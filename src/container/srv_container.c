@@ -3766,7 +3766,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	if (rc == -DER_NONEXIST) {
 		pda = 0;
-		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda, &value);
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
 		if (rc) {
 			D_ERROR("failed to upgrade container scrubbing disabled prop: "DF_CONTF"\n",
 				DP_CONT(ap->pool_uuid, cont_uuid));
