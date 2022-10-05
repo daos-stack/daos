@@ -318,7 +318,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %else
 %define scons_exe scons
 %endif
-%{scons_exe} %{?_smp_mflags} \
+PRINT_CMD_LINE_FUNC=print_cmd_line %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
       USE_INSTALLED=all      \
@@ -332,7 +332,7 @@ mv test.cov{,-build}
 %endif
 
 %install
-%{scons_exe} %{?_smp_mflags}          \
+PRINT_CMD_LINE_FUNC=print_cmd_line %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
       --install-sandbox=%{buildroot}  \
