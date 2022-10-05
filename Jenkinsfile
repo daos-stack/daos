@@ -70,6 +70,12 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repos to add to the build and test nodes, e.g. <project>@<branch>:[build]')
+        string(name: 'CI_BUILD_DESCRIPTION',
+               defaultValue: '',
+               description: 'A description of the build')
         string(name: 'CI_FUNCTIONAL_VM9_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
