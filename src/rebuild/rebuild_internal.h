@@ -65,10 +65,7 @@ struct rebuild_tgt_pool_tracker {
 	 * can be go ahead to finish the rebuild.
 	 */
 	ABT_cond		rt_fini_cond;
-	/* Notify others the rebuild of this pool has been
-	 * done on this target.
-	 */
-	ABT_cond		rt_done_cond;
+
 	/* # to-be-rebuilt objs */
 	uint64_t		rt_reported_toberb_objs;
 	/* reported # rebuilt objs */
