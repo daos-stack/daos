@@ -65,6 +65,8 @@ def get_build_flags(benv):
     if not is_release_build(benv):
         # enable race detector for non-release builds
         flags += "-race"
+    else:
+        flags += '-buildmode=pie'
     return flags
 
 

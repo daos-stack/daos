@@ -265,11 +265,14 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-#define D_FREE(ptr)							\
-	do {								\
-		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		d_free(ptr);						\
-		(ptr) = NULL;						\
+/* Free a pointer. Only logs if the pointer is non-NULL. */
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
