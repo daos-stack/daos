@@ -281,7 +281,7 @@ class ObjectMetadata(TestWithServers):
 
         # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
         self.container = None
-        self.log.info("Leaving pool metadata full (containers will not be destroyed)")
+        self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
     def test_metadata_addremove(self):
