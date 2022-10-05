@@ -2226,7 +2226,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->arg->pool_uuid));
-		return 0;
+		D_GOTO(put, rc = 0);
 	}
 
 	shard = arg->arg->shard % obj_ec_tgt_nr(&arg->oc_attr);
@@ -2314,7 +2314,8 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 		rc = migrate_one_create(arg, io);
 
 put:
-	migrate_pool_tls_put(tls);
+	if (tls != NULL)
+		migrate_pool_tls_put(tls);
 	return rc;
 }
 
