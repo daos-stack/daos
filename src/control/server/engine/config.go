@@ -13,8 +13,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
@@ -138,7 +138,7 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank   `yaml:"rank,omitempty"`
+	Rank              *ranklist.Rank `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -317,7 +317,7 @@ func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 
 // WithRank sets the instance rank.
 func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = system.NewRankPtr(r)
+	c.Rank = ranklist.NewRankPtr(r)
 	return c
 }
 
