@@ -337,11 +337,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             if value is not None:
                 env['ENV'][key] = value
 
-    config = Configure(env)
-    if not config.CheckHeader('stdatomic.h'):
-        Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
-    config.Finish()
-
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
@@ -357,6 +352,10 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    config = Configure(env)
+    if not config.CheckHeader('stdatomic.h'):
+        Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
+    config.Finish()
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults()

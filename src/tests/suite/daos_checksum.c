@@ -2246,7 +2246,6 @@ test_enumerate_object(void **state)
 	struct dcs_csum_info	*csum_info = NULL;
 	void			*end_byte;
 	daos_key_desc_t		*kds = NULL;
-	uint32_t		 csum_count = 0;
 	uint32_t		 nr;
 	int			 rc;
 	char			 dkey[32];
@@ -2364,7 +2363,6 @@ test_enumerate_object(void **state)
 		tmp_csum_iov.iov_buf += ci_size(*csum_info);
 		tmp_csum_iov.iov_buf_len -= ci_size(*csum_info);
 		tmp_csum_iov.iov_len -= ci_size(*csum_info);
-		csum_count++;
 	}
 
 

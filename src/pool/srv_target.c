@@ -1565,9 +1565,12 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (ret == 0 && pool->sp_global_version >= 1) {
+	if (ret == 0) {
 		/** If necessary, upgrade the vos pool format */
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+		if (pool->sp_global_version >= 2)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+		else if (pool->sp_global_version == 1)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
 	}
 
 	ds_pool_child_put(child);
