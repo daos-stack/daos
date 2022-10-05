@@ -279,16 +279,9 @@ class ObjectMetadata(TestWithServers):
         self.log.info(
             "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
 
-        # Phase 4 destroy pool while metadata rdb is full
-        # And prevent container destroy steps from running in teardown
-        self.log.info("Phase 4: Destroy pool while metadata rdb is full (expected to work)")
+        # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
         self.container = None
-        try:
-            self.destroy_pools(self.pool)
-            self.log.info("Phase 4: passed (pool with full metadata rdb successfully destroyed)")
-        except TestFail as error:
-            self.log.error(str(error))
-            self.fail("Phase 4: fail (pool with full metadata rdb NOT destroyed)")
+        self.log.info("Leaving pool metadata full (containers will not be destroyed)")
         self.log.info("Test passed")
 
     def test_metadata_addremove(self):
