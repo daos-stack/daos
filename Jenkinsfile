@@ -52,7 +52,8 @@ void job_step_update(def value) {
 }
 
 // For master, this is just some wildly high number
-String next_version = '1000'
+/* groovylint-disable-next-line CompileStatic */
+String next_version = '2.3'
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -85,9 +86,7 @@ pipeline {
     agent { label 'lightweight' }
 
     triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
+        cron(env.BRANCH_NAME == 'release/2.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '')
     }
 
     environment {
@@ -154,6 +153,9 @@ pipeline {
         string(name: 'CI_UBUNTU20.04_TARGET',
                defaultValue: '',
                description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
+        booleanParam(name: 'CI_RPM_el7_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for CentOS 7')
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
@@ -175,6 +177,9 @@ pipeline {
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Fault Injection on EL 8 CI tests')
+        booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the functional CentOS 7 CI tests')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
@@ -193,6 +198,12 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the functional Ubuntu 20 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
+        booleanParam(name: 'CI_RPMS_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the CentOS 7 RPM CI tests')
+        booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
+                     defaultValue: true,
+                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the Small Cluster CI tests')
