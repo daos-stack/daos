@@ -2333,11 +2333,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop,
 				   &ds_cont_prop_scrubber_disabled, &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST)
+			val = 0;
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type =
-			DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2547,7 +2548,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc == -DER_NONEXIST)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		else  if (rc != 0)
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
@@ -3758,6 +3759,20 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ASSERT(daos_prop_is_set(entry) == false);
 		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 		entry->dpe_val = pda;
+	}
+
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		pda = 0;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container scrubbing disabled prop: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
 	}
 
 	/* Initialize or update container open / metadata modify times.
