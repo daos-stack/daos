@@ -2277,7 +2277,8 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
-		}		D_ASSERT(idx < nr);
+		}
+		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
@@ -4467,12 +4468,13 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		D_GOTO(out_free, rc);
 
 	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub freq",
-				       &ds_pool_prop_scrub_freq, DAOS_PROP_PO_SCRUB_MODE_DEFAULT);
+				       &ds_pool_prop_scrub_freq, DAOS_PROP_PO_SCRUB_FREQ_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
 	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub thresh",
-				       &ds_pool_prop_scrub_thresh, DAOS_PROP_PO_SCRUB_MODE_DEFAULT);
+				       &ds_pool_prop_scrub_thresh,
+				       DAOS_PROP_PO_SCRUB_THRESH_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 
