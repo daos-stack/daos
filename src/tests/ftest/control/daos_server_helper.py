@@ -15,7 +15,7 @@ from server_utils import ServerFailed
 
 
 class DaosAdminPrivTest(TestWithServers):
-    """Test class for daos_admin privilege tests.
+    """Test class for daos_server_helper privilege tests.
 
     Test Class Description:
         Test to verify that daos_server when run as normal user, can perform
@@ -24,26 +24,26 @@ class DaosAdminPrivTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_daos_admin_format(self):
+    def test_daos_server_helper_format(self):
         """JIRA ID: DAOS-2895.
 
         Test Description:
-            Test daos_admin functionality to perform format privileged
+            Test daos_server_helper functionality to perform format privileged
             operations while daos_server is run as normal user.
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=daos_admin,basic
+        :avocado: tags=daos_server_helper,basic
         """
-        # Verify that daos_admin has the correct permissions
-        self.log.info("Checking daos_admin binary permissions")
-        file_stats = os.stat("/usr/bin/daos_admin")
+        # Verify that daos_server_helper has the correct permissions
+        self.log.info("Checking daos_server_helper binary permissions")
+        file_stats = os.stat("/usr/bin/daos_server_helper")
 
         # regular file, mode 4750
         desired = (stat.S_IFREG | stat.S_ISUID | stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
         actual = file_stats.st_mode & ~stat.S_IRWXO  # mask out Other bits for non-RPM
         if (actual ^ desired) > 0:
-            self.fail("Incorrect daos_admin permissions: {}".format(oct(actual)))
+            self.fail("Incorrect daos_server_helper permissions: {}".format(oct(actual)))
 
         # Setup server as non-root
         self.log.info("(0)Preparing to run daos_server as non-root user")
