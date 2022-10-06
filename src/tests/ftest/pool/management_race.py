@@ -70,7 +70,7 @@ class PoolManagementRace(TestWithServers):
                                           " b: 2 (pool delete), 3 (pool create), 4 (pool query) \n"
                                           " c: pool_label \n d: test_loop number")
                             self.fail("#({}.5.{}.{})Pool query failed and retry timeout.".format(
-                                      thread_num, pool_id, test_num))
+                                thread_num, pool_id, test_num))
                 daos_tool.exit_status_exception = True
                 self.log.info("-->Test thread %d, test_loop %d completed.", thread_num, test_num)
 
@@ -98,7 +98,6 @@ class PoolManagementRace(TestWithServers):
 
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
         test_loop = self.params.get("test_loop", '/run/boundary_test/*')
-        num_query_threads = self.params.get("num_query_threads", '/run/boundary_test/*')
         self.pool = []
         for pool_number in range(num_pools):
             self.pool.append(self.get_pool())
@@ -115,7 +114,7 @@ class PoolManagementRace(TestWithServers):
         # Setup the thread manager for del_and_recreate_pool
         thread_manager.add(
             del_recreate=True, test_pool=self.pool[pool_number],
-            thread_num=index, test_loop=test_loop)
+            thread_num=num_pools, test_loop=test_loop)
 
         # Launch all the threads
         self.log.info("==Launching %d delete_and_recreate_pool and query_and_list_pools threads",

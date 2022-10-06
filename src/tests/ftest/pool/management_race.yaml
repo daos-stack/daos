@@ -13,6 +13,5 @@ pool:
 boundary_test:
   num_pools: 20
   test_loop: 200
-  num_query_threads: 5
   wait_time: 1
   max_query_time: 180
