@@ -64,9 +64,6 @@ if [[ "${LAUNCH_OPT_ARGS}" == "auto:-3DNAND" ]]; then
     LAUNCH_OPT_ARGS="--nvme=${LAUNCH_OPT_ARGS}"
 fi
 
-# Log size threshold
-LOGS_THRESHOLD="1G"
-
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
 pre_clean () {
@@ -151,7 +148,6 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      TEST_TAG_ARG=\"$TEST_TAG_ARG\"
      TEST_NODES=\"$TEST_NODES\"
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
-     LOGS_THRESHOLD=\"$LOGS_THRESHOLD\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
