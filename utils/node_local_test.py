@@ -3488,7 +3488,6 @@ def run_in_fg(server, conf, args):
         pass
 
 
-
 def check_readdir_perf(server, conf):
     """ Check and report on readdir performance
 
