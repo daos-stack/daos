@@ -18,13 +18,13 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
-func queryRank(reqRank uint32, engineRank system.Rank) bool {
-	rr := system.Rank(reqRank)
-	if rr.Equals(system.NilRank) {
+func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
+	rr := ranklist.Rank(reqRank)
+	if rr.Equals(ranklist.NilRank) {
 		return true
 	}
 	return rr.Equals(engineRank)
@@ -185,8 +185,8 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 	return nil
 }
 
-func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQueryReq) (system.Rank, *ctlpb.SmdQueryResp_Device, error) {
-	rank := system.NilRank
+func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQueryReq) (ranklist.Rank, *ctlpb.SmdQueryResp_Device, error) {
+	rank := ranklist.NilRank
 	if req.Uuid == "" {
 		return rank, nil, errors.New("empty UUID in device query")
 	}
@@ -203,7 +203,7 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 		case 1:
 			svc.log.Debugf("smdQueryDevice(): uuid %q, rank %d, states %q", req.Uuid,
 				rr.Rank, rr.Devices[0].DevState)
-			rank = system.Rank(rr.Rank)
+			rank = ranklist.Rank(rr.Rank)
 
 			return rank, rr.Devices[0], nil
 		default:
@@ -215,7 +215,7 @@ func (svc *ControlService) smdQueryDevice(ctx context.Context, req *ctlpb.SmdQue
 }
 
 func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
+	req.Rank = uint32(ranklist.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
 		return nil, err
@@ -266,7 +266,7 @@ func (svc *ControlService) smdSetFaulty(ctx context.Context, req *ctlpb.SmdQuery
 }
 
 func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
+	req.Rank = uint32(ranklist.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
 		return nil, err
@@ -319,7 +319,7 @@ func (svc *ControlService) smdReplace(ctx context.Context, req *ctlpb.SmdQueryRe
 }
 
 func (svc *ControlService) smdIdentify(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	req.Rank = uint32(system.NilRank)
+	req.Rank = uint32(ranklist.NilRank)
 	rank, device, err := svc.smdQueryDevice(ctx, req)
 	if err != nil {
 		return nil, err
@@ -397,7 +397,7 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {
 		return nil, errors.New("UUID is ambiguous when querying both pools and devices")
 	}
-	if req.Target != "" && req.Rank == uint32(system.NilRank) {
+	if req.Target != "" && req.Rank == uint32(ranklist.NilRank) {
 		return nil, errors.New("Target is invalid without Rank")
 	}
 

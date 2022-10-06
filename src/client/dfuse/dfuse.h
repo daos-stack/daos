@@ -98,6 +98,12 @@ struct dfuse_obj_hdl {
 	/** True if caching is enabled for this file. */
 	bool                             doh_caching;
 
+	/* True of the kernel may have been told to keep the cache for this open.  This is used
+	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
+	 * here and this flag may be set on create even if the kernel flag isn't provided.
+	 */
+	bool                             doh_keep_cache;
+
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                             doh_writeable;
 
@@ -202,35 +208,35 @@ struct dfuse_pool {
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops	*dfs_ops;
+	struct dfuse_inode_ops *dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
-	struct dfuse_pool	*dfs_dfp;
+	struct dfuse_pool      *dfs_dfp;
 
 	/** dfs mount handle */
-	dfs_t			*dfs_ns;
+	dfs_t                  *dfs_ns;
 
 	/** UUID of the container */
-	uuid_t			dfs_cont;
+	uuid_t                  dfs_cont;
 
 	/** Container handle */
-	daos_handle_t		dfs_coh;
+	daos_handle_t           dfs_coh;
 
 	/** Hash table entry entry in dfp_cont_table */
-	d_list_t		dfs_entry;
+	d_list_t                dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfs_ref;
+	ATOMIC uint             dfs_ref;
 
 	/** Inode number of the root of this container */
-	ino_t			dfs_ino;
+	ino_t                   dfs_ino;
 
 	/** Caching information */
-	double			dfc_attr_timeout;
-	double			dfc_dentry_timeout;
-	double			dfc_dentry_dir_timeout;
-	double			dfc_ndentry_timeout;
-	bool			dfc_data_caching;
-	bool			dfc_direct_io_disable;
+	double                  dfc_attr_timeout;
+	double                  dfc_dentry_timeout;
+	double                  dfc_dentry_dir_timeout;
+	double                  dfc_ndentry_timeout;
+	double                  dfc_data_timeout;
+	bool                    dfc_direct_io_disable;
 };
 
 void
@@ -564,6 +570,9 @@ struct dfuse_inode_entry {
 	d_list_t                 ie_htl;
 
 	/* Time of last kernel cache update.
+	 * For directories this is the time of the most recent closedir for a handle which may
+	 * have populated the cache.
+	 * For files this is when the file was last closed after been written to.
 	 */
 	struct timespec          ie_cache_last_update;
 

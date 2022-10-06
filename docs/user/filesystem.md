@@ -307,24 +307,26 @@ to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 | dfuse-dentry-time       | How long directory entries are cached                                  |
 | dfuse-dentry-dir-time   | How long dentries are cached, if the entry is itself a directory       |
 | dfuse-ndentry-time      | How long negative dentries are cached                                  |
-| dfuse-data-cache        | Data caching enabled for this file ("on"/"true"/"off"/"false")         |
+| dfuse-data-cache        | Data caching enabled, duration or ("on"/"true"/"off"/"false")          |
 | dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false") |
 
 For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
 minutes, hours or days.
 
-dfuse-data-cache should be set to "on", "true", "off" or "false" if set, other values will
-log an error, and result in the cache being off.  The O\_DIRECT flag for open
-files will be honoured with this option enabled, files which do not set
-O\_DIRECT will be cached.
+dfuse-data-cache can be set to a time value or "on", "true", "off" or "false" if set, other values
+will log an error, and result in the cache being off.  The O\_DIRECT flag for open files will be
+honoured with this option enabled, files which do not set O\_DIRECT will be cached.  Data caching
+is controlled by dfuse passing a flag to the kernel on open, if data-cache is enabled then it will
+be allowed for files if that file is already open, and timeout value will be the duration between
+a previous close call which reduced the open count to zero and the next subsequent call to open.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
 however if this is enabled then the O\_DIRECT flag will be ignored, and all
 files will use the page cache.  This default value for this is disabled.
 
 With no options specified attr and dentry timeouts will be 1 second, dentry-dir
-and ndentry timeouts will be 5 seconds, and data caching will be enabled.
+and ndentry timeouts will be 5 seconds, and data caching will be set to 10 minutes.
 
 Readdir caching is available when supported by libfuse; however, on many distributions the system
 libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is required at both
