@@ -8,13 +8,13 @@ import time
 import random
 import threading
 
+import queue
 from test_utils_pool import add_pool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from apricot import skipForTicket
-import queue
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -74,7 +74,7 @@ class OSAOnlineReintegration(OSAUtils):
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers) #nosec
+        rank = random.randint(1, exclude_servers)  # nosec
 
         # Start the daos_racer thread
         if racer is True:
