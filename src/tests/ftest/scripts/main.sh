@@ -225,8 +225,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 # shellcheck disable=SC2086,SC2090
-if ! ./launch.py --mode ci -th "${LOGS_THRESHOLD}" \
-                 ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
