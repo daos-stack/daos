@@ -74,11 +74,6 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
@@ -253,9 +248,7 @@ if [ -d "/mnt/daos" ]; then
         for ((i = 0; i < ${#failures[@]}; i++)); do
             echo "    ${failures[$i]}"
         done
-        if ! ${OLD_CI:-true}; then
-            exit 1
-        fi
+        exit 1
     fi
 else
     echo "/mnt/daos isn't present for unit tests"

@@ -18,7 +18,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
@@ -70,16 +70,16 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 		newLabel = ps.PoolLabel + "-fault"
 	}
 
-	var newRanks []system.Rank
+	var newRanks []ranklist.Rank
 	switch len(fault.Uints) {
 	case 0:
 		if len(ps.Replicas) == 0 {
-			newRanks = []system.Rank{0, 3, 6, 9}
+			newRanks = []ranklist.Rank{0, 3, 6, 9}
 		} else {
-			newRanks = []system.Rank{ps.Replicas[0]}
+			newRanks = []ranklist.Rank{ps.Replicas[0]}
 		}
 	default:
-		newRanks = system.RanksFromUint32(fault.Uints)
+		newRanks = ranklist.RanksFromUint32(fault.Uints)
 	}
 
 	switch fault.Class {
@@ -162,7 +162,7 @@ func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE:
 		req := &mgmtpb.PoolDestroyReq{
 			Id:       ps.PoolUUID.String(),
-			SvcRanks: system.RanksToUint32(ps.Replicas),
+			SvcRanks: ranklist.RanksToUint32(ps.Replicas),
 			Force:    true,
 		}
 		dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)

@@ -16,6 +16,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
@@ -113,7 +114,7 @@ func (svc *mgmtSvc) makePoolCheckerCall(ctx context.Context, method drpc.Method,
 			return nil, err
 		}
 
-		r.Ranks = system.RanksToUint32(checkRanks)
+		r.Ranks = ranklist.RanksToUint32(checkRanks)
 		r.Uuids = poolUuids
 	case *mgmtpb.CheckStopReq:
 		r.Uuids = poolUuids
@@ -145,7 +146,7 @@ func (svc *mgmtSvc) restartSystemRanks(ctx context.Context, sys string) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to get group map")
 	}
-	availRanks := system.NewRankSet()
+	availRanks := ranklist.NewRankSet()
 	for rank := range gm.RankEntries {
 		availRanks.Add(rank)
 	}

@@ -26,8 +26,8 @@ import (
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
@@ -199,7 +199,7 @@ func (cmd *mgmtSvcPoolFaultCmd) Execute([]string) (errOut error) {
 				&chkpb.Fault{
 					Class:   cmd.Args.Class.Class(),
 					Strings: []string{cmd.PoolID().String(), cmd.Label.Label},
-					Uints:   system.RanksToUint32(cmd.SvcList.Ranks()),
+					Uints:   ranklist.RanksToUint32(cmd.SvcList.Ranks()),
 				},
 			)
 		},
@@ -229,7 +229,7 @@ func (cmd *poolSvcFaultCmd) Execute([]string) (errOut error) {
 				&chkpb.Fault{
 					Class:   cmd.Args.Class.Class(),
 					Strings: []string{cmd.PoolID().String(), cmd.Label.Label},
-					Uints:   system.RanksToUint32(cmd.SvcList.Ranks()),
+					Uints:   ranklist.RanksToUint32(cmd.SvcList.Ranks()),
 				},
 			)
 		},
