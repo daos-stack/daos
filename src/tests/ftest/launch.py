@@ -37,6 +37,7 @@ from util.user_utils import get_chown_command
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
+DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
@@ -927,33 +928,33 @@ class Launch():
 
         # Convert host specifications into NodeSets
         try:
-            servers = NodeSet(args.test_servers)
+            args.test_servers = NodeSet(args.test_servers)
         except TypeError:
             message = f"Invalid '--test_servers={args.test_servers}' argument"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         try:
-            clients = NodeSet(args.test_clients)
+            args.test_clients = NodeSet(args.test_clients)
         except TypeError:
             message = f"Invalid '--test_clients={args.test_clients}' argument"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # A list of server hosts is required
-        if not servers and not args.list:
+        if not args.test_servers and not args.list:
             return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
-        logger.info("Testing with hosts:       %s", servers.union(clients))
-        self.details["test hosts"] = str(servers.union(clients))
+        logger.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
+        self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
 
         # Setup the user environment
         try:
             self._set_test_environment(
-                servers, clients, args.list, args.provider, args.insecure_mode)
+                args.test_servers, args.test_clients, args.list, args.provider, args.insecure_mode)
         except LaunchException as error:
             return self.get_exit_status(1, str(error), "Setup", sys.exc_info())
 
         # Auto-detect nvme test yaml replacement values if requested
         if args.nvme and args.nvme.startswith("auto") and not args.list:
             try:
-                args.nvme = self._get_device_replacement(servers, args.nvme)
+                args.nvme = self._get_device_replacement(args.test_servers, args.nvme)
             except LaunchException:
                 message = "Error auto-detecting NVMe test yaml file replacement values"
                 return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -997,7 +998,8 @@ class Launch():
             return self.get_exit_status(0, "Modifying test yaml files complete")
 
         # Get the core file pattern information
-        core_files = self._get_core_file_pattern(servers, clients, args.process_cores)
+        core_files = self._get_core_file_pattern(
+            args.test_servers, args.test_clients, args.process_cores)
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
@@ -2509,6 +2511,9 @@ class Launch():
             return return_code
 
         if "log" in pattern:
+            # Remove any empty files
+            return_code |= self._remove_empty_files(file_hosts, source, pattern, depth)
+
             # Report an error if any files sizes exceed the threshold
             if threshold is not None:
                 return_code |= self._check_log_size(file_hosts, source, pattern, depth, threshold)
@@ -2634,7 +2639,7 @@ class Launch():
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=300)
+        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=600)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -3137,7 +3142,7 @@ def main():
         args.rename = True
         args.sparse = True
         if not args.logs_threshold:
-            args.logs_threshold = "1G"
+            args.logs_threshold = DEFAULT_LOGS_THRESHOLD
 
     # Perform the steps defined by the arguments specified
     try:
