@@ -127,12 +127,12 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
-            cont_attrs['dfuse-data-cache'] = '5m'
+            cont_attrs['dfuse-data-cache'] = '1h'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 30 * 5
+                build_time = 30 * 10
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
