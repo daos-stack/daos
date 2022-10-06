@@ -305,11 +305,9 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
-#  # Optionally specify the fabric network interface port that will be used
-#  # by this engine but please only if you have a specific need, this will
-#  # normally be chosen automatically.
+#  # Specify the fabric network interface and interface port that will
+#  # be used by this engine. The fabric_iface_port must be different
+#  # for each engine on a DAOS server.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000

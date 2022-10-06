@@ -1345,20 +1345,21 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	}
 }
 
-func TestConfig_setEngineAffinity(t *testing.T) {
+func TestConfig_SetNUMAAffinity(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg     *engine.Config
 		setNUMA uint
 		expErr  error
 		expNUMA uint
 	}{
-		"pinned_numa_node set in config overrides detected affinity": {
+		"pinned_numa_node set in config conflicts with detected affinity": {
 			cfg: engine.MockConfig().
 				WithPinnedNumaNode(2).
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			setNUMA: 1,
 			expNUMA: 2,
+			expErr:  errors.New("configured NUMA node"),
 		},
 		"pinned_numa_node not set in config; detected affinity used": {
 			cfg: engine.MockConfig().
@@ -1377,10 +1378,7 @@ func TestConfig_setEngineAffinity(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			err := setEngineAffinity(log, tc.cfg, tc.setNUMA)
+			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
 			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
