@@ -260,6 +260,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 	}
 
+#if 0
 	if (inode->ie_dfs->dfc_attr_timeout &&
 	    (atomic_load_relaxed(&inode->ie_open_write_count) == 0) &&
 	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
@@ -273,13 +274,16 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			D_GOTO(done, 0);
 		}
 	}
+#endif
 
 	if (inode->ie_dfs->dfs_ops->getattr)
 		inode->ie_dfs->dfs_ops->getattr(req, inode, rlink ? &save : NULL);
 	else
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 
+#if 0
 done:
+#endif
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
