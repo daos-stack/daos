@@ -196,6 +196,12 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 	// volume, so set this value to strike a balance between
 	// creating snapshots too frequently and not often enough.
 	raftCfg.SnapshotThreshold = 32
+	if dbCfg.RaftSnapshotThreshold > 0 {
+		raftCfg.SnapshotThreshold = dbCfg.RaftSnapshotThreshold
+	}
+	if dbCfg.RaftSnapshotInterval > 0 {
+		raftCfg.SnapshotInterval = dbCfg.RaftSnapshotInterval
+	}
 	raftCfg.HeartbeatTimeout = 2000 * time.Millisecond
 	raftCfg.ElectionTimeout = 2000 * time.Millisecond
 	raftCfg.LeaderLeaseTimeout = 1000 * time.Millisecond

@@ -1,6 +1,7 @@
 """Build daos engine tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs')
@@ -17,6 +18,7 @@ def scons():
                                          LIBS=['daos_common_pmem', 'gurt',
                                                'cmocka', 'vos', 'bio', 'abt'])
     unit_env.Install('$PREFIX/bin/', [srv_checksum_tests])
+
 
 if __name__ == "SCons.Script":
     scons()
