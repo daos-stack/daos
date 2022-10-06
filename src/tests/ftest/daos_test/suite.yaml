@@ -7,7 +7,7 @@ hosts:
 # (I'm looking at you "rebuild tests")
 timeout: 600
 timeouts:
-    test_daos_degraded_mode: 450
+    test_daos_degraded_mode: 900
     test_daos_management: 110
     test_daos_pool: 180
     test_daos_container: 450
@@ -22,12 +22,12 @@ timeouts:
     test_daos_capability: 104
     test_daos_epoch_recovery: 104
     test_daos_md_replication: 104
-    test_daos_rebuild_simple: 1500
+    test_daos_rebuild_simple: 3000
     test_daos_drain_simple: 500
     test_daos_extend_simple: 500
     test_daos_oid_allocator: 640
     test_daos_checksum: 500
-    test_daos_rebuild_ec: 4800
+    test_daos_rebuild_ec: 9600
     test_daos_aggregate_ec: 200
     test_daos_degraded_ec: 1900
     test_daos_dedup: 220
