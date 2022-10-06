@@ -1,8 +1,6 @@
-"""
-  (C) Copyright 2022 Intel Corporation.
-
-  SPDX-License-Identifier: BSD-2-Clause-Patent
-"""
+#  (C) Copyright 2022 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 hosts:
   test_servers: 3
 timeout: 4800
