@@ -12,6 +12,7 @@ from thread_manager import ThreadManager
 from command_utils_base import CommandFailure
 from pydaos.raw import DaosApiError
 
+
 class PoolManagementRace(TestWithServers):
     """
     Epic: Create system level tests that cover pool management race boundary tests and
@@ -45,7 +46,7 @@ class PoolManagementRace(TestWithServers):
                 self.log.info("--(%d.3.%s.%d)Pool %s recreated.\n",
                               thread_num, pool_id, test_num, pool_id)
                 # pool stays with a random time before destroy
-                pool_stay_time = random.randint(1, 3) #nosec
+                pool_stay_time = random.randint(1, 3)  # nosec
                 time.sleep(pool_stay_time)
             else:
                 completed = False
@@ -104,7 +105,7 @@ class PoolManagementRace(TestWithServers):
             self.log.info("==(1.%d) pool created, %s.", pool_number, self.pool[-1].identifier)
 
         # Randomly select a pool for delete, recreate and query
-        pool_number = random.randint(0, len(self.pool)-1)   # nosec
+        pool_number = random.randint(0, len(self.pool) - 1)  # nosec
 
         # Setup the thread manager for del_and_recreate_pool
         thread_manager = ThreadManager(self.del_recreate_query_and_list_pools, self.timeout - 30)
@@ -113,7 +114,8 @@ class PoolManagementRace(TestWithServers):
                 del_recreate=False, test_pool=t_pool, thread_num=index, test_loop=test_loop)
         # Setup the thread manager for del_and_recreate_pool
         thread_manager.add(
-            del_recreate=True, test_pool=self.pool[pool_number], thread_num=index, test_loop=test_loop)
+            del_recreate=True, test_pool=self.pool[pool_number],
+            thread_num=index, test_loop=test_loop)
 
         # Launch all the threads
         self.log.info("==Launching %d delete_and_recreate_pool and query_and_list_pools threads",

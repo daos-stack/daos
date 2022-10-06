@@ -8,13 +8,13 @@ import time
 import random
 import threading
 import copy
+import queue
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
 from exception_utils import CommandFailure
 from test_utils_pool import add_pool
 from apricot import skipForTicket
-import queue
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -92,9 +92,9 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6) #nosec
-        target_list.append(n)
-        target_list.append(n+1)
+        exc = random.randint(0, 6)  # nosec
+        target_list.append(exc)
+        target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.
