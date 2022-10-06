@@ -5217,6 +5217,9 @@ pool_svc_reconf_ult(void *arg)
 			goto out_to_add_remove;
 		}
 		rc = rdb_remove_replicas(svc->ps_rsvc.s_db, tmp);
+		if (rc != 0)
+			D_ERROR(DF_UUID": failed to remove replicas: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
 		/* Delete from to_remove ranks that are not removed. */
 		d_rank_list_filter(tmp, to_remove, true /* exclude */);
 		d_rank_list_free(tmp);
