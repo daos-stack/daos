@@ -30,6 +30,7 @@ type legacyStorageCmd struct {
 
 type legacyPrepCmd struct {
 	cmdutil.LogCmd
+	helperLogCmd
 	iommuCheckerCmd
 	scs *server.StorageControlService
 
@@ -129,6 +130,10 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 }
 
 func (cmd *legacyPrepCmd) Execute(args []string) error {
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
+	}
+
 	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
 	// This is a little ugly, but allows for easier unit testing.
