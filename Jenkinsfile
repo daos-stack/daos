@@ -72,9 +72,15 @@ pipeline {
                defaultValue: 'ucx+dc_x',
                description: 'Provider to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. ' +
                             'ucx+dc_x)')
-        string(name: 'BaseBranch',
-               defaultValue: base_branch,
-               description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
+        string(name: 'CI_RPM_TEST_VERSION',
+               defaultValue: '',
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repos to add to the build and test nodes, e.g. <project>@<branch>:[build]')
+        string(name: 'CI_BUILD_DESCRIPTION',
+               defaultValue: '',
+               description: 'A description of the build')
         booleanParam(name: 'CI_small_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Small test stage')
