@@ -1,6 +1,7 @@
 """Build io_conf generator"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv')

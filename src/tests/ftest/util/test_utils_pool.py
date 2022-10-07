@@ -421,6 +421,7 @@ class TestPool(TestDaosApiBase):
         status = False
         if self.pool:
             if disconnect:
+                self.log.info("Disconnecting from pool %s", self.identifier)
                 self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.identifier)
@@ -455,7 +456,8 @@ class TestPool(TestDaosApiBase):
                 prop_name = self.prop_name.value
             if prop_value is None:
                 prop_value = self.prop_value.value
-            self.dmg.pool_set_prop(self.identifier, prop_name, prop_value)
+            properties = ":".join([prop_name, prop_value])
+            self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):

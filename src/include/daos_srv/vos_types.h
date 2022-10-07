@@ -18,6 +18,7 @@
 #define VOS_SUB_OP_MAX	((uint16_t)-2)
 
 #define VOS_POOL_DF_2_2 24
+#define VOS_POOL_DF_2_4 25
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -272,6 +273,8 @@ enum {
 enum {
 	/** Aggregation optimization is enabled for this pool */
 	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
+	/** Pool check is supported for this pool */
+	VOS_POOL_FEAT_CHK = (1ULL << 1),
 };
 
 /** Mask for any conditionals passed to to the fetch */

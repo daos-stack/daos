@@ -26,6 +26,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -79,8 +80,8 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	propWithVal := func(key, val string) *control.PoolProperty {
-		hdlr := control.PoolProperties()[key]
+	propWithVal := func(key, val string) *daos.PoolProperty {
+		hdlr := daos.PoolProperties()[key]
 		prop := hdlr.GetProperty(key)
 		if val != "" {
 			if err := prop.SetValue(val); err != nil {
@@ -124,8 +125,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -141,8 +142,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -158,8 +159,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -223,7 +224,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.1, 0.9},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -242,7 +243,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -255,7 +256,7 @@ func TestPoolCommands(t *testing.T) {
 				printRequest(t, &control.PoolCreateReq{
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{1, 2},
+					Ranks:      []ranklist.Rank{1, 2},
 					TotalBytes: uint64(testSize),
 					TierRatio:  []float64{0.06, 0.94},
 				}),
@@ -272,7 +273,7 @@ func TestPoolCommands(t *testing.T) {
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -285,7 +286,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -299,7 +300,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -313,7 +314,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -336,13 +337,13 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub-freq", "1"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
-					Ranks:     []system.Rank{},
+					Ranks:     []ranklist.Rank{},
 					TierBytes: []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -433,7 +434,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1},
+					Ranks: []ranklist.Rank{1},
 				}),
 			}, " "),
 			nil,
@@ -444,7 +445,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1, 2, 3},
+					Ranks: []ranklist.Rank{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -539,7 +540,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -553,7 +554,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -567,7 +568,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{propWithVal("label", "foo")},
+					Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
 				}),
 			}, " "),
 			nil,
@@ -620,7 +621,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
 					},
 				}),
@@ -1457,12 +1458,12 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					"Invalid size of TotalBytes attribute: disabled with manual allocation")
 				if tc.TgtRanks != "" {
 					test.AssertEqual(t,
-						system.RankList(poolCreateRequest.Ranks).String(),
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
 						tc.ExpectedOutput.PoolConfig.Ranks,
 						"Invalid list of Ranks")
 				} else {
 					test.AssertEqual(t,
-						system.RankList(poolCreateRequest.Ranks).String(),
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
 						"",
 						"Invalid list of Ranks")
 				}
