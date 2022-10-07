@@ -1781,30 +1781,43 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 	}
 }
 
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory.
+ */
+#define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
+
+struct dtx_ult_arg {
+	dtx_sub_func_t			 func;
+	void				*func_arg;
+	struct dtx_leader_handle	*dlh;
+};
+
 static void
 dtx_comp_cb(void **arg)
 {
-	struct dtx_leader_handle	*dlh;
-	uint32_t			 sub_cnt;
+	struct dtx_leader_handle	*dlh = arg[0];
+	struct dtx_sub_status		*sub;
 	uint32_t			 i;
+	uint32_t			 j;
 
-	dlh = arg[0];
+	if (dlh->dlh_agg_cb != NULL) {
+		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_allow_failure);
+	} else {
+		for (i = dlh->dlh_forward_idx, j = 0; j < dlh->dlh_forward_cnt; i++, j++) {
+			sub = &dlh->dlh_subs[i];
 
-	if (dlh->dlh_agg_cb) {
-		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
-		return;
-	}
+			if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE || sub->dss_comp == 0 ||
+			    sub->dss_result == 0 || sub->dss_result == -DER_ALREADY ||
+			    sub->dss_result == dlh->dlh_allow_failure)
+				continue;
 
-	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	for (i = 0; i < sub_cnt; i++) {
-		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
-
-		if (sub->dss_result == 0)
-			continue;
-
-		/* Ignore DER_INPROGRESS if there are other failures */
-		if (dlh->dlh_result == 0 || dlh->dlh_result == -DER_INPROGRESS)
-			dlh->dlh_result = sub->dss_result;
+			/* Ignore DER_INPROGRESS if there are other failures */
+			if (dlh->dlh_result == 0 || dlh->dlh_result == -DER_INPROGRESS)
+				dlh->dlh_result = sub->dss_result;
+		}
 	}
 }
 
@@ -1812,51 +1825,63 @@ static void
 dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 {
 	struct dtx_sub_status	*sub = &dlh->dlh_subs[idx];
-	ABT_future		future = dlh->dlh_future;
+	struct daos_shard_tgt	*tgt = &sub->dss_tgt;
 
-	D_ASSERTF(sub->dss_comp == 0, "Repeat sub completion for idx %d: %d\n", idx, rc);
-	sub->dss_comp = 1;
+	if ((dlh->dlh_normal_sub_done == 0 && !(tgt->st_flags & DTF_DELAY_FORWARD)) ||
+	    (dlh->dlh_normal_sub_done == 1 && tgt->st_flags & DTF_DELAY_FORWARD)) {
+		D_ASSERTF(sub->dss_comp == 0,
+			  "Repeat sub completion for idx %d (%d:%d), flags %x: %d\n",
+			  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		sub->dss_comp = 1;
+		sub->dss_result = rc;
 
-	sub->dss_result = rc;
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
+			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+	}
 
-	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
-		sub->dss_tgt.st_rank, sub->dss_tgt.st_tgt_idx,
-		sub->dss_result);
+	rc = ABT_future_set(dlh->dlh_future, dlh);
+	D_ASSERTF(rc == ABT_SUCCESS,
+		  "ABT_future_set failed for idx %d (%d:%d), flags %x: %d\n",
+		  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
 }
 
-struct dtx_ult_arg {
-	dtx_sub_func_t			func;
-	void				*func_arg;
-	struct dtx_leader_handle	*dlh;
-};
-
 static void
-dtx_leader_exec_ops_normal_ult(void *arg)
+dtx_leader_exec_ops_ult(void *arg)
 {
 	struct dtx_ult_arg		*ult_arg = arg;
 	struct dtx_leader_handle	*dlh = ult_arg->dlh;
 	struct dtx_sub_status		*sub;
-	ABT_future			 future = dlh->dlh_future;
-	uint32_t			 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	uint32_t			 i, j;
+	struct daos_shard_tgt		*tgt;
+	uint32_t			 i;
+	uint32_t			 j;
+	uint32_t			 k;
 	int				 rc = 0;
 
-	D_ASSERT(future != ABT_FUTURE_NULL);
-	for (i = 0, j = 0; i < sub_cnt; i++, j++) {
+	for (i = dlh->dlh_forward_idx, j = 0, k = 0; j < dlh->dlh_forward_cnt; i++, j++) {
 		sub = &dlh->dlh_subs[i];
-		sub->dss_result = 0;
-		sub->dss_comp = 0;
+		tgt = &sub->dss_tgt;
 
-		if (unlikely(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
+		if (dlh->dlh_normal_sub_done == 0) {
+			sub->dss_result = 0;
+			sub->dss_comp = 0;
+
+			if (unlikely(tgt->st_flags & DTF_DELAY_FORWARD)) {
+				dtx_sub_comp_cb(dlh, i, 0);
+				continue;
+			}
+		} else {
+			if (!(tgt->st_flags & DTF_DELAY_FORWARD))
+				continue;
+
+			sub->dss_result = 0;
+			sub->dss_comp = 0;
+		}
+
+		if (tgt->st_rank == DAOS_TGT_IGNORE ||
+		    (i == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
+			if (dlh->dlh_normal_sub_done == 0 || tgt->st_flags & DTF_DELAY_FORWARD)
+				dtx_sub_comp_cb(dlh, i, 0);
 			continue;
-
-		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
-		    (i == daos_fail_value_get() &&
-		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			dtx_sub_comp_cb(dlh, i, 0);
-			goto next;
 		}
 
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
@@ -1866,88 +1891,30 @@ dtx_leader_exec_ops_normal_ult(void *arg)
 			break;
 		}
 
-next:
 		/* Yield to avoid holding CPU for too long time. */
-		if (j >= DTX_RPC_YIELD_THD) {
+		if (++k % DTX_RPC_YIELD_THD == 0)
 			ABT_thread_yield();
-			j = 0;
-		}
 	}
 
 	if (rc != 0) {
-		for (i++, j++; i < sub_cnt; i++, j++) {
+		for (i++, j++; j < dlh->dlh_forward_cnt; i++, j++) {
 			sub = &dlh->dlh_subs[i];
-			if (unlikely(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
+			tgt = &sub->dss_tgt;
+
+			if (dlh->dlh_normal_sub_done == 1 && !(tgt->st_flags & DTF_DELAY_FORWARD))
 				continue;
 
+			sub->dss_result = 0;
+			sub->dss_comp = 0;
 			dtx_sub_comp_cb(dlh, i, 0);
-			if (j >= DTX_RPC_YIELD_THD) {
-				ABT_thread_yield();
-				j = 0;
-			}
 		}
 	}
 
 	/* To indicate that the IO forward ULT itself has done. */
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed (3) %d.\n", rc);
-
-	D_FREE(ult_arg);
-}
-
-static void
-dtx_leader_exec_ops_delay_ult(void *arg)
-{
-	struct dtx_ult_arg		*ult_arg = arg;
-	struct dtx_leader_handle	*dlh = ult_arg->dlh;
-	struct dtx_sub_status		*sub;
-	ABT_future			 future = dlh->dlh_future;
-	uint32_t			 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	uint32_t			 i, j;
-	int				 rc = 0;
-
-	D_ASSERT(future != ABT_FUTURE_NULL);
-	for (i = 0, j = 0; i < sub_cnt; i++, j++) {
-		sub = &dlh->dlh_subs[i];
-		if (!(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
-			continue;
-
-		sub->dss_result = 0;
-		sub->dss_comp = 0;
-
-		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
-		if (rc != 0) {
-			if (sub->dss_comp == 0)
-				dtx_sub_comp_cb(dlh, i, rc);
-			break;
-		}
-
-		/* Yield to avoid holding CPU for too long time. */
-		if (j >= DTX_RPC_YIELD_THD) {
-			ABT_thread_yield();
-			j = 0;
-		}
-	}
-
-	if (rc != 0) {
-		for (i++, j++; i < sub_cnt; i++, j++) {
-			sub = &dlh->dlh_subs[i];
-			if (!(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
-				continue;
-
-			dtx_sub_comp_cb(dlh, i, 0);
-			if (j >= DTX_RPC_YIELD_THD) {
-				ABT_thread_yield();
-				j = 0;
-			}
-		}
-	}
-
-	/* To indicate that the IO forward ULT itself has done. */
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed (4) %d.\n", rc);
-
-	D_FREE(ult_arg);
+	rc = ABT_future_set(dlh->dlh_future, dlh);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed [%u, %u], for delay %s: %d\n",
+		  dlh->dlh_forward_idx, dlh->dlh_forward_cnt,
+		  dlh->dlh_normal_sub_done == 1 ? "yes" : "no", rc);
 }
 
 /**
@@ -1955,112 +1922,129 @@ dtx_leader_exec_ops_delay_ult(void *arg)
  */
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg)
+		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg)
 {
-	struct dtx_ult_arg	*ult_arg;
-	int			 rc;
-	int			 rc1 = 0;
+	struct dtx_ult_arg	ult_arg;
+	int			sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+	int			rc = 0;
+	int			local_rc = 0;
+	int			remote_rc = 0;
+
+	ult_arg.func = func;
+	ult_arg.func_arg = func_arg;
+	ult_arg.dlh = dlh;
 
 	dlh->dlh_result = 0;
+	dlh->dlh_allow_failure = allow_failure;
 	dlh->dlh_normal_sub_done = 0;
+	dlh->dlh_forward_idx = 0;
+
+	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
+		dlh->dlh_agg_cb = NULL;
+	} else {
+		dlh->dlh_forward_cnt = sub_cnt;
+		if (likely(dlh->dlh_delay_sub_cnt == 0))
+			dlh->dlh_agg_cb = agg_cb;
+		else
+			dlh->dlh_agg_cb = NULL;
+	}
 
 	if (dlh->dlh_normal_sub_cnt == 0)
 		goto exec;
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		return -DER_NOMEM;
-
-	ult_arg->func = func;
-	ult_arg->func_arg = func_arg;
-	ult_arg->dlh = dlh;
-
-	if (dlh->dlh_delay_sub_cnt > 0) {
-		dlh->dlh_agg_cb = NULL;
-		dlh->dlh_agg_cb_arg = NULL;
-	} else {
-		dlh->dlh_agg_cb = agg_cb;
-		dlh->dlh_agg_cb_arg = agg_cb_arg;
-	}
-
+again:
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
 	/*
-	 * Create the future with sub_cnt + 1, the additional one is used by the IO forward
-	 * ULT itself to prevent the DTX handle being freed before the IO forward ULT exit.
+	 * Create the future with dlh->dlh_forward_cnt + 1, the additional one is used by the IO
+	 * forward ULT itself to prevent the DTX handle being freed before the IO forward ULT exit.
 	 */
-	rc = ABT_future_create(dlh->dlh_normal_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
+	rc = ABT_future_create(dlh->dlh_forward_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed (1): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
-		return dss_abterr2der(rc);
+		D_ERROR("ABT_future_create failed [%u, %u] (1): "DF_RC"\n",
+			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
+		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
 	/*
-	 * XXX: Ideally, we probably should create ULT for each shard, but for performance
-	 *	reasons, let's only create one for all remote targets for now.
+	 * NOTE: Ideally, we probably should create ULT for each shard, but for performance
+	 *	 reasons, let's only create one for all remote targets for now.
 	 */
-	rc = dss_ult_create(dtx_leader_exec_ops_normal_ult, ult_arg, DSS_XS_IOFW,
+	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
-		D_ERROR("ult create failed (2): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
+		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
+			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
 		ABT_future_free(&dlh->dlh_future);
-		return rc;
+		goto out;
 	}
 
 exec:
-	/* Then execute the local operation */
-	rc = func(dlh, func_arg, -1, NULL);
+	/* Execute the local operation only for once. */
+	if (dlh->dlh_forward_idx == 0)
+		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0) {
-		rc1 = dtx_leader_wait(dlh);
-		if (unlikely(rc1 == -DER_ALREADY))
-			rc1 = 0;
+	if (dlh->dlh_forward_cnt > 0)
+		remote_rc = dtx_leader_wait(dlh);
+
+	if (local_rc != 0 && local_rc != allow_failure)
+		D_GOTO(out, rc = local_rc);
+
+	if (remote_rc != 0 && remote_rc != allow_failure)
+		D_GOTO(out, rc = remote_rc);
+
+	sub_cnt -= dlh->dlh_forward_cnt;
+	if (sub_cnt > 0) {
+		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
+		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
+			dlh->dlh_forward_cnt = sub_cnt;
+			if (likely(dlh->dlh_delay_sub_cnt == 0))
+				dlh->dlh_agg_cb = agg_cb;
+		}
+
+		goto again;
 	}
-
-	if (rc != 0)
-		return rc;
-
-	if (rc1 != 0 || likely(dlh->dlh_delay_sub_cnt == 0))
-		return rc1;
-
-	/* For delay forward sub requests. */
 
 	dlh->dlh_normal_sub_done = 1;
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		return -DER_NOMEM;
-
-	ult_arg->func = func;
-	ult_arg->func_arg = func_arg;
-	ult_arg->dlh = dlh;
-	dlh->dlh_agg_cb = agg_cb;
-	dlh->dlh_agg_cb_arg = agg_cb_arg;
+	if (likely(dlh->dlh_delay_sub_cnt == 0))
+		goto out;
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
+	/*
+	 * Delay forward is rare case, the count of targets with delay forward
+	 * will be very limited. So le's handle them via another one cycle dispatch.
+	 */
 	rc = ABT_future_create(dlh->dlh_delay_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (3): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
-		return dss_abterr2der(rc);
+		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_ult_create(dtx_leader_exec_ops_delay_ult, ult_arg, DSS_XS_IOFW,
+	dlh->dlh_agg_cb = agg_cb;
+	dlh->dlh_forward_idx = 0;
+	/* The ones without DELAY flag will be skipped when scan the targets array. */
+	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+
+	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
 		ABT_future_free(&dlh->dlh_future);
-		return rc;
+		goto out;
 	}
 
-	rc = dtx_leader_wait(dlh);
-	if (unlikely(rc == -DER_ALREADY))
-		rc = 0;
+	remote_rc = dtx_leader_wait(dlh);
+	if (remote_rc != 0 && remote_rc != allow_failure)
+		rc = remote_rc;
+
+out:
+	if (rc == 0 && local_rc == allow_failure &&
+	    (dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt == 0 || remote_rc == allow_failure))
+		rc = allow_failure;
 
 	return rc;
 }
