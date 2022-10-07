@@ -1021,7 +1021,7 @@ PING 10.165.192.121 (10.165.192.121) from 10.165.192.2 ens102: 56(84) bytes of d
 ```
 Make sure ping can reach the NIC your DAOS server is bound to.
 
-### fi_pinpong
+### fi_pingpong
 ```
 server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
 client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
@@ -1088,6 +1088,32 @@ server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000
 client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000 ip_of_eth0_server
 ```
 This reports network bandwidth. One can deduce the latency for given packet size.
+
+## Tools to diagnose network issues for a large cluster
+
+### [Intel CLuster Checker](https://www.intel.com/content/www/us/en/developer/tools/oneapi/cluster-checker.html)
+This suite contains multiple useful tools including network_time_uniformity to debug network issue.
+
+### [mpi-benchmarks](https://github.com/intel/mpi-benchmarks)
+Tools like IMB-P2P, IMB-MPI1, and IMB-RMA are helpful for the sanity check of the latency and bandwidth.
+```
+$ for((i=1;i<=65536;i*=4)); do echo "$i"; done &> msglen
+$ mpirun -np 4 -f hostlist ./IMB-P2P -msglen msglen PingPong
+#----------------------------------------------------------------
+# Benchmarking PingPong
+# #processes = 4
+#----------------------------------------------------------------
+       #bytes #repetitions      t[usec]   Mbytes/sec      Msg/sec
+            1       100000        24.50         0.08        81627
+            4       100000        24.50         0.33        81631
+           16       100000        24.50         1.31        81629
+           64       100000        24.50         5.22        81631
+          256       100000        24.60        20.73        80983
+         1024       100000        49.50        41.37        40404
+         4096       100000       224.05        36.43         8894
+        16384        51200       230.22       141.65         8646
+        65536        12800       741.47       176.58         2694
+```
 
 ## Bug Report
 
