@@ -17,7 +17,7 @@ class InfoTests(TestWithServers):
     """
 
     def test_pool_info_query(self):
-        """Jira ID: DAOS-xxxx.
+        """Jira ID: DAOS-xxxx?
 
         Test Description:
             Create and connect to a pool.  Verify the pool information returned
