@@ -5660,8 +5660,7 @@ out:
  */
 static int
 pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
-		d_rank_list_t *rank_list, uint32_t ndomains,
-		uint32_t *domains, bool *updated_p,
+		uint32_t ndomains, uint32_t *domains, bool *updated_p,
 		uint32_t *map_version_p, struct rsvc_hint *hint)
 {
 	struct pool_buf		*map_buf = NULL;
@@ -5767,7 +5766,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	 * Extend the pool map directly - this is more complicated than other
 	 * operations which are handled within pool_svc_update_map()
 	 */
-	rc = pool_extend_map(&tx, svc, nnodes, rank_list, ndomains, domains, &updated,
+	rc = pool_extend_map(&tx, svc, nnodes, ndomains, domains, &updated,
 			     map_version_p, hint);
 
 	if (!updated)

@@ -129,7 +129,7 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "rank",
 	},
 	{
-		.td_type	= PO_COMP_TP_NODE, /** for testing */
+		.td_type	= PO_COMP_TP_NODE,
 		.td_abbr	= 'n',
 		.td_name	= "node",
 	},
@@ -1496,9 +1496,12 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 					continue;
 				}
 			}
+
 			updated = true;
 			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version,
 				       new_status, nr_tgts, &map_comp);
+
+			D_ASSERT(i < ordered_ranks->rl_nr);
 			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
 			num_rank_comps++;
 			break;
@@ -1518,6 +1521,8 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		if (rc != 0)
 			D_ERROR("failed attaching component ID %u to pool buf\n", map_comp.co_id);
 	}
+
+	ordered_ranks->rl_nr = i;
 
 	if (rc == 0 && !updated)
 		return -DER_ALREADY;
