@@ -14,7 +14,7 @@ from apricot import TestWithServers
 from server_utils import ServerFailed
 
 
-class DaosAdminPrivTest(TestWithServers):
+class DaosPrivHelperTest(TestWithServers):
     """Test class for daos_server_helper privilege tests.
 
     Test Class Description:
@@ -33,7 +33,8 @@ class DaosAdminPrivTest(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=daos_server_helper,basic
+        :avocado: tags=control,basic
+        :avocado: tags=daos_server_helper,test_daos_server_helper_format
         """
         # Verify that daos_server_helper has the correct permissions
         self.log.info("Checking daos_server_helper binary permissions")
