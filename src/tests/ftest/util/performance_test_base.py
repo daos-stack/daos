@@ -205,7 +205,16 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.ppn = self.perf_params.ppn = self.params.get("ppn", namespace, self.ppn)
 
     def verify_system_status(self, pool=None, container=None):
-        """Verify system/pool/container status (in that order)."""
+        """Verify system/pool/container status (in that order).
+
+        Args:
+            pool (TestPool, optional): Pool to check status of. Default is None.
+            container (TestContainer, optional): Container to check status of. Default is None.
+
+        Raises:
+            CommandFailure, TestFail: if there is an error checking system status
+
+        """
         funcs = [self.dmg_cmd.system_query]
         if pool:
             funcs.append(pool.set_query_data)
