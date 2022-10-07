@@ -4,7 +4,7 @@ import subprocess
 import daos_build
 import compiler_setup
 
-test_cmocka_skip = """
+TEST_CMOCKA_SKIP = """
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
@@ -24,15 +24,16 @@ int main(int argc, char **argv)
 """
 
 
+# pylint: disable-next=invalid-name
 def CheckCmockaSkip(context):
     """Configure check for cmocka bug"""
     context.Message('Checking if cmocka skip() bug is present ... ')
-    rc = context.TryCompile(test_cmocka_skip, '.c')
+    rc = context.TryCompile(TEST_CMOCKA_SKIP, '.c')
     if rc == 0:
         sys.stdout.write(" (Compile failed) assuming ")
         context.Result(not rc)
         return rc
-    rc = context.TryLink(test_cmocka_skip, '.c')
+    rc = context.TryLink(TEST_CMOCKA_SKIP, '.c')
     if rc == 0:
         sys.stdout.write(" (Link failed) assuming ")
         context.Result(not rc)
@@ -125,11 +126,11 @@ def scons():
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)
     denv.Install('$PREFIX/bin/', daosdebug)
-    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_1')
-    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_2')
-    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_3')
-    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_4')
-    denv.Install('$PREFIX/bin/io_conf', 'io_conf/daos_io_conf_5')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_1')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_2')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_3')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_4')
+    denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript', exports='denv')
 
 

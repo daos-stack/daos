@@ -10,7 +10,6 @@ from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
-from apricot import skipForTicket
 
 
 def convert_to_number(size):
@@ -99,7 +98,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # idx + 1, idx + 2  and idx + 3  are headers.
         # idx + 4 will give ior perf info.
         for iteration in range(self.iterations):
-            ior_results = (" ".join(messages[idx+4+iteration].split())).split()
+            ior_results = (" ".join(messages[idx + 4 + iteration].split())).split()
             # Latency will not include open and close time in order to compare to the
             # IO rpc latency reported by daos metrics
             # ior_results is a list of the following:
@@ -110,97 +109,9 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # read   107.84    27.1 0.036824   4096  4096      0.000252 0.036824 0.000015 0.037091
             self.log.info(
                 "Latency for ior %s with transfer size %s(KiB) is %.2fus"
-                "", ior_results[0], ior_results[5], (float(ior_results[3])*float(10**6)))
-            latency.append(float(ior_results[3])*float(10**6))
+                "", ior_results[0], ior_results[5], (float(ior_results[3]) * float(10**6)))
+            latency.append(float(ior_results[3]) * float(10**6))
         return latency
-
-    def verify_ior_latency_metrics(self, metrics, ior_latency, test_metric, transfer_size):
-        """Verify latency metric against ior latency from job results.
-
-        Args:
-            metrics (dict): dictionary of io latency metrics
-            ior_latency (dict): dictionary of list of ior latency
-            test_metric (str): name of telemetry metrics
-            transfer_size(str): transfer_size
-
-        Returns:
-            status: (bool) True if metric is verified
-
-        """
-        status = {}
-        status[test_metric] = False
-        if convert_to_number(transfer_size) > convert_to_number("4M"):
-            size = "GT4MB"
-        else:
-            size = transfer_size + "B"
-        # collecting data to be verified
-        latency = 0
-        self.rpc_latency[test_metric] = 0
-        if "update" in test_metric:
-            operation = "update"
-            ior_operation = "write"
-        else:
-            operation = "fetch"
-            ior_operation = "read"
-        # add up metrics from ior write/read with transfer size = transfer_size
-        # across all servers, ranks, targets
-        for host in self.hostlist_servers:
-            # test assumes one engine per host
-            rank = self.server_managers[-1].get_host_ranks([host])[0]
-            for target in range(self.server_managers[-1].get_config_value("targets")):
-                value = metrics[test_metric][host][str(rank)][str(target)][size]
-                latency = latency + value
-        self.rpc_latency[test_metric] = latency
-        # Verify latency against IOR latency
-        if test_metric in ["engine_io_latency_fetch", "engine_io_latency_update"]:
-            self.log.info(
-                "IO %s RPC latency = %.2f for %s transfer size"
-                "", operation, self.rpc_latency[test_metric], size)
-            self.log.info(
-                "IOR %s latency = %.2f for %s transfer size"
-                "", ior_operation, ior_latency[transfer_size][operation][-1], size)
-            if float(
-                  self.rpc_latency[test_metric]) < float(ior_latency[transfer_size][operation][-1]):
-                status[test_metric] = True
-        # Verify max latency against max IOR latency
-        if test_metric in ["engine_io_latency_fetch_max", "engine_io_latency_update_max"]:
-            max_ior_latency = max(ior_latency[transfer_size][operation])
-            self.log.info(
-                "IO %s RPC max latency = %.2f for %s transfer size"
-                "", operation, self.rpc_latency[test_metric], size)
-            self.log.info(
-                "IOR %s max latency = %.2f for %s transfer size"
-                "", ior_operation, max_ior_latency, size)
-            if float(self.rpc_latency[test_metric]) < float(max_ior_latency):
-                status[test_metric] = True
-        # Verify min latency against min IOR latency
-        if test_metric in ["engine_io_latency_fetch_min", "engine_io_latency_update_min"]:
-            min_ior_latency = min(ior_latency[transfer_size][operation])
-            self.log.info(
-                "IO %s RPC min latency = %.2f for %s transfer size"
-                "", operation, self.rpc_latency[test_metric], size)
-            self.log.info(
-                "IOR %s min latency = %.2f for %s transfer size"
-                "", ior_operation, min_ior_latency, size)
-            if float(self.rpc_latency[test_metric]) < float(min_ior_latency):
-                status[test_metric] = True
-        # Verify mean latency against mean IOR latency
-        if test_metric in ["engine_io_latency_fetch_mean", "engine_io_latency_update_mean"]:
-            temp = 0
-            for idx in range(self.iterations):
-                temp = temp + ior_latency[transfer_size][operation][idx]
-            ior_mean = float(temp)/float(self.iterations)
-            self.log.info(
-                "IO %s RPC mean latency = %.2f for %s transfer size"
-                "", operation, self.rpc_latency[test_metric], size)
-            self.log.info(
-                "IOR %s mean latency = %.2f for %s transfer size"
-                "", ior_operation, ior_mean, size)
-            if float(self.rpc_latency[test_metric]) < float(ior_mean):
-                status[test_metric] = True
-        if test_metric in ["engine_io_latency_fetch_stddev", "engine_io_latency_update_stddev"]:
-            status[test_metric] = True
-        return status[test_metric]
 
     def verify_rpc_latency_metrics(self, metrics_data, test_metrics, transfer_size):
         """Verify latency metric against ior latency from job results.
@@ -233,8 +144,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         mean_value = metrics["engine_io_latency_fetch_mean"]
         stddev_value = metrics["engine_io_latency_fetch_stddev"]
         if ((max_value >= metrics["engine_io_latency_fetch"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+                max_value > mean_value > min_value) and (stddev_value < (max_value - min_value))):
             status["fetch"] = True
 
         min_value = metrics["engine_io_latency_update_min"]
@@ -242,8 +152,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         mean_value = metrics["engine_io_latency_update_mean"]
         stddev_value = metrics["engine_io_latency_update_stddev"]
         if ((max_value >= metrics["engine_io_latency_update"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+                max_value > mean_value > min_value) and (stddev_value < (max_value - min_value))):
             status["update"] = True
         return status
 
@@ -268,7 +177,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         test_metrics = TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS + \
-                       TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
+            TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
 
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
@@ -286,7 +195,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                     self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                    timeout=200, create_pool=False, create_cont=False)
                 ior_latency[transfer_size][operation] = self.get_ior_latency(ior_results)
                 if operation in "update":
                     metrics_data.update(self.telemetry.get_io_metrics(
@@ -440,8 +349,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         committed_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS
-        #TODO: DAOS-9564: Verify I/O dtx committable metrics
-        #committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
+        # TODO: DAOS-9564: Verify I/O dtx committable metrics
+        # committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
 
         for transfer_size in transfer_sizes:
             # Get the initial IO dtx metrics before running
@@ -456,15 +365,12 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             for operation in ["rw"]:
                 flags = self.params.get("F", "/run/ior/ior{}flags/".format(
                     operation))
-                self.log.info(
-                        "<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                        self.server_group, self.pool, self.container[-1].uuid)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command to populate IO dtx metrics
-                _ = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                _ = self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
                 # _ = self.ior_with_transfer_size(transfer_size, operation)
                 # Get IO dtx telemetry metrics
                 metrics_data.update(self.telemetry.get_io_metrics(
@@ -484,81 +390,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # Destroy the container and the pool.
             self.destroy_containers(containers=self.container[-1])
             self.destroy_pools(pools=self.pool)
-
-        if errors:
-            self.fail("Test FAILED")
-
-    @skipForTicket("DAOS-9031")
-    def test_ior_latency_telmetry_metrics(self):
-        """JIRA ID: DAOS-8624.
-
-            Create files with transfers sizes 512 to 4M to verify the
-            DAOS engine IO latency telemetry metrics infrastructure and
-            verify latency against the ior latency.  It is assumed that rpc io
-            latency should be less than the ior latency reported for each transfer
-            size.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry
-        :avocado: tags=test_ior_latency_telemetry
-
-        """
-        transfer_sizes = self.params.get("transfer_sizes", "/run/*")
-        self.iterations = self.params.get("repetitions", "/run/*")
-        self.container = []
-        ior_verification_results = []
-        metrics_data = {}
-        ior_latency = {}
-        # disable verbosity
-        self.telemetry.dmg.verbose = False
-        test_metrics = TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS + \
-                       TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
-
-        for transfer_size in transfer_sizes:
-            ior_latency[transfer_size] = {}
-            self.add_pool(connect=False)
-            oclass = self.ior_cmd.dfs_oclass.value
-            self.add_containers(self.pool, oclass)
-            for operation in ["update", "fetch"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info(
-                    "<<< Start ior %s transfer_size=%s", operation, transfer_size)
-                self.ior_cmd.transfer_size.update(transfer_size)
-                self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].uuid)
-                # Run ior command
-                ior_results = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
-                ior_latency[transfer_size][operation] = self.get_ior_latency(ior_results)
-                if operation in "update":
-                    metrics_data.update(self.telemetry.get_io_metrics(
-                        TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS))
-                else:
-                    metrics_data.update(self.telemetry.get_io_metrics(
-                        TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS))
-            # Destroy the container and the pool.
-            self.destroy_containers(containers=self.container[-1])
-            self.destroy_pools(pools=self.pool)
-
-        # check dmg latency metrics against ior latency metrics
-        for test_metric in test_metrics:
-            for transfer_size in transfer_sizes:
-                if self.verify_ior_latency_metrics(
-                        metrics_data, ior_latency, test_metric, str(transfer_size)):
-                    ior_verification_results.append(["PASSED", test_metric, transfer_size])
-                else:
-                    ior_verification_results.append(["FAILED", test_metric, transfer_size])
-        # check engine io latency rpc min, max, mean and stddev values for each transfer size
-        errors = False
-        self.log.error("Summary of io latency test results:")
-        # Check ior results
-        for item in ior_verification_results:
-            self.log.info("  %s  %s  %s", item[0], item[1], item[2])
-            if item[0] == "FAILED":
-                errors = True
 
         if errors:
             self.fail("Test FAILED")

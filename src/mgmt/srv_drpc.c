@@ -199,6 +199,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_engines; i++) {
 		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_incarnation = req->engines[i]->incarnation;
 		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
 	in.gui_n_servers = req->n_engines;
@@ -1118,9 +1119,8 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 		return 0;
 
 	D_ALLOC_ARRAY(resp_props, valid_prop_nr);
-	if (resp_props == NULL) {
+	if (resp_props == NULL)
 		return -DER_NOMEM;
-	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -1146,8 +1146,23 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 			if (resp_props[j]->strval == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else if (daos_prop_has_ptr(entry)) {
-			D_ERROR("pointer-value props not supported\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			switch (entry->dpe_type) {
+			case DAOS_PROP_PO_SVC_LIST:
+				if (entry->dpe_val_ptr == NULL) {
+					D_ERROR("svc rank list unset\n");
+					D_GOTO(out, rc = -DER_INVAL);
+				}
+				resp_props[j]->strval = d_rank_list_to_str(
+					(d_rank_list_t *)entry->dpe_val_ptr);
+				if (resp_props[j]->strval == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+				resp_props[j]->value_case =
+					MGMT__POOL_PROPERTY__VALUE_STRVAL;
+				break;
+			default:
+				D_ERROR("pointer-value props not supported\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 		} else {
 			resp_props[j]->numval = entry->dpe_val;
 			resp_props[j]->value_case =

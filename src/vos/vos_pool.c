@@ -771,6 +771,8 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
 		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (pool_df->pd_version >= POOL_DF_POOL_CHK)
+		pool->vp_feats |= VOS_POOL_FEAT_CHK;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -885,15 +887,47 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags, daos_handle_t *
 	return vos_pool_open_metrics(path, uuid, flags, NULL, poh);
 }
 
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats)
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 {
-	struct vos_pool	*pool;
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+	int                 rc = 0;
 
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
-	pool->vp_feats |= feats;
+	pool_df = pool->vp_pool_df;
+
+	if (version == pool_df->pd_version)
+		return 0;
+
+	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
+		  "Invalid pool upgrade version %d, current version is %d\n", version,
+		  pool_df->pd_version);
+
+	rc = umem_tx_begin(&pool->vp_umm, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = umem_tx_add_ptr(&pool->vp_umm, &pool_df->pd_version, sizeof(pool_df->pd_version));
+	if (rc != 0)
+		goto end;
+
+	pool_df->pd_version = version;
+
+end:
+	rc = umem_tx_end(&pool->vp_umm, rc);
+
+	if (rc != 0)
+		return rc;
+
+	if (version >= POOL_DF_AGG_OPT)
+		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (version >= POOL_DF_POOL_CHK)
+		pool->vp_feats |= VOS_POOL_FEAT_CHK;
+
+	return 0;
 }
 
 /**
@@ -1019,4 +1053,24 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	}
 
 	return 0;
+}
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return NULL;
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+		return NULL;
+
+	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -222,7 +223,7 @@ func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
 // AddOrReplace adds member to membership or replaces member if it exists.
 //
 // Note: this method updates state without checking if state transition is
-//       legal so use with caution.
+// legal so use with caution.
 func (m *Membership) AddOrReplace(newMember *Member) error {
 	m.Lock()
 	defer m.Unlock()

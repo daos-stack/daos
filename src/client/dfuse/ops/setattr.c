@@ -63,7 +63,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		DFUSE_TRA_DEBUG(ie, "atime %#lx", attr->st_atime);
 		to_set &= ~(FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_ATIME_NOW);
-		dfs_flags |= DFS_SET_ATTR_ATIME;
 	}
 
 	if (to_set & FUSE_SET_ATTR_MTIME) {
@@ -86,16 +85,15 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 	}
 
 	if (to_set & FUSE_SET_ATTR_SIZE) {
-		DFUSE_TRA_DEBUG(ie, "size %#lx",
-				attr->st_size);
+		DFUSE_TRA_DEBUG(ie, "size %#lx", attr->st_size);
 		to_set &= ~FUSE_SET_ATTR_SIZE;
 		dfs_flags |= DFS_SET_ATTR_SIZE;
-		if (ie->ie_dfs->dfc_data_caching &&
-		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
+		if (ie->ie_dfs->dfc_data_timeout != 0 && ie->ie_stat.st_size == 0 &&
+		    attr->st_size > 0) {
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
-			ie->ie_truncated = true;
-			ie->ie_start_off = 0;
-			ie->ie_end_off = 0;
+			ie->ie_truncated    = true;
+			ie->ie_start_off    = 0;
+			ie->ie_end_off      = 0;
 			ie->ie_stat.st_size = attr->st_size;
 		} else {
 			ie->ie_truncated = false;
@@ -113,11 +111,7 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
-	/* Update the size as dfuse knows about it for future use, but only if it was set as part
-	 * of this call.  See DAOS-8333
-	 */
-	if (dfs_flags & DFS_SET_ATTR_SIZE)
-		ie->ie_stat.st_size = attr->st_size;
+	ie->ie_stat = *attr;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;

@@ -91,6 +91,8 @@ const (
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
 	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
@@ -123,6 +125,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePageMem

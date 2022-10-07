@@ -6,7 +6,6 @@
 
 import os
 import time
-from collections import OrderedDict
 import general_utils
 
 from dfuse_test_base import DfuseTestBase
@@ -59,7 +58,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", True)
+        self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
 
     def test_dfuse_daos_build_metadata(self):
         """ This test builds DAOS on a dfuse filesystem.
@@ -75,6 +74,20 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("metadata")
 
+    def test_dfuse_daos_build_data(self):
+        """ This test builds DAOS on a dfuse filesystem.
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_data
+        """
+        self.run_build_test("data")
+
     def test_dfuse_daos_build_nocache(self):
         """ This test builds DAOS on a dfuse filesystem.
         Use cases:
@@ -89,7 +102,7 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("nocache")
 
-    def run_build_test(self, cache_mode, intercept=False):
+    def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
         """"Run an actual test from above"""
 
         # Create a pool, container and start dfuse.
@@ -98,7 +111,7 @@ class DaosBuild(DfuseTestBase):
 
         daos_cmd = self.get_daos_command()
 
-        cont_attrs = OrderedDict()
+        cont_attrs = {}
 
         # How long to cache things for, if caching is enabled.
         cache_time = '60m'
@@ -106,26 +119,35 @@ class DaosBuild(DfuseTestBase):
         # commands which can both take a long time.
         build_time = 10
 
-        self.load_dfuse(self.hostlist_clients)
+        self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = '5m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = '5m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 120
+                build_time = 30 * 5
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
+            if intercept:
+                build_time = 120
+            self.dfuse.disable_wb_cache.value = True
+        elif cache_mode == 'data':
+            build_time = 60
+            cont_attrs['dfuse-data-cache'] = True
+            cont_attrs['dfuse-attr-time'] = '0'
+            cont_attrs['dfuse-dentry-time'] = '0'
+            cont_attrs['dfuse-ndentry-time'] = '0'
             if intercept:
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
@@ -149,7 +171,7 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        remote_env = OrderedDict()
+        remote_env = {}
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
 
@@ -189,7 +211,9 @@ class DaosBuild(DfuseTestBase):
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
             elapsed = time.time() - start
-            self.log.info('Ran in %d seconds', elapsed)
+            (minutes, seconds) = divmod(elapsed, 60)
+            self.log.info('Completed in %d:%02d (%d%% of timeout)',
+                          minutes, seconds, elapsed / timeout * 100)
             assert len(ret_code) == 1
 
             cmd_ret = ret_code[0]

@@ -124,10 +124,20 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	if (fi_out)
+	if (fi_out) {
+		/* Now set the value of keep_cache, this is for creat where we need to do the hash
+		 * table lookup before setting this value.
+		 */
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
+			fi_out->keep_cache = 1;
+		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
+			fi_out->keep_cache = 1;
+		}
+
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
-	else
+	} else {
 		DFUSE_REPLY_ENTRY(ie, req, entry);
+	}
 
 	if (wipe_parent == 0)
 		return;
@@ -165,22 +175,19 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		return rc;
 
-	/** TODO: should switch dfuse to use da_pool and da_cont instead of the uuids. */
-	duns_destroy_attr(&dattr);
-
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
-		return ENOTSUP;
+		D_GOTO(out_err, rc = ENOTSUP);
 
 	/* Search the currently connect dfp list, if one matches then use that,
 	 * otherwise allocate a new one.
 	 */
 
-	rc = dfuse_pool_connect(fs_handle, &dattr.da_puuid, &dfp);
-	if (rc != -DER_SUCCESS)
+	rc = dfuse_pool_get_handle(fs_handle, dattr.da_puuid, &dfp);
+	if (rc != 0)
 		D_GOTO(out_err, rc);
 
 	rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cuuid, &dfs);
-	if (rc != -DER_SUCCESS)
+	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 
 	/* The inode has a reference to the dfs, so keep that. */
@@ -188,16 +195,13 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
-			NULL, &ie->ie_stat);
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
@@ -207,8 +211,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx",
-		       dfs->dfs_ino);
+	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+
+	duns_destroy_attr(&dattr);
 
 	return rc;
 out_dfs:
@@ -216,6 +221,8 @@ out_dfs:
 out_dfp:
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 out_err:
+	duns_destroy_attr(&dattr);
+
 	return rc;
 }
 

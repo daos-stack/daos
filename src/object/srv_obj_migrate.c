@@ -163,7 +163,7 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 	struct umem_attr	uma;
 	struct tree_cache_root	root = { 0 };
 	struct tree_cache_root	*tmp_root;
-	int			rc;
+	int			rc, rc2;
 
 	d_iov_set(&key_iov, key, key_size);
 	d_iov_set(&val_iov, &root, sizeof(root));
@@ -189,8 +189,12 @@ obj_tree_create(daos_handle_t toh, void *key, size_t key_size,
 
 	*rootp = tmp_root;
 out:
-	if (rc < 0)
-		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+	if (rc < 0) {
+		rc2 = dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+		if (rc2)
+			D_WARN("failed to delete "DF_KEY": "DF_RC"\n",
+			       DP_KEY(&key_iov), DP_RC(rc2));
+	}
 	return rc;
 }
 
@@ -1442,9 +1446,6 @@ migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
 		}
 	}
 
-	if (tls->mpt_global_version >= 1)
-		vos_pool_features_set(cont_child->sc_pool->spc_hdl, VOS_POOL_FEAT_AGG_OPT);
-
 	*cont_p = cont_child;
 	return rc;
 }
@@ -1462,7 +1463,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
 	if (rc || cont == NULL)
-		D_GOTO(out, rc);
+		D_GOTO(cont_put, rc);
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -1520,6 +1521,9 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 		D_GOTO(obj_close, rc);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_UPDATE_FAIL))
+		D_GOTO(obj_close, rc = -DER_INVAL);
+
 	if (mrone->mo_iods[0].iod_type == DAOS_IOD_SINGLE)
 		rc = migrate_fetch_update_single(mrone, oh, cont);
 	else if (obj_shard_is_ec_parity(mrone->mo_oid, mrone->mo_dkey_hash,
@@ -1539,8 +1543,8 @@ cont_close:
 pool_close:
 	dsc_pool_close(poh);
 cont_put:
-	ds_cont_child_put(cont);
-out:
+	if (cont != NULL)
+		ds_cont_child_put(cont);
 	return rc;
 }
 
@@ -2186,7 +2190,10 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	uint32_t		shard = arg->arg->shard;
 	struct migrate_one	*mo;
 	bool			merged = false;
+	bool			create_migrate_one = false;
 	int			rc = 0;
+	struct migrate_pool_tls *tls;
+	uint32_t		parity_shard;
 	int			i;
 
 	if (!daos_oclass_is_ec(&arg->oc_attr))
@@ -2196,29 +2203,41 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	 * If parity shard alive for this dkey, then ignore the data shard enumeration
 	 * from data shard.
 	 */
-	rc = obj_ec_parity_alive(arg->oh, io->ui_dkey_hash);
+	rc = obj_ec_parity_alive(arg->oh, io->ui_dkey_hash, &parity_shard);
 	if (rc < 0)
 		return rc;
+
+	tls = migrate_pool_tls_lookup(arg->arg->pool_uuid, arg->arg->version);
+	if (tls == NULL || tls->mpt_fini) {
+		D_WARN("some one abort the rebuild "DF_UUID"\n",
+		       DP_UUID(arg->arg->pool_uuid));
+		return 0;
+	}
 
 	if (!arg->ec_rotate_parity)
 		io->ui_dkey_hash = 0;
 
-	if (rc == 1 &&
-	    is_ec_data_shard(io->ui_oid.id_shard, io->ui_dkey_hash, &arg->oc_attr)) {
-		D_DEBUG(DB_REBUILD, DF_UOID" ignore data shard "DF_KEY"/%u/"DF_U64".\n",
+	if ((rc == 1 &&
+	     (is_ec_data_shard(io->ui_oid.id_shard, io->ui_dkey_hash, &arg->oc_attr) ||
+	      (arg->ec_rotate_parity && io->ui_oid.id_shard != parity_shard))) ||
+	    (tls->mpt_opc == RB_OP_FAIL && io->ui_oid.id_shard == shard)) {
+		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/"DF_U64".\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
 			obj_ec_shard_off(io->ui_dkey_hash, &arg->oc_attr, 0));
-		return 0;
+		D_GOTO(put, rc = 0);
 	}
 	rc = 0;
 
 	/* Convert EC object offset to DAOS offset. */
-	for (i = 0; i <= io->ui_iods_top; i++) {
+	for (i = 0; i <= io->ui_iods_top && io->ui_dkey_punch_eph == 0 &&
+	     io->ui_obj_punch_eph == 0; i++) {
 		daos_iod_t	*iod = &io->ui_iods[i];
 		daos_epoch_t	**ephs = &io->ui_recx_ephs[i];
 
-		if (iod->iod_type == DAOS_IOD_SINGLE)
+		if (iod->iod_type == DAOS_IOD_SINGLE || io->ui_akey_punch_ephs[i] != 0) {
+			create_migrate_one = true;
 			continue;
+		}
 
 		D_DEBUG(DB_REBUILD, DF_UOID" unpack for shard %u start EC "DF_U64"/"DF_X64"\n",
 			DP_UOID(io->ui_oid), shard,
@@ -2226,7 +2245,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 
 		/**
 		 * Since we do not need split the rebuild into parity rebuild
-		 * (by mo_iods_from_parity) and partial updatei(by mo_iods),
+		 * (by mo_iods_from_parity) and partial update(by mo_iods),
 		 * so it does not need keep the PARITY BIT in recx, see rw_iod_pack().
 		 */
 		rc = obj_recx_ec2_daos(&arg->oc_attr, io->ui_dkey_hash, io->ui_oid.id_shard,
@@ -2234,7 +2253,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		if (rc != 0) {
 			D_ERROR(DF_UOID" ec 2 daos %u failed: "DF_RC"\n",
 				DP_UOID(io->ui_oid), shard, DP_RC(rc));
-			return rc;
+			D_GOTO(put, rc);
 		}
 
 		/* Filter the DAOS recxs to the rebuild data shard */
@@ -2248,12 +2267,18 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 			if (rc) {
 				D_ERROR(DF_UOID" daos to shard %u failed: "DF_RC"\n",
 					DP_UOID(io->ui_oid), shard, DP_RC(rc));
-				return rc;
+				D_GOTO(put, rc);
 			}
-			/* No data needs to be migrate. */
-			if (iod->iod_nr == 0)
-				continue;
 		}
+
+		if (iod->iod_nr > 0)
+			create_migrate_one = true;
+	}
+
+	if (!create_migrate_one) {
+		D_DEBUG(DB_REBUILD, DF_UOID"/"DF_KEY" does not need rebuild.\n",
+			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey));
+		D_GOTO(put, rc = 0);
 	}
 
 	/* Check if some IODs from this unpack can be merged to the exist mrone, mostly for EC
@@ -2267,7 +2292,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		    daos_key_match(&mo->mo_dkey, &io->ui_dkey)) {
 			rc = migrate_try_merge_recx(mo, io);
 			if (rc < 0)
-				return rc;
+				D_GOTO(put, rc);
 
 			if (rc == 0)
 				merged = true; /* merged all recxs already */
@@ -2280,7 +2305,8 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 
 	if (!merged)
 		rc = migrate_one_create(arg, io);
-
+put:
+	migrate_pool_tls_put(tls);
 	return rc;
 }
 
@@ -2394,7 +2420,9 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_handle_t		 poh = DAOS_HDL_INVAL;
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_handle_t		 oh  = DAOS_HDL_INVAL;
+	uint32_t		 minimum_nr;
 	uint32_t		 num;
+	int			 rc1;
 	int			 rc = 0;
 
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
@@ -2421,7 +2449,10 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_pool, rc);
 	}
 
-	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RO, &oh);
+	/* Only open with RW flag, reintegrating flag will be set, which is needed
+	 * during unpack_cb to check if parity shard alive.
+	 */
+	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RW, &oh);
 	if (rc) {
 		D_ERROR("dsc_obj_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);
@@ -2435,7 +2466,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	unpack_arg.epr = *epr;
 	unpack_arg.oh = oh;
 	unpack_arg.version = tls->mpt_version;
-	unpack_arg.ec_rotate_parity = 0;
+	unpack_arg.ec_rotate_parity = 1;
 	D_INIT_LIST_HEAD(&unpack_arg.merge_list);
 	buf = stack_buf;
 	buf_len = ITER_BUF_SIZE;
@@ -2450,7 +2481,13 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
+		/* EC rotate needs to fetch from all shards */
+		if (unpack_arg.ec_rotate_parity)
+			minimum_nr = obj_ec_tgt_nr(&unpack_arg.oc_attr);
+		else
+			minimum_nr = 2;
 	} else {
+		minimum_nr = 2;
 		p_csum = &csum;
 		d_iov_set(&csum, stack_csum_buf, CSUM_BUF_SIZE);
 	}
@@ -2558,7 +2595,7 @@ retry:
 		}
 
 		/* Each object enumeration RPC will at least one OID */
-		if (num < 2) {
+		if (num <= minimum_nr) {
 			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
@@ -2591,7 +2628,10 @@ retry:
 
 	dsc_obj_close(oh);
 out_cont:
-	dsc_cont_close(poh, coh);
+	rc1 = dsc_cont_close(poh, coh);
+	if (rc1)
+		D_WARN(DF_UUID" container "DF_UUID" close failure: "DF_RC"\n",
+		       DP_UUID(tls->mpt_pool_uuid), DP_UUID(tls->mpt_coh_uuid), DP_RC(rc1));
 out_pool:
 	dsc_pool_close(poh);
 out:
@@ -2612,6 +2652,7 @@ migrate_fini_one_ult(void *data)
 {
 	struct migrate_stop_arg *arg = data;
 	struct migrate_pool_tls *tls;
+	int			 rc;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL)
@@ -2624,12 +2665,19 @@ migrate_fini_one_ult(void *data)
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
 	migrate_pool_tls_put(tls); /* lookup */
-	ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+	rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_WARN("failed to migrate fini one ult "DF_UUID": "DF_RC"\n",
+		       DP_UUID(arg->pool_uuid), DP_RC(rc));
+	} else {
+		rc = 0;
+	}
 
 	migrate_pool_tls_put(tls); /* destroy */
 
 	D_INFO("migrate fini one ult "DF_UUID"\n", DP_UUID(arg->pool_uuid));
-	return 0;
+	return rc;
 }
 
 /* stop the migration */
@@ -2641,8 +2689,10 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version);
-	if (tls == NULL)
+	if (tls == NULL) {
+		D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 		return;
+	}
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;

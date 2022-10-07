@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -189,13 +189,14 @@ void swim_self_set(struct swim_context *ctx, swim_id_t self_id);
  * Parse a SWIM message from other group member.
  *
  * @param[in]  ctx	SWIM context pointer from swim_init()
- * @param[in]  from	IDs of selected target for message
+ * @param[in]  from	IDs where message is from
+ * @param[in]  id	IDs of selected target for message
  * @param[in]  upds	SWIM updates from other group member
  * @param[in]  nupds	the count of SWIM updates
  * @returns		0 on success, negative error ID otherwise
  */
-int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
-			struct swim_member_update *upds, size_t nupds);
+int swim_updates_parse(struct swim_context *ctx, swim_id_t from, swim_id_t id,
+		       struct swim_member_update *upds, size_t nupds);
 
 /**
  * Prepare a SWIM message for other group member.
@@ -265,15 +266,6 @@ int swim_progress(struct swim_context *ctx, int64_t timeout);
  */
 int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 			   uint64_t delay);
-
-/**
- * Notify SWIM about new remote member.
- *
- * @param[in]  ctx	SWIM context pointer from swim_init()
- * @param[in]  id	IDs of new member in inactive state
- * @returns		0 on success, negative error ID otherwise
- */
-int swim_member_new_remote(struct swim_context *ctx, swim_id_t id);
 
 /** @} */
 

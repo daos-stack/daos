@@ -140,7 +140,33 @@ struct obj_tls {
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_tgt_update_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_bulk_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bulk_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_vos_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_vos_lat[NR_LATENCY_BUCKETS];
 };
+
+static inline unsigned int
+lat_bucket(uint64_t size)
+{
+	int nr;
+
+	if (size <= 256)
+		return 0;
+
+	/** return number of leading zero-bits */
+	nr =  __builtin_clzl(size - 1);
+
+	/** >4MB, return last bucket */
+	if (nr < 42)
+		return NR_LATENCY_BUCKETS - 1;
+
+	return 56 - nr;
+}
 
 static inline struct obj_tls *
 obj_tls_get()
