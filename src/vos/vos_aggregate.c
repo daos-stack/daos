@@ -397,6 +397,8 @@ vos_agg_obj(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_param->ap_oid = entry->ie_oid;
 	inc_agg_counter(agg_param, VOS_ITER_OBJ, AGG_OP_SCAN);
 
+	D_ERROR("oid:"DF_UOID": vos agg starting\n", DP_UOID(agg_param->ap_oid));
+
 	return 0;
 }
 
@@ -2631,7 +2633,8 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	int			 rc;
 	bool			 run_agg = false;
 
-	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
+	/* D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi); */
+	D_ERROR("epr: %lu -> %lu, flags 0x%x\n", epr->epr_lo, epr->epr_hi, flags);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
@@ -2642,8 +2645,10 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		return -DER_NOMEM;
 
 	rc = aggregate_enter(cont, AGG_MODE_AGGREGATE, epr);
-	if (rc)
+	if (rc) {
+		D_ERROR("aggregate_enter "DF_RC"\n", DP_RC(rc));
 		goto free_agg_data;
+	}
 
 	/** Use the lower end of the epoch range as the barrier when we are aggregating a
 	 *  deleted snapshot.  If there is no write above that range for a given key,
@@ -2656,8 +2661,11 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 
 	feats = dbtree_feats_get(&cont->vc_cont_df->cd_obj_root);
 	has_agg_write = vos_feats_agg_time_get(feats, &agg_write);
-	if (has_agg_write && agg_write <= ad->ad_agg_param.ap_filter_epoch)
+	if (has_agg_write && agg_write <= ad->ad_agg_param.ap_filter_epoch) {
+		D_ERROR("agg_write "DF_X64" <= ad->ad_agg_param.ap_filter_epoch "DF_X64"\n",
+			agg_write, ad->ad_agg_param.ap_filter_epoch);
 		goto update_hae;
+	}
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;

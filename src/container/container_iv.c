@@ -505,8 +505,12 @@ cont_iv_ent_agg_eph_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rc)
 		return rc;
 
-	if (rank != entry->ns->iv_master_rank)
+	if (rank != entry->ns->iv_master_rank) {
+		D_ERROR(DF_CONT" rank %d, entry->ns->iv_master_rank %d, eph "DF_X64", forward\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+			rank, entry->ns->iv_master_rank, civ_ent->iv_agg_eph.eph);
 		return -DER_IVCB_FORWARD;
+	}
 
 	rc = ds_cont_leader_update_agg_eph(entry->ns->iv_pool_uuid,
 					   civ_key->cont_uuid,

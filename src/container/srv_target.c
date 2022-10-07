@@ -294,7 +294,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	uint64_t		interval;
 	uint64_t		snapshots_local[MAX_SNAPSHOT_LOCAL] = { 0 };
 	uint64_t		*snapshots = NULL;
-	int			snapshots_nr;
+	int			snapshots_nr = 0;
 	int			tgt_id = dss_get_module_info()->dmi_tgt_id;
 	uint32_t		flags = 0;
 	int			i, rc = 0;
@@ -344,7 +344,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
+	/* D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n", */
+	D_ERROR("hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
@@ -362,7 +363,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		int	insert_idx;
 
 		/* insert rebuild_fetch into the snapshot list */
-		D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence);
+		/* D_DEBUG(DB_EPC, "rebuild fence "DF_X64"\n", rebuild_fence); */
 		for (j = 0, insert_idx = 0; j < cont->sc_snapshots_nr; j++) {
 			if (cont->sc_snapshots[j] < rebuild_fence) {
 				snapshots[j] = cont->sc_snapshots[j];
@@ -373,6 +374,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		}
 		snapshots[insert_idx] = rebuild_fence;
 		snapshots_nr = cont->sc_snapshots_nr + 1;
+		D_ERROR("rebuild fence "DF_X64", snapshots_nr %d\n", rebuild_fence, snapshots_nr);
 	} else {
 		/* Since sc_snapshots might be freed by other ULT, let's
 		 * always copy here.
@@ -387,24 +389,29 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	for (i = 0; i < snapshots_nr && snapshots[i] < epoch_min; ++i)
 		;
 
-	if (i == 0)
+	if (i == 0) {
 		epoch_range.epr_lo = 0;
-	else
+	} else {
 		epoch_range.epr_lo = snapshots[i - 1] + 1;
+		D_ERROR("i %d, epoch_range.epr_lo "DF_X64"\n", i, epoch_range.epr_lo);
+	}
 
 	if (epoch_range.epr_lo >= epoch_max)
 		D_GOTO(free, rc = 0);
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		tgt_id, epoch_min, hlc);
+	/* D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n", */
+	D_ERROR(DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64", snapshots_nr %d, epoch_range.epr_lo "
+		DF_X64"\n", DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+		tgt_id, epoch_min, hlc, snapshots_nr, epoch_range.epr_lo);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "
-			DF_X64"}\n",
+		/* D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> " */
+		D_ERROR(DF_CONT"[%d]: Aggregating {"DF_X64" -> "
+			DF_X64"}, param->ap_vos_agg %d\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi,
+			param->ap_vos_agg);
 
 		flags |= VOS_AGG_FL_FORCE_MERGE;
 		rc = agg_cb(cont, &epoch_range, flags, param);
@@ -414,13 +421,18 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	}
 
 	D_ASSERT(epoch_range.epr_lo <= epoch_max);
-	if (epoch_range.epr_lo == epoch_max)
+	if (epoch_range.epr_lo == epoch_max) {
+		D_ERROR(DF_CONT"[%d]: epoch_range.epr_lo "DF_X64"\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id,
+			epoch_range.epr_lo);
 		goto out;
+	}
 
 	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n",
+	/* D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n", */
+	D_ERROR(DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}, param->ap_vos_agg %d\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi, param->ap_vos_agg);
 
 	if (dss_xstream_is_busy())
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
@@ -2265,6 +2277,7 @@ cont_ec_eph_alloc(d_list_t *ec_list, uuid_t cont_uuid)
 	new_ec->ce_ephs_cnt = dss_tgt_nr;
 	d_list_add(&new_ec->ce_list, ec_list);
 	new_ec->ce_ref = 0;
+	D_ERROR("cont_ec_eph_alloc ec_eph %p, new_ec->ce_ephs %p\n", new_ec, new_ec->ce_ephs);
 	return new_ec;
 }
 
@@ -2284,8 +2297,9 @@ ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 	}
 
 	new_eph->ce_ref++;
-	D_DEBUG(DB_MD, DF_UUID "add %d tgt to epoch query list %d\n",
-		DP_UUID(cont_uuid), tgt_idx, new_eph->ce_ref);
+	D_ERROR(DF_UUID "add %d tgt to epoch query list %d, new_eph %p, "
+		"new_eph->ce_ephs[tgt_idx] addr %p\n",
+		DP_UUID(cont_uuid), tgt_idx, new_eph->ce_ref, new_eph, &new_eph->ce_ephs[tgt_idx]);
 	D_ASSERT(tgt_idx < new_eph->ce_ephs_cnt);
 	new_eph->ce_ephs[tgt_idx] = 0;
 	*epoch_p = &new_eph->ce_ephs[tgt_idx];
@@ -2306,7 +2320,7 @@ ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 	D_ASSERT(tgt_idx < ec_eph->ce_ephs_cnt);
 	D_ASSERT(ec_eph->ce_ref > 0);
 	ec_eph->ce_ref--;
-	D_DEBUG(DB_MD, DF_UUID "delete %d tgt ref %d.\n",
+	D_ERROR(DF_UUID "delete %d tgt ref %d.\n",
 		DP_UUID(cont_uuid), tgt_idx, ec_eph->ce_ref);
 	return 0;
 }
@@ -2314,6 +2328,7 @@ ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 static void
 cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
 {
+	D_ERROR("cont_ec_eph_destroy ec_eph %p\n", ec_eph);
 	d_list_del(&ec_eph->ce_list);
 	D_FREE(ec_eph->ce_ephs);
 	D_FREE(ec_eph);
@@ -2360,6 +2375,8 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 				break;
 
 			if (ec_eph->ce_ref == 0) {
+				D_ERROR("ce_ref drop to 0, cont_ec_eph_destroy ec_eph %p\n",
+					cont_ec_eph_destroy);
 				cont_ec_eph_destroy(ec_eph);
 				continue;
 			}
@@ -2375,31 +2392,40 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 					}
 				}
 
-				if (!is_failed_tgts)
+				if (!is_failed_tgts) {
 					min_eph = min(min_eph, ec_eph->ce_ephs[i]);
+					D_ERROR("ec_eph->ce_ephs[%d] %p "DF_X64"min_eph "DF_X64"\n",
+						i, &ec_eph->ce_ephs[i], ec_eph->ce_ephs[i],
+						min_eph);
+				}
 			}
 
 			if (min_eph == 0 || min_eph == DAOS_EPOCH_MAX ||
 			    min_eph <= ec_eph->ce_last_eph) {
 				if (min_eph < ec_eph->ce_last_eph)
 					D_ERROR("ignore for now "DF_X64" < "DF_X64
-						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
-						DP_UUID(ec_eph->ce_cont_uuid));
+						" "DF_UUID", ec_eph %p, ec_eph->ce_ephs %p\n",
+						min_eph, ec_eph->ce_last_eph,
+						DP_UUID(ec_eph->ce_cont_uuid),
+						ec_eph, ec_eph->ce_ephs);
 				else
-					D_DEBUG(DB_MD, "Skip eph "DF_X64"/"DF_X64
-						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
-						DP_UUID(ec_eph->ce_cont_uuid));
+					D_ERROR("Skip eph "DF_X64"/"DF_X64
+						" "DF_UUID", ec_eph %p, ec_eph->ce_ephs %p\n",
+						min_eph, ec_eph->ce_last_eph,
+						DP_UUID(ec_eph->ce_cont_uuid),
+						ec_eph, ec_eph->ce_ephs);
 				continue;
 			}
 
-			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
+			/* D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n", */
+			D_ERROR("Update eph "DF_X64" "DF_UUID"\n",
 				min_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, ec_eph->ce_cont_uuid,
 						       min_eph);
 			if (rc == 0)
 				ec_eph->ce_last_eph = min_eph;
 			else
-				D_INFO(DF_CONT": Update min epoch: %d\n",
+				D_ERROR(DF_CONT": Update min epoch: %d\n",
 				       DP_CONT(pool->sp_uuid, ec_eph->ce_cont_uuid), rc);
 		}
 		D_FREE(failed_tgts);

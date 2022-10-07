@@ -2587,6 +2587,14 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * change while we decide how to handle this
 				 * properly.
 				 */
+				if (range_overlap == RT_OVERLAP_INCLUDED &&
+				    rect->rc_minor_epc == EVT_MINOR_EPC_MAX) {
+					D_ERROR("Ignore RT_OVERLAP_INCLUDED array remove "
+						DF_RECT" and "DF_RECT"\n", DP_RECT(rect),
+						DP_RECT(&rtmp));
+					rc = 0;
+					goto out;
+				}
 				if (range_overlap != RT_OVERLAP_SAME) {
 					D_ERROR("Same epoch partial "
 						"overwrite not supported:"
