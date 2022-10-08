@@ -62,6 +62,11 @@ dpdk_cli_override_opts;
 #define NVME_ACCEL_FLAG_MOVE	(1 << 0)
 #define NVME_ACCEL_FLAG_CRC	(1 << 1)
 
+/** Device role flags */
+#define NVME_ROLE_DATA		(1 << 0)
+#define NVME_ROLE_INDEX		(1 << 1)
+#define NVME_ROLE_WAL		(1 << 2)
+
 static inline char *
 nvme_state2str(int state)
 {

@@ -305,11 +305,9 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
-#  # Optionally specify the fabric network interface port that will be used
-#  # by this engine but please only if you have a specific need, this will
-#  # normally be chosen automatically.
+#  # Specify the fabric network interface and interface port that will
+#  # be used by this engine. The fabric_iface_port must be different
+#  # for each engine on a DAOS server.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000
@@ -383,6 +381,19 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
+#
+#    # Optional explicit nvme-class bdev tier role assignments, will define the roles and
+#    # responsibilities of this bdev tier. Note that roles will not be assigned if DCPM
+#    # class tier is defined. Roles will be derived implicitly based on configured bdev
+#    # tiers if not explicitly specified here.
+#    # Options are:
+#    # - "data" SSDs will be used to store actual data
+#    # - "index" SSDs will be used to store the VOS index
+#    # - "wal" SSDs will be used to store the write-ahead-log
+#    bdev_roles:
+#    - data
+#    - index
+#    - wal
 #
 #
 #  # Specify accelerator engine setting (experimental).
@@ -552,6 +563,16 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#
+#    # Optional explicit nvme-class bdev tier role assignments, will define the roles and
+#    # responsibilities of this bdev tier. Note that roles will not be assigned if DCPM
+#    # class tier is defined. Roles will be derived implicitly based on configured bdev
+#    # tiers if not explicitly specified here.
+#    # Options are:
+#    # - "data" SSDs will be used to store actual data
+#    # - "index" SSDs will be used to store the VOS index
+#    # - "wal" SSDs will be used to store the write-ahead-log
+#    bdev_roles: []
 #
 #
 #  # Specify accelerator engine setting (experimental).

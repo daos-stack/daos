@@ -89,10 +89,12 @@ const (
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
-	BdevAccelOptionUnknown
+	BdevConfigOptFlagUnknown
 	BdevConfigTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU
+	BdevConfigMultiTiersWithDCPM
+	BdevConfigBadNrRoles
 )
 
 // DAOS system fault codes
@@ -125,6 +127,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePageMem

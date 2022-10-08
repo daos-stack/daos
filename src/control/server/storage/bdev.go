@@ -20,9 +20,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -56,6 +56,14 @@ const (
 	AccelEngineDML   = C.NVME_ACCEL_DML
 	AccelOptMoveFlag = C.NVME_ACCEL_FLAG_MOVE
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
+)
+
+// Role assignments for NVMe SSDs related to type of storage (enables Metadata-on-SSD capability).
+const (
+	BdevRoleData  = C.NVME_ROLE_DATA
+	BdevRoleIndex = C.NVME_ROLE_INDEX
+	BdevRoleWAL   = C.NVME_ROLE_WAL
+	BdevRoleAll   = BdevRoleData | BdevRoleIndex | BdevRoleWAL
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
@@ -179,15 +187,15 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string       `json:"uuid"`
-	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState `json:"-"`
-	Rank        system.Rank  `json:"rank"`
-	TotalBytes  uint64       `json:"total_bytes"`
-	AvailBytes  uint64       `json:"avail_bytes"`
-	ClusterSize uint64       `json:"cluster_size"`
-	Health      *NvmeHealth  `json:"health"`
-	TrAddr      string       `json:"tr_addr"`
+	UUID        string        `json:"uuid"`
+	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
+	NvmeState   NvmeDevState  `json:"-"`
+	Rank        ranklist.Rank `json:"rank"`
+	TotalBytes  uint64        `json:"total_bytes"`
+	AvailBytes  uint64        `json:"avail_bytes"`
+	ClusterSize uint64        `json:"cluster_size"`
+	Health      *NvmeHealth   `json:"health"`
+	TrAddr      string        `json:"tr_addr"`
 }
 
 // MarshalJSON marshals SmdDevice to JSON.
@@ -407,6 +415,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
+		DeviceRoles    BdevDeviceRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.
