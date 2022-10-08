@@ -91,13 +91,30 @@ func FaultBdevAccelEngineUnknown(input string, options ...string) *fault.Fault {
 			options))
 }
 
-// FaultBdevAccelOptUnknown creates a Fault when an unrecognized acceleration option is detected.
-func FaultBdevAccelOptionUnknown(input string, options ...string) *fault.Fault {
+// FaultBdevConfigOptFlagUnknown creates a Fault when an unrecognized option flag (string) is detected
+// in the engine storage section of the config file.
+func FaultBdevConfigOptFlagUnknown(input string, options ...string) *fault.Fault {
 	return storageFault(
-		code.BdevAccelOptionUnknown,
-		fmt.Sprintf("unknown acceleration option %q", input),
+		code.BdevConfigOptFlagUnknown,
+		fmt.Sprintf("unknown option flag given: %q", input),
 		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
 			options))
+}
+
+// FaultBdevConfigMultiTiersWithDCPM creates a Fault when multiple bdev tiers are specified with DCPM
+// SCM class, which is unsupported.
+var FaultBdevConfigMultiTiersWithDCPM = storageFault(
+	code.BdevConfigMultiTiersWithDCPM,
+	"Multiple bdev tiers in config with scm class set to dcpm",
+	"Only a single bdev tier is supported if scm tier is of class dcpm, reduce the number of bdev tiers in config")
+
+// FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
+// to bdev tiers.
+func FaultBdevConfigBadNrRoles(tierType string, gotNr, wantNr int) *fault.Fault {
+	return storageFault(
+		code.BdevConfigBadNrRoles,
+		fmt.Sprintf("found %d %s tiers, wanted %d", gotNr, tierType, wantNr),
+		"Adjust the bdev tier role assignments in config to fulfil the requirement")
 }
 
 var FaultBdevNonRootVFIODisable = storageFault(

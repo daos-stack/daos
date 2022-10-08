@@ -756,6 +756,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -779,6 +780,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -810,6 +812,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -842,6 +845,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -866,12 +870,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddr(1)),
+							WithBdevDeviceList(test.MockPCIAddr(1)).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -898,12 +905,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -917,12 +927,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
+							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageNumaNodeIndex(1).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
@@ -948,12 +961,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddr(1)),
+							WithBdevDeviceList(test.MockPCIAddr(1)).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -981,12 +997,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -1001,12 +1020,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
+							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...).
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -1035,12 +1057,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:5d:05.5"),
+							WithBdevDeviceList("0000:5d:05.5").
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
 					WithStorageVosEnv("NVME").
@@ -1055,12 +1080,15 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:d7:07.1"),
+							WithBdevDeviceList("0000:d7:07.1").
+							WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 					WithStorageVosEnv("NVME").

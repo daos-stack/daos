@@ -10,21 +10,21 @@ server_config:
     nr_xs_helpers: 0
     scm_size: 4
 pool:
-    name: daos_server
-    control_method: dmg
-    scm_size_mux: !mux
-        size1gb:
-            scm_size: 1G
-        size3gb:
-            scm_size: 3G
+  name: daos_server
+  control_method: dmg
+  scm_size_mux: !mux
+    size1gb:
+      scm_size: 1G
+    size3gb:
+      scm_size: 3G
 object_class: !mux
-    OC_S1:
-        obj_class: OC_S1
-    OC_S4:
-        obj_class: OC_S4
-    OC_SX:
-        obj_class: OC_SX
-    OC_RP_2G1:
-        obj_class: OC_RP_2G1
-    OC_RP_2G2:
-        obj_class: OC_RP_2G2
+  OC_S1:
+    obj_class: OC_S1
+  OC_S4:
+    obj_class: OC_S4
+  OC_SX:
+    obj_class: OC_SX
+  OC_RP_2G1:
+    obj_class: OC_RP_2G1
+  OC_RP_2G2:
+    obj_class: OC_RP_2G2

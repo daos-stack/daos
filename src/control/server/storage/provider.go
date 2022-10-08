@@ -119,7 +119,10 @@ func (p *Provider) MountScm() error {
 
 	switch cfg.Class {
 	case ClassRam:
-		req.Size = cfg.Scm.RamdiskSize
+		req.Ramdisk = &RamdiskParams{
+			Size:     cfg.Scm.RamdiskSize,
+			NUMANode: cfg.Scm.NumaNodeIndex,
+		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
 			return ErrInvalidDcpmCount
@@ -151,7 +154,8 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 	switch class {
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
-			Size: scmCfg.RamdiskSize,
+			Size:     scmCfg.RamdiskSize,
+			NUMANode: scmCfg.NumaNodeIndex,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
@@ -258,11 +262,11 @@ func (p *Provider) HasBlockDevices() bool {
 // BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
-		Class:      cfg.Class,
-		DeviceList: cfg.Bdev.DeviceList,
-		// cfg size in nr GiBytes
+		Class:          cfg.Class,
+		DeviceList:     cfg.Bdev.DeviceList,
 		DeviceFileSize: uint64(humanize.GiByte * cfg.Bdev.FileSize),
 		Tier:           cfg.Tier,
+		DeviceRoles:    cfg.Bdev.DeviceRoles,
 	}
 }
 
