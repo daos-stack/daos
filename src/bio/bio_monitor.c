@@ -292,6 +292,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
+	D_FREE(gsca);
 }
 
 static void
@@ -309,6 +310,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 rc;
 	int				 sc, sct;
 	uint32_t			 cdw0;
+	bool				 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -356,10 +358,13 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
+	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
+	if (free_cb_arg)
+		D_FREE(gsca);
 }
 
 /* Return a uint64 raw value from a byte array */
@@ -592,6 +597,7 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint32_t		 cp_sz;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
+	bool			 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -635,10 +641,13 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
+	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
+	if (free_cb_arg)
+		D_FREE(gsca);
 }
 
 static void
@@ -653,6 +662,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	uint32_t		 numd, numdl, numdu;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
+	bool			 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -706,10 +716,13 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (Intel smart log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
+	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
+	if (free_cb_arg)
+		D_FREE(gsca);
 }
 
 static int
@@ -754,27 +767,27 @@ collect_raw_health_data(struct bio_blobstore *bbs, struct get_spdk_cb_arg *cb_ar
 
 	D_ASSERT(dev_health != NULL);
 	if (dev_health->bdh_desc == NULL)
-		return;
+		goto out;
 
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
 		D_ERROR("No bdev associated with device health descriptor\n");
-		return;
+		goto out;
 	}
 
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
-		return;
+		goto out;
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
 		D_ERROR("Bdev NVMe admin passthru not supported!\n");
-		return;
+		goto out;
 	}
 
 	/* Check to avoid parallel SPDK device health query calls */
 	if (dev_health->bdh_inflights)
-		return;
+		goto out;
 	dev_health->bdh_inflights++;
 
 	/* Prep NVMe command to get SPDK device health data */
@@ -804,6 +817,11 @@ collect_raw_health_data(struct bio_blobstore *bbs, struct get_spdk_cb_arg *cb_ar
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
+
+	return;
+out:
+	D_FREE(cb_arg);
+	return;
 }
 
 void
@@ -814,7 +832,7 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 	uint64_t		 monitor_period;
 	struct bio_xs_blobstore	*bxb = xs_ctxt->bxc_xs_blobstores[st];
 	struct bio_blobstore	*bbs;
-	struct get_spdk_cb_arg	 gsca;
+	struct get_spdk_cb_arg	*gsca;
 
 	if (bxb == NULL || bxb->bxb_blobstore == NULL)
 		return;
@@ -843,9 +861,16 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 			bbs->bb_owner_xs->bxc_tgt_id, rc);
 
 	if (!bypass_health_collect()) {
-		gsca.ctxt = xs_ctxt;
-		gsca.st = st;
-		collect_raw_health_data(bbs, &gsca);
+		D_ALLOC_PTR(gsca);
+
+		if (!gsca) {
+			D_ERROR("failed to allocate memory for get_spdk_cb_arg\n");
+			return;
+		}
+
+		gsca->ctxt = xs_ctxt;
+		gsca->st = st;
+		collect_raw_health_data(bbs, gsca);
 	}
 }
 
