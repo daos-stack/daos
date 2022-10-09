@@ -2691,7 +2691,7 @@ again2:
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3550,7 +3550,7 @@ again2:
 				 &opi->opi_api_flags, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -4565,7 +4565,7 @@ again:
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&
