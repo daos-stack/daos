@@ -1714,9 +1714,11 @@ ec_rec_parity_list(void **state)
 	daos_obj_id_t	oid;
 	int		i;
 	char		*data;
-	int		stripe_size = 4 * EC_CELL_SIZE;
+	int		stripe_size = 4 * ec_cell_size;
 	daos_anchor_t	anchor = { 0 };
 	daos_size_t	size;
+	int		start = INT_MAX;
+	int		end = 0;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1735,21 +1737,32 @@ ec_rec_parity_list(void **state)
 			     data, stripe_size, &req);
 	}
 
+	for (i = 0; i < 5; i++) {
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = ec_cell_size;  /* partial stripe write */
+		recx.rx_idx = i * stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+	}
+
 	/* Verify the recx */
 	while (!daos_anchor_is_eof(&anchor)) {
-		daos_recx_t	   recxs[5];
-		daos_epoch_range_t eprs[5];
-		uint32_t	   number = 5;
+		daos_recx_t	   recxs[10];
+		daos_epoch_range_t eprs[10];
+		uint32_t	   number = 10;
 
 		enumerate_rec(DAOS_TX_NONE, "d_key", "a_key", &size,
 			      &number, recxs, eprs, &anchor, true, &req);
 		for (i = 0; i < number; i++) {
-			assert_int_equal((int)recxs[i].rx_idx, i * stripe_size);
-			assert_int_equal((int)recxs[i].rx_nr, stripe_size);
+			start = min(start, (int)recxs[i].rx_idx);
+			end = max(end, (int)(recxs[i].rx_idx + recxs[i].rx_nr));
 		}
-
 	}
-
+	assert_rc_equal(start, 0);
+	assert_rc_equal(end, 5 * stripe_size);
 	free(data);
 	ioreq_fini(&req);
 }
