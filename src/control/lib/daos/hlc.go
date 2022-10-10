@@ -19,6 +19,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+const (
+	// ZeroHLCDate is the date of the zero HLC, as
+	// defined by CRT_HLC_START_SEC in src/cart/crt_hlc.c
+	ZeroHLCDate = "2021-01-01 00:00:00 +0000 UTC"
+)
+
 type (
 	// HLC is a high-resolution clock.
 	HLC uint64

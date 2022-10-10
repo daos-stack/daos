@@ -211,14 +211,11 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 }
 
 static int
-oid_iv_ent_put(struct ds_iv_entry *entry, void **_priv)
+oid_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	struct oid_iv_priv *priv = (struct oid_iv_priv *)_priv;
-
+	D_ASSERT(priv != NULL);
 	D_DEBUG(DB_TRACE, "%u: ON PUT\n", dss_self_rank());
-
 	D_FREE(priv);
-	_priv = NULL;
 
 	return 0;
 }

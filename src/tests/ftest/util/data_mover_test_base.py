@@ -96,7 +96,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Root directory for POSIX paths
         posix_root_map = {'self.workdir': self.workdir, 'self.tmp': self.tmp}
-        self.posix_root = MappedParameter(None, mapping=posix_root_map) # default will be self.tmp
+        self.posix_root = MappedParameter(None, mapping=posix_root_map)  # default will be self.tmp
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
