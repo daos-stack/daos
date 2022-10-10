@@ -295,7 +295,7 @@ post_provision_config_nodes() {
         # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
             # shellcheck disable=SC2154
-            if ! retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 --setopt=best=0 install $INST_RPMS; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"
