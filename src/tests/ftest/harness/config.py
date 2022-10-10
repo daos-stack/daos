@@ -20,7 +20,7 @@ class HarnessConfigTest(TestWithServers):
     def test_harness_config(self):
         """Verify the config handling.
 
-        Verfies the following:
+        Verifies the following:
             TestWithServers.access_points
             DaosAgentYamlParameters.exclude_fabric_ifaces
 
