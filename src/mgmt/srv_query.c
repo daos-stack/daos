@@ -15,8 +15,9 @@
 
 
 struct bs_state_query_arg {
-	int	bs_arg_state;
-	uuid_t	bs_arg_uuid;
+	int			bs_arg_state;
+	uuid_t			bs_arg_uuid;
+	enum smd_dev_type	bs_arg_type;
 };
 
 static void
@@ -37,7 +38,7 @@ bs_state_query(void *arg)
 		return;
 	}
 
-	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
+	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_type, bxc);
 }
 
 /*
@@ -53,6 +54,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	int				 rc;
 	struct bs_state_query_arg	 bs_arg;
 
+	bs_arg.bs_arg_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get target ID(s) for given device.
 	 */
@@ -141,7 +143,7 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid, bxc);
+	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_dev_type, bxc);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
@@ -163,6 +165,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		return -DER_INVAL;
 	}
 
+	mbh->mb_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get either target ID(s) for given
 	 * device or alternatively the device mapped to a given target.
@@ -533,7 +536,8 @@ out:
 }
 
 struct bio_faulty_dev_info {
-	uuid_t          devid;
+	uuid_t		  bf_devid;
+	enum smd_dev_type bf_dev_type;
 };
 
 static int
@@ -556,11 +560,11 @@ bio_faulty_led_set(void *arg)
 	}
 
 	/* Set the LED of the VMD device to a FAULT state */
-	rc = bio_set_led_state(bxc, faulty_info->devid, "fault",
+	rc = bio_set_led_state(bxc, faulty_info->bf_devid, "fault",
 			       false/*reset*/);
 	if (rc != 0)
 		D_ERROR("Error managing LED on device:"DF_UUID"\n",
-			DP_UUID(faulty_info->devid));
+			DP_UUID(faulty_info->bf_devid));
 
 	return 0;
 
@@ -585,7 +589,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_dev_set_faulty(bxc, bfdi->devid);
+	rc = bio_dev_set_faulty(bxc, bfdi->bf_dev_type);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -609,6 +613,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	D_DEBUG(DB_MGMT, "Setting FAULTY SMD device state for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
 
+	faulty_info.bf_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get NVMe device info for given
 	 * device UUID.
@@ -647,7 +652,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
 
-	uuid_copy(faulty_info.devid, dev_uuid);
+	uuid_copy(faulty_info.bf_devid, dev_uuid);
 	/* set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
 			     NULL, DSS_XS_VOS, 0, 0);

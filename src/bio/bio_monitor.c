@@ -24,7 +24,7 @@
 struct dev_state_msg_arg {
 	struct bio_xs_context		*xs;
 	struct nvme_stats		 devstate;
-	uuid_t				 dev_uuid;
+	enum smd_dev_type		 dev_type;
 	ABT_eventual			 eventual;
 };
 
@@ -60,45 +60,15 @@ collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
 	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * stats->cluster_size;
 }
 
-static enum smd_dev_type
-bio_get_xs_blobstore_type(uuid_t uuid, struct bio_xs_context *xs_ctxt)
-{
-	struct bio_xs_blobstore	 *bxb;
-	enum smd_dev_type		  st;
-
-	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
-		if (bxb != NULL && bxb->bxb_blobstore) {
-			if (uuid_compare(uuid,
-					 bxb->bxb_blobstore->bb_dev->bb_uuid) == 0)
-				return st;
-		}
-		if (bio_xs_is_meta_on_ssd(xs_ctxt) == 0) {
-			st = SMD_DEV_TYPE_MAX;
-			break;
-		}
-	}
-
-	D_ERROR("Failed to get xs:%p smd dev:"DF_UUID" type\n", xs_ctxt, DP_UUID(uuid));
-
-	return st;
-}
-
 /* Copy out the nvme_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
 	struct dev_state_msg_arg	*dsm = msg_arg;
-	enum smd_dev_type		 st;
 	struct bio_xs_blobstore		 *bxb;
 
-	st = bio_get_xs_blobstore_type(dsm->dev_uuid, dsm->xs);
-	/* not found */
-	if (st >= SMD_DEV_TYPE_MAX)
-		return;
-
 	D_ASSERT(dsm != NULL);
-	bxb = bio_xs_context2xs_blobstore(dsm->xs, st);
+	bxb = bio_xs_context2xs_blobstore(dsm->xs, dsm->dev_type);
 
 	dsm->devstate = bxb->bxb_blobstore->bb_dev_health.bdh_health_state;
 	collect_bs_usage(bxb->bxb_blobstore->bb_bs, &dsm->devstate);
@@ -111,15 +81,10 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	struct dev_state_msg_arg	*dsm = msg_arg;
 	int				 rc;
 	struct bio_xs_blobstore		*bxb;
-	enum smd_dev_type		 st;
 
 	D_ASSERT(dsm != NULL);
-	st = bio_get_xs_blobstore_type(dsm->dev_uuid, dsm->xs);
-	/* not found */
-	if (st >= SMD_DEV_TYPE_MAX)
-		return;
 
-	bxb = bio_xs_context2xs_blobstore(dsm->xs, st);
+	bxb = bio_xs_context2xs_blobstore(dsm->xs, dsm->dev_type);
 	rc = bio_bs_state_set(bxb->bxb_blobstore, BIO_BS_STATE_FAULTY);
 	if (rc)
 		D_ERROR("BIO FAULTY state set failed, rc=%d\n", rc);
@@ -158,23 +123,19 @@ bio_log_data_csum_err(struct bio_xs_context *bxc)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct nvme_stats *state, uuid_t uuid,
+bio_get_dev_state(struct nvme_stats *state, enum smd_dev_type st,
 		  struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
 	struct bio_xs_blobstore		*bxb;
-	enum smd_dev_type		 st;
 
 	rc = ABT_eventual_create(0, &dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
-	uuid_copy(dsm.dev_uuid, uuid);
-	st = bio_get_xs_blobstore_type(uuid, xs);
-	if (st >= SMD_DEV_TYPE_MAX)
-		return -DER_NONEXIST;
+	dsm.dev_type = st;
 
 	bxb = bio_xs_context2xs_blobstore(xs, st);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
@@ -196,14 +157,9 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t uuid,
  * Copy out the internal BIO blobstore device state.
  */
 void
-bio_get_bs_state(int *bs_state, uuid_t bs_uuid, struct bio_xs_context *xs)
+bio_get_bs_state(int *bs_state, enum smd_dev_type st, struct bio_xs_context *xs)
 {
-	enum smd_dev_type		 st;
 	struct bio_xs_blobstore		*bxb;
-
-	st = bio_get_xs_blobstore_type(bs_uuid, xs);
-	if (st >= SMD_DEV_TYPE_MAX)
-		return;
 
 	bxb = bio_xs_context2xs_blobstore(xs, st);
 	*bs_state = bxb->bxb_blobstore->bb_state;
@@ -216,23 +172,19 @@ bio_get_bs_state(int *bs_state, uuid_t bs_uuid, struct bio_xs_context *xs)
  * state transition. Called from the device owner xstream.
  */
 int
-bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t uuid)
+bio_dev_set_faulty(struct bio_xs_context *xs, enum smd_dev_type st)
 {
 	struct dev_state_msg_arg	dsm = { 0 };
 	int				rc;
 	int				*dsm_rc;
 	struct bio_xs_blobstore		*bxb;
-	enum smd_dev_type		 st;
-
-	st = bio_get_xs_blobstore_type(uuid, xs);
-	if (st >= SMD_DEV_TYPE_MAX)
-		return -DER_NONEXIST;
 
 	rc = ABT_eventual_create(sizeof(*dsm_rc), &dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
+	dsm.dev_type = st;
 
 	bxb = bio_xs_context2xs_blobstore(xs, st);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
@@ -250,12 +202,12 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t uuid)
 }
 
 static inline struct bio_dev_health *
-xs_ctxt2dev_health(struct bio_xs_context *ctxt, enum smd_dev_type st)
+xs_ctxt2dev_health(struct bio_xs_context *ctxt)
 {
 	D_ASSERT(ctxt != NULL);
 	struct bio_xs_blobstore *bxb;
 
-	bxb = bio_xs_context2xs_blobstore(ctxt, st);
+	bxb = bio_xs_context2xs_blobstore(ctxt, SMD_DEV_TYPE_DATA);
 	/* bio_xsctxt_free() is underway */
 	if (bxb == NULL)
 		return NULL;
@@ -263,17 +215,12 @@ xs_ctxt2dev_health(struct bio_xs_context *ctxt, enum smd_dev_type st)
 	return &bxb->bxb_blobstore->bb_dev_health;
 }
 
-struct get_spdk_cb_arg {
-	struct bio_xs_context	*ctxt;
-	enum smd_dev_type	 st;
-};
-
 static void
 get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
-	struct get_spdk_cb_arg	*gsca = cb_arg;
-	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(gsca->ctxt, gsca->st);
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	int			 sc, sct;
 	uint32_t		 cdw0;
 
@@ -292,15 +239,14 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
-	D_FREE(gsca);
 }
 
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
 {
-	struct get_spdk_cb_arg		*gsca = cb_arg;
-	struct bio_dev_health		*dev_health = xs_ctxt2dev_health(gsca->ctxt, gsca->st);
+	struct bio_xs_context		*ctxt = cb_arg;
+	struct bio_dev_health		*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_bdev		*bdev;
 	struct spdk_nvme_cmd		 cmd;
@@ -310,7 +256,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 rc;
 	int				 sc, sct;
 	uint32_t			 cdw0;
-	bool				 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -358,13 +303,10 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
-	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
-	if (free_cb_arg)
-		D_FREE(gsca);
 }
 
 /* Return a uint64 raw value from a byte array */
@@ -590,14 +532,13 @@ static void
 get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 				    void *cb_arg)
 {
-	struct get_spdk_cb_arg	*gsca = cb_arg;
-	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(gsca->ctxt, gsca->st);
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 cp_sz;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
-	bool			 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -641,28 +582,24 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
-	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
-	if (free_cb_arg)
-		D_FREE(gsca);
 }
 
 static void
 get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
-	struct get_spdk_cb_arg	*gsca = cb_arg;
-	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(gsca->ctxt, gsca->st);
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 page_sz;
 	uint32_t		 numd, numdl, numdu;
 	int			 rc, sc, sct;
 	uint32_t		 cdw0;
-	bool			 free_cb_arg = true;
 
 	if (dev_health == NULL)
 		goto out;
@@ -716,13 +653,10 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 		D_ERROR("NVMe admin passthru (Intel smart log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
-	free_cb_arg = false;
 
 out:
 	/* Free I/O request in the completion callback */
 	spdk_bdev_free_io(bdev_io);
-	if (free_cb_arg)
-		D_FREE(gsca);
 }
 
 static int
@@ -756,9 +690,9 @@ auto_detect_faulty(struct bio_blobstore *bbs)
 
 /* Collect the raw device health state through SPDK admin APIs */
 static void
-collect_raw_health_data(struct bio_blobstore *bbs, struct get_spdk_cb_arg *cb_arg)
+collect_raw_health_data(struct bio_xs_context *ctxt)
 {
-	struct bio_dev_health	*dev_health = &bbs->bb_dev_health;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 numd, numdl, numdu;
@@ -767,27 +701,27 @@ collect_raw_health_data(struct bio_blobstore *bbs, struct get_spdk_cb_arg *cb_ar
 
 	D_ASSERT(dev_health != NULL);
 	if (dev_health->bdh_desc == NULL)
-		goto out;
+		return;
 
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
 		D_ERROR("No bdev associated with device health descriptor\n");
-		goto out;
+		return;
 	}
 
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
-		goto out;
+		return;
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
 		D_ERROR("Bdev NVMe admin passthru not supported!\n");
-		goto out;
+		return;
 	}
 
 	/* Check to avoid parallel SPDK device health query calls */
 	if (dev_health->bdh_inflights)
-		goto out;
+		return;
 	dev_health->bdh_inflights++;
 
 	/* Prep NVMe command to get SPDK device health data */
@@ -812,27 +746,22 @@ collect_raw_health_data(struct bio_blobstore *bbs, struct get_spdk_cb_arg *cb_ar
 					   dev_health->bdh_health_buf,
 					   page_sz,
 					   get_spdk_health_info_completion,
-					   cb_arg);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
 	}
 
-	return;
-out:
-	D_FREE(cb_arg);
-	return;
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t now)
+bio_bs_monitor(struct bio_xs_context *xs_ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
 	int			 rc;
 	uint64_t		 monitor_period;
-	struct bio_xs_blobstore	*bxb = xs_ctxt->bxc_xs_blobstores[st];
+	struct bio_xs_blobstore	*bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_DATA];
 	struct bio_blobstore	*bbs;
-	struct get_spdk_cb_arg	*gsca;
 
 	if (bxb == NULL || bxb->bxb_blobstore == NULL)
 		return;
@@ -860,18 +789,8 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 		D_ERROR("State transition on target %d failed. %d\n",
 			bbs->bb_owner_xs->bxc_tgt_id, rc);
 
-	if (!bypass_health_collect()) {
-		D_ALLOC_PTR(gsca);
-
-		if (!gsca) {
-			D_ERROR("failed to allocate memory for get_spdk_cb_arg\n");
-			return;
-		}
-
-		gsca->ctxt = xs_ctxt;
-		gsca->st = st;
-		collect_raw_health_data(bbs, gsca);
-	}
+	if (!bypass_health_collect())
+		collect_raw_health_data(xs_ctxt);
 }
 
 /* Free all device health monitoring info */

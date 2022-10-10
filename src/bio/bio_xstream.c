@@ -1719,7 +1719,9 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blobstore &&
 		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
-			bio_bs_monitor(ctxt, st, now);
+			bio_bs_monitor(ctxt, now);
+		/* Only support DATA for now */
+		break;
 	}
 
 	if (is_init_xstream(ctxt)) {

@@ -407,11 +407,10 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
-		if (bxb != NULL && bxb->bxb_blobstore != NULL) {
-			rc = bio_blob_delete(pool_id, xs_ctxt, st);
-			if (rc)
-				return rc;
-		}
+		D_ASSERT(bxb != NULL);
+		rc = bio_blob_delete(pool_id, xs_ctxt, st);
+		if (rc)
+			return rc;
 		if (xs_ctxt->bxc_meta_on_ssd == 0)
 			break;
 	}
@@ -433,8 +432,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 
 	D_ASSERT(xs_ctxt != NULL);
 	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
-	if (bxb == NULL || bxb->bxb_blobstore == NULL)
-		return -DER_NO_HDL;
+	D_ASSERT(bxb != NULL);
 
 	bbs = bxb->bxb_blobstore;
 	cluster_sz = bbs->bb_bs != NULL ?

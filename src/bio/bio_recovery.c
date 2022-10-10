@@ -65,7 +65,7 @@ teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 	struct bio_xs_blobstore	*bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 
 	/* This blobstore is torndown */
-	if (bxb == NULL || bxb->bxb_io_channel == NULL)
+	if (bxb->bxb_io_channel == NULL)
 		return;
 
 	/* Try to close all blobs */
@@ -141,7 +141,7 @@ is_xstream_torndown(struct bio_xs_context *xs_ctxt)
 
 	/* only check data blobstore for now */
 	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
-	if (bxb != NULL && bxb->bxb_io_channel != NULL)
+	if (bxb->bxb_io_channel != NULL)
 		return false;
 
 	return true;
@@ -227,8 +227,7 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 	struct bio_xs_blobstore	*bxb;
 
 	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
-	if (bxb == NULL)
-		return;
+	D_ASSERT(bxb != NULL);
 
 	bbs = bxb->bxb_blobstore;
 	if (bbs == NULL)
@@ -282,14 +281,15 @@ setup_xstream(void *arg)
 	/* only support data blobstore for now */
 	closed_blobs = 0;
 	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
+	/*
+	 * It doesn't mean setup failed when there is any closed blob,
+	 * it means some blob is still busy and we can move forward to
+	 * next state yet, we'll retry setup_xstream() later.
+	 */
 	if (closed_blobs > 0)
-		goto failed;
+		return;
 
 	xs_ctxt->bxc_ready = 1;
-	return;
-
-failed:
-	teardown_xstream(xs_ctxt);
 	return;
 
 }
