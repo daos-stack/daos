@@ -2,7 +2,7 @@
 
 This page is intended to provide developer-focused documentation for the
 `daos_admin` helper. For installation instructions, please see the
-[DAOS Admin Guide](https://docs.daos.io/latest/admin/predeployment_check/#elevated-privileges).
+[DAOS Admin Guide](https://docs.daos.io/latest/admin/predeployment_check/#privileged-helper).
 
 ## Overview
 
