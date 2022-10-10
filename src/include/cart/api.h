@@ -2165,7 +2165,7 @@ int crt_group_info_set(d_iov_t *grp_info);
  * to endpoint0 for secondary provider communications.
  *
  * \param[in] idx               Secondary provider index. Currently only 0 is supported.
- * \param[in] num_tags          Numer of remote tags to set.
+ * \param[in] num_tags          Number of remote tags to set.
  *
  * \return                      DER_SUCCESS on success, negative value
  *                              on failure.
