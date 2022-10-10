@@ -18,7 +18,7 @@ The DAOS Server provides capability to provision and manage network devices and
 non-volatile storage including the allocation of resources to engine instances.
 
 See
-[admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning)
+[admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning)
 for details on hardware provisioning.
 
 ## Configuration
@@ -158,7 +158,7 @@ resultant nvdimm namespaces are defined by a device identifier (e.g.
 /dev/pmem0).
 
 See `daos_server storage prepare --help` and the
-[admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning) for usage.
+[admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning) for usage.
 
 ### Storage Scan
 
@@ -170,7 +170,7 @@ modules on the storage server will be returned when running the `storage scan`
 subcommand.
 
 See `daos_server storage scan --help` and the
-[admin guide](https://daos-stack.github.io/admin/deployment/#storage-selection)
+[admin guide](https://docs.daos.io/latest/admin/deployment/)
 for usage.
 
 ### Network Scan
