@@ -46,6 +46,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	mountReqPayload, err := json.Marshal(storage.ScmMountRequest{
 		Class:  storage.ClassRam,
 		Target: testTarget,
+		Ramdisk: &storage.RamdiskParams{
+			Size: 1024,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
