@@ -140,8 +140,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
-	}
-
+	
 	if (wipe_parent == 0)
 		return;
 
