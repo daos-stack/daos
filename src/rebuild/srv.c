@@ -549,6 +549,7 @@ rebuild_leader_status_notify(struct rebuild_global_pool_tracker *rgt, struct ds_
 	iv.riv_rebuild_gen	= rgt->rgt_rebuild_gen;
 	iv.riv_seconds          = rgt->rgt_status.rs_seconds;
 	iv.riv_stable_epoch	= rgt->rgt_stable_epoch;
+	iv.riv_sync = 1;
 	rgt->rgt_dtx_resync_version = iv.riv_global_dtx_resyc_version =
 				rebuild_get_global_dtx_resync_ver(rgt);
 	iv.riv_dtx_resyc_version = pool->sp_dtx_resync_version;
