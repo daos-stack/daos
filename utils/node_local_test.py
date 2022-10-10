@@ -4017,6 +4017,7 @@ class AllocFailTest():
             os.mkdir(self.log_dir)
         except FileExistsError:
             pass
+        print(f'Logging to {self.log_dir}')
 
     def launch(self):
         """Run all tests for this command"""
