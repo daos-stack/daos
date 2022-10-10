@@ -259,7 +259,7 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id, daos_unit_oi
 
 		D_DEBUG(DB_TRACE, "Create cont "DF_UUID" tree\n", DP_UUID(co_uuid));
 		if (tgt_id != (uint64_t)(-1))
-			rc = obj_tree_create(toh, co_uuid, sizeof(uuid_t), DBTREE_CLASS_IV,
+			rc = obj_tree_create(toh, co_uuid, sizeof(uuid_t), DBTREE_CLASS_IFV,
 					     BTR_FEAT_UINT_KEY, &cont_root);
 		else
 			rc = obj_tree_create(toh, co_uuid, sizeof(uuid_t), DBTREE_CLASS_NV,
