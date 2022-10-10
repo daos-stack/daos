@@ -5217,6 +5217,9 @@ pool_svc_reconf_ult(void *arg)
 			goto out_to_add_remove;
 		}
 		rc = rdb_remove_replicas(svc->ps_rsvc.s_db, tmp);
+		if (rc != 0)
+			D_ERROR(DF_UUID": failed to remove replicas: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
 		/* Delete from to_remove ranks that are not removed. */
 		d_rank_list_filter(tmp, to_remove, true /* exclude */);
 		d_rank_list_free(tmp);
@@ -6197,8 +6200,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		d_iov_t		value;
 
 		d_iov_set(&value, &connectable, sizeof(connectable));
-		rc = rdb_tx_update(&tx, &svc->ps_root,
-				   &ds_pool_prop_connectable, &value);
+		rc = rdb_tx_update_critical(&tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
 

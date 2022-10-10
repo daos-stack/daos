@@ -1,6 +1,7 @@
 """Build client tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv')

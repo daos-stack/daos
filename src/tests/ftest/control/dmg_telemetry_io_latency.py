@@ -11,6 +11,7 @@ from telemetry_utils import TelemetryUtils
 from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
 
+
 def convert_to_number(size):
     """Convert string to int.
 
@@ -97,7 +98,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # idx + 1, idx + 2  and idx + 3  are headers.
         # idx + 4 will give ior perf info.
         for iteration in range(self.iterations):
-            ior_results = (" ".join(messages[idx+4+iteration].split())).split()
+            ior_results = (" ".join(messages[idx + 4 + iteration].split())).split()
             # Latency will not include open and close time in order to compare to the
             # IO rpc latency reported by daos metrics
             # ior_results is a list of the following:
@@ -108,8 +109,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             # read   107.84    27.1 0.036824   4096  4096      0.000252 0.036824 0.000015 0.037091
             self.log.info(
                 "Latency for ior %s with transfer size %s(KiB) is %.2fus"
-                "", ior_results[0], ior_results[5], (float(ior_results[3])*float(10**6)))
-            latency.append(float(ior_results[3])*float(10**6))
+                "", ior_results[0], ior_results[5], (float(ior_results[3]) * float(10**6)))
+            latency.append(float(ior_results[3]) * float(10**6))
         return latency
 
     def verify_rpc_latency_metrics(self, metrics_data, test_metrics, transfer_size):
@@ -143,8 +144,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         mean_value = metrics["engine_io_latency_fetch_mean"]
         stddev_value = metrics["engine_io_latency_fetch_stddev"]
         if ((max_value >= metrics["engine_io_latency_fetch"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+                max_value > mean_value > min_value) and (stddev_value < (max_value - min_value))):
             status["fetch"] = True
 
         min_value = metrics["engine_io_latency_update_min"]
@@ -152,8 +152,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         mean_value = metrics["engine_io_latency_update_mean"]
         stddev_value = metrics["engine_io_latency_update_stddev"]
         if ((max_value >= metrics["engine_io_latency_update"] >= min_value) and (
-                    max_value > mean_value > min_value) and (
-                        stddev_value < (max_value-min_value))):
+                max_value > mean_value > min_value) and (stddev_value < (max_value - min_value))):
             status["update"] = True
         return status
 
@@ -178,7 +177,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         test_metrics = TelemetryUtils.ENGINE_IO_LATENCY_FETCH_METRICS + \
-                       TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
+            TelemetryUtils.ENGINE_IO_LATENCY_UPDATE_METRICS
 
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
@@ -196,7 +195,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                     self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                    timeout=200, create_pool=False, create_cont=False)
                 ior_latency[transfer_size][operation] = self.get_ior_latency(ior_results)
                 if operation in "update":
                     metrics_data.update(self.telemetry.get_io_metrics(
@@ -350,8 +349,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         committed_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS
-        #TODO: DAOS-9564: Verify I/O dtx committable metrics
-        #committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
+        # TODO: DAOS-9564: Verify I/O dtx committable metrics
+        # committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
 
         for transfer_size in transfer_sizes:
             # Get the initial IO dtx metrics before running
@@ -366,15 +365,12 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             for operation in ["rw"]:
                 flags = self.params.get("F", "/run/ior/ior{}flags/".format(
                     operation))
-                self.log.info(
-                        "<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(
-                        self.server_group, self.pool, self.container[-1].uuid)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container[-1].uuid)
                 # Run ior command to populate IO dtx metrics
-                _ = self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False)
+                _ = self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
                 # _ = self.ior_with_transfer_size(transfer_size, operation)
                 # Get IO dtx telemetry metrics
                 metrics_data.update(self.telemetry.get_io_metrics(

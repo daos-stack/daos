@@ -9,18 +9,18 @@ package main
 import (
 	"github.com/jessevdk/go-flags"
 
-	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 type PoolSetPropsFlag struct {
 	ui.SetPropertiesFlag
 
-	ToSet []*control.PoolProperty
+	ToSet []*daos.PoolProperty
 }
 
 func (f *PoolSetPropsFlag) UnmarshalFlag(fv string) error {
-	propHdlrs := control.PoolProperties()
+	propHdlrs := daos.PoolProperties()
 	f.SettableKeys(propHdlrs.Keys()...)
 	f.DeprecatedKeyMap(control.PoolDeprecatedProperties())
 
@@ -46,7 +46,7 @@ func (f *PoolSetPropsFlag) UnmarshalFlag(fv string) error {
 
 func (f *PoolSetPropsFlag) Complete(match string) []flags.Completion {
 	comps := make(ui.CompletionMap)
-	for key, hdlr := range control.PoolProperties() {
+	for key, hdlr := range daos.PoolProperties() {
 		comps[key] = hdlr.Values()
 	}
 	f.SetCompletions(comps)
@@ -57,11 +57,11 @@ func (f *PoolSetPropsFlag) Complete(match string) []flags.Completion {
 type PoolGetPropsFlag struct {
 	ui.GetPropertiesFlag
 
-	ToGet []*control.PoolProperty
+	ToGet []*daos.PoolProperty
 }
 
 func (f *PoolGetPropsFlag) UnmarshalFlag(fv string) error {
-	propHdlrs := control.PoolProperties()
+	propHdlrs := daos.PoolProperties()
 	f.GettableKeys(propHdlrs.Keys()...)
 	f.DeprecatedKeyMap(control.PoolDeprecatedProperties())
 
@@ -79,7 +79,7 @@ func (f *PoolGetPropsFlag) UnmarshalFlag(fv string) error {
 
 func (f *PoolGetPropsFlag) Complete(match string) []flags.Completion {
 	comps := make(ui.CompletionMap)
-	for key, hdlr := range control.PoolProperties() {
+	for key, hdlr := range daos.PoolProperties() {
 		comps[key] = hdlr.Values()
 	}
 	f.SetCompletions(comps)
