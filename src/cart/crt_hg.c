@@ -716,6 +716,7 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 	int			rc = DER_SUCCESS;
 
 	prov_data = crt_get_prov_gdata(provider);
+
 	rc = crt_get_info_string(provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
