@@ -412,17 +412,15 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	memcpy(domain_tree, domains,
 	       sizeof(uint32_t) * domains_only_len);
 
-	for (i = 0; i < node_count; i++) {
-		uint32_t idx = domains_only_len + i;
-
-		domain_tree[idx] = i;
-	}
-
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
 	assert_non_null(rank_list.rl_ranks);
-	for (i = 0; i < node_count; i++)
+	for (i = 0; i < node_count; i++) {
+		uint32_t idx = domains_only_len + i;
+
+		domain_tree[idx] = ctx->domain_nr + i;
 		rank_list.rl_ranks[i] = ctx->domain_nr + i;
+	}
 
 	ntargets = node_count * target_count;
 	if (ntargets > ARRAY_SIZE(target_uuids))
@@ -432,7 +430,7 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
 	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
-			  ntargets, domain_tree, &rank_list, target_count);
+			  ntargets, domain_tree, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 
