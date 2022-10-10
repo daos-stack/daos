@@ -3397,6 +3397,15 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	if (obj_auxi->req_tgts.ort_grp_size == 1) {
+		if (obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+			int i;
+
+			for (i = 0; i < shard_arg->la_nr; i++) {
+				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
+					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
+								&shard_arg->la_recxs[i]);
+			}
+		}
 		iter_arg->merge_nr = shard_arg->la_nr;
 		return 0;
 	}
