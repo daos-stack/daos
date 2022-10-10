@@ -87,7 +87,7 @@ blocking barriers and then a more loosely coupled execution.
 
 When the simulation job starts, one task opens the checkpoint container
 and fetches the current global HCE (highest committed epoch).
-It thens obtains an epoch hold and shares the data (the container handle,
+It then obtains an epoch hold and shares the data (the container handle,
 the current LHE (lowest held epoch) and global HCE)
 with peer tasks. Each task checks for the latest computation state saved
 to the checkpoint container by reading with an epoch equal to the global
