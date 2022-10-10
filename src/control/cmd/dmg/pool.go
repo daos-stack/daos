@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -608,14 +609,14 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		}
 
 		propName := strings.ToLower(cmd.Property)
-		p, err := control.PoolProperties().GetProperty(propName)
+		p, err := daos.PoolProperties().GetProperty(propName)
 		if err != nil {
 			return err
 		}
 		if err := p.SetValue(cmd.Value); err != nil {
 			return err
 		}
-		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
+		cmd.Args.Props.ToSet = []*daos.PoolProperty{p}
 	}
 
 	for _, prop := range cmd.Args.Props.ToSet {

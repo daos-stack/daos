@@ -21,8 +21,6 @@ failed=0
 failures=()
 log_num=0
 
-set -x
-
 if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi

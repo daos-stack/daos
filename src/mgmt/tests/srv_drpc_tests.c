@@ -1149,6 +1149,62 @@ test_drpc_pool_get_prop_str_success(void **state)
 	D_FREE(resp.body.data);
 }
 
+static void
+test_drpc_pool_get_prop_svcl_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
+	int			prop_number = DAOS_PROP_PO_SVC_LIST;
+	d_rank_list_t		*prop_val = d_rank_list_alloc(1);
+	char			exp_val[] = "[42]";
+
+	assert_non_null(prop_val);
+	assert_non_null(prop_val->rl_ranks);
+	prop_val->rl_ranks[0] = 42;
+
+	ds_mgmt_pool_get_prop_out = daos_prop_alloc(1);
+	assert_non_null(ds_mgmt_pool_get_prop_out);
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type = prop_number;
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_val_ptr = prop_val;
+
+	req.id = TEST_UUID;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = prop_number;
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	expect_drpc_pool_get_prop_str_success(&resp, prop_number, exp_val);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_get_prop_null_svcl(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
+
+	req.id = "wow this won't work";
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = DAOS_PROP_PO_SVC_LIST;
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	expect_drpc_pool_get_prop_resp_with_error(&resp, -DER_INVAL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
 /*
  * Pool query test setup
  */
@@ -2706,6 +2762,8 @@ main(void)
 		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_bad_uuid),
 		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_num_success),
 		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_str_success),
+		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_svcl_success),
+		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_null_svcl),
 		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
 		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
 		EXCLUDE_TEST(test_drpc_exclude_success),
