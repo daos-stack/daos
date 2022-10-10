@@ -58,8 +58,8 @@ create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	/* Create in-memory sized free extent tree */
-	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
-			   &uma, NULL, &vfc->vfc_size_btr);
+	rc = dbtree_create(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR, &uma, NULL,
+			   &vfc->vfc_size_btr);
 	if (rc != 0)
 		destroy_free_class(vfc);
 
