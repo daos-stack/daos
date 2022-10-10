@@ -54,7 +54,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (ie->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -69,18 +69,11 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
 
-	if (ie->ie_dfs->dfc_data_timeout != 0) {
+	if (ie->ie_dfs->dfc_data_caching) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
 
-		if (atomic_load_relaxed(&ie->ie_open_count) > 0) {
-			fi_out.keep_cache = 1;
-		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
-			fi_out.keep_cache = 1;
-		}
-
-		if (fi_out.keep_cache)
-			oh->doh_keep_cache = true;
+		fi_out.keep_cache = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -127,18 +120,13 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-	DFUSE_TRA_DEBUG(oh, "Closing %d %d", oh->doh_caching, oh->doh_keep_cache);
-
 	if (atomic_load_relaxed(&oh->doh_write_count) != 0) {
-		dfuse_cache_set_time(oh->doh_ie);
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	}
 
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0) {
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	}
-	if (oh->doh_caching && !oh->doh_keep_cache)
-		dfuse_cache_set_time(oh->doh_ie);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);
