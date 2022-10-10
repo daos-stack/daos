@@ -3467,7 +3467,8 @@ def run_in_fg(server, conf, args):
                          show_stdout=True)
 
     dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
-    dfuse.log_flush = True
+    if not args.launch_cmd:
+        dfuse.log_flush = True
     dfuse.start()
 
     t_dir = join(dfuse.dir, container)
@@ -3485,10 +3486,10 @@ def run_in_fg(server, conf, args):
             start = time.time()
             rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
             elapsed = time.time() - start
-            dfuse.stop()
             (minutes, seconds) = divmod(elapsed, 60)
-            print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
+            print(f'Launch command completed in {int(minutes):d}:{int(seconds):02d}')
             print(rc)
+            dfuse.stop()
         else:
             dfuse.wait_for_exit()
     except KeyboardInterrupt:

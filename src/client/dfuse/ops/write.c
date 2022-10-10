@@ -11,9 +11,9 @@ static void
 dfuse_cb_write_complete(struct dfuse_event *ev)
 {
 	if (ev->de_ev.ev_error == 0)
-		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
+		DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
 	else
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
 	D_FREE(ev->de_iov.iov_buf);
 }
 
@@ -42,12 +42,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
-
-	DFUSE_TRA_UP(ev, oh, "write");
-
-	/* Allocate temporary space for the data whilst they asynchronous
-	 * operation is happening.
-	 */
 
 	/* Declare a bufvec on the stack and have fuse copy into it.
 	 * For page size and above this will read directly into the
@@ -94,13 +88,11 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
-		       position, &ev->de_ev);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	/* Send a message to the async thread to wake it up and poll for events
-	 */
+	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&fs_handle->dpi_sem);
 	return;
 

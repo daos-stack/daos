@@ -442,16 +442,23 @@ struct fuse_lowlevel_ops dfuse_ops;
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_BUF(desc, req, buf, size)				\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)",	\
-				buf, size);				\
-		__rc = fuse_reply_buf(req, buf, size);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(desc,				\
-					"fuse_reply_buf returned %d:%s", \
-					__rc, strerror(-__rc));		\
+#define DFUSE_REPLY_BUF(desc, req, buf, size)                                                      \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)", buf, size);                     \
+		__rc = fuse_reply_buf(req, buf, size);                                             \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_buf returned %d:%s", __rc,               \
+					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		__rc = fuse_reply_buf(req, buf, size);                                             \
+		if (__rc != 0)                                                                     \
+			DFUSE_TRA_ERROR(desc, "fuse_reply_buf returned %d:%s", __rc,               \
+					strerror(-__rc));                                          \
 	} while (0)
 
 #define DFUSE_REPLY_WRITE(desc, req, bytes)				\
@@ -532,6 +539,11 @@ struct fuse_lowlevel_ops dfuse_ops;
  */
 
 struct dfuse_inode_entry {
+	/** Hash table of inodes
+	 * All valid inodes are kept in a hash table, using the hash table locking.
+	 */
+	d_list_t                 ie_htl;
+
 	/** stat structure for this inode.
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
@@ -561,12 +573,6 @@ struct dfuse_inode_entry {
 	fuse_ino_t               ie_parent;
 
 	struct dfuse_cont       *ie_dfs;
-
-	/** Hash table of inodes
-	 * All valid inodes are kept in a hash table, using the hash table
-	 * locking.
-	 */
-	d_list_t                 ie_htl;
 
 	/* Time of last kernel cache update.
 	 * For directories this is the time of the most recent closedir for a handle which may

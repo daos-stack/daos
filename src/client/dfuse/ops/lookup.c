@@ -259,7 +259,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	if (attr_len)
+		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	atomic_store_relaxed(&ie->ie_ref, 1);

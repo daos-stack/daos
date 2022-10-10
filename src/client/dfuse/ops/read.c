@@ -11,21 +11,28 @@ static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
 	if (ev->de_ev.ev_error != 0) {
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(free, 0);
 	}
 
 	if (ev->de_len == 0) {
-		DFUSE_TRA_DEBUG(ev, "Truncated read, (EOF)");
-		DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
+				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
+
+		DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 		D_GOTO(free, 0);
 	}
 
-	if (ev->de_len < ev->de_iov.iov_buf_len)
-		DFUSE_TRA_DEBUG(ev, "Truncated read, requested %#zx returned %#zx",
-				ev->de_iov.iov_buf_len, ev->de_len);
+	if (ev->de_len == ev->de_iov.iov_buf_len)
+		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read", ev->de_req_position,
+				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
+	else
+		DFUSE_TRA_DEBUG(ev->de_oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)",
+				ev->de_req_position, ev->de_req_position + ev->de_len - 1,
+				ev->de_req_position + ev->de_len,
+				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
 
-	DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
+	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 free:
 	D_FREE(ev->de_iov.iov_buf);
 }
@@ -35,21 +42,14 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
 	void                         *buff;
 	int                           rc;
 	bool                          mock_read = false;
-	struct dfuse_event           *ev        = NULL;
-
-	D_ASSERT(ino == oh->doh_ie->ie_stat.st_ino);
+	struct dfuse_event           *ev;
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
-
-	DFUSE_TRA_UP(ev, oh, "event");
-
-	DFUSE_TRA_DEBUG(ev, "%#zx-%#zx requested pid=%d", position, position + len - 1, fc->pid);
 
 	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
 	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||

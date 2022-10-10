@@ -19,9 +19,8 @@ static void *
 dfuse_progress_thread(void *arg)
 {
 	struct dfuse_projection_info *fs_handle = arg;
-	int rc;
-	daos_event_t *dev;
-	struct dfuse_event *ev;
+	daos_event_t                 *dev[128];
+	int                           rc;
 
 	while (1) {
 		errno = 0;
@@ -38,12 +37,33 @@ dfuse_progress_thread(void *arg)
 		if (fs_handle->dpi_shutdown)
 			return NULL;
 
-		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 1, &dev);
-		if (rc == 1) {
-			daos_event_fini(dev);
-			ev = container_of(dev, struct dfuse_event, de_ev);
-			ev->de_complete_cb(ev);
-			D_FREE(ev);
+		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
+		if (rc >= 1) {
+			int i;
+
+			for (i = 0; i < rc; i++) {
+				struct dfuse_event *ev;
+
+				daos_event_fini(dev[i]);
+				ev = container_of(dev[i], struct dfuse_event, de_ev);
+				ev->de_complete_cb(ev);
+				D_FREE(ev);
+				if (i != 0) {
+					int nrc;
+
+					errno = 0;
+					nrc   = sem_wait(&fs_handle->dpi_sem);
+					if (nrc != 0) {
+						nrc = errno;
+
+						if (nrc == EINTR)
+							continue;
+
+						DFUSE_TRA_ERROR(fs_handle,
+								"Error from sem_wait: %d", nrc);
+					}
+				}
+			}
 		}
 	}
 	return NULL;
@@ -118,64 +138,53 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static uint32_t
 ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
-	const struct dfuse_inode_entry	*ie;
+	const struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return ih_key_hash(NULL,
-			   &ie->ie_stat.st_ino,
-			   sizeof(ie->ie_stat.st_ino));
+	return ih_key_hash(NULL, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino));
 }
 
 static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
+	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 }
 
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
-	return oldref == 1;
+	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
 static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref = 0;
-	uint				newref = 0;
+	struct dfuse_inode_entry *ie;
+	uint                      oldref = 0;
+	uint                      newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	do {
 		oldref = atomic_load_relaxed(&ie->ie_ref);
-
 		if (oldref < count)
 			break;
 
 		newref = oldref - count;
-
 	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
 
 	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u",
-				count, oldref);
+		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
 		return -DER_INVAL;
 	}
 
-	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
 	if (newref == 0)
 		return 1;
 	return 0;
