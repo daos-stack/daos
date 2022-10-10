@@ -3158,7 +3158,7 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 	/* Normally the enumeration is sent to the parity node */
 	/* convert the parity off to daos off */
 	if (recx->rx_idx & PARITY_INDICATOR) {
-		obj_recx_parity_to_daos(oca, recx);
+		D_DEBUG(DB_IO, "skip parity recx "DF_RECX"\n", DP_RECX(*recx));
 		return 0;
 	}
 
@@ -3392,8 +3392,25 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	if (obj_auxi->req_tgts.ort_grp_size == 1) {
+		if (obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE ||
+		    shard_arg->la_recxs == NULL) {
+			int i;
+
+			for (i = 0; i < shard_arg->la_nr; i++) {
+				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
+					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
+								&shard_arg->la_recxs[i]);
+				rc = merge_recx(iter_arg->merged_list,
+						shard_arg->la_recxs[i].rx_idx,
+						shard_arg->la_recxs[i].rx_nr, 0);
+				if (rc)
+					break;
+			}
+
+			return rc;
+		}
 		iter_arg->merge_nr = shard_arg->la_nr;
-		return 0;
+		return rc;
 	}
 
 	switch (obj_auxi->opc) {
