@@ -64,7 +64,7 @@ dpdk_cli_override_opts;
 
 /** Device role flags */
 #define NVME_ROLE_DATA		(1 << 0)
-#define NVME_ROLE_INDEX		(1 << 1)
+#define NVME_ROLE_META		(1 << 1)
 #define NVME_ROLE_WAL		(1 << 2)
 
 static inline char *

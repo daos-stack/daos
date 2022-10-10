@@ -42,9 +42,9 @@ const (
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
 
-	bdevRoleDataName  = "data"
-	bdevRoleIndexName = "index"
-	bdevRoleWALName   = "wal"
+	bdevRoleDataName = "data"
+	bdevRoleMetaName = "meta"
+	bdevRoleWALName  = "wal"
 )
 
 // Class indicates a specific type of storage.
@@ -266,9 +266,9 @@ func (tcs TierConfigs) Validate() error {
 // Validation of bdev tier role assignments is based on the following assumptions and rules:
 //
 // - A role can only be assigned to one entire tier, i.e. tier 2 & 3 cannot both be assigned the
-//   Index role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
+//   Meta role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
 //   in the case where > 3 bdev tiers exist.
-// - All roles (WAL, Index and Data) need to be assigned in bdev tiers if scm class is ram.
+// - All roles (WAL, Meta and Data) need to be assigned in bdev tiers if scm class is ram.
 // - If the (first) scm tier is of class dcpm, then only one bdev tier with Data role is supported,
 //   no third tier (for now).
 func (tcs TierConfigs) validateBdevTierRoles() error {
@@ -276,23 +276,23 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 	bcs := tcs.BdevConfigs()
 
 	nrWALTiers := 1
-	nrIndexTiers := 1
+	nrMetaTiers := 1
 	if sc.Class == ClassDcpm {
 		nrWALTiers = 0
-		nrIndexTiers = 0
+		nrMetaTiers = 0
 		if len(bcs) > 1 {
 			return FaultBdevConfigMultiTiersWithDCPM
 		}
 	}
 
-	var foundWALTiers, foundIndexTiers, foundDataTiers int
+	var foundWALTiers, foundMetaTiers, foundDataTiers int
 	for _, bc := range bcs {
 		bits := bc.Bdev.DeviceRoles.OptionBits
 		if (bits & BdevRoleWAL) != 0 {
 			foundWALTiers++
 		}
-		if (bits & BdevRoleIndex) != 0 {
-			foundIndexTiers++
+		if (bits & BdevRoleMeta) != 0 {
+			foundMetaTiers++
 		}
 		if (bits & BdevRoleData) != 0 {
 			foundDataTiers++
@@ -302,8 +302,8 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 	if foundWALTiers != nrWALTiers {
 		return FaultBdevConfigBadNrRoles("WAL", foundWALTiers, nrWALTiers)
 	}
-	if foundIndexTiers != nrIndexTiers {
-		return FaultBdevConfigBadNrRoles("Index", foundIndexTiers, nrIndexTiers)
+	if foundMetaTiers != nrMetaTiers {
+		return FaultBdevConfigBadNrRoles("Meta", foundMetaTiers, nrMetaTiers)
 	}
 	// When bdev NVMe tiers exist, there should always be at least one Data tier.
 	if foundDataTiers == 0 {
@@ -317,9 +317,9 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 //
 // Role assignments will be decided based on the following rule set:
 // - For 1 bdev tier, all roles will be assigned to that tier.
-// - For 2 bdev tiers, WAL and Index roles will be assigned to the first bdev tier and Data to
+// - For 2 bdev tiers, WAL and Meta roles will be assigned to the first bdev tier and Data to
 //   the second bdev tier.
-// - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Index to the
+// - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
 //   second bdev tier and Data to all remaining bdev tiers.
 // - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
 // - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
@@ -367,11 +367,11 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 	case 1:
 		tcs[1].WithBdevDeviceRoles(BdevRoleAll)
 	case 2:
-		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleIndex)
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleMeta)
 		tcs[2].WithBdevDeviceRoles(BdevRoleData)
 	default:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
-		tcs[2].WithBdevDeviceRoles(BdevRoleIndex)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
 		for i := 3; i < len(tcs); i++ {
 			tcs[i].WithBdevDeviceRoles(BdevRoleData)
 		}
@@ -721,9 +721,9 @@ func (obs *OptionBits) IsEmpty() bool {
 }
 
 var roleOptFlags = optFlagMap{
-	bdevRoleDataName:  BdevRoleData,
-	bdevRoleIndexName: BdevRoleIndex,
-	bdevRoleWALName:   BdevRoleWAL,
+	bdevRoleDataName: BdevRoleData,
+	bdevRoleMetaName: BdevRoleMeta,
+	bdevRoleWALName:  BdevRoleWAL,
 }
 
 // BdevDeviceRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).
