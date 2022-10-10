@@ -882,6 +882,22 @@ d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote)
 		ch_rec_free(htable, link);
 }
 
+void
+d_hash_rec_promote(struct d_hash_table *htable, d_list_t *link)
+{
+	uint32_t              idx    = ch_rec_hash(htable, link);
+	struct d_hash_bucket *bucket = &htable->ht_buckets[idx];
+
+	D_ASSERT(!(htable->ht_feats & D_HASH_FT_NOLOCK));
+	D_ASSERT(htable->ht_feats & D_HASH_FT_EPHEMERAL);
+
+	D_ASSERT((htable->ht_feats & D_HASH_FT_RWLOCK));
+
+	ch_bucket_lock(htable, idx, false);
+	d_list_move(link, &bucket->hb_head);
+	ch_bucket_unlock(htable, idx, false);
+}
+
 int
 d_hash_rec_ndecref(struct d_hash_table *htable, int count, d_list_t *link)
 {

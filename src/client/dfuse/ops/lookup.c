@@ -15,7 +15,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
 		  struct fuse_file_info *fi_out, bool is_new, struct dht_call *save, fuse_req_t req)
 {
-	struct fuse_entry_param entry = {0};
+	struct fuse_entry_param entry       = {0};
 	d_list_t               *rlink       = NULL;
 	ino_t                   wipe_parent = 0;
 	char                    wipe_name[NAME_MAX + 1];
@@ -32,8 +32,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
-	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
-			entry.ino, ie->ie_stat.st_mode);
+	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry.ino, ie->ie_stat.st_mode);
 
 	if (is_new) {
 		rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
@@ -43,7 +42,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 					 sizeof(ie->ie_stat.st_ino), &cookie, &bucket_length,
 					 &position);
 
-		if (!rlink) {
+		if (rlink) {
+			if ((position > 10) ||
+			    (bucket_length > 10 && (position * 2 > bucket_length))) {
+				d_hash_rec_promote(&fs_handle->dpi_iet, rlink);
+			}
+		} else {
 			rlink = d_hash_rec_find_insertx(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
 							sizeof(ie->ie_stat.st_ino), cookie,
 							&ie->ie_htl);
@@ -140,14 +144,16 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_en
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
-	
+
 	if (wipe_parent == 0)
-		return;
+		D_GOTO(out_decref, 0);
 
 	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
 					      wipe_name, strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+
+out_decref:
 
 	dh_hash_decrefx(fs_handle, save);
 

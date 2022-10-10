@@ -508,9 +508,7 @@ void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link);
 
 /**
  * Decrease the refcount of the record.
- * Should only be called if the EPMEMERAL is set, this allows the decref to work with read locks.
  * If promote is true then will use write lock and move key to front of bucket (LRU).
- * else will use read lock only.
  * Will assert if hop_decref() returns true.
  *
  * \param[in] htable		Pointer to the hash table
@@ -519,6 +517,9 @@ void d_hash_rec_decref(struct d_hash_table *htable, d_list_t *link);
  */
 void
 d_hash_rec_decrefx(struct d_hash_table *htable, d_list_t *link, bool promote);
+
+void
+d_hash_rec_promote(struct d_hash_table *htable, d_list_t *link);
 
 enum d_hash_decrec_arg {
 	DH_DECREF_NONE,
