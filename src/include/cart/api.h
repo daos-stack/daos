@@ -2155,6 +2155,29 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
 int crt_group_info_set(d_iov_t *grp_info);
 
 /**
+ * Sets the number of the remote tags for the specified group.
+ *
+ * Tags are specified as an array, one for each provider, starting
+ * with a primary provider followed by zero or more secondary provider
+ * values.
+ *
+ * Each tag corresponds to a remote context or an endpoint.
+ * By default, CaRT assumes 1 remote tag for each newly created group/provider.
+ *
+ * When a number of tags is set to more than 1 for any secondary provider then
+ * CaRT will round-robin across all secondary provider tags instead of defaulting
+ * to endpoint0 for secondary provider communications.
+ *
+ * \param[in] group             Group identifier
+ * \param[in] tags              Array, each entry specifying a number of tags
+ * \param[in] num_entries       Number of entries in the array
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_group_num_remote_tags_set(crt_group_t *group, int *tags, int num_entries);
+
+/**
  * Retrieve list of ranks that belong to the specified group.
  *
  * \param[in] group             Group identifier

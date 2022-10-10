@@ -1849,6 +1849,14 @@ crt_group_config_path_set(const char *path)
 	return 0;
 }
 
+int
+crt_group_num_remote_tags_set(crt_group_t *group, int *tags, int num_entries)
+{
+	struct crt_grp_priv	*grp_priv = NULL;
+
+	grp_priv = crt_grp_pub2priv(grp);
+}
+
 /**
  * Save attach info to file with the name
  * "<singleton_attach_path>/grpid.attach_info_tmp".
