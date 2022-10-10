@@ -4012,12 +4012,11 @@ class AllocFailTest():
         if conf.tmp_dir:
             self.log_dir = join(conf.tmp_dir, log_dir)
         else:
-            self.log_dir = log_dir
+            self.log_dir = join('/tmp', log_dir)
         try:
             os.mkdir(self.log_dir)
         except FileExistsError:
             pass
-        print(f'Logging to {self.log_dir}')
 
     def launch(self):
         """Run all tests for this command"""
