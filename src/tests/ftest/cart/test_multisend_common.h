@@ -195,7 +195,6 @@ test_parse_args(int argc, char **argv)
 		}
 	}
 	if (optind < argc) {
-		fprintf(stderr, "non-option argv elements encountered");
 		show_usage();
 		return 1;
 	}
