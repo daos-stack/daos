@@ -4008,10 +4008,11 @@ class AllocFailTest():
         self.wf = conf.wf
         # Instruct the fault injection code to skip daos_init().
         self.skip_daos_init = True
+        log_dir = f'dnt_fi_{self.description}_logs'
         if conf.tmp_dir:
-            self.log_dir = join(conf.tmp_dir, f'dnt_fi_{self.description}_logs')
+            self.log_dir = join(conf.tmp_dir, log_dir)
         else:
-            self.log_dir = f'dnt_fi_{self.description}_logs'
+            self.log_dir = log_dir
         try:
             os.mkdir(self.log_dir)
         except FileExistsError:
