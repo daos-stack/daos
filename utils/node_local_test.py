@@ -3784,9 +3784,9 @@ class AllocFailTestRun():
         self.loc = loc
 
         if loc:
-            prefix = f'{loc:04d}_'
+            prefix = f'dnt_{loc:04d}_'
         else:
-            prefix = 'reference_'
+            prefix = 'dnt_reference_'
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
                                                     dir=self.aft.log_dir,
