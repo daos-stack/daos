@@ -1250,14 +1250,14 @@ done:
 		    || task->dst_rebuild_op == RB_OP_DRAIN) {
 			rc = ds_pool_tgt_exclude_out(pool->sp_uuid,
 						     &task->dst_tgts);
-			D_DEBUG(DB_REBUILD, "mark failed target %d of "DF_UUID
+			D_INFO("mark failed target %d of "DF_UUID
 				" as DOWNOUT: "DF_RC"\n",
 				task->dst_tgts.pti_ids[0].pti_id,
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
 		} else if (task->dst_rebuild_op == RB_OP_REINT ||
 			   task->dst_rebuild_op == RB_OP_EXTEND) {
 			rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
-			D_DEBUG(DB_REBUILD, "mark added target %d of "DF_UUID
+			D_INFO("mark added target %d of "DF_UUID
 				" UPIN: "DF_RC"\n",
 				task->dst_tgts.pti_ids[0].pti_id,
 				DP_UUID(task->dst_pool_uuid), DP_RC(rc));
