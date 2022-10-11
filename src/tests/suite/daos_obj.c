@@ -1432,6 +1432,7 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 	uint32_t	number;
 
 	/** Enumerate all mixed NVMe and SCM records */
+	print_message(">>> SPY-10000\n");
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&anchor_des, 0, sizeof(anchor));
@@ -1464,11 +1465,14 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 		}
 
 		number = 5;
+		print_message(">>> SPY-10001\n");
 		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
 			      &number, recxs, eprs, &anchor_des, false, req);
+		print_message(">>> SPY-10002: number=%d\n", number);
 		if (number == 0)
 			continue;
 		for (i = 0; i < (number - 1); i++) {
+			print_message(">>> SPY-10003: i=%d, number=%u, rx_idx=(%lu, %lu)\n", i, number, recxs[i].rx_idx, recxs[i+1].rx_idx);
 			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
 		}
 

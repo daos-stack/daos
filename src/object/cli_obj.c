@@ -3077,6 +3077,7 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 	int				rc = 0;
 
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
+		printf(">>> SPY-100\n");
 		daos_off_t recx_start = recx->recx.rx_idx;
 		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
 		daos_epoch_t recx_eph = recx->recx_eph;
@@ -3084,7 +3085,9 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64" "DF_X64"\n",
 			recx_start, recx_end, recx_eph);
 		if (end < recx_start) {
+			printf(">>> SPY-101\n");
 			if (!inserted) {
+				printf(">>> SPY-102\n");
 				rc = merge_recx_insert(prev == NULL ?
 						       head : &prev->recx_list,
 						       offset, size, eph);
@@ -3095,7 +3098,9 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 
 		/* merge with current recx, and try to merge with next recxs */
 		if (max(recx_start, offset) <= min(recx_end, end)) {
+			printf(">>> SPY-103\n");
 			if (new_recx == NULL) {
+				printf(">>> SPY-104\n");
 				new_recx = recx;
 				new_recx->recx_eph = max(eph, new_recx->recx_eph);
 			}
@@ -3114,6 +3119,7 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 			D_DEBUG(DB_TRACE, "offset "DF_U64"/"DF_U64"\n", offset, end);
 			inserted = true;
 			if (recx != new_recx) {
+				printf(">>> SPY-105\n");
 				d_list_del(&recx->recx_list);
 				D_FREE(recx);
 			}
@@ -3121,9 +3127,11 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 		prev = recx;
 	}
 
-	if (!inserted)
+	if (!inserted) {
+		printf(">>> SPY-106\n");
 		rc = merge_recx_insert(prev == NULL ? head : &prev->recx_list,
 				       offset, size, eph);
+	}
 
 	return rc;
 }
@@ -3164,30 +3172,42 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 	if (merged_list == NULL)
 		return 0;
 
+	printf(">>> SPY-010\n");
 	cell_nr = obj_ec_cell_rec_nr(oca);
 	stripe_nr = obj_ec_stripe_rec_nr(oca);
+	printf(">>> SPY-011: obj_get_grp_size(shard_auxi->obj_auxi->obj)=%d\n",
+	       obj_get_grp_size(shard_auxi->obj_auxi->obj));
 	shard = shard_auxi->shard % obj_get_grp_size(shard_auxi->obj_auxi->obj);
+
+	printf(">>> SPY-012: obj_ec_tgt_nr(oca)=%d\n",
+	       obj_ec_tgt_nr(oca));
 	shard = obj_ec_shard_off(obj_ec_dkey_hash_get(shard_auxi->obj_auxi->obj,
 						      shard_auxi->obj_auxi->dkey_hash),
 				 oca, shard);
 	/* If all parity nodes are down(degraded mode), then
 	 * the enumeration is sent to all data nodes.
 	 */
+	printf(">>> SPY-020\n");
 	while (total_size > 0) {
 		uint64_t daos_off;
 		uint64_t data_size;
 
+		printf(">>> SPY-030\n");
 		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr, shard);
 		data_size = min(roundup(cur_off + 1, cell_nr) - cur_off,
 				total_size);
+		printf(">>> SPY-040\n");
 		rc = merge_recx(merged_list, daos_off, data_size, 0);
+		printf(">>> SPY-050\n");
 		if (rc)
 			break;
+		printf(">>> SPY-060\n");
 		D_DEBUG(DB_IO, "total "DF_U64" merge "DF_U64"/"DF_U64"\n",
 			total_size, daos_off, data_size);
 		total_size -= data_size;
 		cur_off += data_size;
 	}
+	printf(">>> SPY-070\n");
 	return rc;
 }
 
@@ -3396,21 +3416,32 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 		    shard_arg->la_recxs != NULL) {
 			int i;
 
+			printf(">>> SPY-001: shard_arg->la_nr=%d, iter_arg->merge_nr=%d\n",
+			       shard_arg->la_nr, iter_arg->merge_nr);
 			for (i = 0; i < shard_arg->la_nr; i++) {
-				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
+				printf(">>> SPY-002: shard_arg->la_recxs[i].rx_nr=%ld\n",
+				       shard_arg->la_recxs[i].rx_nr);
+				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR) {
+					printf(">>> SPY-003\n");
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
 								&shard_arg->la_recxs[i]);
+				}
 
+				printf(">>> SPY-004\n");
 				rc = merge_recx(iter_arg->merged_list,
 						shard_arg->la_recxs[i].rx_idx,
 						shard_arg->la_recxs[i].rx_nr, 0);
-				if (rc)
+				if (rc) {
+					printf(">>> SPY-005: rc=%d\n", rc);
 					return rc;
+				}
 			}
-
-			return 0;
+			printf(">>> SPY-006: shard_arg->la_nr=%d, iter_arg->merge_nr=%d\n",
+			       shard_arg->la_nr, iter_arg->merge_nr);
 		}
 
+		printf(">>> SPY-007: shard_arg->la_nr=%d, iter_arg->merge_nr=%d\n",
+		       shard_arg->la_nr, iter_arg->merge_nr);
 		iter_arg->merge_nr = shard_arg->la_nr;
 		return 0;
 	}
@@ -3921,6 +3952,7 @@ obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 		return 0;
 	}
 
+	printf(">>> SPY-XXX: This assert is crashing with Di patch\n");
 	D_ASSERT(obj_is_ec(obj_auxi->obj));
 	d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
 				   recx_list) {
