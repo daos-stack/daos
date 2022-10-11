@@ -3399,17 +3399,18 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
 								&shard_arg->la_recxs[i]);
-				rc = merge_recx(iter_arg->merged_list,
-						shard_arg->la_recxs[i].rx_idx,
-						shard_arg->la_recxs[i].rx_nr, 0);
-				if (rc)
-					break;
+				if (obj_ec_tgt_nr(obj_get_oca(shard_auxi->obj_auxi->obj)) > 0) {
+					rc = obj_ec_recxs_convert(iter_arg->merged_list,
+								  &shard_arg->la_recxs[i],
+								  shard_auxi);
+					if (rc)
+						return rc;
+				}
 			}
-
-			return rc;
 		}
+
 		iter_arg->merge_nr = shard_arg->la_nr;
-		return rc;
+		return 0;
 	}
 
 	switch (obj_auxi->opc) {
