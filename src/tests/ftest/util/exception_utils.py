@@ -26,10 +26,11 @@ class MPILoadError(Exception):
         """
         message = "Failed to load an {0} module from the list {3}.\n" \
                   "Available modules:\n{1}\n" \
-                  "Installed *{0}* RPMs:\n{2}\nEnvironment:\n{4}".format(module, show_avail(),
-                  "\n".join(list(filter(lambda x: "openmpi" in x,
-                                        run_command("rpm -qa").stdout_text.split("\n")))),
-                                        ' '.join(get_module_list(module)),
-                                        "\n".join([f"{k}: {v}" for k, v in
-                                                       sorted(os.environ.items())]))
+                  "Installed *{0}* RPMs:\n{2}\nEnvironment:\n{4}".format(
+                      module, show_avail(),
+                      "\n".join(list(filter(
+                          lambda x: "openmpi" in x,
+                          run_command("rpm -qa").stdout_text.split("\n")))),
+                      ' '.join(get_module_list(module)),
+                      "\n".join([f"{k}: {v}" for k, v in sorted(os.environ.items())]))
         super().__init__(message)
