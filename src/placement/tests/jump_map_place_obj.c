@@ -45,8 +45,6 @@ static void
 gen_maps(int num_domains, int nodes_per_domain, int vos_per_target,
 	 struct pool_map **po_map, struct pl_map **pl_map)
 {
-	*po_map = NULL;
-	*pl_map = NULL;
 	gen_pool_and_placement_map(num_domains, nodes_per_domain,
 				   vos_per_target, PL_TYPE_JUMP_MAP,
 				   po_map, pl_map);
@@ -184,10 +182,10 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 	/*
 	 * ---------------------------------------------------------
-	 * With 2 domains, 2 nodes each, 2 targets each = 8 targets
+	 * With 2 domains, 1 nodes each, 4 targets each = 8 targets
 	 * ---------------------------------------------------------
 	 */
-	gen_maps(2, 2, 2, &po_map, &pl_map);
+	gen_maps(2, 1, 4, &po_map, &pl_map);
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 
@@ -414,17 +412,15 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	memcpy(domain_tree, domains,
 	       sizeof(uint32_t) * domains_only_len);
 
-	for (i = 0; i < node_count; i++) {
-		uint32_t idx = domains_only_len + i;
-
-		domain_tree[idx] = i;
-	}
-
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
 	assert_non_null(rank_list.rl_ranks);
-	for (i = 0; i < node_count; i++)
+	for (i = 0; i < node_count; i++) {
+		uint32_t idx = domains_only_len + i;
+
+		domain_tree[idx] = ctx->domain_nr + i;
 		rank_list.rl_ranks[i] = ctx->domain_nr + i;
+	}
 
 	ntargets = node_count * target_count;
 	if (ntargets > ARRAY_SIZE(target_uuids))
@@ -434,7 +430,7 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
 	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_tree_len, node_count,
-			  ntargets, domain_tree, &rank_list, target_count);
+			  ntargets, domain_tree, target_count);
 	D_FREE(domain_tree);
 	assert_success(rc);
 

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -83,15 +82,22 @@ class DaosServerCommand(YamlCommand):
             sub_command = self.sub_command.value
 
         # Available daos_server sub-commands:
-        #   network  Perform network device scan based on fabric provider
-        #   start    Start daos_server
-        #   storage  Perform tasks related to locally-attached storage
-        if sub_command == "network":
-            self.sub_command_class = self.StartSubCommand()
+        #   dump-topology  Dump system topology
+        #   ms             Perform tasks related to management service replicas
+        #   network        Perform network device scan based on fabric provider
+        #   start          Start daos_server
+        #   storage        Perform tasks related to locally-attached storage
+        #   version        Print daos_server version
+        if sub_command == "ms":
+            self.sub_command_class = self.MsSubCommand()
+        elif sub_command == "network":
+            self.sub_command_class = self.NetworkSubCommand()
         elif sub_command == "start":
             self.sub_command_class = self.StartSubCommand()
         elif sub_command == "storage":
             self.sub_command_class = self.StorageSubCommand()
+        elif sub_command == "version":
+            self.sub_command_class = self.VersionSubCommand()
         else:
             self.sub_command_class = None
 
@@ -182,6 +188,57 @@ class DaosServerCommand(YamlCommand):
             engine_values = self.yaml.get_engine_values(name)
         return engine_values
 
+    class MsSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server ms sub command."""
+
+        def __init__(self):
+            """Create an ms subcommand object."""
+            super().__init__("/run/daos_server/ms/*", "ms")
+
+        def get_sub_command_class(self):
+            """Get the daos_server ms sub command object."""
+            # Available daos_server ms sub-commands:
+            #   recover  Recover the management service using this replica
+            #   restore  Restore the management service from a snapshot
+            #   status   Show status of the local management service replica
+            if self.sub_command.value == "recover":
+                self.sub_command_class = self.RecoverSubCommand()
+            elif self.sub_command.value == "restore":
+                self.sub_command_class = self.RestoreSubCommand()
+            elif self.sub_command.value == "status":
+                self.sub_command_class = self.StatusSubCommand()
+
+        class RecoverSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms recover command."""
+
+            def __init__(self):
+                """Create a ms recover subcommand object."""
+                super().__init__("/run/daos_server/ms/recover/*", "recover")
+
+                # daos_server ms recover command options:
+                #   -f, --force     Don't prompt for confirmation
+                self.force = FormattedParameter("--force", False)
+
+        class RestoreSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms restore command."""
+
+            def __init__(self):
+                """Create a ms restore subcommand object."""
+                super().__init__("/run/daos_server/ms/restore/*", "restore")
+
+                # daos_server ms restore command options:
+                #   -f, --force     Don't prompt for confirmation
+                #   -p, --path=     Path to snapshot file
+                self.force = FormattedParameter("--force", False)
+                self.path = FormattedParameter("--path={}")
+
+        class StatusSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server ms status command."""
+
+            def __init__(self):
+                """Create a ms status subcommand object."""
+                super().__init__("/run/daos_server/ms/status/*", "status")
+
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
@@ -271,7 +328,7 @@ class DaosServerCommand(YamlCommand):
             """Defines an object for the daos_server storage prepare command."""
 
             def __init__(self):
-                """Create a storage subcommand object."""
+                """Create a storage prepare subcommand object."""
                 super().__init__(
                     "/run/daos_server/storage/prepare/*", "prepare")
 
@@ -299,6 +356,14 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
+
+    class VersionSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server version sub command."""
+
+        def __init__(self):
+            """Create a version subcommand object."""
+            super().__init__("/run/daos_server/version/*", "version")
+
 
 class DaosServerInformation():
     """An object that stores the daos_server storage and network scan data."""
@@ -551,3 +616,77 @@ class DaosServerInformation():
             self.log.info("  %-4s : %s", category.upper(), sizes)
 
         return storage_capacity
+
+
+class DaosServerCommandRunner(DaosServerCommand):
+    """Defines a object representing a daos_server command."""
+
+    def __init__(self, path):
+        """Create a daos_server Command object.
+
+        Args:
+            path (str): path to the daos_server command
+        """
+        super().__init__(path)
+
+        self.debug.value = False
+        self.json_logs.value = False
+
+    def recover(self, force=False):
+        """Call daos_server ms recover.
+
+        Args:
+            force (bool, optional): Don't prompt for confirmation. Defaults to False.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server recover command fails.
+
+        """
+        return self._get_result(["ms", "recover"], force=force)
+
+    def restore(self, force=False, path=None):
+        """Call daos_server ms restore.
+
+        Args:
+            force (bool, optional): Don't prompt for confirmation. Defaults to False.
+            path (str, optional): Path to snapshot file. Defaults to None.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server restore command fails.
+
+        """
+        return self._get_result(["ms", "restore"], force=force, path=path)
+
+    def status(self):
+        """Call daos_server ms status.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server status command fails.
+
+        """
+        return self._get_result(["ms", "status"])
+
+    def version(self):
+        """Call daos_server version.
+
+        Returns:
+            CmdResult: an avocado CmdResult object containing the daos_server command
+                information, e.g. exit status, stdout, stderr, etc.
+
+        Raises:
+            CommandFailure: if the daos_server version command fails.
+
+        """
+        return self._get_result(["version"])

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -737,7 +737,7 @@ vs_setup_pool(void)
 	struct umem_attr	 uma = { 0 };
 	PMEMoid			 root;
 	void			*root_addr;
-	struct vea_unmap_context unmap_ctxt;
+	struct vea_unmap_context unmap_ctxt = { 0 };
 	struct vea_attr		 attr;
 	struct vea_stat		 stat;
 	uint64_t		 load_time;
@@ -806,8 +806,6 @@ vs_setup_pool(void)
 	}
 
 	load_time = daos_wallclock_secs();
-	unmap_ctxt.vnc_unmap = NULL;
-	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd, &unmap_ctxt,
 		      NULL, &vs_pool->vsp_vsi);
 	if (rc) {
@@ -865,6 +863,14 @@ vs_init(void)
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
 		fprintf(stderr, "failed to register DBTREE_CLASS_IV\n");
+		vs_fini();
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST) {
+		fprintf(stderr, "failed to register DBTREE_CLASS_IFV\n");
 		vs_fini();
 		return rc;
 	}
@@ -947,7 +953,7 @@ int main(int argc, char **argv)
 	char			*endp;
 	int			 i, rc;
 
-	rand_seed = time(0);
+	rand_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 	memset(pool_file, 0, sizeof(pool_file));
 	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {

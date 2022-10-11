@@ -101,7 +101,7 @@ typedef struct {
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_init();
+dfs_init(void);
 
 /**
  * Finalize the DAOS and DFS library. Typically this is called at the end of a user program or in IO
@@ -111,7 +111,7 @@ dfs_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_fini();
+dfs_fini(void);
 
 /**
  * Mount a DFS namespace over the specified pool and container. The container can be optionally
@@ -715,7 +715,7 @@ dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
  *			Target parent directory object. If NULL, use root obj.
  * \param[in]	new_name
  *			New link name of object.
- * \param[out]	oid	Optional: return the intenal object ID of the removed obj
+ * \param[out]	oid	Optional: return the internal object ID of the removed obj
  *			if the move clobbered it.
  *
  * \return		0 on success, errno code on failure.

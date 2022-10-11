@@ -39,6 +39,11 @@
 set -eux
 # allow core files to be generated
 sudo bash -c "set -ex
+if ! $TEST_RPMS; then
+cat <<EOF > /etc/sysctl.d/10-daos-server.conf
+$(cat utils/rpms/10-daos_server.conf)
+EOF
+fi
 # disable Leap15.3 (at least) from restricting dmesg to root
 cat <<EOF > /etc/sysctl.d/10-dmesg-for-all.conf
 kernel.dmesg_restrict=0
@@ -54,12 +59,17 @@ for x in \$(cd /sys/class/net/ && ls -d ib*); do
 done >> /etc/sysctl.d/10-daos-verbs.conf
 sysctl --system
 if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
-    echo \"*  soft  core  unlimited\" >> /etc/security/limits.conf
+    echo \"*  soft  core  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
 fi
 if [ \"\$(ulimit -l)\" != \"unlimited\" ]; then
-    echo \"*  soft  memlock  unlimited\" >> /etc/security/limits.conf
-    echo \"*  hard  memlock  unlimited\" >> /etc/security/limits.conf
+    echo \"*  soft  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
+    echo \"*  hard  memlock  unlimited\" >> /etc/security/limits.d/80_daos_limits.conf
 fi
+if [ \"\$(ulimit -n)\" != \"1048576\" ]; then
+    echo \"*  soft  nofile 1048576\" >> /etc/security/limits.d/80_daos_limits.conf
+    echo \"*  hard  nofile 1048576\" >> /etc/security/limits.d/80_daos_limits.conf
+fi
+cat /etc/security/limits.d/80_daos_limits.conf
 ulimit -a
 echo \"/var/tmp/core.%e.%t.%p\" > /proc/sys/kernel/core_pattern"
 sudo rm -f /var/tmp/core.*

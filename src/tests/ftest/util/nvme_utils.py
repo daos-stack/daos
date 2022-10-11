@@ -14,6 +14,7 @@ from ior_utils import IorCommand
 from server_utils import ServerFailed
 from job_manager_utils import get_job_manager
 
+
 def get_device_ids(dmg, servers):
     """Get the NVMe Device ID from servers.
 
@@ -170,7 +171,7 @@ class ServerFillUp(IorTestBase):
         # Get the block size based on the capacity to be filled. For example
         # If nvme_free_space is 100G and to fill 50% of capacity.
         # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space to be filled.
-        _tmp_block_size = ((free_space/100)*self.capacity)
+        _tmp_block_size = ((free_space / 100) * self.capacity)
 
         # Check the IOR object type to calculate the correct block size.
         _replica = re.findall(r'_(.+?)G', self.ior_local_cmd.dfs_oclass.value)

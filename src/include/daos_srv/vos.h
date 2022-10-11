@@ -42,9 +42,10 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ * \param exist		[IN]	Related DTX entry exists or not.
  */
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist);
 
 /**
  * Detach the DTX entry from the DTX handle.
@@ -76,6 +77,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
+ * \param for_refresh	[IN]	It is for DTX_REFRESH or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -94,7 +96,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
+	      bool for_refresh);
 
 /**
  * Commit the specified DTXs.
@@ -289,13 +292,15 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
-/** Enable any version specific features on the pool
+/** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param feats	[IN]	Features to enable
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
+ *
+ * \return	0 on success, error otherwise
  */
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -983,9 +988,10 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
 	      d_iov_t *iov_out);
 
 /**
- * Delete the current data entry of the iterator
+ * Process the operation for the current cursor.
  *
- * \param ih	[IN]	Iterator handle
+ * \param ih	[IN]	Iterator open handle.
+ * \param op	[IN]	op code to process. See vos_iter_proc_op_t
  * \param args	[IN/OUT]
  *			Optional, Provide additional hints while
  *			deletion to handle special cases.
@@ -995,10 +1001,9 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
  * \return		Zero on Success
  *			-DER_NONEXIST if cursor does
  *			not exist. negative value if error
- *
  */
 int
-vos_iter_delete(daos_handle_t ih, void *args);
+vos_iter_process(daos_handle_t ih, vos_iter_proc_op_t op, void *args);
 
 /**
  * If the iterator has any element. The condition provided to vos_iter_prepare
@@ -1061,15 +1066,18 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
+ * The maximum write epoch for the object can be returned at the same time
+ * as the min or max query. Alternatively, this API can be used to only query
+ * the maximum write for an object if no flags are given.
+ *
  * \param[in]	coh		Container open handle.
  * \param[in]	oid		Object id
  * \param[in]	flags		mask with the following options:
  *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
  *				DAOS_GET_MAX, DAOS_GET_MIN
- *				User has to indicate whether to query the MAX or MIN, in
- *				addition to what needs to be queried. Providing
- *				(MAX | MIN) in any combination will return an error.
- *				i.e. user can only query MAX or MIN in one call.
+ *				If the user isn't querying max_write, they must specify either
+ *				DAOS_GET_MAX or DAOS_GET_MIN, exclusively. Anything else is
+ *				an error.
  * \param[in,out]
  *		dkey		[in]: allocated integer dkey. User can provide the dkey
  *				if not querying the max or min dkey.
@@ -1081,7 +1089,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx		max or min offset in dkey/akey, and the size of the
  *				extent at the offset. If there are no visible array
  *				records, the size in the recx returned will be 0.
- * \param[out]	max_write	Optional: Returns max write epoch for object
+ * \param[out]	max_write	Optional: Returns max write epoch for object.
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
@@ -1147,6 +1155,9 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
+int
+vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1169,6 +1180,9 @@ vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh);
+
 /**
  * Helper functions for dedup verify.
  */
@@ -1188,5 +1202,135 @@ int vos_db_init(const char *db_path);
 int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
+
+/**
+ * The following declarations are for checksum scrubbing functions. The function
+ * types provide an interface for injecting dependencies into the
+ * scrubber (srv_pool_scrub.c) from the schedule/ult management
+ * so that it can be more easily tested without depending on the entire daos
+ * engine to be running or waiting for schedules to run.
+ */
+
+struct cont_scrub {
+	struct daos_csummer	*scs_cont_csummer;
+	void			*scs_cont_src;
+	daos_handle_t		 scs_cont_hdl;
+	uuid_t			 scs_cont_uuid;
+};
+
+/*
+ * Because the scrubber operates at the pool level, it will need a way to
+ * get some info for each container within the pool as it's scrubbed.
+ */
+typedef int(*sc_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
+			       struct cont_scrub *cont);
+typedef void(*sc_put_cont_fn_t)(void *cont);
+typedef bool(*sc_cont_is_stopping_fn_t)(void *cont);
+
+typedef bool (*sc_is_idle_fn_t)();
+typedef int (*sc_sleep_fn_t)(void *, uint32_t msec);
+typedef int (*sc_yield_fn_t)(void *);
+typedef int (*ds_pool_tgt_drain)(struct ds_pool *pool);
+
+enum scrub_status {
+	SCRUB_STATUS_UNKNOWN = 0,
+	SCRUB_STATUS_RUNNING = 1,
+	SCRUB_STATUS_NOT_RUNNING = 2,
+};
+
+struct scrub_ctx_metrics {
+	struct d_tm_node_t *scm_pool_ult_wait_time;
+	struct d_tm_node_t *scm_start;
+	struct d_tm_node_t *scm_end;
+	struct d_tm_node_t *scm_last_duration;
+	struct d_tm_node_t *scm_csum_calcs;
+	struct d_tm_node_t *scm_csum_calcs_last;
+	struct d_tm_node_t *scm_csum_calcs_total;
+	struct d_tm_node_t *scm_bytes_scrubbed;
+	struct d_tm_node_t *scm_bytes_scrubbed_last;
+	struct d_tm_node_t *scm_bytes_scrubbed_total;
+	struct d_tm_node_t *scm_corruption;
+	struct d_tm_node_t *scm_corruption_total;
+	struct d_tm_node_t *scm_scrub_count;
+};
+
+/* Scrub the pool */
+struct scrub_ctx {
+	/**
+	 * Metrics gathered during scrubbing process
+	 */
+	struct scrub_ctx_metrics sc_metrics;
+
+	struct dss_module_info	*sc_dmi;
+
+	/**
+	 * Pool
+	 **/
+	uuid_t			 sc_pool_uuid;
+	daos_handle_t		 sc_vos_pool_hdl;
+	struct ds_pool		*sc_pool; /* Used to get properties */
+	uint32_t		 sc_pool_scrub_count;
+	struct timespec		 sc_pool_start_scrub;
+	int			 sc_pool_last_csum_calcs;
+	int			 sc_pool_csum_calcs;
+	uint64_t		 sc_bytes_scrubbed;
+	uint32_t		 sc_pool_tgt_corrupted_detected;
+	ds_pool_tgt_drain	 sc_drain_pool_tgt_fn;
+
+	/**
+	 * Container
+	 **/
+	/* callback function that will provide the csummer for the container */
+	sc_get_cont_fn_t	 sc_cont_lookup_fn;
+	sc_put_cont_fn_t	 sc_cont_put_fn;
+	sc_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
+	struct cont_scrub	 sc_cont;
+	uuid_t			 sc_cont_uuid;
+
+	/**
+	 * Object
+	 */
+	daos_unit_oid_t		 sc_cur_oid;
+	daos_key_t		 sc_dkey;
+	struct dcs_csum_info	*sc_csum_to_verify;
+	daos_epoch_t		 sc_epoch;
+	uint16_t		 sc_minor_epoch;
+	daos_iod_t		 sc_iod;
+	struct bio_iov		*sc_cur_biov;
+
+	/* Current vos object iterator */
+	daos_handle_t		 sc_vos_iter_handle;
+
+	/* Schedule controlling function pointers and arg */
+	sc_is_idle_fn_t		 sc_is_idle_fn;
+	sc_sleep_fn_t		 sc_sleep_fn;
+	sc_yield_fn_t		 sc_yield_fn;
+	void			*sc_sched_arg;
+
+	enum scrub_status	 sc_status;
+	bool			 sc_did_yield;
+};
+
+/*
+ * It is expected that the pool uuid/handle and any functional dependencies are
+ * set in the scrubbing context. The container/object info should not be set.
+ * This function will iterate over all of the containers in the pool and if
+ * checksums are enabled on the pool, each object in the container will be
+ * scrubbed.
+ */
+int vos_scrub_pool(struct scrub_ctx *ctx);
+
+/*
+ * A generic utility function that, given a start time, duration, number of
+ * periods that can be processed, and the current period index, calculate how
+ * long the caller should wait/sleep in order to fill the space of the current
+ * period.
+ *
+ * Returns number of milliseconds to wait
+ */
+uint64_t
+get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
+		       uint64_t duration_seconds, uint64_t periods_nr,
+		       uint64_t per_idx);
 
 #endif /* __VOS_API_H */

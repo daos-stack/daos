@@ -9,11 +9,10 @@ package bdev
 import (
 	"fmt"
 	"os"
-	"os/user"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
-	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -25,8 +24,8 @@ import (
 )
 
 const (
-	hugePageDir    = "/dev/hugepages"
-	hugePagePrefix = "spdk"
+	hugePageDir         = "/dev/hugepages"
+	spdkHugepagePattern = `spdk_pid([0-9]+)map`
 )
 
 type (
@@ -41,12 +40,12 @@ type (
 		script  *spdkSetupScript
 	}
 
-	removeFn     func(string) error
-	userLookupFn func(string) (*user.User, error)
-	vmdDetectFn  func() (*hardware.PCIAddressSet, error)
-	hpCleanFn    func(string, string, string) (uint, error)
-	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
-	restoreFn    func()
+	statFn      func(string) (os.FileInfo, error)
+	removeFn    func(string) error
+	vmdDetectFn func() (*hardware.PCIAddressSet, error)
+	hpCleanFn   func(logging.Logger, string) (uint, error)
+	writeConfFn func(logging.Logger, *storage.BdevWriteConfigRequest) error
+	restoreFn   func()
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -66,7 +65,7 @@ func (w *spdkWrapper) suppressOutput() (restore restoreFn, err error) {
 		return
 	}
 
-	if err = syscall.Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
+	if err = Dup2(int(devNull.Fd()), syscall.Stdout); err != nil {
 		return
 	}
 
@@ -77,7 +76,7 @@ func (w *spdkWrapper) suppressOutput() (restore restoreFn, err error) {
 		if err := devNull.Close(); err != nil {
 			panic(err)
 		}
-		if err := syscall.Dup2(realStdout, syscall.Stdout); err != nil {
+		if err := Dup2(realStdout, syscall.Stdout); err != nil {
 			panic(err)
 		}
 	}
@@ -113,9 +112,24 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-// name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count *uint) filepath.WalkFunc {
+func isPIDActive(pidStr string, stat statFn) (bool, error) {
+	filename := fmt.Sprintf("/proc/%s", pidStr)
+
+	if _, err := stat(filename); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+// createHugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// name begins with prefix and encoded pid is inactive.
+func createHugePageWalkFunc(log logging.Logger, hugePageDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
+	re := regexp.MustCompile(spdkHugepagePattern)
+
 	return func(path string, info os.FileInfo, err error) error {
 		switch {
 		case err != nil:
@@ -123,22 +137,26 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count
 		case info == nil:
 			return errors.New("nil fileinfo")
 		case info.IsDir():
+			log.Debugf("walk func: dir %s", path)
 			if path == hugePageDir {
 				return nil
 			}
 			return filepath.SkipDir // skip subdirectories
-		case !strings.HasPrefix(info.Name(), prefix):
-			return nil // skip files without prefix
 		}
 
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat == nil {
-			return errors.New("stat missing for file")
+		matches := re.FindStringSubmatch(info.Name())
+		if len(matches) != 2 {
+			log.Debugf("walk func: unexpected name, skipping %s", path)
+			return nil // skip files not matching expected pattern
 		}
-		if strconv.Itoa(int(stat.Uid)) != tgtUID {
-			return nil // skip not owned by target user
+		// PID string will be the first submatch at index 1 of the match results.
+
+		if isActive, err := isPIDActive(matches[1], stat); err != nil || isActive {
+			log.Debugf("walk func: active owner proc, skipping %s", path)
+			return err // skip files created by an existing process (isActive == true)
 		}
 
+		log.Debugf("walk func: removing %s", path)
 		if err := remove(path); err != nil {
 			return err
 		}
@@ -150,32 +168,41 @@ func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn, count
 
 // cleanHugePages removes hugepage files with pathPrefix that are owned by the user with username
 // tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) (count uint, _ error) {
+func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error) {
 	return count, filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove, &count))
+		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
+}
+
+func logNUMAStats(log logging.Logger) {
+	var toLog string
+
+	out, err := exec.Command("numastat", "-m").Output()
+	if err != nil {
+		toLog = (&runCmdError{
+			wrapped: err,
+			stdout:  string(out),
+		}).Error()
+	} else {
+		toLog = string(out)
+	}
+
+	log.Debugf("run cmd numastat -m: %s", toLog)
 }
 
 // prepare receives function pointers for external interfaces.
-func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
+func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
 
-	usr, err := userLookup(req.TargetUser)
-	if err != nil {
-		return resp, errors.Wrapf(err, "lookup on local host")
-	}
-
-	// Remove hugepages matching file name beginning with prefix and owned by the target user.
-	hpPrefix := hugePagePrefix
-	if req.CleanHugePagesPID != 0 {
-		// If a pid is supplied then include in the prefix.
-		hpPrefix = fmt.Sprintf("%s_pid%dmap", hpPrefix, req.CleanHugePagesPID)
-	}
-	nrRemoved, err := hpClean(hugePageDir, hpPrefix, usr.Uid)
-	if err != nil {
-		return resp, errors.Wrapf(err, "clean spdk hugepages")
-	}
-	resp.NrHugePagesRemoved = nrRemoved
 	if req.CleanHugePagesOnly {
+		// Remove hugepages created by an inactive SPDK process.
+		nrRemoved, err := hpClean(sb.log, hugePageDir)
+		if err != nil {
+			return resp, errors.Wrapf(err, "clean spdk hugepages")
+		}
+		resp.NrHugePagesRemoved = nrRemoved
+
+		logNUMAStats(sb.log)
+
 		return resp, nil
 	}
 
@@ -211,15 +238,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 		return errors.Wrapf(err, "update prepare request")
 	}
 
-	if req.EnableVMD {
-		// First run with VMD addresses in allow list and then without to reset backing SSDs.
-		if err := sb.script.Reset(&req); err != nil {
-			return errors.Wrap(err, "unbinding vmd endpoints from userspace drivers")
-		}
-		req.PCIAllowList = ""
-	}
-
-	return errors.Wrap(sb.script.Reset(&req), "unbinding ssds from userspace drivers")
+	return errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
@@ -228,7 +247,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, DetectVMD)
@@ -240,10 +259,10 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
-	return sb.prepare(req, user.Lookup, DetectVMD, cleanHugePages)
+	return sb.prepare(req, DetectVMD, cleanHugePages)
 }
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
@@ -258,9 +277,13 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
-	vmds, err := mapVMDToBackingDevs(discovered)
-	if err != nil {
-		return nil, err
+	var vmds map[string]storage.NvmeControllers
+	if vmdEnabled {
+		vmdMap, err := mapVMDToBackingDevs(discovered)
+		if err != nil {
+			return nil, err
+		}
+		vmds = vmdMap
 	}
 
 	for _, want := range reqDevs.Addresses() {

@@ -17,9 +17,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // TestIOEngineInstance_exit establishes that event is published on exit.
@@ -40,7 +40,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 		exitErr          error
 		expShouldForward bool
 		expEvtMsg        string
-		expExPid         uint64
+		expExPid         int
 	}{
 		"without rank": {
 			expEvtMsg: fmt.Sprintf(exitMsg, 0),
@@ -73,17 +73,17 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 			if tc.rankInSuperblock {
 				engine.setSuperblock(&Superblock{
-					Rank: system.NewRankPtr(0), ValidRank: true,
+					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
 			}
 			if tc.expExPid == 0 {
-				tc.expExPid = uint64(os.Getpid())
+				tc.expExPid = os.Getpid()
 			}
 
 			hn, _ := os.Hostname()
-			engine.OnInstanceExit(publishInstanceExitFn(fakePublish, hn))
+			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
-			engine.exit(context.Background(), exitErr)
+			engine.handleExit(context.Background(), tc.expExPid, exitErr)
 
 			test.AssertEqual(t, 1, len(rxEvts),
 				"unexpected number of events published")
@@ -92,8 +92,9 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			if diff := cmp.Diff(tc.expEvtMsg, rxEvts[0].Msg); diff != "" {
 				t.Fatalf("unexpected message (-want, +got):\n%s\n", diff)
 			}
-			test.AssertEqual(t, tc.expExPid, rxEvts[0].ProcID,
-				"unexpected process ID in event")
+			if tc.expExPid != rxEvts[0].ProcID {
+				t.Fatalf("unexpected PID in event (%d != %d)", tc.expExPid, rxEvts[0].ProcID)
+			}
 		})
 	}
 }

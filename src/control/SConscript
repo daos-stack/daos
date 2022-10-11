@@ -12,7 +12,7 @@ import daos_build
 Import('env', 'prereqs', 'daos_version', 'conf_dir')
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.12.0'
+MIN_GO_VERSION = '1.16.0'
 GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
 
@@ -46,11 +46,12 @@ def is_firmware_mgmt_build(benv):
 
 def get_build_tags(benv):
     "Get custom go build tags."
-    tags = []
+    tags = ["ucx", "spdk"]
     if is_firmware_mgmt_build(benv):
         tags.append("firmware")
-    tags.append("ucx")
-    return "-tags {}".format(','.join(tags))
+    if not is_release_build(benv):
+        tags.append("pprof")
+    return f"-tags {','.join(tags)}"
 
 
 def is_release_build(benv):
@@ -64,6 +65,8 @@ def get_build_flags(benv):
     if not is_release_build(benv):
         # enable race detector for non-release builds
         flags += "-race"
+    else:
+        flags += '-buildmode=pie'
     return flags
 
 
@@ -118,9 +121,10 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
     target = daos_build.run_command(denv, build_bin, src, libs,
-                                    f'cd {gosrc}; {GO_BIN} build -v -mod vendor {go_ldflags()} ' +
-                                    f'{get_build_flags(denv)} {get_build_tags(denv)} ' +
-                                    f'-o {build_bin} {install_src}')
+                                    f'cd {gosrc}; {GO_BIN} build -mod vendor {go_ldflags()} '
+                                    + f'{get_build_flags(denv)} '
+                                    + f'{get_build_tags(denv)} '
+                                    + f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     AlwaysBuild(target)

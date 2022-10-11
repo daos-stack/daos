@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -22,8 +23,6 @@ import (
 const (
 	// bdevPciAddrSep defines the separator used between PCI addresses in string sets.
 	bdevPciAddrSep = " "
-	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
-	vmdDomainLen = 6
 	// PCIAddrBusBitSize defines the number of bits used to represent bus in address.
 	PCIAddrBusBitSize = 8
 )
@@ -32,10 +31,8 @@ var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
 
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
-	if len(addr) != vmdDomainLen {
-		return nil, errors.Errorf("unexpected length of vmd domain: %q", addr)
-	}
-
+	// Left-pad domain string as necessary make it a valid PCI address.
+	addr = fmt.Sprintf("%06s", addr)
 	return NewPCIAddress(fmt.Sprintf("0000:%s:%s.%s", addr[:2], addr[2:4], addr[4:]))
 }
 
@@ -79,11 +76,11 @@ func parsePCIAddress(addr string) (dom uint16, bus, dev, fun uint8, vmdAddr *PCI
 // PCIAddress represents the address of a standard PCI device
 // or a VMD backing device.
 type PCIAddress struct {
-	VMDAddr  *PCIAddress
-	Domain   uint16 `json:"domain"`
-	Bus      uint8  `json:"bus"`
-	Device   uint8  `json:"device"`
-	Function uint8  `json:"function"`
+	VMDAddr  *PCIAddress `json:"vmd_address,omitempty"`
+	Domain   uint16      `json:"domain"`
+	Bus      uint8       `json:"bus"`
+	Device   uint8       `json:"device"`
+	Function uint8       `json:"function"`
 }
 
 func (pa *PCIAddress) FieldStrings() map[string]string {
@@ -435,12 +432,13 @@ func NewPCIAddressSetFromString(addrs string) (*PCIAddressSet, error) {
 type (
 	// PCIDevice represents an individual hardware device.
 	PCIDevice struct {
-		Name      string     `json:"name"`
-		Type      DeviceType `json:"type"`
-		NUMANode  *NUMANode  `json:"-"`
-		Bus       *PCIBus    `json:"-"`
-		PCIAddr   PCIAddress `json:"pci_address"`
-		LinkSpeed float64    `json:"link_speed"`
+		Name        string       `json:"name"`
+		Type        DeviceType   `json:"type"`
+		NUMANode    *NUMANode    `json:"-"`
+		Bus         *PCIBus      `json:"-"`
+		PCIAddr     PCIAddress   `json:"pci_address"`
+		LinkSpeed   float64      `json:"link_speed,omitempty"`
+		BlockDevice *BlockDevice `json:"-"`
 	}
 
 	// PCIBus represents the root of a PCI bus hierarchy.
@@ -515,7 +513,11 @@ func (d *PCIDevice) String() string {
 	if d.LinkSpeed > 0 {
 		speedStr = fmt.Sprintf(" @ %.2f GB/s", d.LinkSpeed)
 	}
-	return fmt.Sprintf("%s %s (%s)%s", &d.PCIAddr, d.Name, d.Type, speedStr)
+	var sizeStr string
+	if d.BlockDevice != nil {
+		sizeStr = fmt.Sprintf("%s ", humanize.Bytes(d.BlockDevice.Size))
+	}
+	return fmt.Sprintf("%s %s (%s%s)%s", &d.PCIAddr, d.Name, sizeStr, d.Type, speedStr)
 }
 
 // DeviceName returns the system name of the PCI device.

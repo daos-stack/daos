@@ -1,12 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 
 from control_test_base import ControlTestBase
+
 
 class DmgSystemLeaderQueryTest(ControlTestBase):
     # pylint: disable=too-many-ancestors
@@ -28,7 +28,11 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
         JIRA ID: DAOS-4822
         Test Description: Test that system leader-query command reports leader
             consistently regardless of which server is queried.
-        :avocado: tags=all,basic,daily_regression,dmg,system_leader_query
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,basic,dmg
+        :avocado: tags=system_leader_query,test_dmg_system_leader_query
         """
         last_result = None
         for host in self.hosts:

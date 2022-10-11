@@ -84,7 +84,7 @@ cont_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-cont_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+cont_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -369,6 +369,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 						  &iv_prop->cip_co_status);
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -431,9 +434,9 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
+again:
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	d_iov_set(&val_iov, NULL, 0);
-again:
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
 	if (rc < 0) {
 		if (rc == -DER_NONEXIST && is_master(entry)) {
@@ -453,8 +456,29 @@ again:
 				D_ERROR("create cont prop iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_CAPA) {
-				/* Can not find the handle on leader */
-				rc = -DER_NONEXIST;
+				struct container_hdl	chdl;
+				int			rc1;
+
+				/* If PS leader switches, it may not in IV cache,
+				 * let's lookup RDB then.
+				 **/
+				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
+							     civ_key->cont_uuid, &chdl);
+				if (rc1 == 0) {
+					struct cont_iv_entry	iv_entry = { 0 };
+
+					/* Only happens on xstream 0 */
+					D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+					iv_entry.iv_capa.flags = chdl.ch_flags;
+					iv_entry.iv_capa.sec_capas = chdl.ch_sec_capas;
+					uuid_copy(iv_entry.cont_uuid, chdl.ch_cont);
+					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
+					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+					if (rc == 0)
+						goto again;
+				} else {
+					rc = -DER_NONEXIST;
+				}
 			}
 		}
 		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
@@ -1276,6 +1300,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = daos_prop_co_status_2_val(
 					&iv_prop->cip_co_status);
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	}
 out:
 	if (rc)

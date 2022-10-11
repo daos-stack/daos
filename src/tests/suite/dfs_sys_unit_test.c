@@ -459,7 +459,6 @@ setattr_hlpr(const char *path, bool no_follow)
 	/** Check new times are set */
 	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_atim.tv_sec, times[0].tv_sec);
 	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);
 
 	/** Increment times again */
@@ -477,7 +476,6 @@ setattr_hlpr(const char *path, bool no_follow)
 	/** Check new times are set */
 	rc = dfs_sys_stat(dfs_sys_mt, path, sflags, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_atim.tv_sec, times[0].tv_sec);
 	assert_int_equal(stbuf.st_mtim.tv_sec, times[1].tv_sec);
 }
 
@@ -853,7 +851,8 @@ dfs_sys_setup(void **state)
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
 			0, NULL);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		return rc;
 
 	arg = *state;
 

@@ -294,6 +294,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
 		return "DAOS_PROP_CO_ROOTS";
+	case DAOS_PROP_CO_SCRUBBER_DISABLED:
+		return "DAOS_PROP_CO_SCRUBBER_DISABLED";
 	default:
 		return "PROPERTY NOT SUPPORTED";
 	}
@@ -356,7 +358,8 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_EC_PDA ||
 			   type == DAOS_PROP_CO_RP_PDA ||
 			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
-			   type == DAOS_PROP_CO_ALLOCED_OID) {
+			   type == DAOS_PROP_CO_ALLOCED_OID ||
+			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
 			entry = &prop_query->dpp_entries[i];
 			rc = serialize_uint(file_id, entry->dpe_val,
 					    prop_str);
@@ -761,6 +764,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 {
 
 	int			rc = 0;
+	int			rc2 = 0;
 	bool			deserialize_label = false;
 	bool			close_cont = true;
 	uint64_t		total_props = 0;
@@ -1036,6 +1040,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 			D_GOTO(out, rc);
 		prop_num++;
 	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_SCRUBBER_DISABLED") > 0) {
+		type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_SCRUBBER_DISABLED");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;
@@ -1046,8 +1060,11 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 	*_prop = prop;
 out:
 	/* close container after checking if label exists in pool */
-	if (close_cont)
-		daos_cont_close(coh, NULL);
+	if (close_cont) {
+		rc2 = daos_cont_close(coh, NULL);
+		if (rc2)
+			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+	}
 	if (rc != 0 && prop != NULL)
 		daos_prop_free(prop);
 	D_FREE(label);

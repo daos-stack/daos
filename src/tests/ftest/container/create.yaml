@@ -1,11 +1,14 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-   test_servers:
-     - server-A
+   test_servers: 1
 timeout: 100
 server_config:
    name: daos_server
+   servers:
+      targets: 4
+      nr_xs_helpers: 0
+      scm_size: 4
 pool:
    mode: 511
    name: daos_server
@@ -13,11 +16,11 @@ pool:
    control_method: dmg
 uuids: !mux
    perfect:
-     uuid:
-       - VALID
-       - PASS
+      uuid:
+         - VALID
+         - PASS
 poolhandle: !mux
    goodone:
-       handle: VALID
+      handle: VALID
    badone:
-       handle: 99999
+      handle: 99999

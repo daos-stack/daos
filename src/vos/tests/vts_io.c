@@ -968,12 +968,13 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
 	assert_rc_equal(rc, 0);
 	/** Should be prevented because object olready held for discard */
-	expect_assert_failure(vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0],
-						   &obj2));
+	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
+	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 	/** Should prevent simultaneous hold for create as well */
-	expect_assert_failure(vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
 					   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
-					   &obj2, 0));
+					   &obj2, 0);
+	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 
 	/** Need to be able to hold for read though or iteration won't work */
 	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
@@ -2950,18 +2951,17 @@ run_io_test(enum daos_otype_t type, int keys, bool nest_iterators, const char *c
 	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_LEXICAL))
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "# VOS IO tests (dkey=%-6s akey=%s) %s",
-		 dkey, akey, cfg);
+	snprintf(buf, VTS_BUF_SIZE, "IO# tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
 	init_type = type;
 	if (keys)
 		init_num_keys = keys;
 	D_PRINT("Running %s\n", buf);
 	if (type == DAOS_OT_MULTI_UINT64) {
-		buf[0] = '2';
+		buf[2] = '2';
 		rc = cmocka_run_group_tests_name(buf, int_tests, setup_io,
 						 teardown_io);
 	}
-	buf[0] = '1';
+	buf[2] = '1';
 
 	return rc + cmocka_run_group_tests_name(buf, io_tests,
 						setup_io, teardown_io);

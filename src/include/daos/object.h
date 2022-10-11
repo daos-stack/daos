@@ -87,8 +87,8 @@ daos_ec_cs_valid(uint32_t cell_sz)
 	if (cell_sz < DAOS_EC_CELL_MIN || cell_sz > DAOS_EC_CELL_MAX)
 		return false;
 
-	/* should be multiplier of the min size */
-	if (cell_sz % DAOS_EC_CELL_MIN != 0)
+	/* should be multiplier of the min size, EC/ISAL lib require 32 byte alignment */
+	if (cell_sz % 32 != 0)
 		return false;
 
 	return true;
@@ -133,11 +133,10 @@ typedef struct {
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
-	uint32_t		omd_padding;
-	union {
-		uint32_t	omd_split;
-		uint64_t	omd_loff;
-	};
+	/* Fault domain level - PO_COMP_TP_RANK, or PO_COMP_TP_RANK. If it is zero then will
+	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
+	 */
+	uint32_t		omd_fdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -178,6 +177,8 @@ struct daos_obj_layout {
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
 	DTF_DELAY_FORWARD	= (1 << 0),
+	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	DTF_REASSEMBLE_REQ	= (1 << 1),
 };
 
 /** to identify each obj shard's target */
@@ -440,7 +441,7 @@ daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 				daos_obj_id_t *oid, enum daos_otype_t type,
 				daos_oclass_id_t cid, daos_oclass_hints_t hints,
-				uint32_t args);
+				uint32_t args, uint32_t pa_domains);
 
 int dc_obj_init(void);
 void dc_obj_fini(void);

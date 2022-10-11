@@ -29,66 +29,24 @@
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 
-#if 0
-/* Disable inflight IO due to DAOS-8775 for 2.0, and re-enable it until inflight I/O
- * during reintegrated are supported.
- */
-static int
-reintegrate_inflight_io(void *data)
-{
-	test_arg_t	*arg = data;
-	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
-	struct ioreq	req;
-	int		i;
-
-	rebuild_pool_connect_internal(arg);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++) {
-		char	key[32];
-		daos_recx_t recx;
-		char	buf[DATA_SIZE];
-
-		sprintf(key, "d_inflight_%d", i);
-		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
-
-		sprintf(key, "d_inflight_1M_%d", i);
-		recx.rx_idx = 0;
-		recx.rx_nr = DATA_SIZE;
-		memset(buf, 'a', DATA_SIZE);
-		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
-			     buf, DATA_SIZE, &req);
-	}
-	ioreq_fini(&req);
-	rebuild_pool_disconnect_internal(arg);
-	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
-				      NULL);
-	return 0;
-}
-#endif
-
 static void
 reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 			     d_rank_t rank, int tgt)
 {
 	daos_obj_id_t inflight_oid;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid != NULL) {
 		inflight_oid = *oid;
 	} else {
-#endif
-	inflight_oid = daos_test_oid_gen(arg->coh,
+		inflight_oid = daos_test_oid_gen(arg->coh,
 					 DAOS_OC_R3S_SPEC_RANK, 0,
 					 0, arg->myrank);
-	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+	}
 
-#if 0
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;
-#endif
+
 	/* To make sure the IO will be done before reintegration is done */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -97,8 +55,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid == NULL) {
 		int rc;
 
@@ -106,7 +62,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 		if (rc != 0)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
-#endif
 }
 
 static void
@@ -825,7 +780,12 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
-		assert_string_equal(buffer, rec);
+		/* SX only has one replica, and reintegration will delete the "stale"
+		 * data anyway, so it may lose data here, so do not need verify data
+		 * for SX object. Incremental reintegration might fix this.
+		 */
+		if (oclass != OC_SX)
+			assert_string_equal(buffer, rec);
 	}
 	ioreq_fini(&req);
 }
@@ -1191,7 +1151,15 @@ rebuild_with_dfs_open_create_punch(void **state)
 	if (!test_runable(arg, 6))
 		return;
 
-	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
+	dfs_attr_t attr = {};
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1213,7 +1181,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
-	reintegrate_single_pool_rank_no_disconnect(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);

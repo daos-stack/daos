@@ -199,6 +199,7 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < req->n_engines; i++) {
 		in.gui_servers[i].se_rank = req->engines[i]->rank;
+		in.gui_servers[i].se_incarnation = req->engines[i]->incarnation;
 		in.gui_servers[i].se_uri = req->engines[i]->uri;
 	}
 	in.gui_n_servers = req->n_engines;
@@ -281,16 +282,32 @@ out:
 }
 
 static int
-create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
+create_pool_props(daos_prop_t **out_prop, uint32_t numsvcreps, char *owner, char *owner_grp,
 		  const char **ace_list, size_t ace_nr)
 {
+	uint64_t	out_svc_rf = DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT;
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
-	uint32_t	entries = 0;
+	uint32_t	entries = 1;
 	uint32_t	idx = 0;
 	int		rc = 0;
+
+	if (numsvcreps > 0) {
+#ifndef DRPC_TEST
+		out_svc_rf = ds_pool_svc_rf_from_nreplicas(numsvcreps);
+#else
+		if (numsvcreps % 2 == 0)
+			numsvcreps--;
+		out_svc_rf = numsvcreps / 2;
+#endif
+		if (!daos_svc_rf_is_valid(out_svc_rf)) {
+			D_ERROR("invalid numsvcreps %u\n", numsvcreps);
+			rc = -DER_INVAL;
+			goto err_out;
+		}
+	}
 
 	if (ace_list != NULL && ace_nr > 0) {
 		rc = daos_acl_from_strs(ace_list, ace_nr, &out_acl);
@@ -316,14 +333,13 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		entries++;
 	}
 
-	if (entries == 0) {
-		D_ERROR("No prop entries provided, aborting!\n");
-		D_GOTO(err_out, rc = -DER_INVAL);
-	}
-
 	new_prop = daos_prop_alloc(entries);
 	if (new_prop == NULL)
 		D_GOTO(err_out, rc = -DER_NOMEM);
+
+	new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_REDUN_FAC;
+	new_prop->dpp_entries[idx].dpe_val = out_svc_rf;
+	idx++;
 
 	if (out_owner != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OWNER;
@@ -373,7 +389,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 
 	D_DEBUG(DB_MGMT, "%d service replicas\n", svc_ranks->rl_nr);
 
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &enabled_ranks, &pool_info, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to query created pool: rc=%d\n", rc);
 		D_GOTO(out, rc);
@@ -458,7 +474,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&base_props, req->user, req->usergroup,
+	rc = create_pool_props(&base_props, req->numsvcreps, req->user, req->usergroup,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -476,10 +492,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->tierbytes[DAOS_MEDIA_SCM],
-				 req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, req->numsvcreps, &svc,
-				 req->n_faultdomains, req->faultdomains);
+				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
+				 prop, &svc, req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -548,9 +562,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Sys and force params are currently ignored in receiver. */
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks, req->sys,
-				  (req->force == true) ? 1 : 0);
+	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
@@ -646,7 +658,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
-				machine, req->sys, &count);
+				machine, &count);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
@@ -1107,9 +1119,8 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 		return 0;
 
 	D_ALLOC_ARRAY(resp_props, valid_prop_nr);
-	if (resp_props == NULL) {
+	if (resp_props == NULL)
 		return -DER_NOMEM;
-	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -1135,8 +1146,23 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 			if (resp_props[j]->strval == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else if (daos_prop_has_ptr(entry)) {
-			D_ERROR("pointer-value props not supported\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			switch (entry->dpe_type) {
+			case DAOS_PROP_PO_SVC_LIST:
+				if (entry->dpe_val_ptr == NULL) {
+					D_ERROR("svc rank list unset\n");
+					D_GOTO(out, rc = -DER_INVAL);
+				}
+				resp_props[j]->strval = d_rank_list_to_str(
+					(d_rank_list_t *)entry->dpe_val_ptr);
+				if (resp_props[j]->strval == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+				resp_props[j]->value_case =
+					MGMT__POOL_PROPERTY__VALUE_STRVAL;
+				break;
+			default:
+				D_ERROR("pointer-value props not supported\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 		} else {
 			resp_props[j]->numval = entry->dpe_val;
 			resp_props[j]->value_case =
@@ -1594,6 +1620,8 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	resp.n_containers = containers_len;
 
+	D_DEBUG(DB_MGMT, "Found %lu containers in DAOS pool %s\n", containers_len, req->id);
+
 	for (i = 0; i < containers_len; i++) {
 		D_ALLOC_PTR(resp.containers[i]);
 		if (resp.containers[i] == NULL)
@@ -1721,7 +1749,8 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* TODO (DAOS-10250) Enabled and disabled engines should be retrieve both if needed */
 	pool_info.pi_bits = req->include_enabled_ranks ? DPI_ALL : (DPI_ALL & ~DPI_ENGINES_ENABLED);
-	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info);
+	rc = ds_mgmt_pool_query(uuid, svc_ranks, &ranks, &pool_info, &resp.pool_layout_ver,
+				&resp.upgrade_layout_ver);
 	if (rc != 0) {
 		D_ERROR("Failed to query the pool, rc=%d\n", rc);
 		goto out_svc_ranks;

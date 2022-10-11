@@ -12,6 +12,7 @@ TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
             'utest_portnumber.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
 
+
 def scons():
     """Scons function"""
     if GetOption('help'):
@@ -49,13 +50,14 @@ def scons():
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + cart_targets +
-                                   swim_targets + gurt_targets,
+                                   source=testobj + cart_targets
+                                   + swim_targets + gurt_targets,
                                    LIBS=test_env["LIBS"] + ['yaml'],
                                    LINKFLAGS=flags)
         tests.append(testprog)
 
     Default(tests)
+
 
 if __name__ == "SCons.Script":
     scons()

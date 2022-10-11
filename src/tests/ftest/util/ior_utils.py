@@ -25,9 +25,9 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         test (Test): avocado Test object
         manager (JobManager): command to manage the multi-host execution of ior
         log (str): log file.
-        hosts (list): hostfile list of hosts
-        path (str, optional): hostfile path. Defaults to None.
-        slots (int, optional): hostfile number of slots per host. Defaults to None.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
         group (str): DAOS server group name
         pool (TestPool): DAOS test pool object
         container (TestContainer): DAOS test container object.
@@ -195,7 +195,7 @@ class IorCommand(ExecutableCommand):
 
         Args:
             group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -211,12 +211,15 @@ class IorCommand(ExecutableCommand):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             display (bool, optional): print updated params. Defaults to True.
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_pool.update(
-                pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+            try:
+                dfs_pool = pool.pool.get_uuid_str()
+            except AttributeError:
+                dfs_pool = pool
+            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -317,13 +320,13 @@ class IorCommand(ExecutableCommand):
             messages = cmdresult.splitlines()
         else:
             messages = cmdresult.stdout_text.splitlines()
-        # Get the index whre the summary starts and add one to
+        # Get the index where the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)
         # idx + 1 is header.
         # idx +2 and idx + 3 will give the write and read metrics.
-        write_metrics = (" ".join(messages[idx+2].split())).split()
-        read_metrics = (" ".join(messages[idx+3].split())).split()
+        write_metrics = (" ".join(messages[idx + 2].split())).split()
+        read_metrics = (" ".join(messages[idx + 3].split())).split()
 
         return (write_metrics, read_metrics)
 
@@ -342,7 +345,7 @@ class IorCommand(ExecutableCommand):
             logger.info(metric)
         logger.info("\n")
 
-    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=10):
+    def check_ior_subprocess_status(self, sub_process, command, pattern_timeout=30):
         """Verify the status of the command started as a subprocess.
 
         Continually search the subprocess output for a pattern (self.pattern)
@@ -407,6 +410,7 @@ class IorCommand(ExecutableCommand):
 class IorMetrics(IntEnum):
     """Index Name and Number of each column in IOR result summary."""
 
+    # pylint: disable=wrong-spelling-in-comment
     # Operation   Max(MiB)   Min(MiB)  Mean(MiB)     StdDev   Max(OPs)
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
@@ -450,7 +454,7 @@ class Ior:
             test (Test): avocado Test object
             manager (JobManager): command to manage the multi-host execution of ior
             log (str): log file.
-            hosts (list): hostfile list of hosts
+            hosts (NodeSet): hosts on which to run the ior command
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): hostfile number of slots per host. Defaults to None.
             namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".

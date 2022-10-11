@@ -152,14 +152,6 @@ fetch_repo_config() {
         return 1
     fi
 
-    # ugly hackery for nexus repo naming
-    if [ "$repo_server" = "nexus" ]; then
-        local version
-        version="$(lsb_release -sr)"
-        version=${version%.*}
-        sed -i -e "s/\$releasever/$version/g" "$repopath"
-    fi
-
     return 0
 }
 
@@ -176,8 +168,13 @@ pr_repos() {
 }
 
 rpm_test_version() {
+    if [ -n "$CI_RPM_TEST_VERSION" ]; then
+        echo "$CI_RPM_TEST_VERSION"
+        return 0
+    fi
+
     echo "$COMMIT_MESSAGE" |
-             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip' 
+             sed -ne '/^RPM-test-version: */s/^[^:]*: *//Ip'
     return 0
 
 }
@@ -191,9 +188,8 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] &&
-       [ -z "$(rpm_test_version)" ] &&
-       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]]; then
+    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
+       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
@@ -238,6 +234,13 @@ update_repos() {
 }
 
 post_provision_config_nodes() {
+    # shellcheck disable=SC2154
+    if ! update_repos "$DISTRO_NAME"; then
+        # need to use the image supplied repos
+        # shellcheck disable=SC2034
+        repo_servers=()
+    fi
+
     bootstrap_dnf
 
     # Reserve port ranges 31416-31516 for DAOS and CART servers
@@ -248,16 +251,9 @@ post_provision_config_nodes() {
         time dnf -y erase fio fuse ior-hpc mpich-autoload               \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
-                     openpa pmix protobuf-c spdk libfabric libpmem \
+                     pmix protobuf-c spdk libfabric libpmem        \
                      libpmemblk munge-libs munge slurm             \
                      slurm-example-configs slurmctld slurm-slurmmd
-    fi
-
-    # shellcheck disable=SC2154
-    if ! update_repos "$DISTRO_NAME"; then
-        # need to use the image supplied repos
-        # shellcheck disable=SC2034
-        repo_servers=()
     fi
 
     if [ -n "$INST_REPOS" ]; then
@@ -278,15 +274,16 @@ post_provision_config_nodes() {
             disable_gpg_check "$repo_url"
         done
     fi
+    inst_rpms=()
     if [ -n "$INST_RPMS" ]; then
-        # shellcheck disable=SC2086
-        time dnf -y erase $INST_RPMS
+        eval "inst_rpms=($INST_RPMS)"
+        time dnf -y erase "${inst_rpms[@]}"
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     if [ -n "${LSB_RELEASE:-}" ]; then
         if ! rpm -q "$LSB_RELEASE"; then
-            RETRY_COUNT=4 retry_dnf 360 install "$LSB_RELEASE"
+            retry_dnf 360 install "$LSB_RELEASE"
         fi
     fi
 
@@ -294,10 +291,8 @@ post_provision_config_nodes() {
     if ! rpm -q "$(echo "$INST_RPMS" |
                    sed -e 's/--exclude [^ ]*//'                 \
                        -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
-        # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
-            # shellcheck disable=SC2154
-            if ! RETRY_COUNT=4 retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 install "${inst_rpms[@]}"; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"
@@ -311,7 +306,7 @@ post_provision_config_nodes() {
 
     # now make sure everything is fully up-to-date
     # shellcheck disable=SC2154
-    if ! RETRY_COUNT=4 retry_dnf 600 upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         return 1
     fi

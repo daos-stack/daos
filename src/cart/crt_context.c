@@ -97,7 +97,7 @@ crt_epi_destroy(struct crt_ep_inflight *epi)
 	/* crt_list_del_init(&epi->epi_link); */
 	D_MUTEX_DESTROY(&epi->epi_mutex);
 
-	D_FREE_PTR(epi);
+	D_FREE(epi);
 }
 
 static int
@@ -188,29 +188,33 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	sep_mode = crt_provider_is_sep(provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
 	if (sep_mode &&
 	    cur_ctx_num >= max_ctx_num) {
-		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
+		D_WARN("Number of active contexts (%d) reached limit (%d).\n",
 			cur_ctx_num, max_ctx_num);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
 
 	D_ALLOC_PTR(ctx);
-	if (ctx == NULL)
+	if (ctx == NULL) {
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
-		D_FREE_PTR(ctx);
+		D_FREE(ctx);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
 
@@ -296,7 +300,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 			swim_period_set(swim_period_get() * 2);
 			csm->csm_ctx->sc_default_ping_timeout *= 2;
 		}
-
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
@@ -521,6 +524,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 flags;
+	int                      provider;
 	int			 rc = 0;
 	int			 i;
 
@@ -582,10 +586,11 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
-	int provider = ctx->cc_hg_ctx.chc_provider;
+	provider = ctx->cc_hg_ctx.chc_provider;
+
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
-		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
+		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1018,9 +1023,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	RPC_ADDREF(rpc_priv);
 
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
-	    (epi->epi_req_num - epi->epi_reply_num) >=
-	     crt_gdata.cg_credit_ep_ctx) {
-
+	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
 		if (rpc_priv->crp_opc_info->coi_queue_front) {
 			d_list_add(&rpc_priv->crp_epi_link,
 					&epi->epi_req_waitq);
@@ -1168,10 +1171,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list,
-					    struct crt_rpc_priv,
-					    crp_tmp_link))) {
-
+	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link))) {
 		rc = crt_req_send_internal(tmp_rpc);
 		if (rc == 0)
 			continue;

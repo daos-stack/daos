@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -24,7 +24,10 @@ class SimpleCreateDeleteTest(TestWithServers):
     def test_container_basics(self):
         """Test basic container create/destroy/open/close/query.
 
-        :avocado: tags=all,container,pr,daily_regression,medium,basecont
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=basecont,test_container_basics
         """
         # Create a pool
         self.log.info("Create a pool")

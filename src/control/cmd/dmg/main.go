@@ -12,7 +12,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"strings"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -24,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -95,10 +95,12 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		Status   int         `json:"status"`
 	}{in, errStr, status}, "", "  ")
 	if err != nil {
+		fmt.Fprintf(out, "unable to marshal json: %s\n", err.Error())
 		return err
 	}
 
 	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
+		fmt.Fprintf(out, "unable to write json: %s\n", err.Error())
 		return err
 	}
 
@@ -149,9 +151,10 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool           `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string         `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	HostList       ui.HostSetFlag `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
 	Insecure       bool           `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
 	Debug          bool           `short:"d" long:"debug" description:"Enable debug output"`
+	LogFile        string         `long:"log-file" description:"Log command output to the specified file"`
 	JSON           bool           `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool           `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string         `short:"o" long:"config-path" description:"Client config file path"`
@@ -211,6 +214,24 @@ and access control settings, along with system wide operations.`
 			common.ScrubProxyVariables()
 		}
 
+		if opts.LogFile != "" {
+			f, err := common.AppendFile(opts.LogFile)
+			if err != nil {
+				return errors.WithMessage(err, "create log file")
+			}
+			defer f.Close()
+
+			log.Debugf("%s logging to file %s",
+				os.Args[0], opts.LogFile)
+
+			// Create an additional set of loggers which append everything
+			// to the specified file.
+			log = log.
+				WithErrorLogger(logging.NewErrorLogger("dmg", f)).
+				WithInfoLogger(logging.NewInfoLogger("dmg", f)).
+				WithDebugLogger(logging.NewDebugLogger(f))
+		}
+
 		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
 			log.Debug("debug output enabled")
@@ -256,9 +277,9 @@ and access control settings, along with system wide operations.`
 			ctlCmd.setInvoker(invoker)
 		}
 
-		if opts.HostList != "" {
+		if !opts.HostList.Empty() {
 			if hlCmd, ok := cmd.(hostListSetter); ok {
-				hl := strings.Split(opts.HostList, ",")
+				hl := opts.HostList.Slice()
 				hlCmd.setHostList(hl)
 				ctlCfg.HostList = hl
 			} else {

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,11 +5,11 @@
 """
 
 import time
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
-from ClusterShell.NodeSet import NodeSet
 from general_utils import check_file_exists, pcmd
 
 
@@ -81,12 +80,18 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
-    def __init__(self, hosts, tmp):
-        """Create a dfuse object."""
-        super().__init__("/run/dfuse/*", "dfuse")
+    def __init__(self, hosts, tmp, namespace="/run/dfuse/*"):
+        """Create a dfuse object.
+
+        Args:
+            hosts (NodeSet): hosts on which to run dfuse
+            tmp (str): tmp directory path
+            namespace (str): dfuse namespace. Defaults to /run/dfuse/*
+        """
+        super().__init__(namespace, "dfuse")
 
         # set params
-        self.hosts = hosts
+        self.hosts = hosts.copy()
         self.tmp = tmp
         self.running_hosts = NodeSet()
 
@@ -113,7 +118,7 @@ class Dfuse(DfuseCommand):
             "nodirectory": NodeSet()
         }
         if not nodes:
-            nodes = NodeSet.fromlist(self.hosts)
+            nodes = self.hosts.copy()
         check_mounted = NodeSet()
 
         # Detect which hosts have mount point directories defined
@@ -209,7 +214,7 @@ class Dfuse(DfuseCommand):
         dir_exists, clean_nodes = check_file_exists(
             self.hosts, self.mount_dir.value, directory=True)
         if dir_exists:
-            target_nodes = list(self.hosts)
+            target_nodes = self.hosts.copy()
             if clean_nodes:
                 target_nodes.remove(clean_nodes)
 
@@ -260,7 +265,7 @@ class Dfuse(DfuseCommand):
             CommandFailure: In case dfuse run command fails
 
         """
-        self.log.info('Starting dfuse at %s', self.mount_dir.value)
+        self.log.info('Starting dfuse at %s on %s', self.mount_dir.value, str(self.hosts))
 
         # A log file must be defined to ensure logs are captured
         if "D_LOG_FILE" not in self.env:
@@ -270,11 +275,14 @@ class Dfuse(DfuseCommand):
         if 'D_LOG_MASK' not in self.env:
             self.env['D_LOG_MASK'] = 'INFO'
 
+        if 'COVFILE' not in self.env:
+            self.env['COVFILE'] = '/tmp/test.cov'
+
         # create dfuse dir if does not exist
         self.create_mount_point()
 
         # run dfuse command
-        cmd = self.env.get_export_str()
+        cmd = self.env.to_export_str()
         if bind_cores:
             cmd += 'taskset -c {} '.format(bind_cores)
         cmd += str(self)
@@ -352,7 +360,7 @@ class Dfuse(DfuseCommand):
         """
         # Include all hosts when stopping to ensure all mount points in any
         # state are properly removed
-        self.running_hosts.add(NodeSet.fromlist(self.hosts))
+        self.running_hosts.add(self.hosts)
 
         self.log.info(
             "Stopping dfuse at %s on %s",
@@ -404,3 +412,51 @@ class Dfuse(DfuseCommand):
 
         else:
             self.log.info("No hosts running dfuse - nothing to stop")
+
+
+def get_dfuse(test, hosts, namespace=None):
+    """Get a new Dfuse instance.
+
+    Args:
+        test (Test): the test instance
+        hosts (NodeSet): hosts on which to start Dfuse
+        namespace (str, optional): dfuse namespace. Defaults to None
+
+    Returns:
+        Dfuse: the new dfuse object
+
+    """
+    if namespace:
+        dfuse = Dfuse(hosts, test.tmp, namespace)
+    else:
+        dfuse = Dfuse(hosts, test.tmp)
+    dfuse.get_params(test)
+    return dfuse
+
+
+def start_dfuse(test, dfuse, pool=None, container=None, **params):
+    """Start a Dfuse instance.
+
+    Args:
+        test (Test): the test instance
+        pool (TestPool, optional): pool to mount. Defaults to None
+        container (TestContainer, optional): container to mount. Defaults to None
+        params (Object, optional): Dfuse command arguments to update
+
+    """
+    # Update dfuse params
+    if pool:
+        dfuse.set_dfuse_params(pool)
+    if container:
+        dfuse.set_dfuse_cont_param(container)
+    if params:
+        dfuse.update_params(**params)
+    dfuse.set_dfuse_exports(test.server_managers[0], test.client_log)
+
+    # Start dfuse
+    try:
+        dfuse.run(bind_cores=test.params.get('cores', dfuse.namespace, None))
+    except CommandFailure as error:
+        test.log.error(
+            "Dfuse command %s failed on hosts %s", str(dfuse), dfuse.hosts, exc_info=error)
+        test.fail("Failed to start dfuse")

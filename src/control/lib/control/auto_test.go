@@ -722,7 +722,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 	baseConfig := func(provider string) *config.Server {
 		return config.DefaultServer().
 			WithControlLogFile(defaultControlLogFile).
-			WithFabricProvider(provider)
+			WithFabricProvider(provider).
+			WithDisableVMD(false)
 	}
 
 	for name, tc := range map[string]struct {
@@ -755,6 +756,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -778,6 +780,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -809,6 +812,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -841,6 +845,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
@@ -865,10 +870,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddr(1)),
 					).
@@ -897,10 +904,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
 					).
@@ -916,10 +925,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 					).
@@ -947,10 +958,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddr(1)),
 					).
@@ -980,10 +993,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
 					).
@@ -1000,10 +1015,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 					).
@@ -1034,10 +1051,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList("0000:5d:05.5"),
 					).
@@ -1054,10 +1073,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
 							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList("0000:d7:07.1"),
 					).
@@ -1080,24 +1101,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				0: &coreCounts{22, 1}, 1: &coreCounts{22, 1},
 			},
 			expErr: FaultConfigVMDImbalance,
-		},
-		// If there is an equal total number of backing devices behind VMDs attached to each
-		// engine but the number of VMDs for each engine differs then validation will fail.
-		// It is expected that there are an equal number of VMD addresses per engine.
-		"vmd enabled; balanced nr ssds; imbalanced nr vmds": {
-			engineCount:  2,
-			accessPoints: []string{"hostX"},
-			numaPMems:    numaPMemsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
-			numaIfaces:   numaNetIfaceMap{0: ib0, 1: ib1},
-			numaSSDs: numaSSDsMap{
-				0: hardware.MustNewPCIAddressSet(test.MockVMDPCIAddrs(5, 2, 4)...),
-				1: hardware.MustNewPCIAddressSet(append(test.MockVMDPCIAddrs(13, 1),
-					test.MockVMDPCIAddrs(14, 1)...)...),
-			},
-			numaCoreCounts: numaCoreCountsMap{
-				0: &coreCounts{22, 1}, 1: &coreCounts{22, 1},
-			},
-			expErr: config.FaultConfigBdevCountMismatch(1, 2, 0, 1),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

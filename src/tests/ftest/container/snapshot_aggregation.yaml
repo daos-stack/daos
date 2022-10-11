@@ -1,22 +1,14 @@
 timeout: 360
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-C
-    - client-D
-    - client-E
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 2
+  test_clients: 6
 server_config:
-    name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
 pool:
   control_method: dmg
   scm_size: 80G

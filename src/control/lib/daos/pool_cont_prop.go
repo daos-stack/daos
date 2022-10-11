@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package daos
 
 import (
@@ -101,6 +102,16 @@ const (
 	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
 	//PoolPropertyUpgradeStatus is pool upgrade status
 	PoolPropertyUpgradeStatus = C.DAOS_PROP_PO_UPGRADE_STATUS
+	// PoolPropertyScrubMode Checksum scrubbing schedule
+	PoolPropertyScrubMode = C.DAOS_PROP_PO_SCRUB_MODE
+	// PoolPropertyScrubFreq Checksum scrubbing frequency
+	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
+	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
+	// PoolPropertySvcRedunFac defines redundancy factor of the pool service.
+	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
+	// PoolPropertySvcList is the list of pool service replicas.
+	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
 )
 
 const (
@@ -148,6 +159,17 @@ const (
 	PoolUpgradeStatusCompleted = C.DAOS_UPGRADE_STATUS_COMPLETED
 	//PoolUpgradeStatusFailed defines pool upgrading operation failed.
 	PoolUpgradeStatusFailed = C.DAOS_UPGRADE_STATUS_FAILED
+)
+
+const (
+	// PoolRedunFacMax defines the maximum value of PoolPropertyRedunFac.
+	PoolRedunFacMax = C.DAOS_PROP_PO_REDUN_FAC_MAX
+	// PoolRedunFacDefault defines the default value of PoolPropertyRedunFac.
+	PoolRedunFacDefault = C.DAOS_PROP_PO_REDUN_FAC_DEFAULT
+	// PoolSvcRedunFacMax defines the maximum value of PoolPropertySvcRedunFac.
+	PoolSvcRedunFacMax = C.DAOS_PROP_PO_SVC_REDUN_FAC_MAX
+	// PoolSvcRedunFacDefault defines the default value of PoolPropertySvcRedunFac.
+	PoolSvcRedunFacDefault = C.DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT
 )
 
 const (
@@ -214,3 +236,9 @@ func PoolPolicyIsValid(polStr string) bool {
 
 	return bool(C.daos_policy_try_parse(cStr, &polDesc))
 }
+
+const (
+	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
+	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
+	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)

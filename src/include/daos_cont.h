@@ -39,8 +39,11 @@ extern "C" {
  */
 #define DAOS_COO_FORCE		(1U << 3)
 
+/** Skips container metadata time updates on DAOS_COO_RO open, and subsequent close */
+#define DAOS_COO_RO_MDSTATS	(1U << 4)
+
 /** Number of bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_NBITS	(4)
+#define DAOS_COO_NBITS	(5)
 
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
@@ -55,8 +58,10 @@ typedef struct {
 	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
-	/** Container information pad (not used) */
-	uint64_t		ci_pad[2];
+	/** Latest open time (hybrid logical clock) */
+	uint64_t		ci_md_otime;
+	/** Latest close/modify time (hybrid logical clock) */
+	uint64_t		ci_md_mtime;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -226,8 +231,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  * when the operation completes.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	cont	Label or UUID string to idenfity the container to
- *			destroy
+ * \param[in]	cont	Label or UUID string to identify the container to destroy.
  * \param[in]	force	Container destroy will return failure if the container
  *			is still busy (outstanding open handles). This parameter
  *			will force the destroy to proceed even if there is an

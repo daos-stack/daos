@@ -20,9 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
@@ -63,7 +64,7 @@ type PoolCreateCmd struct {
 	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	RankList      string           `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	RankList      ui.RankSetFlag   `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>"`
@@ -103,6 +104,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		UserGroup:  cmd.GroupName,
 		NumSvcReps: cmd.NumSvcReps,
 		Properties: cmd.Properties.ToSet,
+		Ranks:      cmd.RankList.Ranks(),
 	}
 
 	if cmd.ACLFile != "" {
@@ -112,23 +114,10 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	req.Ranks, err = system.ParseRanks(cmd.RankList)
-	if err != nil {
-		return errors.Wrap(err, "parsing rank list")
-	}
-
 	switch {
 	case allFlagPattern.MatchString(cmd.Size):
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("size", "num-ranks")
-		}
-
-		// TODO (DAOS-9557) Update the protocol to allow filtering on ranks to use.  To
-		// implement this feature the procotol should be changed to define if a SCM
-		// namespace is associated with one rank or not. If yes, it should define with which
-		// rank the SCM namespace is associated.
-		if cmd.RankList != "" {
-			return errIncompatFlags("size", "ranks")
 		}
 
 		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
@@ -141,7 +130,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
 		// queries of storage request and the pool creation from the management server
-		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(context.Background(), cmd.Logger, cmd.ctlInvoker)
+		scmBytes, nvmeBytes, err := control.GetMaxPoolSize(
+			context.Background(),
+			cmd.Logger,
+			cmd.ctlInvoker,
+			ranklist.RankList(req.Ranks))
 		if err != nil {
 			return err
 		}
@@ -167,7 +160,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.Wrap(err, "failed to parse pool size")
 		}
 
-		if cmd.NumRanks > 0 && cmd.RankList != "" {
+		if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 			return errIncompatFlags("num-ranks", "ranks")
 		}
 		req.NumRanks = cmd.NumRanks
@@ -339,20 +332,26 @@ func (cmd *poolCmd) PoolID() *PoolID {
 // PoolDestroyCmd is the struct representing the command to destroy a DAOS pool.
 type PoolDestroyCmd struct {
 	poolCmd
-	Force bool `short:"f" long:"force" description:"Force removal of DAOS pool"`
+	Recursive bool `short:"r" long:"recursive" description:"Remove pool with existing containers"`
+	Force     bool `short:"f" long:"force" description:"Forcibly remove pool with active client connections"`
 }
 
 // Execute is run when PoolDestroyCmd subcommand is activated
 func (cmd *PoolDestroyCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	req := &control.PoolDestroyReq{ID: cmd.PoolID().String(), Force: cmd.Force}
+	req := &control.PoolDestroyReq{
+		ID:        cmd.PoolID().String(),
+		Force:     cmd.Force,
+		Recursive: cmd.Recursive,
+	}
 
 	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
 
+	cmd.ctlInvoker.Debugf("Pool-destroy command %s", msg)
 	cmd.Infof("Pool-destroy command %s\n", msg)
 
 	return err
@@ -395,7 +394,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolExclude(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -424,7 +423,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolDrain(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -439,24 +438,18 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 // PoolExtendCmd is the struct representing the command to Extend a DAOS pool.
 type PoolExtendCmd struct {
 	poolCmd
-	RankList string `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
+	RankList ui.RankSetFlag `long:"ranks" required:"1" description:"Comma-separated list of ranks to add to the pool"`
 }
 
 // Execute is run when PoolExtendCmd subcommand is activated
 func (cmd *PoolExtendCmd) Execute(args []string) error {
 	msg := "succeeded"
 
-	ranks, err := system.ParseRanks(cmd.RankList)
-	if err != nil {
-		err = errors.Wrap(err, "parsing rank list")
-		return err
-	}
-
 	req := &control.PoolExtendReq{
-		ID: cmd.PoolID().String(), Ranks: ranks,
+		ID: cmd.PoolID().String(), Ranks: cmd.RankList.Ranks(),
 	}
 
-	err = control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -483,7 +476,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -551,7 +544,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	req := &control.PoolQueryTargetReq{
 		ID:      cmd.PoolID().String(),
-		Rank:    system.Rank(cmd.Rank),
+		Rank:    ranklist.Rank(cmd.Rank),
 		Targets: tgtsList,
 	}
 
@@ -616,14 +609,14 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		}
 
 		propName := strings.ToLower(cmd.Property)
-		p, err := control.PoolProperties().GetProperty(propName)
+		p, err := daos.PoolProperties().GetProperty(propName)
 		if err != nil {
 			return err
 		}
 		if err := p.SetValue(cmd.Value); err != nil {
 			return err
 		}
-		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
+		cmd.Args.Props.ToSet = []*daos.PoolProperty{p}
 	}
 
 	for _, prop := range cmd.Args.Props.ToSet {

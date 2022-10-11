@@ -1,0 +1,20 @@
+#  (C) Copyright 2022 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+hosts:
+  test_servers: 3
+timeout: 4800
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 600
+    targets: 1
+pool:
+  name: daos_server
+  scm_size: 200M
+  control_method: dmg
+boundary_test:
+  num_pools: 20
+  test_loop: 200
+  wait_time: 1
+  max_query_time: 180

@@ -695,6 +695,12 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	if (rc != 0 && rc != -DER_EXIST)
 		goto out;
 
+	/* IFV tree used by VEA */
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		goto out;
+
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {

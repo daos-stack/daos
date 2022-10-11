@@ -24,8 +24,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -81,9 +83,9 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 	return usr, grp, nil
 }
 
-func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
+func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
 	out := make([]*mgmtpb.PoolProperty, len(in))
-	allProps := PoolProperties()
+	allProps := daos.PoolProperties()
 
 	for i, prop := range in {
 		if prop == nil {
@@ -109,15 +111,13 @@ func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty,
 			}
 		}
 
-		switch val := prop.Value.data.(type) {
-		case string:
-			out[i].SetValueString(val)
-		case uint64:
-			out[i].SetValueNumber(val)
-		case nil:
+		if num, err := prop.Value.GetNumber(); err == nil {
+			out[i].SetValueNumber(num)
+		} else if prop.Value.IsSet() {
+			out[i].SetValueString(prop.Value.String())
+		} else {
+			// not set; just skip it
 			continue
-		default:
-			return nil, errors.Errorf("unhandled property value: %+v", prop.Value.data)
 		}
 	}
 
@@ -183,7 +183,8 @@ func (r *poolRequest) getDeadline() time.Time {
 	if !r.deadline.IsZero() {
 		return r.deadline
 	}
-	return time.Now().Add(DefaultPoolTimeout)
+	r.SetTimeout(DefaultPoolTimeout)
+	return r.deadline
 }
 
 func (r *poolRequest) canRetry(reqErr error, try uint) bool {
@@ -217,13 +218,13 @@ type (
 		UserGroup  string
 		ACL        *AccessControlList
 		NumSvcReps uint32
-		Properties []*PoolProperty `json:"-"`
+		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
 		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
-		Ranks     []system.Rank
+		Ranks     []ranklist.Rank
 		TierBytes []uint64
 	}
 
@@ -278,21 +279,23 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 // PoolDestroyReq contains the parameters for a pool destroy request.
 type PoolDestroyReq struct {
 	poolRequest
-	ID    string
-	Force bool
+	ID        string
+	Recursive bool // Remove pool and any child containers.
+	Force     bool
 }
 
 // PoolDestroy performs a pool destroy operation on a DAOS Management Server instance.
 func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyReq) error {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:   req.getSystem(rpcClient),
-			Id:    req.ID,
-			Force: req.Force,
+			Sys:       req.getSystem(rpcClient),
+			Id:        req.ID,
+			Recursive: req.Recursive,
+			Force:     req.Force,
 		})
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -302,7 +305,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	if err != nil {
 		return errors.Wrap(err, "pool destroy failed")
 	}
-	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
 
 	return nil
 }
@@ -401,16 +404,18 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32               `json:"total_targets"`
-		ActiveTargets   uint32               `json:"active_targets"`
-		TotalEngines    uint32               `json:"total_engines"`
-		DisabledTargets uint32               `json:"disabled_targets"`
-		Version         uint32               `json:"version"`
-		Leader          uint32               `json:"leader"`
-		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
-		TierStats       []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks    *system.RankSet      `json:"-"`
-		DisabledRanks   *system.RankSet      `json:"-"`
+		TotalTargets     uint32               `json:"total_targets"`
+		ActiveTargets    uint32               `json:"active_targets"`
+		TotalEngines     uint32               `json:"total_engines"`
+		DisabledTargets  uint32               `json:"disabled_targets"`
+		Version          uint32               `json:"version"`
+		Leader           uint32               `json:"leader"`
+		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
+		TierStats        []*StorageUsageStats `json:"tier_stats"`
+		EnabledRanks     *ranklist.RankSet    `json:"-"`
+		DisabledRanks    *ranklist.RankSet    `json:"-"`
+		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
+		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -424,7 +429,7 @@ type (
 	PoolQueryTargetReq struct {
 		poolRequest
 		ID      string
-		Rank    system.Rank
+		Rank    ranklist.Rank
 		Targets []uint32
 	}
 
@@ -468,8 +473,8 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 
 	type Alias PoolQueryResp
 	aux := &struct {
-		EnabledRanks  *[]system.Rank `json:"enabled_ranks"`
-		DisabledRanks *[]system.Rank `json:"disabled_ranks"`
+		EnabledRanks  *[]ranklist.Rank `json:"enabled_ranks"`
+		DisabledRanks *[]ranklist.Rank `json:"disabled_ranks"`
 		*Alias
 	}{
 		Alias: (*Alias)(pqr),
@@ -488,14 +493,14 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&aux)
 }
 
-func unmarshallRankSet(ranks string) (*system.RankSet, error) {
+func unmarshallRankSet(ranks string) (*ranklist.RankSet, error) {
 	switch ranks {
 	case "":
 		return nil, nil
 	case "[]":
-		return &system.RankSet{}, nil
+		return &ranklist.RankSet{}, nil
 	default:
-		return system.CreateRankSet(ranks)
+		return ranklist.CreateRankSet(ranks)
 	}
 }
 
@@ -727,7 +732,7 @@ type PoolSetPropReq struct {
 	poolRequest
 	// ID identifies the pool for which this property should be set.
 	ID         string
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolSetProp sends a pool set-prop request to the pool service leader.
@@ -780,15 +785,15 @@ type PoolGetPropReq struct {
 	Name string
 	// Properties is the list of properties to be retrieved. If empty,
 	// all properties will be retrieved.
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
-func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*PoolProperty, error) {
+func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
 	// Get all by default.
 	if len(req.Properties) == 0 {
-		allProps := PoolProperties()
-		req.Properties = make([]*PoolProperty, 0, len(allProps))
+		allProps := daos.PoolProperties()
+		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
@@ -857,7 +862,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 type PoolExcludeReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -896,7 +901,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 type PoolDrainReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -944,7 +949,7 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 type PoolExtendReq struct {
 	poolRequest
 	ID    string
-	Ranks []system.Rank
+	Ranks []ranklist.Rank
 }
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
@@ -980,7 +985,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -1038,7 +1043,7 @@ type (
 		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_reps"`
+		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
 		// State is the current state of the pool.
 		State string `json:"state"`
 
@@ -1046,6 +1051,11 @@ type (
 		TargetsTotal uint32 `json:"targets_total"`
 		// TargetsDisabled is the number of inactive targets in pool.
 		TargetsDisabled uint32 `json:"targets_disabled"`
+
+		// UpgradeLayoutVer is latest pool layout version to be upgraded.
+		UpgradeLayoutVer uint32 `json:"upgrade_layout_ver"`
+		// PoolLayoutVer is current pool layout version.
+		PoolLayoutVer uint32 `json:"pool_layout_ver"`
 
 		// QueryErrorMsg reports an RPC error returned from a query.
 		QueryErrorMsg string `json:"query_error_msg"`
@@ -1206,6 +1216,8 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
+		p.PoolLayoutVer = resp.PoolLayoutVer
+		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
 	}
 
@@ -1216,80 +1228,130 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
+type rankFreeSpaceMap map[ranklist.Rank]uint64
+
+type filterRankFn func(rank ranklist.Rank) bool
+
+func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
+	return func(rank ranklist.Rank) bool {
+		return len(ranks) == 0 || rank.InList(ranks)
+	}
+}
+
+// Add namespace ranks to rankNVMeFreeSpace map and return minimum free available SCM namespace bytes.
+func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
+	scmBytes := uint64(math.MaxUint64)
+
+	for _, scmNamespace := range scmNamespaces {
+		if scmNamespace.Mount == nil {
+			return 0, errors.Errorf("SCM device %s (bdev %s, name %s) is not mounted",
+				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name)
+		}
+
+		if !filterRank(scmNamespace.Mount.Rank) {
+			log.Debugf("Skipping SCM device %s (bdev %s, name %s, rank %d) not in ranklist",
+				scmNamespace.UUID, scmNamespace.BlockDevice, scmNamespace.Name,
+				scmNamespace.Mount.Rank)
+			continue
+		}
+
+		scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+
+		if scmBytes > scmNamespaceFreeBytes {
+			scmBytes = scmNamespaceFreeBytes
+		}
+
+		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
+			return 0, errors.Errorf("Multiple SCM devices found for rank %d",
+				scmNamespace.Mount.Rank)
+		}
+
+		// Initialize entry for rank in NVMe free space map.
+		rankNVMeFreeSpace[scmNamespace.Mount.Rank] = 0
+	}
+
+	return scmBytes, nil
+}
+
+// Add NVMe free bytes to rankNVMeFreeSpace map.
+func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
+	for _, nvmeController := range nvmeControllers {
+		for _, smdDevice := range nvmeController.SmdDevices {
+			if !smdDevice.NvmeState.IsNormal() {
+				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
+				continue
+			}
+
+			if !filterRank(smdDevice.Rank) {
+				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not in ranklist",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
+			}
+
+			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
+				return errors.Errorf("Rank %d without SCM device and at least one SMD device %s (rank %d, ctrlr %s)",
+					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
+			}
+
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.AvailBytes
+
+			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
+				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
+				smdDevice.AvailBytes, rankNVMeFreeSpace[smdDevice.Rank])
+		}
+	}
+
+	return nil
+}
+
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-//
-// TODO (DAOS-9557) This function should takes an extra parameter to filter the engine ranks to use.
-func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker) (uint64, uint64, error) {
-	storageScanReq := &StorageScanReq{Usage: true}
-	resp, err := StorageScan(ctx, rpcClient, storageScanReq)
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
+	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err
 	}
 
 	if len(resp.HostStorage) == 0 {
-		return 0, 0, errors.New("No DAOS server available")
+		return 0, 0, errors.New("Empty host storage response from StorageScan")
 	}
 
-	hostStorageMap := resp.HostStorage
-	var scmBytes uint64 = math.MaxUint64
-	var nvmeBytes uint64 = math.MaxUint64
-	for _, key := range hostStorageMap.Keys() {
-		hostStorageSet := hostStorageMap[key]
-		hostStorage := hostStorageSet.HostStorage
+	// Generate function to verify a rank is in the provided rank slice.
+	filterRank := newFilterRankFunc(ranks)
+	rankNVMeFreeSpace := make(rankFreeSpaceMap)
+	scmBytes := uint64(math.MaxUint64)
+	for _, key := range resp.HostStorage.Keys() {
+		hostStorage := resp.HostStorage[key].HostStorage
 
-		if hostStorage.ScmNamespaces.Free() == uint64(0) {
+		if hostStorage.ScmNamespaces.Free() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
-				hostStorageSet.HostSet.String())
+				resp.HostStorage[key].HostSet.String())
 		}
 
-		// FIXME (DAOS-9557) At this time the rank associated to one namespace is not
-		// defined in the StorageScanResp.  Thus we rely on the hypothesis that each SCM
-		// namespace is associated to one and only one rank. Eventually, the protocol should
-		// be changed to define if a SCM namespace is associated with one rank or not. If
-		// yes, it should define with which rank the SCM namespace is associated.
-		for _, scmNamespace := range hostStorage.ScmNamespaces {
-			if scmNamespace.Mount == nil {
-				continue
-			}
-			scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
-
-			if scmBytes > scmNamespaceFreeBytes {
-				scmBytes = scmNamespaceFreeBytes
-			}
+		sb, err := processSCMSpaceStats(log, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
+		if err != nil {
+			return 0, 0, err
 		}
 
-		nvmeRanksBytes := make(map[system.Rank]uint64, 0)
-		for _, nvmeController := range hostStorage.NvmeDevices {
-			for _, smdDevice := range nvmeController.SmdDevices {
-				if !smdDevice.NvmeState.IsNormal() {
-					log.Infof("WARNING: SMD device %s (instance %d, ctrlr %s) "+
-						"not usable (device state %q)",
-						smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
-						smdDevice.NvmeState.String())
-					continue
-				}
-
-				nvmeRanksBytes[smdDevice.Rank] += smdDevice.AvailBytes
-				log.Debugf("Adding SMD device %s (instance %d, ctrlr %s) is usable: "+
-					"device state=%q, size=%d total=%d",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr,
-					smdDevice.NvmeState.String(), smdDevice.AvailBytes,
-					nvmeRanksBytes[smdDevice.Rank])
-			}
+		if scmBytes > sb {
+			scmBytes = sb
 		}
-		for _, nvmeRankBytes := range nvmeRanksBytes {
-			if nvmeBytes > nvmeRankBytes {
-				nvmeBytes = nvmeRankBytes
-			}
+
+		if err := processNVMeSpaceStats(log, filterRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
+			return 0, 0, err
 		}
 	}
 
-	if nvmeBytes == math.MaxUint64 {
-		nvmeBytes = 0
+	if scmBytes == math.MaxUint64 {
+		return 0, 0, errors.Errorf("No SCM storage space available with rank list %s", ranks)
 	}
 
-	// TODO (DAOS-9557) Check if there is no ranks (i.e. rank with SCM available) with some NVMe
-	// storage and other without
+	nvmeBytes := uint64(math.MaxUint64)
+	for _, nvmeRankBytes := range rankNVMeFreeSpace {
+		if nvmeBytes > nvmeRankBytes {
+			nvmeBytes = nvmeRankBytes
+		}
+	}
 
 	rpcClient.Debugf("Maximal size of a pool: scmBytes=%s (%d B) nvmeBytes=%s (%d B)",
 		humanize.Bytes(scmBytes), scmBytes, humanize.Bytes(nvmeBytes), nvmeBytes)

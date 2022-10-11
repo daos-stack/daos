@@ -524,9 +524,11 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	*spare_cnt = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
-					 spare_tgt_ranks, shard_ids,
-					 spare_max_nr);
+	rc = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
+				 spare_tgt_ranks, shard_ids,
+				 spare_max_nr);
+	D_ASSERT(rc >= 0);
+	*spare_cnt = rc;
 	D_PRINT("spare_cnt %d for version %d -\n", *spare_cnt, *po_ver);
 	for (i = 0; i < *spare_cnt; i++)
 		D_PRINT("shard %d, spare target rank %d\n",
@@ -604,7 +606,7 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_ring.domain  = PO_COMP_TP_RANK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
@@ -691,7 +693,7 @@ gen_pool_and_placement_map_non_standard(int num_domains,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	mia.ia_ring.domain  = PO_COMP_TP_RANK;
 
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
@@ -802,7 +804,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 }
 
 int
-extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_list,
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
 		     uint32_t *map_version_p, uint32_t dss_tgt_nr)
 {
@@ -816,7 +818,7 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  rank_list, dss_tgt_nr);
+			  dss_tgt_nr);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);

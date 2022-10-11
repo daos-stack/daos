@@ -21,8 +21,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -41,10 +41,9 @@ type poolBaseCmd struct {
 
 	cPoolHandle C.daos_handle_t
 
-	SysName  string `long:"sys-name" short:"G" description:"DAOS system name"`
-	PoolFlag PoolID `long:"pool" short:"p" description:"pool UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
+	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
+	Args    struct {
+		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
@@ -57,9 +56,6 @@ func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
 }
 
 func (cmd *poolBaseCmd) PoolID() PoolID {
-	if !cmd.PoolFlag.Empty() {
-		return cmd.PoolFlag
-	}
 	return cmd.Args.Pool
 }
 
@@ -268,11 +264,11 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	if cmd.ShowEnabledRanks && cmd.ShowDisabledRanks {
 		return errors.New("show-enabled and show-disabled can't be used at the same time.")
 	}
-	var ranklistPtr **C.d_rank_list_t = nil
-	var ranklist *C.d_rank_list_t = nil
+	var rlPtr **C.d_rank_list_t = nil
+	var rl *C.d_rank_list_t = nil
 
 	if cmd.ShowEnabledRanks || cmd.ShowDisabledRanks {
-		ranklistPtr = &ranklist
+		rlPtr = &rl
 	}
 
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
@@ -288,8 +284,8 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		pinfo.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
 	}
 
-	rc := C.daos_pool_query(cmd.cPoolHandle, ranklistPtr, &pinfo, nil, nil)
-	defer C.d_rank_list_free(ranklist)
+	rc := C.daos_pool_query(cmd.cPoolHandle, rlPtr, &pinfo, nil, nil)
+	defer C.d_rank_list_free(rl)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to query pool %s", cmd.poolUUID)
@@ -300,12 +296,12 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	if ranklistPtr != nil {
+	if rlPtr != nil {
 		if cmd.ShowEnabledRanks {
-			pqr.EnabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+			pqr.EnabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
 		}
 		if cmd.ShowDisabledRanks {
-			pqr.DisabledRanks = system.MustCreateRankSet(generateRankSet(ranklist))
+			pqr.DisabledRanks = ranklist.MustCreateRankSet(generateRankSet(rl))
 		}
 	}
 
