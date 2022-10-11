@@ -328,6 +328,51 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+type cfgNumaMismatch struct {
+	cfgNode uint
+	detNode uint
+}
+
+func (cnm *cfgNumaMismatch) Error() string {
+	return fmt.Sprintf("configured NUMA node %d does not match detected NUMA node %d", cnm.cfgNode, cnm.detNode)
+}
+
+func errNumaMismatch(cfg, det uint) error {
+	return &cfgNumaMismatch{cfgNode: cfg, detNode: det}
+}
+
+// IsNUMAMismatch returns true if the supplied error is the result
+// of a NUMA node configuration error.
+func IsNUMAMismatch(err error) bool {
+	_, ok := errors.Cause(err).(*cfgNumaMismatch)
+	return ok
+}
+
+// SetNUMAAffinity sets the NUMA affinity for the engine,
+// if not already set in the configuration.
+func (c *Config) SetNUMAAffinity(node uint) error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	var hasMismatch error
+	if c.PinnedNumaNode != nil {
+		if *c.PinnedNumaNode != node {
+			// advisory for now; may become fatal in future
+			hasMismatch = errNumaMismatch(*c.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		c.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	c.Storage.SetNUMAAffinity(*c.PinnedNumaNode)
+	c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+
+	return hasMismatch
+}
+
 // CmdLineArgs returns a slice of command line arguments to be
 // supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineArgs() ([]string, error) {

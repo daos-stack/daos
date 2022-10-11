@@ -883,7 +883,14 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_hgctx) {
 		hg_ret = HG_Context_destroy(hg_ctx->chc_hgctx);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
+			D_ERROR("Could not destroy HG context, hg_ret: %d %s.\n", hg_ret,
+				HG_Error_to_string(hg_ret));
+
+			/* TODO: Fix mercury handle leak under valgrind and remove this */
+			if (D_ON_VALGRIND && hg_ret == HG_BUSY) {
+				D_ERROR("Ignoring error to allow completion under valgrind\n");
+				D_GOTO(out, rc = 0);
+			}
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 		hg_ctx->chc_hgctx = NULL;

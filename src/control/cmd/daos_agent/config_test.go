@@ -46,6 +46,7 @@ disable_caching: true
 disable_auto_evict: true
 transport_config:
   allow_insecure: true
+exclude_fabric_ifaces: ["ib3"]
 fabric_ifaces:
 -
   numa_node: 0
@@ -133,6 +134,7 @@ transport_config:
 					AllowInsecure:     true,
 					CertificateConfig: DefaultConfig().TransportConfig.CertificateConfig,
 				},
+				ExcludeFabricIfaces: common.NewStringSet("ib3"),
 				FabricInterfaces: []*NUMAFabricConfig{
 					{
 						NUMANode: 0,

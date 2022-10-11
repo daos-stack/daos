@@ -669,6 +669,9 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 			Interface:     nd.numaIfaces[nn].Device,
 			InterfacePort: fmt.Sprintf("%d", defaultFiPort+(nn*defaultFiPortInterval)),
 		}
+		if err := engineCfg.SetNUMAAffinity(pnn); err != nil {
+			return nil, err
+		}
 
 		engines = append(engines, engineCfg)
 	}

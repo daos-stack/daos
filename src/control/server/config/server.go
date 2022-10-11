@@ -665,38 +665,6 @@ func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSourc
 	return 0, ErrNoAffinityDetected
 }
 
-func setEngineAffinity(log logging.Logger, engineCfg *engine.Config, node uint) error {
-	if engineCfg.PinnedNumaNode != nil && engineCfg.ServiceThreadCore != 0 {
-		return errors.New("cannot set both NUMA node and service core")
-	}
-
-	if engineCfg.PinnedNumaNode != nil {
-		if *engineCfg.PinnedNumaNode != node {
-			// TODO: This should probably be a fatal error, but we may need to allow the config
-			// override in case our affinity detection is incorrect.
-			log.Errorf("engine %d config pinned_numa_node is set to %d but detected affinity is with NUMA node %d",
-				engineCfg.Index, *engineCfg.PinnedNumaNode, node)
-		}
-	} else {
-		// If not set via config, use the detected NUMA node affinity.
-		engineCfg.PinnedNumaNode = &node
-	}
-
-	// Propagate the NUMA node affinity to the nested config structs.
-	engineCfg.Fabric.NumaNodeIndex = *engineCfg.PinnedNumaNode
-	engineCfg.Storage.NumaNodeIndex = *engineCfg.PinnedNumaNode
-
-	// TODO: Remove this special case when we have removed first_core as an exposed config
-	// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
-	// so that the engine uses its legacy core allocation algorithm.
-	if engineCfg.ServiceThreadCore != 0 {
-		log.Debugf("engine is pinned to core %d; not setting NUMA affinity", engineCfg.ServiceThreadCore)
-		engineCfg.PinnedNumaNode = nil
-	}
-
-	return nil
-}
-
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
 	defaultAffinity := uint(0)
@@ -722,8 +690,20 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			continue
 		}
 
-		if err := setEngineAffinity(log, engineCfg, numaAffinity); err != nil {
+		if err := engineCfg.SetNUMAAffinity(numaAffinity); err != nil {
+			// For now, just log the error and continue.
+			if engine.IsNUMAMismatch(err) {
+				log.Noticef("engine %d: %s", idx, err)
+				continue
+			}
 			return errors.Wrapf(err, "unable to set engine affinity to %d", numaAffinity)
+		}
+
+		// TODO: Remove this special case when we have removed first_core as an exposed config
+		// parameter. For the moment, if first_core is set, then we need to unset pinned_numa_node
+		// so that the engine uses its legacy core allocation algorithm.
+		if engineCfg.ServiceThreadCore != 0 {
+			engineCfg.PinnedNumaNode = nil
 		}
 	}
 

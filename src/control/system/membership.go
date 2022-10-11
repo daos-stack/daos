@@ -621,18 +621,19 @@ func getFaultDomainSubtree(tree *FaultDomainTree, ranks ...uint32) (*FaultDomain
 	return tree.Subtree(rankDomains...)
 }
 
-const rankFaultDomainPrefix = "rank"
+// RankFaultDomainPrefix is the prefix for rank-level fault domains.
+const RankFaultDomainPrefix = "rank"
 
 // MemberFaultDomain generates a standardized fault domain for a Member,
 // based on its parent fault domain and rank.
 func MemberFaultDomain(m *Member) *FaultDomain {
-	rankDomain := fmt.Sprintf("%s%d", rankFaultDomainPrefix, uint32(m.Rank))
+	rankDomain := fmt.Sprintf("%s%d", RankFaultDomainPrefix, m.Rank.Uint32())
 	// we know the string we're adding is valid, so can't fail
 	return m.FaultDomain.MustCreateChild(rankDomain)
 }
 
 func getFaultDomainRank(fd *FaultDomain) (uint32, bool) {
-	fmtStr := rankFaultDomainPrefix + "%d"
+	fmtStr := RankFaultDomainPrefix + "%d"
 	var rank uint32
 	n, err := fmt.Sscanf(fd.BottomLevel(), fmtStr, &rank)
 	if err != nil || n != 1 {

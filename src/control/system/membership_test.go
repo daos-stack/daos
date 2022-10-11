@@ -8,6 +8,7 @@ package system_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
@@ -967,7 +969,14 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 	}
 }
 
-/*func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
+func TestSystem_Membership_CompressedFaultDomainTree(t *testing.T) {
+	testMemberWithFaultDomain := func(rank Rank, faultDomain *FaultDomain) *Member {
+		return &Member{
+			Rank:        rank,
+			FaultDomain: faultDomain,
+		}
+	}
+
 	rankDomain := func(parent string, rank uint32) *FaultDomain {
 		parentFd := MustCreateFaultDomainFromString(parent)
 		member := testMemberWithFaultDomain(Rank(rank), parentFd)
@@ -987,7 +996,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			tree: NewFaultDomainTree(),
 			expResult: []uint32{
 				0,
-				expFaultDomainID(0),
+				ExpFaultDomainID(0),
 				0,
 			},
 		},
@@ -997,16 +1006,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			),
 			expResult: []uint32{
 				3,
-				expFaultDomainID(0),
+				ExpFaultDomainID(0),
 				1,
 				2,
-				expFaultDomainID(1),
+				ExpFaultDomainID(1),
 				1,
 				1,
-				expFaultDomainID(2),
+				ExpFaultDomainID(2),
 				1,
 				0,
-				expFaultDomainID(3),
+				ExpFaultDomainID(3),
 				0,
 			},
 		},
@@ -1020,31 +1029,31 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			),
 			expResult: []uint32{
 				2, // root
-				expFaultDomainID(0),
+				ExpFaultDomainID(0),
 				3,
 				1, // rack0
-				expFaultDomainID(1),
+				ExpFaultDomainID(1),
 				2,
 				1, // rack1
-				expFaultDomainID(4),
+				ExpFaultDomainID(4),
 				2,
 				1, // rack2
-				expFaultDomainID(7),
+				ExpFaultDomainID(7),
 				1,
 				0, // pdu0
-				expFaultDomainID(2),
+				ExpFaultDomainID(2),
 				0,
 				0, // pdu1
-				expFaultDomainID(3),
+				ExpFaultDomainID(3),
 				0,
 				0, // pdu2
-				expFaultDomainID(5),
+				ExpFaultDomainID(5),
 				0,
 				0, // pdu3
-				expFaultDomainID(6),
+				ExpFaultDomainID(6),
 				0,
 				0, // pdu4
-				expFaultDomainID(8),
+				ExpFaultDomainID(8),
 				0,
 			},
 		},
@@ -1054,16 +1063,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			),
 			expResult: []uint32{
 				4,
-				expFaultDomainID(0),
+				ExpFaultDomainID(0),
 				1,
 				3,
-				expFaultDomainID(1),
+				ExpFaultDomainID(1),
 				1,
 				2,
-				expFaultDomainID(2),
+				ExpFaultDomainID(2),
 				1,
 				1,
-				expFaultDomainID(3),
+				ExpFaultDomainID(3),
 				1,
 				5,
 			},
@@ -1079,31 +1088,31 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			),
 			expResult: []uint32{
 				3,
-				expFaultDomainID(0), // root
+				ExpFaultDomainID(0), // root
 				3,
 				2,
-				expFaultDomainID(1), // rack0
+				ExpFaultDomainID(1), // rack0
 				2,
 				2,
-				expFaultDomainID(6), // rack1
+				ExpFaultDomainID(6), // rack1
 				2,
 				2,
-				expFaultDomainID(12), // rack2
+				ExpFaultDomainID(12), // rack2
 				1,
 				1,
-				expFaultDomainID(2), // pdu0
+				ExpFaultDomainID(2), // pdu0
 				1,
 				1,
-				expFaultDomainID(4), // pdu1
+				ExpFaultDomainID(4), // pdu1
 				1,
 				1,
-				expFaultDomainID(7), // pdu2
+				ExpFaultDomainID(7), // pdu2
 				1,
 				1,
-				expFaultDomainID(9), // pdu3
+				ExpFaultDomainID(9), // pdu3
 				2,
 				1,
-				expFaultDomainID(13), // pdu4
+				ExpFaultDomainID(13), // pdu4
 				1,
 				// ranks
 				0,
@@ -1116,20 +1125,20 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 		},
 		"intermediate domain has name like rank": {
 			tree: NewFaultDomainTree(
-				rankDomain(fmt.Sprintf("/top/%s2/bottom", rankFaultDomainPrefix), 1),
+				rankDomain(fmt.Sprintf("/top/%s2/bottom", RankFaultDomainPrefix), 1),
 			),
 			expResult: []uint32{
 				4,
-				expFaultDomainID(0), // root
+				ExpFaultDomainID(0), // root
 				1,
 				3,
-				expFaultDomainID(1), // top
+				ExpFaultDomainID(1), // top
 				1,
 				2,
-				expFaultDomainID(2), // rank2
+				ExpFaultDomainID(2), // rank2
 				1,
 				1,
-				expFaultDomainID(3), // bottom
+				ExpFaultDomainID(3), // bottom
 				1,
 				1, // rank
 			},
@@ -1146,13 +1155,13 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			inputRanks: []uint32{4},
 			expResult: []uint32{
 				3,
-				expFaultDomainID(0), // root
+				ExpFaultDomainID(0), // root
 				1,
 				2,
-				expFaultDomainID(6), // rack1
+				ExpFaultDomainID(6), // rack1
 				1,
 				1,
-				expFaultDomainID(9), // pdu3
+				ExpFaultDomainID(9), // pdu3
 				1,
 				// ranks
 				4,
@@ -1170,25 +1179,25 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			inputRanks: []uint32{4, 0, 5, 3},
 			expResult: []uint32{
 				3,
-				expFaultDomainID(0), // root
+				ExpFaultDomainID(0), // root
 				3,
 				2,
-				expFaultDomainID(1), // rack0
+				ExpFaultDomainID(1), // rack0
 				1,
 				2,
-				expFaultDomainID(6), // rack1
+				ExpFaultDomainID(6), // rack1
 				1,
 				2,
-				expFaultDomainID(12), // rack2
+				ExpFaultDomainID(12), // rack2
 				1,
 				1,
-				expFaultDomainID(2), // pdu0
+				ExpFaultDomainID(2), // pdu0
 				1,
 				1,
-				expFaultDomainID(9), // pdu3
+				ExpFaultDomainID(9), // pdu3
 				2,
 				1,
-				expFaultDomainID(13), // pdu4
+				ExpFaultDomainID(13), // pdu4
 				1,
 				// ranks
 				0,
@@ -1214,8 +1223,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			db := MockDatabase(t, log)
-			db.data.Members.FaultDomains = tc.tree
+			db := raft.MockDatabaseWithFaultDomainTree(t, log, tc.tree)
 			membership := NewMembership(log, db)
 
 			result, err := membership.CompressedFaultDomainTree(tc.inputRanks...)
@@ -1228,4 +1236,3 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 		})
 	}
 }
-*/

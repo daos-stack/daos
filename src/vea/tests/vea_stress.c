@@ -866,6 +866,14 @@ vs_init(void)
 		vs_fini();
 		return rc;
 	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST) {
+		fprintf(stderr, "failed to register DBTREE_CLASS_IFV\n");
+		vs_fini();
+		return rc;
+	}
 	return rc;
 }
 

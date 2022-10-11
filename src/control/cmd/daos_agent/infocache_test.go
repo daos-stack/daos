@@ -298,6 +298,17 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 				},
 			},
 		},
+		"ignores passed down": {
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
+			input:     hardware.NewFabricInterfaceSet(),
+			expCached: true,
+			expResult: &NUMAFabric{
+				numaMap:      map[int][]*FabricInterface{},
+				ignoreIfaces: common.NewStringSet("test1"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -319,6 +330,9 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
+				if diff := cmp.Diff(tc.expResult.ignoreIfaces, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
 				t.Fatalf("expected nothing cached, found: %+v", tc.lfc.localNUMAFabric.numaMap)
 			}
@@ -328,9 +342,10 @@ func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 
 func TestAgent_localFabricCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
-		lfc       *localFabricCache
-		input     *NUMAFabric
-		expCached bool
+		lfc        *localFabricCache
+		input      *NUMAFabric
+		expCached  bool
+		expIgnored common.StringSet
 	}{
 		"nil": {},
 		"nil NUMAFabric": {
@@ -367,6 +382,23 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 			},
 			expCached: true,
 		},
+		"ignores passed down": {
+			lfc: newLocalFabricCache(nil, true).WithConfig(&Config{
+				ExcludeFabricIfaces: common.NewStringSet("test1"),
+			}),
+			input: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "test1",
+							NetDevClass: hardware.Infiniband,
+						},
+					},
+				},
+			},
+			expCached:  true,
+			expIgnored: common.NewStringSet("test1"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -374,6 +406,9 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 
 			if tc.lfc != nil {
 				tc.lfc.log = log
+			}
+			if tc.input != nil {
+				tc.input.log = log
 			}
 
 			tc.lfc.Cache(context.TODO(), tc.input)
@@ -390,6 +425,9 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 
 			if tc.expCached {
 				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap, cmp.AllowUnexported(FabricInterface{})); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
+				if diff := cmp.Diff(tc.expIgnored, tc.lfc.localNUMAFabric.ignoreIfaces); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
