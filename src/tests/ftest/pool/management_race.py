@@ -12,6 +12,7 @@ from thread_manager import ThreadManager
 from command_utils_base import CommandFailure
 from pydaos.raw import DaosApiError
 
+
 class PoolManagementRace(TestWithServers):
     """
     Epic: Create system level tests that cover pool management race boundary tests and
@@ -45,7 +46,7 @@ class PoolManagementRace(TestWithServers):
                 self.log.info("--(%d.3.%s.%d)Pool %s recreated.\n",
                               thread_num, pool_id, test_num, pool_id)
                 # pool stays with a random time before destroy
-                pool_stay_time = random.randint(1, 3) #nosec
+                pool_stay_time = random.randint(1, 3)  # nosec
                 time.sleep(pool_stay_time)
             else:
                 completed = False
@@ -65,8 +66,11 @@ class PoolManagementRace(TestWithServers):
                             "race condition detected by dmg, retry.. %s", pool_id, error)
                         time.sleep(wait_time)
                         if float(time.time()) - start > max_query_time:
+                            self.log.info("Log reference (a.b.c.d): \n a: test_thread_number \n"
+                                          " b: 2 (pool delete), 3 (pool create), 4 (pool query) \n"
+                                          " c: pool_label \n d: test_loop number")
                             self.fail("#({}.5.{}.{})Pool query failed and retry timeout.".format(
-                                      thread_num, pool_id, test_num))
+                                thread_num, pool_id, test_num))
                 daos_tool.exit_status_exception = True
                 self.log.info("-->Test thread %d, test_loop %d completed.", thread_num, test_num)
 
@@ -94,14 +98,13 @@ class PoolManagementRace(TestWithServers):
 
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
         test_loop = self.params.get("test_loop", '/run/boundary_test/*')
-        num_query_threads = self.params.get("num_query_threads", '/run/boundary_test/*')
         self.pool = []
         for pool_number in range(num_pools):
             self.pool.append(self.get_pool())
             self.log.info("==(1.%d) pool created, %s.", pool_number, self.pool[-1].identifier)
 
         # Randomly select a pool for delete, recreate and query
-        pool_number = random.randint(0, len(self.pool)-1)   # nosec
+        pool_number = random.randint(0, len(self.pool) - 1)  # nosec
 
         # Setup the thread manager for del_and_recreate_pool
         thread_manager = ThreadManager(self.del_recreate_query_and_list_pools, self.timeout - 30)
@@ -110,14 +113,15 @@ class PoolManagementRace(TestWithServers):
                 del_recreate=False, test_pool=t_pool, thread_num=index, test_loop=test_loop)
         # Setup the thread manager for del_and_recreate_pool
         thread_manager.add(
-            del_recreate=True, test_pool=self.pool[pool_number], thread_num=index, test_loop=test_loop)
+            del_recreate=True, test_pool=self.pool[pool_number],
+            thread_num=num_pools, test_loop=test_loop)
 
         # Launch all the threads
         self.log.info("==Launching %d delete_and_recreate_pool and query_and_list_pools threads",
                       thread_manager.qty)
         failed_thread_count = thread_manager.check_run()
         if failed_thread_count > 0:
-            msg = "#(6.{}) FAILED del_and_recreate_pool Threads".format(failed_thread_count)
-            self.d_log.error(msg)
+            msg = "#{} thread(s) FAILED, pool del_and_recreate and pool query, "\
+                  "please check job.log for detail.".format(failed_thread_count)
             self.fail(msg)
         self.log.info("===>Pool management race test passed.")

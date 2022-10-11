@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -182,7 +183,7 @@ type (
 	MockInstanceConfig struct {
 		CallDrpcResp        *drpc.Response
 		CallDrpcErr         error
-		GetRankResp         system.Rank
+		GetRankResp         ranklist.Rank
 		GetRankErr          error
 		TargetCount         int
 		Index               uint32
@@ -219,7 +220,7 @@ func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Messa
 	return mi.cfg.CallDrpcResp, mi.cfg.CallDrpcErr
 }
 
-func (mi *MockInstance) GetRank() (system.Rank, error) {
+func (mi *MockInstance) GetRank() (ranklist.Rank, error) {
 	return mi.cfg.GetRankResp, mi.cfg.GetRankErr
 }
 
@@ -249,7 +250,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 
 func (mi *MockInstance) Run(_ context.Context, _ bool) {}
 
-func (mi *MockInstance) SetupRank(_ context.Context, _ system.Rank) error {
+func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank) error {
 	return mi.cfg.SetupRankErr
 }
 

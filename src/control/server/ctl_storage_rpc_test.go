@@ -30,13 +30,13 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
@@ -498,9 +498,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	ctrlrPBwMetaNormal.SmdDevices[0].ClusterSize = 0
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
+	mockPbScmMount0.Rank += 1
 	mockPbScmNamespace0 := proto.MockScmNamespace(0)
 	mockPbScmNamespace0.Mount = mockPbScmMount0
 	mockPbScmMount1 := proto.MockScmMountPoint(1)
+	mockPbScmMount1.Rank += 1
 	mockPbScmNamespace1 := proto.MockScmNamespace(1)
 	mockPbScmNamespace1.Mount = mockPbScmMount1
 
@@ -814,6 +816,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Class:      mockPbScmMount0.Class,
 								DeviceList: mockPbScmMount0.DeviceList,
 								Path:       mockPbScmMount0.Path,
+								Rank:       mockPbScmMount0.Rank,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
 							},
@@ -905,6 +908,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+								Rank:       mockPbScmMount0.Rank,
 							},
 						},
 					},
@@ -991,6 +995,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount0.AvailBytes),
+								Rank:       mockPbScmMount0.Rank,
 							},
 						},
 						&ctlpb.ScmNamespace{
@@ -1005,6 +1010,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 								Path:       mockPbScmMount1.Path,
 								TotalBytes: mockPbScmMount1.TotalBytes,
 								AvailBytes: adjustScmSize(mockPbScmMount1.AvailBytes),
+								Rank:       mockPbScmMount1.Rank,
 							},
 						},
 					},
@@ -1179,7 +1185,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					t.Fatal("drpc response mocks unpopulated")
 				}
 				ne.setDrpcClient(newMockDrpcClient(dcc))
-				ne._superblock.Rank = system.NewRankPtr(uint32(idx + 1))
+				ne._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
 
 				cs.harness.instances[idx] = ne
 			}

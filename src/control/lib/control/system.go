@@ -26,6 +26,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -45,11 +46,11 @@ var (
 )
 
 type sysRequest struct {
-	Ranks system.RankSet
+	Ranks ranklist.RankSet
 	Hosts hostlist.HostSet
 }
 
-func (req *sysRequest) SetRanks(ranks *system.RankSet) {
+func (req *sysRequest) SetRanks(ranks *ranklist.RankSet) {
 	req.Ranks.Replace(ranks)
 }
 
@@ -58,7 +59,7 @@ func (req *sysRequest) SetHosts(hosts *hostlist.HostSet) {
 }
 
 type sysResponse struct {
-	AbsentRanks system.RankSet   `json:"-"`
+	AbsentRanks ranklist.RankSet `json:"-"`
 	AbsentHosts hostlist.HostSet `json:"-"`
 }
 
@@ -67,7 +68,7 @@ func (resp *sysResponse) getAbsentHostsRanks(inHosts, inRanks string) error {
 	if err != nil {
 		return err
 	}
-	ars, err := system.CreateRankSet(inRanks)
+	ars, err := ranklist.CreateRankSet(inRanks)
 	if err != nil {
 		return err
 	}
@@ -101,7 +102,7 @@ type SystemJoinReq struct {
 	retryableRequest
 	ControlAddr *net.TCPAddr
 	UUID        string
-	Rank        system.Rank
+	Rank        ranklist.Rank
 	URI         string
 	NumContexts uint32              `json:"Nctxs"`
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
@@ -127,7 +128,7 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	State     system.MemberState
 	LocalJoin bool
 }
@@ -443,6 +444,52 @@ func getResetRankErrors(results system.MemberResults) (map[string][]string, []st
 	return rankErrors, goodHosts, nil
 }
 
+// SystemExcludeReq contains the inputs for the system exclude request.
+type SystemExcludeReq struct {
+	unaryRequest
+	msRequest
+	sysRequest
+	Clear bool
+}
+
+// SystemExcludeResp contains the request response.
+type SystemExcludeResp struct {
+	sysResponse
+	Results system.MemberResults
+}
+
+// Errors returns a single error combining all error messages associated with a
+// system exclude response.
+func (resp *SystemExcludeResp) Errors() error {
+	return concatSysErrs(resp.getAbsentHostsRanksErrors(), resp.Results.Errors())
+}
+
+// SystemExclude will mark the specified ranks as administratively excluded from the system.
+func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExcludeReq) (*SystemExcludeResp, error) {
+	if req == nil {
+		return nil, errors.Errorf("nil %T request", req)
+	}
+
+	pbReq := &mgmtpb.SystemExcludeReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+		Clear: req.Clear,
+	}
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).SystemExclude(ctx, pbReq)
+	})
+	rpcClient.Debugf("DAOS system exclude request: %+v", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(SystemExcludeResp)
+	return resp, convertMSResponse(ur, resp)
+}
+
 // SystemEraseReq contains the inputs for a system erase request.
 type SystemEraseReq struct {
 	msRequest
@@ -478,7 +525,7 @@ func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
 		return nil
 	}
 
-	aliveRanks, err := system.CreateRankSet("")
+	aliveRanks, err := ranklist.CreateRankSet("")
 	if err != nil {
 		return err
 	}

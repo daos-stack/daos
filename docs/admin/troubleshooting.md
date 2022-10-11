@@ -433,6 +433,18 @@ ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
 	$ dmg pool destroy --pool=$DAOS_POOL --force
 	Pool-destroy command succeeded
 ```
+### daos_engine fails to start with error "Address already in use"
+```
+09/26-15:25:38.06 node-1 DAOS[3851384/-1/0] external ERR  # [4462751.071824] mercury->cls: [error] /builddir/build/BUILD/mercury-2.2.0/src/na/na_ofi.c:3638
+na_ofi_basic_ep_open(): fi_enable() failed, rc: -98 (Address already in use)
+
+"Address already in use" will be observed when there is more than one engine per node sharing the same NIC and fabric_iface_port of engines are too close; e.g., the difference is not larger than 3.
+libfabric (tcp and sockets providers) uses the port assigned by fabric_iface_port and the three following ports too. We need to make fabric_iface_port of engines on the same NIC distant enough to avoid such errors. Example:
+# engine 0
+fabric_iface_port: 31316
+# engine 1
+fabric_iface_port: 31416
+```
 
 ## Diagnostic and Recovery Tools
 
