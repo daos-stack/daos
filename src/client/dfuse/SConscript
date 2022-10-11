@@ -159,6 +159,9 @@ def configure_fuse(cenv):
 
     if check.CheckHeader('fuse3/fuse_log.h'):
         cenv.AppendUnique(CPPDEFINES=['-DHAVE_FUSE_LOG=1'])
+    else:
+        print("No DFUSE logging")
+        Exit(2)
 
     if check.CheckFuseIoctl('unsigned int'):
         pass

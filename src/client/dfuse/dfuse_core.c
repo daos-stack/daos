@@ -1089,11 +1089,11 @@ dfuse_fuse_log(enum fuse_log_level level, const char *fmt, va_list ap)
 		d_level = DLOG_INFO;
 		break;
 	case FUSE_LOG_DEBUG:
-		d_level = DLOG_DBG;
+		d_level = DB_IO;
 		break;
 	}
 
-	mask = d_log_check(d_level | DB_IO | DD_FAC(fuse));
+	mask = d_log_check(d_level | DD_FAC(fuse));
 	d_log(mask, fmt, ap);
 }
 #endif /* HAVE_FUSE_LOG */
