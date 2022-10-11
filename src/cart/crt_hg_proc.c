@@ -299,6 +299,13 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		D_GOTO(out, rc);
 
 	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
+	if (rc == 0)
+		D_ASSERTF(hdr->cch_opc != 0,
+			  "%s invalid RPC (%p): flags=%x, hlc=%#lx, rpcid=%#lx, "
+			  "src_rank:dst_rank:dst_tag=%d:%d:%d, rc=%d\n",
+			  ENCODING(proc_op) ? "ENCODE" : "DECODE", hdr, hdr->cch_flags,
+			  hdr->cch_hlc, hdr->cch_rpcid, hdr->cch_src_rank,
+			  hdr->cch_dst_rank, hdr->cch_dst_tag, hdr->cch_rc);
 
 out:
 	return rc;
