@@ -230,9 +230,6 @@ dav_obj_close(dav_obj_t *hdl)
 {
 	dav_destroy_clogs(hdl);
 
-	/* REVISIT: To be removed */
-	msync(hdl->do_base, hdl->do_size, MS_SYNC);
-
 	stats_delete(hdl, hdl->do_stats);
 	heap_cleanup(hdl->do_heap);
 	Free(hdl->do_heap);
