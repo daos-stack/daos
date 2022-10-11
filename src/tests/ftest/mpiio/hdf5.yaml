@@ -10,8 +10,8 @@ server_config:
         bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
-      env_vars:
-        - FI_LOG_LEVEL=warn
+        env_vars:
+           - FI_LOG_LEVEL=warn
     transport_config:
         allow_insecure: True
 agent_config:
