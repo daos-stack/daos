@@ -992,4 +992,17 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
 int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
 		   struct bio_desc *biod_data);
 
+/*
+ * Compare two WAL transaction IDs from same WAL instance
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	id1		Transaction ID1
+ * \param[in]	id2		Transaction ID2
+ *
+ * \return			0	: ID1 == ID2
+ *				-1	: ID1 < ID2
+ *				+1	: ID1 > ID2
+ */
+int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
+
 #endif /* __BIO_API_H__ */

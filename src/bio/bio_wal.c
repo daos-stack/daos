@@ -377,6 +377,7 @@ calc_trans_blks(unsigned int act_nr, unsigned int payload_sz, unsigned int blk_s
 	if (left_bytes >= sizeof(struct wal_trans_tail)) {
 		bd->bd_blks = entry_blks + payload_blks;
 		bd->bd_tail_off = blk_sz - left_bytes;
+		return;
 	}
 
 	bd->bd_blks = entry_blks + payload_blks + 1;
