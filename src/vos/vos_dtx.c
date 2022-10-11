@@ -1588,6 +1588,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
+	d_iov_t				 kiov;
 	umem_off_t			 rec_off;
 	size_t				 size;
 	int				 count;
@@ -1602,8 +1603,32 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	dae = dth->dth_ent;
 
 	if (dth->dth_solo) {
-		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
-					     dth->dth_epoch, NULL, NULL, dce_p);
+		if (dth->dth_drop_cmt) {
+			if (unlikely(dae == NULL))
+				D_GOTO(done, rc = 0);
+
+			d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, NULL);
+			if (rc == 0 || rc == -DER_NONEXIST) {
+				dtx_evict_lid(cont, dae);
+				D_GOTO(done, rc = 0);
+			}
+
+			/*
+			 * We cannot remove the DTX entry from the active table, mark it
+			 * as 'committed'. That will consume some DRAM until server restart.
+			 */
+			D_WARN("Cannot remove DTX "DF_DTI" from active table: "DF_RC"\n",
+			       DP_DTI(&dth->dth_xid), DP_RC(rc));
+
+			dae->dae_committed = 1;
+			dtx_act_ent_cleanup(cont, dae, dth, false);
+		} else {
+			rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
+						     dth->dth_epoch, NULL, NULL, dce_p);
+		}
+
+done:
 		dth->dth_active = 0;
 		dth->dth_pinned = 0;
 		if (rc >= 0) {

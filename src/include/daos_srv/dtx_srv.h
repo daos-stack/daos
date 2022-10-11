@@ -65,6 +65,8 @@ struct dtx_handle {
 					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
+					 /* Do not keep committed entry. */
+					 dth_drop_cmt:1,
 					 /* Modified shared items: object/key */
 					 dth_modify_shared:1,
 					 /* The DTX entry is in active table. */
@@ -202,6 +204,8 @@ enum dtx_flags {
 	DTX_FORCE_REFRESH	= (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED		= (1 << 7),
+	/** Do not keep committed entry. */
+	DTX_DROP_CMT		= (1 << 8),
 };
 
 int
