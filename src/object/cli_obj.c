@@ -3406,9 +3406,10 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 			}
 
 			if (! obj_args->incr_order) {
-				// Reverse the output merged list
+				/* Reverse the output merged list */
 				d_list_t	*it = iter_arg->merged_list;
 				d_list_t	*tmp = NULL;
+
 				while (tmp == NULL || it != iter_arg->merged_list) {
 					tmp = it->next;
 					it->next = it->prev;
