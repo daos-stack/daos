@@ -15,6 +15,7 @@
 #include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
+#include <spdk/blob.h>
 
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
@@ -313,15 +314,18 @@ struct bio_bdev {
 	 */
 	int			 bb_led_state;
 	uint64_t		 bb_led_start_time;
-	bool			 bb_removed;
-	bool			 bb_replacing;
-	bool			 bb_trigger_reint;
+	unsigned int		 bb_removed:1,
+				 bb_replacing:1,
+				 bb_trigger_reint:1,
 	/*
 	 * If a faulty device is replaced but still plugged, we'll keep
 	 * the 'faulty' information here, so that we know this device was
 	 * marked as faulty (at least before next server restart).
 	 */
-	bool			 bb_faulty;
+				bb_faulty:1,
+				bb_tgt_cnt_init:1;
+	/* bdev roles data/meta/wal */
+	unsigned int		bb_roles;
 };
 
 
@@ -376,8 +380,7 @@ struct bio_xs_context {
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
 	unsigned int		 bxc_ready:1,		/* xstream setup finished */
-				 bxc_self_polling,	/* for standalone VOS */
-				 bxc_meta_on_ssd;	/* metatadata on ssd enabled */
+				 bxc_self_polling;	/* for standalone VOS */
 };
 
 /* Per VOS instance I/O context */
@@ -529,7 +532,7 @@ bool is_server_started(void);
 d_list_t *bio_bdev_list(void);
 struct spdk_blob_store *
 load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
-	       bool create, bool async,
+	       bool create, bool async, unsigned int roles,
 	       void (*async_cb)(void *arg, struct spdk_blob_store *bs, int rc),
 	       void *async_arg);
 int
@@ -599,7 +602,7 @@ void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
-int bio_blob_open(struct bio_io_context *ctxt, bool async);
+int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 

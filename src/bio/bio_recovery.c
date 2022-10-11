@@ -256,7 +256,8 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 		if (ioc->bic_opening || ioc->bic_closing)
 			continue;
 
-		bio_blob_open(ioc, true);
+		/* fix sysdb */
+		bio_blob_open(ioc, true, false, SPDK_BLOBID_INVALID);
 	}
 
 	if (*closed_blobs)
@@ -352,7 +353,7 @@ on_setup(struct bio_blobstore *bbs)
 
 	bbs->bb_loading = true;
 	load_blobstore(NULL, d_bdev->bb_name, &d_bdev->bb_uuid, false, true,
-		       load_bs_cp, bbs);
+		       d_bdev->bb_roles, load_bs_cp, bbs);
 	return 1;
 
 bs_loaded:

@@ -19,6 +19,8 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/smd.h>
+#include <daos_srv/bio.h>
 #include <vos_internal.h>
 
 struct vos_self_mode {
@@ -661,7 +663,7 @@ static void
 vos_self_nvme_fini(void)
 {
 	if (self_mode.self_xs_ctxt != NULL) {
-		bio_xsctxt_free(self_mode.self_xs_ctxt);
+		bio_sys_xsctxt_free(self_mode.self_xs_ctxt);
 		self_mode.self_xs_ctxt = NULL;
 	}
 	if (self_mode.self_nvme_init) {
@@ -678,7 +680,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
+vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -705,19 +707,37 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 	} else {
 		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
 
 	if (rc)
 		goto out;
 
+	rc = bio_sys_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
+	if (rc)
+		goto out;
+
+	if (use_sys_db)
+		rc = vos_db_init(vos_path);
+	else
+		rc = vos_db_init_ex(vos_path, "self_db", true, true);
+	if (rc)
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		goto out;
+
+	rc = bio_init_xs_data_blobstore_ctxt(self_mode.self_xs_ctxt, tgt_id);
+	if (rc)
+		goto out;
+
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 out:
 	D_FREE(nvme_conf);
 	return rc;
@@ -728,6 +748,7 @@ vos_self_fini_locked(void)
 {
 	vos_self_nvme_fini();
 	vos_db_fini();
+	smd_fini();
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(self_mode.self_tls);
@@ -786,14 +807,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	if (use_sys_db)
-		rc = vos_db_init(db_path);
-	else
-		rc = vos_db_init_ex(db_path, "self_db", true, true);
-	if (rc)
-		D_GOTO(failed, rc);
-
-	rc = vos_self_nvme_init(db_path, tgt_id);
+	rc = vos_self_nvme_init(db_path, tgt_id, use_sys_db);
 	if (rc)
 		D_GOTO(failed, rc);
 

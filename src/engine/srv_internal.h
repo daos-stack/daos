@@ -339,4 +339,10 @@ dss_xs2tgt(int xs_id)
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
 }
 
+static inline bool
+dss_xstream_has_context(struct dss_xstream *dx)
+{
+	return dx->dx_main_xs != 0 || dx->dx_xs_id == 0;
+}
+
 #endif /* __DAOS_SRV_INTERNAL__ */

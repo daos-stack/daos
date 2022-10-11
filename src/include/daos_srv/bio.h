@@ -410,14 +410,12 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
- * \param[IN] db		persistent database to store SMD data
  * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-		  unsigned int hugepage_size, unsigned int tgt_nr,
-		  struct sys_db *db, bool bypass);
+		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -447,14 +445,37 @@ enum {
 int bio_nvme_ctl(unsigned int cmd, void *arg);
 
 /*
- * Initialize SPDK env and per-xstream NVMe context.
+ * Initialize per-xstream NVMe context.
  *
- * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
+ * \param[OUT] pctxt		Per-xstream NVMe context to be returned
+ * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
+
+/*
+ * Initialize SPDK env and sys xstream NVMe context.
+ *
+ * \param[OUT] pctxt		Per-xstream NVMe context to be returned
+ * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
+ * \param[IN] self_polling	self polling enabled or not
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int
+bio_sys_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
+
+/*
+ * Initialize Sys xstream data NVMe context.
+ *
+ * \param[IN] ctxt		Per-xstream NVMe context to be returned
+ * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
+ *
+ * \returns		Zero on success, negative value on error
+ */
+int
+bio_init_xs_data_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.
@@ -464,6 +485,16 @@ int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
  * \returns		N/A
  */
 void bio_xsctxt_free(struct bio_xs_context *ctxt);
+
+/*
+ * Finalize sys xstream NVMe context and SPDK env.
+ *
+ * \param[IN] ctxt	Per-xstream NVMe context
+ *
+ * \returns		N/A
+ */
+void
+bio_sys_xsctxt_free(struct bio_xs_context *ctxt);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
@@ -959,6 +990,6 @@ void
 bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem);
 
 /* Function to check if metadata on ssd enabled or not */
-bool bio_xs_is_meta_on_ssd(struct bio_xs_context *xs_ctxt);
+bool bio_is_meta_on_ssd_configured(void);
 
 #endif /* __BIO_API_H__ */

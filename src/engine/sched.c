@@ -1149,7 +1149,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 		return false;
 
 	/* For VOS xstream only */
-	return dx->dx_main_xs;
+	return dss_xstream_has_context(dx);
 }
 
 static void
@@ -1670,8 +1670,8 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	if (cycle->sc_ults_tot == 0)
 		cycle->sc_cycle_started = 0;
 
-	/* Only main xstream (VOS xstream) has NVMe poll ULT */
-	if (!dx->dx_main_xs)
+	/* main and system xstream (VOS xstream) have NVMe poll ULT */
+	if (!dss_xstream_has_context(dx))
 		return ABT_UNIT_NULL;
 
 	ret = ABT_pool_pop(pool, &unit);
@@ -1882,7 +1882,7 @@ watchdog_enabled(struct dss_xstream *dx)
 	if (sched_unit_runtime_max == 0)
 		return false;
 
-	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
+	return dx->dx_xs_id == 0 || (sched_watchdog_all && dss_xstream_has_context(dx));
 }
 
 int

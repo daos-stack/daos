@@ -212,7 +212,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		return 0;
 
 	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
-			    false, false, NULL, NULL);
+			    false, false, d_bdev->bb_roles, NULL, NULL);
 	if (bs == NULL) {
 		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
 			DP_UUID(d_bdev->bb_uuid));
@@ -281,7 +281,7 @@ free_blob_list(struct bio_xs_context *xs_ctxt, d_list_t *blob_list,
 
 	D_ASSERT(d_bdev->bb_replacing);
 	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
-			    false, false, NULL, NULL);
+			    false, false, d_bdev->bb_roles, NULL, NULL);
 	if (bs == NULL)
 		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
 			DP_UUID(d_bdev->bb_uuid));
@@ -333,7 +333,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
-	new_dev->bb_replacing = true;
+	new_dev->bb_replacing = 1;
 
 	D_INIT_LIST_HEAD(&pool_list);
 	D_INIT_LIST_HEAD(&blob_list);
@@ -363,7 +363,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
-	new_dev->bb_replacing = false;
+	new_dev->bb_replacing = 0;
 	old_dev = new_dev;
 	new_dev = NULL;
 
@@ -375,7 +375,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	 * is triggered, we'll miss auto reint on the replaced device. It's
 	 * supposed to be fixed once incremental reint is ready.
 	 */
-	old_dev->bb_trigger_reint = true;
+	old_dev->bb_trigger_reint = 1;
 
 	/* Transit BS state to SETUP */
 	D_ASSERT(owner_thread(bbs) != NULL);
@@ -386,7 +386,7 @@ out:
 pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
-		new_dev->bb_replacing = false;
+		new_dev->bb_replacing = 0;
 	return rc;
 }
 
