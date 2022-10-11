@@ -25,8 +25,7 @@
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
-#define DAOS_BS_DATA_CLUSTER_SZ	(1ULL << 30)	/* 1GB */
-#define DAOS_BS_META_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
+#define DAOS_BS_CLUSTER_SZ	(1ULL << 25)	/* 32MB */
 #define DAOS_BS_MD_PAGES	(1024 * 20)	/* 20k blobs per device */
 /* DMA buffer parameters */
 #define DAOS_DMA_CHUNK_MB	8	/* 8MB DMA chunks */
@@ -82,6 +81,15 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
+
+static int (*bio_sys_smd_init)(void);
+static void (*bio_sys_smd_fini)(void);
+
+void bio_register_smd_ops(int (*sys_smd_init)(void), void (*sys_smd_fini)(void))
+{
+	bio_sys_smd_init = sys_smd_init;
+	bio_sys_smd_fini = sys_smd_fini;
+}
 
 static int
 bio_spdk_env_init(void)
@@ -246,7 +254,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	       bio_chk_cnt_max, size_mb);
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
-	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_DATA_CLUSTER_SZ;
+	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
@@ -458,7 +466,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 
 struct spdk_blob_store *
 load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
-	       bool create, bool async, unsigned int roles,
+	       bool create, bool async,
 	       void (*async_cb)(void *arg, struct spdk_blob_store *bs, int rc),
 	       void *async_arg)
 {
@@ -480,8 +488,6 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	}
 
 	bs_opts = nvme_glb.bd_bs_opts;
-	if (!(roles & NVME_ROLE_DATA) && roles != 0)
-		bs_opts.cluster_sz = DAOS_BS_META_CLUSTER_SZ;
 
 	/*
 	 * A little hack here, we store a UUID in the 16 bytes 'bstype' and
@@ -809,7 +815,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	/* Try to load blobstore without specifying 'bstype' first */
-	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false, d_bdev->bb_roles,
+	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
 	if (bs == NULL) {
 		D_DEBUG(DB_MGMT, "Creating bs for %s\n", d_bdev->bb_name);
@@ -817,7 +823,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
 		bs = load_blobstore(ctxt, d_bdev->bb_name, &bs_uuid, true,
-				    false, d_bdev->bb_roles, NULL, NULL);
+				    false, NULL, NULL);
 		if (bs == NULL) {
 			D_ERROR("Failed to create blobstore on dev: "
 				""DF_UUID"\n", DP_UUID(bs_uuid));
@@ -890,7 +896,7 @@ error:
 }
 
 static int
-init_bio_bdev(struct bio_xs_context *ctxt)
+init_bio_bdevs(struct bio_xs_context *ctxt)
 {
 	struct spdk_bdev	*bdev;
 	int			 rc = 0;
@@ -1147,8 +1153,6 @@ alloc_xs_blobstore(void)
 	return bxb;
 }
 
-#define	SYS_TGT_ID	-1
-
 int
 find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 		struct bio_bdev **ret_d_bdev, struct smd_dev_info **ret_dev_info)
@@ -1162,7 +1166,7 @@ find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 * Lookup device mapped to @tgt_id and @st in the per-server
 	 * metadata, if found, create blobstore on the mapped device.
 	 */
-	if (tgt_id != SYS_TGT_ID) {
+	if (tgt_id != DSS_SYS_TGT_ID) {
 retry:
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc == -DER_NONEXIST && !assigned) {
@@ -1310,7 +1314,7 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
-				    false, false, d_bdev->bb_roles, NULL, NULL);
+				    false, false, NULL, NULL);
 		if (bs == NULL) {
 			rc = -DER_INVAL;
 			goto free_dev;
@@ -1357,105 +1361,9 @@ bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
 	if (is_bbs_owner(ctxt, bbs))
 		bio_fini_health_monitoring(bbs);
 }
+
 /*
  * Finalize sys xstream NVMe context and SPDK env.
- *
- * \param[IN] ctxt	Per-xstream NVMe context
- *
- * \returns		N/A
- */
-void
-bio_sys_xsctxt_free(struct bio_xs_context *ctxt)
-{
-	int			 rc = 0;
-	enum smd_dev_type	 st;
-	struct bio_xs_blobstore	*bxb;
-
-	/* NVMe context setup was skipped */
-	if (ctxt == NULL)
-		return;
-
-	ctxt->bxc_ready = 0;
-	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		bxb = ctxt->bxc_xs_blobstores[st];
-		if (bxb == NULL)
-			continue;
-
-		if (bxb->bxb_io_channel != NULL) {
-			spdk_bs_free_io_channel(bxb->bxb_io_channel);
-			bxb->bxb_io_channel = NULL;
-		}
-		if (bxb->bxb_blobstore != NULL) {
-			bio_blobstore_free(bxb, ctxt);
-			bxb->bxb_blobstore = NULL;
-		}
-		D_FREE(bxb);
-		ctxt->bxc_xs_blobstores[st] = NULL;
-	}
-
-	ABT_mutex_lock(nvme_glb.bd_mutex);
-	if (nvme_glb.bd_xstream_cnt > 0)
-		nvme_glb.bd_xstream_cnt--;
-
-	if (nvme_glb.bd_init_thread != NULL) {
-		struct common_cp_arg	cp_arg;
-
-		/*
-		 * The xstream initialized SPDK env will have to
-		 * wait for all other xstreams finalized first.
-		 */
-		if (nvme_glb.bd_xstream_cnt != 0) {
-			D_DEBUG(DB_MGMT, "Init xs waits\n");
-			ABT_cond_wait(nvme_glb.bd_barrier,
-				      nvme_glb.bd_mutex);
-		}
-
-		fini_bio_bdevs(ctxt);
-
-		common_prep_arg(&cp_arg);
-		D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems\n");
-		spdk_subsystem_fini(common_fini_cb, &cp_arg);
-		/*
-		 * spdk_subsystem_fini() won't run to completion if
-		 * any bdev is held by open blobs, set a timeout as
-		 * temporary workaround.
-		 */
-		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
-					bio_spdk_subsys_timeout);
-		D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
-			 "SPDK subsystems finalized. "DF_RC"\n",
-			 DP_RC(rc));
-
-		nvme_glb.bd_init_thread = NULL;
-	}
-
-	ABT_mutex_unlock(nvme_glb.bd_mutex);
-
-	if (ctxt->bxc_thread != NULL) {
-		D_DEBUG(DB_MGMT, "Finalizing SPDK thread, tgt_id:%d",
-			ctxt->bxc_tgt_id);
-
-		/* Don't drain events if spdk_subsystem_fini() timeout */
-		while (rc == 0 && !spdk_thread_is_idle(ctxt->bxc_thread))
-			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
-
-		D_DEBUG(DB_MGMT, "SPDK thread finalized, tgt_id:%d",
-			ctxt->bxc_tgt_id);
-
-		spdk_thread_exit(ctxt->bxc_thread);
-		ctxt->bxc_thread = NULL;
-	}
-
-	if (ctxt->bxc_dma_buf != NULL) {
-		dma_buffer_destroy(ctxt->bxc_dma_buf);
-		ctxt->bxc_dma_buf = NULL;
-	}
-
-	D_FREE(ctxt);
-}
-
-/*
- * Finalize per-xstream NVMe context.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
@@ -1494,8 +1402,43 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (nvme_glb.bd_xstream_cnt > 0)
 		nvme_glb.bd_xstream_cnt--;
 
-	if (nvme_glb.bd_init_thread != NULL && nvme_glb.bd_xstream_cnt == 0)
-		ABT_cond_broadcast(nvme_glb.bd_barrier);
+	if (nvme_glb.bd_init_thread != NULL) {
+		if (is_init_xstream(ctxt)) {
+			struct common_cp_arg	cp_arg;
+
+			/*
+			 * The xstream initialized SPDK env will have to
+			 * wait for all other xstreams finalized first.
+			 */
+			if (nvme_glb.bd_xstream_cnt != 0) {
+				D_DEBUG(DB_MGMT, "Init xs waits\n");
+				ABT_cond_wait(nvme_glb.bd_barrier,
+					      nvme_glb.bd_mutex);
+			}
+
+			fini_bio_bdevs(ctxt);
+
+			common_prep_arg(&cp_arg);
+			D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems\n");
+			spdk_subsystem_fini(common_fini_cb, &cp_arg);
+			/*
+			 * spdk_subsystem_fini() won't run to completion if
+			 * any bdev is held by open blobs, set a timeout as
+			 * temporary workaround.
+			 */
+			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
+						bio_spdk_subsys_timeout);
+			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
+				 "SPDK subsystems finalized. "DF_RC"\n",
+				 DP_RC(rc));
+
+			nvme_glb.bd_init_thread = NULL;
+
+		} else if (nvme_glb.bd_xstream_cnt == 0) {
+			ABT_cond_broadcast(nvme_glb.bd_barrier);
+		}
+	}
+
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 
 	if (ctxt->bxc_thread != NULL) {
@@ -1518,25 +1461,19 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		ctxt->bxc_dma_buf = NULL;
 	}
 
+	if (ctxt->bxc_tgt_id == DSS_SYS_TGT_ID)
+		bio_sys_smd_fini();
+
 	D_FREE(ctxt);
 }
 
 int
-bio_init_xs_data_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
+bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
-	if (!bio_nvme_configured())
-		return 0;
-
-	return init_xs_blobstore_ctxt(ctxt, tgt_id, SMD_DEV_TYPE_DATA);
-}
-
-int
-bio_sys_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
-{
-	struct common_cp_arg	cp_arg;
-	int			rc;
-	char			th_name[32];
-	struct bio_xs_context	*ctxt;
+	struct bio_xs_context	*ctxt = *pctxt;
+	char			 th_name[32];
+	int			 rc = 0;
+	enum smd_dev_type	 st;
 
 	D_ALLOC_PTR(ctxt);
 	if (ctxt == NULL)
@@ -1558,112 +1495,6 @@ bio_sys_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
 	}
 
 	ABT_mutex_lock(nvme_glb.bd_mutex);
-
-	nvme_glb.bd_xstream_cnt++;
-	D_INFO("Initialize sys xstream NVMe context, tgt_id:%d\n", tgt_id);
-
-	/*
-	 * Register SPDK thread beforehand, it could be used for poll device
-	 * admin commands completions and hotplugged events in following
-	 * spdk_subsystem_init_from_json_config() call, it also could be used
-	 * for blobstore metadata io channel in init_bio_bdevs() call.
-	 */
-	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
-	ctxt->bxc_thread = spdk_thread_create((const char *)th_name, NULL);
-	if (ctxt->bxc_thread == NULL) {
-		D_ERROR("failed to alloc SPDK thread\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	spdk_set_thread(ctxt->bxc_thread);
-
-	/*
-	 * The first started xstream will scan all bdevs and create blobstores,
-	 * it's a prerequisite for all per-xstream blobstore initialization.
-	 */
-	D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
-		  nvme_glb.bd_xstream_cnt);
-
-	/* Initialize all registered subsystems: bdev, vmd, copy. */
-	common_prep_arg(&cp_arg);
-	spdk_subsystem_init_from_json_config(nvme_glb.bd_nvme_conf,
-					     SPDK_DEFAULT_RPC_ADDR,
-					     subsys_init_cb, &cp_arg,
-					     true);
-	rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
-	D_ASSERT(rc == 0);
-
-	if (cp_arg.cca_rc != 0) {
-		rc = cp_arg.cca_rc;
-		D_ERROR("failed to init bdevs, rc:%d\n", rc);
-		goto out;
-	}
-
-	/* Continue poll until no more events */
-	while (spdk_thread_poll(ctxt->bxc_thread, 0, 0) > 0)
-		;
-	D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
-
-	rc = init_bio_bdev(ctxt);
-	if (rc)
-		goto out;
-
-	if (bio_is_meta_on_ssd_configured()) {
-		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, SMD_DEV_TYPE_META);
-		if (rc)
-			goto out;
-		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, SMD_DEV_TYPE_WAL);
-		if (rc)
-			goto out;
-	}
-
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
-	if (ctxt->bxc_dma_buf == NULL) {
-		D_ERROR("failed to initialize dma buffer\n");
-		rc = -DER_NOMEM;
-		goto out;
-	}
-	nvme_glb.bd_init_thread = ctxt->bxc_thread;
-	ctxt->bxc_ready = 1;
-
-out:
-	ABT_mutex_unlock(nvme_glb.bd_mutex);
-	if (rc != 0)
-		bio_sys_xsctxt_free(ctxt);
-
-	*pctxt = (rc != 0) ? NULL : ctxt;
-	return rc;
-}
-
-int
-bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
-{
-	struct bio_xs_context	*ctxt;
-	char			 th_name[32];
-	int			 rc;
-	enum smd_dev_type	 st;
-
-	D_ALLOC_PTR(ctxt);
-	if (ctxt == NULL)
-		return -DER_NOMEM;
-
-	ctxt->bxc_tgt_id = tgt_id;
-	ctxt->bxc_self_polling = false;
-
-	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (!bio_nvme_configured()) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
-		if (ctxt->bxc_dma_buf == NULL) {
-			D_FREE(ctxt);
-			*pctxt = NULL;
-			return -DER_NOMEM;
-		}
-		*pctxt = ctxt;
-		return 0;
-	}
-
-	ABT_mutex_lock(nvme_glb.bd_mutex);
-
 	nvme_glb.bd_xstream_cnt++;
 
 	D_INFO("Initialize NVMe context, tgt_id:%d, init_thread:%p\n",
@@ -1684,13 +1515,64 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id)
 	}
 	spdk_set_thread(ctxt->bxc_thread);
 
+	/*
+	 * The first started xstream will scan all bdevs and create blobstores,
+	 * it's a prerequisite for all per-xstream blobstore initialization.
+	 */
+	if (nvme_glb.bd_init_thread == NULL) {
+		struct common_cp_arg cp_arg;
+
+		D_ASSERTF(nvme_glb.bd_xstream_cnt == 1, "%d",
+			  nvme_glb.bd_xstream_cnt);
+
+		/* Initialize all registered subsystems: bdev, vmd, copy. */
+		common_prep_arg(&cp_arg);
+		spdk_subsystem_init_from_json_config(nvme_glb.bd_nvme_conf,
+						     SPDK_DEFAULT_RPC_ADDR,
+						     subsys_init_cb, &cp_arg,
+						     true);
+		rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights, 0);
+		D_ASSERT(rc == 0);
+
+		if (cp_arg.cca_rc != 0) {
+			rc = cp_arg.cca_rc;
+			D_ERROR("failed to init bdevs, rc:%d\n", rc);
+			goto out;
+		}
+
+		/* Continue poll until no more events */
+		while (spdk_thread_poll(ctxt->bxc_thread, 0, 0) > 0)
+			;
+		D_DEBUG(DB_MGMT, "SPDK bdev initialized, tgt_id:%d", tgt_id);
+
+		nvme_glb.bd_init_thread = ctxt->bxc_thread;
+		rc = init_bio_bdevs(ctxt);
+		if (rc != 0) {
+			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
+	}
+
 	/* Initialize main xstream blobstore context */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		/* No Data blobstore for sys xstream */
+		if (st == SMD_DEV_TYPE_DATA && tgt_id == DSS_SYS_TGT_ID)
+			continue;
+
+		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
+		if (st != SMD_DEV_TYPE_DATA && !bio_is_meta_on_ssd_configured())
+			break;
+
 		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
 		if (rc)
 			goto out;
-		if (!bio_is_meta_on_ssd_configured())
-			break;
+	}
+
+	if (tgt_id == DSS_SYS_TGT_ID) {
+		rc = bio_sys_smd_init();
+		if (rc)
+			goto out;
 	}
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);

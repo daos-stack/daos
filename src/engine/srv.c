@@ -458,37 +458,24 @@ dss_srv_handler(void *arg)
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		if (dx->dx_xs_id == 0) {
-			rc = bio_sys_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
-			if (rc)
-				D_GOTO(tse_fini, rc);
-			rc = vos_db_init(dss_storage_path);
-			if (rc)
-				D_GOTO(nvme_fini, rc);
-			rc = smd_init(vos_db_get());
-			if (rc)
-				D_GOTO(db_fini, rc);
-		} else {
-			rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id);
-		}
-
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
-			D_GOTO(smd_fini, rc);
+			D_GOTO(tse_fini, rc);
 		}
 
 		rc = ABT_thread_attr_create(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("Create ABT thread attr failed. %d\n", rc);
-			D_GOTO(smd_fini, rc = dss_abterr2der(rc));
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
 		rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
 		if (rc != ABT_SUCCESS) {
 			ABT_thread_attr_free(&attr);
 			D_ERROR("Set ABT stack size failed. %d\n", rc);
-			D_GOTO(smd_fini, rc = dss_abterr2der(rc));
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
 		rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NVME_POLL],
@@ -498,7 +485,7 @@ dss_srv_handler(void *arg)
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
 			ABT_future_set(dx->dx_shutdown, dx);
 			wait_all_exited(dx, dmi);
-			D_GOTO(smd_fini, rc = dss_abterr2der(rc));
+			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 	}
 
@@ -553,19 +540,10 @@ dss_srv_handler(void *arg)
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
 	}
-smd_fini:
-	if (dx->dx_xs_id == 0)
-		smd_fini();
-db_fini:
-	if (dx->dx_xs_id == 0)
-		vos_db_fini();
+
 nvme_fini:
-	if (dss_xstream_has_context(dx)) {
-		if (dx->dx_xs_id == 0)
-			bio_sys_xsctxt_free(dmi->dmi_nvme_ctxt);
-		else
-			bio_xsctxt_free(dmi->dmi_nvme_ctxt);
-	}
+	if (dss_xstream_has_context(dx))
+		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
 crt_destroy:
@@ -731,7 +709,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
 	 */
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	dx->dx_tgt_id = dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		/** system xtreams are named daos_sys_$num */
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -1248,6 +1226,26 @@ dss_srv_fini(bool force)
 	return 0;
 }
 
+static int dss_smd_init(void)
+{
+	int rc;
+
+	rc = vos_db_init(dss_storage_path);
+	if (rc)
+		return rc;
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+
+	return rc;
+}
+
+static void dss_smd_fini(void)
+{
+	vos_db_fini();
+	smd_fini();
+}
+
 int
 dss_srv_init(void)
 {
@@ -1305,6 +1303,7 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
+	bio_register_smd_ops(dss_smd_init, dss_smd_fini);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();

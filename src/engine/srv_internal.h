@@ -317,7 +317,7 @@ void ds_iv_fini(void);
  *
  * \param[in]	xs_id	xstream ID
  *
- * \return		VOS target ID (-1 for system XS).
+ * \return		VOS target ID (1024 for system XS).
  */
 static inline int
 dss_xs2tgt(int xs_id)
@@ -326,15 +326,16 @@ dss_xs2tgt(int xs_id)
 		  "invalid xs_id %d, dss_tgt_nr %d, "
 		  "dss_tgt_offload_xs_nr %d.\n",
 		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
+
+	if (xs_id < dss_sys_xs_nr)
+		return DSS_SYS_TGT_ID;
+
 	if (dss_helper_pool) {
-		if (xs_id < dss_sys_xs_nr ||
-		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
-			return -1;
+		if (xs_id >= dss_sys_xs_nr + dss_tgt_nr)
+			return DSS_INVALID_TGT_ID;
 		return xs_id - dss_sys_xs_nr;
 	}
 
-	if (xs_id < dss_sys_xs_nr)
-		return -1;
 	return (xs_id - dss_sys_xs_nr) /
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
 }

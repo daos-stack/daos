@@ -402,6 +402,13 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
 					      unsigned int perm,
 					      void **bulk_hdl),
 			   int (*bulk_free)(void *bulk_hdl));
+/*
+ * Register smd operations callbacks.
+ *
+ * \param[IN]	sys_smd_init	Init sys smd
+ * \param[IN]	sys_smd_fini	Finish sys smd
+ */
+void bio_register_smd_ops(int (*sys_smd_init)(void), void (*sys_smd_fini)(void));
 /**
  * Global NVMe initialization.
  *
@@ -449,22 +456,11 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
  *
  * \param[OUT] pctxt		Per-xstream NVMe context to be returned
  * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
- *
- * \returns		Zero on success, negative value on error
- */
-int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id);
-
-/*
- * Initialize SPDK env and sys xstream NVMe context.
- *
- * \param[OUT] pctxt		Per-xstream NVMe context to be returned
- * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
  * \param[IN] self_polling	self polling enabled or not
  *
  * \returns		Zero on success, negative value on error
  */
-int
-bio_sys_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
+int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
 
 /*
  * Initialize Sys xstream data NVMe context.
@@ -485,16 +481,6 @@ bio_init_xs_data_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id);
  * \returns		N/A
  */
 void bio_xsctxt_free(struct bio_xs_context *ctxt);
-
-/*
- * Finalize sys xstream NVMe context and SPDK env.
- *
- * \param[IN] ctxt	Per-xstream NVMe context
- *
- * \returns		N/A
- */
-void
-bio_sys_xsctxt_free(struct bio_xs_context *ctxt);
 
 /**
  * NVMe poller to poll NVMe I/O completions.

@@ -663,7 +663,7 @@ static void
 vos_self_nvme_fini(void)
 {
 	if (self_mode.self_xs_ctxt != NULL) {
-		bio_sys_xsctxt_free(self_mode.self_xs_ctxt);
+		bio_xsctxt_free(self_mode.self_xs_ctxt);
 		self_mode.self_xs_ctxt = NULL;
 	}
 	if (self_mode.self_nvme_init) {
@@ -718,10 +718,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
 	if (rc)
 		goto out;
 
-	rc = bio_sys_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
-	if (rc)
-		goto out;
-
 	if (use_sys_db)
 		rc = vos_db_init(vos_path);
 	else
@@ -733,7 +729,7 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
 	if (rc)
 		goto out;
 
-	rc = bio_init_xs_data_blobstore_ctxt(self_mode.self_xs_ctxt, tgt_id);
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 	if (rc)
 		goto out;
 

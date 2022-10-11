@@ -353,7 +353,7 @@ on_setup(struct bio_blobstore *bbs)
 
 	bbs->bb_loading = true;
 	load_blobstore(NULL, d_bdev->bb_name, &d_bdev->bb_uuid, false, true,
-		       d_bdev->bb_roles, load_bs_cp, bbs);
+		       load_bs_cp, bbs);
 	return 1;
 
 bs_loaded:

@@ -588,7 +588,7 @@ get_super_cb(void *arg1, spdk_blob_id blobid, int bserrno)
 	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
 
 	bma->bma_blob_id = blobid;
-	blob_common_cb(ba, bserrno);
+	ba->bca_rc = daos_errno2der(-bserrno);
 }
 
 int
@@ -634,10 +634,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id
 				goto out_free;
 			}
 		} else {
-			ba->bca_inflights = 1;
 			spdk_bs_get_super(bbs->bb_bs, get_super_cb, bma);
-			/* Wait for get super done */
-			blob_wait_completion(xs_ctxt, ba);
 			rc = ba->bca_rc;
 			if (rc)
 				goto out_free;

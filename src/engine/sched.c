@@ -1149,7 +1149,7 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 		return false;
 
 	/* For VOS xstream only */
-	return dss_xstream_has_context(dx);
+	return dx->dx_main_xs;
 }
 
 static void
@@ -1882,7 +1882,7 @@ watchdog_enabled(struct dss_xstream *dx)
 	if (sched_unit_runtime_max == 0)
 		return false;
 
-	return dx->dx_xs_id == 0 || (sched_watchdog_all && dss_xstream_has_context(dx));
+	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
 }
 
 int
