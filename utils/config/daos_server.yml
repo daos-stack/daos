@@ -388,11 +388,11 @@
 #    # tiers if not explicitly specified here.
 #    # Options are:
 #    # - "data" SSDs will be used to store actual data
-#    # - "index" SSDs will be used to store the VOS index
+#    # - "meta" SSDs will be used to store the VOS metadata
 #    # - "wal" SSDs will be used to store the write-ahead-log
 #    bdev_roles:
 #    - data
-#    - index
+#    - meta
 #    - wal
 #
 #
@@ -570,7 +570,7 @@
 #    # tiers if not explicitly specified here.
 #    # Options are:
 #    # - "data" SSDs will be used to store actual data
-#    # - "index" SSDs will be used to store the VOS index
+#    # - "meta" SSDs will be used to store the VOS metadata
 #    # - "wal" SSDs will be used to store the write-ahead-log
 #    bdev_roles: []
 #

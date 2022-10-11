@@ -60,10 +60,10 @@ const (
 
 // Role assignments for NVMe SSDs related to type of storage (enables Metadata-on-SSD capability).
 const (
-	BdevRoleData  = C.NVME_ROLE_DATA
-	BdevRoleIndex = C.NVME_ROLE_INDEX
-	BdevRoleWAL   = C.NVME_ROLE_WAL
-	BdevRoleAll   = BdevRoleData | BdevRoleIndex | BdevRoleWAL
+	BdevRoleData = C.NVME_ROLE_DATA
+	BdevRoleMeta = C.NVME_ROLE_META
+	BdevRoleWAL  = C.NVME_ROLE_WAL
+	BdevRoleAll  = BdevRoleData | BdevRoleMeta | BdevRoleWAL
 )
 
 // NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.

@@ -195,6 +195,18 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	return 1;
 }
 
+static inline uint8_t
+isclr_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		if (isset(bitmap, index))
+			return 0;
+
+	return 1;
+}
+
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
@@ -202,6 +214,15 @@ clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);
+}
+
+static inline void
+setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		setbit(bitmap, index);
 }
 
 static inline unsigned int

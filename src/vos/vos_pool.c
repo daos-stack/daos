@@ -760,10 +760,10 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
-	if (pool_df->pd_version >= POOL_DF_POOL_CHK)
-		pool->vp_feats |= VOS_POOL_FEAT_CHK;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -920,10 +920,10 @@ end:
 	if (rc != 0)
 		return rc;
 
-	if (version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
-	if (version >= POOL_DF_POOL_CHK)
-		pool->vp_feats |= VOS_POOL_FEAT_CHK;
+	if (version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	return 0;
 }

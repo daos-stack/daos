@@ -89,16 +89,15 @@ enum vos_gc_type {
  * Each feature is only enabled if the pool durable format is at least equal to that
  * feature's assigned durable format.  Otherwise, the feature must not be used.
  */
-/** 2.2 features */
-/** Aggregation optimization to avoid scanning subtrees where aggregation is not possible */
-#define POOL_DF_AGG_OPT                         VOS_POOL_DF_2_2
-
-/** 2.4 features */
-/** Feature for checking pool consistency related to catastrophic recovery */
-#define POOL_DF_POOL_CHK                        VOS_POOL_DF_2_4
 
 /** Current durable format version */
 #define POOL_DF_VERSION                         VOS_POOL_DF_2_4
+
+/** 2.2 features */
+#define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
+
+/** 2.4 features */
+#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK)
 
 /**
  * Durable format for VOS pool
