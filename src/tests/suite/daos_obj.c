@@ -1426,16 +1426,64 @@ static int
 iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 {
 	daos_anchor_t	anchor;
-	daos_anchor_t	anchor_des;
+	/* daos_anchor_t	anchor_des; */
 	int		key_nr;
 	int		i;
 	uint32_t	number;
 
+	/* #<{(|* Enumerate all mixed NVMe and SCM records |)}># */
+	/* print_message(">>> SPY-10000\n"); */
+	/* key_nr = 0; */
+	/* memset(&anchor, 0, sizeof(anchor)); */
+	/* memset(&anchor_des, 0, sizeof(anchor)); */
+	/* while (!daos_anchor_is_eof(&anchor)) { */
+	/* 	daos_epoch_range_t	eprs[5]; */
+	/* 	daos_recx_t		recxs[5]; */
+	/* 	daos_size_t		size; */
+        /*  */
+	/* 	number = 5; */
+	/* 	enumerate_rec(DAOS_TX_NONE, dkey, akey, &size, */
+	/* 		      &number, recxs, eprs, &anchor, true, req); */
+	/* 	if (number == 0) */
+	/* 		continue; */
+        /*  */
+	/* 	for (i = 0; i < (number - 1); i++) { */
+	/* 		assert_true(size == iod_size); */
+	/* 		assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx); */
+	/* 		#<{(| Print a subset of enumerated records |)}># */
+	/* 		if ((i + key_nr) % ENUM_PRINT != 0) */
+	/* 			continue; */
+	/* 		print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n", */
+	/* 			      i + key_nr, (int)size, */
+	/* 			      (int)recxs[i].rx_nr, */
+	/* 			      (int)recxs[i].rx_idx); */
+	/* 		i++; #<{(| print the next record to see both rec sizes |)}># */
+	/* 		print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n", */
+	/* 			      i + key_nr, (int)size, */
+	/* 			      (int)recxs[i].rx_nr, */
+	/* 			      (int)recxs[i].rx_idx); */
+	/* 	} */
+        /*  */
+	/* 	number = 5; */
+	/* 	print_message(">>> SPY-10001\n"); */
+	/* 	enumerate_rec(DAOS_TX_NONE, dkey, akey, &size, */
+	/* 		      &number, recxs, eprs, &anchor_des, false, req); */
+	/* 	print_message(">>> SPY-10002: number=%d\n", number); */
+	/* 	if (number == 0) */
+	/* 		continue; */
+	/* 	for (i = 0; i < (number - 1); i++) { */
+	/* 		print_message(">>> SPY-10003: i=%d, number=%u, rx_idx=(%lu, %lu), rx_nbr=(%lu, %lu)\n", */
+	/* 			      i, number, recxs[i].rx_idx, recxs[i+1].rx_idx, recxs[i].rx_nbr, recxs[i+1].rx_nbr); */
+	/* 		assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx); */
+	/* 	} */
+        /*  */
+	/* 	key_nr += number; */
+	/* } */
+
 	/** Enumerate all mixed NVMe and SCM records */
-	print_message(">>> SPY-10000\n");
+	print_message(">>>> SPY-10000\n");
 	key_nr = 0;
 	memset(&anchor, 0, sizeof(anchor));
-	memset(&anchor_des, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		daos_epoch_range_t	eprs[5];
 		daos_recx_t		recxs[5];
@@ -1447,37 +1495,37 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 		if (number == 0)
 			continue;
 
-		for (i = 0; i < (number - 1); i++) {
-			assert_true(size == iod_size);
-			assert_true(recxs[i].rx_idx < recxs[i+1].rx_idx);
-			/* Print a subset of enumerated records */
-			if ((i + key_nr) % ENUM_PRINT != 0)
-				continue;
-			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
-				      i + key_nr, (int)size,
-				      (int)recxs[i].rx_nr,
-				      (int)recxs[i].rx_idx);
-			i++; /* print the next record to see both rec sizes */
-			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
-				      i + key_nr, (int)size,
-				      (int)recxs[i].rx_nr,
-				      (int)recxs[i].rx_idx);
-		}
-
-		number = 5;
-		print_message(">>> SPY-10001\n");
-		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
-			      &number, recxs, eprs, &anchor_des, false, req);
-		print_message(">>> SPY-10002: number=%d\n", number);
-		if (number == 0)
-			continue;
-		for (i = 0; i < (number - 1); i++) {
-			print_message(">>> SPY-10003: i=%d, number=%u, rx_idx=(%lu, %lu)\n", i, number, recxs[i].rx_idx, recxs[i+1].rx_idx);
-			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+		for (i = 0; i < number; i++) {
+			print_message(">>>> SPY-10001: i:%d, key_nr:%d size:%d, iod_size:%d, rx_nr:%d, rx_idx:%d\n",
+				      i, key_nr, (int)size, iod_size, (int)recxs[i].rx_nr, (int)recxs[i].rx_idx);
 		}
 
 		key_nr += number;
 	}
+
+	/** Enumerate all mixed NVMe and SCM records */
+	print_message(">>>> SPY-10002: key_nr: %d\n", key_nr);
+	key_nr = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_epoch_range_t	eprs[5];
+		daos_recx_t		recxs[5];
+		daos_size_t		size;
+
+		number = 5;
+		enumerate_rec(DAOS_TX_NONE, dkey, akey, &size,
+			      &number, recxs, eprs, &anchor, true, req);
+		if (number == 0)
+			continue;
+
+		for (i = 0; i < number; i++) {
+			print_message(">>>> PY-10003: i:%d, key_nr:%d size:%d, iod_size:%d, rx_nr:%d, rx_idx:%d\n",
+				      i, key_nr, (int)size, iod_size, (int)recxs[i].rx_nr, (int)recxs[i].rx_idx);
+		}
+
+		key_nr += number;
+	}
+	print_message(">>>> SPY-10004: key_nr: %d\n", key_nr);
 
 	return key_nr;
 }
