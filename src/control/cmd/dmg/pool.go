@@ -20,9 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // PoolCmd is the struct representing the top-level pool subcommand.
@@ -133,7 +134,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			context.Background(),
 			cmd.Logger,
 			cmd.ctlInvoker,
-			system.RankList(req.Ranks))
+			ranklist.RankList(req.Ranks))
 		if err != nil {
 			return err
 		}
@@ -393,7 +394,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 		return errors.WithMessage(err, "parsing target list")
 	}
 
-	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolExclude(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -422,7 +423,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolDrain(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -475,7 +476,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: system.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
 	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
@@ -543,7 +544,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	req := &control.PoolQueryTargetReq{
 		ID:      cmd.PoolID().String(),
-		Rank:    system.Rank(cmd.Rank),
+		Rank:    ranklist.Rank(cmd.Rank),
 		Targets: tgtsList,
 	}
 
@@ -608,14 +609,14 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		}
 
 		propName := strings.ToLower(cmd.Property)
-		p, err := control.PoolProperties().GetProperty(propName)
+		p, err := daos.PoolProperties().GetProperty(propName)
 		if err != nil {
 			return err
 		}
 		if err := p.SetValue(cmd.Value); err != nil {
 			return err
 		}
-		cmd.Args.Props.ToSet = []*control.PoolProperty{p}
+		cmd.Args.Props.ToSet = []*daos.PoolProperty{p}
 	}
 
 	for _, prop := range cmd.Args.Props.ToSet {

@@ -20,16 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type daosServerTestErr string
-
-func (dste daosServerTestErr) Error() string {
-	return string(dste)
-}
-
-const (
-	errMissingFlag = daosServerTestErr("required flag")
-)
-
 type cmdTest struct {
 	name   string
 	cmd    string
@@ -115,6 +105,40 @@ func TestNoCommand(t *testing.T) {
 	var opts mainOpts
 	err := parseOpts([]string{}, &opts, log)
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
+}
+
+func TestPreExecCheckBypass(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cmdLine string
+		expErr  error
+	}{
+		"help": {
+			cmdLine: "--help",
+			expErr:  flags.ErrHelp,
+		},
+		"version": {
+			cmdLine: "version",
+		},
+		"start (should fail)": {
+			cmdLine: "start",
+			expErr:  errors.New("ouch"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			opts := mainOpts{
+				preExecTests: []execTestFn{
+					func() error {
+						return errors.New("ouch")
+					},
+				},
+			}
+			err := parseOpts([]string{tc.cmdLine}, &opts, log)
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
 }
 
 func TestDaosServer_NVMe_Commands(t *testing.T) {

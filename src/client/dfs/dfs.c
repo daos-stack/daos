@@ -3658,8 +3658,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 }
 
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
-	    struct dirent *dirs)
+readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+	    struct dirent *dirs, struct stat *stbufs)
 {
 	daos_key_desc_t	*kds;
 	char		*enum_buf;
@@ -3711,6 +3711,18 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 				       kds[i].kd_key_len + 1, "%s", ptr);
 			D_ASSERT(len >= kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
+
+			/** stat the entry if requested */
+			if (stbufs) {
+				rc = entry_stat(dfs, DAOS_TX_NONE, obj->oh, dirs[key_nr].d_name,
+						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
+						NULL);
+				if (rc) {
+					D_ERROR("Failed to stat entry %s: %d (%s)\n",
+						dirs[key_nr].d_name, rc, strerror(rc));
+					D_GOTO(out, rc);
+				}
+			}
 			key_nr++;
 		}
 		number = *nr - key_nr;
@@ -3723,6 +3735,20 @@ out:
 	D_FREE(enum_buf);
 	D_FREE(kds);
 	return rc;
+}
+
+int
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+	    struct dirent *dirs)
+{
+	return readdir_int(dfs, obj, anchor, nr, dirs, NULL);
+}
+
+int
+dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+		struct dirent *dirs, struct stat *stbufs)
+{
+	return readdir_int(dfs, obj, anchor, nr, dirs, stbufs);
 }
 
 int
