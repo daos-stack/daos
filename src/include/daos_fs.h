@@ -602,8 +602,32 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, struct dirent *dirs);
+dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs);
+
+/**
+ * directory readdir + stat.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		stbufs	[in] preallocated array of struct stat.
+ *			[out]: stat of every entry in \a dirs.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
+		struct dirent *dirs, struct stat *stbufs);
 
 /**
  * User callback defined for dfs_readdir_size.
