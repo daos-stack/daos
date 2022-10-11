@@ -20,4 +20,8 @@ sudo mv opt/daos /opt/
 sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
 
 # NLT will mount /mnt/daos itself.
+# TODO: Enable this for DAOS-10905
+# ./utils/node_local_test.py --max-log-size 650MiB --dfuse-dir /localhome/jenkins/ \
+#			   --server-valgrind all
+
 ./utils/node_local_test.py --max-log-size 650MiB --dfuse-dir /localhome/jenkins/ all
