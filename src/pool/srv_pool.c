@@ -605,7 +605,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct daos_prop_entry *entry;
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, nnodes, ntargets,
-			  domains, ranks, dss_tgt_nr);
+			  domains, dss_tgt_nr);
 	if (rc != 0) {
 		D_ERROR("failed to generate pool buf, "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -5640,7 +5640,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, 0, rebuild_eph,
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
 					 &target_list, op, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
@@ -5660,8 +5660,7 @@ out:
  */
 static int
 pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
-		d_rank_list_t *rank_list, uint32_t ndomains,
-		uint32_t *domains, bool *updated_p,
+		uint32_t ndomains, uint32_t *domains, bool *updated_p,
 		uint32_t *map_version_p, struct rsvc_hint *hint)
 {
 	struct pool_buf		*map_buf = NULL;
@@ -5681,7 +5680,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  rank_list, dss_tgt_nr);
+			  dss_tgt_nr);
 	if (rc != 0)
 		D_GOTO(out_map_buf, rc);
 
@@ -5767,7 +5766,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	 * Extend the pool map directly - this is more complicated than other
 	 * operations which are handled within pool_svc_update_map()
 	 */
-	rc = pool_extend_map(&tx, svc, nnodes, rank_list, ndomains, domains, &updated,
+	rc = pool_extend_map(&tx, svc, nnodes, ndomains, domains, &updated,
 			     map_version_p, hint);
 
 	if (!updated)
@@ -5782,7 +5781,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	}
 
 	/* Schedule an extension rebuild for those targets */
-	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, 0, extend_eph, &tgts,
+	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, extend_eph, &tgts,
 				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
@@ -6200,8 +6199,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 		d_iov_t		value;
 
 		d_iov_set(&value, &connectable, sizeof(connectable));
-		rc = rdb_tx_update(&tx, &svc->ps_root,
-				   &ds_pool_prop_connectable, &value);
+		rc = rdb_tx_update_critical(&tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
 		if (rc != 0)
 			D_GOTO(out_free, rc);
 
