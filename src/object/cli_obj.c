@@ -3391,7 +3391,8 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	if (obj_auxi->req_tgts.ort_grp_size == 1) {
-		if (obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE &&
+		if (obj_is_ec(obj_auxi->obj) &&
+		    obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE &&
 		    shard_arg->la_recxs != NULL) {
 			int i;
 
@@ -3399,14 +3400,15 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
 								&shard_arg->la_recxs[i]);
-				if (obj_ec_tgt_nr(obj_get_oca(shard_auxi->obj_auxi->obj)) > 0) {
-					rc = obj_ec_recxs_convert(iter_arg->merged_list,
-								  &shard_arg->la_recxs[i],
-								  shard_auxi);
-					if (rc)
-						return rc;
-				}
+
+				rc = merge_recx(iter_arg->merged_list,
+						shard_arg->la_recxs[i].rx_idx,
+						shard_arg->la_recxs[i].rx_nr, 0);
+				if (rc)
+					return rc;
 			}
+
+			return 0;
 		}
 
 		iter_arg->merge_nr = shard_arg->la_nr;
