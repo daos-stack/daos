@@ -4499,6 +4499,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--server-valgrind', action='store_true')
     parser.add_argument('--multi-user', action='store_true')
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
