@@ -2375,6 +2375,7 @@ co_rf_simple(void **state)
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
@@ -2398,13 +2399,23 @@ co_rf_simple(void **state)
 static void
 co_global2local_fail_test(void **state)
 {
-	test_arg_t   *arg  = *state;
-	d_iov_t       ghdl = {0};
+	test_arg_t   *arg0 = *state;
+	test_arg_t   *arg  = NULL;
+	d_iov_t       ghdl = {NULL, 0, 0};
 	daos_handle_t coh_g2l;
 	int           rc;
 
 	FAULT_INJECTION_REQUIRED();
 
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank, SMALL_POOL_SIZE, 0,
+			NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_local2global(arg->coh, &ghdl);
+	assert_rc_equal(rc, 0);
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
+	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(arg->coh, &ghdl);
 	assert_rc_equal(rc, 0);
 
@@ -2412,6 +2423,10 @@ co_global2local_fail_test(void **state)
 	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
 	assert_rc_equal(rc, -DER_NO_HDL);
 	daos_fail_loc_set(0);
+
+	free(ghdl.iov_buf);
+
+	test_teardown((void **)&arg);
 }
 
 static void
@@ -2790,6 +2805,7 @@ out:
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
