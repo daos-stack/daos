@@ -3385,18 +3385,36 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 		if (obj_is_ec(obj_auxi->obj) &&
 		    obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE &&
 		    shard_arg->la_recxs != NULL) {
-			int i;
+			int		i;
+			daos_obj_list_t	*obj_args;
 
+			obj_args = dc_task_get_args(obj_auxi->obj_task);
 			for (i = 0; i < shard_arg->la_nr; i++) {
-				if (shard_arg->la_recxs[i].rx_idx & PARITY_INDICATOR)
+				int index;
+
+				index = obj_args->incr_order?i:(shard_arg->la_nr - 1 - i);
+
+				if (shard_arg->la_recxs[index].rx_idx & PARITY_INDICATOR)
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
-								&shard_arg->la_recxs[i]);
+								&shard_arg->la_recxs[index]);
 
 				rc = merge_recx(iter_arg->merged_list,
-						shard_arg->la_recxs[i].rx_idx,
-						shard_arg->la_recxs[i].rx_nr, 0);
+						shard_arg->la_recxs[index].rx_idx,
+						shard_arg->la_recxs[index].rx_nr, 0);
 				if (rc)
 					return rc;
+			}
+
+			if (! obj_args->incr_order) {
+				// Reverse the output merged list
+				d_list_t	*it = iter_arg->merged_list;
+				d_list_t	*tmp = NULL;
+				while (tmp == NULL || it != iter_arg->merged_list) {
+					tmp = it->next;
+					it->next = it->prev;
+					it->prev = tmp;
+					it = tmp;
+				}
 			}
 
 			return 0;
