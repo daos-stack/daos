@@ -304,6 +304,7 @@ or from a local tree:
 ```bash
 $ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
 ```
+
 This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with
