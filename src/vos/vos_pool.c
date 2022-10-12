@@ -318,7 +318,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 			bio_mc_flags |= BIO_MC_FL_NO_DATABLOB;
 
 		/* WAL size is same as scm size now */
-		rc = bio_mc_create(xs_ctxt, uuid, scm_sz, scm_sz, nvme_sz, 0, bio_mc_flags);
+		rc = bio_mc_create(xs_ctxt, uuid, scm_sz, scm_sz, nvme_sz, bio_mc_flags);
 		if (rc != 0) {
 			D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" "
 				""DF_RC"\n", xs_ctxt, DP_UUID(uuid), DP_RC(rc));

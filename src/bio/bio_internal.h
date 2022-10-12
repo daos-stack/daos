@@ -447,11 +447,15 @@ struct bio_desc {
 				 bd_retry:1,
 				 bd_rdma:1,
 				 bd_copy_dst:1,
-				 bd_in_fifo:1;
+				 bd_in_fifo:1,
+				 bd_async_post:1;
 	/* Cached bulk handles being used by this IOD */
 	struct bio_bulk_hdl    **bd_bulk_hdls;
 	unsigned int		 bd_bulk_max;
 	unsigned int		 bd_bulk_cnt;
+	/* Customized completion callback for bio_iod_post() */
+	void			 (*bd_completion)(void *cb_arg, int err);
+	void			*bd_comp_arg;
 	/* SG lists involved in this io descriptor */
 	unsigned int		 bd_sgl_cnt;
 	struct bio_sglist	 bd_sgls[0];

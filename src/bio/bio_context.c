@@ -540,7 +540,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 }
 
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
-		  uint64_t wal_sz, uint64_t data_sz, uint16_t csum_type, enum bio_mc_flags flags)
+		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
 {
 	int		rc = 0;
 	spdk_blob_id	data_blobid, wal_blobid, meta_blobid;
