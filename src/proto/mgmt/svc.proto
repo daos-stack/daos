@@ -91,6 +91,7 @@ message GetAttachInfoResp {
 		uint32 rank = 1;
 		string uri = 2;
 		uint32 provider_idx = 3;
+		uint32 num_ctxs = 4;
 	}
 	repeated RankUri rank_uris = 2;	// Rank URIs for the primary provider
 					// These CaRT settings are shared with the

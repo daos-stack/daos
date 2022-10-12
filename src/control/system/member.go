@@ -161,17 +161,18 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank                ranklist.Rank `json:"rank"`
-	Incarnation         uint64        `json:"incarnation"`
-	UUID                uuid.UUID     `json:"uuid"`
-	Addr                *net.TCPAddr  `json:"addr"`
-	PrimaryFabricURI    string        `json:"fabric_uri"`
-	SecondaryFabricURIs []string      `json:"secondary_fabric_uris"`
-	FabricContexts      uint32        `json:"fabric_contexts"`
-	State               MemberState   `json:"-"`
-	Info                string        `json:"info"`
-	FaultDomain         *FaultDomain  `json:"fault_domain"`
-	LastUpdate          time.Time     `json:"last_update"`
+	Rank                    ranklist.Rank `json:"rank"`
+	Incarnation             uint64        `json:"incarnation"`
+	UUID                    uuid.UUID     `json:"uuid"`
+	Addr                    *net.TCPAddr  `json:"addr"`
+	PrimaryFabricURI        string        `json:"fabric_uri"`
+	SecondaryFabricURIs     []string      `json:"secondary_fabric_uris"`
+	FabricContexts          uint32        `json:"fabric_contexts"`
+	SecondaryFabricContexts []uint32      `json:"secondary_fabric_contexts"`
+	State                   MemberState   `json:"-"`
+	Info                    string        `json:"info"`
+	FaultDomain             *FaultDomain  `json:"fault_domain"`
+	LastUpdate              time.Time     `json:"last_update"`
 }
 
 // MarshalJSON marshals system.Member to JSON.

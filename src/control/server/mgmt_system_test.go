@@ -112,12 +112,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.PrimaryFabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.PrimaryFabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -143,12 +145,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.PrimaryFabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.PrimaryFabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks: []uint32{0},

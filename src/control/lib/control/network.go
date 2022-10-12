@@ -210,6 +210,7 @@ type (
 		Rank        uint32
 		Uri         string
 		ProviderIdx uint32 `json:"provider_idx"`
+		NumCtxs     uint32 `json:"num_ctxs"`
 	}
 
 	ClientNetworkHint struct {

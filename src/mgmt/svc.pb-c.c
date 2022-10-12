@@ -1421,7 +1421,7 @@ const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
   (ProtobufCMessageInit) mgmt__client_net_hint__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__rank_uri__field_descriptors[3] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__rank_uri__field_descriptors[4] =
 {
   {
     "rank",
@@ -1459,8 +1459,21 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__rank_uri__fiel
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "num_ctxs",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp__RankUri, num_ctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_resp__rank_uri__field_indices_by_name[] = {
+  3,   /* field[3] = num_ctxs */
   2,   /* field[2] = provider_idx */
   0,   /* field[0] = rank */
   1,   /* field[1] = uri */
@@ -1468,7 +1481,7 @@ static const unsigned mgmt__get_attach_info_resp__rank_uri__field_indices_by_nam
 static const ProtobufCIntRange mgmt__get_attach_info_resp__rank_uri__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descriptor =
 {
@@ -1478,7 +1491,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descripto
   "Mgmt__GetAttachInfoResp__RankUri",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoResp__RankUri),
-  3,
+  4,
   mgmt__get_attach_info_resp__rank_uri__field_descriptors,
   mgmt__get_attach_info_resp__rank_uri__field_indices_by_name,
   1,  mgmt__get_attach_info_resp__rank_uri__number_ranges,
