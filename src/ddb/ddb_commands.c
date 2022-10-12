@@ -7,11 +7,12 @@
 #include <daos/common.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
-#include "ddb_cmd_options.h"
+#include "ddb.h"
 #include "ddb_vos.h"
 #include "ddb_printer.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
+#define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
 
 int
 ddb_run_help(struct ddb_ctx *ctx)
@@ -31,6 +32,11 @@ ddb_run_quit(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_error(ctx, "Must close pool before can open another\n");
+		return -DER_EXIST;
+	}
+	ctx->dc_write_mode = opt->write_mode;
 	return dv_pool_open(opt->path, &ctx->dc_poh);
 }
 
@@ -38,11 +44,14 @@ int ddb_run_close(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	if (daos_handle_is_inval(ctx->dc_poh))
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "No pool open to close\n");
 		return 0;
+	}
 
 	rc = dv_pool_close(ctx->dc_poh);
 	ctx->dc_poh = DAOS_HDL_INVAL;
+	ctx->dc_write_mode = false;
 
 	return rc;
 }
@@ -153,6 +162,10 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path_builder vtp = {0};
 	struct ls_ctx lsctx = {0};
 
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		return -DER_NONEXIST;
+	}
 	rc = init_path(ctx->dc_poh, opt->path, &vtp);
 	if (!SUCCESS(rc))
 		return rc;
@@ -350,7 +363,6 @@ ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
 	bool				both = !(opt->committed ^ opt->active);
 	struct dtx_cb_args	args = {.ctx = ctx, .entry_count = 0};
 
-
 	rc = init_path(ctx->dc_poh, opt->path, &vtp);
 	if (!SUCCESS(rc))
 		return rc;
@@ -401,6 +413,11 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 	struct dv_tree_path_builder	vtpb;
 	int				rc;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
 
 	if (!SUCCESS(rc))
@@ -430,6 +447,11 @@ ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	rc = init_path(ctx->dc_poh, opt->dst, &pb);
 	if (rc == -DER_NONEXIST) {
@@ -497,6 +519,11 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 	int				 rc;
 	struct dv_tree_path		*vtp = &vtpb.vtp_path;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	if (path == NULL) {
 		ddb_error(ctx, ilog_path_required_error_message);
 		return -DER_INVAL;
@@ -561,6 +588,11 @@ ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt)
 	struct dv_tree_path		*vtp = &vtpb.vtp_path;
 	daos_handle_t			 coh = {0};
 	int				 rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	if (opt->path == NULL) {
 		ddb_error(ctx, "path is required\n");
@@ -734,6 +766,11 @@ ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
 	uint32_t				blk_cnt;
 	int					rc;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	offset = parse_uint32_t(opt->offset);
 	if (offset <= 0) {
 		ddb_errorf(ctx, "'%s' is not a valid offset\n", opt->offset);
@@ -815,6 +852,11 @@ ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt)
 	struct dtx_modify_args	args = {0};
 	int			rc;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
 	if (!SUCCESS(rc))
 		return rc;
@@ -838,6 +880,11 @@ int ddb_run_dtx_abort(struct ddb_ctx *ctx, struct dtx_abort_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
 	if (!SUCCESS(rc))

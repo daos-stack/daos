@@ -7,7 +7,7 @@
 #include <getopt.h>
 #include <gurt/debug.h>
 
-#include "ddb_cmd_options.h"
+#include "ddb.h"
 #include "ddb_common.h"
 #define same(a, b) (strcmp((a), (b)) == 0)
 #define COMMAND_NAME_HELP "help"

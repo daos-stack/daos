@@ -5,6 +5,8 @@ go 1.13
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/armon/go-metrics v0.4.0 // indirect
+	github.com/desertbit/go-shlex v0.1.1
+	github.com/desertbit/grumble v1.1.3
 	github.com/dustin/go-humanize v1.0.0
 	github.com/google/go-cmp v0.5.8
 	github.com/google/uuid v1.3.0

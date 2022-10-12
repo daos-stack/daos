@@ -7,7 +7,7 @@
 #ifndef DAOS_DDB_VOS_H
 #define DAOS_DDB_VOS_H
 
-#include <vos_layout.h>
+#include <daos_prop.h>
 #include <daos_srv/vos_types.h>
 #include "ddb_common.h"
 

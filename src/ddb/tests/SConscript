@@ -4,7 +4,7 @@ import daos_build
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'ddblib')
+    Import('env', 'prereqs')
 
     denv = env.Clone()
 
@@ -24,7 +24,7 @@ def scons():
     denv.AppendUnique(CPPDEFINES='_GNU_SOURCE') # for fallocate
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart',
-            'cmocka']
+            'cmocka', 'ddb']
     # spdk libraries
     libs += ['spdk_event', 'spdk_log']
     libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
@@ -43,9 +43,7 @@ def scons():
            'ddb_test_driver.c',
            'ddb_vos_tests.c',
            'ddb_commands_print_tests.c']
-    ddb_tests = daos_build.program(denv, 'ddb_tests',
-                                   [ddblib, src],
-                                   LIBS=libs)
+    ddb_tests = daos_build.program(denv, 'ddb_tests', [src], LIBS=libs)
 
     denv.Install('$PREFIX/bin/', ddb_tests)
 

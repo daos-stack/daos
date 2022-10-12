@@ -5,7 +5,6 @@
  */
 
 #include <string.h>
-#include <libpmemobj/types.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -37,7 +36,8 @@ dv_pool_open(char *path, daos_handle_t *poh)
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
+			path_parts.vf_db_path, DP_RC(rc));
 		return rc;
 	}
 
@@ -46,6 +46,17 @@ dv_pool_open(char *path, daos_handle_t *poh)
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
+
+	return rc;
+}
+
+int
+dv_pool_close(daos_handle_t poh)
+{
+	int rc;
+
+	rc = vos_pool_close(poh);
+	vos_self_fini();
 
 	return rc;
 }
@@ -68,17 +79,6 @@ dv_cont_close(daos_handle_t *coh)
 	rc = vos_cont_close(*coh);
 
 	*coh = DAOS_HDL_INVAL;
-
-	return rc;
-}
-
-int
-dv_pool_close(daos_handle_t poh)
-{
-	int rc;
-
-	rc = vos_pool_close(poh);
-	vos_self_fini();
 
 	return rc;
 }

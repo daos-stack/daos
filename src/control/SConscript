@@ -261,6 +261,7 @@ def scons():
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$BUILD_DIR/src/common "
+                            "-L$BUILD_DIR/src/ddb "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
@@ -281,6 +282,7 @@ def scons():
         print("(EXPERIMENTAL) Building DAOS firmware tools")
         install_go_bin(aenv, gosrc, ['nvme_control'], "daos_firmware", "daos_firmware")
 
+    install_go_bin(aenv, gosrc, ['ddb'], "ddb", "ddb")
 
 if __name__ == "SCons.Script":
     scons()

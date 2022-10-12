@@ -7,7 +7,7 @@
 #include <gurt/debug.h>
 #include <ddb_common.h>
 #include <ddb_parse.h>
-#include <ddb_cmd_options.h>
+#include <ddb.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
@@ -265,7 +265,7 @@ update_vea_options_parsing(void **state)
 static void
 dtx_commit_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
+	struct ddb_cmd_info	 info = {0};
 	struct dtx_commit_options	*options = &info.dci_cmd_option.dci_dtx_commit;
 
 	/* test invalid arguments and options */
@@ -281,7 +281,7 @@ dtx_commit_options_parsing(void **state)
 static void
 dtx_abort_options_parsing(void **state)
 {
-	struct ddb_cmd_info		 info = {0};
+	struct ddb_cmd_info	 info = {0};
 	struct dtx_abort_options	*options = &info.dci_cmd_option.dci_dtx_abort;
 
 	/* test invalid arguments and options */

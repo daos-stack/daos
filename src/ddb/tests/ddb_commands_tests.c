@@ -6,7 +6,7 @@
 #include <gurt/debug.h>
 #include <daos/tests_lib.h>
 #include <ddb_common.h>
-#include <ddb_cmd_options.h>
+#include <ddb.h>
 #include <daos_srv/vos.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
