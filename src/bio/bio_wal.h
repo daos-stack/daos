@@ -37,41 +37,38 @@ struct wal_header {
 	uint64_t	wh_tot_blks;	/* WAL blob capacity, in blocks */
 	uint64_t	wh_ckp_id;	/* Last check-pointed transaction ID */
 	uint64_t	wh_commit_id;	/* Last committed transaction ID */
-	uint64_t	wh_unused_id;	/* Next unused transaction ID */
+	uint32_t	wh_ckp_blks;	/* blocks used by last check-pointed transaction */
+	uint32_t	wh_commit_blks;	/* blocks used by last committed transaction */
 	uint64_t	wh_padding2;	/* Reserved */
 	uint32_t	wh_padding3;	/* Reserved */
 	uint32_t	wh_csum;	/* Checksum of this header */
 };
 
-enum wal_hdr_flags {
-	WAL_HDR_FL_TAIL	= (1UL << 0),	/* The tail entry is in current block */
-};
+/*
+ * WAL transaction starts with a header (wal_trans_head), and there will one or multiple
+ * entries (wal_trans_entry) being placed immediately after the header, the payload data
+ * from entries are concatenated after the last entry, the tail (wal_trans_tail) will be
+ * placed after the payload (or the last entry when there is no payload).
+ *
+ * When the transaction spans multiple WAL blocks, the header will be duplicated to the
+ * head of each block.
+ */
 
 /* WAL transaction header */
 struct wal_trans_head {
 	uint32_t	th_magic;
 	uint32_t	th_gen;		/* WAL re-format timestamp */
-	uint32_t	th_len;		/* Total length of transaction entries in WAL */
-	uint32_t	th_flags;	/* See wal_hdr_flags */
 	uint64_t	th_id;		/* Transaction ID */
-};
-
-/* XXX to be adjusted according to umem action types */
-enum wal_op_type {
-	WAL_OP_MEMCPY	= 0,		/* memcpy data to meta blob */
-	WAL_OP_MEMMOVE,			/* memmove data on meta blob */
-	WAL_OP_MEMSET,			/* memset data on meta blob */
-	WAL_OP_DATA_CSUM,		/* checksum of data on data blob */
-	WAL_OP_MAX,
+	uint32_t	th_tot_ents;	/* Total entries */
+	uint32_t	th_tot_payload;	/* Total payload size in bytes */
 };
 
 /* WAL transaction entry */
 struct wal_trans_entry {
 	uint64_t	te_off;		/* Offset within meta blob, in bytes */
-	uint32_t	te_type;	/* Operation type, see wal_op_type */
-	uint32_t	te_len;		/* Data length in bytes */
-	/* Copied data for OP_MEMCPY, Offset for OP_MEMMOVE, Checksum for DATA_CSUM */
-	uint8_t		te_data[0];
+	uint16_t	te_type;	/* Operation type, see UMEM_ACT_XXX */
+	uint16_t	te_len;		/* Data length in bytes */
+	uint32_t	te_data;	/* Various inline data */
 };
 
 /* WAL transaction tail */
@@ -81,15 +78,17 @@ struct wal_trans_tail {
 
 /* In-memory WAL super information */
 struct wal_super_info {
-	struct wal_header	si_header;
+	struct wal_header	si_header;	/* WAL blob header */
 	uint64_t		si_ckp_id;	/* Last check-pointed ID */
 	uint64_t		si_commit_id;	/* Last committed ID */
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
 	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
 	uint64_t		si_unused_id;	/* Next unused ID */
-	ABT_cond		si_submit_wq;	/* Wait-queue for WAL trans submission */
-	ABT_cond		si_reserve_wq;	/* Wait-queue for WAL ID reserving */
-	unsigned int		si_dirty:1;	/* Header is dirty or not */
+	d_list_t		si_pending_list;/* Pending transactions */
+	ABT_cond		si_rsrv_wq;	/* FIFO waitqueue for WAL ID reserving */
+	ABT_mutex		si_mutex;	/* For si_rsrv_wq */
+	unsigned int		si_rsrv_waiters;/* Number of waiters in reserve waitqueue */
+	unsigned int		si_tx_failed:1;	/* Indicating some transaction failed */
 };
 
 /* In-memory Meta context, exported as opaque data structure */
@@ -97,7 +96,29 @@ struct bio_meta_context {
 	struct bio_io_context	*mc_data;	/* Data blob I/O context */
 	struct bio_io_context	*mc_meta;	/* Meta blob I/O context */
 	struct bio_io_context	*mc_wal;	/* WAL blob I/O context */
-	struct wal_super_info	 mc_wal_info;
+	struct meta_header	 mc_meta_hdr;	/* Meta blob header */
+	struct wal_super_info	 mc_wal_info;	/* WAL blob super information */
+	struct hash_ft		*mc_csum_algo;
+	void			*mc_csum_ctx;
 };
+
+struct meta_fmt_info {
+	uuid_t		fi_meta_devid;		/* Meta SSD device ID */
+	uuid_t		fi_wal_devid;		/* WAL SSD device ID */
+	uuid_t		fi_data_devid;		/* Data SSD device ID */
+	uint64_t	fi_meta_blobid;		/* Meta blob ID */
+	uint64_t	fi_wal_blobid;		/* WAL blob ID */
+	uint64_t	fi_data_blobid;		/* Data blob ID */
+	uint64_t	fi_meta_size;		/* Meta blob size in bytes */
+	uint64_t	fi_wal_size;		/* WAL blob size in bytes */
+	uint64_t	fi_data_size;		/* Data blob size in bytes */
+	uint32_t	fi_vos_id;		/* Associated per-engine target ID */
+};
+
+int meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force);
+int meta_open(struct bio_meta_context *mc);
+void meta_close(struct bio_meta_context *mc);
+int wal_open(struct bio_meta_context *mc);
+void wal_close(struct bio_meta_context *mc);
 
 #endif /* __BIO_WAL_H__*/

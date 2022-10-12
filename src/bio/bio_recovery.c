@@ -283,7 +283,7 @@ setup_xstream(void *arg)
 	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
 	/*
 	 * It doesn't mean setup failed when there is any closed blob,
-	 * it means some blob is still busy and we can move forward to
+	 * it means some blob is still busy and we can't move forward to
 	 * next state yet, we'll retry setup_xstream() later.
 	 */
 	if (closed_blobs > 0)

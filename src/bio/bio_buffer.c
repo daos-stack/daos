@@ -274,10 +274,38 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
 	return biod;
 }
 
+static inline void
+iod_dma_completion(struct bio_desc *biod, int err)
+{
+	if (biod->bd_completion != NULL) {
+		D_ASSERT(biod->bd_comp_arg != NULL);
+		biod->bd_completion(biod->bd_comp_arg, err);
+	} else {
+		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+	}
+}
+
+void
+static iod_dma_wait(struct bio_desc *biod)
+{
+	struct bio_xs_context	*xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+
+	D_ASSERT(xs_ctxt != NULL);
+	if (xs_ctxt->bxc_self_polling) {
+		D_DEBUG(DB_IO, "Self poll completion\n");
+		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+	} else if (biod->bd_inflights != 0) {
+		ABT_eventual_wait(biod->bd_dma_done, NULL);
+	}
+}
+
 void
 bio_iod_free(struct bio_desc *biod)
 {
 	int i;
+
+	if (biod->bd_async_post && biod->bd_dma_done != ABT_EVENTUAL_NULL)
+		iod_dma_wait(biod);
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
@@ -936,10 +964,24 @@ add_region:
 }
 
 static void
+dma_drop_iod(struct bio_dma_buffer *bdb)
+{
+	D_ASSERT(bdb->bdb_active_iods > 0);
+	bdb->bdb_active_iods--;
+	if (bdb->bdb_stats.bds_active_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
+
+	ABT_mutex_lock(bdb->bdb_mutex);
+	ABT_cond_broadcast(bdb->bdb_wait_iod);
+	ABT_mutex_unlock(bdb->bdb_mutex);
+}
+
+static void
 rw_completion(void *cb_arg, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct bio_xs_blobstore	*bxb;
+	struct bio_io_context	*io_ctxt;
 	struct bio_desc		*biod = cb_arg;
 	struct media_error_msg	*mem = NULL;
 
@@ -950,6 +992,11 @@ rw_completion(void *cb_arg, int err)
 	bxb = biod->bd_ctxt->bic_xs_blobstore;
 	D_ASSERT(bxb->bxb_blob_rw > 0);
 	bxb->bxb_blob_rw--;
+
+	io_ctxt = biod->bd_ctxt;
+	D_ASSERT(io_ctxt != NULL);
+	D_ASSERT(io_ctxt->bic_inflight_dmas > 0);
+	io_ctxt->bic_inflight_dmas--;
 
 	/* Induce NVMe Read/Write Error*/
 	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
@@ -977,8 +1024,14 @@ rw_completion(void *cb_arg, int err)
 	}
 
 skip_media_error:
-	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+	if (biod->bd_inflights == 0) {
+		iod_dma_completion(biod, err);
+		if (biod->bd_async_post && biod->bd_buffer_prep) {
+			iod_release_buffer(biod);
+			dma_drop_iod(iod_dma_buf(biod));
+		}
+		D_DEBUG(DB_IO, "DMA complete, type:%d\n", biod->bd_type);
+	}
 }
 
 void
@@ -1068,8 +1121,10 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 		drain_inflight_ios(xs_ctxt, bxb);
 
+		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
 		bxb->bxb_blob_rw++;
+		biod->bd_ctxt->bic_inflight_dmas++;
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
@@ -1100,16 +1155,9 @@ dma_rw(struct bio_desc *biod)
 {
 	struct bio_rsrvd_dma	*rsrvd_dma = &biod->bd_rsrvd;
 	struct bio_rsrvd_region	*rg;
-	struct bio_xs_context	*xs_ctxt;
 	int			 i;
 
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-
-	biod->bd_inflights = 0;
-	biod->bd_dma_issued = 0;
-	biod->bd_result = 0;
-	biod->bd_ctxt->bic_inflight_dmas++;
+	biod->bd_inflights = 1;
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_DEBUG(DB_IO, "DMA start, type:%d\n", biod->bd_type);
@@ -1126,30 +1174,13 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_self_polling) {
-		D_DEBUG(DB_IO, "Self poll completion\n");
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
-	} else {
-		biod->bd_dma_issued = 1;
-		if (biod->bd_inflights != 0)
-			ABT_eventual_wait(biod->bd_dma_done, NULL);
+	D_ASSERT(biod->bd_inflights > 0);
+	biod->bd_inflights -= 1;
+
+	if (!biod->bd_async_post) {
+		iod_dma_wait(biod);
+		D_DEBUG(DB_IO, "Wait DMA done, type:%d\n", biod->bd_type);
 	}
-
-	biod->bd_ctxt->bic_inflight_dmas--;
-	D_DEBUG(DB_IO, "DMA done, type:%d\n", biod->bd_type);
-}
-
-static void
-dma_drop_iod(struct bio_dma_buffer *bdb)
-{
-	D_ASSERT(bdb->bdb_active_iods > 0);
-	bdb->bdb_active_iods--;
-	if (bdb->bdb_stats.bds_active_iods)
-		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
-
-	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iod);
-	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
 static inline bool
@@ -1361,11 +1392,13 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		}
 	}
 
+	biod->bd_dma_issued = 0;
+	biod->bd_inflights = 0;
+	biod->bd_result = 0;
+
 	/* Load data from media to buffer on read */
 	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
 		dma_rw(biod);
-	else
-		biod->bd_result = 0;
 
 	if (biod->bd_result) {
 		rc = biod->bd_result;
@@ -1382,28 +1415,42 @@ failed:
 int
 bio_iod_post(struct bio_desc *biod, int err)
 {
-	struct bio_dma_buffer *bdb;
+	biod->bd_dma_issued = 0;
+	biod->bd_inflights = 0;
+	biod->bd_result = err;
 
-	if (!biod->bd_buffer_prep)
-		return -DER_INVAL;
+	if (!biod->bd_buffer_prep) {
+		biod->bd_result = -DER_INVAL;
+		goto out;
+	}
 
 	/* No more actions for direct accessed SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
 		iod_release_buffer(biod);
-		return err;
+		goto out;
 	}
 
 	/* Land data from buffer to media on write */
 	if (err == 0 && biod->bd_type == BIO_IOD_TYPE_UPDATE)
 		dma_rw(biod);
-	else
-		biod->bd_result = err;
 
-	iod_release_buffer(biod);
-	bdb = iod_dma_buf(biod);
-	dma_drop_iod(bdb);
-
+	if (biod->bd_inflights == 0) {
+		if (biod->bd_buffer_prep) {
+			iod_release_buffer(biod);
+			dma_drop_iod(iod_dma_buf(biod));
+		}
+	}
+out:
+	if (!biod->bd_dma_issued)
+		iod_dma_completion(biod, biod->bd_result);
 	return biod->bd_result;
+}
+
+int
+bio_iod_post_async(struct bio_desc *biod, int err)
+{
+	biod->bd_async_post = 1;
+	return bio_iod_post(biod, err);
 }
 
 int
