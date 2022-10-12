@@ -2125,7 +2125,8 @@ dc_tx_restart_end(struct dc_tx *tx)
 	D_ASSERTF(tx->tx_status == TX_RESTARTING, "%d\n", tx->tx_status);
 	tx->tx_status = TX_OPEN;
 	tx->tx_pm_ver = 0;
-	tx->tx_epoch.oe_value = 0;
+	if ((tx->tx_flags & DAOS_TF_SPEC_EPOCH) == 0)
+		tx->tx_epoch.oe_value = 0;
 }
 
 /**
@@ -2157,7 +2158,8 @@ dc_tx_restart(tse_task_t *task)
 
 		D_MUTEX_LOCK(&tx->tx_lock);
 
-		D_ASSERT(!tx->tx_fixed_epoch);
+		if ((tx->tx_flags & DAOS_TF_SPEC_EPOCH) == 0)
+			D_ASSERT(!tx->tx_fixed_epoch);
 
 		rc = dc_tx_restart_begin(tx, &backoff);
 		if (rc != 0)

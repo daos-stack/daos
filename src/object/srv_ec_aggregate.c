@@ -1449,6 +1449,7 @@ agg_peer_update(struct ec_agg_entry *entry)
 		goto out;
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
+	stripe_ud->asu_agg_entry = entry;
 	rc = dss_ult_create(agg_peer_update_ult, stripe_ud, DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
