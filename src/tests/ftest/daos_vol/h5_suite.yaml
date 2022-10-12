@@ -12,6 +12,8 @@ server_config:
         bdev_list: ["0000:81:00.0", "0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
+        env_vars:
+            - FI_LOG_LEVEL=warn
 pool:
     control_method: dmg
     mode: 511
@@ -23,6 +25,9 @@ container:
     control_method: daos
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
+    env_vars:
+        - FI_LOG_LEVEL=warn
+
 daos_vol_tests: !mux
     test1:
         testname: h5_partest_t_shapesame
