@@ -973,10 +973,10 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		"secondary URIs": {
 			members: []*Member{
 				{
-					Rank:             2,
-					UUID:             uuid.MustParse(test.MockUUID(2)),
-					PrimaryFabricURI: MockControlAddr(t, 2).String(),
-					FabricContexts:   8,
+					Rank:                  2,
+					UUID:                  uuid.MustParse(test.MockUUID(2)),
+					PrimaryFabricURI:      MockControlAddr(t, 2).String(),
+					PrimaryFabricContexts: 8,
 					SecondaryFabricURIs: []string{
 						MockControlAddr(t, 3).String(),
 						MockControlAddr(t, 4).String(),

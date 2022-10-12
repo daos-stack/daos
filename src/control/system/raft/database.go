@@ -562,7 +562,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 		gm.RankEntries[srv.Rank] = RankEntry{
 			PrimaryURI:       srv.PrimaryFabricURI,
-			NumPrimaryCtxs:   srv.FabricContexts,
+			NumPrimaryCtxs:   srv.PrimaryFabricContexts,
 			SecondaryURIs:    srv.SecondaryFabricURIs,
 			NumSecondaryCtxs: srv.SecondaryFabricContexts,
 			Incarnation:      srv.Incarnation,

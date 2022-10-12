@@ -167,7 +167,7 @@ type Member struct {
 	Addr                    *net.TCPAddr  `json:"addr"`
 	PrimaryFabricURI        string        `json:"fabric_uri"`
 	SecondaryFabricURIs     []string      `json:"secondary_fabric_uris"`
-	FabricContexts          uint32        `json:"fabric_contexts"`
+	PrimaryFabricContexts   uint32        `json:"fabric_contexts"`
 	SecondaryFabricContexts []uint32      `json:"secondary_fabric_contexts"`
 	State                   MemberState   `json:"-"`
 	Info                    string        `json:"info"`

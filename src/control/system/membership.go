@@ -170,7 +170,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		curMember.Addr = req.ControlAddr
 		curMember.PrimaryFabricURI = req.PrimaryFabricURI
 		curMember.SecondaryFabricURIs = req.SecondaryFabricURIs
-		curMember.FabricContexts = req.FabricContexts
+		curMember.PrimaryFabricContexts = req.FabricContexts
 		curMember.SecondaryFabricContexts = req.SecondaryFabricContexts
 		curMember.FaultDomain = req.FaultDomain
 		curMember.Incarnation = req.Incarnation
@@ -202,7 +202,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		Addr:                    req.ControlAddr,
 		PrimaryFabricURI:        req.PrimaryFabricURI,
 		SecondaryFabricURIs:     req.SecondaryFabricURIs,
-		FabricContexts:          req.FabricContexts,
+		PrimaryFabricContexts:   req.FabricContexts,
 		SecondaryFabricContexts: req.SecondaryFabricContexts,
 		FaultDomain:             req.FaultDomain,
 		State:                   MemberStateJoined,
