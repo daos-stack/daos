@@ -18,18 +18,17 @@
 static void
 clogs_extend_free(struct ulog *redo)
 {
-	Free(redo);
+	D_FREE(redo);
 }
 
 static int
 clogs_extend_redo(struct ulog **redo, uint64_t gen_num)
 {
-	int ret;
 	size_t size = SIZEOF_ALIGNED_ULOG(LANE_REDO_EXTERNAL_SIZE);
 
-	ret = posix_memalign((void **)redo, CACHELINE_SIZE, size);
-	if (ret != 0)
-		return ret;
+	D_ALIGNED_ALLOC(*redo, CACHELINE_SIZE, size);
+	if (*redo == NULL)
+		return -1;
 
 	size_t capacity = ALIGN_DOWN(size - sizeof(struct ulog), CACHELINE_SIZE);
 
@@ -40,12 +39,11 @@ clogs_extend_redo(struct ulog **redo, uint64_t gen_num)
 static int
 clogs_extend_undo(struct ulog **undo, uint64_t gen_num)
 {
-	int ret;
 	size_t size = TX_DEFAULT_RANGE_CACHE_SIZE;
 
-	ret = posix_memalign((void **)undo, CACHELINE_SIZE, size);
-	if (ret != 0)
-		return ret;
+	D_ALIGNED_ALLOC(*undo, CACHELINE_SIZE, size);
+	if (*undo == NULL)
+		return -1;
 
 	size_t capacity = ALIGN_DOWN(size - sizeof(struct ulog), CACHELINE_SIZE);
 

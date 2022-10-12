@@ -146,7 +146,7 @@ container_ravl_destroy(struct block_container *bc)
 
 	ravl_delete(c->tree);
 
-	Free(bc);
+	D_FREE(bc);
 }
 
 /*
@@ -172,8 +172,9 @@ static const struct block_container_ops container_ravl_ops = {
 struct block_container *
 container_new_ravl(struct palloc_heap *heap)
 {
-	struct block_container_ravl *bc = Malloc(sizeof(*bc));
+	struct block_container_ravl *bc;
 
+	D_ALLOC_PTR_NZ(bc);
 	if (bc == NULL)
 		goto error_container_malloc;
 
@@ -186,7 +187,7 @@ container_new_ravl(struct palloc_heap *heap)
 	return (struct block_container *)&bc->super;
 
 error_ravl_new:
-	Free(bc);
+	D_FREE(bc);
 
 error_container_malloc:
 	return NULL;

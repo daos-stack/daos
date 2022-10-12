@@ -17,8 +17,9 @@
 struct stats *
 stats_new(dav_obj_t *pop)
 {
-	struct stats *s = Malloc(sizeof(*s));
+	struct stats *s;
 
+	D_ALLOC_PTR_NZ(s);
 	if (s == NULL) {
 		D_CRIT("Malloc\n");
 		return NULL;
@@ -26,14 +27,14 @@ stats_new(dav_obj_t *pop)
 
 	s->persistent = &pop->do_phdr->dp_stats_persistent;
 	VALGRIND_ADD_TO_GLOBAL_TX_IGNORE(s->persistent, sizeof(*s->persistent));
-	s->transient = Zalloc(sizeof(struct stats_transient));
+	D_ALLOC_PTR(s->transient);
 	if (s->transient == NULL)
 		goto error_transient_alloc;
 
 	return s;
 
 error_transient_alloc:
-	Free(s);
+	D_FREE(s);
 	return NULL;
 }
 
@@ -45,8 +46,8 @@ stats_delete(dav_obj_t *pop, struct stats *s)
 {
 	pmemops_persist(&pop->p_ops, s->persistent,
 	sizeof(struct stats_persistent));
-	Free(s->transient);
-	Free(s);
+	D_FREE(s->transient);
+	D_FREE(s);
 }
 
 int

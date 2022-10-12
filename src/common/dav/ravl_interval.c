@@ -7,7 +7,7 @@
 
 #include <stdbool.h>
 
-#include "alloc.h"
+#include <gurt/common.h>
 #include "ravl_interval.h"
 #include "sys_util.h"
 #include "os_thread.h"
@@ -70,7 +70,7 @@ ravl_interval_delete(struct ravl_interval *ri)
 {
 	ravl_delete(ri->tree);
 	ri->tree = NULL;
-	Free(ri);
+	D_FREE(ri);
 }
 
 /*
@@ -82,7 +82,7 @@ ravl_interval_delete_cb(struct ravl_interval *ri, ravl_cb cb, void *arg)
 {
 	ravl_delete_cb(ri->tree, cb, arg);
 	ri->tree = NULL;
-	Free(ri);
+	D_FREE(ri);
 }
 
 /*
@@ -91,8 +91,9 @@ ravl_interval_delete_cb(struct ravl_interval *ri, ravl_cb cb, void *arg)
 struct ravl_interval *
 ravl_interval_new(ravl_interval_min *get_min, ravl_interval_max *get_max)
 {
-	struct ravl_interval *interval = Malloc(sizeof(*interval));
+	struct ravl_interval *interval;
 
+	D_ALLOC_PTR_NZ(interval);
 	if (!interval)
 		return NULL;
 
@@ -107,7 +108,7 @@ ravl_interval_new(ravl_interval_min *get_min, ravl_interval_max *get_max)
 	return interval;
 
 free_alloc:
-	Free(interval);
+	D_FREE(interval);
 	return NULL;
 }
 

@@ -52,8 +52,7 @@ bucket_init(struct bucket *b, struct block_container *c,
 	b->is_active = 0;
 	b->active_memory_block = NULL;
 	if (aclass && aclass->type == CLASS_RUN) {
-		b->active_memory_block =
-			Zalloc(sizeof(struct memory_block_reserved));
+		D_ALLOC_PTR(b->active_memory_block);
 
 		if (b->active_memory_block == NULL)
 			return -1;
@@ -70,7 +69,7 @@ static void
 bucket_fini(struct bucket *b)
 {
 	if (b->active_memory_block)
-		Free(b->active_memory_block);
+		D_FREE(b->active_memory_block);
 	b->c_ops->destroy(b->container);
 }
 
@@ -82,8 +81,9 @@ bucket_locked_new(struct block_container *c, struct alloc_class *aclass)
 {
 	ASSERTne(c, NULL);
 
-	struct bucket_locked *b = Malloc(sizeof(*b));
+	struct bucket_locked *b;
 
+	D_ALLOC_PTR_NZ(b);
 	if (b == NULL)
 		return NULL;
 
@@ -96,7 +96,7 @@ bucket_locked_new(struct block_container *c, struct alloc_class *aclass)
 	return b;
 
 err_bucket_init:
-	Free(b);
+	D_FREE(b);
 	return NULL;
 }
 
@@ -108,7 +108,7 @@ bucket_locked_delete(struct bucket_locked *b)
 {
 	bucket_fini(&b->bucket);
 	util_mutex_destroy(&b->lock);
-	Free(b);
+	D_FREE(b);
 }
 
 /*
@@ -252,7 +252,7 @@ bucket_detach_run(struct bucket *b, struct memory_block *m_out, int *empty)
 	}
 
 	if (*active == NULL) {
-		*active = Zalloc(sizeof(struct memory_block_reserved));
+		D_ALLOC_PTR(*active);
 		if (*active == NULL)
 			return -1;
 	}

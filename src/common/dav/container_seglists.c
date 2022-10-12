@@ -133,7 +133,7 @@ container_seglists_destroy(struct block_container *bc)
 	for (unsigned i = 0; i < SEGLIST_BLOCK_LISTS; ++i)
 		VECQ_DELETE(&c->blocks[i]);
 
-	Free(c);
+	D_FREE(c);
 }
 
 /*
@@ -155,8 +155,9 @@ static const struct block_container_ops container_seglists_ops = {
 struct block_container *
 container_new_seglists(struct palloc_heap *heap)
 {
-	struct block_container_seglists *bc = Malloc(sizeof(*bc));
+	struct block_container_seglists *bc;
 
+	D_ALLOC_PTR_NZ(bc);
 	if (bc == NULL)
 		goto error_container_malloc;
 

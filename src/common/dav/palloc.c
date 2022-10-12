@@ -358,7 +358,7 @@ palloc_reservation_clear(struct palloc_heap *heap,
 		 * the heap).
 		 */
 		heap_discard_run(heap, &mresv->m);
-		Free(mresv);
+		D_FREE(mresv);
 	} else {
 		VALGRIND_ANNOTATE_HAPPENS_BEFORE(&mresv->nresv);
 	}

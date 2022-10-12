@@ -170,7 +170,7 @@ heap_arena_delete(struct arena *arena)
 	for (int i = 0; i < MAX_ALLOCATION_CLASSES; ++i)
 		if (arena->buckets[i] != NULL)
 			bucket_locked_delete(arena->buckets[i]);
-	Free(arena);
+	D_FREE(arena);
 }
 
 /*
@@ -180,9 +180,9 @@ static struct arena *
 heap_arena_new(struct palloc_heap *heap, int automatic)
 {
 	struct heap_rt *rt = heap->rt;
+	struct arena *arena;
 
-	struct arena *arena = Zalloc(sizeof(struct arena));
-
+	D_ALLOC_PTR(arena);
 	if (arena == NULL) {
 		D_CRIT("!heap: arena malloc error\n");
 		return NULL;
@@ -1540,6 +1540,9 @@ heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 		uint64_t *sizep, void *base, struct pmem_ops *p_ops,
 		struct stats *stats, struct pool_set *set)
 {
+	struct heap_rt *h;
+	int err;
+
 	/*
 	 * The size can be 0 if interrupted during heap_init or this is the
 	 * first time booting the heap with the persistent size field.
@@ -1555,9 +1558,7 @@ heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 		return EINVAL;
 	}
 
-	struct heap_rt *h = Malloc(sizeof(*h));
-	int err;
-
+	D_ALLOC_PTR_NZ(h);
 	if (h == NULL) {
 		err = ENOMEM;
 		goto error_heap_malloc;
@@ -1622,7 +1623,7 @@ error_arenas_malloc:
 error_alloc_classes_new:
 	arena_thread_assignment_fini(&h->arenas.assignment);
 error_assignment_init:
-	Free(h);
+	D_FREE(h);
 	heap->rt = NULL;
 error_heap_malloc:
 	return err;
@@ -1720,7 +1721,7 @@ heap_cleanup(struct palloc_heap *heap)
 
 	VALGRIND_DO_DESTROY_MEMPOOL(heap->layout);
 
-	Free(rt);
+	D_FREE(rt);
 	heap->rt = NULL;
 }
 
@@ -1855,6 +1856,8 @@ heap_check(void *heap_start, uint64_t heap_size)
 int
 heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 {
+	struct zone *zone_buff;
+
 	if (heap_size < HEAP_MIN_SIZE) {
 		D_CRIT("heap: invalid heap size\n");
 		return -1;
@@ -1873,8 +1876,7 @@ heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 	if (heap_verify_header(&header))
 		return -1;
 
-	struct zone *zone_buff = (struct zone *)Malloc(sizeof(struct zone));
-
+	D_ALLOC_PTR_NZ(zone_buff);
 	if (zone_buff == NULL) {
 		D_CRIT("heap: zone_buff malloc error\n");
 		return -1;
@@ -1889,11 +1891,11 @@ heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 		if (heap_verify_zone(zone_buff))
 			goto out;
 	}
-	Free(zone_buff);
+	D_FREE(zone_buff);
 	return 0;
 
 out:
-	Free(zone_buff);
+	D_FREE(zone_buff);
 	return -1;
 }
 

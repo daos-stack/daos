@@ -178,7 +178,9 @@ alloc_class_new(int id, struct alloc_class_collection *ac,
 	DAV_DEBUG("alloc_class_new id:%d\n",
 		  (type == CLASS_HUGE) ? DEFAULT_ALLOC_CLASS_ID : id);
 
-	struct alloc_class *c = Malloc(sizeof(*c));
+	struct alloc_class *c;
+
+	D_ALLOC_PTR_NZ(c);
 
 	if (c == NULL)
 		goto error_class_alloc;
@@ -238,7 +240,7 @@ alloc_class_new(int id, struct alloc_class_collection *ac,
 	return c;
 
 error_map_insert:
-	Free(c);
+	D_FREE(c);
 error_class_alloc:
 	if (id >= 0)
 		alloc_class_reservation_clear(ac, id);
@@ -257,7 +259,7 @@ alloc_class_delete(struct alloc_class_collection *ac,
 	DAV_DEBUG("alloc_class_delete: %d\n", c->id);
 
 	ac->aclasses[c->id] = NULL;
-	Free(c);
+	D_FREE(c);
 }
 
 /*
@@ -401,8 +403,9 @@ alloc_class_find_min_frag(struct alloc_class_collection *ac, size_t n)
 struct alloc_class_collection *
 alloc_class_collection_new()
 {
-	struct alloc_class_collection *ac = Zalloc(sizeof(*ac));
+	struct alloc_class_collection *ac;
 
+	D_ALLOC_PTR(ac);
 	if (ac == NULL)
 		return NULL;
 
@@ -413,7 +416,7 @@ alloc_class_collection_new()
 
 	size_t maps_size = (MAX_RUN_SIZE / ac->granularity) + 1;
 
-	ac->class_map_by_alloc_size = Malloc(maps_size);
+	D_ALLOC_NZ(ac->class_map_by_alloc_size, maps_size);
 	if (ac->class_map_by_alloc_size == NULL)
 		goto error;
 	ac->class_map_by_unit_size = critnib_new();
@@ -529,8 +532,8 @@ alloc_class_collection_delete(struct alloc_class_collection *ac)
 
 	if (ac->class_map_by_unit_size)
 		critnib_delete(ac->class_map_by_unit_size);
-	Free(ac->class_map_by_alloc_size);
-	Free(ac);
+	D_FREE(ac->class_map_by_alloc_size);
+	D_FREE(ac);
 }
 
 /*

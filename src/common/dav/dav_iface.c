@@ -76,8 +76,8 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 		return NULL;
 	}
 
-	rc = posix_memalign((void **)&hdl, 64, sizeof(dav_obj_t));
-	if (rc != 0) {
+	D_ALIGNED_ALLOC(hdl, 64, sizeof(dav_obj_t));
+	if (hdl == NULL) {
 		errno = ENOMEM;
 		goto out1;
 	}
@@ -107,7 +107,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 	if (hdl->do_stats == NULL)
 		goto out2;
 
-	hdl->do_heap = Zalloc(sizeof(struct palloc_heap));
+	D_ALLOC_PTR(hdl->do_heap);
 	if (hdl->do_heap == NULL) {
 		errno = ENOMEM;
 		goto out2;
@@ -145,11 +145,9 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 out2:
 	if (hdl->do_stats)
 		stats_delete(hdl, hdl->do_stats);
-	if (hdl->do_path)
-		Free(hdl->do_path);
 	if (hdl->do_heap)
-		Free(hdl->do_heap);
-	Free(hdl);
+		D_FREE(hdl->do_heap);
+	D_FREE(hdl);
 out1:
 	munmap(base, sz);
 	return NULL;
@@ -194,7 +192,7 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode)
 		close(fd);
 		return NULL;
 	}
-	hdl->do_path = strdup(path);
+	D_STRNDUP(hdl->do_path, path, strlen(path));
 	return hdl;
 }
 
@@ -221,22 +219,28 @@ dav_obj_open(const char *path, int flags)
 		close(fd);
 		return NULL;
 	}
-	hdl->do_path = strdup(path);
+	D_STRNDUP(hdl->do_path, path, strlen(path));
 	return hdl;
 }
 
 void
 dav_obj_close(dav_obj_t *hdl)
 {
+
+	if (hdl == NULL) {
+		D_ERROR("NULL handle\n");
+		return;
+	}
 	dav_destroy_clogs(hdl);
 
 	stats_delete(hdl, hdl->do_stats);
 	heap_cleanup(hdl->do_heap);
-	Free(hdl->do_heap);
+	D_FREE(hdl->do_heap);
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);
-	Free(hdl->do_path);
-	Free(hdl);
+	if (hdl->do_path)
+		D_FREE(hdl->do_path);
+	D_FREE(hdl);
 }
 
 void *

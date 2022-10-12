@@ -9,9 +9,9 @@
 #define PMDK_VECQ_H 1
 
 #include <stddef.h>
+#include <gurt/common.h>
 #include "util.h"
 #include "out.h"
-#include "alloc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -62,8 +62,9 @@ struct name {\
 static inline int
 realloc_set(void **buf, size_t s)
 {
-	void *tbuf = Realloc(*buf, s);
+	void *tbuf;
 
+	D_REALLOC_NZ(tbuf, *buf, s);
 	if (tbuf == NULL) {
 		D_CRIT("Realloc!\n");
 		return -1;
@@ -114,7 +115,7 @@ for (size_t _vec_i = VECQ_SIZE(vec);\
 } while (0)
 
 #define VECQ_DELETE(vec) do {\
-	Free((vec)->buffer);\
+	D_FREE((vec)->buffer);\
 	(vec)->buffer = NULL;\
 	(vec)->capacity = 0;\
 	(vec)->front = 0;\

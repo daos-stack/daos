@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <gurt/common.h>
 #include "dav_internal.h"
 #include "stats.h"
 #include "page_size.h"
@@ -19,7 +20,6 @@
 extern "C" {
 #endif
 
-#include "alloc.h"
 #include "fault_injection.h"
 
 #define OBJ_OFF_TO_PTR(pop, off) ((void *)((uintptr_t)(((dav_obj_t *)(pop))->do_base) + (off)))

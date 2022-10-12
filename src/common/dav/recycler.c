@@ -74,8 +74,9 @@ struct recycler {
 struct recycler *
 recycler_new(struct palloc_heap *heap, size_t nallocs, size_t *peak_arenas)
 {
-	struct recycler *r = Malloc(sizeof(struct recycler));
+	struct recycler *r;
 
+	D_ALLOC_PTR_NZ(r);
 	if (r == NULL)
 		goto error_alloc_recycler;
 
@@ -97,7 +98,7 @@ recycler_new(struct palloc_heap *heap, size_t nallocs, size_t *peak_arenas)
 	return r;
 
 error_alloc_tree:
-	Free(r);
+	D_FREE(r);
 error_alloc_recycler:
 	return NULL;
 }
@@ -112,7 +113,7 @@ recycler_delete(struct recycler *r)
 
 	util_mutex_destroy(&r->lock);
 	ravl_delete(r->runs);
-	Free(r);
+	D_FREE(r);
 }
 
 /*

@@ -88,11 +88,12 @@ struct operation_context {
 static int
 operation_log_transient_init(struct operation_log *log)
 {
+	struct ulog *src;
+
 	log->capacity = ULOG_BASE_SIZE;
 	log->offset = 0;
 
-	struct ulog *src = Zalloc(sizeof(struct ulog) +
-		ULOG_BASE_SIZE);
+	D_ALLOC(src, (sizeof(struct ulog) + ULOG_BASE_SIZE));
 	if (src == NULL) {
 		D_CRIT("Zalloc!\n");
 		return -1;
@@ -114,11 +115,12 @@ static int
 operation_log_persistent_init(struct operation_log *log,
 	size_t ulog_base_nbytes)
 {
+	struct ulog *src;
+
 	log->capacity = ULOG_BASE_SIZE;
 	log->offset = 0;
 
-	struct ulog *src = Zalloc(sizeof(struct ulog) +
-		ULOG_BASE_SIZE);
+	D_ALLOC(src, (sizeof(struct ulog) + ULOG_BASE_SIZE));
 	if (src == NULL) {
 		D_CRIT("Zalloc!\n");
 		return -1;
@@ -182,8 +184,9 @@ operation_new(struct ulog *ulog, size_t ulog_base_nbytes,
 
 	SUPPRESS_UNUSED(p_ops);
 
-	struct operation_context *ctx = Zalloc(sizeof(*ctx));
+	struct operation_context *ctx;
 
+	D_ALLOC_PTR(ctx);
 	if (ctx == NULL) {
 		D_CRIT("Zalloc!\n");
 		goto error_ctx_alloc;
@@ -240,9 +243,9 @@ operation_delete(struct operation_context *ctx)
 {
 	VECQ_DELETE(&ctx->merge_entries);
 	VEC_DELETE(&ctx->next);
-	Free(ctx->pshadow_ops.ulog);
-	Free(ctx->transient_ops.ulog);
-	Free(ctx);
+	D_FREE(ctx->pshadow_ops.ulog);
+	D_FREE(ctx->transient_ops.ulog);
+	D_FREE(ctx);
 }
 
 /*
@@ -354,8 +357,9 @@ operation_add_typed_entry(struct operation_context *ctx,
 	 */
 	if (oplog->offset + CACHELINE_SIZE == oplog->capacity) {
 		size_t ncapacity = oplog->capacity + ULOG_BASE_SIZE;
-		struct ulog *ulog = Realloc(oplog->ulog,
-			SIZEOF_ULOG(ncapacity));
+		struct ulog *ulog;
+
+		D_REALLOC_NZ(ulog, oplog->ulog, SIZEOF_ULOG(ncapacity));
 		if (ulog == NULL)
 			return -1;
 		oplog->capacity += ULOG_BASE_SIZE;

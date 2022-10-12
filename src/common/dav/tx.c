@@ -208,14 +208,13 @@ static void
 tx_restore_range(dav_obj_t *pop, struct tx *tx, struct ulog_entry_buf *range)
 {
 	struct txr tx_ranges;
+	struct tx_range_data *txr;
 
 	PMDK_SLIST_INIT(&tx_ranges);
 
 	ASSERT(tx->pop == pop);
 
-	struct tx_range_data *txr;
-
-	txr = Malloc(sizeof(*txr));
+	D_ALLOC_PTR_NZ(txr);
 	if (txr == NULL) {
 		/* we can't do it any other way */
 		FATAL("!Malloc");
@@ -244,7 +243,7 @@ tx_restore_range(dav_obj_t *pop, struct tx *tx, struct ulog_entry_buf *range)
 		size_t size = (size_t)((char *)txr->end - (char *)txr->begin);
 
 		pmemops_memcpy(&pop->p_ops, txr->begin, src, size, 0);
-		Free(txr);
+		D_FREE(txr);
 	}
 }
 
@@ -465,8 +464,9 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}
 
-	struct tx_data *txd = Malloc(sizeof(*txd));
+	struct tx_data *txd;
 
+	D_ALLOC_PTR_NZ(txd);
 	if (txd == NULL) {
 		err = errno;
 		D_CRIT("Malloc!\n");
@@ -708,7 +708,7 @@ dav_tx_end(void)
 
 	PMDK_SLIST_REMOVE_HEAD(&tx->tx_entries, tx_entry);
 
-	Free(txd);
+	D_FREE(txd);
 
 	VALGRIND_END_TX;
 	int ret = tx->last_errnum;

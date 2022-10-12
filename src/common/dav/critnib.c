@@ -50,7 +50,7 @@
 #include <errno.h>
 #include <stdbool.h>
 
-#include "alloc.h"
+#include <gurt/common.h>
 #include "critnib.h"
 #include "out.h"
 #include "sys_util.h"
@@ -187,8 +187,9 @@ slice_index(uint64_t key, sh_t shift)
 struct critnib *
 critnib_new(void)
 {
-	struct critnib *c = Zalloc(sizeof(struct critnib));
+	struct critnib *c;
 
+	D_ALLOC_PTR(c);
 	if (!c)
 		return NULL;
 
@@ -213,12 +214,12 @@ delete_node(struct critnib_node *__restrict n)
 				delete_node(n->child[i]);
 		}
 
-		Free(n);
+		D_FREE(n);
 	} else {
 		void *ptr;
 
 		ptr = (void *)to_leaf(n);
-		Free(ptr);
+		D_FREE(ptr);
 	}
 }
 
@@ -236,23 +237,23 @@ critnib_delete(struct critnib *c)
 	for (struct critnib_node *m = c->deleted_node; m; ) {
 		struct critnib_node *mm = m->child[0];
 
-		Free(m);
+		D_FREE(m);
 		m = mm;
 	}
 
 	for (struct critnib_leaf *k = c->deleted_leaf; k; ) {
 		struct critnib_leaf *kk = k->value;
 
-		Free(k);
+		D_FREE(k);
 		k = kk;
 	}
 
 	for (int i = 0; i < DELETED_LIFE; i++) {
-		Free(c->pending_del_nodes[i]);
-		Free(c->pending_del_leaves[i]);
+		D_FREE(c->pending_del_nodes[i]);
+		D_FREE(c->pending_del_leaves[i]);
 	}
 
-	Free(c);
+	D_FREE(c);
 }
 
 /*
@@ -281,8 +282,9 @@ static struct critnib_node *
 alloc_node(struct critnib *__restrict c)
 {
 	if (!c->deleted_node) {
-		struct critnib_node *n = Malloc(sizeof(struct critnib_node));
+		struct critnib_node *n;
 
+		D_ALLOC_PTR_NZ(n);
 		if (n == NULL)
 			D_CRIT("Malloc!\n");
 
@@ -319,8 +321,9 @@ static struct critnib_leaf *
 alloc_leaf(struct critnib *__restrict c)
 {
 	if (!c->deleted_leaf) {
-		struct critnib_leaf *k = Malloc(sizeof(struct critnib_leaf));
+		struct critnib_leaf *k;
 
+		D_ALLOC_PTR_NZ(k);
 		if (k == NULL)
 			D_CRIT("Malloc!\n");
 

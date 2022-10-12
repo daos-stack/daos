@@ -8,11 +8,11 @@
 #ifndef PMDK_VEC_H
 #define PMDK_VEC_H 1
 
+#include <gurt/common.h>
 #include <stddef.h>
 #include "valgrind_internal.h"
 #include "util.h"
 #include "out.h"
-#include "alloc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,7 +36,7 @@ struct name {\
 } while (0)
 
 #define VEC_MOVE(vecl, vecr) do {\
-	Free((vecl)->buffer);\
+	D_FREE((vecl)->buffer);\
 	(vecl)->buffer = (vecr)->buffer;\
 	(vecl)->size = (vecr)->size;\
 	(vecl)->capacity = (vecr)->capacity;\
@@ -55,11 +55,12 @@ struct name {\
 static inline int
 vec_reserve(void *vec, size_t ncapacity, size_t s)
 {
+	void *tbuf;
 	size_t ncap = ncapacity == 0 ? VEC_INIT_SIZE : ncapacity;
 
 	VEC(vvec, void) *vecp = (struct vvec *)vec;
-	void *tbuf = Realloc(vecp->buffer, s * ncap);
 
+	D_REALLOC_NZ(tbuf, vecp->buffer, s * ncap);
 	if (tbuf == NULL) {
 		D_CRIT("Realloc!\n");
 		return -1;
@@ -140,7 +141,7 @@ for (size_t _vec_i = 0;\
 #define VEC_CLEAR(vec) ((vec)->size = 0)
 
 #define VEC_DELETE(vec) do {\
-	Free((vec)->buffer);\
+	D_FREE((vec)->buffer);\
 	(vec)->buffer = NULL;\
 	(vec)->size = 0;\
 	(vec)->capacity = 0;\

@@ -22,8 +22,9 @@ struct fs {
 struct fs *
 fs_new(const char *path)
 {
-	struct fs *f = Zalloc(sizeof(*f));
+	struct fs *f;
 
+	D_ALLOC_PTR(f);
 	if (f == NULL)
 		goto error_fs_alloc;
 
@@ -36,7 +37,7 @@ fs_new(const char *path)
 	return f;
 
 error_fts_open:
-	Free(f);
+	D_FREE(f);
 error_fs_alloc:
 	return NULL;
 }
@@ -83,5 +84,5 @@ void
 fs_delete(struct fs *f)
 {
 	fts_close(f->ft);
-	Free(f);
+	D_FREE(f);
 }

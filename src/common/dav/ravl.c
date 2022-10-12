@@ -9,9 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <gurt/common.h>
 #include "out.h"
 #include "ravl.h"
-#include "alloc.h"
 #include "util.h"
 
 #define RAVL_DEFAULT_DATA_SIZE (sizeof(void *))
@@ -45,8 +45,9 @@ struct ravl {
 struct ravl *
 ravl_new_sized(ravl_compare *compare, size_t data_size)
 {
-	struct ravl *r = Malloc(sizeof(*r));
+	struct ravl *r;
 
+	D_ALLOC_PTR_NZ(r);
 	if (r == NULL) {
 		D_CRIT("Malloc!\n");
 		return r;
@@ -84,7 +85,7 @@ ravl_foreach_node(struct ravl_node *n, ravl_cb cb, void *arg, int free_node)
 	ravl_foreach_node(n->slots[RAVL_RIGHT], cb, arg, free_node);
 
 	if (free_node)
-		Free(n);
+		D_FREE(n);
 }
 
 /*
@@ -104,7 +105,7 @@ void
 ravl_delete_cb(struct ravl *ravl, ravl_cb cb, void *arg)
 {
 	ravl_foreach_node(ravl->root, cb, arg, 1);
-	Free(ravl);
+	D_FREE(ravl);
 }
 
 /*
@@ -162,8 +163,9 @@ ravl_node_copy_constructor(void *data, size_t data_size, const void *arg)
 static struct ravl_node *
 ravl_new_node(struct ravl *ravl, ravl_constr constr, const void *arg)
 {
-	struct ravl_node *n = Malloc(sizeof(*n) + ravl->data_size);
+	struct ravl_node *n;
 
+	D_ALLOC_NZ(n, (sizeof(*n) + ravl->data_size));
 	if (n == NULL) {
 		D_CRIT("Malloc!\n");
 		return n;
@@ -425,7 +427,7 @@ ravl_emplace(struct ravl *ravl, ravl_constr constr, const void *arg)
 
 error_duplicate:
 	errno = EEXIST;
-	Free(n);
+	D_FREE(n);
 	return -1;
 }
 
@@ -566,7 +568,7 @@ ravl_remove(struct ravl *ravl, struct ravl_node *n)
 			r->parent = n->parent;
 
 		*ravl_node_ref(ravl, n) = r;
-		Free(n);
+		D_FREE(n);
 	}
 }
 
