@@ -29,7 +29,7 @@ const defaultConfigFile = "daos_server.yml"
 // helperLogCmd is an embeddable type that extends a command with
 // helper privileged binary logging capabilities.
 type helperLogCmd struct {
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_server_helper binary"`
 }
 
 func (hlc *helperLogCmd) setHelperLogFile() error {
@@ -38,7 +38,7 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		return nil
 	}
 
-	return errors.Wrap(os.Setenv(pbin.DaosAdminLogFileEnvVar, filename),
+	return errors.Wrap(os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, filename),
 		"unable to configure privileged helper logging")
 }
 
@@ -203,7 +203,7 @@ func main() {
 		preExecTests: []execTestFn{
 			// Check that the privileged helper is installed and working.
 			func() error {
-				return pbin.CheckHelper(log, pbin.DaosAdminName)
+				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
 			},
 		},
 	}
