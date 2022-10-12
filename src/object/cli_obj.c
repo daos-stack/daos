@@ -1088,6 +1088,7 @@ obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi)
 void
 obj_auxi_set_degfetch(struct obj_auxi_args *obj_auxi)
 {
+	D_ASSERT(!obj_auxi->spec_shard);
 	obj_auxi->deg_fetch = 1;
 }
 
@@ -1109,7 +1110,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
-	if (obj_auxi->is_ec_obj &&
+	if (obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
 	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
 	     obj_auxi->force_degraded || DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
 		if (obj_auxi->tx_uncertain) {
@@ -1169,6 +1170,7 @@ shard_open:
 
 ec_deg_get:
 	if (ec_degrade) {
+		D_ASSERT(!obj_auxi->spec_shard);
 		rc = obj_ec_get_degrade(&obj_auxi->reasb_req,
 					shard - start_shard, &ec_deg_tgt,
 					false);
@@ -1406,6 +1408,25 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (rc)
 			D_ERROR(DF_OID" obj_ec_check_exist_tgts_get failed "DF_RC"\n",
 				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		return rc;
+	}
+
+	if (obj_auxi->spec_shard) {
+		D_ASSERT(grp_nr == 1);
+		D_ASSERT(shard_cnt == 1);
+		D_ASSERT(bit_map == NIL_BITMAP);
+		D_ASSERT(req_tgts->ort_srv_disp == 0);
+
+		tgt = req_tgts->ort_shard_tgts;
+
+		req_tgts->ort_grp_nr = 1;
+		req_tgts->ort_grp_size = 1;
+		if (obj_is_ec(obj))
+			req_tgts->ort_start_shard = rounddown(start_shard, obj_get_grp_size(obj));
+
+		rc = obj_shard_tgts_query(obj, map_ver, start_shard,
+					  start_shard % obj_get_grp_size(obj),
+					  req_tgts->ort_shard_tgts, obj_auxi);
 		return rc;
 	}
 
