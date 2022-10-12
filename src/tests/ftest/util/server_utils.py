@@ -25,7 +25,9 @@ from dmg_utils import get_dmg_command
 from run_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
-from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters, EngineYamlParameters, \
+    StorageTierYamlParameters
 from user_utils import get_chown_command
 
 
@@ -462,7 +464,7 @@ class DaosServerManager(SubprocessManager):
 
         cmd_list = set()
         for engine_params in self.manager.job.yaml.engine_params:
-            scm_mount = engine_params.scm_mount.value
+            scm_mount = engine_params.get_value("scm_mount")
 
             # Support single or multiple scm_mount points
             if not isinstance(scm_mount, list):
@@ -880,24 +882,22 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Resetting engine_params")
         self.manager.job.yaml.engine_params = []
         engines = generated_yaml["engines"]
-        for idx, engine in enumerate(engines):
-            self.log.info("engine %d", idx)
-            for storage_tier in engine["storage"]:
-                if storage_tier["class"] != "dcpm":
-                    continue
-
-                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
-                self.log.info("class = %s", storage_tier["class"])
-                self.log.info("scm_list = %s", storage_tier["scm_list"])
-
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
-                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
-                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
-                per_engine_yaml_parameters.scm_size.update(None)
-                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
-                per_engine_yaml_parameters.reset_yaml_data_updated()
-
-                self.manager.job.yaml.engine_params.append(per_engine_yaml_parameters)
+        for index, engine in enumerate(engines):
+            self.log.info("engine %d", index)
+            engine_yaml_parameters = EngineYamlParameters(index)
+            engine_yaml_parameters.storage_tiers = []
+            for tier, storage_tier in enumerate(engine["storage"]):
+                self.log.info("  storage tier %s:", tier)
+                storage_tier_parameters = StorageTierYamlParameters(index, tier)
+                for name in storage_tier_parameters.get_param_names():
+                    param = getattr(storage_tier_parameters, name)
+                    name = param.yaml_key or name
+                    if name in storage_tier:
+                        param.update(storage_tier[name])
+                    self.log.info("    %s = %s", name, storage_tier[name])
+                engine_yaml_parameters.storage_tiers.append(storage_tier_parameters)
+            self.manager.job.yaml.engine_params.append(engine_yaml_parameters)
+        self.manager.job.yaml.engine_params.reset_yaml_data_updated()
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

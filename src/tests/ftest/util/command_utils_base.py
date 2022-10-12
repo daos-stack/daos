@@ -75,6 +75,19 @@ class BasicParameter():
             self._value = item
             self.updated = True
 
+    @property
+    def yaml_key(self):
+        """Get the optional name used in the yaml file when setting this parameter.
+
+        Note: If not set (None) then the name of the variable assigned to this object is the name
+        used in the yaml file.
+
+        Returns:
+            object: optional name used to write this parameter to the yaml file or None
+
+        """
+        return self._yaml_key
+
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
 
@@ -177,19 +190,6 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file - not used
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        if self._yaml_key is not None:
-            # Use the yaml key name instead of the variable name
-            name = self._yaml_key
-        return super().get_yaml_value(name, test, path)
 
 
 class LogParameter(FormattedParameter):
@@ -454,8 +454,7 @@ class YamlParameters(ObjectWithParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        if (self.other_params is not None and
-                hasattr(self.other_params, "get_yaml_data")):
+        if self.other_params is not None and hasattr(self.other_params, "get_yaml_data"):
             yaml_data = self.other_params.get_yaml_data()
         else:
             yaml_data = {}
@@ -520,9 +519,7 @@ class YamlParameters(ObjectWithParameters):
                 with open(filename, 'w') as write_file:
                     yaml.dump(yaml_data, write_file, default_flow_style=False)
             except Exception as error:
-                raise CommandFailure(
-                    "Error writing the yaml file {}: {}".format(
-                        filename, error)) from error
+                raise CommandFailure(f"Error writing the yaml file {filename}: {error}") from error
             self.reset_yaml_data_updated()
         return create_yaml
 

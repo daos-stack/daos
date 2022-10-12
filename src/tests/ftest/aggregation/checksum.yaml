@@ -4,9 +4,15 @@ hosts:
 timeout: 240
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
 pool:
   mode: 146
   name: daos_server
