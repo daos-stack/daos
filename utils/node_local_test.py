@@ -221,11 +221,11 @@ class WarningsFactory():
             # and keep it there, until close() method is called, then remove
             # it and re-save.  This means any crash will result in there
             # being a results file with an error recorded.
+            tc_startup = junit_xml.TestCase('Startup', classname=self._class_name('core'))
             tc_sanity = junit_xml.TestCase('Sanity', classname=self._class_name('core'))
             tc_sanity.add_error_info('NLT exited abnormally')
-            tc_startup = junit_xml.TestCase('Startup', classname=self._class_name('core'))
             self.test_suite = junit_xml.TestSuite('Node Local Testing',
-                                                  test_cases=[tc_sanity, tc_startup])
+                                                  test_cases=[tc_startup, tc_sanity])
             self._write_test_file()
         else:
             self.test_suite = None
