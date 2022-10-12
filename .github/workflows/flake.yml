@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - '**/*.py'
+      - .github/workflows/flake.yml
 
 jobs:
   flake8-lint:
