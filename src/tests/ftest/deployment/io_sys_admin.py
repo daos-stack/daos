@@ -106,5 +106,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
         self.log.info("#####Starting DSERIAL Test")
         self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
+        self.log.info("#####Starting CONT_CLONE Test")
+        self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)
