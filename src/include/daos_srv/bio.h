@@ -84,6 +84,11 @@ struct bio_sglist {
 	unsigned int	 bs_nr_out;
 };
 
+/** Max number of vos targets per engine */
+#define			 BIO_MAX_VOS_TGT_CNT	96
+/* System xstream target ID */
+#define			 BIO_SYS_TGT_ID		1024
+
 /* Opaque I/O descriptor */
 struct bio_desc;
 /* Opaque I/O context */
@@ -461,17 +466,6 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
  * \returns		Zero on success, negative value on error
  */
 int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling);
-
-/*
- * Initialize Sys xstream data NVMe context.
- *
- * \param[IN] ctxt		Per-xstream NVMe context to be returned
- * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
- *
- * \returns		Zero on success, negative value on error
- */
-int
-bio_init_xs_data_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id);
 
 /*
  * Finalize per-xstream NVMe context and SPDK env.

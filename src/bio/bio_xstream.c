@@ -1062,7 +1062,10 @@ smd_dev_type2bdev_role(enum smd_dev_type st)
 static bool
 is_bdev_match(struct bio_bdev *d_bdev, unsigned int bdev_roles)
 {
-	return d_bdev->bb_roles == 0 || d_bdev->bb_roles & bdev_roles;
+	if (d_bdev->bb_roles == 0)
+		return NVME_ROLE_DATA & bdev_roles;
+
+	return d_bdev->bb_roles & bdev_roles;
 }
 
 /**
@@ -1153,6 +1156,25 @@ alloc_xs_blobstore(void)
 	return bxb;
 }
 
+static inline struct bio_bdev *bio_sys_bdev()
+{
+	struct bio_bdev		*d_bdev;
+	bool			 found = false;
+
+	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
+	/* firstly found meta device is for sys device */
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		if (is_bdev_match(d_bdev, NVME_ROLE_META)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (found)
+		return d_bdev;
+	return NULL;
+}
+
 int
 find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 		struct bio_bdev **ret_d_bdev, struct smd_dev_info **ret_dev_info)
@@ -1166,7 +1188,7 @@ find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 * Lookup device mapped to @tgt_id and @st in the per-server
 	 * metadata, if found, create blobstore on the mapped device.
 	 */
-	if (tgt_id != DSS_SYS_TGT_ID) {
+	if (tgt_id != BIO_SYS_TGT_ID) {
 retry:
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc == -DER_NONEXIST && !assigned) {
@@ -1181,21 +1203,12 @@ retry:
 			return rc;
 		}
 	} else {
-		bool found = false;
-
 		D_ALLOC_PTR(dev_info);
 		if (dev_info == NULL)
 			return -DER_NOMEM;
 
-		D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
-		/* firstly found meta device is for sys device */
-		d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-			if (is_bdev_match(d_bdev, NVME_ROLE_META)) {
-				found = true;
-				break;
-			}
-		}
-		D_ASSERT(found);
+		d_bdev = bio_sys_bdev();
+		D_ASSERT(d_bdev);
 		uuid_copy(dev_info->sdi_id, d_bdev->bb_uuid);
 		dev_info->sdi_state = SMD_DEV_NORMAL;
 		goto alloc_bbs;
@@ -1363,7 +1376,7 @@ bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
 }
 
 /*
- * Finalize sys xstream NVMe context and SPDK env.
+ * Finalize per-xstream NVMe context and SPDK env.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
  *
@@ -1461,7 +1474,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		ctxt->bxc_dma_buf = NULL;
 	}
 
-	if (ctxt->bxc_tgt_id == DSS_SYS_TGT_ID)
+	if (ctxt->bxc_tgt_id == BIO_SYS_TGT_ID)
 		bio_sys_smd_fini();
 
 	D_FREE(ctxt);
@@ -1554,10 +1567,10 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		}
 	}
 
-	/* Initialize main xstream blobstore context */
+	/* Initialize per-xstream blobstore context */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		/* No Data blobstore for sys xstream */
-		if (st == SMD_DEV_TYPE_DATA && tgt_id == DSS_SYS_TGT_ID)
+		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
 
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
@@ -1569,7 +1582,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			goto out;
 	}
 
-	if (tgt_id == DSS_SYS_TGT_ID) {
+	if (tgt_id == BIO_SYS_TGT_ID) {
 		rc = bio_sys_smd_init();
 		if (rc)
 			goto out;

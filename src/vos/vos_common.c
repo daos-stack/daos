@@ -714,18 +714,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
 				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
-
-	if (rc)
-		goto out;
-
-	if (use_sys_db)
-		rc = vos_db_init(vos_path);
-	else
-		rc = vos_db_init_ex(vos_path, "self_db", true, true);
-	if (rc)
-		goto out;
-
-	rc = smd_init(vos_db_get());
 	if (rc)
 		goto out;
 
@@ -802,6 +790,17 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	rc = vos_mod_init();
 	if (rc)
 		D_GOTO(failed, rc);
+
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
+	if (rc)
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		goto out;
 
 	rc = vos_self_nvme_init(db_path, tgt_id, use_sys_db);
 	if (rc)

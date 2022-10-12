@@ -280,7 +280,7 @@ iod_dma_completion(struct bio_desc *biod, int err)
 	if (biod->bd_completion != NULL) {
 		D_ASSERT(biod->bd_comp_arg != NULL);
 		biod->bd_completion(biod->bd_comp_arg, err);
-	} else {
+	} else if (biod->bd_dma_done != ABT_EVENTUAL_NULL) {
 		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
 	}
 }

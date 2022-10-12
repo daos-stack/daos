@@ -317,7 +317,7 @@ void ds_iv_fini(void);
  *
  * \param[in]	xs_id	xstream ID
  *
- * \return		VOS target ID (1024 for system XS).
+ * \return		VOS target ID (-1 for system XS).
  */
 static inline int
 dss_xs2tgt(int xs_id)
@@ -327,21 +327,25 @@ dss_xs2tgt(int xs_id)
 		  "dss_tgt_offload_xs_nr %d.\n",
 		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
 
-	if (xs_id < dss_sys_xs_nr)
-		return DSS_SYS_TGT_ID;
-
 	if (dss_helper_pool) {
-		if (xs_id >= dss_sys_xs_nr + dss_tgt_nr)
-			return DSS_INVALID_TGT_ID;
+		if (xs_id < dss_sys_xs_nr ||
+		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)
+			return -1;
 		return xs_id - dss_sys_xs_nr;
 	}
 
+	if (xs_id < dss_sys_xs_nr)
+		return -1;
 	return (xs_id - dss_sys_xs_nr) /
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
 }
 
+/*
+ * FIXME: control plane shall pass tier information to
+ * avoid create nvme context if Metadata on SSD is not enabled.
+ */
 static inline bool
-dss_xstream_has_context(struct dss_xstream *dx)
+dss_xstream_has_nvme(struct dss_xstream *dx)
 {
 	return dx->dx_main_xs != 0 || dx->dx_xs_id == 0;
 }

@@ -19,7 +19,7 @@
 
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
-#define BIO_XS_CNT_MAX		DSS_MAX_VOS_TGT_CNT	/* Max VOS xstreams per blobstore */
+#define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */
 /*
  * Period to query raw device health stats, auto detect faulty and transition
  * device state. 60 seconds by default. Once FAULTY state has occurred, reduce
