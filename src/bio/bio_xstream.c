@@ -488,7 +488,6 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	}
 
 	bs_opts = nvme_glb.bd_bs_opts;
-
 	/*
 	 * A little hack here, we store a UUID in the 16 bytes 'bstype' and
 	 * use it as the block device ID.
@@ -898,8 +897,8 @@ error:
 static int
 init_bio_bdevs(struct bio_xs_context *ctxt)
 {
-	struct spdk_bdev	*bdev;
-	int			 rc = 0;
+	struct spdk_bdev *bdev;
+	int rc = 0;
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
@@ -914,9 +913,8 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), NULL);
 		if (rc)
-			return rc;
+			break;
 	}
-
 	return rc;
 }
 
@@ -1261,7 +1259,7 @@ out:
 	return rc;
 }
 
-int
+static int
 init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st)
 {
 	struct bio_bdev		*d_bdev;
@@ -1271,6 +1269,7 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	struct smd_dev_info	*dev_info = NULL;
 	int			 rc;
 
+	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
 
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
@@ -1483,7 +1482,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
-	struct bio_xs_context	*ctxt = *pctxt;
+	struct bio_xs_context	*ctxt;
 	char			 th_name[32];
 	int			 rc = 0;
 	enum smd_dev_type	 st;

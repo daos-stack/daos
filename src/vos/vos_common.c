@@ -20,7 +20,6 @@
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/smd.h>
-#include <daos_srv/bio.h>
 #include <vos_internal.h>
 
 struct vos_self_mode {
@@ -714,14 +713,12 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
 				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
-	if (rc)
-		goto out;
 
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 	if (rc)
 		goto out;
 
 	self_mode.self_nvme_init = true;
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 out:
 	D_FREE(nvme_conf);
 	return rc;

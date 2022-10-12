@@ -326,7 +326,6 @@ dss_xs2tgt(int xs_id)
 		  "invalid xs_id %d, dss_tgt_nr %d, "
 		  "dss_tgt_offload_xs_nr %d.\n",
 		  xs_id, dss_tgt_nr, dss_tgt_offload_xs_nr);
-
 	if (dss_helper_pool) {
 		if (xs_id < dss_sys_xs_nr ||
 		    xs_id >= dss_sys_xs_nr + dss_tgt_nr)

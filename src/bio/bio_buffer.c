@@ -1441,7 +1441,7 @@ bio_iod_post(struct bio_desc *biod, int err)
 		}
 	}
 out:
-	if (!biod->bd_dma_issued)
+	if (!biod->bd_dma_issued && biod->bd_type == BIO_IOD_TYPE_UPDATE)
 		iod_dma_completion(biod, biod->bd_result);
 	return biod->bd_result;
 }
