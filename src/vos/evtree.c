@@ -859,20 +859,17 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 			this_ent = &le->le_ent;
 			d_list_for_each_entry_safe(next_le, tmp_le, &covered, le_link) {
 				next_ent = &next_le->le_ent;
-				if (next_ent->en_ext.ex_lo > this_ent->en_ext.ex_hi)
+				if (next_ent->en_ext.ex_lo > (this_ent->en_ext.ex_hi + 1))
 					break;
 				if (next_ent->en_epoch != this_ent->en_epoch)
 					continue;
-				if (next_ent->en_sel_ext.ex_lo <=
-				    (this_ent->en_sel_ext.ex_hi + 1)) {
-					set_visibility(next_ent, EVT_COVERED);
-					d_list_del(&next_le->le_link);
-					/** For removals, we don't care about the actual extent,
-					 *  so we can just fake it.  We only want to know what
-					 *  removal to insert.
-					 */
-					this_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_hi;
-				}
+				set_visibility(next_ent, EVT_COVERED);
+				d_list_del(&next_le->le_link);
+				/** For removals, we don't care about the actual extent,
+				 *  so we can just fake it.  We only want to know what
+				 *  removal to insert.
+				 */
+				this_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_hi;
 			}
 			/** Mark the current entry as visible for sorting */
 			evt_mark_visible(this_ent, false, num_visible);
