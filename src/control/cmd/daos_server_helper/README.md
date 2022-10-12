@@ -1,8 +1,8 @@
 # Developer Notes for daos\_admin
 
 This page is intended to provide developer-focused documentation for the
-`daos_server_helper` helper. For installation instructions, please see the
-[DAOS Admin Guide](https://daos-stack.github.io/admin/predeployment_check/#elevated-privileges).
+`daos_server_helper` binary. For installation instructions, please see the
+[DAOS Admin Guide](https://docs.daos.io/latest/admin/predeployment_check/#privileged-helper).
 
 ## Overview
 
