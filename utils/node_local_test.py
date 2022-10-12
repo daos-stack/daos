@@ -82,7 +82,7 @@ class NLTConf():
     def __init__(self, json_file, args):
 
         with open(json_file, 'r') as ofh:
-            self.base_config = json.load(ofh)
+            self._bc = json.load(ofh)
         self.agent_dir = None
         self.wf = None
         self.args = None
@@ -127,7 +127,7 @@ class NLTConf():
             self.max_log_size = int(size)
 
     def __getitem__(self, key):
-        return self.base_config[key]
+        return self._bc[key]
 
     def compress_file(self, filename):
         """Compress a file using bz2 for space reasons
