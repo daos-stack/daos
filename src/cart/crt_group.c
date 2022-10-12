@@ -1854,7 +1854,7 @@ crt_nr_secondary_remote_tags_set(int idx, int num_tags)
 {
 	struct crt_prov_gdata *prov_data;
 
-	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d\n", num_tags, idx);
+	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d\n", idx, num_tags);
 
 	if (idx != 0) {
 		D_ERROR("Only idx=0 is currently supported\n");
