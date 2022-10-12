@@ -198,7 +198,7 @@ class DdbTest(TestWithServers):
                 if self.random_akey not in actual_akey:
                     msg = ("Unexpected akey! obj_index = {}; dkey_index = {}; "
                            "Expected = {}; Actual = {}").format(
-                               obj_index, dkey_index, self.random_akey, actual_akey)
+                        obj_index, dkey_index, self.random_akey, actual_akey)
                     errors.append(msg)
 
                 # Verify akey size.
@@ -207,7 +207,7 @@ class DdbTest(TestWithServers):
                 if len(akey_string) != akey_size:
                     msg = ("Wrong akey size! obj_index = {}; dkey_index = {}; "
                            "akey = {}; akey size = {}").format(
-                               obj_index, dkey_index, akey_string, akey_size)
+                        obj_index, dkey_index, akey_string, akey_size)
                     errors.append(msg)
 
         # Verify there is one akey for every dkey.
@@ -468,7 +468,7 @@ class DdbTest(TestWithServers):
                 mkdir=False)
         except DaosTestError as error:
             raise CommandFailure(
-                "ERROR: Copying new_data.txt to {}: {}".format(host, error)) from error
+                "ERROR: Copying new_data.txt to {}: {}".format(host, error))
 
         # The file with the new data is ready. Run ddb load.
         ddb_command.load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
@@ -582,7 +582,7 @@ class DdbTest(TestWithServers):
                 actual_akey2_data not in str_data_list:
             msg = ("Unexpected dumped value! Dumped akey data 1 = {}; "
                    "Dumped akey data 2 = {}; Expected data list = {}").format(
-                       actual_akey1_data, actual_akey2_data, str_data_list)
+                actual_akey1_data, actual_akey2_data, str_data_list)
             errors.append(msg)
 
         # 7. Restart the server for the cleanup.

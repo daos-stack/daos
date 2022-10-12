@@ -7,28 +7,31 @@
 #include <getopt.h>
 #include <gurt/debug.h>
 
-#include "ddb_cmd_options.h"
+#include "ddb.h"
 #include "ddb_common.h"
+#include "ddb_parse.h"
+
 #define same(a, b) (strcmp((a), (b)) == 0)
 #define COMMAND_NAME_HELP "help"
 #define COMMAND_NAME_QUIT "quit"
 #define COMMAND_NAME_LS "ls"
 #define COMMAND_NAME_OPEN "open"
+#define COMMAND_NAME_VERSION "version"
 #define COMMAND_NAME_CLOSE "close"
-#define COMMAND_NAME_DUMP_SUPERBLOCK "dump_superblock"
-#define COMMAND_NAME_DUMP_VALUE "dump_value"
+#define COMMAND_NAME_SUPERBLOCK_DUMP "superblock_dump"
+#define COMMAND_NAME_VALUE_DUMP "value_dump"
 #define COMMAND_NAME_RM "rm"
-#define COMMAND_NAME_LOAD "load"
-#define COMMAND_NAME_DUMP_ILOG "dump_ilog"
-#define COMMAND_NAME_COMMIT_ILOG "commit_ilog"
-#define COMMAND_NAME_RM_ILOG "rm_ilog"
-#define COMMAND_NAME_DUMP_DTX "dump_dtx"
-#define COMMAND_NAME_CLEAR_CMT_DTX "clear_cmt_dtx"
+#define COMMAND_NAME_VALUE_LOAD "value_load"
+#define COMMAND_NAME_ILOG_DUMP "ilog_dump"
+#define COMMAND_NAME_ILOG_COMMIT "ilog_commit"
+#define COMMAND_NAME_ILOG_CLEAR "ilog_clear"
+#define COMMAND_NAME_DTX_DUMP "dtx_dump"
+#define COMMAND_NAME_DTX_CMT_CLEAR "dtx_cmt_clear"
 #define COMMAND_NAME_SMD_SYNC "smd_sync"
-#define COMMAND_NAME_DUMP_VEA "dump_vea"
-#define COMMAND_NAME_UPDATE_VEA "update_vea"
-#define COMMAND_NAME_DTX_COMMIT "dtx_commit"
-#define COMMAND_NAME_DTX_ABORT "dtx_abort"
+#define COMMAND_NAME_VEA_DUMP "vea_dump"
+#define COMMAND_NAME_VEA_UPDATE "vea_update"
+#define COMMAND_NAME_DTX_ACT_COMMIT "dtx_act_commit"
+#define COMMAND_NAME_DTX_ACT_ABORT "dtx_act_abort"
 
 /* Parse command line options for the 'ls' command */
 static int
@@ -47,7 +50,7 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
 		switch (opt) {
 		case 'r':
 			cmd_args->recursive = true;
@@ -90,7 +93,7 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
 		switch (opt) {
 		case 'w':
 			cmd_args->write_mode = true;
@@ -119,9 +122,9 @@ open_option_parse(struct ddb_ctx *ctx, struct open_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'dump_value' command */
+/* Parse command line options for the 'value_dump' command */
 static int
-dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args,
+value_dump_option_parse(struct ddb_ctx *ctx, struct value_dump_options *cmd_args,
 			uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
@@ -135,7 +138,7 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -151,9 +154,6 @@ dump_value_option_parse(struct ddb_ctx *ctx, struct dump_value_options *cmd_args
 	if (argc - index > 0) {
 		cmd_args->dst = argv[index];
 		index++;
-	} else {
-		ddb_print(ctx, "Expected argument 'dst'\n");
-		return -DER_INVAL;
 	}
 
 	if (argc - index > 0) {
@@ -180,7 +180,7 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -202,10 +202,10 @@ rm_option_parse(struct ddb_ctx *ctx, struct rm_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'load' command */
+/* Parse command line options for the 'value_load' command */
 static int
-load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
-		  uint32_t argc, char **argv)
+value_load_option_parse(struct ddb_ctx *ctx, struct value_load_options *cmd_args,
+			uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
 	int		  index = 0;
@@ -218,7 +218,7 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -247,9 +247,9 @@ load_option_parse(struct ddb_ctx *ctx, struct load_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'dump_ilog' command */
+/* Parse command line options for the 'ilog_dump' command */
 static int
-dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
+ilog_dump_option_parse(struct ddb_ctx *ctx, struct ilog_dump_options *cmd_args,
 		       uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
@@ -263,7 +263,7 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -285,9 +285,9 @@ dump_ilog_option_parse(struct ddb_ctx *ctx, struct dump_ilog_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'commit_ilog' command */
+/* Parse command line options for the 'ilog_commit' command */
 static int
-commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_args,
+ilog_commit_option_parse(struct ddb_ctx *ctx, struct ilog_commit_options *cmd_args,
 			 uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
@@ -301,7 +301,7 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -323,10 +323,10 @@ commit_ilog_option_parse(struct ddb_ctx *ctx, struct commit_ilog_options *cmd_ar
 	return 0;
 }
 
-/* Parse command line options for the 'rm_ilog' command */
+/* Parse command line options for the 'ilog_clear' command */
 static int
-rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
-		     uint32_t argc, char **argv)
+ilog_clear_option_parse(struct ddb_ctx *ctx, struct ilog_clear_options *cmd_args,
+			uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
 	int		  index = 0;
@@ -339,7 +339,7 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -361,9 +361,9 @@ rm_ilog_option_parse(struct ddb_ctx *ctx, struct rm_ilog_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'dump_dtx' command */
+/* Parse command line options for the 'dtx_dump' command */
 static int
-dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
+dtx_dump_option_parse(struct ddb_ctx *ctx, struct dtx_dump_options *cmd_args,
 		      uint32_t argc, char **argv)
 {
 	char		 *options_short = "ac";
@@ -379,7 +379,7 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	while ((opt = getopt_long(argc, argv, options_short, options_long, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, options_short, options_long, &index)) != -1) {
 		switch (opt) {
 		case 'a':
 			cmd_args->active = true;
@@ -411,9 +411,9 @@ dump_dtx_option_parse(struct ddb_ctx *ctx, struct dump_dtx_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'clear_cmt_dtx' command */
+/* Parse command line options for the 'dtx_cmt_clear' command */
 static int
-clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cmd_args,
+dtx_cmt_clear_option_parse(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *cmd_args,
 			   uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
@@ -427,7 +427,7 @@ clear_cmt_dtx_option_parse(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *cm
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -465,7 +465,7 @@ smd_sync_option_parse(struct ddb_ctx *ctx, struct smd_sync_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -488,9 +488,9 @@ smd_sync_option_parse(struct ddb_ctx *ctx, struct smd_sync_options *cmd_args,
 	return 0;
 }
 
-/* Parse command line options for the 'update_vea' command */
+/* Parse command line options for the 'vea_update' command */
 static int
-update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args,
+vea_update_option_parse(struct ddb_ctx *ctx, struct vea_update_options *cmd_args,
 			uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
@@ -504,7 +504,7 @@ update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -533,10 +533,10 @@ update_vea_option_parse(struct ddb_ctx *ctx, struct update_vea_options *cmd_args
 	return 0;
 }
 
-/* Parse command line options for the 'dtx_commit' command */
+/* Parse command line options for the 'dtx_act_commit' command */
 static int
-dtx_commit_option_parse(struct ddb_ctx *ctx, struct dtx_commit_options *cmd_args,
-			uint32_t argc, char **argv)
+dtx_act_commit_option_parse(struct ddb_ctx *ctx, struct dtx_act_commit_options *cmd_args,
+			    uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
 	int		  index = 0;
@@ -549,7 +549,7 @@ dtx_commit_option_parse(struct ddb_ctx *ctx, struct dtx_commit_options *cmd_args
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -578,10 +578,10 @@ dtx_commit_option_parse(struct ddb_ctx *ctx, struct dtx_commit_options *cmd_args
 	return 0;
 }
 
-/* Parse command line options for the 'dtx_abort' command */
+/* Parse command line options for the 'dtx_act_abort' command */
 static int
-dtx_abort_option_parse(struct ddb_ctx *ctx, struct dtx_abort_options *cmd_args,
-		       uint32_t argc, char **argv)
+dtx_act_abort_option_parse(struct ddb_ctx *ctx, struct dtx_act_abort_options *cmd_args,
+			   uint32_t argc, char **argv)
 {
 	char		 *options_short = "";
 	int		  index = 0;
@@ -594,7 +594,7 @@ dtx_abort_option_parse(struct ddb_ctx *ctx, struct dtx_abort_options *cmd_args,
 	/* Restart getopt */
 	optind = 1;
 	opterr = 0;
-	if (getopt_long(argc, argv, options_short, options_long, NULL) != -1) {
+	if (getopt_long(argc, argv, options_short, options_long, &index) != -1) {
 		ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
 		return -DER_INVAL;
 	}
@@ -646,17 +646,21 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return open_option_parse(ctx, &info->dci_cmd_option.dci_open,
 		       argc, argv);
 	}
+	if (same(cmd, COMMAND_NAME_VERSION)) {
+		info->dci_cmd = DDB_CMD_VERSION;
+		return 0;
+	}
 	if (same(cmd, COMMAND_NAME_CLOSE)) {
 		info->dci_cmd = DDB_CMD_CLOSE;
 		return 0;
 	}
-	if (same(cmd, COMMAND_NAME_DUMP_SUPERBLOCK)) {
-		info->dci_cmd = DDB_CMD_DUMP_SUPERBLOCK;
+	if (same(cmd, COMMAND_NAME_SUPERBLOCK_DUMP)) {
+		info->dci_cmd = DDB_CMD_SUPERBLOCK_DUMP;
 		return 0;
 	}
-	if (same(cmd, COMMAND_NAME_DUMP_VALUE)) {
-		info->dci_cmd = DDB_CMD_DUMP_VALUE;
-		return dump_value_option_parse(ctx, &info->dci_cmd_option.dci_dump_value,
+	if (same(cmd, COMMAND_NAME_VALUE_DUMP)) {
+		info->dci_cmd = DDB_CMD_VALUE_DUMP;
+		return value_dump_option_parse(ctx, &info->dci_cmd_option.dci_value_dump,
 		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_RM)) {
@@ -664,34 +668,34 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return rm_option_parse(ctx, &info->dci_cmd_option.dci_rm,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_LOAD)) {
-		info->dci_cmd = DDB_CMD_LOAD;
-		return load_option_parse(ctx, &info->dci_cmd_option.dci_load,
+	if (same(cmd, COMMAND_NAME_VALUE_LOAD)) {
+		info->dci_cmd = DDB_CMD_VALUE_LOAD;
+		return value_load_option_parse(ctx, &info->dci_cmd_option.dci_value_load,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_DUMP_ILOG)) {
-		info->dci_cmd = DDB_CMD_DUMP_ILOG;
-		return dump_ilog_option_parse(ctx, &info->dci_cmd_option.dci_dump_ilog,
+	if (same(cmd, COMMAND_NAME_ILOG_DUMP)) {
+		info->dci_cmd = DDB_CMD_ILOG_DUMP;
+		return ilog_dump_option_parse(ctx, &info->dci_cmd_option.dci_ilog_dump,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_COMMIT_ILOG)) {
-		info->dci_cmd = DDB_CMD_COMMIT_ILOG;
-		return commit_ilog_option_parse(ctx, &info->dci_cmd_option.dci_commit_ilog,
+	if (same(cmd, COMMAND_NAME_ILOG_COMMIT)) {
+		info->dci_cmd = DDB_CMD_ILOG_COMMIT;
+		return ilog_commit_option_parse(ctx, &info->dci_cmd_option.dci_ilog_commit,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_RM_ILOG)) {
-		info->dci_cmd = DDB_CMD_RM_ILOG;
-		return rm_ilog_option_parse(ctx, &info->dci_cmd_option.dci_rm_ilog,
+	if (same(cmd, COMMAND_NAME_ILOG_CLEAR)) {
+		info->dci_cmd = DDB_CMD_ILOG_CLEAR;
+		return ilog_clear_option_parse(ctx, &info->dci_cmd_option.dci_ilog_clear,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_DUMP_DTX)) {
-		info->dci_cmd = DDB_CMD_DUMP_DTX;
-		return dump_dtx_option_parse(ctx, &info->dci_cmd_option.dci_dump_dtx,
+	if (same(cmd, COMMAND_NAME_DTX_DUMP)) {
+		info->dci_cmd = DDB_CMD_DTX_DUMP;
+		return dtx_dump_option_parse(ctx, &info->dci_cmd_option.dci_dtx_dump,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_CLEAR_CMT_DTX)) {
-		info->dci_cmd = DDB_CMD_CLEAR_CMT_DTX;
-		return clear_cmt_dtx_option_parse(ctx, &info->dci_cmd_option.dci_clear_cmt_dtx,
+	if (same(cmd, COMMAND_NAME_DTX_CMT_CLEAR)) {
+		info->dci_cmd = DDB_CMD_DTX_CMT_CLEAR;
+		return dtx_cmt_clear_option_parse(ctx, &info->dci_cmd_option.dci_dtx_cmt_clear,
 		       argc, argv);
 	}
 	if (same(cmd, COMMAND_NAME_SMD_SYNC)) {
@@ -699,23 +703,23 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 		return smd_sync_option_parse(ctx, &info->dci_cmd_option.dci_smd_sync,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_DUMP_VEA)) {
-		info->dci_cmd = DDB_CMD_DUMP_VEA;
+	if (same(cmd, COMMAND_NAME_VEA_DUMP)) {
+		info->dci_cmd = DDB_CMD_VEA_DUMP;
 		return 0;
 	}
-	if (same(cmd, COMMAND_NAME_UPDATE_VEA)) {
-		info->dci_cmd = DDB_CMD_UPDATE_VEA;
-		return update_vea_option_parse(ctx, &info->dci_cmd_option.dci_update_vea,
+	if (same(cmd, COMMAND_NAME_VEA_UPDATE)) {
+		info->dci_cmd = DDB_CMD_VEA_UPDATE;
+		return vea_update_option_parse(ctx, &info->dci_cmd_option.dci_vea_update,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_DTX_COMMIT)) {
-		info->dci_cmd = DDB_CMD_DTX_COMMIT;
-		return dtx_commit_option_parse(ctx, &info->dci_cmd_option.dci_dtx_commit,
+	if (same(cmd, COMMAND_NAME_DTX_ACT_COMMIT)) {
+		info->dci_cmd = DDB_CMD_DTX_ACT_COMMIT;
+		return dtx_act_commit_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_commit,
 		       argc, argv);
 	}
-	if (same(cmd, COMMAND_NAME_DTX_ABORT)) {
-		info->dci_cmd = DDB_CMD_DTX_ABORT;
-		return dtx_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_abort,
+	if (same(cmd, COMMAND_NAME_DTX_ACT_ABORT)) {
+		info->dci_cmd = DDB_CMD_DTX_ACT_ABORT;
+		return dtx_act_abort_option_parse(ctx, &info->dci_cmd_option.dci_dtx_act_abort,
 		       argc, argv);
 	}
 
@@ -724,24 +728,145 @@ ddb_parse_cmd_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct ddb_c
 			"'quit', "
 			"'ls', "
 			"'open', "
+			"'version', "
 			"'close', "
-			"'dump_superblock', "
-			"'dump_value', "
+			"'superblock_dump', "
+			"'value_dump', "
 			"'rm', "
-			"'load', "
-			"'dump_ilog', "
-			"'commit_ilog', "
-			"'rm_ilog', "
-			"'dump_dtx', "
-			"'clear_cmt_dtx', "
+			"'value_load', "
+			"'ilog_dump', "
+			"'ilog_commit', "
+			"'ilog_clear', "
+			"'dtx_dump', "
+			"'dtx_cmt_clear', "
 			"'smd_sync', "
-			"'dump_vea', "
-			"'update_vea', "
-			"'dtx_commit', "
-			"'dtx_abort'\n", cmd);
+			"'vea_dump', "
+			"'vea_update', "
+			"'dtx_act_commit', "
+			"'dtx_act_abort'\n", cmd);
 
 	return -DER_INVAL;
 }
+
+int
+ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
+{
+	struct argv_parsed	 parse_args = {0};
+	struct ddb_cmd_info	 info = {0};
+	int			 rc;
+	char			*cmd_copy = strdup(cmd_str);
+
+	/* Remove newline if needed */
+	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')
+		cmd_copy[strlen(cmd_copy) - 1] = '\0';
+
+	rc = ddb_str2argv_create(cmd_copy, &parse_args);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	if (parse_args.ap_argc == 0) {
+		D_ERROR("Nothing parsed\n");
+		return -DER_INVAL;
+	}
+
+	rc = ddb_parse_cmd_args(ctx, parse_args.ap_argc, parse_args.ap_argv, &info);
+	if (!SUCCESS(rc))
+		D_GOTO(done, rc);
+
+	switch (info.dci_cmd) {
+
+	case DDB_CMD_HELP:
+		rc = ddb_run_help(ctx);
+		break;
+
+	case DDB_CMD_QUIT:
+		rc = ddb_run_quit(ctx);
+		break;
+
+	case DDB_CMD_LS:
+		rc = ddb_run_ls(ctx, &info.dci_cmd_option.dci_ls);
+		break;
+
+	case DDB_CMD_OPEN:
+		rc = ddb_run_open(ctx, &info.dci_cmd_option.dci_open);
+		break;
+
+	case DDB_CMD_VERSION:
+		rc = ddb_run_version(ctx);
+		break;
+
+	case DDB_CMD_CLOSE:
+		rc = ddb_run_close(ctx);
+		break;
+
+	case DDB_CMD_SUPERBLOCK_DUMP:
+		rc = ddb_run_superblock_dump(ctx);
+		break;
+
+	case DDB_CMD_VALUE_DUMP:
+		rc = ddb_run_value_dump(ctx, &info.dci_cmd_option.dci_value_dump);
+		break;
+
+	case DDB_CMD_RM:
+		rc = ddb_run_rm(ctx, &info.dci_cmd_option.dci_rm);
+		break;
+
+	case DDB_CMD_VALUE_LOAD:
+		rc = ddb_run_value_load(ctx, &info.dci_cmd_option.dci_value_load);
+		break;
+
+	case DDB_CMD_ILOG_DUMP:
+		rc = ddb_run_ilog_dump(ctx, &info.dci_cmd_option.dci_ilog_dump);
+		break;
+
+	case DDB_CMD_ILOG_COMMIT:
+		rc = ddb_run_ilog_commit(ctx, &info.dci_cmd_option.dci_ilog_commit);
+		break;
+
+	case DDB_CMD_ILOG_CLEAR:
+		rc = ddb_run_ilog_clear(ctx, &info.dci_cmd_option.dci_ilog_clear);
+		break;
+
+	case DDB_CMD_DTX_DUMP:
+		rc = ddb_run_dtx_dump(ctx, &info.dci_cmd_option.dci_dtx_dump);
+		break;
+
+	case DDB_CMD_DTX_CMT_CLEAR:
+		rc = ddb_run_dtx_cmt_clear(ctx, &info.dci_cmd_option.dci_dtx_cmt_clear);
+		break;
+
+	case DDB_CMD_SMD_SYNC:
+		rc = ddb_run_smd_sync(ctx, &info.dci_cmd_option.dci_smd_sync);
+		break;
+
+	case DDB_CMD_VEA_DUMP:
+		rc = ddb_run_vea_dump(ctx);
+		break;
+
+	case DDB_CMD_VEA_UPDATE:
+		rc = ddb_run_vea_update(ctx, &info.dci_cmd_option.dci_vea_update);
+		break;
+
+	case DDB_CMD_DTX_ACT_COMMIT:
+		rc = ddb_run_dtx_act_commit(ctx, &info.dci_cmd_option.dci_dtx_act_commit);
+		break;
+
+	case DDB_CMD_DTX_ACT_ABORT:
+		rc = ddb_run_dtx_act_abort(ctx, &info.dci_cmd_option.dci_dtx_act_abort);
+		break;
+
+	case DDB_CMD_UNKNOWN:
+		ddb_error(ctx, "Unknown command\n");
+		rc = -DER_INVAL;
+		break;
+	}
+done:
+	ddb_str2argv_free(&parse_args);
+	D_FREE(cmd_copy);
+
+	return rc;
+}
+
 
 void
 ddb_commands_help(struct ddb_ctx *ctx)
@@ -770,13 +895,15 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "open <path>\n");
 	ddb_print(ctx, "\tOpens the vos file at <path>\n");
 	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tPath to the vos file to open. This should be an absolute path to the\n"
-		       "\tpool shard. Part of the path is used to determine what the pool uuid\n"
-		       "\tis.\n");
+	ddb_print(ctx, "\tPath to the vos file to open.\n");
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -w, --write_mode\n");
-	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the vos\n"
-		       "\tfile with the load, commit_ilog, etc commands.\n");
+	ddb_print(ctx, "\tOpen the vos file in write mode.\n");
+	ddb_print(ctx, "\n");
+
+	/* Command: version */
+	ddb_print(ctx, "version\n");
+	ddb_print(ctx, "\tPrint ddb version\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: close */
@@ -784,65 +911,59 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tClose the currently opened vos pool shard\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dump_superblock */
-	ddb_print(ctx, "dump_superblock\n");
+	/* Command: superblock_dump */
+	ddb_print(ctx, "superblock_dump\n");
 	ddb_print(ctx, "\tDump the pool superblock information\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dump_value */
-	ddb_print(ctx, "dump_value <path> <dst>\n");
-	ddb_print(ctx, "\tDump a value to a file\n");
+	/* Command: value_dump */
+	ddb_print(ctx, "value_dump <path> [dst]\n");
+	ddb_print(ctx, "\tDump a value\n");
 	ddb_print(ctx, "    <path>\n");
-	ddb_print(ctx, "\tVOS tree path to dump. Should be a complete path including the akey\n"
-		       "\tand if the value is an array value it should include the extent.\n");
-	ddb_print(ctx, "    <dst>\n");
+	ddb_print(ctx, "\tVOS tree path to dump.\n");
+	ddb_print(ctx, "    [dst]\n");
 	ddb_print(ctx, "\tFile path to dump the value to.\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: rm */
 	ddb_print(ctx, "rm <path>\n");
-	ddb_print(ctx, "\tRemove a branch of the VOS tree. The branch can be anything from a\n"
-		       "\tcontainer and everything under it, to a single value.\n");
+	ddb_print(ctx, "\tRemove a branch of the VOS tree.\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to remove.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: load */
-	ddb_print(ctx, "load <src> <dst>\n");
-	ddb_print(ctx, "\tLoad a value to a vos path. This can be used to update the value of an\n"
-		       "\texisting key, or create a new key.\n");
+	/* Command: value_load */
+	ddb_print(ctx, "value_load <src> <dst>\n");
+	ddb_print(ctx, "\tLoad a value to a vos path.\n");
 	ddb_print(ctx, "    <src>\n");
-	ddb_print(ctx, "\tSource file path that contains the data for the value to load.\n");
+	ddb_print(ctx, "\tSource file path.\n");
 	ddb_print(ctx, "    <dst>\n");
-	ddb_print(ctx, "\tDestination vos tree path to the value where the data will be loaded.\n"
-		       "\tIf the path currently exists, then the destination path must match the\n"
-		       "\tvalue type, meaning, if the value type is an array, then the path must\n"
-		       "\tinclude the extent, otherwise, it must not.\n");
+	ddb_print(ctx, "\tDestination vos tree path to a value.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dump_ilog */
-	ddb_print(ctx, "dump_ilog <path>\n");
+	/* Command: ilog_dump */
+	ddb_print(ctx, "ilog_dump <path>\n");
 	ddb_print(ctx, "\tDump the ilog\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: commit_ilog */
-	ddb_print(ctx, "commit_ilog <path>\n");
+	/* Command: ilog_commit */
+	ddb_print(ctx, "ilog_commit <path>\n");
 	ddb_print(ctx, "\tProcess the ilog\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: rm_ilog */
-	ddb_print(ctx, "rm_ilog <path>\n");
+	/* Command: ilog_clear */
+	ddb_print(ctx, "ilog_clear <path>\n");
 	ddb_print(ctx, "\tRemove all the ilog entries\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to an object, dkey, or akey.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dump_dtx */
-	ddb_print(ctx, "dump_dtx <path>\n");
+	/* Command: dtx_dump */
+	ddb_print(ctx, "dtx_dump <path>\n");
 	ddb_print(ctx, "\tDump the dtx tables\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
@@ -853,8 +974,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tOnly dump entries from the committed table\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: clear_cmt_dtx */
-	ddb_print(ctx, "clear_cmt_dtx <path>\n");
+	/* Command: dtx_cmt_clear */
+	ddb_print(ctx, "dtx_cmt_clear <path>\n");
 	ddb_print(ctx, "\tClear the dtx committed table\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
@@ -869,13 +990,13 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tPath to the vos db. (default /mnt/daos)\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dump_vea */
-	ddb_print(ctx, "dump_vea\n");
+	/* Command: vea_dump */
+	ddb_print(ctx, "vea_dump\n");
 	ddb_print(ctx, "\tDump information from the vea about free regions\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: update_vea */
-	ddb_print(ctx, "update_vea <offset> <blk_cnt>\n");
+	/* Command: vea_update */
+	ddb_print(ctx, "vea_update <offset> <blk_cnt>\n");
 	ddb_print(ctx, "\tAlter the VEA tree to mark a region as free.\n");
 	ddb_print(ctx, "    <offset>\n");
 	ddb_print(ctx, "\tBlock offset of the region to mark free.\n");
@@ -883,22 +1004,22 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "\tTotal blocks of the region to mark free.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dtx_commit */
-	ddb_print(ctx, "dtx_commit <path> <dtx_id>\n");
+	/* Command: dtx_act_commit */
+	ddb_print(ctx, "dtx_act_commit <path> <dtx_id>\n");
 	ddb_print(ctx, "\tMark the active dtx entry as committed\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
 	ddb_print(ctx, "    <dtx_id>\n");
-	ddb_print(ctx, "\tDTX id of the entry to commit.\n");
+	ddb_print(ctx, "\tThe dtx id of the entry to commit.\n");
 	ddb_print(ctx, "\n");
 
-	/* Command: dtx_abort */
-	ddb_print(ctx, "dtx_abort <path> <dtx_id>\n");
+	/* Command: dtx_act_abort */
+	ddb_print(ctx, "dtx_act_abort <path> <dtx_id>\n");
 	ddb_print(ctx, "\tMark the active dtx entry as aborted\n");
 	ddb_print(ctx, "    <path>\n");
 	ddb_print(ctx, "\tVOS tree path to a container.\n");
 	ddb_print(ctx, "    <dtx_id>\n");
-	ddb_print(ctx, "\tDTX id of the entry to abort.\n");
+	ddb_print(ctx, "\tThe dtx id of the entry to abort.\n");
 	ddb_print(ctx, "\n");
 }
 
@@ -931,8 +1052,8 @@ ddb_program_help(struct ddb_ctx *ctx)
 
 	ddb_print(ctx, "\nOptions:\n");
 	ddb_print(ctx, "   -w, --write_mode\n");
-	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying the\n"
-		       "\tvos file with the load,\n"
+	ddb_print(ctx, "\tOpen the vos file in write mode. This allows for modifying\n"
+		       "\tthe vos file with the rm, load,\n"
 		       "\tcommit_ilog, etc commands.\n");
 	ddb_print(ctx, "   -R, --run_cmd <cmd>\n");
 	ddb_print(ctx, "\tExecute the single command <cmd>, then exit.\n");
@@ -947,19 +1068,20 @@ ddb_program_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "   quit              Quit interactive mode\n");
 	ddb_print(ctx, "   ls                List containers, objects, dkeys, akeys, and values\n");
 	ddb_print(ctx, "   open              Opens the vos file at <path>\n");
+	ddb_print(ctx, "   version           Print ddb version\n");
 	ddb_print(ctx, "   close             Close the currently opened vos pool shard\n");
-	ddb_print(ctx, "   dump_superblock   Dump the pool superblock information\n");
-	ddb_print(ctx, "   dump_value        Dump a value to a file\n");
+	ddb_print(ctx, "   superblock_dump   Dump the pool superblock information\n");
+	ddb_print(ctx, "   value_dump        Dump a value\n");
 	ddb_print(ctx, "   rm                Remove a branch of the VOS tree.\n");
-	ddb_print(ctx, "   load              Load a value to a vos path.\n");
-	ddb_print(ctx, "   dump_ilog         Dump the ilog\n");
-	ddb_print(ctx, "   commit_ilog       Process the ilog\n");
-	ddb_print(ctx, "   rm_ilog           Remove all the ilog entries\n");
-	ddb_print(ctx, "   dump_dtx          Dump the dtx tables\n");
-	ddb_print(ctx, "   clear_cmt_dtx     Clear the dtx committed table\n");
+	ddb_print(ctx, "   value_load        Load a value to a vos path.\n");
+	ddb_print(ctx, "   ilog_dump         Dump the ilog\n");
+	ddb_print(ctx, "   ilog_commit       Process the ilog\n");
+	ddb_print(ctx, "   ilog_clear        Remove all the ilog entries\n");
+	ddb_print(ctx, "   dtx_dump          Dump the dtx tables\n");
+	ddb_print(ctx, "   dtx_cmt_clear     Clear the dtx committed table\n");
 	ddb_print(ctx, "   smd_sync          Restore the SMD file with backup from blob\n");
-	ddb_print(ctx, "   dump_vea          Dump information from the vea about free regions\n");
-	ddb_print(ctx, "   update_vea        Alter the VEA tree to mark a region as free.\n");
-	ddb_print(ctx, "   dtx_commit        Mark the active dtx entry as committed\n");
-	ddb_print(ctx, "   dtx_abort         Mark the active dtx entry as aborted\n");
+	ddb_print(ctx, "   vea_dump          Dump information from the vea about free regions\n");
+	ddb_print(ctx, "   vea_update        Alter the VEA tree to mark a region as free.\n");
+	ddb_print(ctx, "   dtx_act_commit    Mark the active dtx entry as committed\n");
+	ddb_print(ctx, "   dtx_act_abort     Mark the active dtx entry as aborted\n");
 }

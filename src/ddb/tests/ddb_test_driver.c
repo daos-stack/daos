@@ -281,12 +281,14 @@ ddb_test_setup_vos(void **state)
 	D_ASSERT(state);
 	D_ALLOC_PTR(tctx);
 	assert_non_null(tctx);
+	vos_self_init("/mnt/daos", false, 0);
 
 	assert_success(ddb_test_pool_setup(tctx));
 
 	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh));
 	dvt_insert_data(poh, 0, 0, 0, 0);
 	vos_pool_close(poh);
+	vos_self_fini();
 
 	*state = tctx;
 
@@ -298,7 +300,9 @@ ddb_teardown_vos(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
 
+	vos_self_init("/mnt/daos", false, 0);
 	assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
+	vos_self_fini();
 	close(tctx->dvt_fd);
 	D_FREE(tctx);
 
@@ -538,6 +542,13 @@ create_test_vos_file()
 	int			akeys = 5;
 	int			rc;
 
+	rc = vos_self_init("/mnt/daos", false, 0);
+	if (rc != 0) {
+		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		ddb_fini();
+		return -rc;
+	}
+
 	rc = ddb_test_pool_setup(&tctx);
 	if (!SUCCESS(rc)) {
 		print_error("Unable to setup pool: "DF_RC"\n", DP_RC(rc));
@@ -553,6 +564,7 @@ create_test_vos_file()
 	vos_pool_close(poh);
 
 	close(tctx.dvt_fd);
+	vos_self_fini();
 
 	print_message("VOS file created at: %s\n", tctx.dvt_pmem_file);
 	print_message("\t- pool uuid: "DF_UUIDF"\n", DP_UUID(tctx.dvt_pool_uuid));
@@ -592,12 +604,6 @@ int main(int argc, char *argv[])
 	rc = ddb_init();
 	if (rc != 0)
 		return -rc;
-	rc = vos_self_init("/mnt/daos", false, 0);
-	if (rc != 0) {
-		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
-		ddb_fini();
-		return -rc;
-	}
 
 	ddb_test_driver_arguments_parse(argc, argv, &args);
 
@@ -625,7 +631,6 @@ int main(int argc, char *argv[])
 		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
 
 done:
-	vos_self_fini();
 	ddb_fini();
 	if (rc > 0)
 		printf("%d test(s) failed!\n", rc);

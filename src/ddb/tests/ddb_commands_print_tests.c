@@ -38,7 +38,7 @@ print_object_test(void **state)
 
 	ddb_print_obj(&ctx, &obj, 1);
 
-	assert_str_exact("\t[2] '10.1' (type: TEST TYPE, groups: 2)\n");
+	assert_str_exact("    [2] '10.1' (type: TEST TYPE, groups: 2)\n");
 }
 
 static void set_key_buf(struct ddb_key	*key, uint32_t len)
@@ -63,10 +63,10 @@ print_key_test(void **state)
 	key.ddbk_idx = 4;
 	d_iov_set(&key.ddbk_key, key_buf, ARRAY_SIZE(key_buf));
 
-	ddb_print_key(&ctx, &key, 2);
+	ddb_print_key(&ctx, &key, 0);
 
 	/* empty large key */
-	assert_str_exact("\t\t[4] '' (1024)\n");
+	assert_str_exact("[4] '' (1024)\n");
 	dvt_fake_print_reset();
 
 	/* Large key buffer, but only part is text */
@@ -100,28 +100,28 @@ print_key_test(void **state)
 	key_buf[0] = 0xab;
 	key.ddbk_key.iov_len = sizeof(char);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{uint8:0xab}'\n");
+	assert_str_exact("[4] {uint8:0xab}\n");
 	dvt_fake_print_reset();
 
 	/* short key */
 	key.ddbk_key.iov_buf = (uint8_t *)&s;
 	key.ddbk_key.iov_len = sizeof(short);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{uint16:0xabcd}'\n");
+	assert_str_exact("[4] {uint16:0xabcd}\n");
 	dvt_fake_print_reset();
 
 	/* int key */
 	key.ddbk_key.iov_buf = (int *)&i;
 	key.ddbk_key.iov_len = sizeof(int);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{uint32:0x1234abcd}'\n");
+	assert_str_exact("[4] {uint32:0x1234abcd}\n");
 	dvt_fake_print_reset();
 
 	/* 64 bit key */
 	key.ddbk_key.iov_buf = (uint64_t *)&ll;
 	key.ddbk_key.iov_len = sizeof(uint64_t);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{uint64:0x1abc2abc3abc4abc}'\n");
+	assert_str_exact("[4] {uint64:0x1abc2abc3abc4abc}\n");
 	dvt_fake_print_reset();
 
 	/* random length binary key */
@@ -131,17 +131,17 @@ print_key_test(void **state)
 	key.ddbk_key.iov_buf = key_buf;
 	key.ddbk_key.iov_len = 3;
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{bin(3):0xaabbcc}'\n");
+	assert_str_exact("[4] {bin(3):0xaabbcc}\n");
 	dvt_fake_print_reset();
 
 	set_key_buf(&key, 12);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{bin(12):0x0102030405060708090a0b0c}'\n");
+	assert_str_exact("[4] {bin(12):0x0102030405060708090a0b0c}\n");
 	dvt_fake_print_reset();
 
 	set_key_buf(&key, 128);
 	ddb_print_key(&ctx, &key, 0);
-	assert_str_exact("[4] '{bin(128):0x0102030405...0c0d0e0f10}'\n");
+	assert_str_exact("[4] {bin(128):0x0102030405060708090a0b0c0d0e0f1001020304050607080...}\n");
 	dvt_fake_print_reset();
 }
 
@@ -150,8 +150,8 @@ print_sv_test(void **state)
 {
 	struct ddb_sv sv = {.ddbs_record_size = 19089555};
 
-	ddb_print_sv(&ctx, &sv, 1);
-	assert_str_exact("\t[0] Single Value (Length: 19089555 bytes)\n");
+	ddb_print_sv(&ctx, &sv, 0);
+	assert_str_exact("[0] Single Value (Length: 19089555 bytes)\n");
 }
 
 static void
@@ -164,8 +164,8 @@ print_array_test(void **state)
 		.ddba_idx = 8,
 	};
 
-	ddb_print_array(&ctx, &array, 2);
-	assert_str_exact("\t\t[8] Array Value (Length: 128 records, "
+	ddb_print_array(&ctx, &array, 0);
+	assert_str_exact("[8] Array Value (Length: 128 records, "
 		   "Record Indexes: {64-191}, Record Size: 3)\n");
 }
 
@@ -237,7 +237,7 @@ print_ilog_test(void **state)
 }
 
 static void
-print_dtx_active(void **state)
+print_dtx_active_test(void **state)
 {
 	struct dv_dtx_active_entry entry = {
 		.ddtx_id = {.dti_uuid = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc}, .dti_hlc = 0x1234},
@@ -265,7 +265,7 @@ print_dtx_active(void **state)
 }
 
 static void
-print_dtx_committed(void **state)
+print_dtx_committed_test(void **state)
 {
 	struct dv_dtx_committed_entry entry = {
 		.ddtx_epoch = 1234,
@@ -276,6 +276,91 @@ print_dtx_committed(void **state)
 
 	assert_str("ID: 12345678-9abc-0000-0000-000000000000.1234\n");
 	assert_str("Epoch: 1234\n");
+}
+
+static void
+iov_to_printable_test(void **state)
+{
+	d_iov_t iov = {0};
+	uint32_t buf_len = 64;
+	char buf[buf_len];
+	char input_buf[buf_len];
+
+	assert_int_equal(0, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+
+	/* buf is plenty big */
+	sprintf(input_buf, "This is some text");
+	d_iov_set(&iov, input_buf, strlen(input_buf) + 1);
+	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_string_equal(input_buf, buf);
+
+	/* buf is too small */
+	memset(buf, 0, buf_len);
+	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, 10));
+	assert_string_equal("This is s", buf);
+
+	/* Binary type - enough buffer*/
+	memset(input_buf, 0xab, buf_len);
+	d_iov_set(&iov, input_buf, 10);
+	/* chars written to buffer is 30. For each byte, 2 are printed (10 bytes * 2) plus
+	 * the prefix of 'bin(10):' is 10 more chars.
+	 */
+	assert_int_equal(30, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_string_equal("bin(10):0xabababababababababab", buf);
+
+	/* Binary type - not enough buffer*/
+	assert_int_equal(30, ddb_iov_to_printable_buf(&iov, buf, 20));
+	assert_string_equal("bin(10):0xababab...", buf);
+
+	/* Number types */
+	d_iov_set(&iov, input_buf, 8); /* uint64 */
+	assert_int_equal(25, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_string_equal("uint64:0xabababababababab", buf);
+
+	assert_int_equal(25, ddb_iov_to_printable_buf(&iov, buf, 10));
+	assert_string_equal("uint64:0x", buf);
+
+	d_iov_set(&iov, input_buf, 4); /* uint32 */
+	assert_int_equal(17, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_string_equal("uint32:0xabababab", buf);
+
+	d_iov_set(&iov, input_buf, 1); /* uint8 */
+	assert_int_equal(10, ddb_iov_to_printable_buf(&iov, buf, buf_len));
+	assert_string_equal("uint8:0xab", buf);
+}
+
+static void
+vtp_path_printing_tests(void **state)
+{
+	struct	dv_tree_path vtp = {0};
+	char	dkey_buf[32];
+	char	akey_buf[32];
+
+	uuid_copy(vtp.vtp_cont, g_uuids[0]);
+	vtp.vtp_oid = g_oids[0];
+	vtp.vtp_dkey = g_dkeys[0];
+	vtp.vtp_akey = g_akeys[0];
+	vtp.vtp_recx.rx_idx = 1;
+	vtp.vtp_recx.rx_nr = 10;
+	vtp.vtp_is_recx = true;
+
+	vtp_print(&ctx, &vtp, false);
+	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0/"
+			 "dkey-1/akey-1/{1-10}");
+
+	/* Try different types of keys */
+	d_iov_set(&vtp.vtp_dkey, dkey_buf, 32);
+	d_iov_set(&vtp.vtp_akey, akey_buf, 32);
+
+	memset(vtp.vtp_dkey.iov_buf, 0xab, vtp.vtp_dkey.iov_len);
+
+	sprintf(akey_buf, "0");
+	vtp.vtp_akey.iov_len = 1;
+
+	dvt_fake_print_reset();
+	vtp_print(&ctx, &vtp, false);
+	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0/"
+			 "{bin(32):0xababababababababab...}/0/{1-10}");
 }
 
 static int
@@ -295,8 +380,10 @@ static const struct CMUnitTest tests[] = {
 	TEST(bytes_hr_tests),
 	TEST(print_superblock_test),
 	TEST(print_ilog_test),
-	TEST(print_dtx_active),
-	TEST(print_dtx_committed),
+	TEST(print_dtx_active_test),
+	TEST(print_dtx_committed_test),
+	TEST(iov_to_printable_test),
+	TEST(vtp_path_printing_tests),
 };
 
 int

@@ -119,15 +119,15 @@ def scons():
     # Build utilities
     SConscript('utils/SConscript')
 
+    # Build ddb
+    SConscript('ddb/SConscript')
+
     # Build the control plane components
     SConscript('control/SConscript')
 
     # Build test
     SConscript('placement/tests/SConscript')
     SConscript('tests/SConscript')
-
-    # Build ddb
-    SConscript('ddb/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

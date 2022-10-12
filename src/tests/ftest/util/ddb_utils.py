@@ -142,7 +142,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def dump_value(self, component_path, out_file_path):
-        """Call ddb -R "dump_value <component_path> <out_file_path>"
+        """Call ddb -R "value_dump <component_path> <out_file_path>"
 
         dump_value writes the contents to the file. e.g., if akey is specified, its data
         will be dumped.
@@ -161,12 +161,12 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = False
         self.single_command.value = " ".join(
-            ["dump_value", component_path, out_file_path])
+            ["value_dump", component_path, out_file_path])
 
         return self.run()
 
     def load(self, component_path, load_file_path):
-        """Call ddb -w -R "load <load_file_path> <component_path>"
+        """Call ddb -w -R "value_load <load_file_path> <component_path>"
 
         load writes the given data into the container. e.g.,
         load new_data.txt [0]/[1]/[1]/[0]
@@ -184,7 +184,7 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = True
         self.single_command.value = " ".join(
-            ["load", load_file_path, component_path])
+            ["value_load", load_file_path, component_path])
 
         return self.run()
 
@@ -206,7 +206,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def dump_ilog(self, component_path):
-        """Call ddb -R "dump_ilog <component_path>"
+        """Call ddb -R "ilog_dump <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -218,12 +218,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["dump_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_dump", component_path])
 
         return self.run()
 
     def commit_ilog(self, component_path):
-        """Call ddb -R "commit_ilog <component_path>"
+        """Call ddb -R "ilog_commit <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -235,12 +235,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["commit_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_commit", component_path])
 
         return self.run()
 
     def rm_ilog(self, component_path):
-        """Call ddb -R "rm_ilog <component_path>"
+        """Call ddb -R "ilog_clear <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -252,12 +252,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["rm_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_clear", component_path])
 
         return self.run()
 
     def dump_superblock(self, component_path):
-        """Call ddb -R "dump_superblock <component_path>"
+        """Call ddb -R "superblock_dump <component_path>"
 
         Args:
             component_path (str): Component that comes after dump_superblock.
@@ -269,12 +269,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["dump_superblock", component_path])
+        self.single_command.value = " ".join(["superblock_dump", component_path])
 
         return self.run()
 
     def dump_dtx(self, component_path="[0]", committed=False, active=False):
-        """Call ddb -R "dump_dtx <component_path>"
+        """Call ddb -R "dtx_dump <component_path>"
 
         committed and active can't be set at the same time.
 
@@ -291,7 +291,7 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = False
 
-        commands = ["dump_dtx"]
+        commands = ["dtx_dump"]
         if committed:
             commands.append("-c")
         if active:
@@ -303,7 +303,7 @@ class DdbCommand(DdbCommandBase):
         return self.run()
 
     def clear_cmt_dtx(self, component_path="[0]"):
-        """Call ddb -R "clear_cmt_dtx <component_path>"
+        """Call ddb -R "dtx_cmt_clear <component_path>"
 
         Args:
             component_path (str): Component that comes after clear_cmt_dtx. It doesn't
@@ -315,6 +315,6 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command.value = " ".join(["clear_cmt_dtx", component_path])
+        self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
 
         return self.run()

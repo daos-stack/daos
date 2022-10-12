@@ -234,18 +234,16 @@ vos_path_parse_tests(void **state)
 
 	/* handle dkey */
 	iov_alloc_str(&expected_vt.vtp_path.vtp_dkey, "dkey");
-	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/", expected_vt);
 
 	iov_alloc_str(&expected_vt.vtp_path.vtp_akey, "akey");
-	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/akey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey", expected_vt);
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey/", expected_vt);
 
 	expected_vt.vtp_path.vtp_recx.rx_idx = 1;
 	expected_vt.vtp_path.vtp_recx.rx_nr = 5;
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/{1-6}",
+	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey/akey/{1-6}",
 		    expected_vt);
 
 	daos_iov_free(&expected_vt.vtp_path.vtp_dkey);
@@ -260,7 +258,7 @@ vos_path_parse_and_print_tests(void **state)
 	struct ddb_ctx			 ctx = {0};
 	char				*path;
 
-	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/'akey'/'dkey'";
+	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/akey/dkey";
 
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
 
