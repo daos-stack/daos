@@ -20,6 +20,9 @@ agent_config:
 dmg:
     transport_config:
         allow_insecure: True
+dfuse:
+    env_vars:
+           - FI_LOG_LEVEL=warn
 pool:
     mode: 146
     name: daos_server
