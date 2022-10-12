@@ -78,7 +78,9 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
                     self.container = self.add_containers(oclass)
                     try:
-                        self.execute_mdtest_with_flags(mdtest_np, mdtest_ppn)
+                        self.processes = mdtest_np
+                        self.ppn = mdtest_ppn
+                        self.execute_mdtest()
                         results.append(["PASS", str(self.mdtest_cmd)])
                     except TestFail:
                         results.append(["FAIL", str(self.mdtest_cmd)])
@@ -90,13 +92,15 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 self.container = self.add_containers(oclass)
                 self.update_ior_cmd_with_pool(False)
                 try:
+                    self.processes = ior_np
+                    self.ppn = ior_ppn
                     if self.ior_cmd.api.value == 'HDF5-VOL':
                         self.ior_cmd.api.update('HDF5')
-                        self.run_ior_with_flags(
-                            ior_np, ior_ppn, create_pool=False, plugin_path=hdf5_plugin_path,
-                            mount_dir=mount_dir)
+                        self.run_ior_with_pool(
+                            create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
                     else:
-                        self.run_ior_with_flags(ior_np, ior_ppn, create_pool=False)
+                        self.processes = ior_np
+                        self.run_ior_with_pool(create_pool=False)
                     results.append(["PASS", str(self.ior_cmd)])
                 except TestFail:
                     results.append(["FAIL", str(self.ior_cmd)])
@@ -113,41 +117,3 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 errors = True
         if errors:
             self.fail("Test FAILED")
-
-    def run_ior_with_flags(self, processes, ppn, create_pool=True, create_cont=True,
-                           plugin_path=None, mount_dir=None):
-        """Execute ior with optional overrides for ior flags and object_class.
-
-        If specified the ior flags and ior daos object class parameters will
-        override the values read from the yaml file.
-
-        Args:
-            processes (int): Number of processes.
-            ppn (int): Number of processes per node.
-            create_pool (bool, optional): If it is true, create pool and
-                container else just run the ior. Defaults to True.
-            create_cont (bool, optional): Create new container. Default is True
-            plugin_path (str, optional): HDF5 vol connector library path.
-                This will enable dfuse (xattr) working directory which is
-                needed to run vol connector for DAOS. Default is None.
-            mount_dir (str, optional): Create specific mount point
-
-        Returns:
-            CmdResult: result of the ior command execution
-
-        """
-        self.processes = processes
-        self.ppn = ppn
-        return self.run_ior_with_pool(
-            create_pool=create_pool, create_cont=create_cont, plugin_path=plugin_path,
-            mount_dir=mount_dir)
-
-    def execute_mdtest_with_flags(self, processes, ppn):
-        """Runner method for Mdtest.
-        Args:
-            processes (int): Number of processes.
-            ppn (int): Number of processes per node.
-        """
-        self.processes = processes
-        self.ppn = ppn
-        self.execute_mdtest()
