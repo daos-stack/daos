@@ -1083,7 +1083,7 @@ verify_and_recalc(struct bio_sglist *bsgl, struct evt_entry_in *ent_in,
 
 	vos_offload_exec(vos_csum_recalc_fn, &args);
 	if (args.cra_rc == -DER_CSUM)
-		bio_log_csum_err(vos_xsctxt_get());
+		bio_log_data_csum_err(vos_xsctxt_get());
 	return args.cra_rc;
 }
 
@@ -1119,7 +1119,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(lgc_seg->ls_idx_start <= lgc_seg->ls_idx_end);
 	D_ASSERT(lgc_seg->ls_idx_end < mw->mw_lgc_cnt);
 
-	bio_ctxt = obj->obj_cont->vc_pool->vp_io_ctxt;
+	bio_ctxt = bio_mc2data(obj->obj_cont->vc_pool->vp_meta_context);
 	D_ASSERT(bio_ctxt != NULL);
 
 	seg_count = lgc_seg->ls_idx_end - lgc_seg->ls_idx_start + 1;

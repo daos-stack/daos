@@ -217,8 +217,8 @@ struct vos_pool {
 	d_list_t		vp_gc_cont;
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
-	/** I/O context */
-	struct bio_io_context	*vp_io_ctxt;
+	/** meta I/O context */
+	struct bio_meta_context	*vp_meta_context;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
 	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */

@@ -9,6 +9,7 @@
 
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
+#include <daos_srv/smd.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 #include <spdk/env.h>
@@ -356,25 +357,35 @@ struct bio_blobstore {
 				 bb_unloading:1;
 };
 
+/* Per-xstream blobstore */
+struct bio_xs_blobstore {
+	/* Inflight blob read/write */
+	unsigned int		 bxb_blob_rw;
+	/* spdk io channel */
+	struct spdk_io_channel	*bxb_io_channel;
+	/* per bio blobstore */
+	struct bio_blobstore	*bxb_blobstore;
+	/* All I/O contexts for this xstream blobstore */
+	d_list_t		 bxb_io_ctxts;
+};
+
 /* Per-xstream NVMe context */
 struct bio_xs_context {
 	int			 bxc_tgt_id;
-	unsigned int		 bxc_blob_rw;		/* inflight blob read/write */
 	struct spdk_thread	*bxc_thread;
-	struct bio_blobstore	*bxc_blobstore;
-	struct spdk_io_channel	*bxc_io_channel;
+	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
-	d_list_t		 bxc_io_ctxts;
 	unsigned int		 bxc_ready:1,		/* xstream setup finished */
-				 bxc_self_polling;	/* for standalone VOS */
+				 bxc_self_polling,	/* for standalone VOS */
+				 bxc_meta_on_ssd;	/* metatadata on ssd enabled */
 };
 
 /* Per VOS instance I/O context */
 struct bio_io_context {
-	d_list_t		 bic_link; /* link to bxc_io_ctxts */
+	d_list_t		 bic_link; /* link to bxb_io_ctxts */
 	struct umem_instance	*bic_umem;
-	uint64_t		 bic_pmempool_uuid;
 	struct spdk_blob	*bic_blob;
+	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
 	uint32_t		 bic_io_unit;
@@ -533,7 +544,7 @@ void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
-void drain_inflight_ios(struct bio_xs_context *ctxt);
+void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -584,7 +595,7 @@ int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *xs_ctxt, uint64_t now);
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
@@ -593,6 +604,8 @@ void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
 int bio_blob_open(struct bio_io_context *ctxt, bool async);
+struct bio_xs_blobstore *
+bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);

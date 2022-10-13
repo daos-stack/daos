@@ -403,7 +403,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 
-	bioc = ioc->ic_cont->vc_pool->vp_io_ctxt;
+	bioc = bio_mc2data(ioc->ic_cont->vc_pool->vp_meta_context);
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
@@ -681,8 +681,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	cont = vos_hdl2cont(coh);
-
-	bioc = cont->vc_pool->vp_io_ctxt;
+	bioc = bio_mc2data(cont->vc_pool->vp_meta_context);
 	D_ASSERT(bioc != NULL);
 	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr,
 			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);

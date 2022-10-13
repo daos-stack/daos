@@ -980,6 +980,7 @@ static void
 rw_completion(void *cb_arg, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
+	struct bio_xs_blobstore	*bxb;
 	struct bio_io_context	*io_ctxt;
 	struct bio_desc		*biod = cb_arg;
 	struct media_error_msg	*mem = NULL;
@@ -988,16 +989,14 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
 
+	bxb = biod->bd_ctxt->bic_xs_blobstore;
+	D_ASSERT(bxb->bxb_blob_rw > 0);
+	bxb->bxb_blob_rw--;
+
 	io_ctxt = biod->bd_ctxt;
 	D_ASSERT(io_ctxt != NULL);
 	D_ASSERT(io_ctxt->bic_inflight_dmas > 0);
 	io_ctxt->bic_inflight_dmas--;
-
-	D_ASSERT(io_ctxt->bic_xs_ctxt);
-	xs_ctxt = io_ctxt->bic_xs_ctxt;
-	D_ASSERT(xs_ctxt != NULL);
-	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
-	xs_ctxt->bxc_blob_rw--;
 
 	/* Induce NVMe Read/Write Error*/
 	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
@@ -1016,7 +1015,9 @@ rw_completion(void *cb_arg, int err)
 			goto skip_media_error;
 		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ?
 						MET_WRITE : MET_READ;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_bs = bxb->bxb_blobstore;
+		D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+		xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
@@ -1090,11 +1091,12 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	struct bio_xs_context	*xs_ctxt;
 	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
+	struct bio_xs_blobstore	*bxb = biod->bd_ctxt->bic_xs_blobstore;
 
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
 	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 	blob = biod->bd_ctxt->bic_blob;
-	channel = xs_ctxt->bxc_io_channel;
+	channel = bxb->bxb_io_channel;
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
 	if (daos_io_bypass & IOBP_NVME)
@@ -1116,12 +1118,13 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	pg_cnt -= pg_idx;
 
 	while (pg_cnt > 0) {
-		drain_inflight_ios(xs_ctxt);
+
+		drain_inflight_ios(xs_ctxt, bxb);
 
 		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
+		bxb->bxb_blob_rw++;
 		biod->bd_ctxt->bic_inflight_dmas++;
-		xs_ctxt->bxc_blob_rw++;
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
