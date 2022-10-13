@@ -28,7 +28,7 @@ dump_envariables(void)
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
-		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
+		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN", FI_LOG_LEVEL,
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE" };
 
 	D_INFO("-- ENVARS: --\n");
@@ -117,6 +117,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
+	set_env("FI_LOG_LEVEL, "warn", 1);
 	dump_envariables();
 
 	/*
