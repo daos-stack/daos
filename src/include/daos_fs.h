@@ -57,22 +57,28 @@ typedef struct dfs dfs_t;
 /** read/write access */
 #define DFS_RDWR	O_RDWR
 
-/** struct holding attributes for a DFS container */
+/** struct holding attributes for a DFS container - all optional */
 typedef struct {
-	/** Optional user ID for DFS container. */
+	/** User ID for DFS container. */
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
-	/** Default Object Class for all objects in the container */
+	/** Default Object Class for all files in the container */
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
 	/**
-	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
-	 * If set to 0 or more generally not set to balanced explicitly, relaxed
-	 * mode will be used. In the future, Balanced mode will be the default.
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.  If set to 0 or more
+	 * generally not set to balanced explicitly, relaxed mode will be used
 	 */
 	uint32_t		da_mode;
+	/** Default Object Class for all directories in the container */
+	daos_oclass_id_t	da_dir_oclass_id;
+	/**
+	 * Comma separated hints for POSIX container creation of the format: "type:hint".
+	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
+	 */
+	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -400,6 +406,21 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **obj,
 int
 dfs_lookup_rel(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	       dfs_obj_t **obj, mode_t *mode, struct stat *stbuf);
+
+/**
+ * Suggest an oclass for creating DFS objects given a hint from the user of the format: obj:val
+ * where obj can be either file or dir/directory and val from:
+ * single: tiny files or directories to be single sharded.
+ * max: large files or directories to be max shared.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]	hint	hint from user for a file or directory
+ * \param[out]	cid	object class suggested to use
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid);
 
 /**
  * Create/Open a directory, file, or Symlink.

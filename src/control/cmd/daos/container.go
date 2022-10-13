@@ -204,16 +204,18 @@ func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) 
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        ContTypeFlag         `long:"type" short:"t" description:"container type"`
-	Path        string               `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	Args        struct {
+	Type           ContTypeFlag         `long:"type" short:"t" description:"container type"`
+	Path           string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize      ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass    ObjClassFlag         `long:"oclass" short:"o" description:"default file object class"`
+	DirObjectClass ObjClassFlag         `long:"dir_oclass" short:"a" description:"default directory object class"`
+	CHints         string               `long:"hints" short:"h" description:"container hints"`
+	Properties     CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Mode           ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile        string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User           string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group          string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args           struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
 }
@@ -291,8 +293,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.ObjectClass.Set {
 			ap.oclass = cmd.ObjectClass.Class
 		}
+		if cmd.DirObjectClass.Set {
+			ap.dir_oclass = cmd.DirObjectClass.Class
+		}
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
+		}
+		if cmd.CHints != "" {
+			ap.hints = C.CString(cmd.CHints)
+			defer freeString(ap.hints)
 		}
 	}
 
