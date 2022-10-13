@@ -448,11 +448,20 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing up the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            msg = "One or more servers crashed after bringing up the network interface!"
-            errors.append(msg)
+        # # Some ranks may be excluded after bringing up the network interface. Check if
+        # all ranks are joined. If not, restart the servers and check again.
+        time.sleep(60)
+        dmg_command = self.get_dmg_command()
+        if not check_system_query_status(dmg_command.system_query()):
+            self.log.info("Not all ranks are joined. Restart the servers.")
+            dmg_command.system_stop()
+            dmg_command.system_start()
+
+            # Now all ranks should be joined.
+            if not self.wait_for_ranks_to_join():
+                msg = ("One or more servers crashed after bringing up the network "
+                       "interface!")
+                errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)
