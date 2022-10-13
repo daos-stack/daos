@@ -8,6 +8,8 @@ import os
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
+MAX_STORAGE_TIERS = 4
+
 
 class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
@@ -130,6 +132,10 @@ class DaosServerYamlParameters(YamlParameters):
         # the self.engines_per_host.value.
         self.engine_params = [EngineYamlParameters(0)]
 
+        # Maximum number of detectable storage tiers. This can be used to limit what is read from
+        # test yaml. If changed, get_params() should be called.
+        self.max_storage_tiers = MAX_STORAGE_TIERS
+
         self.fault_path = BasicParameter(None)
 
     def get_params(self, test):
@@ -146,7 +152,8 @@ class DaosServerYamlParameters(YamlParameters):
         # Create the requested number of single server parameters
         self.engine_params = []
         for index in range(self.engines_per_host.value or 0):
-            self.engine_params.append(EngineYamlParameters(index, self.provider.value))
+            self.engine_params.append(
+                EngineYamlParameters(index, self.provider.value, self.max_storage_tiers))
             self.engine_params[-1].get_params(test)
 
     def get_yaml_data(self):
@@ -325,13 +332,15 @@ class EngineYamlParameters(YamlParameters):
             "CRT_MRC_ENABLE=1"],
     }
 
-    def __init__(self, index, provider=None):
+    def __init__(self, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
         """Create a SingleServerConfig object.
 
         Args:
             index (int): engine index number for the namespace path
             provider (str, optional): index number for the namespace path used
                 when specifying multiple engines per host. Defaults to None.
+            max_storage_tiers (int, optional): maximum number of storage tiers that can be detected.
+                Defaults to MAX_STORAGE_TIERS.
         """
         self._index = index
         self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
@@ -385,7 +394,7 @@ class EngineYamlParameters(YamlParameters):
         self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 
         # the storage configuration for this engine
-        self.storage = StorageYamlParameters(self._index)
+        self.storage = StorageYamlParameters(self._index, max_storage_tiers)
 
     def get_params(self, test):
         """Get values for the daos server yaml config file.
@@ -527,18 +536,20 @@ class EngineYamlParameters(YamlParameters):
 class StorageYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for all of the storage tiers for an engine."""
 
-    def __init__(self, engine):
+    def __init__(self, engine, max_tiers=MAX_STORAGE_TIERS):
         """Create a SingleServerConfig object.
 
         Args:
             engine (int) index number for the server engine namespace path.
-            tier (int) index number for the storage tier namespace path.
+            max_tiers (int, optional): maximum number of storage tiers that can be detected.
+                Defaults to MAX_STORAGE_TIERS.
         """
         self._engine_index = engine
         super().__init__(f"/run/server_config/engines/{self._engine_index}/*")
 
-        # Defines the number of storage tier config parameters to define in the yaml file
-        self.storage_tier_qty = BasicParameter(None, 0)
+        # Maximum number of detectable storage tiers. This can be used to limit what is read from
+        # test yaml. If changed, DaosServerManager.get_params() should be called.
+        self._max_tiers = max_tiers
 
         # Each engine can define one or more storage tiers. Default to one storage tier for this
         # engine - for the config_file_gen.py tool. Calling get_params() will update the list to
@@ -588,17 +599,15 @@ class StorageYamlParameters(YamlParameters):
 
         # Since the test.params.get() method does not return a dictionary from the test yaml, use
         # the required 'class' field to determine how many entries are in the test yaml
-        tier_qty = 0
-        while tier_qty < 4:
-            namespace = f"/run/server_config/engines/{self._engine_index}/storage/{tier_qty}/*"
+        self.storage_tiers = []
+        while len(self.storage_tiers) < self._max_tiers:
+            tier_index = len(self.storage_tiers)
+            namespace = f"/run/server_config/engines/{self._engine_index}/storage/{tier_index}/*"
             if test.params.get("class", namespace, None) is None:
                 break
-            tier_qty += 1
 
-        # Create the requested number of storage tier parameters
-        self.storage_tiers = []
-        for index in range(tier_qty):
-            self.storage_tiers.append(StorageTierYamlParameters(self._engine_index, index))
+            # Create this storage tier parameters
+            self.storage_tiers.append(StorageTierYamlParameters(self._engine_index, tier_index))
             self.storage_tiers[-1].get_params(test)
 
     def get_yaml_data(self):
@@ -611,14 +620,14 @@ class StorageYamlParameters(YamlParameters):
         # Get the common config yaml parameters
         yaml_data = super().get_yaml_data()
 
-        # Remove the "engines_per_host" BasicParameter as it is not an actual
-        # daos_server configuration file parameter
-        yaml_data.pop("storage_tier_qty", None)
-
-        # Add the per-engine yaml parameters
-        yaml_data["storage"] = []
+        # Add the storage tier yaml parameters
+        storage_data = []
         for tier in self.storage_tiers:
-            yaml_data["storage"].append(tier.get_yaml_data())
+            data = tier.get_yaml_data()
+            if data:
+                storage_data.append(data)
+        if storage_data:
+            yaml_data["storage"] = storage_data
 
         return yaml_data
 
@@ -656,7 +665,7 @@ class StorageYamlParameters(YamlParameters):
         """
         status = super().set_value(name, value)
 
-        # Set the value for each per-engine configuration attribute name
+        # Set the value for each storage tier attribute name
         if not status:
             for tier in self.storage_tiers:
                 if tier.set_value(name, value):
@@ -676,8 +685,8 @@ class StorageYamlParameters(YamlParameters):
         """
         value = super().get_value(name)
 
-        # Look for the value in the per-engine configuration parameters.  The
-        # first value found will be returned.
+        # Look for the value in the storage tier configuration parameters. The first value found
+        # will be returned.
         index = 0
         while value is None and index < len(self.storage_tiers):
             value = self.storage_tiers[index].get_value(name)

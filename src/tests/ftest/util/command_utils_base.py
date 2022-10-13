@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import OrderedDict
 from logging import getLogger
 import os
 import yaml
@@ -521,7 +520,7 @@ class YamlParameters(ObjectWithParameters):
         if self.other_params is not None and hasattr(self.other_params, "get_yaml_data"):
             yaml_data = self.other_params.get_yaml_data()
         else:
-            yaml_data = OrderedDict()
+            yaml_data = {}
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None:
