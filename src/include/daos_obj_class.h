@@ -211,8 +211,8 @@ enum {
 	 * for number of redundancy Groups.
 	 *
 	 * Examples:
-	 * 2G1 : 2 replicas group=1
-	 * 3G2 : 3 replicas groups=2, ...
+	 * 2G1 : 2 replicas, groups=1
+	 * 3G2 : 3 replicas, groups=2, ...
 	 * 8GX : 8 replicas, it spreads across all targets within the pool
 	 */
 	/** 2-way replicated object classes */
