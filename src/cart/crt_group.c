@@ -1849,6 +1849,35 @@ crt_group_config_path_set(const char *path)
 	return 0;
 }
 
+int
+crt_nr_secondary_remote_tags_set(int idx, int num_tags)
+{
+	struct crt_prov_gdata *prov_data;
+
+	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d\n", idx, num_tags);
+
+	if (idx != 0) {
+		D_ERROR("Only idx=0 is currently supported\n");
+		return -DER_NONEXIST;
+	}
+
+	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
+	    (idx >= crt_gdata.cg_num_secondary_provs)) {
+		D_ERROR("Secondary providers not initialized\n");
+		return -DER_NONEXIST;
+	}
+
+	if (num_tags <= 0) {
+		D_ERROR("Invalid number of tags: %d\n", num_tags);
+		return -DER_INVAL;
+	}
+
+	prov_data = &crt_gdata.cg_prov_gdata_secondary[idx];
+	prov_data->cpg_num_remote_tags = num_tags;
+
+	return DER_SUCCESS;
+}
+
 /**
  * Save attach info to file with the name
  * "<singleton_attach_path>/grpid.attach_info_tmp".

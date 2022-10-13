@@ -53,11 +53,18 @@ struct crt_prov_gdata {
 	uint32_t		cpg_max_exp_size;
 	uint32_t		cpg_max_unexp_size;
 
+	/** Number of remote tags */
+	uint32_t		cpg_num_remote_tags;
+	uint32_t		cpg_last_remote_tag;
+
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
 				cpg_primary		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
+
+	/** Mutext to protect fields above */
+	pthread_mutex_t		cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2

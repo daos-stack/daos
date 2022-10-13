@@ -190,13 +190,13 @@ int main(int argc, char **argv)
 	}
 
 	if (num_primary_ctx > NUM_PRIMARY_CTX_MAX) {
-		printf("Error: Exceeded max alllowed %d for primary ctx\n",
+		printf("Error: Exceeded max allowed %d for primary ctx\n",
 		       NUM_PRIMARY_CTX_MAX);
 		return -1;
 	}
 
 	if (num_secondary_ctx > NUM_SECONDARY_CTX_MAX) {
-		printf("Error: Exceeded max alllowed %d for secondary ctx\n",
+		printf("Error: Exceeded max allowed %d for secondary ctx\n",
 		       NUM_SECONDARY_CTX_MAX);
 		return -1;
 	}

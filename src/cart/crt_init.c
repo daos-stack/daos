@@ -101,7 +101,7 @@ exit:
 	return;
 }
 
-static void
+static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
 
@@ -112,6 +112,11 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
 	uint32_t	max_num_ctx = 256;
+	int		rc;
+
+	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
+	if (rc != 0)
+		return rc;
 
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
@@ -148,10 +153,16 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
 
+	/* By default set number of secondary remote tags to 1 */
+	prov_data->cpg_num_remote_tags = 1;
+	prov_data->cpg_last_remote_tag = 0;
+
 	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d)\n",
 		provider, primary, set_sep, max_expect_size, max_unexpect_size);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
+
+	return DER_SUCCESS;
 }
 
 /* first step init - for initializing crt_gdata */
@@ -650,8 +661,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 
-		prov_data_init(&crt_gdata.cg_prov_gdata_primary,
-			       primary_provider, true, opt);
+		rc = prov_data_init(&crt_gdata.cg_prov_gdata_primary,
+				    primary_provider, true, opt);
+		if (rc != 0)
+			D_GOTO(cleanup, rc);
+
 		prov_settings_apply(true, primary_provider, opt);
 		crt_gdata.cg_primary_prov = primary_provider;
 
@@ -683,8 +697,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		for (i = 0;  i < num_secondaries; i++) {
 			tmp_prov = crt_gdata.cg_secondary_provs[i];
 
-			prov_data_init(&crt_gdata.cg_prov_gdata_secondary[i],
-				       tmp_prov, false, opt);
+			rc = prov_data_init(&crt_gdata.cg_prov_gdata_secondary[i],
+					    tmp_prov, false, opt);
+			if (rc != 0)
+				D_GOTO(cleanup, rc);
+
 			prov_settings_apply(false, tmp_prov, opt);
 
 			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1);
