@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from collections import OrderedDict
 from logging import getLogger
 import os
 import yaml
@@ -12,7 +13,7 @@ from exception_utils import CommandFailure
 class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None, yaml_key=None):
+    def __init__(self, value, default=None, yaml_key=None, position=None):
         """Create a BasicParameter object.
 
         Normal use includes assigning this object to an attribute name that
@@ -31,6 +32,7 @@ class BasicParameter():
         self._value = value if value is not None else default
         self._default = default
         self._yaml_key = yaml_key
+        self._position = position
         self.log = getLogger(__name__)
 
         # Flag used to indicate if a parameter value has or has not been updated
@@ -87,6 +89,61 @@ class BasicParameter():
 
         """
         return self._yaml_key
+
+    @property
+    def position(self):
+        """Get the position property that defines the order/position of the parameter.
+
+        Returns:
+            int: the position of this parameter or None if not set
+
+        """
+        return self._position
+
+    def __lt__(self, other):
+        """Determine if this BasicParameter is less than the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is less than the other parameter's position
+
+        """
+        return (self.position or 0) < (other.position or 0)
+
+    def __gt__(self, other):
+        """Determine if this BasicParameter is greater than the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is greater than the other parameter's position
+
+        """
+        return (self.position or 0) > (other.position or 0)
+
+    def __eq__(self, other):
+        """Determine if this BasicParameter is equal to the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is equal to the other parameter's position
+
+        """
+        return (self.position or 0) == (other.position or 0)
+
+    def __hash__(self):
+        """Return the position as the hash of the class.
+
+        Returns:
+            int: the hash for this object
+
+        """
+        return (self.position or 0)
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -310,9 +367,16 @@ class ObjectWithParameters():
             list: a list of class attribute names used to define parameters
 
         """
-        return [
-            name for name in sorted(self.__dict__.keys())
-            if attr_type is None or isinstance(getattr(self, name), attr_type)]
+        positional = {}
+        non_positional = []
+        for name in sorted(list(self.__dict__)):
+            attr = getattr(self, name)
+            if attr_type is None or isinstance(attr, attr_type):
+                if hasattr(attr, "position") and isinstance(attr.position, int):
+                    positional[attr] = name
+                else:
+                    non_positional.append(name)
+        return [positional[key] for key in sorted(positional)] + non_positional
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -457,11 +521,12 @@ class YamlParameters(ObjectWithParameters):
         if self.other_params is not None and hasattr(self.other_params, "get_yaml_data"):
             yaml_data = self.other_params.get_yaml_data()
         else:
-            yaml_data = {}
+            yaml_data = OrderedDict()
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None:
-                yaml_data[name] = value
+                yaml_name = getattr(self, name).yaml_key
+                yaml_data[yaml_name or name] = value
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
@@ -765,7 +830,7 @@ class PositionalParameter(BasicParameter):
         return self.position == other.position
 
     def __hash__(self):
-        """Returns self.position as the hash of the class.
+        """Return the position as the hash of the class.
 
         This is used in CommandWithPositionalParameters.get_attribute_names()
         where we use this object as the key for a dictionary.

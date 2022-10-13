@@ -722,21 +722,21 @@ class StorageTierYamlParameters(YamlParameters):
         #
         # Two StorageTierYamlParameters objects would be used for the second example.
         #
-        self.storage_class = BasicParameter(None, "ram", yaml_key="class")
+        self.storage_class = BasicParameter(None, "ram", yaml_key="class", position=1)
 
         # Additional 'class: dcpm' options
-        self.scm_list = BasicParameter(None)
+        self.scm_list = BasicParameter(None, position=2)
 
         # Additional 'class: dcpm|ram' options
-        self.scm_mount = BasicParameter(None, "/mnt/daos")
+        self.scm_mount = BasicParameter(None, "/mnt/daos", position=3)
 
         # Additional 'class: ram' options
-        self.scm_size = BasicParameter(None, 16)
+        self.scm_size = BasicParameter(None, 16, position=4)
 
         # Additional 'class: bdev' options
-        self.bdev_list = BasicParameter(None)
-        self.bdev_number = BasicParameter(None)
-        self.bdev_size = BasicParameter(None)
+        self.bdev_list = BasicParameter(None, position=5)
+        self.bdev_number = BasicParameter(None, position=6)
+        self.bdev_size = BasicParameter(None, position=7)
 
     @property
     def using_dcpm(self):
