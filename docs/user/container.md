@@ -470,7 +470,7 @@ Successfully created container 90185799-0e22-4a0b-be9d-1a20900a35ee
 
 This will force a cell size of 64KiB for all erasure-coded objects created in
 this container. If no cell size is specified, it will be inherited from the
-pool. The default cell size on the pool is set to 1MiB if not modified by the
+pool. The default cell size on the pool is set to 64KiB if not modified by the
 administrator at pool creation time.
 
 ### Checksum Background Scrubbing
