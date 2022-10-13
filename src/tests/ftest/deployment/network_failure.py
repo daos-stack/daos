@@ -448,7 +448,7 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # # Some ranks may be excluded after bringing up the network interface. Check if
+        # Some ranks may be excluded after bringing up the network interface. Check if
         # all ranks are joined. If not, restart the servers and check again.
         time.sleep(60)
         dmg_command = self.get_dmg_command()
