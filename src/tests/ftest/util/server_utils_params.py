@@ -722,16 +722,16 @@ class StorageTierYamlParameters(YamlParameters):
         #
         # Two StorageTierYamlParameters objects would be used for the second example.
         #
-        self.storage_class = BasicParameter(None, "ram", yaml_key="class", position=1)
+        self.storage_class = BasicParameter(None, yaml_key="class", position=1)
 
         # Additional 'class: dcpm' options
         self.scm_list = BasicParameter(None, position=2)
 
         # Additional 'class: dcpm|ram' options
-        self.scm_mount = BasicParameter(None, "/mnt/daos", position=3)
+        self.scm_mount = BasicParameter(None, position=3)
 
         # Additional 'class: ram' options
-        self.scm_size = BasicParameter(None, 16, position=4)
+        self.scm_size = BasicParameter(None, position=4)
 
         # Additional 'class: bdev' options
         self.bdev_list = BasicParameter(None, position=5)
@@ -757,16 +757,3 @@ class StorageTierYamlParameters(YamlParameters):
 
         """
         return self.storage_class.value == "nvme"
-
-    def get_params(self, test):
-        """Get values for the daos server yaml config file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super().get_params(test)
-
-        # Ignore the scm_size param when using dcpm
-        if self.using_dcpm:
-            self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
-            self.scm_size.update(None, "scm_size")

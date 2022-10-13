@@ -13,6 +13,8 @@ server_config:
       storage:
         0:
           class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
         1:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a"]
