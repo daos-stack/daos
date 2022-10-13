@@ -15,9 +15,7 @@ class DaosServerTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super().__init__(
-            "/run/server_config/transport_config/*",
-            "transport_config", log_dir)
+        super().__init__("/run/server_config/transport_config/*", "transport_config", log_dir)
 
         # Additional daos_server transport credential parameters:
         #   - client_cert_dir: <str>, e.g. "".daos/clients"
@@ -537,7 +535,7 @@ class StorageYamlParameters(YamlParameters):
             tier (int) index number for the storage tier namespace path.
         """
         self._engine_index = engine
-        super().__init__(f"/run/server_config/servers/{self._engine_index}/*")
+        super().__init__(f"/run/server_config/engines/{self._engine_index}/*")
 
         # Defines the number of storage tier config parameters to define in the yaml file
         self.storage_tier_qty = BasicParameter(None, 0)
@@ -592,7 +590,7 @@ class StorageYamlParameters(YamlParameters):
         # the required 'class' field to determine how many entries are in the test yaml
         tier_qty = 0
         while tier_qty < 4:
-            namespace = f"/run/server_config/servers/{self._engine_index}/storage/{tier_qty}/*"
+            namespace = f"/run/server_config/engines/{self._engine_index}/storage/{tier_qty}/*"
             if test.params.get("class", namespace, None) is None:
                 break
             tier_qty += 1
@@ -699,7 +697,7 @@ class StorageTierYamlParameters(YamlParameters):
             tier (int) index number for the storage tier namespace path.
         """
         self._tier = tier
-        super().__init__(f"/run/server_config/servers/{engine}/storage/{self._tier}/*")
+        super().__init__(f"/run/server_config/engines/{engine}/storage/{self._tier}/*")
 
         # Example storage tier definition in a test yaml file:
         #
