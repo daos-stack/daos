@@ -172,7 +172,7 @@ function start
 	fi
 
 	info "Creating POSIX container posix-fs in tank pool"
-	if ! run docker exec daos-client daos container create --type=posix --label=posix-fs tank ; then
+	if ! run docker exec daos-client daos container create --type=posix tank posix-fs ; then
 		fatal "DAOS POSIX container posix-fs could not be created in tank pool"
 	fi
 

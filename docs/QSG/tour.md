@@ -49,7 +49,7 @@ bring-up DAOS servers and clients.
 ### run fio
 
 	$ dmg pool create --size 10G Pool1
-	$ daos cont create --label Cont1 --type POSIX Pool1
+	$ daos cont create Pool1 Cont1 --type POSIX
 	$ daos cont query Pool1 Cont1
 	$ /usr/bin/mkdir /tmp/daos_test1
 	$ /usr/bin/touch /tmp/daos_test1/testfile
@@ -251,7 +251,7 @@ bring-up DAOS servers and clients.
 	  boro-[8,35,52-53] 1           0
 
 	$ dmg pool create --size 10G Pool1
-	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1
+	$ daos cont create Pool1 Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2
 	$ daos pool list-cont Pool1
 	UUID                                 Label
 	----                                 -----
@@ -407,7 +407,7 @@ bring-up DAOS servers and clients.
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
 
-	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1
+	$ daos cont create Pool1 Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
 
 	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont Cont1 --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool Pool1

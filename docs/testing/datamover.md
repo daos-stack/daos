@@ -6,7 +6,7 @@ Create Second container:
 
 ```sh
 # Create Second container
-$ daos container create --pool $DAOS_POOL --type POSIX --label cont2
+$ daos container create $DAOS_POOL cont2 --type POSIX
 Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
 ```
 
