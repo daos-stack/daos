@@ -1780,6 +1780,65 @@ dfs_test_async_io(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+static void
+dfs_test_readdir(void **state)
+{
+	dfs_obj_t		*dir;
+	dfs_obj_t		*obj;
+	int			nr = 100;
+	char                    name[24];
+	daos_anchor_t		anchor = {0};
+	uint32_t		num_ents = 10;
+	struct dirent		ents[10];
+	struct stat		stbufs[10];
+	int			num_files = 0;
+	int			num_dirs = 0;
+	int			i;
+	int			rc;
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/** create 100 files and dirs */
+	for (i = 0; i < nr; i++) {
+		sprintf(name, "RD_file_%d", i);
+		rc = dfs_open(dfs_mt, dir, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &obj);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+
+		sprintf(name, "RD_dir_%d", i);
+		rc = dfs_mkdir(dfs_mt, dir, name, S_IFDIR, OC_S1);
+		assert_int_equal(rc, 0);
+	}
+
+	/** readdir and stat */
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+
+		for (i = 0; i < num_ents; i++) {
+			if (strncmp(ents[i].d_name, "RD_file", 7) == 0) {
+				assert_true(S_ISREG(stbufs[i].st_mode));
+				num_files++;
+			} else if (strncmp(ents[i].d_name, "RD_dir", 6) == 0) {
+				assert_true(S_ISDIR(stbufs[i].st_mode));
+				num_dirs++;
+			} else {
+				print_error("Found invalid entry: %s\n", ents[i].d_name);
+			}
+		}
+	}
+
+	assert_true(num_files == 100);
+	assert_true(num_dirs == 100);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1817,6 +1876,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_async_io_th, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST18: async IO",
 	  dfs_test_async_io, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST19: DFS readdir",
+	  dfs_test_readdir, async_disable, test_case_teardown},
 };
 
 static int
