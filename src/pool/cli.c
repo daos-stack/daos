@@ -45,6 +45,8 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 {
 	struct pool_proto *pproto = (struct pool_proto *)cb_info->pq_arg;
 
+	D_ERROR("POOL INFO: cb_info->pq_rc; %d, completed: %d\n", cb_info->pq_rc,
+		pproto->completed ? 1 : 0);
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
 		uint32_t	ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
 		int		rc;

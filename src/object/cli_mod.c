@@ -32,6 +32,8 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 {
 	struct obj_proto *oproto = (struct obj_proto *)cb_info->pq_arg;
 
+	D_ERROR("OBJECT INFO: cb_info->pq_rc; %d, completed: %d\n", cb_info->pq_rc,
+		oproto->completed ? 1 : 0);
 	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
 		uint32_t	ver_array[2] = {DAOS_OBJ_VERSION - 1, DAOS_OBJ_VERSION};
 		int		rc;
