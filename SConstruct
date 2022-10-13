@@ -43,7 +43,7 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "4"
+API_VERSION_MINOR = "5"
 API_VERSION_FIX = "0"
 API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
@@ -352,6 +352,10 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
+    config = Configure(env)
+    if not config.CheckHeader('stdatomic.h'):
+        Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
+    config.Finish()
     build_prefix = prereqs.get_src_build_dir()
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults()

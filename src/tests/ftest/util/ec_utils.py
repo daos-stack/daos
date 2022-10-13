@@ -110,12 +110,12 @@ class ErasureCodeIor(ServerFillUp):
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
-        rf = "rf:{}".format(ec_object['parity'])
+        rd_fac = "rd_fac:{}".format(ec_object['parity'])
         if self.ec_container.properties.value is None:
-            self.ec_container.properties.update(rf)
+            self.ec_container.properties.update(rd_fac)
         else:
             self.ec_container.properties.update("{},{}"
-                                                .format(self.ec_container.properties.value, rf))
+                                                .format(self.ec_container.properties.value, rd_fac))
         # create container
         self.ec_container.create()
         self.nvme_local_cont = self.ec_container
@@ -276,7 +276,7 @@ class ErasureCodeSingle(TestWithServers):
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.container[index].properties.update("rf:{}".format(ec_object['parity']))
+        self.container[index].properties.update("rd_fac:{}".format(ec_object['parity']))
 
         # create container
         self.container[index].create()

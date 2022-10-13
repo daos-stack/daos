@@ -214,16 +214,16 @@
 #control_log_file: /tmp/daos_server.log
 #
 #
-## Enable daos_admin (privileged helper) logging.
+## Enable daos_server_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#helper_log_file: /tmp/daos_admin.log
+#helper_log_file: /tmp/daos_server_helper.log
 #
 #
-## Enable daos_firmware (privileged helper) logging.
+## Enable daos_firmware_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /tmp/daos_firmware.log
+#firmware_helper_log_file: /tmp/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.
@@ -305,11 +305,9 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
-#  # Optionally specify the fabric network interface port that will be used
-#  # by this engine but please only if you have a specific need, this will
-#  # normally be chosen automatically.
+#  # Specify the fabric network interface and interface port that will
+#  # be used by this engine. The fabric_iface_port must be different
+#  # for each engine on a DAOS server.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000

@@ -14,28 +14,21 @@
 %endif
 
 Name:          daos
-Version:       2.3.100
-Release:       21%{?relval}%{?dist}
+Version:       2.3.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
-%if (0%{?rhel} >= 7)
 %if (0%{?rhel} >= 8)
 BuildRequires: python3-scons >= 2.4
-%else
-BuildRequires: python36-scons >= 2.4
-%endif
 %else
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
-%if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
-BuildRequires: libpsm2-devel
-%endif
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
 BuildRequires: openmpi-devel
@@ -46,14 +39,10 @@ BuildRequires: hwloc-devel
 %if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
 %endif
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: boost-python3-devel
-%else
-BuildRequires: boost-python36-devel
-%endif
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
@@ -74,7 +63,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.1
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
@@ -89,25 +78,19 @@ BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 BuildRequires: go >= 1.16
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
-%if (0%{?rhel} >= 8)
 BuildRequires: python3-distro
-%else
-BuildRequires: python36-distro
-%endif
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libpsm2-compat
-BuildRequires: libpsm_infinipath1
 # prefer over libcurl4-mini
 BuildRequires: libcurl4
 BuildRequires: distribution-release
@@ -124,9 +107,6 @@ BuildRequires: systemd-rpm-macros
 # have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
 # have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
 BuildRequires: libcurl4
-# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
-# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
-BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
@@ -234,22 +214,15 @@ This is the package is a metapackage to install all of the internal test package
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-Requires: python36-distro
-Requires: python36-tabulate
-Requires: python36-defusedxml
-%else
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
-%endif
 Requires: fio
 Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
 %if (0%{?suse_version} >= 1315)
-Requires: libpsm_infinipath1
 Requires: lua-lmod
 %else
 Requires: Lmod
@@ -320,7 +293,7 @@ This is the package that bridges the difference between the MOFED openmpi
 %build
 
 %define conf_dir %{_sysconfdir}/daos
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} == 8)
 %define scons_exe scons-3
 %else
 %define scons_exe scons
@@ -361,13 +334,8 @@ echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_sysctldir}
 install -m 644 utils/rpms/%{sysctl_script_name} %{buildroot}/%{_sysctldir}
 mkdir -p %{buildroot}/%{_unitdir}
-%if (0%{?rhel} == 7)
-install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
-install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
-%endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 
@@ -417,10 +385,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-# set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_admin
-# set daos_server to be setgid daos_server in order to invoke daos_admin
-# and/or daos_firmware
+# set daos_server_helper to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_server_helper
+# set daos_server to be setgid daos_server in order to invoke daos_server_helper
+# and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
@@ -446,7 +414,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_storage_estimator.py
 %{python3_sitearch}/storage_estimator/*.py
 %dir %{python3_sitearch}/storage_estimator
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/storage_estimator/__pycache__
 %{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
@@ -477,7 +445,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
 %{python3_sitearch}/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
 %dir %{python3_sitearch}/pydaos/__pycache__
 %{python3_sitearch}/pydaos/__pycache__/*.pyc
 %dir %{python3_sitearch}/pydaos/raw/__pycache__
@@ -494,7 +462,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{daoshome}/TESTING
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/io_conf
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
@@ -546,8 +513,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %files firmware
-# set daos_firmware to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_firmware
+# set daos_firmware_helper to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
 
 %files serialize
 %{_libdir}/libdaos_serialize.so
@@ -562,6 +529,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Oct 6 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.101-2
+- Rename daos_admin -> daos_server_helper
+
+
+* Tue Sep 20 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.101-1
+- Bump version to 2.3.101
+
+* Thu Sep 8 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-22
+- Move io_conf files from bin to TESTING
+
 * Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-21
 - Update PMDK to 1.12.1~rc1 to fix DAOS-11151
 
@@ -1021,7 +998,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - add daos and dmg man pages to the daos-client files list
 
 * Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
-- Add systemd scriptlets for managing daos_server/daos_admin services
+- Add systemd scriptlets for managing daos_server/daos_agent services
 
 * Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
 - Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0

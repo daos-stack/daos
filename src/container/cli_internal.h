@@ -57,7 +57,6 @@ void dc_cont_hdl_link(struct dc_cont *dc);
 void dc_cont_hdl_unlink(struct dc_cont *dc);
 
 struct dc_cont *dc_cont_alloc(const uuid_t uuid);
-void dc_cont_free(struct dc_cont *);
 void dc_cont_put(struct dc_cont *dc);
 
 #endif /* __CONTAINER_CLIENT_INTERNAL_H__ */
