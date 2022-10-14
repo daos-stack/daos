@@ -1148,7 +1148,7 @@ events_handler(void *arg)
 	D_DEBUG(DB_MD, DF_UUID": starting\n", DP_UUID(svc->ps_uuid));
 
 	for (;;) {
-		struct pool_svc_event  *event;
+		struct pool_svc_event  *event = NULL;
 		bool			stop;
 
 		ABT_mutex_lock(events->pse_mutex);
