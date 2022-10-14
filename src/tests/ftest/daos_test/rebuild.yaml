@@ -10,9 +10,9 @@ timeouts:
 pool:
   nvme_size: 0G
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1

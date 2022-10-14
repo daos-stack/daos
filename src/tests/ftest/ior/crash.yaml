@@ -13,7 +13,6 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      engines_per_host: 1
       storage:
         0:
           class: dcpm

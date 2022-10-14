@@ -3,6 +3,7 @@ hosts:
 timeout: 1800
 server_config:
   name: daos_server
+  engines_per_host: 1
   engines:
     0:
       log_mask: INFO

@@ -3,10 +3,10 @@ hosts:
   test_clients: 1
 timeout: 1000
 server_config:
-  engines_per_host: 2
   name: daos_server
   crt_timeout: 60
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 4
