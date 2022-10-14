@@ -45,7 +45,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
 ior:
   api: "DFS"
   client_processes:

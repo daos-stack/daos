@@ -508,7 +508,7 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		}
 		opts.num_pci_addr = nr_pcil;
 	}
-	opts.name = "daos_admin";
+	opts.name = "daos_server_helper";
 
 	rc = spdk_env_init(&opts);
 	if (rc < 0) {

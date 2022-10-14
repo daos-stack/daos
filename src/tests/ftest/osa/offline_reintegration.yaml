@@ -65,7 +65,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_3G6
-  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:2
+  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 ior:
   clientslots:
     slots: 48

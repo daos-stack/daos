@@ -43,7 +43,7 @@ server_config:
           bdev_list: ["bbbb:bb:bb.b"]
 container:
   control_method: daos
-  properties: "rf:1"
+  properties: "rd_fac:1"
 pool:
   scm_size: 1G
   control_method: dmg

@@ -24,7 +24,7 @@ pool:
   pool_query_timeout: 30
 container:
   type: POSIX
-  properties: rf:1
+  properties: rd_fac:1
   control_method: daos
 ior:
   ior_timeout: 120

@@ -53,7 +53,7 @@ container_wo_rf:
 container_with_rf:
   type: POSIX
   control_method: daos
-  properties: rf:1
+  properties: rd_fac:1
 
 ior: &ior_base
   client_processes:

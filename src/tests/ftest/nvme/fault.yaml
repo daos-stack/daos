@@ -50,7 +50,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  properties: rf:1
+  properties: rd_fac:1
 ior:
   api: DFS
   client_processes:
