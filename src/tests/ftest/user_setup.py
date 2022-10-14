@@ -12,6 +12,7 @@ import sys
 
 from ClusterShell.NodeSet import NodeSet
 
+# pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 from util.run_utils import run_remote, get_local_host
 
@@ -47,7 +48,9 @@ def create_group(nodes, group, sudo=False):
     Returns:
         bool: whether the command was successful on all nodes
     '''
-    command = _sudo(sudo, 'groupadd {} -f'.format(group))
+    check_cmd = f'getent group {group} >/dev/null'
+    create_cmd = _sudo(sudo, f'groupadd -r {group}')
+    command = f'{check_cmd} || {create_cmd}'
     return run_remote(LOGGER, nodes, command).passed
 
 
@@ -66,17 +69,17 @@ def create_users(nodes, users, group=None, parent_dir=None, sudo=False):
     '''
     for user in users:
         # Delete if existing
-        check_cmd = 'id -u {} &> /dev/null'.format(user)
-        delete_cmd = _sudo(sudo, 'userdel -f -r {}'.format(user))
-        command = 'if $({}); then {}; fi'.format(check_cmd, delete_cmd)
+        check_cmd = f'id -u {user} &> /dev/null'
+        delete_cmd = _sudo(sudo, f'userdel -f -r {user}')
+        command = f'if $({check_cmd}); then {delete_cmd}; fi'
         if not run_remote(LOGGER, nodes, command).passed:
             return False
 
         # Create new user
         command = ' '.join(filter(None, [
             _sudo(sudo, 'useradd -m'),
-            '-g {}'.format(group) if group else None,
-            '-d {}'.format(os.path.join(parent_dir, user)) if parent_dir else None,
+            f'-g {group}' if group else None,
+            f'-d {os.path.join(parent_dir, user)}' if parent_dir else None,
             user
         ]))
         if not run_remote(LOGGER, nodes, command).passed:
@@ -88,7 +91,7 @@ def main():
     '''Set up test env users.
 
     Returns:
-        int: 0 on success. positive int on failure
+        int: 0 on success. 1 on failure
     '''
     logging.basicConfig(
         format="%(asctime)s %(levelname)-5s %(message)s",
@@ -97,14 +100,15 @@ def main():
     parser = argparse.ArgumentParser(prog="user_setup.py")
 
     parser.add_argument(
+        'users',
+        type=str,
+        nargs='+',
+        help="User accounts to create")
+    parser.add_argument(
         '-n', '--nodes',
         type=str,
-        help="Comma-separated list of nodes to create users on")
-    parser.add_argument(
-        '-u', '--users',
-        type=str,
-        required=True,
-        help="Comma-separated list of user accounts to create")
+        default=get_local_host(),
+        help="Comma-separated list of nodes to create users on. Defaults to localhost")
     parser.add_argument(
         "-g", "--group",
         type=str,
@@ -121,13 +125,12 @@ def main():
     args = parser.parse_args()
     logging.info("Arguments: %s", args)
 
-    nodes = NodeSet(args.nodes or get_local_host())
-    users = args.users.split(',') if args.users else None
+    nodes = NodeSet(args.nodes)
 
     if args.group and not create_group(nodes, args.group, args.sudo):
         return 1
 
-    if users and not create_users(nodes, users, args.group, args.dir, args.sudo):
+    if args.users and not create_users(nodes, args.users, args.group, args.dir, args.sudo):
         return 1
 
     return 0

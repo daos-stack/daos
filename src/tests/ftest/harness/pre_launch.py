@@ -18,7 +18,7 @@ class HarnessPreLaunchTest(TestWithoutServers):
     """
 
     def test_harness_pre_launch_users(self):
-        """Verify all expected users are setup correctly.
+        """Verify all expected users are setup correctly with user_setup.py.
 
         :avocado: tags=all
         :avocado: tags=vm
