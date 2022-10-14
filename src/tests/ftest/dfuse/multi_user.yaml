@@ -5,6 +5,7 @@ pool:
   size: 1GiB
 container:
   type: POSIX
+  control_method: daos
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   multi_user: true
