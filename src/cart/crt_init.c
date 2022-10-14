@@ -118,7 +118,7 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
-	setenv("FI_LOG_LEVEL", "warn", 1);
+	setenv("FI_LOG_LEVEL", "trace", 1);
 	setenv("D_LOG_STDERR_IN_LOG", "1", 1);
 	dump_envariables();
 
