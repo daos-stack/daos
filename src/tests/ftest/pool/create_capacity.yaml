@@ -5,20 +5,23 @@ timeouts:
   test_create_pool_quantity: 690
 server_config:
   name: daos_server
-  servers:
+  engines_per_host: 1
+  engines:
     0:
       targets: 4
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: DEBUG
       env_vars:
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-  name: daos_server
   control_method: dmg
   scm_size: 60%
   nvme_size: 60%

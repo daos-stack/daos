@@ -3,3 +3,11 @@ hosts:
 timeout: 70
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16

@@ -3,8 +3,8 @@ hosts:
   test_clients: 1
 timeout: 1800
 server_config:
-  engines_per_host: 2
   name: daos_server
+  engines_per_host: 2
   engines:
     0:
       pinned_numa_node: 0
@@ -14,19 +14,19 @@ server_config:
       log_file: daos_server0.log
       log_mask: "ERR"
       storage:
-          0:
-            class: dcpm
-            scm_list: ["/dev/pmem0"]
-            scm_mount: /mnt/daos0
-          1:
-            class: nvme
-            bdev_list: ["aaaa:aa:aa.a"]
-          2:
-            class: nvme
-            bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
-          3:
-            class: nvme
-            bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+        2:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        3:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -35,16 +35,16 @@ server_config:
       log_file: daos_server1.log
       log_mask: "ERR"
       storage:
-          0:
-            class: dcpm
-            scm_list: ["/dev/pmem0"]
-            scm_mount: /mnt/daos0
-          1:
-            class: nvme
-            bdev_list: ["bbbb:bb:bb.b"]
-          2:
-            class: nvme
-            bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
-          3:
-            class: nvme
-            bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+        2:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+        3:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]

@@ -16,8 +16,6 @@ server_config:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a"]
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 20%
   nvme_size: 50%
   svcn: 1

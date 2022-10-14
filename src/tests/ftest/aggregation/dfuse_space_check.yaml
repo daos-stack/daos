@@ -19,8 +19,6 @@ server_config:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a"]
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 200MB
   nvme_size: 1GiB # Minimum for 1 target
   svcn: 1
