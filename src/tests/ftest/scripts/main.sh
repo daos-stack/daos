@@ -191,12 +191,13 @@ fi
 export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
 
 # Create two test users in the same group
-if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_group_x -u daos_test_user_x1,daos_test_user_x2 -s; then
+if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_group_x -s \
+        daos_test_user_x1 daos_test_user_x2; then
     exit "${PIPESTATUS[0]}"
 fi
 
 # Create a third test user in a different group
-if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_group_y -u daos_test_user_y1 -s; then
+if ! ./user_setup.py -n "${TEST_NODES}" -g daos_test_group_y -s daos_test_user_y1; then
     exit "${PIPESTATUS[0]}"
 fi
 
