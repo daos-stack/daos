@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -42,14 +41,14 @@ class POSIXStatTest(IorTestBase):
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
 
-        i = 1
+        idx = 1
         for block_size in block_sizes:
             self.log.info("Block Size = %s", block_size)
             self.ior_cmd.block_size.update(block_size)
 
             # 1. Verify creation time.
-            test_file_suffix = "_{}".format(i)
-            i += 1
+            test_file_suffix = "_{}".format(idx)
+            idx += 1
 
             # Run ior command.
             try:

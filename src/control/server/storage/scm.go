@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
@@ -89,12 +90,13 @@ type (
 
 	// ScmMountPoint represents location PMem filesystem is mounted.
 	ScmMountPoint struct {
-		Class      Class    `json:"class"`
-		DeviceList []string `json:"device_list"`
-		Info       string   `json:"info"`
-		Path       string   `json:"path"`
-		TotalBytes uint64   `json:"total_bytes"`
-		AvailBytes uint64   `json:"avail_bytes"`
+		Class      Class         `json:"class"`
+		DeviceList []string      `json:"device_list"`
+		Info       string        `json:"info"`
+		Path       string        `json:"path"`
+		Rank       ranklist.Rank `json:"rank"`
+		TotalBytes uint64        `json:"total_bytes"`
+		AvailBytes uint64        `json:"avail_bytes"`
 	}
 
 	// ScmMountPoints is a type alias for []ScmMountPoint that implements fmt.Stringer.
@@ -298,10 +300,11 @@ type (
 		Device string
 	}
 
-	// RamdiskParams defines the sub-parameters of a Format operation that
+	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size uint
+		Size     uint
+		NUMANode uint
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
@@ -326,10 +329,10 @@ type (
 	// ScmMountRequest defines the parameters for a Mount operation.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
-		Class  Class
-		Device string
-		Target string
-		Size   uint
+		Class   Class
+		Device  string
+		Target  string
+		Ramdisk *RamdiskParams
 	}
 
 	// ScmMountResponse contains the results of a successful Mount operation.
@@ -400,7 +403,7 @@ type ScmAdminForwarder struct {
 
 // NewScmAdminForwarder creates a new ScmAdminForwarder.
 func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &ScmAdminForwarder{
 		Forwarder: *pf,

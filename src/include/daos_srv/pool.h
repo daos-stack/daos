@@ -65,6 +65,12 @@ struct ds_pool {
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1,
 				sp_need_discard:1;
+
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
+
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
@@ -173,10 +179,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t **svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    const d_rank_list_t *target_addrs, int ndomains,
+			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 

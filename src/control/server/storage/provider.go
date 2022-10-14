@@ -119,7 +119,10 @@ func (p *Provider) MountScm() error {
 
 	switch cfg.Class {
 	case ClassRam:
-		req.Size = cfg.Scm.RamdiskSize
+		req.Ramdisk = &RamdiskParams{
+			Size:     cfg.Scm.RamdiskSize,
+			NUMANode: cfg.Scm.NumaNodeIndex,
+		}
 	case ClassDcpm:
 		if len(cfg.Scm.DeviceList) != 1 {
 			return ErrInvalidDcpmCount
@@ -151,7 +154,8 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 	switch class {
 	case ClassRam:
 		req.Ramdisk = &RamdiskParams{
-			Size: scmCfg.RamdiskSize,
+			Size:     scmCfg.RamdiskSize,
+			NUMANode: scmCfg.NumaNodeIndex,
 		}
 	case ClassDcpm:
 		if len(scmCfg.DeviceList) != 1 {
@@ -513,12 +517,20 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
+func (p *Provider) GetBdevCache() BdevScanResponse {
+	p.RLock()
+	defer p.RUnlock()
+
+	return p.bdevCache
+}
+
 // SetBdevCache stores given scan response in provider bdev cache.
 func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
 	p.Lock()
 	defer p.Unlock()
 
-	// Filter out any controllers not configured in provider's engine storage config.
+	// Enumerate scan results and filter out any controllers not specified in provider's engine
+	// storage config.
 	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp); err != nil {
 		return errors.Wrap(err, "filtering scan response before caching")
 	}

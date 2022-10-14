@@ -1,30 +1,32 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 from getpass import getuser
 import math
 import os
-import socket
 import time
 import random
 import yaml
 
 from avocado import fail_on
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd, get_primary_group
+    stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
+from run_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
-from ClusterShell.NodeSet import NodeSet
+from user_utils import get_chown_command
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -73,7 +75,8 @@ class DaosServerManager(SubprocessManager):
     def __init__(self, group, bin_dir,
                  svr_cert_dir, svr_config_file, dmg_cert_dir, dmg_config_file,
                  svr_config_temp=None, dmg_config_temp=None, manager="Orterun",
-                 namespace="/run/server_manager/*"):
+                 namespace="/run/server_manager/*", access_points_suffix=None):
+        # pylint: disable=too-many-arguments
         """Initialize a DaosServerManager object.
 
         Args:
@@ -93,6 +96,8 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
             namespace (str): yaml namespace (path to parameters)
+            access_points_suffix (str, optional): Suffix to append to each access point name.
+                Defaults to None.
         """
         self.group = group
         server_command = get_server_command(
@@ -102,7 +107,8 @@ class DaosServerManager(SubprocessManager):
 
         # Dmg command to access this group of servers which will be configured
         # to access the daos_servers when they are started
-        self.dmg = get_dmg_command(group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp)
+        self.dmg = get_dmg_command(
+            group, dmg_cert_dir, bin_dir, dmg_config_file, dmg_config_temp, access_points_suffix)
 
         # Set the correct certificate file ownership
         if manager == "Systemctl":
@@ -161,8 +167,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), local_host.split())
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -465,7 +470,8 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "sudo chown -R {}:{} {}".format(user, get_primary_group(user), " ".join(scm_mount)))
+                "sudo -n {}".format(get_chown_command(user, options="-R", file=" ".join(scm_mount)))
+            )
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
@@ -874,8 +880,8 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Resetting engine_params")
         self.manager.job.yaml.engine_params = []
         engines = generated_yaml["engines"]
-        for i, engine in enumerate(engines):
-            self.log.info("engine %d", i)
+        for idx, engine in enumerate(engines):
+            self.log.info("engine %d", idx)
             for storage_tier in engine["storage"]:
                 if storage_tier["class"] != "dcpm":
                     continue
@@ -884,15 +890,14 @@ class DaosServerManager(SubprocessManager):
                 self.log.info("class = %s", storage_tier["class"])
                 self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(i)
+                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
                 per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
                 per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
                 per_engine_yaml_parameters.scm_size.update(None)
                 per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
                 per_engine_yaml_parameters.reset_yaml_data_updated()
 
-                self.manager.job.yaml.engine_params.append(
-                    per_engine_yaml_parameters)
+                self.manager.job.yaml.engine_params.append(per_engine_yaml_parameters)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

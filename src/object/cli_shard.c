@@ -1279,6 +1279,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (auxi->obj_auxi->ec_degrade_fetch) {
 		struct obj_tgt_oiod *toiod;
 
+		D_ASSERT(args->reasb_req != NULL);
+		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);
@@ -2036,6 +2038,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 			  bool changed)
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
+	d_iov_t			*dkey = &okqo->okqo_dkey;
 	daos_recx_t		*result_recx = cb_args->recx;
 	daos_recx_t		 tmp_recx = {0};
 	uint64_t		 tmp_end;
@@ -2051,7 +2054,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj, cb_args->dkey_hash);
+	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj,
+					 obj_dkey2hash(cb_args->obj->cob_md.omd_id, dkey));
 	from_data_tgt = is_ec_data_shard(shard, dkey_hash, oca);
 	tgt_off = obj_ec_shard_off(dkey_hash, oca, shard);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
@@ -2232,12 +2236,11 @@ out:
 }
 
 int
-dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
-		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
-		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       struct dtx_id *dti, unsigned int *map_ver,
-		       unsigned int req_map_ver, daos_handle_t th, tse_task_t *task)
+dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+		       uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_1_in	*okqi;
@@ -2245,10 +2248,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
 	crt_endpoint_t			 tgt_ep;
-	uint64_t			 dkey_hash;
 	int				 rc;
-
-	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
 
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL)

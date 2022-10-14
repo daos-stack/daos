@@ -52,17 +52,21 @@ class ListVerboseTest(IorTestBase):
 
         targets_total = self.server_managers[0].get_config_value("targets") * rank_count
 
+        p_query = self.get_dmg_command().pool_query(pool.identifier)
+        pool_layout_ver = p_query["response"]["pool_layout_ver"]
+        upgrade_layout_ver = p_query["response"]["upgrade_layout_ver"]
+
         return {
             "uuid": pool.uuid.lower(),
             "label": pool.label.value,
             "svc_reps": pool.svc_ranks,
             "targets_total": targets_total,
             "targets_disabled": targets_disabled,
-            "pool_layout_ver": 2,
+            "upgrade_layout_ver": upgrade_layout_ver,
+            "pool_layout_ver": pool_layout_ver,
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
-            "upgrade_layout_ver": 2,
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -173,7 +177,7 @@ class ListVerboseTest(IorTestBase):
             # Verify scm_size using the threshold rather than the exact match.
             rank_count = len(pool.target_list.value)
             if scm_size[index] is None:
-                created = pool.scm_size.value * rank_count
+                created = pool.scm_per_rank * rank_count
             else:
                 created = scm_size[index]
             self.verify_scm_size(

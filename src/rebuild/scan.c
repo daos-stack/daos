@@ -366,11 +366,14 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND) {
+		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND)
 			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
 				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
-			rc = 0;
-		}
+		else
+			/* Since it is harmless, let's skip duplicate obj for other cases. */
+			D_WARN(DF_UUID" found duplicate "DF_UOID" %d\n",
+			       DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
+		rc = 0;
 	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
@@ -965,10 +968,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	 */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
-		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
-			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
-			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+		    ((rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) ||
+		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
+		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
+		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
+			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
+			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term);
 			rpt->rt_abort = 1;
 		}
