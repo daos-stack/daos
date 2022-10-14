@@ -37,7 +37,7 @@ server_config:
       scm_mount: /mnt/daos1
 container:
   control_method: daos
-  properties: "rf:1"
+  properties: "rd_fac:1"
 pool:
   mode: 511
   name: daos_server

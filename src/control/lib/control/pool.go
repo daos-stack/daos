@@ -83,9 +83,9 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 	return usr, grp, nil
 }
 
-func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
+func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
 	out := make([]*mgmtpb.PoolProperty, len(in))
-	allProps := PoolProperties()
+	allProps := daos.PoolProperties()
 
 	for i, prop := range in {
 		if prop == nil {
@@ -111,15 +111,13 @@ func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty,
 			}
 		}
 
-		switch val := prop.Value.data.(type) {
-		case string:
-			out[i].SetValueString(val)
-		case uint64:
-			out[i].SetValueNumber(val)
-		case nil:
+		if num, err := prop.Value.GetNumber(); err == nil {
+			out[i].SetValueNumber(num)
+		} else if prop.Value.IsSet() {
+			out[i].SetValueString(prop.Value.String())
+		} else {
+			// not set; just skip it
 			continue
-		default:
-			return nil, errors.Errorf("unhandled property value: %+v", prop.Value.data)
 		}
 	}
 
@@ -220,7 +218,7 @@ type (
 		UserGroup  string
 		ACL        *AccessControlList
 		NumSvcReps uint32
-		Properties []*PoolProperty `json:"-"`
+		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
 		TierRatio  []float64
@@ -734,7 +732,7 @@ type PoolSetPropReq struct {
 	poolRequest
 	// ID identifies the pool for which this property should be set.
 	ID         string
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolSetProp sends a pool set-prop request to the pool service leader.
@@ -787,15 +785,15 @@ type PoolGetPropReq struct {
 	Name string
 	// Properties is the list of properties to be retrieved. If empty,
 	// all properties will be retrieved.
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
-func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*PoolProperty, error) {
+func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
 	// Get all by default.
 	if len(req.Properties) == 0 {
-		allProps := PoolProperties()
-		req.Properties = make([]*PoolProperty, 0, len(allProps))
+		allProps := daos.PoolProperties()
+		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
@@ -843,6 +841,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
+			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {

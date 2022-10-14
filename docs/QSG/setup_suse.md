@@ -306,7 +306,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		provider: ofi+verbs;ofi_rxm
 		control_log_mask: DEBUG
 		control_log_file: /tmp/daos_server.log
-		helper_log_file: /tmp/daos_admin.log
+		helper_log_file: /tmp/daos_server_helper.log
 		engines:
 		-
 			pinned_numa_node: 0
