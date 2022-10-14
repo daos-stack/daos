@@ -57,6 +57,15 @@ single-value (uint64_t): Default chunk size for files in this container
 A-key: "DFS_OBJ_CLASS"
 single-value (uint16_t): Default object class for files in this container
 
+A-key: "DFS_DIR_OBJ_CLASS"
+single-value (uint16_t): Default object class for directories in this container
+
+A-key: "DFS_MODE"
+single-value (uint16_t): Consistency mode of this container (Relaxed vs Balanced)
+
+A-key: "DFS_HINTS"
+single-value (string): Container hints for object class selection for files and directories
+
 D-key: "/"
 // rest of akey entries for root are same as in directory entry described below.
 ~~~~~~
@@ -201,3 +210,32 @@ actively maintained for just file objects (changing a file contents updates the 
 would be returned on stat). At this time, mtime for directory objects and ctime for all objects are
 not actively maintained. atime (access) is not stored in DFS and stat returns the max value between
 mtime and ctime for atime.
+
+## Container Hints
+
+A user can set container hints when creating a POSIX type container. Those hints are immutable and
+are used internally to select a more suitable object class for files and directories than the
+default selection that the internal object API would do. The hints are required to be passed in the
+following format:
+
+~~~~~~
+type:value,type:value
+type can be file or dir (directory is also accepted)
+value can be:
+ - single (single sharded objects for small files / directories) or
+ - max (maximum sharded objects for large files / directories)
+~~~~~~
+
+If a hint is set to single, depending on the container redundancy factor, the oclass would be (same
+for files and dirs in this case):
+ - S1 if rf == 0
+ - RP_2G1 if rf == 1
+ - RP_3G1 if rf == 2
+
+Otherwise if the hint is set to max, for directories, it would be the same as single except the
+group would be X for max sharding (SX, RP_2GX, etc.). For files on the other hand, we use EC for
+redundancy instead of replication in this case (n depends on the number of fault domains in the
+pool):
+ - SX if rf == 0
+ - EC_nP1GX if rf == 1
+ - EC_nP2GX if rf == 2

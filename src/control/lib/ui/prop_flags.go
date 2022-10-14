@@ -42,11 +42,21 @@ func propError(fs string, args ...interface{}) *flags.Error {
 // CompletionMap is a map of key to a list of possible completions.
 type CompletionMap map[string][]string
 
+type PropertiesFlag struct {
+	completions      CompletionMap
+	deprecatedKeyMap map[string]string
+}
+
+// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
+func (f *PropertiesFlag) DeprecatedKeyMap(deprKeyMap map[string]string) {
+	f.deprecatedKeyMap = deprKeyMap
+}
+
 // SetPropertiesFlag is used to hold a list of properties to set.
 type SetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  map[string]string
 	settableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -70,7 +80,15 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 		return true
 	}
 
-	_, isSettable := f.settableKeys[key]
+	if _, isSettable := f.settableKeys[key]; isSettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isSettable := f.deprecatedKeyMap[key]
 	return isSettable
 }
 
@@ -95,6 +113,9 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if len(key) > MaxPropKeyLen {
 			return propError("key too long (%d > %d)", len(key), MaxPropKeyLen)
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 		if len(value) == 0 {
 			return propError("value must not be empty")
@@ -151,9 +172,9 @@ func (f *SetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 
 // GetPropertiesFlag is used to hold a list of property keys to get.
 type GetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // GettableKeys accepts a list of property keys that are gettable.
@@ -177,7 +198,15 @@ func (f *GetPropertiesFlag) IsGettable(key string) bool {
 		return true
 	}
 
-	_, isGettable := f.gettableKeys[key]
+	if _, isGettable := f.gettableKeys[key]; isGettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isGettable := f.deprecatedKeyMap[key]
 	return isGettable
 }
 
@@ -199,6 +228,9 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if strings.Contains(key, propKvSep) {
 			return propError("key cannot contain '" + propKvSep + "'")
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 
 		f.ParsedProps.Add(key)

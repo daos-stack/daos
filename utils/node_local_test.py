@@ -3778,7 +3778,7 @@ class AllocFailTestRun():
         # The subprocess handle
         self._sp = None
         # The valgrind handle
-        self.vh = None
+        self.valgrindh = None
         # The return from subprocess.poll
         self.ret = None
 
@@ -3793,61 +3793,62 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        if loc is None:
-            prefix = 'dnt_fi_{}_reference_'.format(aft.description)
+        if loc:
+            prefix = f'dnt_{loc:04d}_'
         else:
-            prefix = 'dnt_fi_{}_{:04d}_'.format(aft.description, loc)
+            prefix = 'dnt_reference_'
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
-                                                    dir=self.aft.conf.tmp_dir,
+                                                    dir=self.aft.log_dir,
                                                     delete=False).name
         self.env['D_LOG_FILE'] = self.log_file
 
     def __str__(self):
-        res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
-        res += 'Fault injection location {}\n'.format(self.loc)
-        if self.vh:
+        cmd_text = ' '.join(self.cmd)
+        res = f"Fault injection test of '{cmd_text}'\n"
+        res += f'Fault injection location {self.loc}\n'
+        if self.valgrindh:
             res += 'Valgrind enabled for this test\n'
-        if self.returncode is None:
-            res += 'Process not completed'
+        if self.returncode:
+            res += f'Returncode was {self.returncode}'
         else:
-            res += 'Returncode was {}'.format(self.returncode)
+            res += 'Process not completed'
 
         if self.stdout:
-            res += '\nSTDOUT:{}'.format(self.stdout.decode('utf-8').strip())
+            res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
 
         if self.stderr:
-            res += '\nSTDERR:{}'.format(self.stderr.decode('utf-8').strip())
+            res += f'\nSTDERR:{self.stderr.decode("utf-8").strip()}'
         return res
 
     def start(self):
         """Start the command"""
-        fc = {}
+        faults = {}
 
-        fc['fault_config'] = [{'id': 100,
-                               'probability_x': 1,
-                               'probability_y': 1}]
+        faults['fault_config'] = [{'id': 100,
+                                   'probability_x': 1,
+                                   'probability_y': 1}]
 
         if self.loc:
-            fc['fault_config'].append({'id': 0,
-                                       'probability_x': 1,
-                                       'probability_y': 1,
-                                       'interval': self.loc,
-                                       'max_faults': 1})
+            faults['fault_config'].append({'id': 0,
+                                           'probability_x': 1,
+                                           'probability_y': 1,
+                                           'interval': self.loc,
+                                           'max_faults': 1})
 
             if self.aft.skip_daos_init:
-                fc['fault_config'].append({'id': 101, 'probability_x': 1})
+                faults['fault_config'].append({'id': 101, 'probability_x': 1})
 
         # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
-        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        self._fi_file.write(yaml.dump(faults, encoding='utf=8'))
         self._fi_file.flush()
 
         self.env['D_FI_CONFIG'] = self._fi_file.name
 
-        if self.vh:
-            exec_cmd = self.vh.get_cmd_prefix()
+        if self.valgrindh:
+            exec_cmd = self.valgrindh.get_cmd_prefix()
             exec_cmd.extend(self.cmd)
         else:
             exec_cmd = self.cmd
@@ -3925,8 +3926,8 @@ class AllocFailTestRun():
                 if self.aft.expected_stdout is not None:
                     assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
-        if self.vh:
-            self.vh.convert_xml()
+        if self.valgrindh:
+            self.valgrindh.convert_xml()
         if not self.fault_injected:
             _explain()
             return
@@ -3962,13 +3963,13 @@ class AllocFailTestRun():
                 if 'DER_UNKNOWN' in line:
                     self.aft.wf.add(self.fi_loc,
                                     'HIGH',
-                                    "Incorrect stderr '{}'".format(line),
+                                    f"Incorrect stderr '{line}'",
                                     mtype='Invalid error code used')
                     continue
 
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                "Unexpected stderr '{}'".format(line),
+                                f"Unexpected stderr '{line}'",
                                 mtype='Unrecognised error')
             _explain()
             return
@@ -3977,7 +3978,7 @@ class AllocFailTestRun():
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
-                                "Incorrect stdout '{}'".format(self.stdout),
+                                f"Incorrect stdout '{self.stdout}'",
                                 mtype='Out of memory caused zero exit '
                                 'code with incorrect output')
 
@@ -3992,9 +3993,10 @@ class AllocFailTestRun():
                 print()
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
-                            "Incorrect stderr '{}'".format(stderr),
+                            f"Incorrect stderr '{stderr}'",
                             mtype='Out of memory not reported correctly via stderr')
         _explain()
+
 
 class AllocFailTest():
     # pylint: disable=too-few-public-methods
@@ -4016,6 +4018,15 @@ class AllocFailTest():
         self.wf = conf.wf
         # Instruct the fault injection code to skip daos_init().
         self.skip_daos_init = True
+        log_dir = f'dnt_fi_{self.description}_logs'
+        if conf.tmp_dir:
+            self.log_dir = join(conf.tmp_dir, log_dir)
+        else:
+            self.log_dir = join('/tmp', log_dir)
+        try:
+            os.mkdir(self.log_dir)
+        except FileExistsError:
+            pass
 
     def launch(self):
         """Run all tests for this command"""
@@ -4033,6 +4044,7 @@ class AllocFailTest():
         print('Expected stdout is')
         print(self.expected_stdout)
 
+        # pylint: disable-next=no-member
         num_cores = len(os.sched_getaffinity(0))
 
         if num_cores < 20:
@@ -4040,7 +4052,7 @@ class AllocFailTest():
         else:
             max_child = int(num_cores / 4 * 3)
 
-        print('Maximum number of spawned tests will be {}'.format(max_child))
+        print(f'Maximum number of spawned tests will be {max_child}')
 
         active = []
         fid = 2
@@ -4081,8 +4093,8 @@ class AllocFailTest():
                     finished = True
                 break
 
-        print('Completed, fid {}'.format(fid))
-        print('Max in flight {}'.format(max_count))
+        print(f'Completed, fid {fid}')
+        print(f'Max in flight {max_count}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4114,14 +4126,14 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.vh = ValgrindHelper(self.conf)
-            # Turn off leak checking in this case, as we're just interested in
-            # why it crashed.
-            aftf.vh.full_check = False
+            aftf.valgrindh = ValgrindHelper(self.conf)
+            # Turn off leak checking in this case, as we're just interested in why it crashed.
+            aftf.valgrindh.full_check = False
 
         aftf.start()
 
         return aftf
+
 
 def test_dfuse_start(server, conf, wf):
     """Start dfuse under fault injection
@@ -4153,6 +4165,7 @@ def test_dfuse_start(server, conf, wf):
     os.rmdir(mount_point)
     return rc
 
+
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -4169,23 +4182,21 @@ def test_alloc_fail_copy(server, conf, wf):
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     sub_dir = join(src_dir.name, 'new_dir')
     os.mkdir(sub_dir)
-    for f in range(5):
-        with open(join(sub_dir, 'file.{}'.format(f)), 'w') as ofd:
+    for idx in range(5):
+        with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
             ofd.write('hello')
 
     os.symlink('broken', join(sub_dir, 'broken_s'))
     os.symlink('file.0', join(sub_dir, 'link'))
 
     def get_cmd(cont_id):
-        container = 'container_' + str(cont_id)
-        cmd = [join(conf['PREFIX'], 'bin', 'daos'),
-               'filesystem',
-               'copy',
-               '--src',
-               src_dir.name,
-               '--dst',
-               'daos://{}/{}'.format(pool, container)]
-        return cmd
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'filesystem',
+                'copy',
+                '--src',
+                src_dir.name,
+                '--dst',
+                f'daos://{pool}/container_{cont_id}']
 
     test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.skip_daos_init = False
@@ -4227,6 +4238,47 @@ def test_alloc_fail_cat(server, conf):
     return rc
 
 
+def test_alloc_fail_il_cp(server, conf):
+    """Run the Interception library with fault injection
+
+    Start dfuse for this test, and do not do output checking on the command
+    itself yet.
+    """
+
+    pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='il_cp')
+
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    test_dir = join(dfuse.dir, 'test_dir')
+
+    os.mkdir(test_dir)
+
+    cmd = ['fs', 'set-attr', '--path', test_dir, '--oclass', 'S4', '--chunk-size', '8']
+
+    rc = run_daos_cmd(conf, cmd)
+    print(rc)
+
+    src_file = join(test_dir, 'src_file')
+
+    with open(src_file, 'w') as fd:
+        fd.write('Some raw test data that spans over at least two targets and possibly more.')
+
+    def get_cmd(loc):
+        return ['cp', src_file, join(test_dir, f'test_{loc}')]
+
+    test_cmd = AllocFailTest(conf, 'il-cp', get_cmd)
+    test_cmd.use_il = True
+    test_cmd.check_stderr = False
+    test_cmd.wf = conf.wf
+
+    rc = test_cmd.launch()
+    dfuse.stop()
+    return rc
+
+
 def test_fi_list_attr(server, conf, wf):
     """Run daos cont list-attr with fault injection"""
 
@@ -4252,6 +4304,28 @@ def test_fi_list_attr(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-list-attr', cmd)
     test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+
+def test_fi_get_prop(server, conf, wf):
+    """Run daos cont list-attr with fault injection"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool, ctype='POSIX')
+
+    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'get-prop',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-get-prop', cmd)
+    test_cmd.wf = wf
+    test_cmd.check_stderr = False
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
@@ -4455,6 +4529,8 @@ def run(wf, args):
                 fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
                 fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
+                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
@@ -4467,6 +4543,9 @@ def run(wf, args):
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
+                # Copy (read/write) via IL, requires dfuse.
+                fatal_errors.add_result(test_alloc_fail_il_cp(server, conf))
 
             if args.perf_check:
                 check_readdir_perf(server, conf)
