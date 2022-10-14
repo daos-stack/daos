@@ -286,10 +286,11 @@ struct  _Mgmt__GetAttachInfoResp__RankUri
   uint32_t rank;
   char *uri;
   uint32_t provider_idx;
+  uint32_t num_ctxs;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, 0 }
+    , 0, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp

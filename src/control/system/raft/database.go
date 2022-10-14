@@ -115,9 +115,11 @@ type (
 
 	// RankEntry comprises the information about a rank in GroupMap.
 	RankEntry struct {
-		PrimaryURI    string
-		SecondaryURIs []string
-		Incarnation   uint64
+		PrimaryURI       string
+		NumPrimaryCtxs   uint32
+		SecondaryURIs    []string
+		NumSecondaryCtxs []uint32
+		Incarnation      uint64
 	}
 
 	// RaftComponents holds the components required to start a raft instance.
@@ -559,9 +561,11 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		}
 
 		gm.RankEntries[srv.Rank] = RankEntry{
-			PrimaryURI:    srv.PrimaryFabricURI,
-			SecondaryURIs: srv.SecondaryFabricURIs,
-			Incarnation:   srv.Incarnation,
+			PrimaryURI:       srv.PrimaryFabricURI,
+			NumPrimaryCtxs:   srv.PrimaryFabricContexts,
+			SecondaryURIs:    srv.SecondaryFabricURIs,
+			NumSecondaryCtxs: srv.SecondaryFabricContexts,
+			Incarnation:      srv.Incarnation,
 		}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)

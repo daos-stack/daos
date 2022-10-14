@@ -57,7 +57,7 @@ func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Me
 
 	addr := MockControlAddr(t, idx)
 	m := MockMemberFullSpec(t, Rank(idx), test.MockUUID(int32(idx)), addr.String(), addr, state)
-	m.FabricContexts = idx
+	m.PrimaryFabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}

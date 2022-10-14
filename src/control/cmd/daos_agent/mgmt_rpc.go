@@ -213,7 +213,6 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 
 func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.GetAttachInfoResp, iface, domain string) (*mgmtpb.GetAttachInfoResp, error) {
 	reqProviders := mod.getIfaceProviders(ctx, iface, domain)
-	mod.log.Debugf("requested interface %q (domain: %q) supports providers: %s", iface, domain, strings.Join(reqProviders.ToSlice(), ", "))
 
 	if mod.providerIdx > 0 {
 		// Secondary provider indices begin at 1
@@ -267,6 +266,7 @@ func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain stri
 		providers.Add(fis.Providers()...)
 	}
 
+	mod.log.Debugf("requested interface %q (domain: %q) supports providers: %s", iface, domain, strings.Join(providers.ToSlice(), ", "))
 	return providers
 }
 

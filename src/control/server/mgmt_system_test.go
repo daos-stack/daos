@@ -112,12 +112,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.PrimaryFabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.PrimaryFabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -143,12 +145,14 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
-						Rank: msReplica.Rank.Uint32(),
-						Uri:  msReplica.PrimaryFabricURI,
+						Rank:    msReplica.Rank.Uint32(),
+						Uri:     msReplica.PrimaryFabricURI,
+						NumCtxs: 0,
 					},
 					{
-						Rank: nonReplica.Rank.Uint32(),
-						Uri:  nonReplica.PrimaryFabricURI,
+						Rank:    nonReplica.Rank.Uint32(),
+						Uri:     nonReplica.PrimaryFabricURI,
+						NumCtxs: 1,
 					},
 				},
 				MsRanks: []uint32{0},
@@ -464,7 +468,7 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	uri := fmt.Sprintf("tcp://%s", addr)
 
 	m := system.MockMemberFullSpec(t, ranklist.Rank(r), test.MockUUID(r), uri, addr, state)
-	m.FabricContexts = uint32(r)
+	m.PrimaryFabricContexts = uint32(r)
 	m.FaultDomain = fd
 	m.Incarnation = uint64(r)
 
@@ -2077,7 +2081,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				tc.req.SrvFaultDomain = newMember.FaultDomain.String()
 			}
 			if tc.req.Nctxs == 0 {
-				tc.req.Nctxs = newMember.FabricContexts
+				tc.req.Nctxs = newMember.PrimaryFabricContexts
 			}
 			if tc.req.Incarnation == 0 {
 				tc.req.Incarnation = newMember.Incarnation

@@ -79,8 +79,9 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 		}
 
 		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-			Rank: rank.Uint32(),
-			Uri:  entry.PrimaryURI,
+			Rank:    rank.Uint32(),
+			Uri:     entry.PrimaryURI,
+			NumCtxs: entry.NumPrimaryCtxs,
 		})
 
 		for i, uri := range entry.SecondaryURIs {
@@ -88,6 +89,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 				Rank:        rank.Uint32(),
 				Uri:         uri,
 				ProviderIdx: uint32(i + 1),
+				NumCtxs:     entry.NumSecondaryCtxs[i],
 			}
 
 			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
@@ -98,6 +100,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if len(svc.clientNetworkHint) > 1 {
 		resp.SecondaryClientNetHints = svc.clientNetworkHint[1:]
 	}
+
 	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
 	// For resp.RankUris may be large, we make a resp copy with a limited
@@ -290,14 +293,15 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:                ranklist.Rank(req.Rank),
-		UUID:                uuid,
-		ControlAddr:         req.peerAddr,
-		PrimaryFabricURI:    req.GetUri(),
-		SecondaryFabricURIs: req.GetSecondaryUris(),
-		FabricContexts:      req.GetNctxs(),
-		FaultDomain:         fd,
-		Incarnation:         req.GetIncarnation(),
+		Rank:                    ranklist.Rank(req.Rank),
+		UUID:                    uuid,
+		ControlAddr:             req.peerAddr,
+		PrimaryFabricURI:        req.GetUri(),
+		SecondaryFabricURIs:     req.GetSecondaryUris(),
+		FabricContexts:          req.GetNctxs(),
+		SecondaryFabricContexts: req.GetSecondaryNctxs(),
+		FaultDomain:             fd,
+		Incarnation:             req.GetIncarnation(),
 	})
 	if err != nil {
 		return &batchJoinResponse{joinErr: err}
