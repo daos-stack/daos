@@ -2150,19 +2150,17 @@ out:
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
-	dfs_t				*dfs;
-	daos_prop_t			*prop;
-	struct daos_prop_entry		*entry;
-	struct daos_prop_co_roots	*roots;
-	struct dfs_entry		root_dir;
-	int				amode;
-	int				rc;
-	int				i;
-	int				num_props = 4;
-	uint32_t			props[] = {DAOS_PROP_CO_LAYOUT_TYPE,
-						   DAOS_PROP_CO_ROOTS,
-						   DAOS_PROP_CO_OWNER,
-						   DAOS_PROP_CO_OWNER_GROUP};
+	dfs_t                     *dfs;
+	daos_prop_t               *prop;
+	struct daos_prop_entry    *entry;
+	struct daos_prop_co_roots *roots;
+	struct dfs_entry           root_dir;
+	int                        amode;
+	int                        rc;
+	int                        i;
+	int                        num_props = 4;
+	uint32_t props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS, DAOS_PROP_CO_OWNER,
+			    DAOS_PROP_CO_OWNER_GROUP};
 
 	if (_dfs == NULL)
 		return EINVAL;

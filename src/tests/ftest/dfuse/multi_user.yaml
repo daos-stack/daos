@@ -1,0 +1,10 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+pool:
+  size: 1GiB
+container:
+  type: POSIX
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
+  multi_user: true

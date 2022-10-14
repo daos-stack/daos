@@ -3487,7 +3487,7 @@ def run_in_fg(server, conf, args):
     print('export D_IL_REPORT=-1')
     if args.multi_user:
         print(f'dmg pool --insecure update-acl -e A::root@:rw {pool.id()}')
-    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    print(f'daos container create --type POSIX --path {t_dir}/uns-link')
     print(f'daos container destroy --path {t_dir}/uns-link')
     print(f'daos cont list {pool.label}')
 

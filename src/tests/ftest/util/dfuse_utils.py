@@ -32,6 +32,7 @@ class DfuseCommand(ExecutableCommand):
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
+        self.multi_user = FormattedParameter("--multi-user", False)
 
         # Environment variable names to export when running dfuse
         self.update_env_names(["D_LOG_FILE"])
