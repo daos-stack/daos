@@ -156,7 +156,8 @@ test_run()
 				sgl.sg_iovs[0].iov_len = chunk_size;
 				sgl.sg_iovs[0].iov_buf_len = chunk_size;
 
-				rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl[chunk_index]);
+				rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW,
+						     &bulk_hdl[chunk_index]);
 				D_ASSERTF(rc == 0, "crt_bulk_create() failed; rc: %d\n", rc);
 
 				input->bulk_hdl = bulk_hdl[chunk_index];
@@ -189,7 +190,8 @@ test_run()
 		     (tv_end.tv_usec - tv_start.tv_usec);
 
 	if (test.tg_force_rank == -1 ) {
-		DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %dkb each took %ld usec (%d repeats)\n",
+		DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %dkb each took "
+			  "%ld usec (%d repeats)\n",
 			  test.tg_test_mode == TEST_MODE_SYNC ? "Synchronous" : "Asynchronous",
 			  test.tg_do_put == true ? "PUT" : "GET",
 			  num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations,
