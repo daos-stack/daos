@@ -35,7 +35,7 @@ server_config:
           scm_mount: /mnt/daos1
         1:
           class: nvme
-          bdev_list: [""bbbb:bb:bb.b"]
+          bdev_list: ["bbbb:bb:bb.b"]
 pool:
   size: 90%
   svcn: 1
