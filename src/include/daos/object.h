@@ -325,6 +325,12 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 	oid->hi |= hdr;
 }
 
+/* the default value length of each OID in OIT table */
+#define DAOS_OIT_DEFAULT_VAL_LEN	(8)
+#define DAOS_OIT_DKEY_SET(dkey_ptr, bid_ptr)			\
+	(d_iov_set((dkey_ptr), (bid_ptr), sizeof(*(bid_ptr))))
+#define DAOS_OIT_AKEY_SET(akey_ptr, oid_ptr)			\
+	(d_iov_set((akey_ptr), (oid_ptr), sizeof(*(oid_ptr))))
 
 /* check if an object ID is OIT (Object ID Table) */
 static inline bool

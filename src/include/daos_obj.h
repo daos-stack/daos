@@ -1144,7 +1144,10 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
  * \param[in]	oh	OIT open handle.
  * \param[in]	oid	object ID in the OIT.
  * \param[in]	marker	the data/status to be marked for the OID, the max valid length (in bytes)
- *			is DAOS_OIT_MARKER_MAX_LEN. NULL is invalid parameter.
+ *			is DAOS_OIT_MARKER_MAX_LEN.
+ *			NULL to clear previously set marker.
+ *			non-NULL marker but with NULL marker->iov_buf or 0 marker->iov_len is
+ *			invalid argument.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
