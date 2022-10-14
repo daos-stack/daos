@@ -7,6 +7,8 @@
 
 #include "dfs_test.h"
 #include "dfs_internal.h"
+#include <daos_types.h>
+#include <daos/placement.h>
 #include <pthread.h>
 
 /** global DFS mount used for all tests */
@@ -1839,6 +1841,256 @@ dfs_test_readdir(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static int
+compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
+{
+	int		rc;
+	daos_obj_id_t	oid = {};
+
+	/*
+	 * get the expected oclass - this is needed to convert things with GX to fit them in current
+	 * system.
+	 */
+	rc = daos_obj_generate_oid(coh, &oid, 0, ecid, 0, 0);
+	assert_rc_equal(rc, 0);
+	ecid = daos_obj_id2class(oid);
+
+	if (acid == ecid)
+		return 0;
+	else
+		return 1;
+}
+
+static void
+dfs_test_oclass_hints(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			oclass_name[24];
+	daos_oclass_id_t	cid;
+	daos_handle_t		coh;
+	dfs_t			*dfs_l;
+	dfs_obj_t		*obj;
+	daos_obj_id_t		oid;
+	daos_oclass_id_t	ecidx;
+	daos_prop_t             *prop = NULL;
+	dfs_attr_t		dattr = {0};
+	struct pl_map_attr      attr = {0};
+	int			rc;
+
+	/** check invalid hints */
+	rc = dfs_suggest_oclass(dfs_mt, "file:single,dir:large", &cid);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_suggest_oclass(dfs_mt, "file:singlee", &cid);
+	assert_int_equal(rc, EINVAL);
+
+	rc = pl_map_query(arg->pool.pool_uuid, &attr);
+	assert_rc_equal(rc, 0);
+
+	strcpy(dattr.da_hints, "file:max,dir:invalid");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:max;dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:max:dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "invalid");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:single,dir:max,hello:world");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+
+	strcpy(dattr.da_hints, "File:single,Dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 */
+	rc = dfs_open(dfs_l, NULL, "file1", S_IWUSR | S_IRUSR | S_IFREG, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(obj, &oid);
+	assert_int_equal(rc, 0);
+	cid = daos_obj_id2class(oid);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create /dir1 */
+	rc = dfs_open(dfs_l, NULL, "dir1", S_IWUSR | S_IRUSR | S_IFDIR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(obj, &oid);
+	assert_int_equal(rc, 0);
+	cid = daos_obj_id2class(oid);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	memset(dattr.da_hints, 0, DAOS_CONT_HINT_MAX_LEN);
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "h_cont", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	dattr.da_props = prop;
+
+	/** create container with RF = 0 */
+	print_message("DFS object class hints with container RF0:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF0;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont0", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont0", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** create container with RF = 1 */
+	print_message("DFS object class hints with container RF1:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont1", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 18)
+		ecidx = OC_EC_16P1GX;
+	else if (attr.pa_domain_nr >= 10)
+		ecidx = OC_EC_8P1GX;
+	else if (attr.pa_domain_nr >= 6)
+		ecidx = OC_EC_4P1GX;
+	else
+		ecidx = OC_EC_2P1GX;
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, ecidx);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2GX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont1", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** create container with RF = 2 */
+	print_message("DFS object class hints with container RF2:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont2", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 18)
+		ecidx = OC_EC_16P2GX;
+	else if (attr.pa_domain_nr >= 10)
+		ecidx = OC_EC_8P2GX;
+	else if (attr.pa_domain_nr >= 6)
+		ecidx = OC_EC_4P2GX;
+	else
+		ecidx = OC_EC_2P2GX;
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, ecidx);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3GX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont2", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	daos_prop_free(prop);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1878,6 +2130,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_async_io, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST19: DFS readdir",
 	  dfs_test_readdir, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST20: dfs oclass hints",
+	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 };
 
 static int
@@ -1903,7 +2157,7 @@ dfs_setup(void **state)
 
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
-		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+		print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
 
 	handle_share(&co_hdl, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
