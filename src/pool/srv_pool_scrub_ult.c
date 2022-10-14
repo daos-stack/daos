@@ -43,9 +43,10 @@
 static inline bool
 scrubbing_is_enabled()
 {
-	char *disabled = getenv("DAOS_CSUM_SCRUB_DISABLED");
+	bool result = false;
 
-	return disabled == NULL;
+	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
+	return result;
 }
 
 static inline int
@@ -214,7 +215,7 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 	struct pool_target_addr		 addr = {0};
 	int rc;
 
-	D_ERROR("Draining target. rank: %d, target: %d", rank, target);
+	D_ERROR("Draining target. rank: %d, target: %d\n", rank, target);
 
 	rc = ds_pool_get_ranks(pool_uuid, PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_NEW,
 			       &out_ranks);
@@ -356,14 +357,12 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 
 	/** Don't even create the ULT if scrubbing is disabled. */
 	if (!scrubbing_is_enabled()) {
-		C_TRACE("Checksum scrubbing DISABLED. "
-			"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
+		C_TRACE("Checksum scrubbing DISABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 			dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 		return 0;
 	}
 
-	C_TRACE("Checksum scrubbing ENABLED. "
-		"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
+	C_TRACE("Checksum scrubbing ENABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 		dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 
 	/* There will be several levels iteration, such as pool, container, object, and lower,
@@ -373,7 +372,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child,
 						    DSS_DEEP_STACK_SZ);
 	if (child->spc_scrubbing_req == NULL) {
-		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.n",
+		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
