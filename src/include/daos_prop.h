@@ -191,6 +191,11 @@ enum {
 	DAOS_SCRUB_MODE_INVALID = 3,
 };
 
+/* Checksum Scrubbing Defaults */
+#define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+#define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
+#define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
+
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)

@@ -27,7 +27,7 @@ receipt of events over dRPC from the DAOS Engine and forwarding of management
 service actionable events to the MS leader.
 
 The pbin package provides a framework for forwarding of requests to be executed
-by the privileged binary `daos_admin` on behalf of `daos_server`.
+by the privileged binary `daos_server_helper` on behalf of `daos_server`.
 
 The provider package contains interface shims to the external environment,
 initially just to the Linux operating system.
@@ -44,4 +44,4 @@ Please refer to package-specific README's.
 
 ## User Documentation
 
-- [online documentation](https://daos-stack.github.io/)
+- [online documentation](https://docs.daos.io/latest/)

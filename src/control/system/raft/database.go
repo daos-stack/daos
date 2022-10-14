@@ -23,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -66,7 +67,7 @@ type (
 		log logging.Logger
 
 		Version       uint64
-		NextRank      system.Rank
+		NextRank      ranklist.Rank
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
@@ -108,8 +109,8 @@ type (
 	// GroupMap represents a version of the system membership map.
 	GroupMap struct {
 		Version     uint32
-		RankEntries map[system.Rank]RankEntry
-		MSRanks     []system.Rank
+		RankEntries map[ranklist.Rank]RankEntry
+		MSRanks     []ranklist.Rank
 	}
 
 	// RankEntry comprises the information about a rank in GroupMap.
@@ -527,7 +528,7 @@ func (db *Database) IncMapVer() error {
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:     version,
-		RankEntries: make(map[system.Rank]RankEntry),
+		RankEntries: make(map[ranklist.Rank]RankEntry),
 	}
 }
 
@@ -550,7 +551,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
-		if srv.Rank.Equals(system.NilRank) || srv.FabricURI == "" {
+		if srv.Rank.Equals(ranklist.NilRank) || srv.FabricURI == "" {
 			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
@@ -631,14 +632,14 @@ func (db *Database) filterMembers(desiredStates ...system.MemberState) (result [
 }
 
 // MemberRanks returns a slice of all the ranks in the membership.
-func (db *Database) MemberRanks(desiredStates ...system.MemberState) ([]system.Rank, error) {
+func (db *Database) MemberRanks(desiredStates ...system.MemberState) ([]ranklist.Rank, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
 	db.data.RLock()
 	defer db.data.RUnlock()
 
-	ranks := make([]system.Rank, 0, len(db.data.Members.Ranks))
+	ranks := make([]ranklist.Rank, 0, len(db.data.Members.Ranks))
 	for _, m := range db.filterMembers(desiredStates...) {
 		ranks = append(ranks, m.Rank)
 	}
@@ -745,7 +746,7 @@ func (db *Database) AddMember(newMember *system.Member) error {
 	}
 
 	mu := &memberUpdate{Member: newMember}
-	if newMember.Rank.Equals(system.NilRank) {
+	if newMember.Rank.Equals(ranklist.NilRank) {
 		newMember.Rank = db.data.NextRank
 		mu.NextRank = true
 	}
@@ -775,7 +776,7 @@ func (db *Database) UpdateMember(m *system.Member) error {
 
 // FindMemberByRank searches the member database by rank. If no
 // member is found, an error is returned.
-func (db *Database) FindMemberByRank(rank system.Rank) (*system.Member, error) {
+func (db *Database) FindMemberByRank(rank ranklist.Rank) (*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -944,9 +945,25 @@ func (db *Database) UpdatePoolService(ps *system.PoolService) error {
 	db.Lock()
 	defer db.Unlock()
 
-	_, err := db.FindPoolServiceByUUID(ps.PoolUUID)
+	p, err := db.FindPoolServiceByUUID(ps.PoolUUID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to retrieve pool %s", ps.PoolUUID)
+	}
+
+	// This is a workaround before we can handle the following race
+	// properly.
+	//
+	//   mgmtSvc.PoolCreate()   Database.handlePoolRepsUpdate()
+	//     Write ps: Creating
+	//                            Read ps: Creating
+	//     Write ps: Ready
+	//                            Write ps: Creating
+	//
+	// The pool remains in Creating state after PoolCreate completes,
+	// leading to DER_AGAINs during PoolDestroy.
+	if p.State == system.PoolServiceStateReady && ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("ignoring invalid pool service update: %+v -> %+v", p, ps)
+		return nil
 	}
 
 	if err := db.submitPoolUpdate(raftOpUpdatePoolService, ps); err != nil {
@@ -980,7 +997,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
 
-	ps.Replicas = system.RanksFromUint32(ei.SvcReplicas)
+	ps.Replicas = ranklist.RanksFromUint32(ei.SvcReplicas)
 
 	if err := db.UpdatePoolService(ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)

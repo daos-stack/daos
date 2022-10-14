@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
@@ -7,6 +6,7 @@
 
 
 from control_test_base import ControlTestBase
+
 
 class DmgSystemLeaderQueryTest(ControlTestBase):
     # pylint: disable=too-many-ancestors

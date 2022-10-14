@@ -4023,10 +4023,9 @@ io_capa_iv_fetch(void **state)
 		skip();
 
 	test_get_leader(arg, &leader);
-	D_ASSERT(leader > 0);
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
-	oid = dts_oid_set_rank(oid, leader - 1);
+	oid = dts_oid_set_rank(oid, leader == 0 ? leader + 1 : leader - 1);
 
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -4382,11 +4381,11 @@ oclass_auto_setting(void **state)
 			  DAOS_RES_REPL, 2, OC_RP_2G1);
 	assert_rc_equal(rc, 0);
 
-	/** RP hint with Tiny sharding should use RP_2G4 */
+	/** RP hint with Tiny sharding should use RP_2G1 */
 	print_message("oid with DAOS_OCH_RDD_RP | DAOS_OCH_SHD_TINY hint:\t");
 	rc = check_oclass(coh, attr.pa_domain_nr,
 			  DAOS_OCH_RDD_RP | DAOS_OCH_SHD_TINY, feat_byte_array,
-			  DAOS_RES_REPL, 2, OC_RP_2G4);
+			  DAOS_RES_REPL, 2, OC_RP_2G1);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_cont_close(coh, NULL);

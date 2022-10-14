@@ -1,6 +1,7 @@
 """Build util"""
 import os
 
+
 def scons():
     """Execute build"""
     Import('env')
@@ -12,6 +13,7 @@ def scons():
                 ['apricot/setup.py', 'apricot/VERSION'])
     env.Install(os.path.join(util_install_dir, 'apricot/apricot'),
                 Glob('apricot/apricot/*.py'))
+
 
 if __name__ == "SCons.Script":
     scons()

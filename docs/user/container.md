@@ -83,7 +83,7 @@ To create a container that can support one engine failure, use a redundancy
 factor of 1 as follows:
 
 ```bash
-$ daos cont create tank --label mycont1 --type POSIX --properties rf:1
+$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
   Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
   Container Label: mycont1
   Container Type : unknown
@@ -174,7 +174,7 @@ By default, a container will inherit a set of default value for each property.
 Those can be overridden at container creation time via the `--properties` option.
 
 ```bash
-$ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rf:1
+$ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rd_fac:1
   Container UUID : a6286ead-1952-4faa-bf87-00fc0f3785aa
   Container Label: mycont2
   Container Type : unknown
@@ -340,7 +340,7 @@ The redundancy factor can be set at container creation time and cannot be
 modified after creation.
 
 ```bash
-$ daos cont create tank --label mycont1 --type POSIX --properties rf:1
+$ daos cont create tank --label mycont1 --type POSIX --properties rd_fac:1
   Container UUID : b396e2ca-2077-4908-9ff2-1af4b4b2fd4a
   Container Label: mycont1
   Container Type : unknown
@@ -461,7 +461,7 @@ parity fragments (also called sometimes chunks). The cell size can be set at
 container creation time via the property:
 
 ```bash
-$ daos cont create tank --label mycont5 --type POSIX --properties rf:1,cell_size:65536
+$ daos cont create tank --label mycont5 --type POSIX --properties rd_fac:1,cell_size:65536
   Container UUID : 90185799-0e22-4a0b-be9d-1a20900a35ee
   Container Label: mycont5
   Container Type : unknown

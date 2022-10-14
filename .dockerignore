@@ -12,7 +12,7 @@
 !utils/config
 !utils/node_local_test.py
 !utils/nlt_server.yaml
-!utils/setup_daos_admin.sh
+!utils/setup_daos_server_helper.sh
 !utils/sl/setup_local.sh
 !utils/scripts
 !SConstruct

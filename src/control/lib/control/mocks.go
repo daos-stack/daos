@@ -25,8 +25,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // MockMessage implements the proto.Message
@@ -580,12 +580,12 @@ type (
 
 	MockScmConfig struct {
 		MockStorageConfig
-		Rank system.Rank
+		Rank ranklist.Rank
 	}
 
 	MockNvmeConfig struct {
 		MockStorageConfig
-		Rank system.Rank
+		Rank ranklist.Rank
 	}
 
 	MockHostStorageConfig struct {

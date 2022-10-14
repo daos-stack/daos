@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package system
+package ranklist
 
 import (
 	"fmt"

@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -87,7 +88,7 @@ Rebuild busy, 42 objs, 21 recs
 					Version:          100,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					EnabledRanks:     system.MustCreateRankSet("[0,1,2]"),
+					EnabledRanks:     ranklist.MustCreateRankSet("[0,1,2]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -131,7 +132,7 @@ Rebuild busy, 42 objs, 21 recs
 					Version:          100,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					DisabledRanks:    system.MustCreateRankSet("[0,1,3]"),
+					DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   control.PoolRebuildStateBusy,
 						Objects: 42,
@@ -175,7 +176,7 @@ Rebuild busy, 42 objs, 21 recs
 					Version:          100,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					DisabledRanks:    system.MustCreateRankSet("[0,1,3]"),
+					DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
 					Rebuild: &control.PoolRebuildStatus{
 						State:   42,
 						Objects: 42,
@@ -982,7 +983,7 @@ no pools in system
 				Pools: []*control.Pool{
 					{
 						UUID:            test.MockUUID(1),
-						ServiceReplicas: []system.Rank{0, 1, 2},
+						ServiceReplicas: []ranklist.Rank{0, 1, 2},
 						State:           system.PoolServiceStateReady.String(),
 					},
 				},
@@ -998,7 +999,7 @@ Pool     Size State Used Imbalance Disabled
 			resp: &control.ListPoolsResp{
 				Pools: []*control.Pool{
 					{
-						ServiceReplicas: []system.Rank{0, 1, 2},
+						ServiceReplicas: []ranklist.Rank{0, 1, 2},
 						Usage:           exampleUsage,
 					},
 				},
@@ -1010,7 +1011,7 @@ Pool     Size State Used Imbalance Disabled
 				Pools: []*control.Pool{
 					{
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1020,7 +1021,7 @@ Pool     Size State Used Imbalance Disabled
 					{
 						UUID:             test.MockUUID(2),
 						Label:            "one",
-						ServiceReplicas:  []system.Rank{3, 4, 5},
+						ServiceReplicas:  []ranklist.Rank{3, 4, 5},
 						Usage:            exampleUsage[1:],
 						TargetsTotal:     64,
 						TargetsDisabled:  8,
@@ -1036,7 +1037,7 @@ Pool     Size State Used Imbalance Disabled
 				Pools: []*control.Pool{
 					{
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1047,7 +1048,7 @@ Pool     Size State Used Imbalance Disabled
 					{
 						Label:            "two",
 						UUID:             test.MockUUID(2),
-						ServiceReplicas:  []system.Rank{3, 4, 5},
+						ServiceReplicas:  []ranklist.Rank{3, 4, 5},
 						Usage:            exampleUsage,
 						TargetsTotal:     64,
 						TargetsDisabled:  8,
@@ -1071,7 +1072,7 @@ two      6.0 TB Ready 83%  12%       8/64     1->2
 					{
 						Label:            "one",
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1082,7 +1083,7 @@ two      6.0 TB Ready 83%  12%       8/64     1->2
 					{
 						Label:           "two",
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{3, 4, 5},
+						ServiceReplicas: []ranklist.Rank{3, 4, 5},
 						Usage: []*control.PoolTierUsage{
 							exampleUsage[0],
 							{TierName: "NVME"},
@@ -1109,7 +1110,7 @@ two  100 GB Ready 80%  12%       8/64     None
 					{
 						Label:            "one",
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1120,7 +1121,7 @@ two  100 GB Ready 80%  12%       8/64     None
 					{
 						Label:           "two",
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{3, 4, 5},
+						ServiceReplicas: []ranklist.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
 				},
@@ -1140,7 +1141,7 @@ one  6.0 TB Ready 83%  12%       0/16     1->2
 					{
 						Label:            "one",
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1150,13 +1151,13 @@ one  6.0 TB Ready 83%  12%       0/16     1->2
 					},
 					{
 						UUID:            test.MockUUID(2),
-						ServiceReplicas: []system.Rank{3, 4, 5},
+						ServiceReplicas: []ranklist.Rank{3, 4, 5},
 						QueryErrorMsg:   "stats unavailable",
 					},
 					{
 						Label:           "three",
 						UUID:            test.MockUUID(3),
-						ServiceReplicas: []system.Rank{3, 4, 5},
+						ServiceReplicas: []ranklist.Rank{3, 4, 5},
 						QueryStatusMsg:  "DER_UNINIT",
 					},
 				},
@@ -1206,7 +1207,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 					{
 						Label:            "one",
 						UUID:             test.MockUUID(1),
-						ServiceReplicas:  []system.Rank{0, 1, 2},
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  0,
@@ -1217,7 +1218,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 					{
 						Label:            "two",
 						UUID:             test.MockUUID(2),
-						ServiceReplicas:  []system.Rank{3, 4, 5},
+						ServiceReplicas:  []ranklist.Rank{3, 4, 5},
 						Usage:            exampleUsage,
 						TargetsTotal:     64,
 						TargetsDisabled:  8,
