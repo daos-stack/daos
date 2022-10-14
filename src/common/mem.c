@@ -46,8 +46,8 @@ umempobj_settings_init(void)
 	enum pobj_arenas_assignment_type	atype;
 	bool val = false;
 
-	d_getenv_bool("DAOS_USE_PMDK", &val);
-	if (val == true) {
+	d_getenv_bool("DAOS_MD_ON_SSD", &val);
+	if (val == false) {
 		use_bmem = 0;
 		atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
 
