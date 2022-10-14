@@ -679,7 +679,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, bool use_sys_db)
+vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -799,7 +799,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		goto out;
 
-	rc = vos_self_nvme_init(db_path, tgt_id, use_sys_db);
+	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
 		D_GOTO(failed, rc);
 
