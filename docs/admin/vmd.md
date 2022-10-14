@@ -197,7 +197,7 @@ _individual NVMe backing devices_:
 
 While this configuration _should_ work, this code path has not been fully validated with DAOS 2.2.
 It should also be noted that listing less than all four NVMe disks can lead to unexpected
-behaviour. For example, the `dmg storage format` command in DAOS 2.2 will still format
+behavior. For example, the `dmg storage format` command in DAOS 2.2 will still format
 all four NVMe disks that are part of the VMD domain, even if only one NVMe disk is listed
 in the `bdev_list`.
 
