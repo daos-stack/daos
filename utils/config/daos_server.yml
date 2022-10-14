@@ -225,16 +225,16 @@
 #control_log_file: /tmp/daos_server.log
 #
 #
-## Enable daos_admin (privileged helper) logging.
+## Enable daos_server_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#helper_log_file: /tmp/daos_admin.log
+#helper_log_file: /tmp/daos_server_helper.log
 #
 #
-## Enable daos_firmware (privileged helper) logging.
+## Enable daos_firmware_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /tmp/daos_firmware.log
+#firmware_helper_log_file: /tmp/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.
