@@ -89,7 +89,7 @@ class NLTConf():
         self.max_log_size = None
         self.valgrind_errors = False
         self.log_timer = CulmTimer()
-        self.lt_compress = CulmTimer()
+        self.compress_timer = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -142,11 +142,11 @@ class NLTConf():
 
     def flush_bz2(self):
         """Wait for all bzip2 subprocess to finish"""
-        self.lt_compress.start()
+        self.compress_timer.start()
         for proc in self._compress_procs:
             proc.wait()
         self._compress_procs = []
-        self.lt_compress.stop()
+        self.compress_timer.stop()
 
 
 class CulmTimer():
@@ -4558,7 +4558,7 @@ def run(wf, args):
     wf_server.close()
     conf.flush_bz2()
     print(f'Total time in log analysis: {conf.log_timer.total:.2f} seconds')
-    print(f'Total time in log compression: {conf.lt_compress.total:.2f} seconds')
+    print(f'Total time in log compression: {conf.compress_timer.total:.2f} seconds')
     return fatal_errors
 
 
