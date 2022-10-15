@@ -148,7 +148,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         off
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont
@@ -190,7 +190,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont2
@@ -229,7 +229,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont3
@@ -497,7 +497,7 @@ For example:
 * With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 64kiB is a perfect setting
   for EC\_16P1GX and EC\_16P2GX: Sixteen EC cells of 64kiB exactly match the 1MiB chunk size.
   Smaller EC stripe widths like EC\_8P2GX and EC\_4P1GX also work with this EC cell size,
-  which is the reason why 4kiB is the new DAOS 2.2 default for the `ec_cell_sz`.
+  which is the reason why 64kiB is the new DAOS 2.2 default for the `ec_cell_sz`.
 
 
 ### Checksum Background Scrubbing
