@@ -375,7 +375,7 @@ When setting this property, specifying the percentage symbol is optional:
 This property defines the default erasure code cell size inherited to DAOS
 containers. The EC cell size can be between 1kiB and 1GiB,
 although it should typically be set to a value between 32kiB and 1MiB.
-The default in DAOS 2.0 was 1MiB. The default in DAOS 2.2 is 64 kiB.
+The default in DAOS 2.0 was 1MiB. The default in DAOS 2.2 is 64kiB.
 When setting this property, the cell size can be specified in Bytes
 (as a number with no suffix), with a base-10 suffix like `k` or `MB`,
 or with a base-2 suffix like `ki` or `MiB`.
