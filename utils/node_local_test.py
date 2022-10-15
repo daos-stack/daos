@@ -2815,6 +2815,41 @@ class posix_tests():
         assert lineresult[3] == '    Links:       1'
         assert rc.returncode == 0
 
+        # test a link pointing to a regular file
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               join(src_dir.name, 'file_s'),
+               '--dst',
+               'daos://{}/{}/file_from_link'.format(self.pool.uuid, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 4
+        assert lineresult[1] == '    Directories: 0'
+        assert lineresult[2] == '    Files:       1'
+        assert lineresult[3] == '    Links:       0'
+        assert rc.returncode == 0
+
+        # test a link pointing to a directory
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        os.mkdir(join(src_dir.name, 'dir_s'))
+        os.symlink('dir_s', join(src_dir.name, 'link_to_dir'))
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               join(src_dir.name, 'link_to_dir'),
+               '--dst',
+               'daos://{}/{}/link_to_dir'.format(self.pool.uuid, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        lineresult = rc.stdout.decode('utf-8').splitlines()
+        assert len(lineresult) == 4
+        assert lineresult[1] == '    Directories: 0'
+        assert lineresult[2] == '    Files:       0'
+        assert lineresult[3] == '    Links:       1'
+        assert rc.returncode == 0
+
     def test_cont_clone(self):
         """Verify that cloning a container works
 

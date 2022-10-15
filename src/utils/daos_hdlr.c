@@ -1050,6 +1050,86 @@ out:
 }
 
 static int
+fs_query_symlink(struct cmd_args_s *ap,
+		 struct file_dfs *file_dfs,
+		 const char *path,
+		 char *symlink_value)
+{
+	int		rc = 0;
+	daos_size_t	len = DFS_MAX_PATH; /* unsigned for dfs_sys_readlink() */
+	ssize_t		len2 = DFS_MAX_PATH; /* signed for readlink() */
+
+	if (file_dfs->type == POSIX) {
+		len2 = readlink(path, symlink_value, len2);
+		if (len2 < 0) {
+			rc = daos_errno2der(errno);
+			DH_PERROR_DER(ap, rc, "fs_query_symlink failed on readlink('%s')",
+				      path);
+			D_GOTO(out_query_symlink, rc);
+		}
+		len = (daos_size_t)len2;
+	} else if (file_dfs->type == DAOS) {
+		rc = dfs_sys_readlink(file_dfs->dfs_sys, path, symlink_value, &len);
+		if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "fs_query_symlink failed on dfs_sys_readlink('%s')",
+				      path);
+			D_GOTO(out_query_symlink, rc);
+		}
+		len--;
+	} else {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", path);
+		D_GOTO(out_query_symlink, rc);
+	}
+	symlink_value[len] = 0;
+
+out_query_symlink:
+	return rc;
+}
+
+static int
+fs_create_symlink(struct cmd_args_s *ap,
+		  struct file_dfs *file_dfs,
+		  const char *path,
+		  const char *symlink_value)
+{
+	int	rc = 0;
+
+	if (file_dfs->type == POSIX) {
+		rc = symlink(symlink_value, path);
+		if ((rc != 0) && (errno == EEXIST)) {
+			rc = -DER_EXIST;
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", path);
+			D_GOTO(out_create_symlink, rc);
+		} else if (rc != 0) {
+			rc = daos_errno2der(errno);
+			DH_PERROR_DER(ap, rc, "fs_create_symlink failed on symlink('%s')", path);
+			D_GOTO(out_create_symlink, rc);
+		}
+	} else if (file_dfs->type == DAOS) {
+		rc = dfs_sys_symlink(file_dfs->dfs_sys, symlink_value, path);
+		if (rc == EEXIST) {
+			rc = -DER_EXIST;
+			D_DEBUG(DB_TRACE, "Link %s exists.\n", path);
+			D_GOTO(out_create_symlink, rc);
+		} else if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc,
+				      "fs_create_symlink failed on dfs_sys_readlink('%s')", path);
+			D_GOTO(out_create_symlink, rc);
+		}
+	} else {
+		rc = -DER_INVAL;
+		DH_PERROR_DER(ap, rc, "unknown type for %s", path);
+		D_GOTO(out_create_symlink, rc);
+	}
+
+out_create_symlink:
+	return rc;
+}
+
+static int
 fs_copy_symlink(struct cmd_args_s *ap,
 		struct file_dfs *src_file_dfs,
 		struct file_dfs *dst_file_dfs,
@@ -1058,70 +1138,18 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		const char *dst_path)
 {
 	int		rc = 0;
-	daos_size_t	len = DFS_MAX_PATH; /* unsigned for dfs_sys_readlink() */
-	ssize_t		len2 = DFS_MAX_PATH; /* signed for readlink() */
 	char		*symlink_value = NULL;
 
-	D_ALLOC(symlink_value, len + 1);
+	D_ALLOC(symlink_value, DFS_MAX_PATH + 1);
 	if (symlink_value == NULL)
 		D_GOTO(out_copy_symlink, rc = -DER_NOMEM);
+	rc = fs_query_symlink(ap, src_file_dfs, src_path, symlink_value);
+	if (rc)
+		goto out_copy_symlink;
+	rc = fs_create_symlink(ap, dst_file_dfs, dst_path, symlink_value);
+	if (rc)
+		goto out_copy_symlink;
 
-	if (src_file_dfs->type == POSIX) {
-		len2 = readlink(src_path, symlink_value, len2);
-		if (len2 < 0) {
-			rc = daos_errno2der(errno);
-			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on readlink('%s')",
-				      src_path);
-			D_GOTO(out_copy_symlink, rc);
-		}
-		len = (daos_size_t)len2;
-	} else if (src_file_dfs->type == DAOS) {
-		rc = dfs_sys_readlink(src_file_dfs->dfs_sys, src_path, symlink_value, &len);
-		if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on dfs_sys_readlink('%s')",
-				      src_path);
-			D_GOTO(out_copy_symlink, rc);
-		}
-		/*length of symlink_value includes the NULL terminator already.*/
-		len--;
-	} else {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "unknown type for %s", src_path);
-		D_GOTO(out_copy_symlink, rc);
-	}
-	symlink_value[len] = 0;
-
-	if (dst_file_dfs->type == POSIX) {
-		rc = symlink(symlink_value, dst_path);
-		if ((rc != 0) && (errno == EEXIST)) {
-			rc = -DER_EXIST;
-			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
-			D_GOTO(out_copy_symlink, rc);
-		} else if (rc != 0) {
-			rc = daos_errno2der(errno);
-			DH_PERROR_DER(ap, rc, "fs_copy_symlink failed on symlink('%s')",
-				      dst_path);
-			D_GOTO(out_copy_symlink, rc);
-		}
-	} else if (dst_file_dfs->type == DAOS) {
-		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
-		if (rc == EEXIST) {
-			rc = -DER_EXIST;
-			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
-			D_GOTO(out_copy_symlink, rc);
-		} else if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_DER(ap, rc,
-				      "fs_copy_symlink failed on dfs_sys_readlink('%s')",
-				      dst_path);
-			D_GOTO(out_copy_symlink, rc);
-		}
-	} else {
-		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "unknown type for %s", dst_path);
-		D_GOTO(out_copy_symlink, rc);
-	}
 out_copy_symlink:
 	D_FREE(symlink_value);
 	src_file_dfs->offset = 0;
@@ -1276,12 +1304,18 @@ fs_copy(struct cmd_args_s *ap,
 	struct fs_copy_stats *num)
 {
 	int		rc = 0;
+	int		len_parent_dir;
 	struct stat	src_stat;
 	struct stat	dst_stat;
+	struct stat	next_src_stat;
 	bool		copy_into_dst = false;
 	char		*tmp_path = NULL;
 	char		*tmp_dir = NULL;
 	char		*tmp_name = NULL;
+	char		*next_src_path = NULL;
+	char		*symlink_value = NULL;
+	char		c_save;
+	char		*src_path_alias;
 
 	/* Make sure the source exists. */
 	rc = file_lstat(ap, src_file_dfs, src_path, &src_stat);
@@ -1339,9 +1373,57 @@ fs_copy(struct cmd_args_s *ap,
 		if (rc == 0)
 			num->num_dirs++;
 		break;
+	case S_IFLNK:
+		/* Similar to cp command to dereference one time*/
+		D_ALLOC(symlink_value, DFS_MAX_PATH + 1);
+		if (symlink_value == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = fs_query_symlink(ap, src_file_dfs, src_path, symlink_value);
+		if (rc)
+			goto out;
+		/* To determine parent dir */
+		len_parent_dir = strnlen(src_path, DFS_MAX_PATH);
+		while (len_parent_dir > 0)	{
+			if (src_path[len_parent_dir] == '/')
+				break;
+			else
+				len_parent_dir--;
+		}
+		c_save = src_path[len_parent_dir];
+		src_path_alias = (char *)src_path;
+		if (len_parent_dir >= 0 && src_path[len_parent_dir] == '/')
+			src_path_alias[len_parent_dir] = 0;
+		D_ASPRINTF(next_src_path, "%s/%s", src_path, symlink_value);
+		src_path_alias[len_parent_dir] = c_save;
+		rc = file_lstat(ap, src_file_dfs, next_src_path, &next_src_stat);
+		if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "Cannot stat path '%s'", next_src_path);
+			D_GOTO(out, rc);
+		}
+		switch (next_src_stat.st_mode & S_IFMT) {
+			case S_IFREG:
+				/* Copy the file to destination as cp does. */
+				rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
+						  next_src_path, dst_path);
+				if (rc == 0)
+					num->num_files++;
+				break;
+			case S_IFDIR:
+				/* mkdir a symbol link as "cp -R" does. */
+				rc = fs_create_symlink(ap, dst_file_dfs, dst_path, symlink_value);
+				if (rc == 0)
+					num->num_links++;
+				break;
+			default:
+				rc = -DER_INVAL;
+				DH_PERROR_DER(ap, rc,
+					      "Only supports a link to a file or directory");
+		}
+		break;
 	default:
 		rc = -DER_INVAL;
-		DH_PERROR_DER(ap, rc, "Only files and directories are supported");
+		DH_PERROR_DER(ap, rc, "Only files, directories, and links are supported");
 		D_GOTO(out, rc);
 	}
 
@@ -1350,6 +1432,10 @@ out:
 		D_FREE(tmp_path);
 		D_FREE(tmp_dir);
 		D_FREE(tmp_name);
+	}
+	if (rc) {
+		D_FREE(symlink_value);
+		D_FREE(next_src_path);
 	}
 	return rc;
 }
