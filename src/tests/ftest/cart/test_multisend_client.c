@@ -218,6 +218,7 @@ test_run()
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
+	D_FREE(dma_buff);
 	D_DEBUG(DB_TRACE, "exiting.\n");
 }
 
