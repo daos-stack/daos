@@ -250,14 +250,14 @@ bring-up DAOS servers and clients.
 	  -----             ----------- ------------
 	  boro-[8,35,52-53] 1           0
 
-	$ dmg pool create --size 10G Pool1
-	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1
-	$ daos pool list-cont Pool1
+	$ dmg pool create --size 10G Pool2
+	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rf:2 Pool2
+	$ daos pool list-cont Pool2
 	UUID                                 Label
 	----                                 -----
 	2649aa0f-3ad7-4943-abf5-4343205a637b Cont1
 
-	$ dmg pool query Pool1
+	$ dmg pool query Pool2
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
 	- Target(VOS) count:32
@@ -274,7 +274,7 @@ bring-up DAOS servers and clients.
 
 	$ mkdir /tmp/daos_test1
 
-	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
+	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool2 --cont=Cont1
 
 	$ df -h -t fuse.daos
 	Filesystem      Size  Used Avail Use% Mounted on
