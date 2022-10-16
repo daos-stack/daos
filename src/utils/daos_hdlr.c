@@ -1386,8 +1386,7 @@ fs_copy(struct cmd_args_s *ap,
 		while (len_parent_dir > 0)	{
 			if (src_path[len_parent_dir] == '/')
 				break;
-			else
-				len_parent_dir--;
+			len_parent_dir--;
 		}
 		c_save = src_path[len_parent_dir];
 		src_path_alias = (char *)src_path;
@@ -1433,10 +1432,9 @@ out:
 		D_FREE(tmp_dir);
 		D_FREE(tmp_name);
 	}
-	if (rc) {
-		D_FREE(symlink_value);
-		D_FREE(next_src_path);
-	}
+	D_FREE(symlink_value);
+	D_FREE(next_src_path);
+
 	return rc;
 }
 
