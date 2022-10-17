@@ -62,7 +62,7 @@ class DfuseCommand(ExecutableCommand):
             cont (TestContainer): Daos test container object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.cuuid.update(cont.label, "cuuid" if display else None)
+        self.cuuid.update(cont, "cuuid" if display else None)
 
     def set_dfuse_exports(self, manager, log_file):
         """Set exports to issue before the dfuse command.
