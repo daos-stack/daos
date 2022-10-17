@@ -108,7 +108,7 @@ echo Setting up fuse.conf
 ls -l /etc/fuse.conf || true
 if [ -e /etc/fuse.conf ]
 then
-        sudo echo user_allow_other >> /etc/fuse.conf
+        echo user_allow_other | sudo tee -a /etc/fuse.conf
         cat /etc/fuse.conf
 fi
 
