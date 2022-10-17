@@ -25,7 +25,7 @@ import jira
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
 VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test', 'md',
-		    'agent', 'csum')
+                    'agent', 'csum')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
