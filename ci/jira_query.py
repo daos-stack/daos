@@ -48,7 +48,7 @@ def set_output(key, value):
         print(f'::set-output name={key}::{clean_value}')
         return
 
-    delim = ''.join(random.choices(string.ascii_uppercase, k=7))
+    delim = ''.join(random.choices(string.ascii_uppercase, k=7))  # nosec
     with open(env_file, 'a') as file:
         file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
