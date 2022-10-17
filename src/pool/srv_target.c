@@ -1513,6 +1513,8 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	struct ds_pool			*pool;
 	int				 rc;
 
+	D_INFO("enter\n");
+
 	/* Single target query */
 	if (dss_get_module_info()->dmi_xs_id != 0) {
 		rc = pool_query_space(in->tqi_op.pi_uuid, &out->tqo_space);
@@ -1534,6 +1536,7 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 out:
 	out->tqo_rc = rc;
 	crt_reply_send(rpc);
+	D_INFO("leave: "DF_RC"\n", DP_RC(rc));
 }
 
 int
