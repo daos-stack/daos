@@ -104,6 +104,10 @@ if [ -f /usr/lib/daos/TESTING/ftest/test.cov ]; then
     chmod 777 /tmp/test.cov
 fi
 
+echo Setting up fuse.conf
+echo user_allow_other >> /etc/fuse.conf
+cat /etc/fuse.conf
+
 # make sure to set up for daos_agent. The test harness will take care of
 # creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
