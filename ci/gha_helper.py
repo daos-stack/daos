@@ -23,7 +23,7 @@ COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
-    env_file = os.getenv('GITHUB_ENV')
+    env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         print(f'::set-output name={key}::{value}')
         return

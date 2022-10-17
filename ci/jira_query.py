@@ -42,7 +42,7 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
-    env_file = os.getenv('GITHUB_ENV')
+    env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         clean_value = value.replace('\n', '%0A')
         print(f'::set-output name={key}::{clean_value}')
