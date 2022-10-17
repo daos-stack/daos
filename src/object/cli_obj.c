@@ -4272,6 +4272,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi->result = 0;
 	obj_auxi->csum_retry = 0;
 	obj_auxi->tx_uncertain = 0;
+	obj_auxi->nvme_io_err = 0;
 	obj = obj_auxi->obj;
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
@@ -4331,15 +4332,17 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (task->dt_result == -DER_NEED_TX)
 			obj_auxi->tx_convert = 1;
 
-		if (task->dt_result == -DER_CSUM ||
-		    task->dt_result == -DER_TX_UNCERTAIN) {
+		if (task->dt_result == -DER_CSUM || task->dt_result == -DER_TX_UNCERTAIN ||
+		    task->dt_result == -DER_NVME_IO) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
 			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				if (task->dt_result == -DER_CSUM)
 					obj_auxi->csum_retry = 1;
-				else
+				else if (task->dt_result == -DER_TX_UNCERTAIN)
 					obj_auxi->tx_uncertain = 1;
+				else
+					obj_auxi->nvme_io_err = 1;
 			} else {
 				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
@@ -4816,6 +4819,32 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	return 0;
 }
 
+static inline char *
+retry_errstr(struct obj_auxi_args *obj_auxi)
+{
+	if (obj_auxi->csum_retry)
+		return "csum error";
+	else if (obj_auxi->tx_uncertain)
+		return "tx uncertainty error";
+	else if (obj_auxi->nvme_io_err)
+		return "NVMe I/O error";
+	else
+		return "unknown error";
+}
+
+static inline int
+retry_errcode(struct obj_auxi_args *obj_auxi)
+{
+	if (obj_auxi->csum_retry)
+		return -DER_CSUM;
+	else if (obj_auxi->tx_uncertain)
+		return -DER_TX_UNCERTAIN;
+	else if (obj_auxi->nvme_io_err)
+		return -DER_NVME_IO;
+	else
+		return -DER_IO;
+}
+
 /* Selects next replica in the object's layout.
  */
 static int
@@ -4826,8 +4855,7 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	unsigned int	start_shard;
 	int		rc = 0;
 
-	D_WARN("Retrying replica because of %s error.\n",
-	       obj_auxi->csum_retry ? "csum" : "tx_uncertain");
+	D_WARN("Retrying replica because of %s.\n", retry_errstr(obj_auxi));
 
 	/* EC retry is done by degraded fetch */
 	D_ASSERT(!obj_is_ec(obj));
@@ -4839,10 +4867,7 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	*shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) % grp_size + start_shard;
 	if (*shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
-		if (obj_auxi->csum_retry)
-			return -DER_CSUM;
-
-		return -DER_TX_UNCERTAIN;
+		return retry_errcode(obj_auxi);
 	}
 
 	return rc;
@@ -4859,7 +4884,8 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	bool			ec_degrade = false;
 	int			rc = 0;
 
-	if (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->force_degraded)
+	if (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->force_degraded ||
+	    obj_auxi->nvme_io_err)
 		force_ec_degrade = true;
 
 	while (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) || force_ec_degrade) {
@@ -4886,10 +4912,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	if (rc) {
 		if (force_ec_degrade) {
 			obj_auxi->no_retry = 1;
-			if (obj_auxi->csum_retry)
-				rc = -DER_CSUM;
-			else if (obj_auxi->tx_uncertain)
-				rc = -DER_TX_UNCERTAIN;
+			rc = retry_errcode(obj_auxi);
 		}
 		D_ERROR(DF_OID" can not get parity shard: "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
@@ -4898,6 +4921,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	if (ec_degrade) {
 		obj_auxi->tx_uncertain = 0;
 		obj_auxi->csum_retry = 0;
+		obj_auxi->nvme_io_err = 0;
 	}
 
 	return rc;
@@ -5073,7 +5097,7 @@ obj_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned int
 		rc = obj_ec_fetch_shards_get(obj, args, map_ver, obj_auxi, shard, shard_cnt);
 		if (rc)
 			D_GOTO(out, rc);
-	} else if ((obj_auxi->csum_retry || obj_auxi->tx_uncertain)) {
+	} else if ((obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err)) {
 		*shard_cnt = 1;
 		rc = obj_retry_next_shard(obj, obj_auxi, map_ver, shard);
 		if (rc)

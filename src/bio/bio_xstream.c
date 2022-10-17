@@ -159,6 +159,25 @@ bypass_health_collect()
 	return nvme_glb.bd_bypass_health_collect;
 }
 
+struct bio_faulty_criteria	glb_criteria;
+
+/* TODO: Make it configurable through control plane */
+static inline void
+set_faulty_criteria(void)
+{
+	glb_criteria.fc_enabled = false;
+	glb_criteria.fc_max_io_errs = 5;
+	glb_criteria.fc_max_csum_errs = 5;
+
+	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
+
+	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
+	       glb_criteria.fc_enabled ? "enabled" : "disabled",
+	       glb_criteria.fc_max_io_errs, glb_criteria.fc_max_csum_errs);
+}
+
 int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr,
@@ -277,6 +296,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		goto fini_smd;
 	}
 	bio_spdk_inited = true;
+	set_faulty_criteria();
 
 	return 0;
 
