@@ -39,13 +39,3 @@ jobs:
           # Max line length is 100, and pylint will warn about lines longer than this, but some
           # existing lines are longer so allow them here.
           max-line-length: '133'
-      - name: Set the value
-        id: step_one
-        run: |
-          echo "action_state=yellow" >> $GITHUB_ENV
-      - name: Test env file
-        run: env
-      - name: Test env file 2
-        run: echo $GITHUB_ENV
-      - name: Test env file 3
-        run: cat $GITHUB_ENV

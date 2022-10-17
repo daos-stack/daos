@@ -103,8 +103,7 @@ def main():
         rc = subprocess.run(COMMIT_CMD, check=True, capture_output=True)
         commit_hash = rc.stdout.decode('utf-8').strip()
 
-        key = 'bc-{}-{}-{}-{}-{}'.format(target_branch,
-                                         base_distro, build_hash, commit_hash, '{hash}')
+        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}-{{hash}}'
         set_output('key', key)
 
         restore = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}'
@@ -117,7 +116,7 @@ def main():
         # PR builds.  Do not embed the current commit in the hash name, load the most recent build
         # scripts, and fall back to the most recent version of the build script from the last week
         # or anything if that isn't found.
-        key = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, '{hash}')
+        key = f'bc-{target_branch}-{base_distro}-{build_hash}-{{hash}}'
         set_output('key', key)
 
         restore = f'bc-{target_branch}-{base_distro}-{build_hash}'
