@@ -334,7 +334,7 @@ dts_ctx_init(struct credit_context *tsc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_DEBUG;
 
-	rc = vos_self_init(vos_path, false, BIO_STAND_ALONE_ID);
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc)
 		goto out;
 	tsc->tsc_init = DTS_INIT_MODULE;

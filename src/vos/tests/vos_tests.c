@@ -202,7 +202,7 @@ main(int argc, char **argv)
 		strcpy(vos_path, "/mnt/daos");
 	}
 
-	rc = vos_self_init(vos_path, false, BIO_STAND_ALONE_ID);
+	rc = vos_self_init(vos_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc) {
 		print_error("Error initializing VOS instance\n");
 		goto exit_0;
