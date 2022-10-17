@@ -32,7 +32,7 @@ from process_core_files import CoreFileProcessing
 from util.logger_utils import get_console_handler, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command
+from util.user_utils import get_chown_command, create_group, create_user, delete_user
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
@@ -1001,6 +1001,14 @@ class Launch():
         core_files = self._get_core_file_pattern(
             args.test_servers, args.test_clients, args.process_cores)
 
+        # Setup additional test users
+        if args.setup_test_users:
+            try:
+                self._setup_test_users(args)
+            except RunException:
+                message = "Error setting up test users"
+                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
         setup_result.end()
@@ -1710,6 +1718,32 @@ class Launch():
             logger.debug(
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
                 test.hosts.clients)
+
+    def _setup_test_users(self, args):
+        """Setup test users on test nodes.
+
+        Args:
+            args (argparse.Namespace): command line arguments for this program
+
+        Raises:
+            RunException: if setup fails
+
+        """
+        nodes = args.test_servers | args.test_clients
+        group_users = {
+            'daos_test_group_x': ['daos_test_user_x1', 'daos_test_user_x2'],
+            'daos_test_group_y': ['daos_test_user_y1']
+        }
+        for group, users in group_users.items():
+            create_group(logger, nodes, group, True)
+            for user in users:
+                # Delete if existing
+                try:
+                    delete_user(logger, nodes, user, True)
+                except RunException:
+                    pass
+
+                create_user(logger, nodes, user, group, args.setup_test_users_dir, True)
 
     def _replace_yaml_file(self, yaml_file, args, yaml_dir):
         # pylint: disable=too-many-nested-blocks,too-many-branches
@@ -3086,6 +3120,14 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "--setup_test_users",
+        action="store_true",
+        help="setup user accounts used by some tests")
+    parser.add_argument(
+        "--setup_test_users_dir",
+        type=str,
+        help="parent home directory for test users")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3141,6 +3183,7 @@ def main():
         args.process_cores = True
         args.rename = True
         args.sparse = True
+        args.setup_test_users = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
 
