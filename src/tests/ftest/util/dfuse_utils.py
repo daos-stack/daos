@@ -53,7 +53,7 @@ class DfuseCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.puuid.update(pool.uuid, "puuid" if display else None)
+        self.puuid.update(pool.label, "puuid" if display else None)
 
     def set_dfuse_cont_param(self, cont, display=True):
         """Set dfuse cont param from Container object.
