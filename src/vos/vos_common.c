@@ -756,6 +756,34 @@ vos_self_fini(void)
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 }
 
+static const char	*vos_db_path;
+static bool		 vos_use_sys_db;
+
+static int vos_smd_init(void)
+{
+	int rc;
+
+	D_ASSERT(vos_db_path != NULL);
+	if (vos_use_sys_db)
+		rc = vos_db_init(vos_db_path);
+	else
+		rc = vos_db_init_ex(vos_db_path, "self_db", true, true);
+	if (rc)
+		return rc;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+
+	return rc;
+}
+
+static void vos_smd_fini(void)
+{
+	vos_db_fini();
+	smd_fini();
+}
+
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
@@ -788,16 +816,9 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	if (use_sys_db)
-		rc = vos_db_init(db_path);
-	else
-		rc = vos_db_init_ex(db_path, "self_db", true, true);
-	if (rc)
-		goto out;
-
-	rc = smd_init(vos_db_get());
-	if (rc)
-		goto out;
+	vos_db_path = db_path;
+	vos_use_sys_db = use_sys_db;
+	bio_register_smd_ops(vos_smd_init, vos_smd_fini);
 
 	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)

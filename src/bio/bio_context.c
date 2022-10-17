@@ -542,8 +542,11 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
 		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
 {
-	int		rc = 0;
-	spdk_blob_id	data_blobid, wal_blobid, meta_blobid;
+	int			 rc = 0, rc1;
+	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID, wal_blobid, meta_blobid;
+	struct bio_meta_context *mc = NULL;
+	struct meta_fmt_info	*fi = NULL;
+	struct bio_xs_blobstore *bxb;
 
 	if (data_sz > 0) {
 		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_DEV_TYPE_DATA, flags,
@@ -569,13 +572,67 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 			goto delete_meta;
 	}
 
+	D_ALLOC_PTR(mc);
+	if (mc == NULL) {
+		rc = -DER_NOMEM;
+		goto delete_wal;
+	}
+	D_ALLOC_PTR(fi);
+	if (fi == NULL) {
+		rc = -DER_NOMEM;
+		goto delete_wal;
+	}
+
+	if (data_sz == 0)
+		flags |= BIO_MC_FL_NO_DATABLOB;
+	flags |= BIO_MC_FL_NO_CHECKMETA;
+	rc = bio_mc_open(xs_ctxt, pool_id, flags, &mc);
+	if (rc)
+		goto delete_wal;
+
+	/* fill meta_fmt_info */
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_META);
+	uuid_copy(fi->fi_meta_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_WAL);
+	uuid_copy(fi->fi_wal_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	/* No data blobstore is possible */
+	if (bxb != NULL) {
+		bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
+		uuid_copy(fi->fi_data_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	}
+	fi->fi_meta_blobid = meta_blobid;
+	fi->fi_wal_blobid = wal_blobid;
+	fi->fi_data_blobid = data_blobid;
+	fi->fi_meta_size = meta_sz;
+	fi->fi_wal_size = wal_sz;
+	fi->fi_data_size = data_sz;
+	fi->fi_vos_id = xs_ctxt->bxc_tgt_id;
+
+	rc = meta_format(mc, fi, true);
+	if (rc)
+		D_ERROR("Unable to format newly created blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
+
+	rc1 = bio_mc_close(mc, flags);
+	if (rc == 0)
+		rc = rc1;
+
 	return rc;
+delete_wal:
+	if (mc)
+		D_FREE(mc);
+	if (fi)
+		D_FREE(fi);
+
+	if (wal_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL))
+		D_ERROR("Unable to delete newly created wal blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
 delete_meta:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META))
+	if (meta_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META))
 		D_ERROR("Unable to delete newly created meta blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 delete_data:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA))
+	if (data_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA))
 		D_ERROR("Unable to delete newly created data blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 	return rc;
@@ -772,16 +829,31 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 				       flags, SMD_DEV_TYPE_META, open_blobid);
 		if (rc)
 			goto failed;
+
 		/*
-		 * Check Meta blob header if pool nvme size is 0,
-		 * set BIO_MC_FL_NO_DATABLOB if needed.
-		 *
-		 * set sys WAL blob id properly.
+		 * Check Meta blob header if data blob is associated, and
+		 * get wal blob id.
 		 */
+		if (!(flags & BIO_MC_FL_NO_CHECKMETA)) {
+			rc = meta_open(bio_mc);
+			if (rc)
+				goto failed;
+
+			if (bio_mc->mc_meta_hdr.mh_data_blobid == SPDK_BLOBID_INVALID)
+				flags |= BIO_MC_FL_NO_DATABLOB;
+			open_blobid = bio_mc->mc_meta_hdr.mh_wal_blobid;
+		}
+
 		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_WAL, open_blobid);
 		if (rc)
 			goto failed;
+
+		if (!(flags & BIO_MC_FL_NO_CHECKMETA)) {
+			rc = wal_open(bio_mc);
+			if (rc)
+				goto failed;
+		}
 	}
 
 out:
@@ -898,11 +970,15 @@ int bio_mc_close(struct bio_meta_context *bio_mc, enum bio_mc_flags flags)
 		rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
 		if (rc1 && !rc)
 			rc = rc1;
+		if (!(flags & BIO_MC_FL_NO_CHECKMETA))
+			meta_close(bio_mc);
 	}
 	if (bio_mc->mc_wal) {
 		rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
 		if (rc1 && !rc)
 			rc = rc1;
+		if (!(flags & BIO_MC_FL_NO_CHECKMETA))
+			wal_close(bio_mc);
 	}
 
 	D_FREE(bio_mc);

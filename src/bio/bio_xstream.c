@@ -1186,7 +1186,8 @@ find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 * Lookup device mapped to @tgt_id and @st in the per-server
 	 * metadata, if found, create blobstore on the mapped device.
 	 */
-	if (tgt_id != BIO_SYS_TGT_ID) {
+	if (tgt_id != BIO_SYS_TGT_ID ||
+	    (tgt_id == BIO_STAND_ALONE_ID && st == SMD_DEV_TYPE_DATA)) {
 retry:
 		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
 		if (rc == -DER_NONEXIST && !assigned) {
@@ -1571,7 +1572,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		/* No Data blobstore for sys xstream */
 		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
-
+		/* Data blobstore could be only setup after smd prepared */
+		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_STAND_ALONE_ID)
+			continue;
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
 		if (st != SMD_DEV_TYPE_DATA && !bio_is_meta_on_ssd_configured())
 			break;
@@ -1581,10 +1584,15 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			goto out;
 	}
 
-	if (tgt_id == BIO_SYS_TGT_ID) {
+	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STAND_ALONE_ID) {
 		rc = bio_sys_smd_init();
 		if (rc)
 			goto out;
+		if (tgt_id == BIO_STAND_ALONE_ID) {
+			rc = init_xs_blobstore_ctxt(ctxt, tgt_id, SMD_DEV_TYPE_DATA);
+			if (rc)
+				goto out;
+		}
 	}
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);

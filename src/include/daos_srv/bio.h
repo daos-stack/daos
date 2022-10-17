@@ -88,6 +88,8 @@ struct bio_sglist {
 #define			 BIO_MAX_VOS_TGT_CNT	96
 /* System xstream target ID */
 #define			 BIO_SYS_TGT_ID		1024
+/* for standalone VOS */
+#define			 BIO_STAND_ALONE_ID	-1
 
 /* Opaque I/O descriptor */
 struct bio_desc;
@@ -504,6 +506,7 @@ int bio_ioctxt_open(struct bio_io_context **pctxt,
 enum bio_mc_flags {
 	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
 	BIO_MC_FL_NO_DATABLOB	= (1UL << 1),	/* No associated data blob */
+	BIO_MC_FL_NO_CHECKMETA	= (1UL << 2),	/* don't load meta header */
 };
 
 /*
