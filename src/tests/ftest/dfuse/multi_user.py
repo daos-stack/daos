@@ -34,14 +34,16 @@ class MultiUser(DfuseTestBase):
                                      'stat {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0.exit_status == 0
+        assert ret0['exit_status'] == 0
 
         ret = general_utils.run_pcmd(self.hostlist_clients,
                                      'sudo stat {}'.format(root_dir), expect_rc=0)
         print(ret)
         ret0 = ret[0]
         print(ret0)
-        assert ret0.exit_status == 0
+        assert ret0['exit_status'] == 0
+
+        # Add perms to pool.
 
         ret = general_utils.run_pcmd(
             self.hostlist_clients,
@@ -50,10 +52,10 @@ class MultiUser(DfuseTestBase):
         print(ret)
         ret0 = ret[0]
         print(ret0)
-        assert ret0.exit_status == 0
+        assert ret0['exit_status'] == 0
 
         ret = general_utils.run_pcmd(self.hostlist_clients,
                                      'ls -l {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0.exit_status == 0
+        assert ret0['exit_status'] == 0
