@@ -5,6 +5,8 @@
 import os
 import sys
 from os.path import join
+import random
+import string
 import subprocess  # nosec
 
 BUILD_FILES = ['site_scons',
@@ -21,7 +23,14 @@ COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
-    print('::set-output name={}::{}'.format(key, value))
+    env_file = os.getenv('GITHUB_ENV')
+    if not env_file:
+        print(f'::set-output name={key}::{value}')
+        return
+
+    delim = ''.join(random.choices(string.ascii_uppercase, k=7))
+    with open(env_file, 'a') as file:
+        file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
 def main():
@@ -63,12 +72,12 @@ def main():
     if base_distro:
         docker_distro = os.getenv('DOCKER_BASE', base_distro)
 
-        dockerfile = 'utils/docker/Dockerfile.{}'.format(docker_distro)
+        dockerfile = f'utils/docker/Dockerfile.{docker_distro}'
         assert os.path.exists(dockerfile)
         cmd.append(dockerfile)
 
         install_helper = docker_distro.replace('.', '')
-        install_script = join('utils', 'scripts', 'install-{}.sh'.format(install_helper))
+        install_script = join('utils', 'scripts', f'install-{install_helper}.sh')
 
         assert os.path.exists(install_script)
         cmd.append(dockerfile)
@@ -117,7 +126,7 @@ def main():
         if len(lines):
             restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, lines[0])
         else:
-            restore_prev = 'bc-{}-{}-'.format(target_branch, base_distro)
+            restore_prev = f'bc-{target_branch}-{base_distro}-'
         set_output('restore_prev', restore_prev)
 
 
