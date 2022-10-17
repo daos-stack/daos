@@ -1,6 +1,7 @@
 """Build versioned object store tests"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
