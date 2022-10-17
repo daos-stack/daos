@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -23,7 +22,8 @@ from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout, get_primary_group
+    get_subprocess_stdout
+from user_utils import get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -34,8 +34,7 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False,
-                 check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -58,7 +57,7 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = True
         self.output_check = "both"
         self.verbose = True
-        self.env = None
+        self.env = EnvironmentVariables()
         self.sudo = False
 
         # A list of environment variable names to set and export prior to
@@ -105,7 +104,7 @@ class ExecutableCommand(CommandWithParameters):
 
     @property
     def process(self):
-        """Getter for process attribute of the ExecutableCommand class."""
+        """Get the process attribute of the ExecutableCommand class."""
         return self._process
 
     @property
@@ -145,7 +144,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         # Clear any previous run results
         self.result = None
-        command = self.__str__()
+        command = str(self)
         try:
             # Block until the command is complete or times out
             self.result = run_command(
@@ -176,6 +175,7 @@ class ExecutableCommand(CommandWithParameters):
         status = True
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
+            self.log.debug("Checking the command output for any bad keywords: %s", regex)
             for output in (self.result.stdout_text, self.result.stderr_text):
                 match = re.findall(regex, output)
                 if match:
@@ -198,7 +198,7 @@ class ExecutableCommand(CommandWithParameters):
         if self._process is None:
             # Start the job manager command as a subprocess
             kwargs = {
-                "cmd": self.__str__(),
+                "cmd": str(self),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
                 "shell": False,
@@ -384,6 +384,19 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also gets env_vars from /run/client/* and self.namespace.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        for namespace in ['/run/client/*', self.namespace]:
+            if namespace is not None:
+                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+
     def update_env_names(self, new_names):
         """Update environment variable names to export for the command.
 
@@ -408,7 +421,8 @@ class ExecutableCommand(CommandWithParameters):
                 values to export.
 
         """
-        env = EnvironmentVariables()
+        env = self.env.copy()
+        # Update with variables from the server manager
         for name in self._env_names:
             if name == "D_LOG_FILE":
                 if not log_file:
@@ -427,7 +441,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self.env = env.copy()
+        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -880,7 +894,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             source (str): source of the certificate files.
-            hosts (list): list of the destination hosts.
+            hosts (NodeSet): list of the destination hosts.
         """
         names = set()
         yaml = self.yaml

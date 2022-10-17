@@ -67,10 +67,6 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 			addrStr: "0000:gg:00.0",
 			expErr:  errors.New("parsing \"gg\""),
 		},
-		"invalid vmd": {
-			addrStr: "1ffff:01:00.0",
-			expErr:  errors.New("unexpected length of vmd"),
-		},
 		"vmd address": {
 			addrStr: "0000:5d:05.5",
 		},
@@ -82,6 +78,14 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 				Function: 0xff,
 			},
 		},
+		"short vmd backing device address": {
+			addrStr: "50505:05:00.0",
+			expVMD: &PCIAddress{
+				Bus:      0x05,
+				Device:   0x05,
+				Function: 0x05,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			addr, err := NewPCIAddress(tc.addrStr)
@@ -90,9 +94,6 @@ func TestHardware_NewPCIAddress(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.addrStr, addr.String()); diff != "" {
-				t.Fatalf("unexpected string (-want, +got):\n%s\n", diff)
-			}
 			if diff := cmp.Diff(tc.expVMD, addr.VMDAddr); diff != "" {
 				t.Fatalf("unexpected VMD address (-want, +got):\n%s\n", diff)
 			}
@@ -176,6 +177,15 @@ func TestHardware_NewPCIAddressSet(t *testing.T) {
 			expAddrStrs: []string{
 				"0000:7e:00.0", "0000:7f:00.0", "0000:7f:00.1", "0000:7f:01.0",
 				"0000:80:00.0", "0000:81:00.0", "5d0505:01:00.0",
+			},
+		},
+		"vmd backing device": {
+			addrStrs: []string{
+				"050505:03:00.0", "050505:01:00.0",
+			},
+			expAddrStr: "050505:01:00.0 050505:03:00.0",
+			expAddrStrs: []string{
+				"050505:01:00.0", "050505:03:00.0",
 			},
 		},
 		"invalid": {
@@ -299,9 +309,9 @@ func TestHardware_PCIAddressSet_BackingToVMDAddresses(t *testing.T) {
 			inAddrs:     []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			expOutAddrs: []string{"0000:5d:05.5"},
 		},
-		"invalid vmd domain in address": {
-			inAddrs: []string{"5d055:01:00.0"},
-			expErr:  errors.New("unexpected length of vmd domain"),
+		"short vmd domain in address": {
+			inAddrs:     []string{"5d055:01:00.0"},
+			expOutAddrs: []string{"0000:05:d0.55"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -1,7 +1,7 @@
 hosts:
   test_servers: 6
   test_clients: 1
-timeout: 360
+timeout: 480
 server_config:
   name: daos_server
   servers:
@@ -19,9 +19,9 @@ container:
   control_method: daos
   cont_prop: !mux
     rf_1:
-      properties: rf:1
+      properties: rd_fac:1
     rf_2:
-      properties: rf:2
+      properties: rd_fac:2
   akey_size: 5
   dkey_size: 5
   data_size: 5

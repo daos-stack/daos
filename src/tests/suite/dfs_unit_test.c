@@ -7,12 +7,23 @@
 
 #include "dfs_test.h"
 #include "dfs_internal.h"
+#include <daos_types.h>
+#include <daos/placement.h>
 #include <pthread.h>
 
 /** global DFS mount used for all tests */
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
 static dfs_t		*dfs_mt;
+
+static bool
+check_ts(struct timespec l, struct timespec r)
+{
+	if (l.tv_sec == r.tv_sec)
+		return l.tv_nsec < r.tv_nsec;
+	else
+		return l.tv_sec < r.tv_sec;
+}
 
 static void
 dfs_test_mount(void **state)
@@ -1000,6 +1011,7 @@ dfs_test_rename(void **state)
 	d_iov_t			iov;
 	char			buf[64];
 	struct stat		stbuf;
+	struct timespec		prev_ts;
 	int			rc;
 
 	if (arg->myrank != 0)
@@ -1027,6 +1039,8 @@ dfs_test_rename(void **state)
 
 	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
 	assert_int_equal(rc, 0);
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
 
@@ -1037,6 +1051,8 @@ dfs_test_rename(void **state)
 
 	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
 	assert_int_equal(rc, 0);
+	/** check ctime updated */
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
 
@@ -1217,6 +1233,7 @@ dfs_test_chown(void **state)
 	char		*filename_file2 = "open_stat2";
 	mode_t		create_mode = S_IWUSR | S_IRUSR;
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	struct timespec	prev_ts;
 
 	if (arg->myrank != 0)
 		return;
@@ -1234,6 +1251,8 @@ dfs_test_chown(void **state)
 
 	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	orig_uid = stbuf.st_uid;
 	orig_gid = stbuf.st_gid;
@@ -1245,6 +1264,9 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, orig_uid);
 	assert_int_equal(stbuf.st_gid, orig_gid);
+	/** check ctime unchanged */
+	assert_int_equal(prev_ts.tv_sec, stbuf.st_ctim.tv_sec);
+	assert_int_equal(prev_ts.tv_nsec, stbuf.st_ctim.tv_nsec);
 
 	/** set uid to 0 */
 	rc = dfs_chown(dfs_mt, NULL, filename, 0, -1, 0);
@@ -1253,6 +1275,9 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, orig_gid);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** set gid to 0 */
 	rc = dfs_chown(dfs_mt, NULL, filename, -1, 0, 0);
@@ -1261,17 +1286,25 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** set uid to 3, gid to 4 - using dfs_osetattr */
+	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_uid = 3;
 	stbuf.st_gid = 4;
 	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
 	assert_int_equal(rc, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 3);
 	assert_int_equal(stbuf.st_gid, 4);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** set uid to 1, gid to 2 */
 	rc = dfs_chown(dfs_mt, NULL, filename, 1, 2, 0);
@@ -1280,6 +1313,9 @@ dfs_test_chown(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 1);
 	assert_int_equal(stbuf.st_gid, 2);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** create a symlink to that file */
 	rc = dfs_open(dfs_mt, NULL, symname, S_IFLNK | S_IWUSR | S_IRUSR,
@@ -1346,15 +1382,6 @@ dfs_test_chown(void **state)
 	assert_int_equal(stbuf.st_gid, stbuf2.st_gid);
 }
 
-static bool
-check_ts(struct timespec l, struct timespec r)
-{
-	if (l.tv_sec == r.tv_sec)
-		return l.tv_nsec < r.tv_nsec;
-	else
-		return l.tv_sec < r.tv_sec;
-}
-
 static void
 dfs_test_mtime(void **state)
 {
@@ -1399,6 +1426,7 @@ dfs_test_mtime(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 64);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -1418,6 +1446,7 @@ dfs_test_mtime(void **state)
 	stbuf.st_mtim.tv_nsec = first_ts.tv_nsec;
 	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
@@ -1425,16 +1454,93 @@ dfs_test_mtime(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 
 	/** truncate the file */
 	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
 	assert_int_equal(rc, 0);
-
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_ostat(dfs_mt, file, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+
+	/** set size on file with dfs_osetattr and stat at same time */
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1024;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 1024);
+	/** check the mtime was updated with the setattr */
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+
+	struct tm	tm = {0};
+	time_t		ts;
+	char		*p;
+	struct tm       *timeptr;
+	char		time_str[64];
+
+	/** set the mtime to 2020 */
+	p = strptime("2020-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/** verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("2020", time_str, 4) == 0);
+
+	/** set the mtime to 1900 */
+	memset(&tm, 0, sizeof(struct tm));
+	p = strptime("1900-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/* verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("1900", time_str, 4) == 0);
+
+	/** set the mtime to 2999 */
+	memset(&tm, 0, sizeof(struct tm));
+	p = strptime("2999-12-31", "%Y-%m-%d", &tm);
+	assert_non_null(p);
+	ts = mktime(&tm);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_mtim.tv_sec = ts;
+	stbuf.st_mtim.tv_nsec = 0;
+	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	assert_int_equal(rc, 0);
+	/* verify */
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+	timeptr = localtime(&stbuf.st_mtim.tv_sec);
+	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+	print_message("mtime = %s\n", time_str);
+	assert_true(strncmp("2999", time_str, 4) == 0);
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
@@ -1676,6 +1782,315 @@ dfs_test_async_io(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
+static void
+dfs_test_readdir(void **state)
+{
+	dfs_obj_t		*dir;
+	dfs_obj_t		*obj;
+	int			nr = 100;
+	char                    name[24];
+	daos_anchor_t		anchor = {0};
+	uint32_t		num_ents = 10;
+	struct dirent		ents[10];
+	struct stat		stbufs[10];
+	int			num_files = 0;
+	int			num_dirs = 0;
+	int			i;
+	int			rc;
+
+	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	/** create 100 files and dirs */
+	for (i = 0; i < nr; i++) {
+		sprintf(name, "RD_file_%d", i);
+		rc = dfs_open(dfs_mt, dir, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &obj);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+
+		sprintf(name, "RD_dir_%d", i);
+		rc = dfs_mkdir(dfs_mt, dir, name, S_IFDIR, OC_S1);
+		assert_int_equal(rc, 0);
+	}
+
+	/** readdir and stat */
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+
+		for (i = 0; i < num_ents; i++) {
+			if (strncmp(ents[i].d_name, "RD_file", 7) == 0) {
+				assert_true(S_ISREG(stbufs[i].st_mode));
+				num_files++;
+			} else if (strncmp(ents[i].d_name, "RD_dir", 6) == 0) {
+				assert_true(S_ISDIR(stbufs[i].st_mode));
+				num_dirs++;
+			} else {
+				print_error("Found invalid entry: %s\n", ents[i].d_name);
+			}
+		}
+	}
+
+	assert_true(num_files == 100);
+	assert_true(num_dirs == 100);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+}
+
+static int
+compare_oclass(daos_handle_t coh, daos_oclass_id_t acid, daos_oclass_id_t ecid)
+{
+	int		rc;
+	daos_obj_id_t	oid = {};
+
+	/*
+	 * get the expected oclass - this is needed to convert things with GX to fit them in current
+	 * system.
+	 */
+	rc = daos_obj_generate_oid(coh, &oid, 0, ecid, 0, 0);
+	assert_rc_equal(rc, 0);
+	ecid = daos_obj_id2class(oid);
+
+	if (acid == ecid)
+		return 0;
+	else
+		return 1;
+}
+
+static void
+dfs_test_oclass_hints(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			oclass_name[24];
+	daos_oclass_id_t	cid;
+	daos_handle_t		coh;
+	dfs_t			*dfs_l;
+	dfs_obj_t		*obj;
+	daos_obj_id_t		oid;
+	daos_oclass_id_t	ecidx;
+	daos_prop_t             *prop = NULL;
+	dfs_attr_t		dattr = {0};
+	struct pl_map_attr      attr = {0};
+	int			rc;
+
+	/** check invalid hints */
+	rc = dfs_suggest_oclass(dfs_mt, "file:single,dir:large", &cid);
+	assert_int_equal(rc, EINVAL);
+	rc = dfs_suggest_oclass(dfs_mt, "file:singlee", &cid);
+	assert_int_equal(rc, EINVAL);
+
+	rc = pl_map_query(arg->pool.pool_uuid, &attr);
+	assert_rc_equal(rc, 0);
+
+	strcpy(dattr.da_hints, "file:max,dir:invalid");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:max;dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:max:dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "invalid");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+	strcpy(dattr.da_hints, "file:single,dir:max,hello:world");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, EINVAL);
+
+	strcpy(dattr.da_hints, "File:single,Dir:max");
+	rc = dfs_cont_create_with_label(arg->pool.poh, "h_cont", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 */
+	rc = dfs_open(dfs_l, NULL, "file1", S_IWUSR | S_IRUSR | S_IFREG, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(obj, &oid);
+	assert_int_equal(rc, 0);
+	cid = daos_obj_id2class(oid);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** Create /dir1 */
+	rc = dfs_open(dfs_l, NULL, "dir1", S_IWUSR | S_IRUSR | S_IFDIR, O_RDWR | O_CREAT | O_EXCL,
+		      0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(obj, &oid);
+	assert_int_equal(rc, 0);
+	cid = daos_obj_id2class(oid);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	memset(dattr.da_hints, 0, DAOS_CONT_HINT_MAX_LEN);
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "h_cont", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	dattr.da_props = prop;
+
+	/** create container with RF = 0 */
+	print_message("DFS object class hints with container RF0:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF0;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont0", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_S1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_SX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont0", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** create container with RF = 1 */
+	print_message("DFS object class hints with container RF1:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont1", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 18)
+		ecidx = OC_EC_16P1GX;
+	else if (attr.pa_domain_nr >= 10)
+		ecidx = OC_EC_8P1GX;
+	else if (attr.pa_domain_nr >= 6)
+		ecidx = OC_EC_4P1GX;
+	else
+		ecidx = OC_EC_2P1GX;
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, ecidx);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_2GX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont1", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** create container with RF = 2 */
+	print_message("DFS object class hints with container RF2:\n");
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	rc = dfs_cont_create_with_label(arg->pool.poh, "oc_cont2", &dattr, NULL, &coh, &dfs_l);
+	assert_int_equal(rc, 0);
+
+	/** set the expect EC object class ID based on domain nr */
+	if (attr.pa_domain_nr >= 18)
+		ecidx = OC_EC_16P2GX;
+	else if (attr.pa_domain_nr >= 10)
+		ecidx = OC_EC_8P2GX;
+	else if (attr.pa_domain_nr >= 6)
+		ecidx = OC_EC_4P2GX;
+	else
+		ecidx = OC_EC_2P2GX;
+
+	rc = dfs_suggest_oclass(dfs_l, "file:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"file:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "File:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"File:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, ecidx);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "dir:single", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"dir:single\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3G1);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_suggest_oclass(dfs_l, "Directory:max", &cid);
+	assert_int_equal(rc, 0);
+	daos_oclass_id2name(cid, oclass_name);
+	print_message("oclass suggested for \"Directory:max\" = %s\n", oclass_name);
+	rc = compare_oclass(coh, cid, OC_RP_3GX);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_umount(dfs_l);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, "oc_cont2", 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	daos_prop_free(prop);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -1713,6 +2128,10 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_async_io_th, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST18: async IO",
 	  dfs_test_async_io, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST19: DFS readdir",
+	  dfs_test_readdir, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST20: dfs oclass hints",
+	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 };
 
 static int
@@ -1722,7 +2141,8 @@ dfs_setup(void **state)
 	int		rc = 0;
 
 	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	if (rc != 0)
+		return rc;
 
 	arg = *state;
 
@@ -1737,7 +2157,7 @@ dfs_setup(void **state)
 
 		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
-		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+		print_message("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
 
 	handle_share(&co_hdl, HANDLE_CO, arg->myrank, arg->pool.poh, 0);

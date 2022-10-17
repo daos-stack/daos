@@ -285,7 +285,10 @@ type MockBackendConfig struct {
 }
 
 type MockBackend struct {
-	cfg MockBackendConfig
+	sync.RWMutex
+	cfg          MockBackendConfig
+	PrepareCalls []storage.ScmPrepareRequest
+	ResetCalls   []storage.ScmPrepareRequest
 }
 
 func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
@@ -296,11 +299,29 @@ func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
-func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+func (mb *MockBackend) prep(req storage.ScmPrepareRequest, _ *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	mb.Lock()
+	mb.PrepareCalls = append(mb.PrepareCalls, req)
+	mb.Unlock()
+
+	if mb.cfg.PrepErr != nil {
+		return nil, mb.cfg.PrepErr
+	} else if mb.cfg.PrepRes == nil {
+		return &storage.ScmPrepareResponse{}, nil
+	}
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	mb.Lock()
+	mb.ResetCalls = append(mb.ResetCalls, req)
+	mb.Unlock()
+
+	if mb.cfg.PrepResetErr != nil {
+		return nil, mb.cfg.PrepResetErr
+	} else if mb.cfg.PrepResetRes == nil {
+		return &storage.ScmPrepareResponse{}, nil
+	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
 

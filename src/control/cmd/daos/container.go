@@ -47,8 +47,8 @@ type containerCmd struct {
 	GetAttribute    containerGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
 	SetAttribute    containerSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container properties"`
+	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container properties"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
@@ -79,6 +79,9 @@ func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 
 func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
 	openFlags |= C.DAOS_COO_FORCE
+	if (openFlags & C.DAOS_COO_RO) != 0 {
+		openFlags |= C.DAOS_COO_RO_MDSTATS
+	}
 
 	var rc C.int
 	switch {
@@ -201,16 +204,20 @@ func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) 
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        ContTypeFlag         `long:"type" short:"t" description:"container type"`
-	Path        string               `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Label       string               `long:"label" short:"l" description:"container label"`
-	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Type           ContTypeFlag         `long:"type" short:"t" description:"container type"`
+	Path           string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize      ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass    ObjClassFlag         `long:"oclass" short:"o" description:"default file object class"`
+	DirObjectClass ObjClassFlag         `long:"dir_oclass" short:"a" description:"default directory object class"`
+	CHints         string               `long:"hints" short:"h" description:"container hints"`
+	Properties     CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Mode           ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile        string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User           string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group          string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args           struct {
+		Label string `positional-arg-name:"label"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
@@ -260,16 +267,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		defer freeString(ap.aclfile)
 	}
 
-	if cmd.Label != "" {
+	if cmd.Args.Label != "" {
 		for key := range cmd.Properties.ParsedProps {
 			if key == "label" {
-				return errors.New("can't use both --label and --properties label:")
+				return errors.New("can't supply label arg and --properties label:")
 			}
 		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
 			return err
 		}
-		cmd.contLabel = cmd.Label
+		cmd.contLabel = cmd.Args.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -286,8 +293,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.ObjectClass.Set {
 			ap.oclass = cmd.ObjectClass.Class
 		}
+		if cmd.DirObjectClass.Set {
+			ap.dir_oclass = cmd.DirObjectClass.Class
+		}
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
+		}
+		if cmd.CHints != "" {
+			ap.hints = C.CString(cmd.CHints)
+			defer freeString(ap.hints)
 		}
 	}
 
@@ -337,7 +351,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ci.PoolUUID = &cmd.poolUUID
 		ci.Type = cmd.Type.String()
 		ci.ContainerUUID = &cmd.contUUID
-		ci.ContainerLabel = cmd.Label
+		ci.ContainerLabel = cmd.Args.Label
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -356,17 +370,13 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 type existingContainerCmd struct {
 	containerBaseCmd
 
-	Path     string      `long:"path" short:"d" description:"unified namespace path"`
-	ContFlag ContainerID `long:"cont" short:"c" description:"container UUID (deprecated; use positional arg)"`
-	Args     struct {
-		Container ContainerID `positional-arg-name:"<container name or UUID>"`
+	Path string `long:"path" short:"d" description:"unified namespace path"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *existingContainerCmd) ContainerID() ContainerID {
-	if !cmd.ContFlag.Empty() {
-		return cmd.ContFlag
-	}
 	return cmd.Args.Container
 }
 
@@ -719,11 +729,15 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%#x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
+			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 		}...)
 
+		if *ci.LatestSnapshot != 0 {
+			rows = append(rows, txtfmt.TableRow{"Latest Persistent Snapshot": fmt.Sprintf("%#x (%s)", *ci.LatestSnapshot, daos.HLC(*ci.LatestSnapshot))})
+		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}
@@ -743,6 +757,8 @@ type containerInfo struct {
 	LatestSnapshot   *uint64    `json:"latest_snapshot"`
 	RedundancyFactor *uint32    `json:"redundancy_factor"`
 	NumSnapshots     *uint32    `json:"num_snapshots"`
+	OpenTime         *uint64    `json:"open_time"`
+	CloseModifyTime  *uint64    `json:"close_modify_time"`
 	Type             string     `json:"container_type"`
 	ObjectClass      string     `json:"object_class,omitempty"`
 	ChunkSize        uint64     `json:"chunk_size,omitempty"`
@@ -767,7 +783,8 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-
+	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
+	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)
 	return ci
 }
 

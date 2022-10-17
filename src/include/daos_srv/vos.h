@@ -42,9 +42,10 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ * \param exist		[IN]	Related DTX entry exists or not.
  */
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist);
 
 /**
  * Detach the DTX entry from the DTX handle.
@@ -291,13 +292,15 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
-/** Enable any version specific features on the pool
+/** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param feats	[IN]	Features to enable
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
+ *
+ * \return	0 on success, error otherwise
  */
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.
@@ -1063,15 +1066,18 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * a recx is found or no more dkeys exist in which case -DER_NONEXIST is
  * returned.
  *
+ * The maximum write epoch for the object can be returned at the same time
+ * as the min or max query. Alternatively, this API can be used to only query
+ * the maximum write for an object if no flags are given.
+ *
  * \param[in]	coh		Container open handle.
  * \param[in]	oid		Object id
  * \param[in]	flags		mask with the following options:
  *				DAOS_GET_DKEY, DAOS_GET_AKEY, DAOS_GET_RECX,
  *				DAOS_GET_MAX, DAOS_GET_MIN
- *				User has to indicate whether to query the MAX or MIN, in
- *				addition to what needs to be queried. Providing
- *				(MAX | MIN) in any combination will return an error.
- *				i.e. user can only query MAX or MIN in one call.
+ *				If the user isn't querying max_write, they must specify either
+ *				DAOS_GET_MAX or DAOS_GET_MIN, exclusively. Anything else is
+ *				an error.
  * \param[in,out]
  *		dkey		[in]: allocated integer dkey. User can provide the dkey
  *				if not querying the max or min dkey.
@@ -1083,7 +1089,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx		max or min offset in dkey/akey, and the size of the
  *				extent at the offset. If there are no visible array
  *				records, the size in the recx returned will be 0.
- * \param[out]	max_write	Optional: Returns max write epoch for object
+ * \param[out]	max_write	Optional: Returns max write epoch for object.
  * \param[in]	cell_size cell size for EC object, used to calculated the replicated
  *                      space address on parity shard.
  * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
@@ -1173,6 +1179,9 @@ int
 vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
+
+uint64_t
+vos_get_io_size(daos_handle_t ioh);
 
 /**
  * Helper functions for dedup verify.
@@ -1323,5 +1332,21 @@ uint64_t
 get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 		       uint64_t duration_seconds, uint64_t periods_nr,
 		       uint64_t per_idx);
+
+/** Set the VOS portion of the anchor for a given dkey or akey
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	Object ID
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Optional attribute key. If NULL, anchor is set using dkey
+ * \param[out]	anchor	The anchor to set.
+ *
+ * \return 0 on success, error otherwise.
+ *
+ * If the tree containing the key doesn't exist, the anchor will be set anchor to EOF.
+ */
+int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor);
 
 #endif /* __VOS_API_H */

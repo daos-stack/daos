@@ -157,8 +157,8 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_ran
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_create(pool_uuid, ranks->rl_nr, group, ranks, domains_nr, domains, prop,
-				  svc_list);
+	return ds_pool_svc_dist_create(pool_uuid, ranks->rl_nr, group, ranks, domains_nr, domains,
+				       prop, svc_list);
 }
 
 int
@@ -223,10 +223,16 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
+		/*
+		 * The ds_mgmt_pool_svc_create call doesn't clean up any
+		 * successful PS replica creations upon errors; we clean up
+		 * those here together with other pool resources to save one
+		 * round of RPCs.
+		 */
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
 	}
 
 out:
@@ -238,12 +244,10 @@ out:
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		     const char *group, uint32_t force)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 {
 	int		 rc;
 	d_rank_list_t	*ranks = NULL;
-	d_rank_list_t	*filtered_svc = NULL;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -260,38 +264,15 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		goto out;
 	}
 
-	/* Destroy pool service. Send corpc only to svc_ranks found in ranks.
-	 * Control plane may not have been updated yet if any of svc_ranks
-	 * were recently excluded from the pool.
-	 */
-	rc = d_rank_list_dup(&filtered_svc, svc_ranks);
-	if (rc)
-		D_GOTO(free_ranks, rc = -DER_NOMEM);
-	d_rank_list_filter(ranks, filtered_svc, false /* exclude */);
-	if (!d_rank_list_identical(filtered_svc, svc_ranks)) {
-		D_DEBUG(DB_MGMT, DF_UUID": %u svc_ranks, but only %u found "
-			"in pool map\n", DP_UUID(pool_uuid),
-			svc_ranks->rl_nr, filtered_svc->rl_nr);
-	}
-
-	rc = ds_pool_svc_destroy(pool_uuid, filtered_svc);
-	if (rc != 0) {
-		D_ERROR("Failed to destroy pool service " DF_UUID ", "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_filtered;
-	}
-
 	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_filtered;
+		goto free_ranks;
 	}
 
 	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
 		DP_UUID(pool_uuid));
-free_filtered:
-	d_rank_list_free(filtered_svc);
 free_ranks:
 	d_rank_list_free(ranks);
 out:
@@ -332,8 +313,7 @@ out:
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
-		   uint32_t destroy, uint32_t force_destroy, char *machine,
-		   const char *group, uint32_t *count)
+		   uint32_t destroy, uint32_t force_destroy, char *machine, uint32_t *count)
 {
 	int		 rc;
 

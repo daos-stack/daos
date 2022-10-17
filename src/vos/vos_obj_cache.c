@@ -404,15 +404,9 @@ check_object:
 	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
 		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, false);
-		D_ASSERTF(0, "Simultaneous object hold and discard detected\n");
-		goto failed;
-	}
-
-	if (obj->obj_discard && intent == DAOS_INTENT_UPDATE) {
-		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
-		vos_obj_release(occ, obj, false);
+		/* Update request will retry with this error */
 		rc = -DER_UPDATE_AGAIN;
-		goto failed;
+		goto failed_2;
 	}
 
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)

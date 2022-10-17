@@ -520,7 +520,7 @@ func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmForm
 		return nil, FaultFormatMissingParam
 	}
 
-	res, err := p.MountRamdisk(req.Mountpoint, req.Ramdisk.Size)
+	res, err := p.MountRamdisk(req.Mountpoint, req.Ramdisk)
 	if err != nil {
 		return nil, err
 	}
@@ -598,13 +598,21 @@ func (p *Provider) MountDcpm(device, target string) (*storage.ScmMountResponse, 
 
 // MountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
 // the specified mountpoint.
-func (p *Provider) MountRamdisk(target string, size uint) (*storage.ScmMountResponse, error) {
-	var opts string
-	if size > 0 {
-		opts = fmt.Sprintf("size=%dg", size)
+func (p *Provider) MountRamdisk(target string, params *storage.RamdiskParams) (*storage.ScmMountResponse, error) {
+	if params == nil {
+		return nil, FaultFormatMissingParam
 	}
 
-	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, opts)
+	var opts = []string{
+		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
+		// mpol=prefer:Node prefers to allocate memory from the given Node
+		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
+	}
+	if params.Size > 0 {
+		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
+	}
+
+	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, strings.Join(opts, ","))
 }
 
 // Mount attempts to mount the target specified in the supplied request.
@@ -613,7 +621,7 @@ func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.ScmMountResponse
 	case storage.ClassDcpm:
 		return p.MountDcpm(req.Device, req.Target)
 	case storage.ClassRam:
-		return p.MountRamdisk(req.Target, req.Size)
+		return p.MountRamdisk(req.Target, req.Ramdisk)
 	default:
 		return nil, errors.New(storage.ScmMsgClassNotSupported)
 	}

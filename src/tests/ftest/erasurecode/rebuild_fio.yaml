@@ -52,9 +52,9 @@ container:
   control_method: daos
   rf_properties: !mux
     rf1:
-        properties: rf:1
+        properties: rd_fac:1
     rf2:
-        properties: rf:2
+        properties: rd_fac:2
 fio:
   names:
     - test
@@ -66,7 +66,7 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     iodepth: 10
-    size: 133MB
+    size: 33MB
     read_write: !mux
       write_read:
         rw: 'write'
