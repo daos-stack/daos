@@ -52,17 +52,17 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             container (DaosContainer): Container.
             objtype (str): Object class.
         """
-        for i in range(self.obj_count):
+        for idx in range(self.obj_count):
             self.ioreqs.append(IORequest(
                 context=self.context, container=container, obj=None,
                 objtype=objtype))
 
             # Prepare 2 dkeys and 1 akey in each dkey. Use the same akey for
             # both dkeys.
-            dkey_str_a = b"Sample dkey A %d" % i
-            dkey_str_b = b"Sample dkey B %d" % i
-            akey_str = b"Sample akey %d" % i
-            data_str = b"Sample data %d" % i
+            dkey_str_a = b"Sample dkey A %d" % idx
+            dkey_str_b = b"Sample dkey B %d" % idx
+            akey_str = b"Sample akey %d" % idx
+            data_str = b"Sample data %d" % idx
             self.dkey_strs_a.append(dkey_str_a)
             self.dkey_strs_b.append(dkey_str_b)
             self.akey_strs.append(akey_str)
@@ -87,16 +87,16 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
     def punch_all_keys(self):
         """Punch all dkeys and akeys in the objects.
         """
-        for i in range(self.obj_count):
-            self.ioreqs[i].obj.punch_akeys(
-                0, dkey=self.dkey_strs_a[i], akeys=[self.akey_strs[i]])
-            self.ioreqs[i].obj.punch_akeys(
-                0, dkey=self.dkey_strs_b[i], akeys=[self.akey_strs[i]])
+        for idx in range(self.obj_count):
+            self.ioreqs[idx].obj.punch_akeys(
+                0, dkey=self.dkey_strs_a[idx], akeys=[self.akey_strs[idx]])
+            self.ioreqs[idx].obj.punch_akeys(
+                0, dkey=self.dkey_strs_b[idx], akeys=[self.akey_strs[idx]])
             # Punch dkeys one at a time. DAOS-8945
-            self.ioreqs[i].obj.punch_dkeys(0, dkeys=[self.dkey_strs_a[i]])
-            self.ioreqs[i].obj.punch_dkeys(0, dkeys=[self.dkey_strs_b[i]])
-            if i % 10 == 0:
-                self.log.info("Keys punched %d", i)
+            self.ioreqs[idx].obj.punch_dkeys(0, dkeys=[self.dkey_strs_a[idx]])
+            self.ioreqs[idx].obj.punch_dkeys(0, dkeys=[self.dkey_strs_b[idx]])
+            if idx % 10 == 0:
+                self.log.info("Keys punched %d", idx)
 
     def verify_active_latency(self, prefix, test_latency):
         """Call the dmg telemetry command with given prefix and verify.
@@ -222,16 +222,16 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             container=container, objtype=DaosObjClass.OC_S1)
 
         # Call list_dkey() and list_akey() on each object.
-        for i in range(self.obj_count):
-            _ = self.ioreqs[i].list_dkey()
-            _ = self.ioreqs[i].list_akey(dkey=self.dkeys_a[i])
-            _ = self.ioreqs[i].list_akey(dkey=self.dkeys_b[i])
+        for idx in range(self.obj_count):
+            _ = self.ioreqs[idx].list_dkey()
+            _ = self.ioreqs[idx].list_akey(dkey=self.dkeys_a[idx])
+            _ = self.ioreqs[idx].list_akey(dkey=self.dkeys_b[idx])
 
         self.punch_all_keys()
 
         self.telemetry.dmg.verbose = False
 
-        ### Obtain and verify the io metrics 1 to 4. ###
+        # Obtain and verify the io metrics 1 to 4. ###
         # engine_pool_ops_dkey_enum
         pool_dkey_enum = self.telemetry.ENGINE_POOL_METRICS[5]
         # engine_pool_ops_akey_enum
@@ -275,7 +275,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
                 akey_punch_total)
             self.errors.append(msg)
 
-        ### Verify active and latency; metrics 5 to 8. ###
+        # Verify active and latency; metrics 5 to 8. ###
         # Verify dkey enum active.
         self.verify_active_latency(
             prefix="engine_io_ops_dkey_enum_active_", test_latency=False)
@@ -358,7 +358,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         self.telemetry.dmg.verbose = False
 
-        ### Obtain and verify the pool metrics 1 and 2 ###
+        # Obtain and verify the pool metrics 1 and 2 ###
         pool_tgt_dkey_punch = self.telemetry.ENGINE_POOL_METRICS[21]
         pool_tgt_akey_punch = self.telemetry.ENGINE_POOL_METRICS[20]
         specific_metrics = [pool_tgt_dkey_punch, pool_tgt_akey_punch]
@@ -443,7 +443,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         self.telemetry.dmg.verbose = False
 
-        ### Verify active and latency; metrics 1 and 2. ###
+        # Verify active and latency; metrics 1 and 2. ###
         # Verify tgt dkey punch active.
         self.verify_active_latency(
             prefix="engine_io_ops_tgt_dkey_punch_active_", test_latency=False)

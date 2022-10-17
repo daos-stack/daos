@@ -10,12 +10,12 @@ import threading
 import copy
 
 from itertools import product
+import queue
 from write_host_file import write_host_file
 from exception_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-import queue
 
 
 class OSAOnlineParallelTest(OSAUtils):
@@ -99,9 +99,9 @@ class OSAOnlineParallelTest(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6) #nosec
-        target_list.append(n)
-        target_list.append(n+1)
+        exc = random.randint(0, 6)  # nosec
+        target_list.append(exc)
+        target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.

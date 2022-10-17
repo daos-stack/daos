@@ -1,3 +1,5 @@
+# yamllint disable rule:truthy
+
 hosts:
   test_servers: 1
 

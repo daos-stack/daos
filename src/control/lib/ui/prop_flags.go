@@ -11,76 +11,17 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jessevdk/go-flags"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 var (
-	_ flags.Unmarshaler = &LabelOrUUIDFlag{}
 	_ flags.Unmarshaler = &SetPropertiesFlag{}
 	_ flags.Completer   = &SetPropertiesFlag{}
 	_ flags.Unmarshaler = &GetPropertiesFlag{}
 	_ flags.Completer   = &GetPropertiesFlag{}
 )
-
-// LabelOrUUIDFlag is used to hold a pool or container ID supplied
-// via command-line argument.
-type LabelOrUUIDFlag struct {
-	UUID  uuid.UUID `json:"uuid"`
-	Label string    `json:"label"`
-}
-
-// Empty returns true if neither UUID or Label were set.
-func (f LabelOrUUIDFlag) Empty() bool {
-	return !f.HasLabel() && !f.HasUUID()
-}
-
-// HasLabel returns true if Label is a nonempty string.
-func (f LabelOrUUIDFlag) HasLabel() bool {
-	return f.Label != ""
-}
-
-// HasUUID returns true if UUID is a nonzero value.
-func (f LabelOrUUIDFlag) HasUUID() bool {
-	return f.UUID != uuid.Nil
-}
-
-func (f LabelOrUUIDFlag) String() string {
-	switch {
-	case f.HasLabel():
-		return f.Label
-	case f.HasUUID():
-		return f.UUID.String()
-	default:
-		return "<no label or uuid set>"
-	}
-}
-
-// SetLabel validates the supplied label and sets it if valid.
-func (f *LabelOrUUIDFlag) SetLabel(l string) error {
-	if !daos.LabelIsValid(l) {
-		return errors.Errorf("invalid label %q", l)
-	}
-
-	f.Label = l
-	return nil
-}
-
-// UnmarshalFlag implements the go-flags.Unmarshaler
-// interface.
-func (f *LabelOrUUIDFlag) UnmarshalFlag(fv string) error {
-	uuid, err := uuid.Parse(fv)
-	if err == nil {
-		f.UUID = uuid
-		return nil
-	}
-
-	return f.SetLabel(fv)
-}
 
 const (
 	// MaxPropKeyLen is the maximum length of a property key.
@@ -101,11 +42,21 @@ func propError(fs string, args ...interface{}) *flags.Error {
 // CompletionMap is a map of key to a list of possible completions.
 type CompletionMap map[string][]string
 
+type PropertiesFlag struct {
+	completions      CompletionMap
+	deprecatedKeyMap map[string]string
+}
+
+// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
+func (f *PropertiesFlag) DeprecatedKeyMap(deprKeyMap map[string]string) {
+	f.deprecatedKeyMap = deprKeyMap
+}
+
 // SetPropertiesFlag is used to hold a list of properties to set.
 type SetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  map[string]string
 	settableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -129,7 +80,15 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 		return true
 	}
 
-	_, isSettable := f.settableKeys[key]
+	if _, isSettable := f.settableKeys[key]; isSettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isSettable := f.deprecatedKeyMap[key]
 	return isSettable
 }
 
@@ -154,6 +113,9 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if len(key) > MaxPropKeyLen {
 			return propError("key too long (%d > %d)", len(key), MaxPropKeyLen)
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 		if len(value) == 0 {
 			return propError("value must not be empty")
@@ -210,9 +172,9 @@ func (f *SetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 
 // GetPropertiesFlag is used to hold a list of property keys to get.
 type GetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // GettableKeys accepts a list of property keys that are gettable.
@@ -236,7 +198,15 @@ func (f *GetPropertiesFlag) IsGettable(key string) bool {
 		return true
 	}
 
-	_, isGettable := f.gettableKeys[key]
+	if _, isGettable := f.gettableKeys[key]; isGettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isGettable := f.deprecatedKeyMap[key]
 	return isGettable
 }
 
@@ -258,6 +228,9 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 		}
 		if strings.Contains(key, propKvSep) {
 			return propError("key cannot contain '" + propKvSep + "'")
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 
 		f.ParsedProps.Add(key)

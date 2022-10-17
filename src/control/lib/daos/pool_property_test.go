@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package control_test
+package daos_test
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func TestControl_PoolPropertyValue(t *testing.T) {
@@ -25,7 +25,7 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		val    *control.PoolPropertyValue
+		val    *daos.PoolPropertyValue
 		strVal *string
 		numVal *uint64
 		expErr error
@@ -36,18 +36,18 @@ func TestControl_PoolPropertyValue(t *testing.T) {
 			expStr: "value not set",
 		},
 		"not set": {
-			val:    &control.PoolPropertyValue{},
+			val:    &daos.PoolPropertyValue{},
 			expErr: errors.New("not set"),
 			expStr: "value not set",
 		},
 		"string value": {
-			val:    &control.PoolPropertyValue{},
+			val:    &daos.PoolPropertyValue{},
 			strVal: strPtr("hi"),
 			expErr: errors.New("not uint64"),
 			expStr: "hi",
 		},
 		"number value": {
-			val:    &control.PoolPropertyValue{},
+			val:    &daos.PoolPropertyValue{},
 			numVal: numPtr(42),
 			expStr: "42",
 		},
@@ -129,14 +129,14 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
-		"rf-valid": {
-			name:    "rf",
+		"rd_fac-valid": {
+			name:    "rd_fac",
 			value:   "1",
-			expStr:  "rf:1",
-			expJson: []byte(`{"name":"rf","description":"Pool redundancy factor","value":1}`),
+			expStr:  "rd_fac:1",
+			expJson: []byte(`{"name":"rd_fac","description":"Pool redundancy factor","value":1}`),
 		},
-		"rf-invalid": {
-			name:   "rf",
+		"rd_fac-invalid": {
+			name:   "rd_fac",
 			value:  "100",
 			expErr: errors.New("invalid"),
 		},
@@ -208,7 +208,7 @@ func TestControl_PoolProperties(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			prop, err := control.PoolProperties().GetProperty(tc.name)
+			prop, err := daos.PoolProperties().GetProperty(tc.name)
 			if err != nil {
 				t.Fatal(err)
 			}

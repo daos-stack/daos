@@ -588,7 +588,7 @@ retry:
 				 */
 				D_ASSERT(top >= 0);
 				parent_dom = top > 0 ? dom_stack[top - 1] : root_pos;
-				num_doms_1 = get_num_domains(parent_dom, allow_status);
+				num_doms_1 = get_num_domains(parent_dom, allow_status, fdom_lvl);
 				start_dom_1 = (root_pos->do_children) - root_pos;
 				end_dom_1 = start_dom_1 + (num_doms_1 - 1);
 				for (idx = start_dom_1; idx <= end_dom_1; idx++) {
@@ -599,7 +599,8 @@ retry:
 					tmp_dom = curr_dom + (idx - (curr_dom - root_pos));
 					if (tmp_dom->do_children == NULL)
 						continue;
-					num_doms_2 = get_num_domains(tmp_dom, allow_status);
+					num_doms_2 = get_num_domains(tmp_dom, allow_status,
+								     fdom_lvl);
 					start_dom_2 = (tmp_dom->do_children) - root_pos;
 					end_dom_2 = start_dom_2 + (num_doms_2 - 1);
 					if (isset_range(dom_cur_grp_used, start_dom_2,

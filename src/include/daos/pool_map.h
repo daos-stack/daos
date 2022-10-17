@@ -226,8 +226,7 @@ int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-		 int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
-		 uint32_t dss_tgt_nr);
+		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr);
 
 int pool_map_comp_cnt(struct pool_map *map);
 

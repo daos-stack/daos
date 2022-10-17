@@ -137,7 +137,7 @@ int
 get_object_classes(daos_oclass_id_t **oclass_id_pp);
 
 int
-extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_list,
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
 		     uint32_t *map_version_p, uint32_t dss_tgt_nr);
 

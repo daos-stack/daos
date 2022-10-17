@@ -8,17 +8,17 @@ server_config:
     nr_xs_helpers: 0
     scm_size: 4
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 1G
-    control_method: dmg
+  mode: 146
+  name: daos_server
+  scm_size: 1G
+  control_method: dmg
 container:
-    container_handle: !mux
-        good_coh:
-            coh:
-                - GOOD
-                - 'PASS'
-        bad_coh:
-            coh:
-                - BAD
-                - 'FAIL'
+  container_handle: !mux
+    good_coh:
+      coh:
+        - GOOD
+        - 'PASS'
+    bad_coh:
+      coh:
+        - BAD
+        - 'FAIL'

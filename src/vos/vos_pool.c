@@ -769,8 +769,10 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, unsigned int flags, void
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	if (pool_df->pd_version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
@@ -920,8 +922,10 @@ end:
 	if (rc != 0)
 		return rc;
 
-	if (version >= POOL_DF_AGG_OPT)
-		pool->vp_feats |= VOS_POOL_FEAT_AGG_OPT;
+	if (version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	if (version >= VOS_POOL_DF_2_4)
+		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 
 	return 0;
 }
@@ -1049,4 +1053,24 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	}
 
 	return 0;
+}
+
+/** Convenience function to return address of a bio_addr in pmem.  If it's a hole or NVMe address,
+ *  it returns NULL.
+ */
+const void *
+vos_pool_biov2addr(daos_handle_t poh, struct bio_iov *biov)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	if (bio_addr_is_hole(&biov->bi_addr))
+		return NULL;
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+		return NULL;
+
+	return umem_off2ptr(vos_pool2umm(pool), bio_iov2raw_off(biov));
 }
