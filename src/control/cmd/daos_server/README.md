@@ -18,7 +18,7 @@ The DAOS Server provides capability to provision and manage network devices and
 non-volatile storage including the allocation of resources to engine instances.
 
 See
-[admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning)
+[admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning)
 for details on hardware provisioning.
 
 ## Configuration
@@ -157,7 +157,7 @@ Preparing SCM involves configuring DCPM modules in AppDirect memory regions
 resultant nvdimm namespaces are defined by a device identifier (e.g.
 /dev/pmem0).
 
-See the [admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning) for usage.
+See the [admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning) for usage.
 
 ### Storage Scan
 
@@ -168,7 +168,7 @@ Device details for any discovered PMem (Intel(R) Optane(TM) persistent memory)
 modules on the storage server will be returned when running the `storage scan`
 subcommand.
 
-See the [admin guide](https://daos-stack.github.io/admin/deployment/#hardware-provisioning) for usage.
+See the [admin guide](https://docs.daos.io/latest/admin/deployment/#hardware-provisioning) for usage.
 
 ### Network Scan
 

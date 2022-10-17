@@ -386,7 +386,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         if self.ior_cmd.dfs_chunk.value:
             params['chunk_size'] = self.ior_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)
-        rf_prop = "rf:{}".format(cont_rf)
+        rf_prop = "rd_fac:{}".format(cont_rf)
         current_properties = self.container.properties.value
         new_properties = ','.join(filter(None, (current_properties, rf_prop)))
         self.container.properties.update(new_properties)
@@ -475,7 +475,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         if self.mdtest_cmd.dfs_chunk.value:
             params['chunk_size'] = self.mdtest_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)
-        rf_prop = "rf:{}".format(cont_rf)
+        rf_prop = "rd_fac:{}".format(cont_rf)
         current_properties = self.container.properties.value
         new_properties = ','.join(filter(None, (current_properties, rf_prop)))
         self.container.properties.update(new_properties)

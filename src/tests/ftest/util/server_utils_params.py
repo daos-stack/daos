@@ -114,7 +114,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.nr_hugepages = BasicParameter(None, 0)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
-        self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
+        self.helper_log_file = LogParameter(log_dir, None, "daos_server_helper.log")
         self.telemetry_port = BasicParameter(None, 9191)
         self.disable_vmd = BasicParameter(None)
 

@@ -45,7 +45,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: rf:2
+    properties: rd_fac:2
 mdtest:
   client_processes:
     np_48:
