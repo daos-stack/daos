@@ -44,7 +44,7 @@ class MultiUser(DfuseTestBase):
 
         ret = general_utils.run_pcmd(
             self.hostlist_servers,
-            'dmg pool update-acl -e A::root@:rw {}'.format(self.pool.label),
+            'dmg pool --insecure update-acl -e A::root@:rw {}'.format(self.pool.label),
             expect_rc=0)
         ret0 = ret[0]
         print(ret0)
