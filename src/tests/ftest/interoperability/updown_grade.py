@@ -98,7 +98,7 @@ class UpgradeDowngradeTest(IorTestBase):
                                                         decoded.get(attr.decode(), None)))
 
     def check_result(self, result):
-        """check for command result, raise failure when error cncountered
+        """check for command result, raise failure when error encountered
 
         Args:
              result (dict): dictionary of result to check.
@@ -178,7 +178,6 @@ class UpgradeDowngradeTest(IorTestBase):
         else:
             all_hosts = servers + clients
             self.updowngrade_via_rpms(all_hosts, "upgrade", self.upgrade_repo)
-
 
     def downgrade(self, servers, clients):
         """Downgrade hosts via repository or RPMs
@@ -266,7 +265,6 @@ class UpgradeDowngradeTest(IorTestBase):
                 self.fail("##({0})Test failed, {1}, on {2}, expect_err {3} "
                           "not shown on stdout".format(step, cmd, agent_server_ver, exp_err))
         self.log.info("==(%s)Test passed, %s, on %s", step, cmd, agent_server_ver)
-
 
     def test_diff_versions_agent_server(self):
         """
