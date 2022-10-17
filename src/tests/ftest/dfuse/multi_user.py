@@ -47,7 +47,7 @@ class MultiUser(DfuseTestBase):
 
         ret = general_utils.run_pcmd(
             self.hostlist_clients,
-            'sudo daos container create --type POSIX --path {}'.format(root_dir),
+            'sudo daos container create --type POSIX --path {}/new-cont'.format(root_dir),
             expect_rc=0)
         print(ret)
         ret0 = ret[0]
