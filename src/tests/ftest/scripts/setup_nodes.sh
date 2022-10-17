@@ -105,8 +105,12 @@ if [ -f /usr/lib/daos/TESTING/ftest/test.cov ]; then
 fi
 
 echo Setting up fuse.conf
-echo user_allow_other >> /etc/fuse.conf
-cat /etc/fuse.conf
+ls -l /etc/fuse.conf || true
+if [ -e /etc/fuse.conf ]
+then
+        sudo echo user_allow_other >> /etc/fuse.conf
+        cat /etc/fuse.conf
+fi
 
 # make sure to set up for daos_agent. The test harness will take care of
 # creating the /var/run/daos_{agent,server} directories when needed.
