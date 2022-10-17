@@ -491,9 +491,8 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-		  enum daos_otype_t otype, daos_oclass_hints_t hints,
-		  enum daos_obj_redun *ord, uint32_t *nr);
+int dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
+		  daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr);
 
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
@@ -574,7 +573,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)

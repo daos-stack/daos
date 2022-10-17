@@ -472,7 +472,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
 	idx = grp_start + d_rand() % grp_size;
-	for (i = 0; i < grp_size; i++, idx++) {
+	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
 		uint32_t tgt_id;
 		int index;
 
@@ -1333,15 +1333,15 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 {
 	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int			 obj_tf;	/* obj #tolerate failures */
-	int			 cont_rf;	/* cont redun_fac */
+	uint32_t		 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
 
-	cont_rf = dc_cont_hdl2redunfac(coh);
-	if (cont_rf < 0) {
+	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
+	if (rc) {
 		D_ERROR(DF_OID" dc_cont_hdl2redunfac failed, "DF_RC"\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(cont_rf));
-		return cont_rf;
+			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		return rc;
 	}
 
 	if (obj_is_ec(obj)) {
@@ -1709,7 +1709,7 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
  * 1: alive,  0: no alive  < 0: failure.
  */
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 {
 	struct daos_oclass_attr *oca;
 	struct dc_object	*obj;
@@ -1732,14 +1732,15 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash)
 	oca = obj_get_oca(obj);
 	p_shard = obj_ec_parity_start(obj_ec_dkey_hash_get(obj, dkey_hash), oca);
 	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++, p_shard++) {
-		uint32_t shard;
-
-		shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
-		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d\n", shard,
-			obj->cob_shards->do_shards[shard].do_rebuilding,
-			obj->cob_shards->do_shards[shard].do_target_id,
-			obj->cob_shards->do_shards[shard].do_shard);
-		if (!obj_shard_is_invalid(obj, shard, DAOS_OBJ_RPC_FETCH))
+		*shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
+		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", *shard,
+			obj->cob_shards->do_shards[*shard].do_rebuilding,
+			obj->cob_shards->do_shards[*shard].do_reintegrating,
+			obj->cob_shards->do_shards[*shard].do_target_id,
+			obj->cob_shards->do_shards[*shard].do_shard,
+			obj->cob_shards->do_shards[*shard].do_shard_idx);
+		if (!obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH) &&
+		    !obj->cob_shards->do_shards[*shard].do_reintegrating)
 			D_GOTO(out_put, rc = 1);
 	}
 
@@ -5901,7 +5902,7 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_TO_SPEC_GROUP) {
 		*shard = dc_obj_anchor2shard(args->dkey_anchor);
 		obj_auxi->spec_group = 1;
-		grp_idx = *shard / obj_get_grp_size(obj);
+		grp_idx = *shard / obj_get_replicas(obj);
 	} else {
 		if (args->dkey != NULL) {
 			grp_idx = obj_dkey2grpidx(obj, obj_auxi->dkey_hash, map_ver);
@@ -6718,15 +6719,17 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		attr.pa_domain_nr, attr.pa_target_nr);
 
 	if (cid == OC_UNKNOWN) {
-		uint64_t rf_factor;
+		uint32_t rf;
 
-		rf_factor = dc_cont_hdl2redunfac(coh);
-		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-				   attr.pa_target_nr, type, hints, &ord,
+		rc = dc_cont_hdl2redunfac(coh, &rf);
+		if (rc) {
+			D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
 	}
 
 	if (rc)
@@ -6795,7 +6798,7 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr = {0};
-	uint64_t		rf_factor;
+	uint32_t		rf;
 	int			rc;
 	enum daos_obj_redun	ord;
 	struct cont_props	props;
@@ -6815,10 +6818,12 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
 
-	rf_factor = dc_cont_hdl2redunfac(coh);
-	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-			   attr.pa_target_nr, type, hints,
-			   &ord, &nr_grp);
+	rc = dc_cont_hdl2redunfac(coh, &rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
 		return 0;
 

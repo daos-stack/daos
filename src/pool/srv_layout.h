@@ -68,7 +68,7 @@ extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
 extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
 extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
-extern d_iov_t ds_pool_prop_scrub_sched;	/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_mode;	/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_thresh;	/* uint64_t */
 extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */

@@ -23,6 +23,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -358,7 +359,7 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
-		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+		if err := setenv(pbin.DaosPrivHelperLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
@@ -495,7 +496,7 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 		if sb := engine.getSuperblock(); !sb.ValidRank {
 			engine.log.Debug("marking bootstrap instance as rank 0")
 			req.Rank = 0
-			sb.Rank = system.NewRankPtr(0)
+			sb.Rank = ranklist.NewRankPtr(0)
 		}
 
 		return join(ctx, req)
@@ -550,7 +551,7 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
 					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
 					if system.IsNotLeader(err) {
 						// If we've lost leadership while processing the event,

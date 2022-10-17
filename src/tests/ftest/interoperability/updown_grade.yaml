@@ -23,7 +23,7 @@ pool:
 container:
   control_method: daos
   type: POSIX
-  properties: rf:2
+  properties: rf:1
 attrtests:
   num_attributes: 20
 dfuse:
