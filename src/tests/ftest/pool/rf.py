@@ -62,7 +62,7 @@ class PoolRedunFacProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_rf != pool_prop_expected:
-                self.container.properties.update("rf:{}"
+                self.container.properties.update("rd_fac:{}"
                                                  .format(cont_rf))
 
             # Create the container and open handle

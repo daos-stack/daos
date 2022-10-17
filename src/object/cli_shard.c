@@ -1279,6 +1279,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if (auxi->obj_auxi->ec_degrade_fetch) {
 		struct obj_tgt_oiod *toiod;
 
+		D_ASSERT(args->reasb_req != NULL);
+		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);

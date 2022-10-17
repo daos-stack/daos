@@ -1333,15 +1333,15 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 {
 	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int			 obj_tf;	/* obj #tolerate failures */
-	int			 cont_rf;	/* cont redun_fac */
+	uint32_t		 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
 
-	cont_rf = dc_cont_hdl2redunfac(coh);
-	if (cont_rf < 0) {
+	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
+	if (rc) {
 		D_ERROR(DF_OID" dc_cont_hdl2redunfac failed, "DF_RC"\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(cont_rf));
-		return cont_rf;
+			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		return rc;
 	}
 
 	if (obj_is_ec(obj)) {
@@ -6719,15 +6719,17 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		attr.pa_domain_nr, attr.pa_target_nr);
 
 	if (cid == OC_UNKNOWN) {
-		uint64_t rf_factor;
+		uint32_t rf;
 
-		rf_factor = dc_cont_hdl2redunfac(coh);
-		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-				   attr.pa_target_nr, type, hints, &ord,
+		rc = dc_cont_hdl2redunfac(coh, &rf);
+		if (rc) {
+			D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
 	}
 
 	if (rc)
@@ -6796,7 +6798,7 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr = {0};
-	uint64_t		rf_factor;
+	uint32_t		rf;
 	int			rc;
 	enum daos_obj_redun	ord;
 	struct cont_props	props;
@@ -6816,10 +6818,12 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
 
-	rf_factor = dc_cont_hdl2redunfac(coh);
-	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-			   attr.pa_target_nr, type, hints,
-			   &ord, &nr_grp);
+	rc = dc_cont_hdl2redunfac(coh, &rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
 		return 0;
 
