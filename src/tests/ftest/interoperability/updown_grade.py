@@ -9,8 +9,8 @@ import random
 import base64
 import time
 
-from general_utils import get_random_bytes, pcmd, run_pcmd
 from pydaos.raw import DaosApiError
+from general_utils import get_random_bytes, pcmd, run_pcmd
 from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
@@ -95,7 +95,7 @@ class UpgradeDowngradeTest(IorTestBase):
                 self.fail(
                     "FAIL: Value does not match after get({}), Expected "
                     "val={} and received val={}".format(attr, value,
-                                        decoded.get(attr.decode(), None)))
+                                                        decoded.get(attr.decode(), None)))
 
     def check_result(self, result):
         """check for command result, raise failure when error cncountered
@@ -188,9 +188,9 @@ class UpgradeDowngradeTest(IorTestBase):
             clients (NodeSet): clients to be upgraded.
         """
         if ".repo" in self.upgrade_repo:
-            repo_2 = self.upgrade_repo
-            repo_1 = self.downgrade_repo
-            self.updowngrade_via_repo(servers, clients, repo_2, repo_1)
+            repo_1 = self.upgrade_repo
+            repo_2 = self.downgrade_repo
+            self.updowngrade_via_repo(servers, clients, repo_1, repo_2)
         else:
             all_hosts = servers + clients
             self.updowngrade_via_rpms(all_hosts, "downgrade", self.downgrade_repo)
@@ -223,10 +223,9 @@ class UpgradeDowngradeTest(IorTestBase):
             host (NodeSet): test host.
         """
         cmds = [
-                "daos version",
-                "dmg version",
-                "daos pool query {}".format(self.pool.identifier)
-               ]
+            "daos version",
+            "dmg version",
+            "daos pool query {}".format(self.pool.identifier)]
         for cmd in cmds:
             self.log.info("==cmd= %s", cmd)
             result = pcmd(host, cmd, False)
@@ -240,7 +239,7 @@ class UpgradeDowngradeTest(IorTestBase):
             self.log.info("==>%s result= %s", cmd, result)
 
     def veryfy_daos_libdaos(self, step, hosts_client, cmd, positive_test, agent_server_ver,
-            exp_err=None):
+                            exp_err=None):
         """Verify daos and libdaos interoperability between different version of agent and server.
 
         Args:
