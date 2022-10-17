@@ -107,10 +107,10 @@ def main():
                                          base_distro, build_hash, commit_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, commit_hash)
+        restore = f'bc-{target_branch}-{base_distro}-{build_hash}-{commit_hash}'
         set_output('restore', restore)
 
-        restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
+        restore_prev = 'bc-{target_branch}-{base_distro}-{build_hash}'
         set_output('restore_prev', restore_prev)
 
     else:
@@ -120,11 +120,11 @@ def main():
         key = 'bc-{}-{}-{}-{}'.format(target_branch, base_distro, build_hash, '{hash}')
         set_output('key', key)
 
-        restore = 'bc-{}-{}-{}'.format(target_branch, base_distro, build_hash)
+        restore = f'bc-{target_branch}-{base_distro}-{build_hash}'
         set_output('restore', restore)
 
         if len(lines):
-            restore_prev = 'bc-{}-{}-{}'.format(target_branch, base_distro, lines[0])
+            restore_prev = f'bc-{target_branch}-{base_distro}-{lines[0]}'
         else:
             restore_prev = f'bc-{target_branch}-{base_distro}-'
         set_output('restore_prev', restore_prev)
