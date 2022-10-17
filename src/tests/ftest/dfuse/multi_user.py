@@ -43,8 +43,8 @@ class MultiUser(DfuseTestBase):
         assert ret0['exit_status'] == 0
 
         ret = general_utils.run_pcmd(
-            self.hostlist_clients,
-            'dmg pool --insecure update-acl -e A::root@:rw {}'.format(self.pool.label),
+            self.hostlist_servers,
+            'dmg pool update-acl -e A::root@:rw {}'.format(self.pool.label),
             expect_rc=0)
         ret0 = ret[0]
         print(ret0)
