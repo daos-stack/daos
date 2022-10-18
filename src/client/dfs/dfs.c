@@ -2206,10 +2206,10 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int				amode;
 	int				rc;
 	int				i;
-	#define				NUM_PROPS 3
-	uint32_t			props[NUM_PROPS] = {DAOS_PROP_CO_LAYOUT_TYPE,
-							    DAOS_PROP_CO_ROOTS,
-							    DAOS_PROP_CO_REDUN_FAC};
+	const int			num_props = 3;
+	uint32_t			props[] = {DAOS_PROP_CO_LAYOUT_TYPE,
+						   DAOS_PROP_CO_ROOTS,
+						   DAOS_PROP_CO_REDUN_FAC};
 
 	if (_dfs == NULL)
 		return EINVAL;
@@ -2218,11 +2218,11 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (get_daos_obj_mode(flags) == -1)
 		return EINVAL;
 
-	prop = daos_prop_alloc(NUM_PROPS);
+	prop = daos_prop_alloc(num_props);
 	if (prop == NULL)
 		return ENOMEM;
 
-	for (i = 0; i < NUM_PROPS; i++)
+	for (i = 0; i < num_props; i++)
 		prop->dpp_entries[i].dpe_type = props[i];
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
