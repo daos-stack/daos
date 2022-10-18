@@ -2147,6 +2147,54 @@ out:
 	return rc;
 }
 
+static int
+get_uid_gid_from_ownership(daos_handle_t coh, dfs_t *dfs)
+{
+	daos_prop_t            *owner_props;
+	struct daos_prop_entry *entry;
+	int                     rc = 0;
+
+	owner_props = daos_prop_alloc(2);
+	if (owner_props == NULL)
+		return ENOMEM;
+
+	owner_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
+	owner_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+
+	rc = daos_cont_query(coh, NULL, owner_props, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	/* Convert the owner information to uid/gid */
+	entry = daos_prop_entry_get(owner_props, DAOS_PROP_CO_OWNER);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
+	if (rc == -DER_NONEXIST)
+		/** Set uid to nobody */
+		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
+	if (rc) {
+		D_ERROR("Unable to convert owner to uid " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(owner_props, DAOS_PROP_CO_OWNER_GROUP);
+	D_ASSERT(entry != NULL);
+	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
+	if (rc == -DER_NONEXIST)
+		/** Set gid to nobody */
+		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
+	if (rc) {
+		D_ERROR("Unable to convert owner to gid " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+out:
+	daos_prop_free(owner_props);
+	return rc;
+}
+
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
@@ -2158,9 +2206,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int                        amode;
 	int                        rc;
 	int                        i;
-	int                        num_props = 4;
-	uint32_t props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS, DAOS_PROP_CO_OWNER,
-			    DAOS_PROP_CO_OWNER_GROUP};
+#define NUM_PROPS 3
+	uint32_t props[NUM_PROPS] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS,
+				     DAOS_PROP_CO_REDUN_FAC};
 
 	if (_dfs == NULL)
 		return EINVAL;
@@ -2169,11 +2217,11 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	if (get_daos_obj_mode(flags) == -1)
 		return EINVAL;
 
-	prop = daos_prop_alloc(num_props);
+	prop = daos_prop_alloc(NUM_PROPS);
 	if (prop == NULL)
 		return ENOMEM;
 
-	for (i = 0; i < num_props; i++)
+	for (i = 0; i < NUM_PROPS; i++)
 		prop->dpp_entries[i].dpe_type = props[i];
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
@@ -2220,28 +2268,9 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** older layout versions don't have uid/gid for each entry, so use the ACL. */
 	if (dfs->layout_v <= 2) {
-		/* Convert the owner information to uid/gid */
-		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER);
-		D_ASSERT(entry != NULL);
-		rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-		if (rc == -DER_NONEXIST)
-			/** Set uid to nobody */
-			rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
-		if (rc) {
-			D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_dfs, rc = daos_der2errno(rc));
-		}
-
-		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OWNER_GROUP);
-		D_ASSERT(entry != NULL);
-		rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-		if (rc == -DER_NONEXIST)
-			/** Set gid to nobody */
-			rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
-		if (rc) {
-			D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_dfs, rc = daos_der2errno(rc));
-		}
+		rc = get_uid_gid_from_ownership(coh, dfs);
+		if (rc)
+			D_GOTO(err_dfs, rc);
 	}
 
 	/** set oid hints for files and dirs */
