@@ -5,6 +5,7 @@ hosts:
 timeout: 900
 server_config:
   name: daos_server
+  provider: ofi+tcp;ofi_rxm
   servers:
     targets: 2
     nr_xs_helpers: 0
