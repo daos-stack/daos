@@ -662,25 +662,24 @@ err:
 	return rc;
 }
 
+/* Setup any container ACLs so multi-user dfuse can access it.
+ *
+ * Returns a system error code.
+ */
 static int
 duns_set_fuse_acl(struct dfuse_user_reply *dur, daos_handle_t coh)
 {
 	int              rc = 0;
 	struct daos_acl *acl;
 	struct daos_ace *ace;
-	int              uid;
 	char            *name;
 
-	uid = geteuid();
-
-	if (uid == dur->uid) {
-		D_DEBUG(DB_TRACE, "Same user, returning\n");
+	if (geteuid() == dur->uid)
 		return 0;
-	}
 
 	rc = daos_acl_uid_to_principal(dur->uid, &name);
 	if (rc != 0)
-		return rc;
+		return daos_der2errno(rc);
 
 	ace = daos_ace_create(DAOS_ACL_USER, name);
 	if (ace == NULL) {
@@ -696,8 +695,10 @@ duns_set_fuse_acl(struct dfuse_user_reply *dur, daos_handle_t coh)
 		D_GOTO(out_ace, rc = EIO);
 
 	rc = daos_cont_update_acl(coh, acl, NULL);
-	if (rc)
+	if (rc) {
 		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n", DP_RC(rc));
+		rc = daos_der2errno(rc);
+	}
 
 	daos_acl_free(acl);
 

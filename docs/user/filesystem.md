@@ -166,8 +166,8 @@ So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 DFuse should be run with the credentials (user/group) of the user who will
 be accessing it, and who owns any pools that will be used.
 
-There is one mandatory command-line options, this is a mount point to start dfuse and can be
-supplied either via the positional `--mountpoint` option or the first positional argument.
+There is one mandatory command-line option, this is a mount point to start dfuse and can be
+supplied either via the `--mountpoint` option or the first positional argument.
 The mount point specified should be an empty directory on the local node that
 is owned by the user.
 

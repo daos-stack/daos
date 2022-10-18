@@ -34,13 +34,13 @@ class MultiUser(DfuseTestBase):
                                      'stat {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0['exit_status'] == 0
+        self.assertEqual(ret0['exit_status'], 0)
 
         ret = general_utils.run_pcmd(self.hostlist_clients,
                                      'sudo stat {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0['exit_status'] == 0
+        self.assertEqual(ret0['exit_status'], 0)
 
         self.get_dmg_command().pool_update_acl(self.pool.label, entry="A::root@:rw")
 
@@ -50,10 +50,10 @@ class MultiUser(DfuseTestBase):
             expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0['exit_status'] == 0
+        self.assertEqual(ret0['exit_status'], 0)
 
         ret = general_utils.run_pcmd(self.hostlist_clients,
                                      'ls -l {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
         print(ret0)
-        assert ret0['exit_status'] == 0
+        self.assertEqual(ret0['exit_status'], 0)
