@@ -1,17 +1,15 @@
 # DAOS Version 2.2 Release Notes
 
-**DRAFT** **DRAFT** **DRAFT** **DRAFT** **DRAFT**
-
 We are pleased to announce the release of DAOS version 2.2.
 
 
-## DAOS Version 2.2.0 (2022-09-xx)
+## DAOS Version 2.2.0 (2022-10-18)
 
 ### General Support
 
 This release adds the following changes to the DAOS support matrix:
 
-- Rocky Linux 8 support is added.
+- Rocky Linux 8 and Alma Linux 8 support is added.
 - CentOS Linux 8 support is removed.
 - Support for the `libfabric/tcp` provider is added (replaces `libfabric/sockets`)
 - UCX support is added (Technology Preview - not supported in production environments)
@@ -23,7 +21,8 @@ For a complete list of supported hardware and software, refer to the
 
 #### EL8 Support Transition
 
-CentOS Linux 8 support has been removed, and has been replaced by Rocky Linux 8 support.
+CentOS Linux 8 support has been removed, and has been replaced by Rocky Linux 8 and
+Alma Linux 8 support.
 RHEL 8.5 is no longer supported by RedHat; RHEL 8.6 and RHEL 8.4 EUS are still supported.
 
 #### New Network Providers
@@ -110,9 +109,9 @@ on setting the EC cell size.
 The DAOS 2.2 release includes fixes for numerous defects, including:
 
 - All patches included in DAOS Version 2.0.3.
-- Update PMDK to 1.12.1~rc1.
+- Update PMDK to 1.12.1.
 - Update SPDK to 22.01.1.
-- Update mercury to 2.2.0-rc6 to grab several fixes in ucx, tcp and cxi.
+- Update mercury to 2.2.0-3 to grab several fixes in ucx, tcp and cxi.
 - Update libfabric to 1.15.1 (same as in DAOS 2.0.3).
 - Remove check for dpdk/rte\_eal.
 - Handle the rare case in the control plane where a node processing a SWIM dead event
