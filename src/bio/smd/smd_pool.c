@@ -376,6 +376,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 			if (rc) {
 				D_ERROR("Replace blobs for pool "DF_UUID" failed. "DF_RC"\n",
 					DP_UUID(&id.uuid), DP_RC(rc));
+				return rc;
 			}
 		}
 	}

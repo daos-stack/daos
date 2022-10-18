@@ -27,7 +27,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type)
 	smd_db_lock();
 
 	/* Check if the target is already bound to a device */
-	rc = smd_db_fetch((char *)TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id),
+	rc = smd_db_fetch(TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id),
 			  &id_org, sizeof(id_org));
 	if (rc == 0) {
 		D_ERROR("Target %d is already bound to dev "DF_UUID"\n",
@@ -73,7 +73,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type)
 		goto out_tx;
 	}
 
-	rc = smd_db_upsert((char *)TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
+	rc = smd_db_upsert(TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
 		D_ERROR("Update target %d failed: "DF_RC"\n",
 			tgt_id, DP_RC(rc));
@@ -206,7 +206,7 @@ smd_dev_get_by_tgt(uint32_t tgt_id, enum smd_dev_type smd_type, struct smd_dev_i
 	int		rc;
 
 	smd_db_lock();
-	rc = smd_db_fetch((char *)TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
+	rc = smd_db_fetch(TABLE_TGTS[smd_type], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
 			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
@@ -363,7 +363,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 			}
 			if (rc == 0) {
 				uuid_copy(id.uuid, new_id);
-				rc = smd_db_upsert((char *)TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
+				rc = smd_db_upsert(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
 						   &id, sizeof(id));
 				if (rc) {
 					D_ERROR("Update target %d failed. "DF_RC"\n",
