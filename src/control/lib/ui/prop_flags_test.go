@@ -21,6 +21,7 @@ import (
 func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 	for name, tc := range map[string]struct {
 		settable []string
+		deprKeys map[string]string
 		fv       string
 		expProps map[string]string
 		expErr   error
@@ -58,10 +59,17 @@ func TestUI_SetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			fv:       "a:b,c:d",
 			expProps: map[string]string{"a": "b", "c": "d"},
 		},
+		"deprecated properties": {
+			settable: []string{"a", "b"},
+			deprKeys: map[string]string{"e": "a"},
+			fv:       "e:b,b:d",
+			expProps: map[string]string{"a": "b", "b": "d"},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := ui.SetPropertiesFlag{}
 			f.SettableKeys(tc.settable...)
+			f.DeprecatedKeyMap(tc.deprKeys)
 
 			gotErr := f.UnmarshalFlag(tc.fv)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -185,6 +193,7 @@ func TestUI_SetPropertiesFlag_Complete(t *testing.T) {
 func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 	for name, tc := range map[string]struct {
 		gettable []string
+		deprKeys map[string]string
 		fv       string
 		expKeys  []string
 		expErr   error
@@ -214,10 +223,17 @@ func TestUI_GetPropertiesFlag_UnmarshalFlag(t *testing.T) {
 			fv:      "a,c",
 			expKeys: []string{"a", "c"},
 		},
+		"deprecated properties": {
+			gettable: []string{"a", "b"},
+			deprKeys: map[string]string{"e": "a"},
+			fv:       "e,b",
+			expKeys:  []string{"a", "b"},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := ui.GetPropertiesFlag{}
 			f.GettableKeys(tc.gettable...)
+			f.DeprecatedKeyMap(tc.deprKeys)
 
 			gotErr := f.UnmarshalFlag(tc.fv)
 			test.CmpErr(t, tc.expErr, gotErr)
