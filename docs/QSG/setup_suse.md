@@ -400,7 +400,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 		node-4: May 05 22:21:03 node-1.test.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
 
 		# format storage
-		dmg storage format -l $SERVER_NODES --force
+		dmg storage format -l $SERVER_NODES # can use --force if needed
 
 3. Verify that all servers have started:
 

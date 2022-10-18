@@ -392,7 +392,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 		server-1: Dec 16 00:12:11 server-1.test.hpdd.intel.com daos_server[290473]: SCM format required on instance 0
 
 		# format storage
-		dmg storage format -l $SERVER_NODES --force
+		dmg storage format -l $SERVER_NODES # can use --force if needed
 
 3. Verify that all servers have started:
 
