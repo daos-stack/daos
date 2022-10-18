@@ -1074,9 +1074,9 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result)
+dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, struct ds_cont_child *cont,
+	       int result)
 {
-	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;

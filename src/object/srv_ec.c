@@ -140,12 +140,6 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_arra
 	int			 rc = 0;
 
 	D_ASSERT(oiods != NULL);
-	/* as we select the last parity node as leader, and for any update
-	 * there must be a siod (the last siod) for leader except for singv.
-	 */
-	D_ASSERT((oiods[0].oiod_flags & OBJ_SIOD_SINGV) ||
-		 oiods[0].oiod_nr >= 2);
-
 	if (oca == NULL)
 		oca = daos_oclass_attr_find(oid.id_pub, NULL);
 	D_ASSERT(oca != NULL);

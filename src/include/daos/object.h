@@ -517,7 +517,9 @@ enum daos_io_flags {
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
-	DIOF_FOR_FORCE_DEGRADE = 0x400,
+	DIOF_FOR_FORCE_DEGRADE	= 0x400,
+	/* For EC aggregation, remove replica/parity exts on all parity shards */
+	DIOF_EC_AGG_REMOVE	= 0x800,
 };
 
 /**

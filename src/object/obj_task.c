@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -208,8 +208,8 @@ dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 
 int
 dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
-			  daos_key_t *dkey, unsigned int nr,
-			  daos_iod_t *iods, d_sg_list_t *sgls,
+			  daos_key_t *dkey, unsigned int nr, uint32_t extra_flags,
+			  daos_iod_t *iods, d_sg_list_t *sgls, void *extra_arg,
 			  daos_event_t *ev, tse_sched_t *tse,
 			  tse_task_t **task)
 {
@@ -222,13 +222,15 @@ dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		return rc;
 
 	args = dc_task_get_args(*task);
-	args->oh	= oh;
-	args->th	= th;
-	args->flags	= flags;
-	args->dkey	= dkey;
-	args->nr	= nr;
-	args->iods	= iods;
-	args->sgls	= sgls;
+	args->oh		= oh;
+	args->th		= th;
+	args->flags		= flags;
+	args->dkey		= dkey;
+	args->nr		= nr;
+	args->extra_flags	= extra_flags;
+	args->iods		= iods;
+	args->sgls		= sgls;
+	args->extra_arg		= extra_arg;
 
 	return 0;
 }
@@ -352,6 +354,42 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->akey_anchor = akey_anchor;
 	args->incr_order = incr_order;
 	args->csum	= csum;
+
+	return 0;
+}
+
+int
+dc_tx_commit_task_create(daos_handle_t th, uint32_t flags, daos_event_t *ev, tse_sched_t *tse,
+			 tse_task_t **task)
+{
+	daos_tx_commit_t	*args;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, TX_COMMIT);
+	rc = dc_task_create(dc_tx_commit, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->th	= th;
+	args->flags	= flags;
+
+	return 0;
+}
+
+int
+dc_tx_restart_task_create(daos_handle_t th, daos_event_t *ev, tse_sched_t *tse, tse_task_t **task)
+{
+	daos_tx_restart_t	*args;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, TX_RESTART);
+	rc = dc_task_create(dc_tx_restart, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->th	= th;
 
 	return 0;
 }

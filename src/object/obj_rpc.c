@@ -485,6 +485,10 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 	}
 
+	rc = crt_proc_uint64_t(proc, proc_op, &iod_array->oia_epoch_lo);
+	if (unlikely(rc))
+		return rc;
+
 	if (FREEING(proc_op))
 		D_FREE(iod_array->oia_iods);
 

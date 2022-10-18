@@ -20,6 +20,9 @@
 /* The time (in second) threshold for batched DTX commit. */
 #define DTX_COMMIT_THRESHOLD_AGE	10
 
+/* Start TX on specific epoch */
+#define DAOS_TF_SPEC_EPOCH	DAOS_TF_RESESRVE_1
+
 /*
  * VOS aggregation should try to avoid aggregating in the epoch range where
  * lots of data records are pending to commit, so the aggregation epoch upper

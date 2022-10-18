@@ -2691,7 +2691,7 @@ again2:
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
 
 	/* Stop the distributed transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3550,7 +3550,7 @@ again2:
 				 &opi->opi_api_flags, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, ioc.ioc_coc, rc);
 	switch (rc) {
 	case -DER_TX_RESTART:
 		/*
@@ -3858,6 +3858,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	int				  rma_idx = 0;
 	int				  rc = 0;
 	int				  i;
+	bool				  ec_agg_remove;
 	uint64_t			  update_flags;
 	uint64_t			  sched_seq = sched_cur_seq();
 
@@ -3964,6 +3965,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			csums = dcu->dcu_iod_array.oia_iod_csums;
 		}
 
+		ec_agg_remove = (dcu->dcu_flags & ORF_EC_AGG_REMOVE);
 		update_flags = dcsr->dcsr_api_flags;
 		if (dcu->dcu_flags & ORF_CPD_BULK &&
 		    ioc->ioc_coc->sc_props.dcp_dedup_enabled) {
@@ -3974,14 +3976,26 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		if (dcu->dcu_flags & ORF_EC)
 			update_flags |= VOS_OF_EC;
 
-		rc = vos_update_begin(ioc->ioc_vos_coh,
-				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
-				update_flags, &dcsr->dcsr_dkey,
-				dcsr->dcsr_nr, iods, csums,
-				ioc->ioc_coc->sc_props.dcp_dedup_size,
-				&iohs[i], dth);
+		if (likely(!ec_agg_remove)) {
+			rc = vos_update_begin(ioc->ioc_vos_coh,
+					      dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
+					      update_flags, &dcsr->dcsr_dkey,
+					      dcsr->dcsr_nr, iods, csums,
+					      ioc->ioc_coc->sc_props.dcp_dedup_size,
+					      &iohs[i], dth);
+		} else {
+			daos_epoch_range_t	epr;
+
+			epr.epr_hi = dcsh->dcsh_epoch.oe_value,
+			epr.epr_lo = dcu->dcu_iod_array.oia_epoch_lo;
+			rc = vos_obj_array_remove_begin(ioc->ioc_vos_coh, dcsr->dcsr_oid, &epr,
+							&dcsr->dcsr_dkey, iods, &iohs[i], dth);
+		}
 		if (rc != 0)
 			goto out;
+
+		if (unlikely(ec_agg_remove))
+			continue;
 
 		biods[i] = vos_ioh2desc(iohs[i]);
 		rc = bio_iod_prep(biods[i], BIO_CHK_TYPE_IO,
@@ -4039,7 +4053,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	for (i = 0; i < dcde->dcde_write_cnt && rma_idx < rma; i++) {
 		int	*status;
 
-		if (!bulks[i].inited)
+		if (bulks == NULL || !bulks[i].inited)
 			continue;
 
 		rc = ABT_eventual_wait(bulks[i].eventual, (void **)&status);
@@ -4067,6 +4081,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			continue;
 
 		dcu = &dcsr->dcsr_update;
+		ec_agg_remove = (dcu->dcu_flags & ORF_EC_AGG_REMOVE);
+		if (unlikely(ec_agg_remove))
+			continue;
 		if (dcu->dcu_ec_split_req != NULL) {
 			iods = dcu->dcu_ec_split_req->osr_iods;
 			csums = dcu->dcu_ec_split_req->osr_iod_csums;
@@ -4130,8 +4147,19 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (rc != 0)
 				goto out;
 
-			rc = vos_update_end(iohs[i], dth->dth_ver,
-					    &dcsr->dcsr_dkey, rc, NULL, dth);
+			dcu = &dcsr->dcsr_update;
+			ec_agg_remove = (dcu->dcu_flags & ORF_EC_AGG_REMOVE);
+			if (likely(!ec_agg_remove)) {
+				rc = vos_update_end(iohs[i], dth->dth_ver,
+						    &dcsr->dcsr_dkey, rc, NULL, dth);
+			} else {
+				daos_epoch_range_t	epr;
+
+				epr.epr_hi = dcsh->dcsh_epoch.oe_value,
+				epr.epr_lo = dcu->dcu_iod_array.oia_epoch_lo;
+				rc = vos_obj_array_remove_end(iohs[i], &epr, &dcsr->dcsr_dkey, rc,
+							      dth);
+			}
 			iohs[i] = DAOS_HDL_INVAL;
 			if (rc != 0)
 				goto out;
@@ -4537,7 +4565,7 @@ again:
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
 
 	/* Stop the distribute transaction */
-	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
+	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, dca->dca_ioc->ioc_coc, rc);
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&

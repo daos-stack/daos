@@ -2818,11 +2818,43 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 }
 
 int
+vos_obj_array_remove_begin(daos_handle_t coh, daos_unit_oid_t oid, const daos_epoch_range_t *epr,
+			   const daos_key_t *dkey, daos_iod_t *iod, daos_handle_t *ioh,
+			   struct dtx_handle *dth)
+{
+	int rc;
+
+	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE, (daos_key_t *)dkey,
+			      1, iod, NULL, 0, ioh, dth);
+	if (rc)
+		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
+	return rc;
+}
+
+int
+vos_obj_array_remove_end(daos_handle_t ioh, const daos_epoch_range_t *epr, const daos_key_t *dkey,
+			 int err, struct dtx_handle *dth)
+{
+	struct vos_io_context	*ioc;
+	int			 rc;
+
+	ioc = vos_ioh2ioc(ioh);
+	/** Set lower bound of epoch range */
+	ioc->ic_epr.epr_lo = epr->epr_lo;
+
+	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, err, NULL, dth);
+	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" epr_hi "DF_X64", epr_lo "
+		DF_X64", "DF_RC"\n", DP_UOID(ioc->ic_oid), DP_RECX(ioc->ic_iods->iod_recxs[0]),
+		epr->epr_hi, epr->epr_lo, DP_RC(rc));
+	return rc;
+}
+
+int
 vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 		     const daos_epoch_range_t *epr, const daos_key_t *dkey,
 		     const daos_key_t *akey, const daos_recx_t *recx)
 {
-	struct vos_io_context	*ioc;
 	daos_iod_t		 iod;
 	daos_handle_t		 ioh;
 	int			 rc;
@@ -2833,24 +2865,17 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
 	iod.iod_name = *akey;
 	iod.iod_size = 0;
 
-	rc = vos_update_begin(coh, oid, epr->epr_hi, VOS_OF_REMOVE,
-			      (daos_key_t *)dkey, 1, &iod, NULL, 0,
-			      &ioh, NULL);
+	rc = vos_obj_array_remove_begin(coh, oid, epr, (daos_key_t *)dkey, &iod, &ioh, NULL);
 	if (rc) {
-		D_ERROR("Update "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+		D_ERROR("vos_obj_array_remove_begin "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
 			DP_RC(rc));
 		return rc;
 	}
 
-	ioc = vos_ioh2ioc(ioh);
-	/** Set lower bound of epoch range */
-	ioc->ic_epr.epr_lo = epr->epr_lo;
-
-	rc = vos_update_end(ioh, 0 /* don't care */, (daos_key_t *)dkey, rc,
-			    NULL, NULL);
-	D_DEBUG(DB_IO, DF_UOID" remove "DF_RECX" epr_hi "DF_X64", epr_lo "
-		DF_X64", "DF_RC"\n", DP_UOID(oid), DP_RECX(*recx), epr->epr_hi,
-		epr->epr_lo, DP_RC(rc));
+	rc = vos_obj_array_remove_end(ioh, epr, (daos_key_t *)dkey, rc, NULL);
+	if (rc)
+		D_ERROR("vos_obj_array_remove_end "DF_UOID" failed "DF_RC"\n", DP_UOID(oid),
+			DP_RC(rc));
 	return rc;
 }
 

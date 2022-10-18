@@ -161,7 +161,7 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	tse_task_t	*task;
 	int		rc;
 
-	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, iods, sgls,
+	rc = dc_obj_update_task_create(oh, th, flags, dkey, nr, 0, iods, sgls, NULL,
 				       ev, NULL, &task);
 	if (rc)
 		return rc;

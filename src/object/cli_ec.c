@@ -1685,21 +1685,82 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 }
 
 int
+obj_ec_agg_req_reasb(daos_iod_t *iod, d_sg_list_t *sgl, struct daos_oclass_attr *oca,
+		     uint64_t dkey_hash, struct obj_reasb_req *reasb_req, bool agg_remove)
+{
+	daos_iod_t			*riod = &reasb_req->orr_iods[0];
+	d_sg_list_t			*rsgl = &reasb_req->orr_sgls[0];
+	struct obj_io_desc		*oiod = &reasb_req->orr_oiods[0];
+	uint8_t				*tgt_bitmap = reasb_req->tgt_bitmap;
+	struct obj_shard_iod		*siod;
+	uint32_t			 parity_tgt_nr = obj_ec_parity_tgt_nr(oca);
+	uint32_t			 data_tgt_nr = obj_ec_data_tgt_nr(oca);
+	uint64_t			 cell_bytes;
+	bool				 parity_update;
+	int				 i, rc;
+
+	rc = obj_io_desc_init(oiod, parity_tgt_nr, 0);
+	if (rc)
+		goto out;
+
+	reasb_req->orr_ec_agg_update = 1;
+	*riod = *iod;
+	if (!agg_remove) {
+		D_ASSERT(sgl != NULL);
+		*rsgl = *sgl;
+	}
+	parity_update = (!agg_remove) && (iod->iod_recxs[0].rx_idx & PARITY_INDICATOR);
+	if (parity_update)
+		D_ASSERT(iod->iod_nr == parity_tgt_nr);
+	cell_bytes = obj_ec_cell_bytes(iod, oca);
+	for (i = 0; i < parity_tgt_nr; i++) {
+		siod = &oiod->oiod_siods[i];
+		siod->siod_tgt_idx = obj_ec_shard_idx(dkey_hash, oca, data_tgt_nr + i);
+		if (parity_update) {
+			siod->siod_idx = i;
+			siod->siod_nr = 1;
+			siod->siod_off = i * cell_bytes;
+		} else {
+			siod->siod_idx = 0;
+			siod->siod_nr = iod->iod_nr;
+			siod->siod_off = 0;
+		}
+		EC_TRACE("i %d tgt %u idx %u nr %u, start "DF_U64"\n",
+			 i, siod->siod_tgt_idx, siod->siod_idx,
+			 siod->siod_nr, obj_ec_shard_idx(dkey_hash, oca, 0));
+		setbit(tgt_bitmap, siod->siod_tgt_idx);
+	}
+
+out:
+	return rc;
+}
+
+int
 obj_ec_req_reasb(daos_iod_t *iods, uint64_t dkey_hash, d_sg_list_t *sgls, daos_obj_id_t oid,
 		 struct daos_oclass_attr *oca, struct obj_reasb_req *reasb_req, uint32_t iod_nr,
-		 bool update)
+		 bool update, uint32_t flags)
 {
 	bool	singv_only = true;
 	int	i, j, rc = 0;
 	int	data_tgt_nr = 0;
+	bool	ec_agg_remove;
 
-	reasb_req->orr_oid = oid;
 	reasb_req->orr_iod_nr = iod_nr;
 	if (!reasb_req->orr_size_fetch) {
 		reasb_req->orr_uiods = iods;
 		reasb_req->orr_usgls = sgls;
 	}
 
+	if (unlikely(update && (flags & ORF_FOR_EC_AGG))) {
+		D_ASSERT(iod_nr == 1);
+		ec_agg_remove = (flags & ORF_EC_AGG_REMOVE);
+		rc = obj_ec_agg_req_reasb(iods, sgls, oca, dkey_hash, reasb_req, ec_agg_remove);
+		if (rc)
+			D_ERROR(DF_OID" obj_ec_agg_req_reasb failed %d.\n", DP_OID(oid), rc);
+		return rc;
+	}
+
+	reasb_req->orr_oid = oid;
 	/* If any array iod with unknown rec_size, firstly send a size_fetch
 	 * request to server to query it, and then retry the IO request to do
 	 * the real fetch. If only with single-value, need not size_fetch ahead.
@@ -2045,14 +2106,6 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF))) {
 		rc = -DER_FETCH_AGAIN;
 		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
-	} else {
-		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
-		if (rc) {
-			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
-			daos_recx_ep_list_dump(parity_lists, nr);
-			daos_recx_ep_list_dump(recx_lists, nr);
-			goto out;
-		}
 	}
 
 out:
