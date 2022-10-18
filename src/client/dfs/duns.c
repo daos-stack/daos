@@ -737,8 +737,15 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		else
 			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, ch, NULL);
 		if (rc == -DER_SUCCESS && dur) {
+			int rc2;
+
 			rc = duns_set_fuse_acl(dur, coh);
-			daos_cont_close(coh, NULL);
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2 != -DER_SUCCESS) {
+				D_ERROR("failed to close container: " DF_RC "\n", DP_RC(rc2));
+				if (rc2 == -DER_NOMEM)
+					daos_cont_close(coh, NULL);
+			}
 		}
 	} else {
 		daos_prop_t	*prop;
@@ -879,7 +886,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = resolve_direct_path(path, attrp, no_prefix, pool_only);
 		if (rc) {
-			D_ERROR("Failed to resolve direct path %s\n", path);
+			D_ERROR("Failed to resolve direct path '%s': %d (%s)\n", path, rc,
+				strerror(rc));
 			return rc;
 		}
 
@@ -888,13 +896,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		else
 			rc = create_cont(poh, attrp, false, NULL);
 		if (rc)
-			D_ERROR("Failed to create container (%d)\n", rc);
+			D_ERROR("Failed to create container: %d (%s)\n", rc, strerror(rc));
 		return rc;
 	}
 
 	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	if (rc) {
-		D_ERROR("Failed to query pool info\n");
+		D_ERROR("Failed to query pool info" DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
@@ -921,7 +929,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		D_STRNDUP(dir, path, path_len);
 		if (dir == NULL) {
-			D_ERROR("Failed copy path %s: %s\n", path, strerror(errno));
 			return ENOMEM;
 		}
 
@@ -932,7 +939,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc == -1) {
 			rc = errno;
 
-			D_ERROR("Failed to create dir %s: %s\n", path, strerror(rc));
+			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
 			return rc;
 		}
 
@@ -940,7 +947,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc == -1) {
 			int err = errno;
 
-			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(err));
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
 			D_FREE(dir);
 			return err;
 		}
@@ -955,7 +962,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			if (fd == -1) {
 				int err = errno;
 
-				D_ERROR("Dfuse open failed '%s': %s\n", dirp, strerror(err));
+				D_ERROR("Dfuse open failed '%s': %d (%s)\n", dirp, err,
+					strerror(err));
 				D_FREE(dir);
 				return err;
 			}
@@ -965,7 +973,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			if (rc == -1) {
 				int err = errno;
 
-				D_ERROR("Dfuse ioctl failed %s: %s\n", dirp, strerror(err));
+				D_ERROR("Dfuse ioctl failed %s: %d (%s)\n", dirp, err,
+					strerror(err));
 				D_FREE(dir);
 				return err;
 			}
@@ -984,7 +993,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		D_STRNDUP(dir, path, path_len);
 		if (dir == NULL) {
-			D_ERROR("Failed copy path %s: %s\n", path, strerror(errno));
 			return ENOMEM;
 		}
 
@@ -993,7 +1001,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc == -1) {
 			int err = errno;
 
-			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(errno));
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
 			D_FREE(dir);
 			return err;
 		}
@@ -1011,7 +1019,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (fd == -1) {
 			rc = errno;
 
-			D_ERROR("Failed to create file %s: %s\n", path, strerror(rc));
+			D_ERROR("Failed to create file %s: %d (%s)\n", path, rc, strerror(rc));
 			return rc;
 		}
 		close(fd);
@@ -1026,7 +1034,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	/** Create container */
 	rc = create_cont(poh, attrp, false, backend_dfuse ? &dur : NULL);
 	if (rc) {
-		D_ERROR("Failed to create container (%s)\n", strerror(rc));
+		D_ERROR("Failed to create container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_link, rc);
 	}
 
@@ -1044,7 +1052,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_INFO("Path is not in a filesystem that supports the DAOS unified "
 			       "namespace\n");
 		} else {
-			D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
+			D_ERROR("Failed to set DAOS xattr: %d (%s)\n", rc, strerror(rc));
 		}
 		goto err_cont;
 	}
@@ -1060,7 +1068,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		rc = stat(path, &finfo);
 		if (rc) {
 			rc = errno;
-			D_ERROR("Failed to access new container: %s\n", strerror(rc));
+			D_ERROR("Failed to access new container: %d (%s)\n", rc, strerror(rc));
 			goto err_link;
 		}
 	}

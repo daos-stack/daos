@@ -3979,8 +3979,7 @@ class AllocFailTestRun():
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 f"Incorrect stdout '{self.stdout}'",
-                                mtype='Out of memory caused zero exit '
-                                'code with incorrect output')
+                                mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("(-1009): Out of memory") and \
@@ -4206,6 +4205,34 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
+    return rc
+
+
+def test_alloc_fail_cont_create(server, conf):
+    """Run container create --path under fault injection."""
+
+    pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='parent_cont')
+
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                '--type',
+                'POSIX',
+                '--path',
+                join(dfuse.dir, f'container_{cont_id}')]
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = False
+
+    rc = test_cmd.launch()
+    dfuse.stop()
     return rc
 
 
@@ -4540,6 +4567,8 @@ def run(wf, args):
                 # We cannot yet run dfuse inside docker containers and some of the failure modes
                 # aren't well handled so continue to run the dfuse fault injection test on real
                 # hardware.
+
+                fatal_errors.add_result(test_alloc_fail_cont_create(server, conf))
 
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
