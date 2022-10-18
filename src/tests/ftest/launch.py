@@ -32,10 +32,12 @@ from process_core_files import CoreFileProcessing
 from util.logger_utils import get_console_handler, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command, create_group, create_user, delete_user
+from util.user_utils import get_chown_command, get_create_group_command, \
+    get_create_user_command, get_delete_user_command
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
+DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing_user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
@@ -66,6 +68,11 @@ YAML_KEYS = OrderedDict(
         ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
+
+DAOS_TEST_GROUP_USERS = {
+    'daos_test_group_x': ['daos_test_user_x1', 'daos_test_user_x2'],
+    'daos_test_group_y': ['daos_test_user_y1']
+}
 
 
 # Set up a logger for the console messages
@@ -1002,9 +1009,9 @@ class Launch():
             args.test_servers, args.test_clients, args.process_cores)
 
         # Setup additional test users
-        if args.setup_test_users:
+        if args.user_setup:
             try:
-                self._setup_test_users(args)
+                self._user_setup(args)
             except RunException:
                 message = "Error setting up test users"
                 return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1125,6 +1132,8 @@ class Launch():
                 os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+            if "DAOS_TEST_USER_DIR" not in os.environ:
+                os.environ["DAOS_TEST_USER_DIR"] = DEFAULT_DAOS_TEST_USER_DIR
             if "DAOS_TEST_SHARED_DIR" not in os.environ:
                 if base_dir != os.path.join(os.sep, "usr"):
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
@@ -1719,7 +1728,7 @@ class Launch():
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
                 test.hosts.clients)
 
-    def _setup_test_users(self, args):
+    def _user_setup(self, args):
         """Setup test users on test nodes.
 
         Args:
@@ -1730,20 +1739,18 @@ class Launch():
 
         """
         nodes = args.test_servers | args.test_clients
-        group_users = {
-            'daos_test_group_x': ['daos_test_user_x1', 'daos_test_user_x2'],
-            'daos_test_group_y': ['daos_test_user_y1']
-        }
-        for group, users in group_users.items():
-            create_group(logger, nodes, group, True)
+        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
+        if not run_remote(logger, nodes, f'mkdir -p {parent_dir}').passed:
+            raise RunException(f'Failed to create user directory {parent_dir}')
+        for group, users in DAOS_TEST_GROUP_USERS.items():
+            if not run_remote(logger, nodes, get_create_group_command(group, True)).passed:
+                raise RunException(f'Failed to create group {group} on nodes {nodes}')
             for user in users:
                 # Delete if existing
-                try:
-                    delete_user(logger, nodes, user, True)
-                except RunException:
-                    pass
-
-                create_user(logger, nodes, user, group, args.setup_test_users_dir, True)
+                _ = run_remote(logger, nodes, get_delete_user_command(user, True))
+                command = get_create_user_command(user, group, parent_dir, True)
+                if not run_remote(logger, nodes, command).passed:
+                    raise RunException(f'Failed to create user {user} on nodes {nodes}')
 
     def _replace_yaml_file(self, yaml_file, args, yaml_dir):
         # pylint: disable=too-many-nested-blocks,too-many-branches
@@ -3116,17 +3123,13 @@ def main():
         type=int,
         help="number of times to repeat test execution")
     parser.add_argument(
-        "-s", "--sparse",
-        action="store_true",
-        help="limit output to pass/fail")
-    parser.add_argument(
-        "--setup_test_users",
+        "-u", "--user_setup",
         action="store_true",
         help="setup user accounts used by some tests")
     parser.add_argument(
-        "--setup_test_users_dir",
-        type=str,
-        help="parent home directory for test users")
+        "-s", "--sparse",
+        action="store_true",
+        help="limit output to pass/fail")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3183,7 +3186,7 @@ def main():
         args.process_cores = True
         args.rename = True
         args.sparse = True
-        args.setup_test_users = True
+        args.user_setup = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
 

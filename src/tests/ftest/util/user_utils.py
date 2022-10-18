@@ -8,9 +8,6 @@ from grp import getgrgid
 from pwd import getpwnam
 import os
 
-# pylint: disable=import-error,no-name-in-module
-from run_utils import run_remote, RunException
-
 
 def get_primary_group(user=None):
     """Get the name of the user's primary group.
@@ -53,68 +50,54 @@ def get_chown_command(user=None, group=None, options=None, file=None):
     return " ".join(command)
 
 
-def create_group(log, nodes, group, sudo=False):
-    """Create a group on remote nodes.
+def get_create_group_command(group, sudo=False):
+    """Get a command to create a group on remote nodes.
 
     Args:
-        log (logger): logger for the messages produced by this method
-        nodes (NodeSet): nodes on which to create the group
         group (str): the group to create
         sudo (bool): whether to execute commands with sudo
 
-    Raises:
-        RunException: if creation fails
+    Returns:
+        str: the create group command
 
     """
-    _sudo = 'sudo ' if sudo else ''
-    command = 'getent group {0} >/dev/null || {1}groupadd -r {0}'.format(group, _sudo)
-    if not run_remote(log, nodes, command).passed:
-        raise RunException('Failed to create group {} on nodes {}'.format(group, nodes))
+    _sudo = 'sudo -n ' if sudo else ''
+    return f'getent group {group} >/dev/null || {_sudo}groupadd -r {group}'
 
 
-def create_user(log, nodes, user, group=None, parent_dir=None, sudo=False):
-    """Create a user.
+def get_create_user_command(user, group=None, parent_dir=None, sudo=False):
+    """Get a command to create a user.
 
     Args:
-        log (logger): logger for the messages produced by this method
-        nodes (NodeSet): nodes on which to create the user
         user (str): user to create
         group (str, optional): user group. Default is None
         parent_dir (str, optional): parent home directory
         sudo (bool): whether to execute commands with sudo
 
-    Raises:
-        RunException: if creation fails
+    Returns:
+        str: the create user command
 
     """
-    _sudo = 'sudo ' if sudo else ''
-
-    command = ' '.join(filter(None, [
-        '{}useradd -m'.format(_sudo),
-        '-g {}'.format(group) if group else None,
-        '-d {}'.format(os.path.join(parent_dir, user)) if parent_dir else None,
+    _sudo = 'sudo -n ' if sudo else ''
+    return ' '.join(filter(None, [
+        f'{_sudo}useradd -m',
+        f'-g {group}' if group else None,
+        f'-d {os.path.join(parent_dir, user)}' if parent_dir else None,
         user]))
-    if not run_remote(log, nodes, command).passed:
-        raise RunException('Failed to create user {} on nodes {}'.format(user, nodes))
 
 
-def delete_user(log, nodes, user, sudo=False):
-    """Delete a user.
+def get_delete_user_command(user, sudo=False):
+    """Get a command to delete a user.
 
     Args:
-        log (logger): logger for the messages produced by this method
-        nodes (NodeSet): nodes on which to delete the user
         user (str): user to create
         group (str, optional): user group. Default is None
         parent_dir (str, optional): parent home directory
         sudo (bool): whether to execute commands with sudo
 
-    Raises:
-        RunException: if creation fails
+    Returns:
+        str: the delete user command
 
     """
-    _sudo = 'sudo ' if sudo else ''
-
-    command = '{}userdel -f -r {}'.format(_sudo, user)
-    if not run_remote(log, nodes, command).passed:
-        raise RunException('Failed to delete user {} on nodes {}'.format(user, nodes))
+    _sudo = 'sudo -n ' if sudo else ''
+    return f'{_sudo}userdel -f -r {user}'
