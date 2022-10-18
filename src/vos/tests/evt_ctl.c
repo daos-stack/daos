@@ -2446,10 +2446,8 @@ ts_group(void **state)
 
 	int	opc = 0;
 
-	while ((opc = getopt_long(test_group_argc,
-				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::tsr:",
-				 ts_ops, NULL)) != -1){
+	while ((opc = getopt_long(test_group_argc, test_group_args,
+				  "C:a:m:e:f:g:d:b:Docl::ts:r:", ts_ops, NULL)) != -1) {
 		ts_cmd_run(opc, optarg);
 	}
 }
