@@ -226,13 +226,13 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
 		bool	found_tgt = false;
 
-		for (i = 0; i < pool_info->spi_tgt_cnt; i++) {
+		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; i++) {
 			/* Skip the targets not assigned to old device */
-			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[i]))
+			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[SMD_DEV_TYPE_DATA][i]))
 				continue;
 
 			found_tgt = true;
-			rc = create_one_blob(bs, pool_info->spi_blob_sz,
+			rc = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 					     &blob_id);
 			if (rc)
 				goto out;
@@ -249,7 +249,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			d_list_add_tail(&created->bi_link, blob_list);
 
 			/* Replace the blob id in pool info */
-			pool_info->spi_blobs[i] = blob_id;
+			pool_info->spi_blobs[SMD_DEV_TYPE_DATA][i] = blob_id;
 		}
 
 		/*

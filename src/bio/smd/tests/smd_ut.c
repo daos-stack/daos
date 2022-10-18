@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,7 @@
 #include <daos/tests_lib.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
-#define DB_LIST_NR	3
+#define DB_LIST_NR		(SMD_DEV_TYPE_MAX*2+1)
 
 struct ut_db {
 	struct sys_db	ud_db;
@@ -40,14 +40,16 @@ d_list_t *
 db_name2list(struct sys_db *db, char *name)
 {
 	struct ut_db *ud = container_of(db, struct ut_db, ud_db);
+	enum smd_dev_type st;
 
 	if (!strcmp(name, TABLE_DEV))
 		return &ud->ud_lists[0];
-	if (!strcmp(name, TABLE_TGT))
-		return &ud->ud_lists[1];
-	if (!strcmp(name, TABLE_POOL))
-		return &ud->ud_lists[2];
-
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		if (!strcmp(name, TABLE_TGTS[st]))
+			return &ud->ud_lists[st+1];
+		if (!strcmp(name, TABLE_POOLS[st]))
+			return &ud->ud_lists[st+SMD_DEV_TYPE_MAX+1];
+	}
 	D_ASSERT(0);
 	return NULL;
 }
@@ -257,21 +259,21 @@ ut_device(void **state)
 	uuid_generate(id3);
 
 	/* Assigned dev1 to target 0, 1, 2, dev2 to target 3 */
-	rc = smd_dev_add_tgt(dev_id1, 0);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
 	assert_rc_equal(rc, 0);
 
-	rc = smd_dev_add_tgt(dev_id1, 0);
+	rc = smd_dev_add_tgt(dev_id1, 0, SMD_DEV_TYPE_DATA);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	for (i = 1; i < 3; i++) {
-		rc = smd_dev_add_tgt(dev_id1, i);
+		rc = smd_dev_add_tgt(dev_id1, i, SMD_DEV_TYPE_DATA);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_dev_add_tgt(dev_id2, 1);
+	rc = smd_dev_add_tgt(dev_id2, 1, SMD_DEV_TYPE_DATA);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_dev_add_tgt(dev_id2, 3);
+	rc = smd_dev_add_tgt(dev_id2, 3, SMD_DEV_TYPE_DATA);
 	assert_rc_equal(rc, 0);
 
 	rc = smd_dev_set_state(dev_id2, SMD_DEV_FAULTY);
@@ -286,10 +288,10 @@ ut_device(void **state)
 
 	smd_dev_free_info(dev_info);
 
-	rc = smd_dev_get_by_tgt(4, &dev_info);
+	rc = smd_dev_get_by_tgt(4, SMD_DEV_TYPE_DATA, &dev_info);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
-	rc = smd_dev_get_by_tgt(3, &dev_info);
+	rc = smd_dev_get_by_tgt(3, SMD_DEV_TYPE_DATA, &dev_info);
 	assert_rc_equal(rc, 0);
 	verify_dev(dev_info, dev_id2, 2);
 
@@ -319,11 +321,11 @@ verify_pool(struct smd_pool_info *pool_info, uuid_t id, int shift)
 	int	i;
 
 	assert_int_equal(uuid_compare(pool_info->spi_id, id), 0);
-	assert_int_equal(pool_info->spi_tgt_cnt, 4);
+	assert_int_equal(pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA], 4);
 
 	for (i = 0; i < 4; i++) {
-		assert_int_equal(pool_info->spi_tgts[i], i);
-		assert_int_equal(pool_info->spi_blobs[i], i << shift);
+		assert_int_equal(pool_info->spi_tgts[SMD_DEV_TYPE_DATA][i], i);
+		assert_int_equal(pool_info->spi_blobs[SMD_DEV_TYPE_DATA][i], i << shift);
 	}
 }
 
@@ -341,17 +343,17 @@ ut_pool(void **state)
 	uuid_generate(id3);
 
 	for (i = 0; i < 4; i++) {
-		rc = smd_pool_add_tgt(id1, i, i << 10, 100);
+		rc = smd_pool_add_tgt(id1, i, i << 10, SMD_DEV_TYPE_DATA, 100);
 		assert_rc_equal(rc, 0);
 
-		rc = smd_pool_add_tgt(id2, i, i << 20, 200);
+		rc = smd_pool_add_tgt(id2, i, i << 20, SMD_DEV_TYPE_DATA, 200);
 		assert_rc_equal(rc, 0);
 	}
 
-	rc = smd_pool_add_tgt(id1, 0, 5000, 100);
+	rc = smd_pool_add_tgt(id1, 0, 5000, SMD_DEV_TYPE_DATA, 100);
 	assert_rc_equal(rc, -DER_EXIST);
 
-	rc = smd_pool_add_tgt(id1, 4, 4 << 10, 200);
+	rc = smd_pool_add_tgt(id1, 4, 4 << 10, SMD_DEV_TYPE_DATA, 200);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	rc = smd_pool_get_info(id1, &pool_info);
@@ -364,16 +366,16 @@ ut_pool(void **state)
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	for (i = 0; i < 4; i++) {
-		rc = smd_pool_get_blob(id1, i, &blob_id);
+		rc = smd_pool_get_blob(id1, i, SMD_DEV_TYPE_DATA, &blob_id);
 		assert_rc_equal(rc, 0);
 		assert_int_equal(blob_id, i << 10);
 
-		rc = smd_pool_get_blob(id2, i, &blob_id);
+		rc = smd_pool_get_blob(id2, i, SMD_DEV_TYPE_DATA, &blob_id);
 		assert_rc_equal(rc, 0);
 		assert_int_equal(blob_id, i << 20);
 	}
 
-	rc = smd_pool_get_blob(id1, 5, &blob_id);
+	rc = smd_pool_get_blob(id1, 5, SMD_DEV_TYPE_DATA, &blob_id);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	D_INIT_LIST_HEAD(&pool_list);
@@ -393,14 +395,14 @@ ut_pool(void **state)
 		smd_pool_free_info(pool_info);
 	}
 
-	rc = smd_pool_del_tgt(id1, 5);
+	rc = smd_pool_del_tgt(id1, 5, SMD_DEV_TYPE_DATA);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	for (i = 0; i < 4; i++) {
-		rc = smd_pool_del_tgt(id1, i);
+		rc = smd_pool_del_tgt(id1, i, SMD_DEV_TYPE_DATA);
 		assert_rc_equal(rc, 0);
 
-		rc = smd_pool_del_tgt(id2, i);
+		rc = smd_pool_del_tgt(id2, i, SMD_DEV_TYPE_DATA);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -424,10 +426,10 @@ ut_dev_replace(void **state)
 
 	/* Assign pools, they were unassigned in prior pool test */
 	for (i = 0; i < 4; i++) {
-		rc = smd_pool_add_tgt(pool_id1, i, i << 10, 100);
+		rc = smd_pool_add_tgt(pool_id1, i, i << 10, SMD_DEV_TYPE_DATA, 100);
 		assert_rc_equal(rc, 0);
 
-		rc = smd_pool_add_tgt(pool_id2, i, i << 20, 200);
+		rc = smd_pool_add_tgt(pool_id2, i, i << 20, SMD_DEV_TYPE_DATA, 200);
 		assert_rc_equal(rc, 0);
 	}
 
@@ -438,9 +440,9 @@ ut_dev_replace(void **state)
 
 	/* Assign different blobs to dev1's targets 0, 1, 2 */
 	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
-		pool_info->spi_blobs[0] = 555;
-		pool_info->spi_blobs[1] = 666;
-		pool_info->spi_blobs[2] = 777;
+		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][0] = 555;
+		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][1] = 666;
+		pool_info->spi_blobs[SMD_DEV_TYPE_DATA][2] = 777;
 	}
 
 	/* Replace dev1 with dev3 without marking dev1 as faulty */
@@ -479,7 +481,7 @@ ut_dev_replace(void **state)
 	/* Verify blob IDs after device replace */
 	d_list_for_each_entry_safe(pool_info, tmp_pool, &pool_list, spi_link) {
 		for (i = 0; i < 3; i++) {
-			rc = smd_pool_get_blob(pool_info->spi_id, i, &blob_id);
+			rc = smd_pool_get_blob(pool_info->spi_id, i, SMD_DEV_TYPE_DATA, &blob_id);
 			assert_rc_equal(rc, 0);
 			if (i == 0)
 				assert_int_equal(blob_id, 555);
