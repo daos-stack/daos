@@ -29,8 +29,11 @@ typedef struct _Mgmt__CheckQueryInconsist Mgmt__CheckQueryInconsist;
 typedef struct _Mgmt__CheckQueryTarget Mgmt__CheckQueryTarget;
 typedef struct _Mgmt__CheckQueryPool Mgmt__CheckQueryPool;
 typedef struct _Mgmt__CheckQueryResp Mgmt__CheckQueryResp;
+typedef struct _Mgmt__CheckSetPolicyReq Mgmt__CheckSetPolicyReq;
 typedef struct _Mgmt__CheckPropReq Mgmt__CheckPropReq;
 typedef struct _Mgmt__CheckPropResp Mgmt__CheckPropResp;
+typedef struct _Mgmt__CheckGetPolicyReq Mgmt__CheckGetPolicyReq;
+typedef struct _Mgmt__CheckGetPolicyResp Mgmt__CheckGetPolicyResp;
 typedef struct _Mgmt__CheckActReq Mgmt__CheckActReq;
 typedef struct _Mgmt__CheckActResp Mgmt__CheckActResp;
 
@@ -373,7 +376,32 @@ struct  _Mgmt__CheckQueryResp
 
 
 /*
- * For 'dmg check prop'
+ * For 'dmg check set-policy'
+ */
+struct  _Mgmt__CheckSetPolicyReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier.
+   */
+  char *sys;
+  /*
+   * The flags when start check - see CheckFlag.
+   */
+  uint32_t flags;
+  /*
+   * Inconsistency policy array.
+   */
+  size_t n_policies;
+  Mgmt__CheckInconsistPolicy **policies;
+};
+#define MGMT__CHECK_SET_POLICY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_set_policy_req__descriptor) \
+    , (char *)protobuf_c_empty_string, 0, 0,NULL }
+
+
+/*
+ * To allow daos_server to query check leader properties
  */
 struct  _Mgmt__CheckPropReq
 {
@@ -410,6 +438,50 @@ struct  _Mgmt__CheckPropResp
 };
 #define MGMT__CHECK_PROP_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_prop_resp__descriptor) \
+    , 0, 0, 0,NULL }
+
+
+/*
+ * For 'dmg check get-policy'
+ */
+struct  _Mgmt__CheckGetPolicyReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier.
+   */
+  char *sys;
+  size_t n_classes;
+  Chk__CheckInconsistClass *classes;
+};
+#define MGMT__CHECK_GET_POLICY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_get_policy_req__descriptor) \
+    , (char *)protobuf_c_empty_string, 0,NULL }
+
+
+/*
+ * CheckGetPolicyResp returns the result of check prop and the properties when start check.
+ * NB: Dupe of CheckPropResp currently; may consolidate if they don't diverge.
+ */
+struct  _Mgmt__CheckGetPolicyResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code.
+   */
+  int32_t status;
+  /*
+   * The flags when start check - see CheckFlag.
+   */
+  uint32_t flags;
+  /*
+   * Inconsistency policy array.
+   */
+  size_t n_policies;
+  Mgmt__CheckInconsistPolicy **policies;
+};
+#define MGMT__CHECK_GET_POLICY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_get_policy_resp__descriptor) \
     , 0, 0, 0,NULL }
 
 
@@ -704,6 +776,25 @@ Mgmt__CheckQueryResp *
 void   mgmt__check_query_resp__free_unpacked
                      (Mgmt__CheckQueryResp *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__CheckSetPolicyReq methods */
+void   mgmt__check_set_policy_req__init
+                     (Mgmt__CheckSetPolicyReq         *message);
+size_t mgmt__check_set_policy_req__get_packed_size
+                     (const Mgmt__CheckSetPolicyReq   *message);
+size_t mgmt__check_set_policy_req__pack
+                     (const Mgmt__CheckSetPolicyReq   *message,
+                      uint8_t             *out);
+size_t mgmt__check_set_policy_req__pack_to_buffer
+                     (const Mgmt__CheckSetPolicyReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__CheckSetPolicyReq *
+       mgmt__check_set_policy_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__check_set_policy_req__free_unpacked
+                     (Mgmt__CheckSetPolicyReq *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__CheckPropReq methods */
 void   mgmt__check_prop_req__init
                      (Mgmt__CheckPropReq         *message);
@@ -741,6 +832,44 @@ Mgmt__CheckPropResp *
                       const uint8_t       *data);
 void   mgmt__check_prop_resp__free_unpacked
                      (Mgmt__CheckPropResp *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__CheckGetPolicyReq methods */
+void   mgmt__check_get_policy_req__init
+                     (Mgmt__CheckGetPolicyReq         *message);
+size_t mgmt__check_get_policy_req__get_packed_size
+                     (const Mgmt__CheckGetPolicyReq   *message);
+size_t mgmt__check_get_policy_req__pack
+                     (const Mgmt__CheckGetPolicyReq   *message,
+                      uint8_t             *out);
+size_t mgmt__check_get_policy_req__pack_to_buffer
+                     (const Mgmt__CheckGetPolicyReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__CheckGetPolicyReq *
+       mgmt__check_get_policy_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__check_get_policy_req__free_unpacked
+                     (Mgmt__CheckGetPolicyReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__CheckGetPolicyResp methods */
+void   mgmt__check_get_policy_resp__init
+                     (Mgmt__CheckGetPolicyResp         *message);
+size_t mgmt__check_get_policy_resp__get_packed_size
+                     (const Mgmt__CheckGetPolicyResp   *message);
+size_t mgmt__check_get_policy_resp__pack
+                     (const Mgmt__CheckGetPolicyResp   *message,
+                      uint8_t             *out);
+size_t mgmt__check_get_policy_resp__pack_to_buffer
+                     (const Mgmt__CheckGetPolicyResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__CheckGetPolicyResp *
+       mgmt__check_get_policy_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__check_get_policy_resp__free_unpacked
+                     (Mgmt__CheckGetPolicyResp *message,
                       ProtobufCAllocator *allocator);
 /* Mgmt__CheckActReq methods */
 void   mgmt__check_act_req__init
@@ -821,11 +950,20 @@ typedef void (*Mgmt__CheckQueryPool_Closure)
 typedef void (*Mgmt__CheckQueryResp_Closure)
                  (const Mgmt__CheckQueryResp *message,
                   void *closure_data);
+typedef void (*Mgmt__CheckSetPolicyReq_Closure)
+                 (const Mgmt__CheckSetPolicyReq *message,
+                  void *closure_data);
 typedef void (*Mgmt__CheckPropReq_Closure)
                  (const Mgmt__CheckPropReq *message,
                   void *closure_data);
 typedef void (*Mgmt__CheckPropResp_Closure)
                  (const Mgmt__CheckPropResp *message,
+                  void *closure_data);
+typedef void (*Mgmt__CheckGetPolicyReq_Closure)
+                 (const Mgmt__CheckGetPolicyReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__CheckGetPolicyResp_Closure)
+                 (const Mgmt__CheckGetPolicyResp *message,
                   void *closure_data);
 typedef void (*Mgmt__CheckActReq_Closure)
                  (const Mgmt__CheckActReq *message,
@@ -852,8 +990,11 @@ extern const ProtobufCMessageDescriptor mgmt__check_query_inconsist__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_query_target__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_query_pool__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__check_set_policy_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_prop_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_prop_resp__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__check_get_policy_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__check_get_policy_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_act_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__check_act_resp__descriptor;
 

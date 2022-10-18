@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -41,40 +40,34 @@ type faultCmd struct {
 	PoolSvcFault     poolSvcFaultCmd     `command:"pool-svc" alias:"ps" description:"Inject pool service fault"`
 }
 
-type chkRptCls chkpb.CheckInconsistClass
+type chkRptCls string
 
 func (c chkRptCls) String() string {
-	return chkpb.CheckInconsistClass_name[int32(c)]
+	return string(c)
 }
 
 func (c chkRptCls) Complete(match string) (comps []flags.Completion) {
-	for _, v := range chkpb.CheckInconsistClass_name {
-		if strings.HasPrefix(v, match) {
-			comps = append(comps, flags.Completion{Item: v})
+	for _, cls := range control.CheckerPolicyClasses() {
+		if strings.HasPrefix(cls.String(), match) {
+			comps = append(comps, flags.Completion{Item: cls.String()})
 		}
 	}
 	return
 }
 
 func (c *chkRptCls) UnmarshalFlag(value string) error {
-	for i, v := range chkpb.CheckInconsistClass_name {
-		if v == value {
-			*c = chkRptCls(i)
-			return nil
-		}
+	if _, ok := chkpb.CheckInconsistClass_value[value]; ok {
+		*c = chkRptCls(value)
+		return nil
 	}
-
-	if v, err := strconv.Atoi(value); err == nil {
-		if _, found := chkpb.CheckInconsistClass_name[int32(v)]; found {
-			*c = chkRptCls(v)
-			return nil
-		}
-	}
-	return errors.Errorf("invalid class %s", value)
+	return errors.Errorf("invalid class %q", value)
 }
 
 func (c chkRptCls) Class() chkpb.CheckInconsistClass {
-	return chkpb.CheckInconsistClass(c)
+	if cls, ok := chkpb.CheckInconsistClass_value[c.String()]; ok {
+		return chkpb.CheckInconsistClass(cls)
+	}
+	return chkpb.CheckInconsistClass_CIC_UNKNOWN
 }
 
 type addCheckerReportCmd struct {
@@ -104,7 +97,7 @@ func (cmd *addCheckerReportCmd) Execute(_ []string) (errOut error) {
 	} else {
 		rand.Seed(time.Now().UnixNano())
 
-		cls := chkpb.CheckInconsistClass(cmd.Class)
+		cls := cmd.Class.Class()
 		// Define some canned reports based on class. These can be used
 		// for prototyping and testing. For more control, define a report
 		// in JSON format and load it with the --file option.

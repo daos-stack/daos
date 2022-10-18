@@ -67,6 +67,7 @@ message CheckStopResp {
 	int32 status = 1; // DAOS error code.
 }
 
+
 // For 'dmg check query'.
 message CheckQueryReq {
 	string sys = 1; // DAOS system identifier.
@@ -144,13 +145,34 @@ message CheckQueryResp {
 	repeated chk.CheckReport reports = 7;
 }
 
-// For 'dmg check prop'
+// For 'dmg check set-policy'
+message CheckSetPolicyReq {
+	string sys = 1; // DAOS system identifier.
+	uint32 flags = 2; // The flags when start check - see CheckFlag.
+	repeated CheckInconsistPolicy policies = 3; // Inconsistency policy array.
+}
+
+// To allow daos_server to query check leader properties
 message CheckPropReq {
 	string sys = 1; // DAOS system identifier.
 }
 
 // CheckPropResp returns the result of check prop and the properties when start check.
 message CheckPropResp {
+	int32 status = 1; // DAOS error code.
+	uint32 flags = 2; // The flags when start check - see CheckFlag.
+	repeated CheckInconsistPolicy policies = 3; // Inconsistency policy array.
+}
+
+// For 'dmg check get-policy'
+message CheckGetPolicyReq {
+	string sys = 1; // DAOS system identifier.
+	repeated chk.CheckInconsistClass classes = 2;
+}
+
+// CheckGetPolicyResp returns the result of check prop and the properties when start check.
+// NB: Dupe of CheckPropResp currently; may consolidate if they don't diverge.
+message CheckGetPolicyResp {
 	int32 status = 1; // DAOS error code.
 	uint32 flags = 2; // The flags when start check - see CheckFlag.
 	repeated CheckInconsistPolicy policies = 3; // Inconsistency policy array.
