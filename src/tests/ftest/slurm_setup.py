@@ -128,7 +128,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     for cmd in cmdlist:
         if sudo:
             cmd = "sudo {}".format(cmd)
-        if not run_remote(logger, nodes, cmd).passed:
+        if not run_remote(logger, nodes, cmd, timeout=600).passed:
             # Do not bother executing any remaining commands if this one failed
             return 1
     return 0
