@@ -1,20 +1,20 @@
 hosts:
-# servers if no server partition is defined
+    # servers if no server partition is defined
     test_servers: 4
-# servers if a server partition is defined
+    # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
     # client_reservation: daos-test
 orterun:
-    allow_run_as_root: True
+    allow_run_as_root: true
 mpi_module: mpi/mpich-x86_64
-enable_sudo: True
+enable_sudo: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
 setup:
-    start_servers: True
-    start_agents: True
+    start_servers: true
+    start_agents: true
 server_config:
     engines_per_host: 2
     name: daos_server
@@ -72,7 +72,7 @@ container:
     control_method: daos
 container_reserved:
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
     oclass: EC_2P1GX
     control_method: daos
 # test_params - Defines the type of test to run and how long it runs
@@ -131,13 +131,13 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - "EC_2P1GX"
-#        - "EC_4P1G1"
-#        - "EC_4P2GX"
-#        - "EC_8P2G1"
-#        - "EC_16P2GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/ior/"
-        disable_caching: True
+        disable_caching: true
 fio_smoke:
     job_timeout: 10
     names:
@@ -163,10 +163,10 @@ fio_smoke:
             - 'randrw'
         oclass:
             - "EC_2P1GX"
-#            - "EC_4P1G1"
-#            - "EC_4P2GX"
-#            - "EC_8P2G1"
-#            - "EC_16P2GX"
+            # - "EC_4P1G1"
+            # - "EC_4P2GX"
+            # - "EC_8P2G1"
+            # - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/fio/"
 daos_racer:
@@ -178,7 +178,7 @@ vpic_smoke:
     taskspernode:
         - 1
     cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
-    posix: True
+    posix: true
     workdir: "/tmp/daos_dfuse/vpic/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/vpic/"
@@ -191,7 +191,7 @@ lammps_smoke:
     taskspernode:
         - 1
     cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj.smoke"
-    posix: True
+    posix: true
     workdir: "/tmp/daos_dfuse/lammps/"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/lammps/"
@@ -220,14 +220,14 @@ mdtest_smoke:
         - 0
     dfs_oclass:
         - "EC_2P1G1"
-#        - "EC_4P1G1"
-#        - "EC_4P2G1"
-#        - "EC_8P2G1"
-#        - "EC_16P2G1"
-    dfs_destroy: False
+        # - "EC_4P1G1"
+        # - "EC_4P2G1"
+        # - "EC_8P2G1"
+        # - "EC_16P2G1"
+    dfs_destroy: false
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
-        disable_caching: True
+        disable_caching: true
 macsio_smoke:
     job_timeout: 10
     nodesperjob:
@@ -253,7 +253,7 @@ macsio_smoke:
         # - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/macsio/"
-        disable_caching: True
+        disable_caching: true
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
@@ -263,4 +263,4 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-enable_telemetry: True
+enable_telemetry: true
