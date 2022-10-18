@@ -2206,9 +2206,10 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	int				amode;
 	int				rc;
 	int				i;
-	#define				NUM_PROPS 2
+	#define				NUM_PROPS 3
 	uint32_t			props[NUM_PROPS] = {DAOS_PROP_CO_LAYOUT_TYPE,
-							    DAOS_PROP_CO_ROOTS};
+							    DAOS_PROP_CO_ROOTS,
+							    DAOS_PROP_CO_REDUN_FAC};
 
 	if (_dfs == NULL)
 		return EINVAL;
