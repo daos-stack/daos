@@ -2464,6 +2464,11 @@ cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
 		goto out;
 
 	rw_arg.csa_rw_disable = (rc == -DER_RF);
+	if (rc == -DER_RF)
+		D_ERROR(DF_CONT": RF broken, last_ver %d, rf %d, "DF_RC"\n",
+			DP_CONT(cont_child->sc_pool_uuid, cont_child->sc_uuid),
+			cont_child->sc_status_pm_ver, cont_child->sc_props.dcp_redun_fac,
+			DP_RC(rc));
 	if (rw_arg.csa_rw_disable == cont_child->sc_rw_disabled)
 		D_GOTO(out, rc = 0);
 
