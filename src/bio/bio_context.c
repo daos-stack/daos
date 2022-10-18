@@ -825,7 +825,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		enum bio_mc_flags flags, struct bio_meta_context **mc)
 {
 	struct bio_meta_context	*bio_mc;
-	int			 rc;
+	int			 rc, rc1;
 	spdk_blob_id		 open_blobid = SPDK_BLOBID_INVALID;
 
 	D_ALLOC_PTR(bio_mc);
@@ -839,7 +839,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_META, open_blobid);
 		if (rc)
-			goto failed;
+			goto free_mem;
 
 		/*
 		 * Check Meta blob header if data blob is associated, and
@@ -847,7 +847,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		 */
 		rc = meta_open(bio_mc);
 		if (rc)
-			goto failed;
+			goto close_meta_ioctxt;
 
 		if (bio_mc->mc_meta_hdr.mh_data_blobid == SPDK_BLOBID_INVALID)
 			flags |= BIO_MC_FL_NO_DATABLOB;
@@ -856,24 +856,36 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_WAL, open_blobid);
 		if (rc)
-			goto failed;
+			goto close_meta;
 
 		rc = wal_open(bio_mc);
 		if (rc)
-			goto failed;
+			goto close_wal_ioctxt;
 	}
 
 out:
 	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, pool_id, flags,
 			       SMD_DEV_TYPE_DATA, open_blobid);
 	if (rc)
-		goto failed;
+		goto close_wal;
 
 	*mc = bio_mc;
 	return 0;
 
-failed:
-	bio_mc_close(bio_mc, flags);
+close_wal:
+	wal_close(bio_mc);
+close_wal_ioctxt:
+	rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
+	if (rc1)
+		D_ERROR("Failed to close wal ioctxt. %d", rc1);
+close_meta:
+	meta_close(bio_mc);
+close_meta_ioctxt:
+	rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
+	if (rc1)
+		D_ERROR("Failed to close meta ioctxt. %d", rc1);
+free_mem:
+	D_FREE(bio_mc);
 
 	return rc;
 }
@@ -974,16 +986,16 @@ int bio_mc_close(struct bio_meta_context *bio_mc, enum bio_mc_flags flags)
 			rc = rc1;
 	}
 	if (bio_mc->mc_wal) {
+		wal_close(bio_mc);
 		rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
 		if (rc1 && !rc)
 			rc = rc1;
-		wal_close(bio_mc);
 	}
 	if (bio_mc->mc_meta) {
+		meta_close(bio_mc);
 		rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
 		if (rc1 && !rc)
 			rc = rc1;
-		meta_close(bio_mc);
 	}
 
 	D_FREE(bio_mc);
