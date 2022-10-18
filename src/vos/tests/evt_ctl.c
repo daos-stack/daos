@@ -451,14 +451,15 @@ ts_remove_rect(void)
 	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
-		if (rc != 0)
+		if (rc < 0) {
 			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
-		if (rc == 0) {
+		if (rc >= 0) {
 			D_FATAL("Remove rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
 }
 
