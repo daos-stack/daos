@@ -862,7 +862,7 @@ class DaosServerManager(SubprocessManager):
                 yaml.dump(generated_yaml, write_file, default_flow_style=False)
         except Exception as error:
             raise CommandFailure(
-                "Error writing the yaml file! {}: {}".format(temp_file_path, error)) from error
+                f"Error writing the yaml file! {temp_file_path}: {error}") from error
 
         # Copy the config from temp dir to /etc/daos of the server node.
         default_server_config = get_default_config_file("server")
@@ -871,8 +871,7 @@ class DaosServerManager(SubprocessManager):
                 dst_hosts, temp_file_path, default_server_config, verbose=False, sudo=True)
         except DaosTestError as error:
             raise CommandFailure(
-                "ERROR: Copying yaml configuration file to {}: "
-                "{}".format(dst_hosts, error)) from error
+                f"ERROR: Copying yaml configuration file to {dst_hosts}: {error}") from error
 
         # Before restarting daos_server, we need to clear SCM. Unmount the mount
         # point, wipefs the disks, etc. This clearing step is built into the
@@ -894,7 +893,7 @@ class DaosServerManager(SubprocessManager):
                     name = param.yaml_key or name
                     if name in storage_tier:
                         param.update(storage_tier[name])
-                    self.log.info("    %s = %s", name, storage_tier[name])
+                        self.log.info("    %s = %s", name, storage_tier[name])
                 engine_yaml_parameters.storage_tiers.append(storage_tier_parameters)
             self.manager.job.yaml.engine_params.append(engine_yaml_parameters)
         self.manager.job.yaml.engine_params.reset_yaml_data_updated()
