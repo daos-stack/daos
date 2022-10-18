@@ -359,7 +359,7 @@ func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, 
 
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
-		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+		if err := setenv(pbin.DaosPrivHelperLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
