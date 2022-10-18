@@ -48,8 +48,8 @@ This release adds the following usability improvements:
   It is no longer necessary (and discouraged) to specify `nr_hugepages` in the
   `daos_server.yml` configuration file.
 
-- Intel VMD devices are now supported in the control plane.
-  Roadmap items exist for future DAOS releases to add
+- Intel [VMD](https://docs.daos.io/v2.2/admin/vmd/) devices are now supported
+  in the control plane. Roadmap items exist for future DAOS releases to add
   support for LED management of VMD-managed NVMe disks,
   and hot-plug support for VMD-managed NVMe disks.
 
@@ -58,6 +58,17 @@ This release adds the following usability improvements:
   capacity numbers.
 
 - POSIX containers (DFS) now support file modification time (mtime).
+
+#### Other notable changes
+
+The default of the pool property `ec_cell_sz` was 1MiB in DAOS 2.0.
+In DAOS 2.2, the default has been changed to 64kiB.
+While this smaller EC cell size should generally improve performance,
+some workloads may benefit from a bigger EC cell size.
+See [Pool Operations](../admin/pool_operations/) and
+[Erasure Code](../user/container/#erasure-code) for details
+on setting the EC cell size.
+
 
 ### Known Issues and limitations
 
