@@ -180,8 +180,10 @@ enum obj_rpc_flags {
 	ORF_CONTAIN_LEADER	= (1 << 20),
 	/*Ascending Order - 0, descending order - 1*/
 	ORF_DESCENDING_ORDER	= (1 << 21),
-	/* send to reintegrating target */
+	/* The IO include reintegrating target */
 	ORF_REINTEGRATING_IO	= (1 << 22),
+	/* The IO include rebuilding target */
+	ORF_REBUILDING_IO	= (1 << 23),
 };
 
 /* common for update/fetch */

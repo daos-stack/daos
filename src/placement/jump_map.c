@@ -1060,6 +1060,7 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  * \param[in]   md              The object metadata which contains data about
  *                              the object being placed such as the object ID.
  * \param[in]   mode		mode of daos_obj_open(DAOS_OO_RO, DAOS_OO_RW etc).
+ * \param[in]	rebuild_ver	rebuild version of the current pool.
  * \param[in]   shard_md        Shard metadata.
  * \param[out]  layout_pp       The layout generated for the object. Contains
  *                              references to the targets in the pool map where
@@ -1071,7 +1072,8 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  */
 static int
 jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
-		   unsigned int mode, struct daos_obj_shard_md *shard_md,
+		   unsigned int mode, uint32_t rebuild_version,
+		   struct daos_obj_shard_md *shard_md,
 		   struct pl_obj_layout **layout_pp)
 {
 	struct pl_jump_map	*jmap;
@@ -1133,7 +1135,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		if (is_extending)
 			allow_status |= PO_COMP_ST_UP;
 
-		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, -1,
+		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, rebuild_version,
 					      &extend_layout, NULL, NULL);
 		if (rc)
 			D_GOTO(out, rc);
