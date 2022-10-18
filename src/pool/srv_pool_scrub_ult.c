@@ -46,7 +46,7 @@ scrubbing_is_enabled()
 	bool result = false;
 
 	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
-	return result;
+	return !result;
 }
 
 static inline int
