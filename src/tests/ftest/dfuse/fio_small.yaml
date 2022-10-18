@@ -49,9 +49,9 @@ container:
     rf0:
       properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     rf1:
-      properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
     rf2:
-      properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
 fio:
   names:
     - global
