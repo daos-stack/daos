@@ -48,8 +48,8 @@ This release adds the following usability improvements:
   It is no longer necessary (and discouraged) to specify `nr_hugepages` in the
   `daos_server.yml` configuration file.
 
-- Intel VMD devices are now supported in the control plane.
-  Roadmap items exist for future DAOS releases to add
+- Intel [VMD](https://docs.daos.io/v2.2/admin/vmd/) devices are now supported
+  in the control plane. Roadmap items exist for future DAOS releases to add
   support for LED management of VMD-managed NVMe disks,
   and hot-plug support for VMD-managed NVMe disks.
 
