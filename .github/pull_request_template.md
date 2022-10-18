@@ -22,7 +22,7 @@
       such as a compiler warning on extraneous platforms.
 * [ ] No new NLT or valgrind warnings.  Check the classic view. This step should only matter if
       the build requires force landing.
-* [ ] Ensure sufficent testing is done.   Check feature pragmas and test tags. Check that tests
+* [ ] Ensure sufficient testing is done.   Check feature pragmas and test tags. Check that tests
       skipped for the ticket are run and now pass with the changes.
 * [ ] Quick-build or Quick-functional is not used.
 * [ ] Pay attention to PRs that may affect compatibility between versions and ensure it has been

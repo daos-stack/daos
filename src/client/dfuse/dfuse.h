@@ -97,7 +97,7 @@ struct dfuse_obj_hdl {
 	/** True if caching is enabled for this file. */
 	bool                             doh_caching;
 
-	/* True of the kernel may have been told to keep the cache for this open.  This is used
+	/* True if the kernel may have been told to keep the cache for this open.  This is used
 	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
 	 * here and this flag may be set on create even if the kernel flag isn't provided.
 	 */
@@ -571,7 +571,7 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache update.
 	 * For directories this is the time of the most recent closedir for a handle which may
 	 * have populated the cache.
-	 * For files this is when the file was last closed after been written to.
+	 * For files this is when the file was last closed after being written to.
 	 */
 	struct timespec          ie_cache_last_update;
 
