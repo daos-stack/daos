@@ -35,7 +35,7 @@ mkdir new_dir
 sudo cp -a new_dir /opt/daos
 tar --strip-components=2 --directory /opt/daos -xf opt-daos.tar
 
-sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
+sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 sudo mkdir -p /usr/share/spdk/scripts/
 sudo ln -sf "$SL_PREFIX/share/spdk/scripts/setup.sh" /usr/share/spdk/scripts/

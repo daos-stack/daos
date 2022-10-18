@@ -403,7 +403,7 @@ type ScmAdminForwarder struct {
 
 // NewScmAdminForwarder creates a new ScmAdminForwarder.
 func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &ScmAdminForwarder{
 		Forwarder: *pf,

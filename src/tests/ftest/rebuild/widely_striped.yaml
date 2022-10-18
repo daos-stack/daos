@@ -33,7 +33,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
-  properties: "rf:2"
+  properties: "rd_fac:2"
 mdtest:
   api: DFS
   client_processes:

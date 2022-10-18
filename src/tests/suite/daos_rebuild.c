@@ -1265,16 +1265,10 @@ static void
 rebuild_kill_rank_during_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc;
 
 	if (!test_runable(arg, 6))
-		return;
-
-	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
-	if (rc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1283,7 +1277,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(new_arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
@@ -1293,7 +1287,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 				      0, NULL);
 	}
 
-	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
+	arg->rebuild_cb = rebuild_destroy_pool_cb;
 
 	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			    ranks_to_kill[0], -1);

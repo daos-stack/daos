@@ -75,7 +75,7 @@ class TargetFailure(IorTestBase):
         error to the ongoing IOR even if data protection is used. Also verify that
         reintegrating the excluded target will bring back the system to the usable state.
 
-        1. Run two server ranks and create a pool and a container with --properties=rf:1.
+        1. Run two server ranks and create a pool and a container with --properties=rd_fac:1.
         2. Run IOR with --dfs.oclass RP_2G1/EC_2P1G1 --dfs.dir_oclass RP_2G1/EC_2P1G1
         3. While the IOR is running, exclude one target from each server rank so that IO
         fails even with replication.

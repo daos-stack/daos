@@ -515,7 +515,7 @@ enum {
 	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
 						 * flat KV; 1 grp for others.
 						 */
-	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** 1 grp */
 	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
 	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
 	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
