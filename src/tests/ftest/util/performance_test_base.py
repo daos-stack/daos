@@ -370,7 +370,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         # Create pool and container upfront for flexibility and so rank stop timing is accurate
         self.create_pool()
         self.create_cont(
-            chunk_size=self.ior_cmd.dfs_chunk.value, properties="rf:{}".format(cont_rf))
+            chunk_size=self.ior_cmd.dfs_chunk.value, properties="rd_fac:{}".format(cont_rf))
         self.update_ior_cmd_with_pool(False)
 
         for iteration in range(num_iterations):
@@ -454,7 +454,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             create=False,
             oclass=self.mdtest_cmd.dfs_oclass.value,
             chunk_size=self.mdtest_cmd.dfs_chunk.value)
-        properties = "rf:{}".format(cont_rf)
+        properties = "rd_fac:{}".format(cont_rf)
         current_properties = self.container.properties.value
         if current_properties:
             new_properties = current_properties + "," + properties

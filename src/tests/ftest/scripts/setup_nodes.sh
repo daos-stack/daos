@@ -129,7 +129,7 @@ fi"
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be
     # necessary if we were testing from RPMs) in order to
-    # perform NVMe operations via daos_admin
+    # perform NVMe operations via daos_server_helper
     sudo mkdir -p /usr/share/daos/control
     sudo ln -sf "$SL_PREFIX"/share/daos/control/setup_spdk.sh \
                /usr/share/daos/control
@@ -149,11 +149,11 @@ if ! $TEST_RPMS; then
     fi
 
     # first, strip the execute bit from the in-tree binary,
-    # then copy daos_admin binary into \$PATH and fix perms
-    chmod -x "$DAOS_BASE"/install/bin/daos_admin && \
-    sudo cp "$DAOS_BASE"/install/bin/daos_admin /usr/bin/daos_admin && \
-	    sudo chown root /usr/bin/daos_admin && \
-	    sudo chmod 4755 /usr/bin/daos_admin
+    # then copy daos_server_helper binary into \$PATH and fix perms
+    chmod -x "$DAOS_BASE"/install/bin/daos_server_helper && \
+    sudo cp "$DAOS_BASE"/install/bin/daos_server_helper /usr/bin/daos_server_helper && \
+	    sudo chown root /usr/bin/daos_server_helper && \
+	    sudo chmod 4755 /usr/bin/daos_server_helper
 fi
 
 rm -rf "${TEST_TAG_DIR:?}/"

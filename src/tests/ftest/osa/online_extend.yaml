@@ -57,7 +57,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
     oclass: RP_2G1
 ior:
   client_processes:

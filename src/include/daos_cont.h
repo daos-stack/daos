@@ -48,6 +48,9 @@ extern "C" {
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
+/** Maximum length for container hints */
+#define DAOS_CONT_HINT_MAX_LEN	128
+
 /** Container information */
 typedef struct {
 	/** Container UUID */

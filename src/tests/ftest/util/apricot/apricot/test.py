@@ -1637,7 +1637,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
         self.control_log = "{}_daos_control.log".format(self.test_id)
-        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.helper_log = "{}_daos_server_helper.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
         self.config_file_base = "{}_".format(self.test_id)
 

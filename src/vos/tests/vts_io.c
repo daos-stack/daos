@@ -354,7 +354,7 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 		daos_key_t *dkey, int dkey_id, int *akeys, int *recs,
 		bool print_ent)
 {
-	daos_handle_t	ih = DAOS_HDL_INVAL;
+	daos_handle_t   ih = DAOS_HDL_INVAL;
 	int		nr = 0;
 	int		rc;
 
@@ -403,6 +403,7 @@ io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
 				     recs, print_ent);
 
 		nr++;
+
 		rc = vos_iter_next(ih, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST) {
 			print_error("Failed to move cursor: "DF_RC"\n",
@@ -424,6 +425,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 		 bool print_ent)
 {
 	char			buf[UPDATE_AKEY_SIZE];
+	daos_key_t              saved_dkey = {0};
+	char                    dkey_buf[UPDATE_DKEY_SIZE];
 	vos_iter_param_t	param;
 	daos_handle_t		ih;
 	bool			iter_fa;
@@ -483,6 +486,27 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 
 		nr++;
+
+		if ((arg->ta_flags & TF_IT_SET_ANCHOR)) {
+			if (nr == 2) {
+				/** Save the old key for later use */
+				assert_true(ent.ie_key.iov_len <= sizeof(dkey_buf));
+				memcpy(dkey_buf, ent.ie_key.iov_buf, ent.ie_key.iov_len);
+				d_iov_set(&saved_dkey, dkey_buf, ent.ie_key.iov_len);
+			} else if (nr == 10) {
+				/** Manually set the anchor back to the saved key */
+				rc = vos_obj_key2anchor(arg->ctx.tc_co_hdl, arg->oid, &saved_dkey,
+							NULL, &anchor);
+				assert_rc_equal(rc, 0);
+				goto probe_from_anchor;
+			} else if (nr == 11) {
+				printf(DF_KEY " expected to be " DF_KEY "\n", DP_KEY(&saved_dkey),
+				       DP_KEY(&ent.ie_key));
+				assert_memory_equal(saved_dkey.iov_buf, ent.ie_key.iov_buf,
+						    ent.ie_key.iov_len);
+			}
+		}
+
 		rc = vos_iter_next(ih, NULL);
 		if (rc == -DER_NONEXIST) {
 			print_message("Finishing d-key iteration\n");
@@ -506,6 +530,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 		}
 
+probe_from_anchor:
 		rc = vos_iter_probe(ih, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
@@ -1121,7 +1146,7 @@ io_iter_test_base(struct io_test_args *args)
 	print_message("Enumerated: %d, total_keys: %lu.\n",
 		      nr, vts_cntr.cn_dkeys);
 	print_message("Enumerated akeys: %d\n", akeys);
-	assert_int_equal(nr, vts_cntr.cn_dkeys);
+	assert_int_equal(nr, vts_cntr.cn_dkeys + ((args->ta_flags & TF_IT_SET_ANCHOR) ? 9 : 0));
 }
 
 static void
@@ -1139,6 +1164,15 @@ io_iter_test_with_anchor(void **state)
 	struct io_test_args	*arg = *state;
 
 	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
+	io_iter_test_base(arg);
+}
+
+static void
+io_iter_test_key2anchor(void **state)
+{
+	struct io_test_args *arg = *state;
+
+	arg->ta_flags = TF_IT_SET_ANCHOR | TF_REC_EXT;
 	io_iter_test_base(arg);
 }
 
@@ -2869,58 +2903,39 @@ io_query_key_negative(void **state)
 }
 
 static const struct CMUnitTest io_tests[] = {
-	{ "VOS201: VOS object IO index",
-		io_oi_test, NULL, NULL},
-	{ "VOS202: VOS object cache test",
-		io_obj_cache_test, NULL, NULL},
-	{ "VOS203: Simple update/fetch/verify test",
-		io_simple_one_key, NULL, NULL},
-	{ "VOS204: Simple Punch test",
-		io_simple_punch, NULL, NULL},
-	{ "VOS205: Simple near-epoch retrieval test",
-		io_simple_near_epoch, NULL, NULL},
-	{ "VOS206: Simple scatter-gather list test, multiple update buffers",
-		io_sgl_update, NULL, NULL},
-	{ "VOS207: Simple scatter-gather list test, multiple fetch buffers",
-		io_sgl_fetch, NULL, NULL},
-	{ "VOS208: Extent hole test",
-		io_fetch_hole, NULL, NULL},
-	{ "VOS220: 100K update/fetch/verify test",
-		io_multiple_dkey, NULL, NULL},
-	{ "VOS222: overwrite test",
-		io_idx_overwrite, NULL, NULL},
-	{ "VOS240.0: KV Iter tests (for dkey)",
-		io_iter_test, NULL, NULL},
-	{ "VOS240.1: KV Iter tests with anchor (for dkey)",
-		io_iter_test_with_anchor, NULL, NULL},
-	{ "VOS240.3: KV range Iteration tests (for dkey)",
-		io_obj_forward_iter_test, NULL, NULL},
-	{ "VOS240.4: KV reverse range Iteration tests (for dkey)",
-		io_obj_reverse_iter_test, NULL, NULL},
-	{ "VOS240.5 KV range iteration tests (for recx)",
-		io_obj_forward_recx_iter_test, NULL, NULL},
-	{ "VOS240.6 KV reverse range iteration tests (for recx)",
-		io_obj_reverse_recx_iter_test, NULL, NULL},
-	{ "VOS245.0: Object iter test (for oid)",
-		oid_iter_test, oid_iter_test_setup, NULL},
-	{ "VOS245.1: Object iter test with anchor (for oid)",
-		oid_iter_test_with_anchor, oid_iter_test_setup, NULL},
-	{ "VOS250.0: vos_iterate tests - Check single callback",
-		vos_iterate_test, NULL, NULL},
-	{ "VOS280: Same Obj ID on two containers (obj_cache test)",
-		io_simple_one_key_cross_container, NULL, NULL},
-	{ "VOS281.0: Fetch from non existent object",
-		io_fetch_no_exist_object, NULL, NULL},
-	{ "VOS281.1: Fetch from non existent object with zero-copy",
-		io_fetch_no_exist_object_zc, NULL, NULL},
-	{ "VOS282.0: Fetch from non existent dkey",
-		io_fetch_no_exist_dkey, NULL, NULL},
-	{ "VOS282.1: Fetch from non existent dkey with zero-copy",
-		io_fetch_no_exist_dkey_zc, NULL, NULL},
-	{ "VOS282.2: Accessing pool, container with same UUID",
-		pool_cont_same_uuid, NULL, NULL},
-	{ "VOS299: Space overflow negative error test",
-		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
+    {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
+    {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
+    {"VOS203: Simple update/fetch/verify test", io_simple_one_key, NULL, NULL},
+    {"VOS204: Simple Punch test", io_simple_punch, NULL, NULL},
+    {"VOS205: Simple near-epoch retrieval test", io_simple_near_epoch, NULL, NULL},
+    {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
+    {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
+    {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+    {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
+    {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
+    {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
+    {"VOS240.1: KV Iter tests with anchor (for dkey)", io_iter_test_with_anchor, NULL, NULL},
+    {"VOS240.7: key2anchor iterator test", io_iter_test_key2anchor, NULL, NULL},
+    {"VOS240.3: KV range Iteration tests (for dkey)", io_obj_forward_iter_test, NULL, NULL},
+    {"VOS240.4: KV reverse range Iteration tests (for dkey)", io_obj_reverse_iter_test, NULL, NULL},
+    {"VOS240.5 KV range iteration tests (for recx)", io_obj_forward_recx_iter_test, NULL, NULL},
+    {"VOS240.6 KV reverse range iteration tests (for recx)", io_obj_reverse_recx_iter_test, NULL,
+     NULL},
+    {"VOS245.0: Object iter test (for oid)", oid_iter_test, oid_iter_test_setup, NULL},
+    {"VOS245.1: Object iter test with anchor (for oid)", oid_iter_test_with_anchor,
+     oid_iter_test_setup, NULL},
+    {"VOS250.0: vos_iterate tests - Check single callback", vos_iterate_test, NULL, NULL},
+    {"VOS280: Same Obj ID on two containers (obj_cache test)", io_simple_one_key_cross_container,
+     NULL, NULL},
+    {"VOS281.0: Fetch from non existent object", io_fetch_no_exist_object, NULL, NULL},
+    {"VOS281.1: Fetch from non existent object with zero-copy", io_fetch_no_exist_object_zc, NULL,
+     NULL},
+    {"VOS282.0: Fetch from non existent dkey", io_fetch_no_exist_dkey, NULL, NULL},
+    {"VOS282.1: Fetch from non existent dkey with zero-copy", io_fetch_no_exist_dkey_zc, NULL,
+     NULL},
+    {"VOS282.2: Accessing pool, container with same UUID", pool_cont_same_uuid, NULL, NULL},
+    {"VOS299: Space overflow negative error test", io_pool_overflow_test, NULL,
+     io_pool_overflow_teardown},
 };
 
 static const struct CMUnitTest int_tests[] = {
