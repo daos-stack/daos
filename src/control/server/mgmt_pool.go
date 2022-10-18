@@ -555,14 +555,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	resp := &mgmtpb.PoolDestroyResp{}
 
-	inCleanupMode := false
-	if ps.State == system.PoolServiceStateDestroying {
-		// If we already tried to destroy the pool but it failed for some
-		// reason, try again, but instead use the full set of storage ranks
-		// in case the MS has lost track of the actual svc ranks.
-		req.SvcRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
-		inCleanupMode = true
-	} else {
+	if ps.State != system.PoolServiceStateDestroying {
 		// If recursive flag is unset, refuse to destroy pool if resident containers exist.
 		if !req.Recursive {
 			hasContainers, err := svc.poolHasContainers(ctx, req)
@@ -605,7 +598,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
+	// Note that we set req.SvcRanks to all ranks in the system, not the PS
+	// replicas, not the up ranks in the pool. Doing such a "blind" destroy
+	// avoids contacting the PS, who may have already been destroyed by a
+	// previous pool destroy attempt or otherwise unavailable at this point.
+	// Moreover, we will also clean up pool resources on ranks that are now
+	// available but have previously been excluded from the pool.
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return nil, err
+	}
+	allRanks := make([]uint32, 0, len(gm.RankEntries))
+	for i := range gm.RankEntries {
+		allRanks = append(allRanks, i.Uint32())
+	}
+	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
+	req.SvcRanks = allRanks
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -618,18 +627,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
 	ds := daos.Status(resp.Status)
-	switch ds {
-	case daos.Success, daos.NotLeader, daos.NotReplica:
-		if ds == daos.NotLeader || ds == daos.NotReplica {
-			// If we're not cleaning up, then this is an error.
-			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
-			if !inCleanupMode {
-				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
-				break
-			}
-			// Otherwise, we've done all we can to try to recover.
-			resp.Status = int32(daos.Success)
-		}
+	if ds == daos.Success {
 		if err := svc.sysdb.RemovePoolService(poolUUID); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
 			// As we know the service entry existed when we started this handler,
@@ -639,7 +637,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 				return nil, errors.Wrapf(err, "failed to remove pool %s", poolUUID)
 			}
 		}
-	default:
+	} else {
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 

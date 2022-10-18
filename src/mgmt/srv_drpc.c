@@ -533,7 +533,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolDestroyReq	*req = NULL;
 	Mgmt__PoolDestroyResp	 resp = MGMT__POOL_DESTROY_RESP__INIT;
 	uuid_t			 uuid;
-	d_rank_list_t		*svc_ranks = NULL;
+	d_rank_list_t		*ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -558,17 +558,22 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
-	if (svc_ranks == NULL)
+	/*
+	 * Note that req->svc_ranks in this dRPC indicates on which ranks we
+	 * shall attempt to destroy the pool, not the set of PS ranks, despite
+	 * the name. See the caller code in mgmt_svc.PoolDestroy.
+	 */
+	ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
+	rc = ds_mgmt_destroy_pool(uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
 	}
 
-	d_rank_list_free(svc_ranks);
+	d_rank_list_free(ranks);
 
 out:
 	resp.status = rc;
