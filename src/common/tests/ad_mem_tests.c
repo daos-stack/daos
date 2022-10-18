@@ -19,6 +19,27 @@
 static struct ad_blob_handle adt_bh;
 static char	*adt_store;
 
+static void
+addr_swap(void *array, int a, int b)
+{
+        daos_off_t	*addrs = array;
+        daos_off_t	 tmp;
+
+        tmp = addrs[a];
+        addrs[a] = addrs[b];
+        addrs[b] = tmp;
+}
+
+static daos_sort_ops_t addr_shuffle_ops = {
+	.so_swap	= addr_swap,
+};
+
+static void
+adt_addrs_shuffle(daos_off_t *addrs, int nr)
+{
+	daos_array_shuffle((void *)addrs, nr, &addr_shuffle_ops);
+}
+
 static int
 adt_store_read(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl)
 {
@@ -63,7 +84,6 @@ adt_store_wal_rsv(struct umem_store *store, uint64_t *id)
 static int
 adt_store_wal_submit(struct umem_store *store, uint64_t id, d_list_t *actions)
 {
-	printf("Write WAL: id=%d\n", (int)id);
 	return 0;
 }
 
@@ -97,32 +117,7 @@ adt_blob_create(void **state)
 	assert_rc_equal(rc, 0);
 }
 
-static void
-adt_blob_open(void **state)
-{
-	struct umem_store	*store;
-	struct ad_blob_handle	 bh;
-	int	rc;
-
-	printf("prep open ad_blob\n");
-	rc = ad_blob_prep_open(DUMMY_BLOB, &bh);
-	assert_rc_equal(rc, 0);
-
-	store = ad_blob_hdl2store(bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post open ad_blob\n");
-	rc = ad_blob_post_open(bh);
-	assert_rc_equal(rc, 0);
-	assert_int_equal(store->stor_size, ADT_STORE_SIZE);
-
-	printf("close ad_blob\n");
-	rc = ad_blob_close(bh);
-	assert_rc_equal(rc, 0);
-}
-
-static void
-adt_reserve_cancel(void **state)
+static void adt_reserve_cancel_1(void **state)
 {
 	const int	     alloc_size = 128;
 	struct ad_reserv_act act;
@@ -150,7 +145,29 @@ adt_reserve_cancel(void **state)
 }
 
 static void
-adt_reserve_publish(void **state)
+adt_reserve_cancel_2(void **state)
+{
+	const int	     alloc_size = 128;
+	const int	     rsv_count = 16;
+	struct ad_reserv_act acts[rsv_count];
+	daos_off_t	     addrs[rsv_count];
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("multiple reserve and cancel\n");
+	for (i = 0; i < rsv_count; i++) {
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed allocate\n");
+			return;
+		}
+		printf("reserved address=%lx\n", (unsigned long)addrs[i]);
+	}
+	ad_cancel(acts, rsv_count);
+}
+
+static void
+adt_reserve_pub_1(void **state)
 {
 	const int	     alloc_size = 48;
 	struct ad_tx	     tx;
@@ -161,8 +178,8 @@ adt_reserve_publish(void **state)
 	int		     i;
 	uint32_t	     arena = AD_ARENA_ANY;
 
-	printf("Reserve and publish\n");
-	for (i = 0; i < 32; i++) {
+	printf("Reserve and publish in a loop\n");
+	for (i = 0; i < 1024; i++) {
 		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
 		if (addr == 0) {
 			fprintf(stderr, "failed allocate\n");
@@ -191,7 +208,41 @@ adt_reserve_publish(void **state)
 }
 
 static void
-adt_reserve_free(void **state)
+adt_reserve_pub_2(void **state)
+{
+	const int	     alloc_size = 512;
+	const int	     rsv_count = 16;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[rsv_count];
+	daos_off_t	     addrs[rsv_count];
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("multiple reserve and one publish\n");
+	for (i = 0; i < rsv_count; i++) {
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[i]);
+		if (addrs[i]== 0) {
+			fprintf(stderr, "failed allocate\n");
+			return;
+		}
+		printf("reserved address=%lx\n", (unsigned long)addrs[i]);
+	}
+
+	printf("publishing reserved addresses\n");
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, rsv_count);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+adt_reserve_free_1(void **state)
 {
 	const int	     alloc_size = 256;
 	struct ad_tx	     tx;
@@ -225,11 +276,57 @@ adt_reserve_free(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+adt_reserve_free_2(void **state)
+{
+	const int	     alloc_size = 96;
+	const int	     rsv_count = 1024;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[rsv_count];
+	daos_off_t	     addrs[rsv_count];
+	int		     i;
+	int		     rc;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Multiple frees in one transaction\n");
+	for (i = 0; i < rsv_count; i++) {
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed allocate\n");
+			return;
+		}
+	}
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, rsv_count);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+
+	adt_addrs_shuffle(addrs, rsv_count);
+
+	printf("Free addresses in random order\n");
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < rsv_count; i++) {
+		rc = ad_tx_free(&tx, addrs[i]);
+		assert_rc_equal(rc, 0);
+	}
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 adt_setup(void **state)
 {
 	struct umem_store *store;
 	int		   rc;
+
+	adt_blob_create(state);
 
 	printf("prep open ad_blob\n");
 	rc = ad_blob_prep_open(DUMMY_BLOB, &adt_bh);
@@ -260,17 +357,14 @@ adt_teardown(void **state)
 int
 main(void)
 {
-	const struct CMUnitTest blob_tests[] = {
-		cmocka_unit_test(adt_blob_create),
-		cmocka_unit_test(adt_blob_open),
+	const struct CMUnitTest ad_mem_tests[] = {
+		cmocka_unit_test(adt_reserve_cancel_1),
+		cmocka_unit_test(adt_reserve_cancel_2),
+		cmocka_unit_test(adt_reserve_pub_1),
+		cmocka_unit_test(adt_reserve_pub_2),
+		cmocka_unit_test(adt_reserve_free_1),
+		cmocka_unit_test(adt_reserve_free_2),
 	};
-
-	const struct CMUnitTest alloc_tests[] = {
-		cmocka_unit_test(adt_reserve_cancel),
-		cmocka_unit_test(adt_reserve_publish),
-		cmocka_unit_test(adt_reserve_free),
-	};
-
 	int	rc;
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
@@ -282,13 +376,9 @@ main(void)
 		return -1;
 	}
 
-	rc = cmocka_run_group_tests_name("ad_blob_tests", blob_tests, NULL, NULL);
-	if (rc)
-		goto failed;
+	rc = cmocka_run_group_tests_name("ad_mem_tests", ad_mem_tests, adt_setup, adt_teardown);
 
-	rc = cmocka_run_group_tests_name("ad_alloc_tests", alloc_tests, adt_setup, adt_teardown);
-failed:
-	D_FREE(adt_store);
 	daos_debug_fini();
+	D_FREE(adt_store);
 	return rc;
 }

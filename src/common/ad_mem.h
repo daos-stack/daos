@@ -62,14 +62,18 @@ struct ad_group_df {
 /** DRAM format of group, it is referenced by ad_group_df::gd_back_ptr */
 struct ad_group {
 	struct ad_arena		*gp_arena;
+	/** address of durable format */
 	struct ad_group_df	*gp_df;
 	/** unpublished group */
 	bool			 gp_unpub;
 	/** being published */
 	bool			 gp_publishing;
 	int			 gp_ref;
+	/** number of reserved units */
 	int			 gp_unit_rsv;
+	/** bit offset in ad_arena_df */
 	int			 gp_bit_at;
+	/** number of bits consumed by this group */
 	int			 gp_bit_nr;
 	/** link chain on blob LRU */
 	d_list_t		 gp_link;
@@ -94,10 +98,10 @@ struct ad_arena_spec {
 	uint32_t		as_type;
 	/** arena unit size, reserved for future use */
 	uint32_t		as_unit;
-	/** number of group specs */
-	uint32_t		as_specs_nr;
 	/* last active arena of this type, this is not really part of spec... */
 	uint32_t		as_arena_last;
+	/** number of group specs (valid members of as_specs) */
+	uint32_t		as_specs_nr;
 	/** group sizes and number of units within each group */
 	struct ad_group_spec	as_specs[ARENA_GRP_SPEC_MAX];
 };
@@ -125,18 +129,16 @@ struct ad_arena_df {
 	uint16_t		ad_magic;
 	/** for SLAB style allocation */
 	uint16_t		ad_type;
-	/** internal offset for locating */
-	int16_t			ad_spec_id;
-	/** available bits in ad_bmap */
-	int16_t			ad_bits_avail;
 	/** Arena ID (its highnest bit is reserved for external arena) */
-	int32_t			ad_id;
+	uint32_t		ad_id;
+	/** arena size, default is 16MB, <= 4GB */
+	uint32_t		ad_size;
 	/** minimum allocation unit */
 	int32_t			ad_unit;
 	/** number of groups */
 	int32_t			ad_grp_nr;
-	/** arena size, default is 16MB, <= 4GB */
-	uint32_t		ad_size;
+	/** internal offset for locating */
+	int32_t			ad_pad32;
 	/**
 	 * validate @ad_sort_sz_tmp, @ad_sort_ad_tmp and ad_back_ptr, because they are DRAM
 	 * pointers.
