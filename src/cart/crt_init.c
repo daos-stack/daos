@@ -480,6 +480,9 @@ do_init:
 			}
 		}
 
+		if (crt_na_type_is_ucx(prov))
+			unsetenv("FI_OFI_RXM_USE_SRX"); 
+
 		/* Print notice that "ofi+psm2" will be deprecated*/
 		if (prov == CRT_NA_OFI_PSM2) {
 			D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
