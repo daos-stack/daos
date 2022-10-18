@@ -142,9 +142,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_CENTOS7_TARGET',
-               defaultValue: '',
-               description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
@@ -180,7 +177,7 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the functional CentOS 8 CI tests' +
+                     description: 'Run the functional EL 8 CI tests' +
                                   ' with Valgrind')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
@@ -690,7 +687,7 @@ pipeline {
                     }
                     post {
                         always {
-                            unitTestPost artifacts: ['nlt_logs/*'],
+                            unitTestPost artifacts: ['nlt_logs/'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
@@ -766,41 +763,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: 'daos-stack/daos',
-                                   parallel_build: parallelBuild()
-                    }
-                    post {
-                        success {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            /* groovylint-disable-next-line DuplicateMapLiteral */
-                            coverityPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
                 stage('Functional on EL 8 with Valgrind') {
                     when {
                         beforeAgent true

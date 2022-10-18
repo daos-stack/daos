@@ -1029,7 +1029,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC_OLD) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		if (!strcmp(val, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -1057,6 +1058,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL_OLD) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
