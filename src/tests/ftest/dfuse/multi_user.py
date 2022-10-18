@@ -52,6 +52,14 @@ class MultiUser(DfuseTestBase):
         print(ret0)
         self.assertEqual(ret0['exit_status'], 0)
 
+        ret = general_utils.run_pcmd(
+            self.hostlist_clients,
+            'daos container get-attr --path {}/new-cont'.format(root_dir),
+            expect_rc=0)
+        ret0 = ret[0]
+        print(ret0)
+        self.assertEqual(ret0['exit_status'], 0)
+
         ret = general_utils.run_pcmd(self.hostlist_clients,
                                      'ls -l {}'.format(root_dir), expect_rc=0)
         ret0 = ret[0]
