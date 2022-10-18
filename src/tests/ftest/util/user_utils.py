@@ -9,7 +9,7 @@ from pwd import getpwnam
 import os
 
 # pylint: disable=import-error,no-name-in-module
-from util.run_utils import run_remote, RunException
+from run_utils import run_remote, RunException
 
 
 def get_primary_group(user=None):
