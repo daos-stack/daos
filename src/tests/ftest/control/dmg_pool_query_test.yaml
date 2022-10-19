@@ -5,21 +5,25 @@ timeout: 80
 server_config:
   name: daos_server
   port: 10001
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
   control_method: dmg
-  mode: 146
   scm_size: 16GB
   nvme_size: 32GB
-  name: daos_server
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 ior:
   flags: "-k -w -r"
   transfer_size: "64M"
