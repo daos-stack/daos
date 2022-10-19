@@ -268,6 +268,22 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 	return 0;
 }
 
+static int
+get_integer(void *addr, int size)
+{
+	switch (size) {
+	default:
+		D_ASSERT(0);
+		break;
+	case 1:
+		return *((uint8_t *)addr);
+	case 2:
+		return *((uint16_t *)addr);
+	case 4:
+		return *((uint32_t *)addr);
+	}
+}
+
 static void
 assign_integer(void *addr, int size, uint32_t val)
 {
@@ -307,7 +323,7 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 
 	it_undo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
 	it_undo->it_act.ac_assign.size = size;
-	assign_integer(&it_undo->it_act.ac_assign.val, size, val);
+	assign_integer(&it_undo->it_act.ac_assign.val, size, get_integer(addr, size));
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 
 	assign_integer(addr, size, val);

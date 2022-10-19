@@ -260,7 +260,9 @@ struct ad_blob {
 	/** unused group LRU */
 	d_list_t		 bb_gps_lru;
 	int			 bb_ars_lru_size;
+	int			 bb_ars_lru_cap;
 	int			 bb_gps_lru_size;
+	int			 bb_gps_lru_cap;
 	/** file descriptor of MD file */
 	int			 bb_fd;
 	/** reference counter */

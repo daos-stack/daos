@@ -152,8 +152,8 @@ blob_bmap_size(struct ad_blob *blob)
 	return (blob->bb_pgs_nr + 7) >> 3;
 }
 
-#define GROUP_LRU_SIZE	4096
-#define ARENA_LRU_SIZE	1024
+#define GROUP_LRU_MAX	(256 << 10)
+#define ARENA_LRU_MAX	(64 << 10)
 
 static int
 blob_init(struct ad_blob *blob)
@@ -201,7 +201,10 @@ blob_init(struct ad_blob *blob)
 	if (!blob->bb_bmap_rsv)
 		goto failed;
 
-	for (i = 0; i < ARENA_LRU_SIZE; i++) {
+	blob->bb_ars_lru_cap = min(blob->bb_pgs_nr, ARENA_LRU_MAX);
+	blob->bb_gps_lru_cap = min(blob->bb_pgs_nr * 8, GROUP_LRU_MAX);
+
+	for (i = 0; i < blob->bb_ars_lru_cap; i++) {
 		struct ad_arena *arena;
 
 		arena = alloc_arena(NULL, true);
@@ -212,7 +215,7 @@ blob_init(struct ad_blob *blob)
 		d_list_add(&arena->ar_link, &blob->bb_ars_lru);
 	}
 
-	for (i = 0; i < GROUP_LRU_SIZE; i++) {
+	for (i = 0; i < blob->bb_gps_lru_cap; i++) {
 		struct ad_group *group;
 
 		group = alloc_group(NULL, true);
@@ -249,12 +252,9 @@ blob_fini(struct ad_blob *blob)
 	while ((arena = d_list_pop_entry(&blob->bb_ars_lru, struct ad_arena, ar_link)))
 		free_arena(arena, true);
 
-	if (blob->bb_bmap_rsv)
-		D_FREE(blob->bb_bmap_rsv);
-	if (blob->bb_pages)
-		D_FREE(blob->bb_pages);
-	if (blob->bb_mmap)
-		D_FREE(blob->bb_mmap);
+	D_FREE(blob->bb_bmap_rsv);
+	D_FREE(blob->bb_pages);
+	D_FREE(blob->bb_mmap);
 	return 0;
 }
 
@@ -498,8 +498,7 @@ ad_blob_post_open(struct ad_blob_handle bh)
 	return 0;
 failed:
 	blob_handle_release(bh);
-	if (bd)
-		D_FREE(bd);
+	D_FREE(bd);
 	return rc;
 }
 
@@ -774,18 +773,30 @@ arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx)
 	struct ad_blob_df	*bd	= blob->bb_df;
 	struct ad_arena_df	*ad	= arena->ar_df;
 	struct ad_arena_spec	*spec	= &bd->bd_asp[ad->ad_type];
+	int			 rc;
 
 	D_DEBUG(DB_TRACE, "publishing arena=%d\n", ad->ad_id);
-	ad_tx_setbits(tx, bd->bd_bmap, ad->ad_id, 1);
+	rc = ad_tx_setbits(tx, bd->bd_bmap, ad->ad_id, 1);
+	if (rc)
+		return rc;
 
 	if (spec->as_arena_last == AD_ARENA_ANY || spec->as_arena_last < ad->ad_id) {
-		ad_tx_assign(tx, &spec->as_arena_last, sizeof(spec->as_arena_last), ad->ad_id);
+		rc = ad_tx_assign(tx, &spec->as_arena_last, sizeof(spec->as_arena_last), ad->ad_id);
+		if (rc)
+			return rc;
+
 		D_DEBUG(DB_TRACE, "Published arena type = %u, ID = %u\n",
 			ad->ad_type, spec->as_arena_last);
 	}
 
-	ad_tx_set(tx, ad, 0, sizeof(*ad), AD_TX_REDO | AD_TX_LOG_ONLY);
-	ad_tx_snap(tx, ad, offsetof(struct ad_arena_df, ad_bmap[0]), AD_TX_REDO);
+	rc = ad_tx_set(tx, ad, 0, sizeof(*ad), AD_TX_REDO | AD_TX_LOG_ONLY);
+	if (rc)
+		return rc;
+
+	rc = ad_tx_snap(tx, ad, offsetof(struct ad_arena_df, ad_bmap[0]), AD_TX_REDO);
+	if (rc)
+		return rc;
+
 	return 0;
 }
 
@@ -1395,16 +1406,28 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	struct ad_group_df	*gd = group->gp_df;
 	int			 bit_at;
 	int			 bit_nr;
+	int			 rc;
 
 	bit_at = (gd->gd_addr - ad->ad_addr - ARENA_HDR_SIZE) >> GRP_SIZE_SHIFT;
 	bit_nr = (gd->gd_unit_nr * gd->gd_unit) >> GRP_SIZE_SHIFT;
 	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
 
-	ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
-	ad_tx_increase(tx, &ad->ad_grp_nr);
+	rc = ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
+	if (rc)
+		return rc;
 
-	ad_tx_set(tx, gd, 0, sizeof(*gd), AD_TX_REDO | AD_TX_LOG_ONLY);
-	ad_tx_snap(tx, gd, offsetof(struct ad_group_df, gd_bmap[0]), AD_TX_REDO);
+	rc = ad_tx_increase(tx, &ad->ad_grp_nr);
+	if (rc)
+		return rc;
+
+	rc = ad_tx_set(tx, gd, 0, sizeof(*gd), AD_TX_REDO | AD_TX_LOG_ONLY);
+	if (rc)
+		return rc;
+
+	rc = ad_tx_snap(tx, gd, offsetof(struct ad_group_df, gd_bmap[0]), AD_TX_REDO);
+	if (rc)
+		return rc;
+
 	return 0;
 }
 
@@ -1718,8 +1741,13 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		}
 
 		D_DEBUG(DB_TRACE, "publishing reserved bit=%d\n", acts[i].ra_bit);
-		ad_tx_setbits(tx, gd->gd_bmap, acts[i].ra_bit, 1);
-		ad_tx_decrease(tx, &gd->gd_unit_free);
+		rc = ad_tx_setbits(tx, gd->gd_bmap, acts[i].ra_bit, 1);
+		if (rc)
+			break;
+
+		rc = ad_tx_decrease(tx, &gd->gd_unit_free);
+		if (rc)
+			break;
 
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 		group->gp_unit_rsv--;
@@ -1828,6 +1856,7 @@ blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 	struct ad_blob_df	*bd = blob->bb_df;
 	struct ad_arena_spec	*spec;
 	int			 i;
+	int			 rc;
 
 	if (arena_type >= ARENA_SPEC_MAX)
 		return -DER_INVAL;
@@ -1839,7 +1868,9 @@ blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 	if (spec->as_specs_nr != 0)
 		return -DER_EXIST;
 
-	ad_tx_increase(tx, &bd->bd_asp_nr);
+	rc = ad_tx_increase(tx, &bd->bd_asp_nr);
+	if (rc)
+		return rc;
 
 	spec->as_type	    = arena_type;
 	spec->as_specs_nr   = specs_nr;
@@ -1848,7 +1879,10 @@ blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 		spec->as_specs[i] = specs[i];
 
 	blob->bb_arena_last[arena_type] = AD_ARENA_ANY;
-	ad_tx_snap(tx, spec, sizeof(*spec), AD_TX_REDO);
+	rc = ad_tx_snap(tx, spec, sizeof(*spec), AD_TX_REDO);
+	if (rc)
+		return rc;
+
 	return 0;
 }
 
@@ -1910,7 +1944,7 @@ free_group(struct ad_group *grp, bool force)
 		D_ASSERT(blob);
 
 		d_list_add_tail(&grp->gp_link, &blob->bb_gps_lru);
-		if (blob->bb_gps_lru_size < GROUP_LRU_SIZE) {
+		if (blob->bb_gps_lru_size < blob->bb_gps_lru_cap) {
 			blob->bb_gps_lru_size++;
 			return;
 		}
@@ -1986,19 +2020,18 @@ free_arena(struct ad_arena *arena, bool force)
 
 		D_ASSERT(blob);
 		d_list_add_tail(&arena->ar_link, &blob->bb_ars_lru);
-		if (blob->bb_ars_lru_size < ARENA_LRU_SIZE) {
+		if (blob->bb_ars_lru_size < blob->bb_ars_lru_cap) {
 			blob->bb_ars_lru_size++;
 			return;
 		}
 		/* release an old one from the LRU */
 		arena = d_list_pop_entry(&blob->bb_ars_lru, struct ad_arena, ar_link);
 	}
+
+	D_FREE(arena->ar_addr_sorter);
+	D_FREE(arena->ar_size_sorter);
 	if (arena->ar_blob)
 		blob_decref(arena->ar_blob);
-	if (arena->ar_addr_sorter)
-		D_FREE(arena->ar_addr_sorter);
-	if (arena->ar_size_sorter)
-		D_FREE(arena->ar_size_sorter);
 	if (arena->ar_df)
 		arena->ar_df->ad_back_ptr = 0;
 
