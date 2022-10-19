@@ -490,10 +490,14 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
 
+	/* It is safe to share the head with parent since we are holding reference on parent RPC. */
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-	head_dcs->dcs_type = DCST_HEAD;
+	head_dcs->dcs_type = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
 	head_dcs->dcs_nr = 1;
-	head_dcs->dcs_buf = dcsh;
+	if (head_dcs->dcs_type == DCST_BULK_HEAD)
+		head_dcs->dcs_buf = ds_obj_cpd_get_head_bulk(dca->dca_rpc, dca->dca_idx);
+	else
+		head_dcs->dcs_buf = dcsh;
 	oci->oci_sub_heads.ca_arrays = head_dcs;
 	oci->oci_sub_heads.ca_count = 1;
 

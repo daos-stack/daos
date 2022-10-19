@@ -4633,6 +4633,158 @@ ds_obj_dtx_leader_ult(void *arg)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
 }
 
+static int
+ds_obj_cpd_body_prep(struct daos_cpd_bulk *dcb, uint32_t type, uint32_t nr)
+{
+	int	rc = 0;
+
+	if (dcb->dcb_size == 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_ASSERT(dcb->dcb_iov.iov_buf == NULL);
+
+	D_ALLOC(dcb->dcb_iov.iov_buf, dcb->dcb_size);
+	if (dcb->dcb_iov.iov_buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	dcb->dcb_iov.iov_buf_len = dcb->dcb_size;
+	dcb->dcb_iov.iov_len = dcb->dcb_size;
+
+	dcb->dcb_sgl.sg_nr = 1;
+	dcb->dcb_sgl.sg_nr_out = 1;
+	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
+
+	dcb->dcb_type = type;
+	dcb->dcb_item_nr = nr;
+
+out:
+	return rc;
+}
+
+/* Handle the bulk for CPD RPC body. */
+static int
+ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
+		     struct daos_cpd_bulk ***p_dcbs, uint32_t *dcb_nr)
+{
+	struct obj_cpd_in		 *oci = crt_req_get(rpc);
+	struct daos_cpd_bulk		**dcbs = NULL;
+	struct daos_cpd_bulk		 *dcb = NULL;
+	crt_bulk_t			 *bulks = NULL;
+	d_sg_list_t			**sgls = NULL;
+	struct daos_cpd_sub_head	 *dcsh;
+	struct daos_cpd_disp_ent	 *dcde;
+	struct daos_cpd_req_idx		 *dcri;
+	void				 *end;
+	uint32_t			  total = 0;
+	uint32_t			  count = 0;
+	int				  rc = 0;
+	int				  i;
+	int				  j;
+
+	total += oci->oci_sub_heads.ca_count;
+	total += oci->oci_disp_ents.ca_count;
+	if (leader)
+		total += oci->oci_disp_tgts.ca_count;
+
+	D_ALLOC_ARRAY(dcbs, total);
+	if (dcbs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	*p_dcbs = dcbs;
+	*dcb_nr = total;
+
+	for (i = 0; i < oci->oci_sub_heads.ca_count; i++) {
+		dcb = ds_obj_cpd_get_head_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_HEAD,
+						  ds_obj_cpd_get_dcsh_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
+		}
+	}
+
+	for (i = 0; i < oci->oci_disp_ents.ca_count; i++) {
+		dcb = ds_obj_cpd_get_disp_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_DISP,
+						  ds_obj_cpd_get_dcde_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
+		}
+	}
+
+	if (leader) {
+		for (i = 0; i < oci->oci_disp_tgts.ca_count; i++) {
+			dcb = ds_obj_cpd_get_tgts_bulk(rpc, i);
+			if (dcb != NULL) {
+				rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_TGT,
+							  ds_obj_cpd_get_tgt_cnt(rpc, i));
+				if (rc != 0)
+					goto out;
+
+				dcbs[count++] = dcb;
+			}
+		}
+	}
+
+	/* no bulk for this CPD RPC body. */
+	if (count == 0)
+		D_GOTO(out, rc = 0);
+
+	D_ALLOC_ARRAY(bulks, count);
+	if (bulks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(sgls, count);
+	if (sgls == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < count; i++) {
+		bulks[i] = *dcbs[i]->dcb_bulk;
+		sgls[i] = &dcbs[i]->dcb_sgl;
+	}
+
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL,
+			       DAOS_HDL_INVAL, sgls, count, NULL, ioc->ioc_coh);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < count; i++) {
+		switch (dcbs[i]->dcb_type) {
+		case DCST_BULK_HEAD:
+			dcsh = &dcbs[i]->dcb_head;
+			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			break;
+		case DCST_BULK_DISP:
+			dcde = dcbs[i]->dcb_iov.iov_buf;
+			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
+			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
+
+			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
+				dcde[j].dcde_reqs = dcri;
+				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
+				D_ASSERT((void *)dcri <= end);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+out:
+	if (rc != 0)
+		D_ERROR("Failed to bulk transfer CPD RPC body for %p: "DF_RC"\n", rpc, DP_RC(rc));
+
+	D_FREE(sgls);
+	D_FREE(bulks);
+
+	return rc;
+}
+
 void
 ds_obj_cpd_handler(crt_rpc_t *rpc)
 {
@@ -4641,6 +4793,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	struct daos_cpd_args	*dcas = NULL;
 	struct obj_io_context	 ioc;
 	ABT_future		 future = ABT_FUTURE_NULL;
+	struct daos_cpd_bulk   **dcbs = NULL;
+	uint32_t		 dcb_nr = 0;
 	int			 tx_count = oci->oci_sub_heads.ca_count;
 	int			 rc = 0;
 	int			 i;
@@ -4672,34 +4826,37 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
-		    oci->oci_disp_ents.ca_count != 1 ||
-		    oci->oci_disp_tgts.ca_count != 0) {
+		    oci->oci_disp_ents.ca_count != 1 || oci->oci_disp_tgts.ca_count != 0) {
 			D_ERROR("Unexpected CPD RPC format for non-leader: "
 				"head %u, req set %lu, disp %lu, tgts %lu\n",
 				tx_count, oci->oci_sub_reqs.ca_count,
-				oci->oci_disp_ents.ca_count,
-				oci->oci_disp_tgts.ca_count);
+				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
 
 			D_GOTO(reply, rc = -DER_PROTO);
 		}
+	} else {
+		if (tx_count != oci->oci_sub_reqs.ca_count ||
+		    tx_count != oci->oci_disp_ents.ca_count ||
+		    tx_count != oci->oci_disp_tgts.ca_count || tx_count == 0) {
+			D_ERROR("Unexpected CPD RPC format for leader: "
+				"head %u, req set %lu, disp %lu, tgts %lu\n",
+				tx_count, oci->oci_sub_reqs.ca_count,
+				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
 
+			D_GOTO(reply, rc = -DER_PROTO);
+		}
+	}
+
+	rc = ds_obj_cpd_body_bulk(rpc, &ioc, leader, &dcbs, &dcb_nr);
+	if (rc != 0)
+		goto reply;
+
+	if (!leader) {
 		oco->oco_sub_rets.ca_arrays = NULL;
 		oco->oco_sub_rets.ca_count = 0;
 		rc = ds_obj_dtx_follower(rpc, &ioc);
 
 		D_GOTO(reply, rc);
-	}
-
-	if (tx_count != oci->oci_sub_reqs.ca_count ||
-	    tx_count != oci->oci_disp_ents.ca_count ||
-	    tx_count != oci->oci_disp_tgts.ca_count || tx_count == 0) {
-		D_ERROR("Unexpected CPD RPC format for leader: "
-			"head %u, req set %lu, disp %lu, tgts %lu\n",
-			tx_count, oci->oci_sub_reqs.ca_count,
-			oci->oci_disp_ents.ca_count,
-			oci->oci_disp_tgts.ca_count);
-
-		D_GOTO(reply, rc = -DER_PROTO);
 	}
 
 	D_ALLOC(oco->oco_sub_rets.ca_arrays, sizeof(int32_t) * tx_count);
@@ -4760,6 +4917,13 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 reply:
 	D_FREE(dcas);
+	if (dcbs != NULL) {
+		for (i = 0; i < dcb_nr; i++) {
+			if (dcbs[i] != NULL)
+				D_FREE(dcbs[i]->dcb_iov.iov_buf);
+		}
+		D_FREE(dcbs);
+	}
 	obj_cpd_reply(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }

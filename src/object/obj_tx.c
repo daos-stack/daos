@@ -106,6 +106,10 @@ struct dc_tx {
 	struct daos_cpd_sg	 tx_disp;
 	struct daos_cpd_sg	 tx_tgts;
 
+	struct daos_cpd_bulk	 tx_head_bulk;
+	struct daos_cpd_bulk	 tx_disp_bulk;
+	struct daos_cpd_bulk	 tx_tgts_bulk;
+
 	struct d_backoff_seq	 tx_backoff_seq;
 };
 
@@ -468,8 +472,8 @@ dc_tx_leftmost_req(struct dc_tx *tx, bool write)
 static void
 dc_tx_cleanup(struct dc_tx *tx)
 {
-	struct daos_cpd_sub_head	*dcsh = tx->tx_head.dcs_buf;
-	struct daos_cpd_disp_ent	*dcde = tx->tx_disp.dcs_buf;
+	struct daos_cpd_sub_head	*dcsh;
+	struct daos_cpd_disp_ent	*dcde;
 	uint32_t			 from;
 	uint32_t			 to;
 	uint32_t			 i;
@@ -485,18 +489,54 @@ dc_tx_cleanup(struct dc_tx *tx)
 
 	/* Keep 'tx_set_resend'. */
 
-	if (dcsh != NULL) {
-		D_FREE(dcsh->dcsh_mbs);
-		D_FREE(tx->tx_head.dcs_buf);
+	if (tx->tx_head.dcs_type == DCST_BULK_HEAD) {
+		if (tx->tx_head_bulk.dcb_bulk != NULL) {
+			if (tx->tx_head_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+				crt_bulk_free(tx->tx_head_bulk.dcb_bulk[0]);
+			D_FREE(tx->tx_head_bulk.dcb_bulk);
+		}
+		/* Free MBS buffer. */
+		D_FREE(tx->tx_head_bulk.dcb_iov.iov_buf);
+	} else {
+		dcsh = tx->tx_head.dcs_buf;
+		if (dcsh != NULL) {
+			D_FREE(dcsh->dcsh_mbs);
+			D_FREE(dcsh);
+		}
+	}
+	tx->tx_head.dcs_buf = NULL;
+
+	if (tx->tx_disp.dcs_type == DCST_BULK_DISP) {
+		if (tx->tx_disp_bulk.dcb_bulk != NULL) {
+			if (tx->tx_disp_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+				crt_bulk_free(tx->tx_disp_bulk.dcb_bulk[0]);
+			D_FREE(tx->tx_disp_bulk.dcb_bulk);
+		}
+		dcde = tx->tx_disp_bulk.dcb_iov.iov_buf;
+	} else {
+		dcde = tx->tx_disp.dcs_buf;
 	}
 
 	if (dcde != NULL) {
 		for (i = 0; i < tx->tx_disp.dcs_nr; i++)
 			D_FREE(dcde[i].dcde_reqs);
-		D_FREE(tx->tx_disp.dcs_buf);
+		D_FREE(dcde);
+
+		tx->tx_disp_bulk.dcb_iov.iov_buf = NULL;
+		tx->tx_disp.dcs_buf = NULL;
 	}
 
-	D_FREE(tx->tx_tgts.dcs_buf);
+	if (tx->tx_tgts.dcs_type == DCST_BULK_TGT) {
+		if (tx->tx_tgts_bulk.dcb_bulk != NULL) {
+			if (tx->tx_tgts_bulk.dcb_bulk[0] != CRT_BULK_NULL)
+				crt_bulk_free(tx->tx_tgts_bulk.dcb_bulk[0]);
+			D_FREE(tx->tx_tgts_bulk.dcb_bulk);
+		}
+		D_FREE(tx->tx_tgts_bulk.dcb_iov.iov_buf);
+		tx->tx_tgts.dcs_buf = NULL;
+	} else {
+		D_FREE(tx->tx_tgts.dcs_buf);
+	}
 }
 
 /**
@@ -1519,17 +1559,143 @@ dc_tx_dump(struct dc_tx *tx)
 		"leader: %u/%u\n"
 		"read_cnt: %u\n"
 		"write_cnt: %u\n"
-		"head: %p/%u\n"
-		"reqs: %p/%u\n"
-		"disp: %p/%u\n"
-		"tgts: %p/%u\n",
+		"head: %p/%u/%u/%u/%p\n"
+		"reqs: %p/%u/%u\n"
+		"disp: %p/%u/%u/%u/%p\n"
+		"tgts: %p/%u/%u/%u/%p\n",
 		tx, DP_DTI(&tx->tx_id), tx->tx_epoch.oe_value, tx->tx_flags,
 		tx->tx_pm_ver, tx->tx_leader_rank, tx->tx_leader_tag,
 		tx->tx_read_cnt, tx->tx_write_cnt,
-		tx->tx_head.dcs_buf, tx->tx_head.dcs_nr,
-		tx->tx_reqs.dcs_buf, tx->tx_reqs.dcs_nr,
-		tx->tx_disp.dcs_buf, tx->tx_disp.dcs_nr,
-		tx->tx_tgts.dcs_buf, tx->tx_tgts.dcs_nr);
+		tx->tx_head.dcs_buf, tx->tx_head.dcs_nr, tx->tx_head.dcs_type,
+		tx->tx_head_bulk.dcb_size, tx->tx_head_bulk.dcb_bulk,
+		tx->tx_reqs.dcs_buf, tx->tx_reqs.dcs_nr, tx->tx_reqs.dcs_type,
+		tx->tx_disp.dcs_buf, tx->tx_disp.dcs_nr, tx->tx_disp.dcs_type,
+		tx->tx_disp_bulk.dcb_size, tx->tx_disp_bulk.dcb_bulk,
+		tx->tx_tgts.dcs_buf, tx->tx_tgts.dcs_nr, tx->tx_tgts.dcs_type,
+		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
+}
+
+/* The calculted CPD RPC body size may be some larger than the real case, no matter. */
+static size_t
+dc_tx_cpd_body_size(struct daos_cpd_sub_req *dcsr, int count)
+{
+	struct daos_cpd_update	*dcu;
+	daos_iod_t		*iod;
+	struct obj_iod_array	*oia;
+	struct dcs_iod_csums	*csum;
+	struct obj_io_desc	*desc;
+	size_t			 size;
+	int			 i;
+	int			 j;
+	int			 k;
+
+	size = sizeof(struct obj_cpd_in) + sizeof(struct daos_cpd_sg) * 4;
+
+	for (i = 0; i < count; i++, dcsr++) {
+		size += offsetof(struct daos_cpd_sub_req, dcsr_update);
+		size += dcsr->dcsr_dkey.iov_buf_len;
+
+		switch (dcsr->dcsr_opc) {
+		case DCSO_UPDATE:
+			dcu = &dcsr->dcsr_update;
+			oia = &dcu->dcu_iod_array;
+
+			size += sizeof(dcu->dcu_iod_array.oia_iod_nr) +
+				sizeof(dcu->dcu_iod_array.oia_oiod_nr) +
+				sizeof(dcu->dcu_flags) + sizeof(dcu->dcu_start_shard);
+
+			if (dcu->dcu_dkey_csum != NULL)
+				size += sizeof(*dcu->dcu_dkey_csum) +
+					dcu->dcu_dkey_csum->cs_buf_len;
+
+			if (dcu->dcu_ec_tgts != NULL)
+				size += sizeof(*dcu->dcu_ec_tgts) * dcsr->dcsr_ec_tgt_nr;
+
+			for (j = 0; j < oia->oia_iod_nr; j++) {
+				if (oia->oia_iods != NULL) {
+					iod = &oia->oia_iods[j];
+					size += sizeof(*iod) + iod->iod_name.iov_buf_len +
+						sizeof(*iod->iod_recxs) * iod->iod_nr;
+				}
+
+				if (oia->oia_iod_csums != NULL) {
+					csum = &oia->oia_iod_csums[j];
+					size += sizeof(*csum) + csum->ic_akey.cs_buf_len;
+
+					for (k = 0; k < csum->ic_nr; k++)
+						size += sizeof(csum->ic_data[k]) +
+							csum->ic_data[k].cs_buf_len;
+				}
+
+				if (oia->oia_oiods != NULL) {
+					desc = &oia->oia_oiods[j];
+					size += sizeof(*desc) +
+						sizeof(*desc->oiod_siods) * desc->oiod_nr;
+				}
+			}
+
+			if (oia->oia_offs != NULL)
+				size += sizeof(*oia->oia_offs) * oia->oia_iod_nr;
+
+			if (dcu->dcu_flags & ORF_CPD_BULK)
+				size += sizeof(*dcu->dcu_bulks) * dcsr->dcsr_nr;
+			else
+				size += daos_sgls_packed_size(dcsr->dcsr_sgls, dcsr->dcsr_nr, NULL);
+			break;
+		case DCSO_READ:
+			for (j = 0; j < dcsr->dcsr_nr; j++) {
+				iod = &dcsr->dcsr_read.dcr_iods[j];
+				size += sizeof(*iod) + iod->iod_name.iov_buf_len;
+			}
+			break;
+		case DCSO_PUNCH_AKEY:
+			for (j = 0; j < dcsr->dcsr_nr; j++)
+				size += dcsr->dcsr_punch.dcp_akeys[j].iov_buf_len;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return size;
+}
+
+static inline bool
+dc_tx_cpd_body_need_bulk(size_t size)
+{
+	/*
+	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to
+	 *	 transfer for large CPD RPC body via RDMA.
+	 */
+	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
+}
+
+static int
+dc_tx_cpd_body_bulk(struct daos_cpd_sg *dcs, struct daos_cpd_bulk *dcb,
+		    tse_task_t *task, void *buf, size_t size, uint32_t nr, uint32_t type)
+{
+	int	rc;
+
+	dcb->dcb_size = size;
+
+	dcb->dcb_iov.iov_buf = buf;
+	dcb->dcb_iov.iov_buf_len = size;
+	dcb->dcb_iov.iov_len = size;
+
+	dcb->dcb_sgl.sg_nr = 1;
+	dcb->dcb_sgl.sg_nr_out = 1;
+	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
+
+	rc = obj_bulk_prep(&dcb->dcb_sgl, 1, true, CRT_BULK_RO, task, &dcb->dcb_bulk);
+	if (rc == 0) {
+		dcs->dcs_type = type;
+		dcs->dcs_nr = nr;
+		dcs->dcs_buf = dcb;
+	} else {
+		dcb->dcb_iov.iov_buf = NULL;
+	}
+
+	return rc;
 }
 
 static int
@@ -1543,6 +1709,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	struct daos_cpd_disp_ent	*dcdes = NULL;
 	struct daos_shard_tgt		*shard_tgts = NULL;
 	struct daos_cpd_sub_req		*dcsr;
+	struct daos_cpd_req_idx		*dcri;
 	struct dc_object		*obj;
 	struct dtx_memberships		*mbs;
 	struct dtx_daos_target		*ddt;
@@ -1557,6 +1724,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	uint32_t			 start;
 	uint32_t			 tgt_cnt;
 	uint32_t			 req_cnt;
+	uint32_t			 body_size;
 	int				 grp_idx;
 	int				 rc = 0;
 	int				 i;
@@ -1772,42 +1940,142 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		}
 	}
 
+	/* NOTE: Currently, we only pack single DTX per CPD RPC, then elect
+	 *	 the first targets in the dispatch list as the leader.
+	 */
+	tx->tx_leader_rank = shard_tgts[0].st_rank;
+	tx->tx_leader_tag = shard_tgts[0].st_tgt_idx;
+
+	/*
+	 * There is limitation for the sub requests count because of server side minor epoch
+	 * restriction. So we always directly pack the sub requests into CPD RPC body without
+	 * bulk transfer. That avoids complex sub request parse and unparse as CaRT proc does.
+	 */
 	tx->tx_reqs.dcs_type = DCST_REQ_CLI;
 	tx->tx_reqs.dcs_nr = req_cnt;
 	tx->tx_reqs.dcs_buf = tx->tx_req_cache + start;
 
-	tx->tx_disp.dcs_type = DCST_DISP;
-	tx->tx_disp.dcs_nr = act_tgt_cnt;
-	tx->tx_disp.dcs_buf = dcdes;
+	body_size = dc_tx_cpd_body_size(tx->tx_req_cache + start, req_cnt);
+	if (unlikely(body_size >= DAOS_BULK_LIMIT))
+		D_WARN("The TX "DF_DTI" is too large (1): %u/%u\n",
+		       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
 
-	tx->tx_tgts.dcs_type = DCST_TGT;
-	tx->tx_tgts.dcs_nr = act_tgt_cnt;
-	tx->tx_tgts.dcs_buf = shard_tgts;
+	size = sizeof(*dcsh) + sizeof(*mbs) + mbs->dm_data_size;
 
-	tx->tx_head.dcs_type = DCST_HEAD;
-	tx->tx_head.dcs_nr = 1;
-	tx->tx_head.dcs_buf = dcsh;
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		rc = dc_tx_cpd_body_bulk(&tx->tx_head, &tx->tx_head_bulk, task, mbs,
+					 sizeof(*mbs) + mbs->dm_data_size, 1, DCST_BULK_HEAD);
+		if (rc != 0)
+			goto out;
 
-	/* XXX: Currently, we only pack single DTX per CPD RPC, then elect
-	 *	the first targets in the dispatch list as the leader.
+		tx->tx_head_bulk.dcb_head = *dcsh;
+		body_size += sizeof(*dcsh);
+
+		/*
+		 * dcsh has been copied, do not need it any longer, free it. MBS buffer will
+		 * be released via tx->tx_head.dcs_buf or tx->tx_head_bulk.dcb_iov.iov_buf in
+		 * dc_tx_cleanup().
+		 */
+		D_FREE(dcsh);
+	} else {
+		tx->tx_head.dcs_type = DCST_HEAD;
+		tx->tx_head.dcs_nr = 1;
+		tx->tx_head.dcs_buf = dcsh;
+
+		/* Reset dcsh, its buffer will be freed via tx->tx_head.dcs_buf in dc_tx_cleanup. */
+		dcsh = NULL;
+
+		body_size += size;
+		if (body_size >= DAOS_BULK_LIMIT)
+			D_WARN("The TX "DF_DTI" is too large (2): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
+
+	size = sizeof(*dcdes) * act_tgt_cnt;
+	for (i = 0; i < act_tgt_cnt; i++)
+		size += sizeof(*dcri) * (dcdes[i].dcde_read_cnt + dcdes[i].dcde_write_cnt);
+
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		D_REALLOC(ptr, dcdes, sizeof(*dcdes) * act_tgt_cnt, size);
+		if (ptr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		dcdes = ptr;
+		dcri = ptr + sizeof(*dcdes) * act_tgt_cnt;
+		ptr += size;
+
+		for (i = 0; i < act_tgt_cnt; i++) {
+			j = dcdes[i].dcde_read_cnt + dcdes[i].dcde_write_cnt;
+			memcpy(dcri, dcdes[i].dcde_reqs, sizeof(*dcri) * j);
+			/* data has been copied to bulk buffer, release the original one. */
+			D_FREE(dcdes[i].dcde_reqs);
+
+			dcri += j;
+			D_ASSERT((void *)dcri <= ptr);
+		}
+
+		rc = dc_tx_cpd_body_bulk(&tx->tx_disp, &tx->tx_disp_bulk, task, dcdes,
+					 size, act_tgt_cnt, DCST_BULK_DISP);
+		if (rc != 0)
+			goto out;
+	} else {
+		tx->tx_disp.dcs_type = DCST_DISP;
+		tx->tx_disp.dcs_nr = act_tgt_cnt;
+		tx->tx_disp.dcs_buf = dcdes;
+
+		body_size += size;
+		if (body_size >= DAOS_BULK_LIMIT)
+			D_WARN("The TX "DF_DTI" is too large (3): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
+
+	/*
+	 * Reset dcdes, related buffer will be released via tx->tx_disp.dcs_buf or
+	 * tx->tx_disp_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
 	 */
+	dcdes = NULL;
 
-	tx->tx_leader_rank = shard_tgts[0].st_rank;
-	tx->tx_leader_tag = shard_tgts[0].st_tgt_idx;
+	size = sizeof(*shard_tgts) * act_tgt_cnt;
+
+	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
+		rc = dc_tx_cpd_body_bulk(&tx->tx_tgts, &tx->tx_tgts_bulk, task, shard_tgts,
+					 size, act_tgt_cnt, DCST_BULK_TGT);
+		if (rc != 0)
+			goto out;
+	} else {
+		tx->tx_tgts.dcs_type = DCST_TGT;
+		tx->tx_tgts.dcs_nr = act_tgt_cnt;
+		tx->tx_tgts.dcs_buf = shard_tgts;
+
+		body_size += size;
+		if (body_size >= DAOS_BULK_LIMIT)
+			D_WARN("The TX "DF_DTI" is too large (4): %u/%u\n",
+			       DP_DTI(&tx->tx_id), DAOS_BULK_LIMIT, body_size);
+	}
+
+	/*
+	 * Reset shard_tgts, related buffer will be released via tx->tx_tgts.dcs_buf or
+	 * tx->tx_tgts_bulk.dcb_iov.iov_buf in dc_tx_cleanup().
+	 */
+	shard_tgts = NULL;
 
 	dc_tx_dump(tx);
 
 out:
 	if (rc < 0) {
-		if (dtrgs != NULL)
+		if (dtrgs != NULL) {
 			for (i = 0; i < tgt_cnt; i++)
 				D_FREE(dtrgs[i].dtrg_req_idx);
-		if (dcdes != NULL)
+		}
+
+		if (dcdes != NULL) {
 			for (i = 0; i < act_tgt_cnt; i++)
 				D_FREE(dcdes[i].dcde_reqs);
+			D_FREE(dcdes);
+		}
 
-		D_FREE(dcdes);
 		D_FREE(shard_tgts);
+
 		if (dcsh != NULL) {
 			D_FREE(dcsh->dcsh_mbs);
 			D_FREE(dcsh);
