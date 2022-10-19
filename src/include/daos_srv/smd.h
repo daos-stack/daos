@@ -187,7 +187,7 @@ int smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
  * \return			Zero on success, negative value on error
  */
 int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id,
-		enum smd_dev_type smd_type, uint64_t *blob_id);
+		      enum smd_dev_type smd_type, uint64_t *blob_id);
 
 /**
  * Get pool info, caller is responsible to free list items

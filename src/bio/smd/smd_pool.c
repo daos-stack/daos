@@ -337,7 +337,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 	uuid_copy(id.uuid, info->spi_id);
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		rc = smd_db_fetch(TABLE_POOLS[st], &id, sizeof(id),
-				&pools[st], sizeof(pools[st]));
+				  &pools[st], sizeof(pools[st]));
 		if (rc && !(rc == -DER_NONEXIST && st > SMD_DEV_TYPE_DATA)) {
 			D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
 				DP_UUID(&id.uuid), rc);
@@ -372,7 +372,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (pools[st].sp_tgt_cnt) {
 			rc = smd_db_upsert(TABLE_POOLS[st], &id, sizeof(id),
-					&pools[st], sizeof(pools[st]));
+					   &pools[st], sizeof(pools[st]));
 			if (rc) {
 				D_ERROR("Replace blobs for pool "DF_UUID" failed. "DF_RC"\n",
 					DP_UUID(&id.uuid), DP_RC(rc));
