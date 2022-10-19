@@ -26,9 +26,10 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
     set_avocado_config_value, nodeset_append_suffix
+from host_utils import get_test_hosts, get_hosts_from_yaml
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
@@ -556,33 +557,7 @@ class TestWithoutServers(Test):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
-        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
-
-        # Collect any host information from the test yaml
-        host_data = self.params.get(yaml_key, namespace)
-        partition = self.params.get(partition_key, namespace)
-        reservation = self.params.get(reservation_key, namespace, reservation_default)
-        if partition is not None and host_data is not None:
-            self.fail(
-                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
-                    partition_key, yaml_key))
-
-        if partition is not None and host_data is None:
-            # If a partition is provided instead of a set of hosts get the set of hosts from the
-            # partition information
-            setattr(self, partition_key, partition)
-            setattr(self, reservation_key, reservation)
-            slurm_nodes = get_partition_hosts(partition, reservation)
-            if not slurm_nodes:
-                self.fail(
-                    "No valid nodes in {} partition with {} reservation".format(
-                        partition, reservation))
-            host_data = slurm_nodes
-
-        # Convert the set of hosts from slurm or the yaml file into a NodeSet
-        if isinstance(host_data, (list, tuple)):
-            return NodeSet.fromlist(host_data)
-        return NodeSet(host_data)
+        return get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace)
 
 
 class TestWithServers(TestWithoutServers):
@@ -705,20 +680,7 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.hostlist_servers = self.get_hosts_from_yaml(
-            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
-        self.hostlist_clients = self.get_hosts_from_yaml(
-            "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
-
-        # Optionally remove any servers that may have ended up in the client list.  This can occur
-        # with tests using slurm partitions as they are setup with all hosts.
-        if self.slurm_exclude_servers:
-            self.log.debug(
-                "Excluding any %s servers from the current client list: %s",
-                self.hostlist_servers, self.hostlist_clients)
-            new_client_list = self.hostlist_clients.difference(self.hostlist_servers)
-            self.slurm_exclude_nodes = self.hostlist_clients.difference(new_client_list)
-            self.hostlist_clients = new_client_list
+        self.hostlist_servers, self.hostlist_clients = get_test_hosts(self)
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(

@@ -29,10 +29,13 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_handler, get_file_handler
-from util.results_utils import create_html, create_xml, Job, Results, TestResult
-from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from host_utils import get_hosts, update_clients, HostException                 # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
+from run_utils import get_local_host, run_local, run_remote, RunException       # noqa: E402
+from user_utils import get_chown_command                                        # noqa: E402
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
@@ -113,7 +116,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r", encoding="utf-8") as open_file:
             try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
             except yaml.YAMLError as error:
                 logger.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
@@ -660,66 +663,39 @@ class TestInfo():
             include_localhost (bool, optional): should the local host be included in the list of
                 client matches. Defaults to False.
         """
-        self.hosts.all.clear()
-        self.hosts.all.update(self._get_hosts_from_yaml(include_localhost))
+        logger.debug("Extracting hosts from %s", self.yaml_file)
+        yaml_data = get_yaml_data(self.yaml_file)
+        keys = [
+            YAML_KEYS["test_servers"], "server_partition", "server_reservation",
+            YAML_KEYS["test_clients"], "client_partition", "client_reservation"
+        ]
+        info = find_values(yaml_data, keys)
+        for key in keys:
+            if key not in info:
+                info[key] = None
+            logger.debug("  Found %-18s = %s", key, info[key])
 
         self.hosts.servers.clear()
-        self.hosts.servers.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_servers"]))
+        try:
+            self.hosts.servers.update(
+                get_hosts(logger, info[keys[0]], info[keys[1]], info[keys[2]]))
+        except HostException as error:
+            raise LaunchException(f"Error updating server hosts for {self.test_file}") from error
 
         self.hosts.clients.clear()
-        self.hosts.clients.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_clients"]))
+        try:
+            self.hosts.clients.update(
+                get_hosts(logger, info[keys[3]], info[keys[4]], info[keys[5]]))
+        except HostException as error:
+            raise LaunchException(f"Error updating client hosts for {self.test_file}") from error
+        if include_localhost or not self.hosts.clients:
+            local_host = NodeSet(get_local_host())
+            logger.debug("Adding the localhost to the clients: %s", local_host)
+            self.hosts.clients.add(local_host)
+        update_clients(logger, info[keys[4]], self.hosts.servers, self.hosts.clients)
 
-    def _get_hosts_from_yaml(self, include_localhost=False, key_match=None):
-        """Extract the list of hosts from the test yaml file.
-
-        This host will be included in the list if no clients are explicitly called
-        out in the test's yaml file.
-
-        Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-            key_match (str, optional): test yaml key used to filter which hosts to
-                find.  Defaults to None which will match all keys.
-
-        Returns:
-            NodeSet: hosts specified in the test's yaml file
-
-        """
-        logger.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
-        local_host = NodeSet(get_local_host())
-        yaml_hosts = NodeSet()
-        if include_localhost and key_match != YAML_KEYS["test_servers"]:
-            yaml_hosts.add(local_host)
-        found_client_key = False
-        for key, value in list(self._find_yaml_hosts().items()):
-            logger.debug("  Found %s: %s", key, value)
-            if key_match is None or key == key_match:
-                logger.debug("    Adding %s", value)
-                if isinstance(value, list):
-                    yaml_hosts.add(NodeSet.fromlist(value))
-                else:
-                    yaml_hosts.add(NodeSet(value))
-            if key in YAML_KEYS["test_clients"]:
-                found_client_key = True
-
-        # Include this host as a client if no clients are specified
-        if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-            logger.debug("    Adding the localhost: %s", local_host)
-            yaml_hosts.add(local_host)
-
-        return yaml_hosts
-
-    def _find_yaml_hosts(self):
-        """Find the all the host values in the specified yaml file.
-
-        Returns:
-            dict: a dictionary of each host key and its host values
-
-        """
-        return find_values(
-            get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+        self.hosts.all.clear()
+        self.hosts.all.update(self.hosts.servers | self.hosts.clients)
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -821,7 +797,8 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
+    @staticmethod
+    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
