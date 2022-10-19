@@ -1211,18 +1211,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					  DAOS_FAIL_ONCE);
 		}
 	}
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
-		if (srv_io_mode == DIM_CLIENT_DISPATCH) {
-			/* to trigger retry on all other shards */
-			if (auxi->shard != daos_fail_value_get()) {
-				D_INFO("complete shard %d update as "
-				       "-DER_TIMEDOUT.\n", auxi->shard);
-				D_GOTO(out, rc = -DER_TIMEDOUT);
-			}
-		} else {
-			flags = ORF_DTX_SYNC;
-		}
-	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE))
+		flags = ORF_DTX_SYNC;
 
 	if (auxi->epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		flags |= ORF_EPOCH_UNCERTAIN;
