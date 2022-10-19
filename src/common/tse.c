@@ -1121,6 +1121,8 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 		dtp->dtp_stack_top = 0;
 	}
 
+	task->dt_result = 0;
+
 	/** Move back to init list */
 	if (delay == 0) {
 		dtp->dtp_wakeup_time = 0;
@@ -1132,8 +1134,6 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 	}
 
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
-
-	task->dt_result = 0;
 
 	return 0;
 
