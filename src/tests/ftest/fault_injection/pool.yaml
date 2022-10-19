@@ -4,10 +4,17 @@ hosts:
 timeout: 1200
 server_config:
   name: daos_server
-  servers:
-    scm_size: 20
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 20
 pool:
-  name: daos_server
   control_method: dmg
   size: 12G
   nranks: 4
@@ -24,12 +31,12 @@ container:
 object_class: OC_RP_3G1
 number_pools: 5
 faults:
-    fault_list:
-      - DAOS_POOL_CREATE_FAIL_CORPC
-      - DAOS_POOL_DESTROY_FAIL_CORPC
-      - DAOS_POOL_CONNECT_FAIL_CORPC
-      - DAOS_POOL_DISCONNECT_FAIL_CORPC
-      - DAOS_POOL_QUERY_FAIL_CORPC
-      - DAOS_CONT_DESTROY_FAIL_CORPC
-      - DAOS_CONT_CLOSE_FAIL_CORPC
-      - DAOS_CONT_QUERY_FAIL_CORPC
+  fault_list:
+    - DAOS_POOL_CREATE_FAIL_CORPC
+    - DAOS_POOL_DESTROY_FAIL_CORPC
+    - DAOS_POOL_CONNECT_FAIL_CORPC
+    - DAOS_POOL_DISCONNECT_FAIL_CORPC
+    - DAOS_POOL_QUERY_FAIL_CORPC
+    - DAOS_CONT_DESTROY_FAIL_CORPC
+    - DAOS_CONT_CLOSE_FAIL_CORPC
+    - DAOS_CONT_QUERY_FAIL_CORPC
