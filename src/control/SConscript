@@ -274,11 +274,12 @@ def scons():
 
     # Sets CGO_LDFLAGS for rpath
     daos_build.add_rpaths(aenv, None, True, True)
-    install_go_bin(aenv, gosrc, ['nvme_control'], "daos_admin", "daos_admin")
+    install_go_bin(aenv, gosrc, ['nvme_control'], "daos_server_helper", "daos_server_helper")
 
     if is_firmware_mgmt_build(denv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
-        install_go_bin(aenv, gosrc, ['nvme_control'], "daos_firmware", "daos_firmware")
+        install_go_bin(aenv, gosrc, ['nvme_control'],
+                       "daos_firmware_helper", "daos_firmware_helper")
 
 
 if __name__ == "SCons.Script":

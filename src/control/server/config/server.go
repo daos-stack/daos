@@ -265,13 +265,13 @@ func (cfg *Server) WithControlLogJSON(enabled bool) *Server {
 	return cfg
 }
 
-// WithHelperLogFile sets the path to the daos_admin logfile.
+// WithHelperLogFile sets the path to the daos_server_helper logfile.
 func (cfg *Server) WithHelperLogFile(filePath string) *Server {
 	cfg.HelperLogFile = filePath
 	return cfg
 }
 
-// WithFirmwareHelperLogFile sets the path to the daos_firmware logfile.
+// WithFirmwareHelperLogFile sets the path to the daos_firmware_helper logfile.
 func (cfg *Server) WithFirmwareHelperLogFile(filePath string) *Server {
 	cfg.FWHelperLogFile = filePath
 	return cfg

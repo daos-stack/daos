@@ -19,6 +19,7 @@
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/smd.h>
 #include <vos_internal.h>
 
 struct vos_self_mode {
@@ -705,11 +706,11 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 	} else {
 		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, vos_db_get(), true);
+				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
 
@@ -728,6 +729,7 @@ vos_self_fini_locked(void)
 {
 	vos_self_nvme_fini();
 	vos_db_fini();
+	smd_fini();
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(self_mode.self_tls);
@@ -791,7 +793,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	else
 		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
-		D_GOTO(failed, rc);
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		goto out;
 
 	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
@@ -812,7 +818,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

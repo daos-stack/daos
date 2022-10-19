@@ -297,7 +297,7 @@ dss_nvme_poll_ult(void *args)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct dss_xstream	*dx = dss_current_xstream();
 
-	D_ASSERT(dx->dx_main_xs);
+	D_ASSERT(dss_xstream_has_nvme(dx));
 	while (!dss_xstream_exiting(dx)) {
 		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
@@ -454,11 +454,13 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	if (dx->dx_main_xs) {
+	if (dss_xstream_has_nvme(dx)) {
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt,
+				      dmi->dmi_tgt_id < 0 ? BIO_SYS_TGT_ID : dmi->dmi_tgt_id,
+				      false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -540,8 +542,9 @@ dss_srv_handler(void *arg)
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
 	}
+
 nvme_fini:
-	if (dx->dx_main_xs)
+	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
@@ -708,7 +711,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
 	 */
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	dx->dx_tgt_id = dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		/** system xtreams are named daos_sys_$num */
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -1179,7 +1182,6 @@ enum {
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
-	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1203,9 +1205,6 @@ dss_srv_fini(bool force)
 	case XD_INIT_NVME:
 		bio_nvme_fini();
 		/* fall through */
-	case XD_INIT_SYS_DB:
-		vos_db_fini();
-		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
 		/* fall through */
@@ -1227,6 +1226,26 @@ dss_srv_fini(bool force)
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
+}
+
+static int dss_smd_init(void)
+{
+	int rc;
+
+	rc = vos_db_init(dss_storage_path);
+	if (rc)
+		return rc;
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+
+	return rc;
+}
+
+static void dss_smd_fini(void)
+{
+	vos_db_fini();
+	smd_fini();
 }
 
 int
@@ -1278,18 +1297,15 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
 	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
+			   dss_nvme_hugepage_size, dss_tgt_nr,
 			   dss_nvme_bypass_health_check);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
+	bio_register_smd_ops(dss_smd_init, dss_smd_fini);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();
