@@ -675,11 +675,8 @@ close_meta:
 	if (rc == 0)
 		rc = rc1;
 delete_wal:
-	if (mc)
-		D_FREE(mc);
-	if (fi)
-		D_FREE(fi);
-
+	D_FREE(mc);
+	D_FREE(fi);
 	if (rc && wal_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL))
 		D_ERROR("Unable to delete newly created wal blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
