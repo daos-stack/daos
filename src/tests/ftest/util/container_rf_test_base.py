@@ -4,10 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+
 from rebuild_test_base import RebuildTestBase
 from general_utils import DaosTestError
 from daos_utils import DaosCommand
-import re
 
 
 class ContRedundancyFactor(RebuildTestBase):
@@ -66,9 +67,9 @@ class ContRedundancyFactor(RebuildTestBase):
         actual_health = None
 
         cont_props = self.daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, properties=["rf", "status"])
+            pool=self.pool.uuid, cont=self.container.uuid, properties=["rd_fac", "status"])
         for cont_prop in cont_props["response"]:
-            if cont_prop["name"] == "rf":
+            if cont_prop["name"] == "rd_fac":
                 actual_rf = cont_prop["value"]
             elif cont_prop["name"] == "status":
                 actual_health = cont_prop["value"]
@@ -82,16 +83,16 @@ class ContRedundancyFactor(RebuildTestBase):
             "#Container health-status mismatch, actual: {},"
             " expected: {}.".format(actual_health, expected_health))
 
-    def start_rebuild_cont_rf(self, rf):
+    def start_rebuild_cont_rf(self, rd_fac):
         """Start the rebuild process and check for container properties.
 
         Args:
-            rf (str): container redundancy factor.
+            rd_fac (str): container redundancy factor.
         """
         self.log.info(
-            "==>(2)Check for container rf and health-status "
+            "==>(2)Check for container rd_fac and health-status "
             "before rebuild: HEALTHY")
-        self.verify_cont_rf_healthstatus(rf, "HEALTHY")
+        self.verify_cont_rf_healthstatus(rd_fac, "HEALTHY")
 
         # Exclude the ranks from the pool to initiate rebuild simultaneously
         self.log.info(
@@ -99,26 +100,26 @@ class ContRedundancyFactor(RebuildTestBase):
         self.server_managers[0].stop_ranks(
             self.inputs.rank.value, self.d_log)
 
-    def execute_during_rebuild_cont_rf(self, rf, expect_cont_status="HEALTHY"):
+    def execute_during_rebuild_cont_rf(self, rd_fac, expect_cont_status="HEALTHY"):
         """Execute test steps during rebuild.
 
         Args:
-            rf (str): container redundancy factor.
+            rd_fac (str): container redundancy factor.
             expect_cont_status (str, optional):
                 expected container health status.
         """
         # Wait for rebuild to start and check for container status
         self.pool.wait_for_rebuild(True, 1)
         self.log.info(
-            "==>(4)Check for container rf and health-status "
+            "==>(4)Check for container rd_fac and health-status "
             "after ranks rebuild started: %s", expect_cont_status)
-        self.verify_cont_rf_healthstatus(rf, expect_cont_status)
+        self.verify_cont_rf_healthstatus(rd_fac, expect_cont_status)
         # Wait for rebuild completion and check for container status
         self.pool.wait_for_rebuild(False, 1)
         self.log.info(
-            "==>(5)Check for container rf and health-status "
+            "==>(5)Check for container rd_fac and health-status "
             "after rebuild completed: %s", expect_cont_status)
-        self.verify_cont_rf_healthstatus(rf, expect_cont_status)
+        self.verify_cont_rf_healthstatus(rd_fac, expect_cont_status)
 
     def create_test_container_and_write_obj(self, negative_test=False):
         """Create a container and write objects
@@ -154,7 +155,7 @@ class ContRedundancyFactor(RebuildTestBase):
                               "test failed, return error RC: -1003 not found")
 
     def execute_cont_rf_test(self, create_container=True):
-        """Execute the rebuild test steps for container rf test.
+        """Execute the rebuild test steps for container rd_fac test.
 
         Args:
             create_container (bool, optional): should the test create a
@@ -168,8 +169,11 @@ class ContRedundancyFactor(RebuildTestBase):
             self.setup_test_container()
         oclass = self.inputs.object_class.value
         negative_test = True
-        rf = ''.join(self.container.properties.value.split(":"))
-        rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
+        rd_fac = ''.join(self.container.properties.value.split(":"))
+        rf_match = re.search(r"rd_fac([0-9]+)", rd_fac)
+        if rf_match is None:
+            self.fail("Redundancy factor is not available in container properties")
+        rf_num = int(rf_match.group(1))
         if "OC_SX" in oclass and rf_num < 1:
             negative_test = False
         elif ("OC_RP_2" in oclass and rf_num < 2) or ("OC_RP_3" in oclass and rf_num < 3):
@@ -187,9 +191,9 @@ class ContRedundancyFactor(RebuildTestBase):
             # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
             # Start the rebuild process
-            self.start_rebuild_cont_rf(rf)
+            self.start_rebuild_cont_rf(rd_fac)
             # Execute the test steps during rebuild
-            self.execute_during_rebuild_cont_rf(rf, expect_cont_status)
+            self.execute_during_rebuild_cont_rf(rd_fac, expect_cont_status)
             # Refresh local pool and container
             self.log.info(
                 "==>(6)Check for pool and container info after rebuild.")
@@ -207,6 +211,6 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.verify_container_data()
             self.log.info("Test passed")
         elif self.mode == "cont_rf_enforcement":
-            self.log.info("Container rf test passed")
+            self.log.info("Container rd_fac test passed")
         else:
             self.fail("#Unsupported container_rf test mode")

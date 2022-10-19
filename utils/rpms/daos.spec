@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -385,10 +385,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files server
 %config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
 %dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-# set daos_admin to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_admin
-# set daos_server to be setgid daos_server in order to invoke daos_admin
-# and/or daos_firmware
+# set daos_server_helper to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_server_helper
+# set daos_server to be setgid daos_server in order to invoke daos_server_helper
+# and/or daos_firmware_helper
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
@@ -512,8 +512,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/*.a
 
 %files firmware
-# set daos_firmware to be setuid root in order to perform privileged tasks
-%attr(4750,root,daos_server) %{_bindir}/daos_firmware
+# set daos_firmware_helper to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_firmware_helper
 
 %files serialize
 %{_libdir}/libdaos_serialize.so
@@ -528,6 +528,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Oct 6 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.101-2
+- Rename daos_admin -> daos_server_helper
+
+
 * Tue Sep 20 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.101-1
 - Bump version to 2.3.101
 
@@ -993,7 +997,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - add daos and dmg man pages to the daos-client files list
 
 * Thu Mar 26 2020 Michael MacDonald <mjmac.macdonald@intel.com> 1.1.0-7
-- Add systemd scriptlets for managing daos_server/daos_admin services
+- Add systemd scriptlets for managing daos_server/daos_agent services
 
 * Thu Mar 26 2020 Alexander Oganeozv <alexander.a.oganezov@intel.com> - 1.1.0-6
 - Update ofi to 62f6c937601776dac8a1f97c8bb1b1a6acfbc3c0
