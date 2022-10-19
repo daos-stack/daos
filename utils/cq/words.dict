@@ -187,9 +187,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -444,6 +446,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr

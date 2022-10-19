@@ -9,7 +9,7 @@ import re
 from apricot import TestWithoutServers
 
 from run_utils import run_remote
-from util.user_utils import get_getent_command
+from user_utils import get_getent_command
 
 
 class HarnessPreLaunchTest(TestWithoutServers):
