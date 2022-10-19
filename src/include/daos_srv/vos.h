@@ -195,9 +195,10 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  * Cleanup local DTX when local modification failed.
  *
  * \param dth	[IN]	The DTX handle.
+ * \param unpin	[IN]	unpin the DTX entry or not.
  */
 void
-vos_dtx_cleanup(struct dtx_handle *dth);
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
 
 /**
  * Reset DTX related cached information in VOS.
