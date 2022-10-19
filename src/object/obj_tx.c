@@ -1138,13 +1138,11 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 	rc = daos_csummer_calc_key(csummer, &dcsr->dcsr_dkey,
 				   &dcu->dcu_dkey_csum);
-	if (rc != 0)
-		return rc;
-
-	rc = daos_csummer_calc_iods(csummer, dcsr->dcsr_sgls,
-				    dcu->dcu_iod_array.oia_iods, NULL,
-				    dcsr->dcsr_nr, false, singv_los, -1,
-				    &dcu->dcu_iod_array.oia_iod_csums);
+	if (rc == 0 && dcsr->dcsr_sgls != NULL)
+		rc = daos_csummer_calc_iods(csummer, dcsr->dcsr_sgls,
+					    dcu->dcu_iod_array.oia_iods, NULL,
+					    dcsr->dcsr_nr, false, singv_los, -1,
+					    &dcu->dcu_iod_array.oia_iod_csums);
 
 pack:
 	if (rc == 0)
@@ -1588,11 +1586,13 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (DAOS_BULK_LIMIT >> 2)) {
+			if (dcsr->dcsr_sgls != NULL && rc > (DAOS_BULK_LIMIT >> 2)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
 			} else {
+				if (dcsr->dcsr_sgls == NULL)
+					dcsr->dcsr_update.dcu_flags |= ORF_EMPTY_SGL;
 				dcsr->dcsr_update.dcu_sgls = dcsr->dcsr_sgls;
 			}
 		}
@@ -2261,6 +2261,16 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 	if (*obj == NULL)
 		return -DER_NO_HDL;
 
+	/*
+	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to transfer
+	 *	 empty sgl with non-zero nr via CPD RPC, otherwise it will cause crash on server.
+	 */
+	if (unlikely(sgls == NULL && dc_obj_proto_version <= 8)) {
+		D_WARN("Do NOT allow to send empty SGL with non-zero nr to old server via "
+		       "distributed transaction. Please consider to upgrade your server\n");
+		return -DER_NOTSUPPORTED;
+	}
+
 	rc = dc_tx_get_next_slot(tx, false, &dcsr);
 	if (rc != 0)
 		return rc;
@@ -2308,16 +2318,18 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object **obj, uint64_t flags,
 		       sizeof(daos_recx_t) * iods[i].iod_nr);
 	}
 
-	D_ALLOC_ARRAY(dcsr->dcsr_sgls, nr);
-	if (dcsr->dcsr_sgls == NULL)
-		D_GOTO(fail_iods, rc = -DER_NOMEM);
+	if (sgls != NULL) {
+		D_ALLOC_ARRAY(dcsr->dcsr_sgls, nr);
+		if (dcsr->dcsr_sgls == NULL)
+			D_GOTO(fail_iods, rc = -DER_NOMEM);
 
-	if (tx->tx_flags & DAOS_TF_ZERO_COPY)
-		rc = daos_sgls_copy_ptr(dcsr->dcsr_sgls, nr, sgls, nr);
-	else
-		rc = daos_sgls_copy_all(dcsr->dcsr_sgls, nr, sgls, nr);
-	if (rc != 0)
-		D_GOTO(fail_sgl, rc);
+		if (tx->tx_flags & DAOS_TF_ZERO_COPY)
+			rc = daos_sgls_copy_ptr(dcsr->dcsr_sgls, nr, sgls, nr);
+		else
+			rc = daos_sgls_copy_all(dcsr->dcsr_sgls, nr, sgls, nr);
+		if (rc != 0)
+			D_GOTO(fail_sgl, rc);
+	}
 
 	tx->tx_write_cnt++;
 

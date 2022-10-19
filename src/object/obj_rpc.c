@@ -755,7 +755,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				if (unlikely(rc))
 					D_GOTO(out, rc);
 			}
-		} else {
+		} else if (!(dcu->dcu_flags & ORF_EMPTY_SGL)) {
 			if (DECODING(proc_op)) {
 				D_ALLOC_ARRAY(dcu->dcu_sgls, dcsr->dcsr_nr);
 				if (dcu->dcu_sgls == NULL)
