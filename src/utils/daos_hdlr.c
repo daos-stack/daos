@@ -564,7 +564,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 	cmd_args_print(ap);
 
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t attr;
+		dfs_attr_t attr = {0};
 
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
