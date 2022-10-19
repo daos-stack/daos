@@ -9,6 +9,7 @@ import re
 from apricot import TestWithoutServers
 
 from run_utils import run_remote
+from util.user_utils import get_getent_command
 
 
 class HarnessPreLaunchTest(TestWithoutServers):
@@ -18,7 +19,7 @@ class HarnessPreLaunchTest(TestWithoutServers):
     """
 
     def test_harness_pre_launch_users(self):
-        """Verify all expected users are setup correctly with user_setup.py.
+        """Verify all expected users are setup correctly with launch.py.
 
         :avocado: tags=all
         :avocado: tags=vm
@@ -30,12 +31,16 @@ class HarnessPreLaunchTest(TestWithoutServers):
         expected_users = self.params.get('users', '/run/test_harness_pre_launch_users/*')
         for user_group in expected_users:
             user, group = user_group.split(':')
-            group_result = run_remote(self.log, hostlist_clients, 'getent group {}'.format(group))
+            self.log.info('Checking if group %s exists', group)
+            group_result = run_remote(
+                self.log, hostlist_clients, get_getent_command('group', group))
             if not group_result.passed:
-                self.fail('Group {} does not exist'.format(group))
+                self.fail(f'Group {group} does not exist')
             gid = group_result.output[0].stdout[0].split(':')[2]
-            user_result = run_remote(self.log, hostlist_clients, 'id {}'.format(user))
+            self.log.info('Checking if user %s exists', user)
+            user_result = run_remote(self.log, hostlist_clients, f'id {user}')
             if not user_result.passed:
-                self.fail('User {} does not exist'.format(user))
-            if not re.findall(r'gid={}'.format(gid), user_result.output[0].stdout[0]):
-                self.fail('User {} not in group {}'.format(user, group))
+                self.fail(f'User {user} does not exist')
+            self.log.info('Checking if user %s is in group %s', user, gid)
+            if not re.findall(f'gid={gid}', user_result.output[0].stdout[0]):
+                self.fail(f'User {user} not in group {group}')

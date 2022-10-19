@@ -32,8 +32,8 @@ from process_core_files import CoreFileProcessing
 from util.logger_utils import get_console_handler, get_file_handler
 from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command, get_create_group_command, \
-    get_create_user_command, get_delete_user_command
+from util.user_utils import get_chown_command, get_getent_command, get_groupadd_command, \
+    get_useradd_command, get_userdel_command
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
@@ -1743,12 +1743,17 @@ class Launch():
         if not run_remote(logger, nodes, f'mkdir -p {parent_dir}').passed:
             raise RunException(f'Failed to create user directory {parent_dir}')
         for group, users in DAOS_TEST_GROUP_USERS.items():
-            if not run_remote(logger, nodes, get_create_group_command(group, True)).passed:
+            logger.info('Creating group %s', group)
+            if not run_remote(logger, nodes, get_groupadd_command(group, True, True)).passed:
                 raise RunException(f'Failed to create group {group} on nodes {nodes}')
+            logger.info('Querying group %s', group)
+            if not run_remote(logger, nodes, get_getent_command('group', group)).passed:
+                raise RunException(f'Failed to query group {group} on nodes {nodes}')
             for user in users:
-                # Delete if existing
-                _ = run_remote(logger, nodes, get_delete_user_command(user, True))
-                command = get_create_user_command(user, group, parent_dir, True)
+                logger.info('Deleting user %s if existing', user)
+                _ = run_remote(logger, nodes, get_userdel_command(user, True))
+                logger.info('Creating user %s in group %s', user, group)
+                command = get_useradd_command(user, group, parent_dir, True)
                 if not run_remote(logger, nodes, command).passed:
                     raise RunException(f'Failed to create user {user} on nodes {nodes}')
 
