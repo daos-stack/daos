@@ -364,7 +364,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 			if (rc == 0) {
 				uuid_copy(id.uuid, new_id);
 				rc = smd_db_upsert((char *)TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
-					   &id, sizeof(id));
+						   &id, sizeof(id));
 				if (rc) {
 					D_ERROR("Update target %d failed. "DF_RC"\n",
 						tgt_id, DP_RC(rc));
