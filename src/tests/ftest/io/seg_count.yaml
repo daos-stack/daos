@@ -3,35 +3,41 @@ hosts:
   test_clients: 2
 timeout: 2000
 server_config:
-    name: daos_server
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 60000000000
-    svcn: 3
-    control_method: dmg
+  scm_size: 60000000000
+  svcn: 3
+  control_method: dmg
 ior:
-    client_processes: !mux
-        slots_16:
-            np: 16
-        slots_32:
-            np: 32
-        slots_64:
-            np: 64
-    repetitions: 3
-    flags: "-v -W -w -r -R"
-    blocksize_transfersize_stripesize: !mux
-        4k:
-            block_size: '4k'
-            transfer_size: '4k'
-        1m:
-            block_size: '1m'
-            transfer_size: '1m'
-        4m:
-            block_size: '4m'
-            transfer_size: '4m'
-    objectclass: !mux
-        SX:
-            dfs_oclass: "SX"
-        2-way_Replication:
-            dfs_oclass: "RP_2GX"
+  client_processes: !mux
+    slots_16:
+      np: 16
+    slots_32:
+      np: 32
+    slots_64:
+      np: 64
+  repetitions: 3
+  flags: "-v -W -w -r -R"
+  blocksize_transfersize_stripesize: !mux
+    4k:
+      block_size: '4k'
+      transfer_size: '4k'
+    1m:
+      block_size: '1m'
+      transfer_size: '1m'
+    4m:
+      block_size: '4m'
+      transfer_size: '4m'
+  objectclass: !mux
+    SX:
+      dfs_oclass: "SX"
+    2-way_Replication:
+      dfs_oclass: "RP_2GX"
