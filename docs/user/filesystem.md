@@ -165,6 +165,8 @@ So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 
 ### Launching
 
+#### Via dfuse command
+
 DFuse should be run with the credentials (user/group) of the user who will
 be accessing it, and who owns any pools that will be used.
 
@@ -213,16 +215,13 @@ Filesystem      Size  Used Avail Use% Mounted on
 dfuse           537G  5.1G  532G   1% /scratch_fs/dfuse
 $
 ```
-
-### Launching via fstab
-
 DFuse can be launched via fstab and the standard mount command, it will parse -o options
 and extract pool=<name>,container=<name> if provided and ignore any other filesystem options given.
 
 There are few use cases described below to explain how systemd or /etc/fstab can be used to mount
 the daos container using dfuse.
 
-#### 1> User can mount the file system using mount.fuse3 command
+#### Via mount.fuse3 command
 
 ```bash
 $  dmg pool create --scm-size=8G --nvme-size=64G --label=samirrav_pool -u samirrav@
@@ -279,7 +278,9 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/daos_dfuse_samir
 $
 ```
 
-#### 2> Use dfuse entry in /etc/fstab to mount the container.
+#### Via fstab.
+
+Only root can run 'mount -a' command so this example should be run as root user.
 
 ```bash
 $  dmg pool create --scm-size=8G --nvme-size=64G --label=admin_pool
@@ -334,7 +335,7 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
 $
 ```
 
-#### 3> Use systemd service to mount the dfuse container.
+#### Via systemd.
 
 User can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
 Consider the previous example /etc/fstab entry which has the admin_pool and admin_cont.
@@ -415,7 +416,7 @@ Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /scratch_fs/r
 $
 ```
 
-#### 4> systemd to auto mount the dfuse container after system power cycle or reboot.
+#### Via systemd during system power ON.
 
   Same systemd file mention in previous example is used to mount the fuse during system power ON.
 
