@@ -2260,29 +2260,25 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (resp == NULL) {
 		D_ERROR("Failed to allocate daos response ref\n");
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		goto out;
+		ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
+		return;
 	}
 
 	ctl__dev_manage_resp__init(resp);
 
-	if (strlen(req->uuid) == 0) {
-		D_ERROR("Device UUID for management request is empty\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		goto out;
-	}
-
 	if (uuid_parse(req->uuid, dev_uuid) != 0) {
-		D_ERROR("Unable to parse device UUID %s: %d\n", req->uuid, rc);
-		uuid_clear(dev_uuid);
+		D_ERROR("Device UUID (%s) is invalid\n", req->uuid);
+		D_GOTO(pack_resp, rc = -DER_INVAL);
 	}
 
 	rc = ds_mgmt_dev_set_faulty(dev_uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
-	resp->status = rc;
 
+pack_resp:
+	resp->status = rc;
 	drpc_dev_manage_pack(resp, body, drpc_resp);
-out:
+
 	ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
 	drpc_dev_manage_free(resp);
 }
@@ -2347,26 +2343,13 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	if (strlen(req->old_dev_uuid) == 0) {
-		D_ERROR("Old device UUID for replacement command is empty\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
-		return;
-	}
-	if (strlen(req->new_dev_uuid) == 0) {
-		D_ERROR("New device UUID for replacement command is empty\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
-		return;
-	}
-
 	D_INFO("Received request to replace device %s with device %s\n",
 	       req->old_dev_uuid, req->new_dev_uuid);
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response ref\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
@@ -2376,10 +2359,9 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC_PTR(resp->device);
 	if (resp == NULL) {
-		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate daos response device ref\n");
-		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
-		return;
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		goto out;
 	}
 
 	ctl__smd_device__init(resp->device);
@@ -2387,13 +2369,13 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->device->uuid = NULL;
 
 	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
-		D_ERROR("Unable to parse device UUID %s: %d\n", req->old_dev_uuid, rc);
-		uuid_clear(old_uuid); /* need to set uuid = NULL */
+		D_ERROR("Old device UUID (%s) is invalid\n", req->old_dev_uuid);
+		D_GOTO(pack_resp, rc = -DER_INVAL);
 	}
 
 	if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
-		D_ERROR("Unable to parse device UUID %s: %d\n", req->new_dev_uuid, rc);
-		uuid_clear(new_uuid); /* need to set uuid = NULL */
+		D_ERROR("New device UUID (%s) is invalid\n", req->new_dev_uuid);
+		D_GOTO(pack_resp, rc = -DER_INVAL);
 	}
 
 	/* TODO: Implement no-reint device replacement option */
@@ -2403,6 +2385,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("Failed to replace device %s with %s (%d)\n", req->old_dev_uuid,
 			req->new_dev_uuid, rc);
 
+pack_resp:
 	resp->status = rc;
 	len = ctl__dev_manage_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
@@ -2415,14 +2398,14 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		drpc_resp->body.data = body;
 	}
 
-	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
-
 	if (rc == 0) {
 		if (resp->device->uuid != NULL)
 			D_FREE(resp->device->uuid);
 	}
 
+out:
 	D_FREE(resp);
+	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 }
 
 void
