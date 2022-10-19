@@ -922,7 +922,7 @@ vs_op2str(unsigned int op)
 {
 	switch (op) {
 	case VS_OP_RESERV:
-		return "reserv";
+		return "reserve";
 	case VS_OP_PUBLISH:
 		return "tx_publish";
 	case VS_OP_FREE:
