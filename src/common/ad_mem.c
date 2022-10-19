@@ -1848,7 +1848,7 @@ blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 		spec->as_specs[i] = specs[i];
 
 	blob->bb_arena_last[arena_type] = AD_ARENA_ANY;
-	ad_tx_copy(tx, spec, sizeof(*spec), spec, AD_TX_REDO | AD_TX_UNDO);
+	ad_tx_snap(tx, spec, sizeof(*spec), AD_TX_REDO);
 	return 0;
 }
 
@@ -1866,10 +1866,11 @@ ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 static struct ad_group *
 alloc_group(struct ad_arena *arena, bool force)
 {
-	struct ad_blob  *blob = arena->ar_blob;
 	struct ad_group *grp  = NULL;
 
 	if (!force) {
+		struct ad_blob  *blob = arena->ar_blob;
+
 		grp = d_list_pop_entry(&blob->bb_gps_lru, struct ad_group, gp_link);
 		if (grp)
 			blob->bb_gps_lru_size--;

@@ -22,12 +22,12 @@ static char	*adt_store;
 static void
 addr_swap(void *array, int a, int b)
 {
-        daos_off_t	*addrs = array;
-        daos_off_t	 tmp;
+	daos_off_t *addrs = array;
+	daos_off_t  tmp;
 
-        tmp = addrs[a];
-        addrs[a] = addrs[b];
-        addrs[b] = tmp;
+	tmp = addrs[a];
+	addrs[a] = addrs[b];
+	addrs[b] = tmp;
 }
 
 static daos_sort_ops_t addr_shuffle_ops = {
