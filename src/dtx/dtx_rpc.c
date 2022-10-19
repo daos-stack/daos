@@ -301,15 +301,18 @@ dtx_req_list_cb(void **args)
 					drr->drr_rank, drr->drr_tag);
 				return;
 			case -DER_EXCLUDED:
-				/* If non-leader is excluded, handle it
-				 * as 'prepared'. If other non-leaders
-				 * also 'prepared' then related DTX is
-				 * committable. Fall through.
+				/*
+				 * If non-leader is excluded, handle it as 'prepared'. If other
+				 * non-leaders are also 'prepared' then related DTX maybe still
+				 * committable or 'corrupted'. The subsequent DTX resync logic
+				 * will handle related things, see dtx_verify_groups().
+				 *
+				 * Fall through.
 				 */
 			case DTX_ST_PREPARED:
 				if (dra->dra_result == 0 ||
 				    dra->dra_result == DTX_ST_CORRUPTED)
-					dra->dra_result = drr->drr_result;
+					dra->dra_result = DTX_ST_PREPARED;
 				break;
 			case DTX_ST_CORRUPTED:
 				if (dra->dra_result == 0)
@@ -333,8 +336,8 @@ dtx_req_list_cb(void **args)
 		}
 
 		drr = args[0];
-		D_CDEBUG(dra->dra_result < 0 &&
-			 dra->dra_result != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
+		D_CDEBUG(dra->dra_result < 0 && dra->dra_result != -DER_NONEXIST &&
+			 dra->dra_result != -DER_INPROGRESS, DLOG_ERR, DB_TRACE,
 			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
 			 dra->dra_opc, DP_DTI(drr->drr_dti),
 			 dra->dra_result < 0 ? "failed" : "succeed",
@@ -506,8 +509,8 @@ btr_ops_t dbtree_dtx_cf_ops = {
 #define DTX_CF_BTREE_ORDER	20
 
 static int
-dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
-		 int *length, struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
+dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *length,
+		 struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct dtx_memberships		*mbs = dte->dte_mbs;
 	struct dtx_cf_rec_bundle	 dcrb;
@@ -547,7 +550,9 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 
 		/* Skip non-healthy one. */
 		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
-		    target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+		    target->ta_comp.co_status != PO_COMP_ST_NEW &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 			continue;
 
 		/* Skip myself. */
