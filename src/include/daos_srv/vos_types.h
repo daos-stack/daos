@@ -88,6 +88,8 @@ enum vos_pool_open_flags {
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 	/** Caller does VEA flush periodically */
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	/** VOS DB pool*/
+	VOS_POF_SYSDB	= (1 << 4),
 };
 
 enum vos_oi_attr {

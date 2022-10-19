@@ -339,4 +339,14 @@ dss_xs2tgt(int xs_id)
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
 }
 
+/*
+ * FIXME: control plane shall pass tier information to
+ * avoid create nvme context if Metadata on SSD is not enabled.
+ */
+static inline bool
+dss_xstream_has_nvme(struct dss_xstream *dx)
+{
+	return dx->dx_main_xs != 0 || dx->dx_xs_id == 0;
+}
+
 #endif /* __DAOS_SRV_INTERNAL__ */

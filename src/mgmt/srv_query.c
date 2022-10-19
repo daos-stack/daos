@@ -262,7 +262,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	D_INIT_LIST_HEAD(&list_devs_info.dev_list);
 
 	rc = dss_ult_execute(bio_query_dev_list, &list_devs_info, NULL, NULL,
-			     DSS_XS_VOS, 0, 0);
+			     DSS_XS_SYS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -655,7 +655,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	uuid_copy(faulty_info.bf_devid, dev_uuid);
 	/* set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_faulty_led_set, &faulty_info, NULL,
-			     NULL, DSS_XS_VOS, 0, 0);
+			     NULL, DSS_XS_SYS, 0, 0);
 	if (rc) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n",
 			DP_UUID(dev_uuid));
@@ -746,7 +746,7 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL,
-			     NULL, DSS_XS_VOS, 0, 0);
+			     NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT\n");
 		goto out;
@@ -831,7 +831,7 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 
 	uuid_copy(identify_info.devid, dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_identify, &identify_info, NULL,
-			     NULL, DSS_XS_VOS, 0, 0);
+			     NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0)
 		goto out;
 

@@ -84,6 +84,11 @@ struct bio_sglist {
 	unsigned int	 bs_nr_out;
 };
 
+/** Max number of vos targets per engine */
+#define			 BIO_MAX_VOS_TGT_CNT	96
+/* System xstream target ID */
+#define			 BIO_SYS_TGT_ID		1024
+
 /* Opaque I/O descriptor */
 struct bio_desc;
 /* Opaque I/O context */
@@ -402,6 +407,13 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
 					      unsigned int perm,
 					      void **bulk_hdl),
 			   int (*bulk_free)(void *bulk_hdl));
+/*
+ * Register smd operations callbacks.
+ *
+ * \param[IN]	sys_smd_init	Init sys smd
+ * \param[IN]	sys_smd_fini	Finish sys smd
+ */
+void bio_register_smd_ops(int (*sys_smd_init)(void), void (*sys_smd_fini)(void));
 /**
  * Global NVMe initialization.
  *
@@ -410,14 +422,12 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
- * \param[IN] db		persistent database to store SMD data
  * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-		  unsigned int hugepage_size, unsigned int tgt_nr,
-		  struct sys_db *db, bool bypass);
+		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -449,8 +459,9 @@ int bio_nvme_ctl(unsigned int cmd, void *arg);
 /*
  * Initialize SPDK env and per-xstream NVMe context.
  *
- * \param[OUT] pctxt	Per-xstream NVMe context to be returned
- * \param[IN] tgt_id	Target ID (mapped to a VOS xstream)
+ * \param[OUT] pctxt		Per-xstream NVMe context to be returned
+ * \param[IN] tgt_id		Target ID (mapped to a VOS xstream)
+ * \param[IN] self_polling	self polling enabled or not
  *
  * \returns		Zero on success, negative value on error
  */
@@ -961,7 +972,7 @@ void
 bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem);
 
 /* Function to check if metadata on ssd enabled or not */
-bool bio_xs_is_meta_on_ssd(struct bio_xs_context *xs_ctxt);
+bool bio_is_meta_on_ssd_configured(void);
 
 /*
  * Reserve WAL log space for current transaction

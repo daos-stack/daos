@@ -256,7 +256,8 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 		if (ioc->bic_opening || ioc->bic_closing)
 			continue;
 
-		bio_blob_open(ioc, true);
+		/* fix sysdb */
+		bio_blob_open(ioc, true, false, SPDK_BLOBID_INVALID);
 	}
 
 	if (*closed_blobs)

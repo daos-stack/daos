@@ -278,6 +278,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
 	int			 rc = 0;
+	enum bio_mc_flags	 bio_mc_flags = 0;
 
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
@@ -305,10 +306,19 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	}
 
 	/* Create SPDK blob on NVMe device */
-	if (nvme_sz > 0 && bio_nvme_configured()) {
-		D_DEBUG(DB_MGMT, "Creating blob for xs:%p pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(uuid));
-		rc = bio_mc_create(xs_ctxt, uuid, 0, 0, nvme_sz, 0);
+	if (bio_nvme_configured()) {
+		D_DEBUG(DB_MGMT,
+			"Creating blobs for xs:%p pool:"DF_UUID" scm_sz: %llu, nvme_sz: %llu\n",
+			xs_ctxt, DP_UUID(uuid), (unsigned long long)scm_sz,
+			(unsigned long long)nvme_sz);
+
+		if (flags & VOS_POF_SYSDB)
+			bio_mc_flags |= BIO_MC_FL_SYSDB;
+		if (nvme_sz == 0)
+			bio_mc_flags |= BIO_MC_FL_NO_DATABLOB;
+
+		/* WAL size is same as scm size now */
+		rc = bio_mc_create(xs_ctxt, uuid, scm_sz, scm_sz, nvme_sz, bio_mc_flags);
 		if (rc != 0) {
 			D_ERROR("Error creating blob for xs:%p pool:"DF_UUID" "
 				""DF_RC"\n", xs_ctxt, DP_UUID(uuid), DP_RC(rc));
@@ -821,10 +831,11 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	if (xs_ctxt && bio_xs_is_meta_on_ssd(xs_ctxt)) {
+	if (bio_is_meta_on_ssd_configured()) {
 		D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
-		rc = bio_mc_open(xs_ctxt, uuid, 0, &pool->vp_meta_context);
+		rc = bio_mc_open(xs_ctxt, uuid, flags & VOS_POF_SYSDB ? BIO_MC_FL_SYSDB : 0,
+				 &pool->vp_meta_context);
 		if (rc) {
 			D_ERROR("Failed to open VOS I/O context for xs:%p "
 				"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),

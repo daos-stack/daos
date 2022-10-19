@@ -67,6 +67,8 @@ dpdk_cli_override_opts;
 #define NVME_ROLE_META		(1 << 1)
 #define NVME_ROLE_WAL		(1 << 2)
 
+#define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
+
 static inline char *
 nvme_state2str(int state)
 {
