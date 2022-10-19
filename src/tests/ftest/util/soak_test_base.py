@@ -305,7 +305,7 @@ class SoakTestBase(TestWithServers):
                 # nodesperjob = -1 indicates to use all nodes in client hostlist
                 if npj < 0:
                     npj = len(self.hostlist_clients)
-                if len(self.hostlist_clients)/npj < 1:
+                if len(self.hostlist_clients) / npj < 1:
                     raise SoakTestError(
                         "<<FAILED: There are only {} client nodes for this job."
                         " Job requires {}".format(
@@ -579,8 +579,8 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
         # cleanup test_node
-        for log_dir in [self.soak_dir, self.sharedsoaktest_dir]:
-            cmd = "rm -rf {}".format(log_dir)
+        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
+            cmd = "rm -rf {}/*".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)
             except DaosTestError as error:

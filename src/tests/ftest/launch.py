@@ -29,10 +29,13 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_handler, get_file_handler
-from util.results_utils import create_html, create_xml, Job, Results, TestResult
-from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from host_utils import get_node_set, HostInfo, HostException                    # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
+from run_utils import get_local_host, run_local, run_remote, RunException       # noqa: E402
+from user_utils import get_chown_command                                        # noqa: E402
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
@@ -113,7 +116,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r", encoding="utf-8") as open_file:
             try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
             except yaml.YAMLError as error:
                 logger.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
@@ -610,26 +613,6 @@ class TestName():
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
-    class HostInfo():
-        # pylint: disable=too-few-public-methods
-        """Defines the hosts being utilized by the test."""
-
-        def __init__(self):
-            """Initialize a HostInfo object."""
-            self.all = NodeSet()
-            self.servers = NodeSet()
-            self.clients = NodeSet()
-
-        @property
-        def clients_with_localhost(self):
-            """Get the test clients including the localhost.
-
-            Returns:
-                NodeSet: test clients including the localhost
-
-            """
-            return self.clients | NodeSet(get_local_host())
-
     def __init__(self, test_file, order):
         """Initialize a TestInfo object.
 
@@ -642,7 +625,7 @@ class TestInfo():
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
-        self.hosts = self.HostInfo()
+        self.hosts = HostInfo()
 
     def __str__(self):
         """Get the test file as a string.
@@ -659,67 +642,34 @@ class TestInfo():
         Args:
             include_localhost (bool, optional): should the local host be included in the list of
                 client matches. Defaults to False.
-        """
-        self.hosts.all.clear()
-        self.hosts.all.update(self._get_hosts_from_yaml(include_localhost))
 
-        self.hosts.servers.clear()
-        self.hosts.servers.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_servers"]))
-
-        self.hosts.clients.clear()
-        self.hosts.clients.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_clients"]))
-
-    def _get_hosts_from_yaml(self, include_localhost=False, key_match=None):
-        """Extract the list of hosts from the test yaml file.
-
-        This host will be included in the list if no clients are explicitly called
-        out in the test's yaml file.
-
-        Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-            key_match (str, optional): test yaml key used to filter which hosts to
-                find.  Defaults to None which will match all keys.
-
-        Returns:
-            NodeSet: hosts specified in the test's yaml file
+        Raises:
+            LaunchException: if there is an error getting the host from the test yaml
 
         """
-        logger.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
-        local_host = NodeSet(get_local_host())
-        yaml_hosts = NodeSet()
-        if include_localhost and key_match != YAML_KEYS["test_servers"]:
-            yaml_hosts.add(local_host)
-        found_client_key = False
-        for key, value in list(self._find_yaml_hosts().items()):
-            logger.debug("  Found %s: %s", key, value)
-            if key_match is None or key == key_match:
-                logger.debug("    Adding %s", value)
-                if isinstance(value, list):
-                    yaml_hosts.add(NodeSet.fromlist(value))
-                else:
-                    yaml_hosts.add(NodeSet(value))
-            if key in YAML_KEYS["test_clients"]:
-                found_client_key = True
+        logger.debug("Extracting hosts from %s", self.yaml_file)
+        yaml_data = get_yaml_data(self.yaml_file)
+        keys = [
+            YAML_KEYS["test_servers"], "server_partition", "server_reservation",
+            YAML_KEYS["test_clients"], "client_partition", "client_reservation"
+        ]
+        info = find_values(yaml_data, keys)
+        for key in keys:
+            if key not in info:
+                info[key] = None
+            logger.debug("  Found %-18s = %s", key, info[key])
 
-        # Include this host as a client if no clients are specified
-        if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-            logger.debug("    Adding the localhost: %s", local_host)
-            yaml_hosts.add(local_host)
+        if include_localhost:
+            info[keys[3]] = get_node_set(info[keys[3]])
+            logger.debug("Adding the localhost to the clients: %s", info[keys[3]])
+            info[keys[3]].add(get_local_host())
 
-        return yaml_hosts
-
-    def _find_yaml_hosts(self):
-        """Find the all the host values in the specified yaml file.
-
-        Returns:
-            dict: a dictionary of each host key and its host values
-
-        """
-        return find_values(
-            get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+        try:
+            self.hosts.set_hosts(
+                logger, info[keys[0]], info[keys[1]], info[keys[2]], info[keys[3]], info[keys[4]],
+                info[keys[5]])
+        except HostException as error:
+            raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -821,7 +771,8 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
+    @staticmethod
+    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -1008,7 +959,7 @@ class Launch():
         # Modify the test yaml files to run on this cluster
         try:
             self.setup_test_files(args, yaml_dir)
-        except RunException:
+        except (RunException, LaunchException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
@@ -1708,7 +1659,8 @@ class Launch():
             yaml_dir (str): directory in which to write the modified yaml files
 
         Raises:
-            RunException: if there is a problem updating the test ymal files
+            RunException: if there is a problem updating the test yaml files
+            LaunchException: if there is an error getting host information from the test yaml files
 
         """
         # Replace any placeholders in the extra yaml file, if provided

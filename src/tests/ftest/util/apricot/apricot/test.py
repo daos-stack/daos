@@ -26,9 +26,10 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
     set_avocado_config_value, nodeset_append_suffix
+from host_utils import get_host_parameters, HostRole, HostInfo
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
@@ -556,33 +557,10 @@ class TestWithoutServers(Test):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
-        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
-
-        # Collect any host information from the test yaml
-        host_data = self.params.get(yaml_key, namespace)
-        partition = self.params.get(partition_key, namespace)
-        reservation = self.params.get(reservation_key, namespace, reservation_default)
-        if partition is not None and host_data is not None:
-            self.fail(
-                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
-                    partition_key, yaml_key))
-
-        if partition is not None and host_data is None:
-            # If a partition is provided instead of a set of hosts get the set of hosts from the
-            # partition information
-            setattr(self, partition_key, partition)
-            setattr(self, reservation_key, reservation)
-            slurm_nodes = get_partition_hosts(partition, reservation)
-            if not slurm_nodes:
-                self.fail(
-                    "No valid nodes in {} partition with {} reservation".format(
-                        partition, reservation))
-            host_data = slurm_nodes
-
-        # Convert the set of hosts from slurm or the yaml file into a NodeSet
-        if isinstance(host_data, (list, tuple)):
-            return NodeSet.fromlist(host_data)
-        return NodeSet(host_data)
+        data = get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace)
+        role = HostRole(*data)
+        role.update_hosts(self.log)
+        return role.hosts
 
 
 class TestWithServers(TestWithoutServers):
@@ -705,20 +683,28 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.hostlist_servers = self.get_hosts_from_yaml(
-            "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
-        self.hostlist_clients = self.get_hosts_from_yaml(
-            "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+        info = HostInfo()
+        info.set_test_hosts(self)
+        self.hostlist_servers = info.servers
+        self.hostlist_clients = info.clients
+        self.server_partition = info.server_partition.name
+        self.client_partition = info.client_partition.name
+        self.server_reservation = info.server_partition.reservation
+        self.client_reservation = info.client_partition.reservation
 
-        # Optionally remove any servers that may have ended up in the client list.  This can occur
-        # with tests using slurm partitions as they are setup with all hosts.
-        if self.slurm_exclude_servers:
-            self.log.debug(
-                "Excluding any %s servers from the current client list: %s",
-                self.hostlist_servers, self.hostlist_clients)
-            new_client_list = self.hostlist_clients.difference(self.hostlist_servers)
-            self.slurm_exclude_nodes = self.hostlist_clients.difference(new_client_list)
-            self.hostlist_clients = new_client_list
+        # Access points to use by default when starting servers and agents
+        #  - for 1 or 2 servers use 1 access point
+        #  - for 3 or more servers use 3 access points
+        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points = self.hostlist_servers[:access_points_qty]
+        self.access_points = NodeSet(
+            self.params.get("access_points", "/run/setup/*", default_access_points))
+        self.access_points_suffix = self.params.get(
+            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
+        if self.access_points_suffix:
+            self.access_points = nodeset_append_suffix(
+                self.access_points, self.access_points_suffix)
+        info.access_points = self.access_points
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -734,29 +720,8 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-        # Access points to use by default when starting servers and agents
-        #  - for 1 or 2 servers use 1 access point
-        #  - for 3 or more servers use 3 access points
-        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
-        default_access_points = self.hostlist_servers[:access_points_qty]
-        self.access_points = NodeSet(
-            self.params.get("access_points", "/run/setup/*", default_access_points))
-        self.access_points_suffix = self.params.get(
-            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
-        if self.access_points_suffix:
-            self.access_points = nodeset_append_suffix(
-                self.access_points, self.access_points_suffix)
-
         # Display host information
-        self.log.info("-" * 100)
-        self.log.info("--- HOST INFORMATION ---")
-        self.log.info("hostlist_servers:    %s", self.hostlist_servers)
-        self.log.info("hostlist_clients:    %s", self.hostlist_clients)
-        self.log.info("server_partition:    %s", self.server_partition)
-        self.log.info("client_partition:    %s", self.client_partition)
-        self.log.info("server_reservation:  %s", self.server_reservation)
-        self.log.info("client_reservation:  %s", self.client_reservation)
-        self.log.info("access_points:       %s", self.access_points)
+        info.display(self.log)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)

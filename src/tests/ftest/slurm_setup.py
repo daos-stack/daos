@@ -22,7 +22,7 @@ from util.run_utils import get_clush_command_list, run_local, run_remote, RunExc
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.INFO))
+logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
@@ -128,7 +128,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     for cmd in cmdlist:
         if sudo:
             cmd = "sudo {}".format(cmd)
-        if not run_remote(logger, nodes, cmd).passed:
+        if not run_remote(logger, nodes, cmd, timeout=600).passed:
             # Do not bother executing any remaining commands if this one failed
             return 1
     return 0
