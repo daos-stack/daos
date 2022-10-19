@@ -47,8 +47,8 @@ type containerCmd struct {
 	GetAttribute    containerGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
 	SetAttribute    containerSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container properties"`
+	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container properties"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
@@ -162,7 +162,8 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
 		var attr C.dfs_attr_t
-		var oclass [10]C.char
+		var oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+		var dir_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
 		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
@@ -175,6 +176,9 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		}
 		C.daos_oclass_id2name(attr.da_oclass_id, &oclass[0])
 		ci.ObjectClass = C.GoString(&oclass[0])
+		C.daos_oclass_id2name(attr.da_dir_oclass_id, &dir_oclass[0])
+		ci.DirObjectClass = C.GoString(&dir_oclass[0])
+		ci.CHints = C.GoString(&attr.da_hints[0])
 		ci.ChunkSize = uint64(attr.da_chunk_size)
 
 		if err := dfsError(C.dfs_umount(dfs)); err != nil {
@@ -204,16 +208,18 @@ func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) 
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        ContTypeFlag         `long:"type" short:"t" description:"container type"`
-	Path        string               `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	Args        struct {
+	Type           ContTypeFlag         `long:"type" short:"t" description:"container type"`
+	Path           string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize      ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass    ObjClassFlag         `long:"oclass" short:"o" description:"default file object class"`
+	DirObjectClass ObjClassFlag         `long:"dir_oclass" short:"a" description:"default directory object class"`
+	CHints         string               `long:"hints" short:"h" description:"container hints"`
+	Properties     CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Mode           ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile        string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User           string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group          string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args           struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
 }
@@ -291,8 +297,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.ObjectClass.Set {
 			ap.oclass = cmd.ObjectClass.Class
 		}
+		if cmd.DirObjectClass.Set {
+			ap.dir_oclass = cmd.DirObjectClass.Class
+		}
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
+		}
+		if cmd.CHints != "" {
+			ap.hints = C.CString(cmd.CHints)
+			defer freeString(ap.hints)
 		}
 	}
 
@@ -732,6 +745,12 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}
+		if ci.DirObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass})
+		}
+		if ci.CHints != "" {
+			rows = append(rows, txtfmt.TableRow{"Hints": ci.CHints})
+		}
 		if ci.ChunkSize > 0 {
 			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
 		}
@@ -752,6 +771,8 @@ type containerInfo struct {
 	CloseModifyTime  *uint64    `json:"close_modify_time"`
 	Type             string     `json:"container_type"`
 	ObjectClass      string     `json:"object_class,omitempty"`
+	DirObjectClass   string     `json:"dir_object_class,omitempty"`
+	CHints           string     `json:"hints,omitempty"`
 	ChunkSize        uint64     `json:"chunk_size,omitempty"`
 }
 

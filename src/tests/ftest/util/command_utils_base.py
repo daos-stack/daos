@@ -12,7 +12,7 @@ from exception_utils import CommandFailure
 class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None, yaml_key=None):
+    def __init__(self, value, default=None, yaml_key=None, position=None):
         """Create a BasicParameter object.
 
         Normal use includes assigning this object to an attribute name that
@@ -31,6 +31,7 @@ class BasicParameter():
         self._value = value if value is not None else default
         self._default = default
         self._yaml_key = yaml_key
+        self._position = position
         self.log = getLogger(__name__)
 
         # Flag used to indicate if a parameter value has or has not been updated
@@ -74,6 +75,74 @@ class BasicParameter():
         if item != self._value:
             self._value = item
             self.updated = True
+
+    @property
+    def yaml_key(self):
+        """Get the optional name used in the yaml file when setting this parameter.
+
+        Note: If not set (None) then the name of the variable assigned to this object is the name
+        used in the yaml file.
+
+        Returns:
+            object: optional name used to write this parameter to the yaml file or None
+
+        """
+        return self._yaml_key
+
+    @property
+    def position(self):
+        """Get the position property that defines the order/position of the parameter.
+
+        Returns:
+            int: the position of this parameter or None if not set
+
+        """
+        return self._position
+
+    def __lt__(self, other):
+        """Determine if this BasicParameter is less than the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is less than the other parameter's position
+
+        """
+        return (self.position or 0) < (other.position or 0)
+
+    def __gt__(self, other):
+        """Determine if this BasicParameter is greater than the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is greater than the other parameter's position
+
+        """
+        return (self.position or 0) > (other.position or 0)
+
+    def __eq__(self, other):
+        """Determine if this BasicParameter is equal to the other BasicParameter.
+
+        Args:
+            other (BasicParameter): the other object to compare
+
+        Returns:
+            bool: if this parameter's position is equal to the other parameter's position
+
+        """
+        return (self.position or 0) == (other.position or 0)
+
+    def __hash__(self):
+        """Return the position as the hash of the class.
+
+        Returns:
+            int: the hash for this object
+
+        """
+        return (self.position or 0)
 
     def get_yaml_value(self, name, test, path):
         """Get the value for the parameter from the test case's yaml file.
@@ -177,19 +246,6 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
-
-    def get_yaml_value(self, name, test, path):
-        """Get the value for the parameter from the test case's yaml file.
-
-        Args:
-            name (str): name of the value in the yaml file - not used
-            test (Test): avocado Test object to use to read the yaml file
-            path (str): yaml path where the name is to be found
-        """
-        if self._yaml_key is not None:
-            # Use the yaml key name instead of the variable name
-            name = self._yaml_key
-        return super().get_yaml_value(name, test, path)
 
 
 class LogParameter(FormattedParameter):
@@ -310,9 +366,16 @@ class ObjectWithParameters():
             list: a list of class attribute names used to define parameters
 
         """
-        return [
-            name for name in sorted(self.__dict__.keys())
-            if attr_type is None or isinstance(getattr(self, name), attr_type)]
+        positional = {}
+        non_positional = []
+        for name in sorted(list(self.__dict__)):
+            attr = getattr(self, name)
+            if attr_type is None or isinstance(attr, attr_type):
+                if hasattr(attr, "position") and isinstance(attr.position, int):
+                    positional[attr] = name
+                else:
+                    non_positional.append(name)
+        return [positional[key] for key in sorted(positional)] + non_positional
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -454,15 +517,15 @@ class YamlParameters(ObjectWithParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        if (self.other_params is not None and
-                hasattr(self.other_params, "get_yaml_data")):
+        if self.other_params is not None and hasattr(self.other_params, "get_yaml_data"):
             yaml_data = self.other_params.get_yaml_data()
         else:
             yaml_data = {}
         for name in self.get_param_names():
             value = getattr(self, name).value
             if value is not None:
-                yaml_data[name] = value
+                yaml_name = getattr(self, name).yaml_key
+                yaml_data[yaml_name or name] = value
 
         return yaml_data if self.title is None else {self.title: yaml_data}
 
@@ -520,9 +583,7 @@ class YamlParameters(ObjectWithParameters):
                 with open(filename, 'w') as write_file:
                     yaml.dump(yaml_data, write_file, default_flow_style=False)
             except Exception as error:
-                raise CommandFailure(
-                    "Error writing the yaml file {}: {}".format(
-                        filename, error)) from error
+                raise CommandFailure(f"Error writing the yaml file {filename}: {error}") from error
             self.reset_yaml_data_updated()
         return create_yaml
 
@@ -733,78 +794,3 @@ class EnvironmentVariables(dict):
 
         """
         return EnvironmentVariables(self)
-
-
-class PositionalParameter(BasicParameter):
-    """Parameter that defines position.
-
-    Used to support positional parameters for dmg and daos.
-    """
-
-    def __init__(self, position, default=None):
-        """Create a PositionalParameter  object.
-
-        Args:
-            position (int): argument position/order
-            default (object, optional): default value for the param. Defaults to
-                None.
-
-        """
-        super().__init__(default, default)
-        self._position = position
-
-    @property
-    def position(self):
-        """Position property that defines the position of the parameter."""
-        return self._position
-
-    def __lt__(self, other):
-        return self.position < other.position
-
-    def __gt__(self, other):
-        return self.position > other.position
-
-    def __eq__(self, other):
-        return self.position == other.position
-
-    def __hash__(self):
-        """Returns self.position as the hash of the class.
-
-        This is used in CommandWithPositionalParameters.get_attribute_names()
-        where we use this object as the key for a dictionary.
-
-        """
-        return self.position
-
-
-class CommandWithPositionalParameters(CommandWithParameters):
-    """Command that uses positional parameters.
-
-    Used to support positional parameters for dmg and daos.
-    """
-
-    def get_attribute_names(self, attr_type=None):
-        """Get a sorted list of the names of the attr_type attributes.
-
-        The list has the ordered positional parameters first, then
-        non-positional parameters.
-
-        Args:
-            attr_type(object, optional): A single object type or tuple of
-                object types used to filter class attributes by their type.
-                Defaults to None.
-
-        Returns:
-            list: a list of class attribute names used to define parameters
-
-        """
-        positional = {}
-        non_positional = []
-        for name in sorted(list(self.__dict__)):
-            attr = getattr(self, name)
-            if isinstance(attr, attr_type):
-                if hasattr(attr, "position"):
-                    positional[attr] = name
-                else:
-                    non_positional.append(name)
-        return [positional[key] for key in sorted(positional)] + non_positional

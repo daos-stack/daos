@@ -524,7 +524,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		case DAOS_PROP_PO_SCRUB_MODE:
 			d_iov_set(&value, &entry->dpe_val,
 				  sizeof(entry->dpe_val));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_sched,
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_scrub_mode,
 					   &value);
 			if (rc)
 				return rc;
@@ -1148,7 +1148,7 @@ events_handler(void *arg)
 	D_DEBUG(DB_MD, DF_UUID": starting\n", DP_UUID(svc->ps_uuid));
 
 	for (;;) {
-		struct pool_svc_event  *event;
+		struct pool_svc_event  *event = NULL;
 		bool			stop;
 
 		ABT_mutex_lock(events->pse_mutex);
@@ -1292,11 +1292,11 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	struct ds_pool *pool;
 	int		rc;
 
-	pool = ds_pool_lookup(svc->ps_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(svc->ps_uuid));
-		return -DER_NONEXIST;
+	rc = ds_pool_lookup(svc->ps_uuid, &pool);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		return rc;
 	}
 	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
 	if (rc != 0) {
@@ -1647,8 +1647,6 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	d_rank_t		rank = dss_self_rank();
-
-	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 
 	fini_events(svc);
 	pool_svc_cancel_and_wait_reconf(svc);
@@ -2269,10 +2267,15 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	}
 	if (bits & DAOS_PO_QUERY_PROP_SCRUB_MODE) {
 		d_iov_set(&value, &val, sizeof(val));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_sched,
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_mode,
 				   &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
+			rc = 0;
+			val = DAOS_PROP_PO_SCRUB_MODE_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2282,8 +2285,13 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_freq,
 				   &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
+			rc = 0;
+			val = DAOS_PROP_PO_SCRUB_FREQ_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_FREQ;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2293,8 +2301,13 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_scrub_thresh,
 				   &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
+			rc = 0;
+			val = DAOS_PROP_PO_SCRUB_THRESH_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
 			D_GOTO(out_prop, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SCRUB_THRESH;
 		prop->dpp_entries[idx].dpe_val = val;
@@ -2542,6 +2555,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			D_GOTO(out_svc, rc);
 	}
 
+	ds_rebuild_running_query(in->pci_op.pi_uuid, &out->pco_rebuild_ver);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3317,7 +3331,7 @@ out:
 }
 
 static void
-ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
+ds_pool_query_handler(crt_rpc_t *rpc, int version)
 {
 	struct pool_query_v5_in	 *in = crt_req_get(rpc);
 	struct pool_query_v5_out *out = crt_reply_get(rpc);
@@ -3346,6 +3360,9 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 			D_GOTO(out_svc, rc);
 	}
 
+	if (version >= 5)
+		ds_rebuild_running_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_ver);
+
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3369,7 +3386,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 		}
 	}
 
-	if (return_pool_ver) {
+	if (version >= 5) {
 		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
 		if (rc != 0)
 			D_GOTO(out_lock, rc);
@@ -3538,13 +3555,13 @@ out:
 void
 ds_pool_query_handler_v4(crt_rpc_t *rpc)
 {
-	ds_pool_query_handler(rpc, false);
+	ds_pool_query_handler(rpc, 4);
 }
 
 void
 ds_pool_query_handler_v5(crt_rpc_t *rpc)
 {
-	ds_pool_query_handler(rpc, true);
+	ds_pool_query_handler(rpc, 5);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */
@@ -4281,7 +4298,33 @@ out:
 	crt_reply_send(rpc);
 }
 
-static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
+static int
+pool_upgrade_one_prop_int(struct rdb_tx *tx, struct pool_svc *svc, uuid_t uuid, bool *need_commit,
+			  const char *friendly_name, d_iov_t *prop_iov, uint64_t default_value)
+{
+	d_iov_t			value;
+	uint64_t		val;
+	int			rc;
+
+	d_iov_set(&value, &val, sizeof(default_value));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, prop_iov, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		return rc;
+	} else if (rc == -DER_NONEXIST) {
+		val = default_value;
+		rc = rdb_tx_update(tx, &svc->ps_root, prop_iov, &value);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to upgrade '%s' of pool: %d.\n",
+				DP_UUID(uuid), friendly_name, rc);
+			return rc;
+		}
+		*need_commit = true;
+	}
+	return 0;
+}
+
+static int
+pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 			      uuid_t pool_uuid, crt_rpc_t *rpc)
 {
 	d_iov_t			value;
@@ -4419,6 +4462,23 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		}
 		need_commit = true;
 	}
+
+	/* Upgrade to have scrubbing properties */
+	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub mode",
+				       &ds_pool_prop_scrub_mode, DAOS_PROP_PO_SCRUB_MODE_DEFAULT);
+	if (rc != 0)
+		D_GOTO(out_free, rc);
+
+	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub freq",
+				       &ds_pool_prop_scrub_freq, DAOS_PROP_PO_SCRUB_FREQ_DEFAULT);
+	if (rc != 0)
+		D_GOTO(out_free, rc);
+
+	rc = pool_upgrade_one_prop_int(tx, svc, pool_uuid, &need_commit, "scrub thresh",
+				       &ds_pool_prop_scrub_thresh,
+				       DAOS_PROP_PO_SCRUB_THRESH_DEFAULT);
+	if (rc != 0)
+		D_GOTO(out_free, rc);
 
 	d_iov_set(&value, &val32, sizeof(val32));
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_upgrade_status, &value);
@@ -5640,7 +5700,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, 0, rebuild_eph,
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
 					 &target_list, op, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
@@ -5781,7 +5841,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	}
 
 	/* Schedule an extension rebuild for those targets */
-	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, 0, extend_eph, &tgts,
+	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, extend_eph, &tgts,
 				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
@@ -6973,10 +7033,10 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	struct ds_pool	*pool;
 	int		rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(pool_uuid));
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return false;
 	}
 

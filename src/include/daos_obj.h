@@ -515,7 +515,7 @@ enum {
 	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
 						 * flat KV; 1 grp for others.
 						 */
-	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** 1 grp */
 	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
 	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
 	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
@@ -1018,6 +1018,26 @@ int
 daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		   daos_event_t *ev);
+
+/**
+ * Retrieve the max epoch where the object has been updated.
+ *
+ * \param[in]	oh	Object open handle.
+ * \param[in]	th	Optional transaction handle to query at.
+ *			Use DAOS_TX_NONE for an independent transaction.
+ * \param[out]	epoch	max epoch at which an update to the object happened.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_obj_query_max_epoch(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch, daos_event_t *ev);
 
 /**
  * Verify object data consistency against the specified epoch.

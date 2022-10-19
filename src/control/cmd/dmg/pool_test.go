@@ -189,7 +189,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (size nranks)",
 			"pool create --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --num-ranks"),
+			errors.New("--size may not be mixed with --nranks"),
+		},
+		{
+			"Create pool with incompatible arguments (size tier-ratio)",
+			"pool create --size 100% --tier-ratio 16",
+			"",
+			errors.New("--size may not be mixed with --tier-ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
@@ -596,6 +602,12 @@ func TestPoolCommands(t *testing.T) {
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb reclaim:all",
 			"",
 			errors.New("invalid value"),
+		},
+		{
+			"Set pool rd_fac property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
 		},
 		{
 			"Set pool rf property is not allowed",
@@ -1426,6 +1438,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			poolCreateCmd.TierRatio = `6,94`
 
 			err := poolCreateCmd.Execute(nil)
 

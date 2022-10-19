@@ -2070,8 +2070,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 		       DP_UUID(iter_arg->pool_uuid));
 		D_GOTO(put, rc = 0);
 	}
-	if (iod_eph_total == 0 || tls->mpt_version <= version ||
-	    tls->mpt_fini) {
+	if (iod_eph_total == 0 || tls->mpt_fini) {
 		D_DEBUG(DB_REBUILD, "No need eph_total %d version %u"
 			" migrate ver %u fini %d\n", iod_eph_total, version,
 			tls->mpt_version, tls->mpt_fini);
@@ -2554,7 +2553,7 @@ retry:
 			continue;
 		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
 			   DIOF_TO_LEADER) {
-			if (rc != -DER_INPROGRESS) {
+			if (rc != -DER_INPROGRESS && rc != -DER_SHUTDOWN) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
 						      DIOF_TO_SPEC_GROUP |
@@ -2563,9 +2562,10 @@ retry:
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
 			} else {
-				/* Keep retry on leader if it is inprogress,
-				 * since the new dtx leader might still
-				 * resync the uncommitted records.
+				/* Keep retry on leader if it is inprogress or shutdown,
+				 * since the new dtx leader might still resync the
+				 * uncommitted records, or it will choose a new leader
+				 * once the pool map is updated.
 				 */
 				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
@@ -2582,9 +2582,8 @@ retry:
 			/* If the container is being destroyed, it may return
 			 * -DER_NONEXIST, see obj_ioc_init().
 			 */
-			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
-				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
-					" %d\n", DP_UOID(arg->oid), rc);
+			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+				D_WARN("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
@@ -2703,6 +2702,17 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 	if (tls->mpt_opc == RB_OP_REINT)
 		pool->sp_reintegrating--;
 	migrate_pool_tls_put(tls);
+	tls->mpt_fini = 1;
+	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
+	if (tls->mpt_ult_running) {
+		rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			D_WARN("failed to migrate wait "DF_UUID": "DF_RC"\n",
+			       DP_UUID(pool->sp_uuid), DP_RC(rc));
+		}
+	}
+
 	migrate_pool_tls_put(tls);
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
@@ -2978,8 +2988,15 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(cont_uuid), ih.cookie, root->root_hdl.cookie);
 
-	dp = ds_pool_lookup(tls->mpt_pool_uuid);
-	D_ASSERT(dp != NULL);
+	rc = ds_pool_lookup(tls->mpt_pool_uuid, &dp);
+	if (rc) {
+		D_ERROR(DF_UUID" ds_pool_lookup failed: "DF_RC"\n",
+			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
+		if (rc == -DER_SHUTDOWN)
+			rc = 0;
+		D_GOTO(out_put, rc);
+	}
+
 	rc = ds_cont_fetch_snaps(dp->sp_iv_ns, cont_uuid, &snapshots,
 				 &snap_cnt);
 	if (rc) {
@@ -3072,7 +3089,8 @@ free:
 out_put:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
-	ds_pool_put(dp);
+	if (dp != NULL)
+		ds_pool_put(dp);
 	return rc;
 }
 
@@ -3088,7 +3106,7 @@ migrate_ult(void *arg)
 	int			rc;
 
 	D_ASSERT(pool_tls != NULL);
-	while (!dbtree_is_empty(pool_tls->mpt_root_hdl)) {
+	while (!dbtree_is_empty(pool_tls->mpt_root_hdl) && !pool_tls->mpt_fini) {
 		rc = dbtree_iterate(pool_tls->mpt_root_hdl,
 				    DAOS_INTENT_PURGE, false,
 				    migrate_cont_iter_cb, pool_tls);
@@ -3243,17 +3261,18 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_copy(po_uuid, migrate_in->om_pool_uuid);
 	uuid_copy(po_hdl_uuid, migrate_in->om_poh_uuid);
 
-	pool = ds_pool_lookup(po_uuid);
-	if (pool == NULL) {
-		D_DEBUG(DB_TRACE, DF_UUID" pool service is not started yet\n",
-			DP_UUID(po_uuid));
-		D_GOTO(out, rc = -DER_AGAIN);
-	}
-
-	if (pool->sp_stopping) {
-		D_DEBUG(DB_TRACE, DF_UUID" pool service is stopping.\n",
-			DP_UUID(po_uuid));
-		D_GOTO(out, rc = 0);
+	rc = ds_pool_lookup(po_uuid, &pool);
+	if (rc != 0) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_REBUILD, DF_UUID" pool service is stopping.\n",
+				DP_UUID(po_uuid));
+			rc = 0;
+		} else {
+			D_DEBUG(DB_REBUILD, DF_UUID" pool service is not started yet. "DF_RC"\n",
+				DP_UUID(po_uuid), DP_RC(rc));
+			rc = -DER_AGAIN;
+		}
+		D_GOTO(out, rc);
 	}
 
 	/* Check if the pool tls exists */

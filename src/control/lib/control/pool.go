@@ -23,6 +23,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -201,6 +203,13 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		case daos.TimedOut, daos.GroupVersionMismatch,
 			daos.TryAgain, daos.OutOfGroup, daos.Unreachable,
 			daos.Excluded:
+			return true
+		default:
+			return false
+		}
+	case *fault.Fault:
+		switch e.Code {
+		case code.ServerDataPlaneNotStarted:
 			return true
 		default:
 			return false
@@ -841,6 +850,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
+			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {

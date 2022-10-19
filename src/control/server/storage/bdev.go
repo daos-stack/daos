@@ -598,7 +598,7 @@ type BdevAdminForwarder struct {
 }
 
 func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &BdevAdminForwarder{
 		Forwarder: *pf,

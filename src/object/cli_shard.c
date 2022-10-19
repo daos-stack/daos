@@ -1273,12 +1273,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_flags = auxi->flags | flags;
 	if (auxi->obj_auxi->reintegrating)
 		orw->orw_flags |= ORF_REINTEGRATING_IO;
+	if (auxi->obj_auxi->rebuilding)
+		orw->orw_flags |= ORF_REBUILDING_IO;
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
 	if (auxi->obj_auxi->ec_degrade_fetch) {
 		struct obj_tgt_oiod *toiod;
 
+		D_ASSERT(args->reasb_req != NULL);
+		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);
@@ -2150,6 +2154,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
 
+	if (flags == 0)
+		goto set_max_epoch;
+
 	bool check = true;
 	bool changed = false;
 	bool first = (cb_args->dkey->iov_len == 0);
@@ -2259,8 +2266,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n",
-		tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
