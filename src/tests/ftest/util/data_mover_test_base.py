@@ -20,7 +20,7 @@ from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path
 from general_utils import create_string_buffer
-from command_utils_base import MappedParameter
+from command_utils_base import BasicParameter
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -94,9 +94,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.dserialize_np = None
         self.ddeserialize_np = None
 
-        # Root directory for POSIX paths
+        # Root directory for POSIX paths. Default is self.tmp
         posix_root_map = {'self.workdir': self.workdir, 'self.tmp': self.tmp}
-        self.posix_root = MappedParameter(None, mapping=posix_root_map)  # default will be self.tmp
+        self.posix_root = BasicParameter(None, mapped_values=posix_root_map)
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp

@@ -145,6 +145,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -238,6 +239,7 @@ libgurt
 libioil
 libs
 libvirt
+linux
 llnl
 lmod
 localhost
@@ -397,6 +399,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
