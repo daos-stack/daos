@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -41,13 +40,20 @@ class IorCrash(IorTestBase):
             Verify IOR completes successfully.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,ior,dfs
-        :avocado: tags=ior_crash
+        :avocado: tags=test_ior_crash
         """
-        # Run IOR and crash it in the middle of Write
-        self.run_ior_with_pool()
-        self.check_subprocess_status()
+        # Create pool and container
+        self.pool = self.get_pool(connect=False)
+        self.container = self.get_container(self.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+
+        # Don't check subprocess status, since output is buffered and can't be read in real time
+        self.ior_cmd.pattern = None
+
+        # Start IOR and crash it in the middle of Write
+        self.run_ior_with_pool(create_pool=False, create_cont=False)
         time.sleep(self.ior_cmd.sw_deadline.value / 2)
         self.stop_ior()
 
@@ -58,9 +64,9 @@ class IorCrash(IorTestBase):
 
         # Run IOR and crash it in the middle of Read.
         # Must wait for Write to complete first.
-        self.run_ior_with_pool()
+        # Assumes Write and Read performance are about the same.
+        self.run_ior_with_pool(create_pool=False, create_cont=False)
         time.sleep(self.ior_cmd.sw_deadline.value * 1.5)
-        self.check_subprocess_status("read")
         self.stop_ior()
 
         # Verify engines did not crash
@@ -69,8 +75,7 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Run IOR and verify it completes successfully
-        self.run_ior_with_pool()
-        self.job_manager.wait()
+        self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # Verify engines did not crash
         scan_info = self.dmg.system_query(verbose=True)

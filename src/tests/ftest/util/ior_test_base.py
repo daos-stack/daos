@@ -201,12 +201,10 @@ class IorTestBase(DfuseTestBase):
         elif operation == "read":
             self.ior_cmd.pattern = self.IOR_READ_PATTERN
         else:
-            self.fail("Exiting Test: Inappropriate operation type \
-                      for subprocess status check")
+            self.fail("Exiting Test: Inappropriate operation type for subprocess status check")
 
-        if not self.ior_cmd.check_ior_subprocess_status(
-                self.job_manager.process, self.ior_cmd):
-            self.fail("Exiting Test: Subprocess not running")
+        if not self.ior_cmd.check_subprocess_status(self.job_manager.process):
+            self.fail("IOR subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
@@ -280,7 +278,7 @@ class IorTestBase(DfuseTestBase):
             # ior thread (eg: thread1 --> thread2 --> ior)
             if out_queue is not None:
                 out_queue.put("IOR Failed")
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("IOR Failed")
         finally:
             if not self.subprocess and display_space:
                 self.display_pool_space(pool)
@@ -302,7 +300,7 @@ class IorTestBase(DfuseTestBase):
             return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("Failed to stop in-progress IOR command")
         finally:
             self.display_pool_space()
 
@@ -405,8 +403,8 @@ class IorTestBase(DfuseTestBase):
 
         except CommandFailure as error:
             # Report an error if any command fails
-            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.log.error("Failed to execute command: %s", str(error))
+            self.fail("Failed to execute command")
 
         return result
 
