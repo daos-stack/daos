@@ -949,12 +949,87 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 	switch (entry.mode & S_IFMT) {
 	case S_IFDIR:
+	{
+		daos_handle_t	dir_oh;
+		daos_epoch_t	ep;
+
 		size = sizeof(entry);
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
-		stbuf->st_ctim.tv_sec = entry.ctime;
-		stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+
+		/** check if dir is empty */
+		rc = daos_obj_open(dfs->coh, entry.oid, DAOS_OO_RO, &dir_oh, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
+		if (rc) {
+			daos_obj_close(oh, NULL);
+			return daos_der2errno(rc);
+		}
+
+		rc = daos_obj_close(dir_oh, NULL);
+		if (rc)
+			return daos_der2errno(rc);
+
+		/** object was updated since creation */
+		if (ep) {
+			struct timespec obj_mtime, entry_mtime;
+
+			rc = crt_hlc2timespec(ep, &obj_mtime);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			if (obj_hlc)
+				*obj_hlc = ep;
+
+			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+			if (rc) {
+				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+
+			/** ctime should be the greater of the entry and object hlc */
+			stbuf->st_ctim.tv_sec = entry.ctime;
+			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			if (tspec_gt(obj_mtime, stbuf->st_ctim)) {
+				stbuf->st_ctim.tv_sec = obj_mtime.tv_sec;
+				stbuf->st_ctim.tv_nsec = obj_mtime.tv_nsec;
+			}
+
+			/*
+			 * mtime is not like ctime since user can update it manually. So returning
+			 * the larger mtime like ctime would not work since the user can manually
+			 * set the mtime to the past.
+			 */
+			if (obj_mtime.tv_sec == entry_mtime.tv_sec &&
+			    obj_mtime.tv_nsec == entry_mtime.tv_nsec) {
+				/*
+				 * internal mtime entry set through a user set mtime and is up to
+				 * date with the object epoch time, which means that the user set
+				 * mtime in the inode entry is the correct value to return.
+				 */
+				stbuf->st_mtim.tv_sec = entry.mtime;
+				stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+			} else {
+				/*
+				 * the user has not updated the mtime explicitly or the object
+				 * itself was modified after an explicit mtime update.
+				 */
+				stbuf->st_mtim.tv_sec = obj_mtime.tv_sec;
+				stbuf->st_mtim.tv_nsec = obj_mtime.tv_nsec;
+			}
+		} else {
+			/** the dir has not been touched, so the entry times are accurate */
+			stbuf->st_ctim.tv_sec = entry.ctime;
+			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+		}
 		break;
+	}
 	case S_IFREG:
 	{
 		daos_array_stbuf_t	array_stbuf = {0};
@@ -1023,7 +1098,8 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 				stbuf->st_ctim.tv_nsec = obj_mtime.tv_nsec;
 			}
 
-			/** mtime is not like ctime since user can update it manually. So returning
+			/*
+			 * mtime is not like ctime since user can update it manually. So returning
 			 * the larger mtime like ctime would not work since the user can manually
 			 * set the mtime to the past.
 			 */
@@ -2886,8 +2962,7 @@ dfs_set_prefix(dfs_t *dfs, const char *prefix)
 		return 0;
 	}
 
-	if (prefix[0] != '/' ||
-	    strnlen(prefix, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
+	if (prefix[0] != '/' || strnlen(prefix, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
 		return EINVAL;
 
 	D_STRNDUP(dfs->prefix, prefix, DFS_MAX_PATH - 1);
