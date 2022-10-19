@@ -133,7 +133,7 @@ rebuild_retry_for_stale_pool(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -164,7 +164,7 @@ rebuild_drop_obj(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -230,7 +230,7 @@ rebuild_multiple_pools(void **state)
 	rebuild_io_verify(args[0], oids, OBJ_NR);
 	rebuild_io_verify(args[1], oids, OBJ_NR);
 
-	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1);
+	reintegrate_pools_ranks(args, 2, ranks_to_kill, 1, false);
 	rebuild_io_verify(args[0], oids, OBJ_NR);
 	rebuild_io_verify(args[1], oids, OBJ_NR);
 
@@ -370,6 +370,8 @@ rebuild_destroy_pool_cb(void *data)
 
 	rebuild_pool_disconnect_internal(data);
 
+	print_message("sleep 20 seconds to make rebuild ready\n");
+	sleep(20);
 	if (arg->myrank == 0) {
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -384,8 +386,7 @@ rebuild_destroy_pool_cb(void *data)
 	}
 
 	arg->pool.destroyed = true;
-	print_message("pool destroyed "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
+	print_message("pool destroyed "DF_UUIDF"\n", DP_UUID(arg->pool.pool_uuid));
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -470,7 +471,7 @@ rebuild_iv_tgt_fail(void **state)
 	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -540,7 +541,7 @@ rebuild_send_objects_fail(void **state)
 				     0, NULL);
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_add_back_tgts(arg, ranks_to_kill[0], NULL, 1);
 }
 
@@ -678,6 +679,9 @@ rebuild_offline_pool_connect_internal(void **state, unsigned int fail_loc)
 	arg->rebuild_cb = NULL;
 
 	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
 static void
@@ -719,6 +723,9 @@ rebuild_offline(void **state)
 	arg->rebuild_pre_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
+	rebuild_io_verify(arg, oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -875,7 +882,7 @@ rebuild_nospace(void **state)
 	arg->rebuild_cb = NULL;
 	rebuild_io_verify(arg, oids, OBJ_NR);
 
-	reintegrate_single_pool_rank(arg, ranks_to_kill[0]);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], false);
 	rebuild_io_verify(arg, oids, OBJ_NR);
 }
 
@@ -950,7 +957,6 @@ rebuild_multiple_tgts(void **state)
 	par_barrier(PAR_COMM_WORLD);
 }
 
-#if 0
 static int
 rebuild_io_cb(void *arg)
 {
@@ -974,7 +980,6 @@ rebuild_io_post_cb(void *arg)
 
 	return 0;
 }
-#endif
 
 static void
 rebuild_master_failure(void **state)
@@ -1053,7 +1058,11 @@ rebuild_master_failure(void **state)
 	print_message("svc leader changed from %d to %d, should get same "
 		      "rebuild status (memcmp result %d).\n", pinfo.pi_leader,
 		      pinfo_new.pi_leader, rc);
+
 	assert_int_equal(rc, 0);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	rebuild_io_verify(arg, oids, 10 * OBJ_NR);
 }
 
 static void
@@ -1078,21 +1087,20 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-#if 0
 	/* Remove this inflight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
 	/* Disable data validation because of DAOS-2915. */
 	arg->rebuild_post_cb = rebuild_io_post_cb;
-#else
-	arg->rebuild_post_cb = NULL;
-#endif
+
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
 	rebuild_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
+
+	reintegrate_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
 }
 
 static void
@@ -1257,16 +1265,10 @@ static void
 rebuild_kill_rank_during_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc;
 
 	if (!test_runable(arg, 6))
-		return;
-
-	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
-	if (rc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1275,7 +1277,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(new_arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
@@ -1285,7 +1287,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 				      0, NULL);
 	}
 
-	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
+	arg->rebuild_cb = rebuild_destroy_pool_cb;
 
 	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			    ranks_to_kill[0], -1);
@@ -1293,6 +1295,9 @@ rebuild_kill_rank_during_rebuild(void **state)
 	sleep(2);
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 arg->pool.alive_svc, ranks_to_kill[0]);
+
+	sleep(10);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 }
 
 static void
@@ -1327,6 +1332,16 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	}
 	sleep(2);
 	rebuild_single_pool_rank(arg, leader, true);
+
+	sleep(5);
+	reintegrate_single_pool_rank(arg, leader, true);
+}
+
+static void
+rebuild_pool_destroy_during_rebuild_failure(void **state)
+{
+	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_UPDATE_FAIL |
+						    DAOS_FAIL_ALWAYS);
 }
 
 /** create a new pool/container for each test */
@@ -1404,6 +1419,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sub_teardown},
 	{"REBUILD29: rebuild kill PS leader during rebuild",
 	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD30: destroy pool during rebuild failure and retry",
+	  rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

@@ -1730,9 +1730,9 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/*
 	 * If we reached here, means we got DER_IVCB_FORWARD
-	 * Donot need a version check after call.
+	 * Do not need a version check after call.
 	 * We will create a new rpc for synchronization
-	*/
+	 */
 	rc = get_shortcut_path(ivns_internal, root_rank, shortcut, &next_node);
 	if (rc != 0)
 		D_GOTO(exit, rc);
@@ -2520,7 +2520,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 		transfer_back_to_child(&input->ivu_key, iv_info, true,
-				       cb_info->cci_rc);
+				       cb_info->cci_rc ?: output->rc);
 		D_GOTO(exit, 0);
 	}
 
@@ -2865,7 +2865,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_GOTO(send_error, rc);
 		}
 	} else if (update_rc == 0) {
-		/* If sync was bi-directional - trasnfer value back */
+		/* If sync was bi-directional - transfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 			rc = transfer_back_to_child(&input->ivu_key,
 						    update_cb_info,

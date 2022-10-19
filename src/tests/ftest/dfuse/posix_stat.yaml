@@ -1,10 +1,13 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 timeout: 600
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 pool:
   name: daos_server
   scm_size: 1G

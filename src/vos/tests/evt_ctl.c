@@ -451,14 +451,15 @@ ts_remove_rect(void)
 	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
-		if (rc != 0)
+		if (rc < 0) {
 			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
-		if (rc == 0) {
+		if (rc >= 0) {
 			D_FATAL("Remove rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
 }
 
@@ -1355,6 +1356,7 @@ test_evt_find_internal(void **state)
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_filter	 filter = {0};
+	char                     *value;
 	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	bio_addr_t		 addr;
 	int			 rc;
@@ -1430,12 +1432,16 @@ test_evt_find_internal(void **state)
 			addr = ent->en_addr;
 			strcpy(buf, " ");
 			punched = bio_addr_is_hole(&addr);
-			D_PRINT("Find rect "DF_ENT" width=%d val=%.*s\n",
-			DP_ENT(ent),
-			(int)evt_extent_width(&ent->en_sel_ext),
-			punched ? 4 : (int)evt_extent_width(&ent->en_sel_ext),
-			punched ? "None" : (char *)utest_off2ptr(arg->ta_utx,
-								 addr.ba_off));
+			if (punched) {
+				D_PRINT("Find rect " DF_ENT " (punch)\n", DP_ENT(ent));
+			} else {
+				/** Must have a valid address if the extent isn't punched */
+				value = utest_off2ptr(arg->ta_utx, addr.ba_off);
+				D_ASSERT(value != NULL);
+				D_PRINT("Find rect " DF_ENT " width=%d val=%.*s\n", DP_ENT(ent),
+					(int)evt_extent_width(&ent->en_sel_ext),
+					(int)evt_extent_width(&ent->en_sel_ext), value);
+			}
 			punched ? strcpy(buf, "None") :
 			strncpy(buf,
 				(char *)utest_off2ptr(arg->ta_utx, addr.ba_off),
@@ -2440,10 +2446,8 @@ ts_group(void **state)
 
 	int	opc = 0;
 
-	while ((opc = getopt_long(test_group_argc,
-				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::tsr:",
-				 ts_ops, NULL)) != -1){
+	while ((opc = getopt_long(test_group_argc, test_group_args,
+				  "C:a:m:e:f:g:d:b:Docl::ts:r:", ts_ops, NULL)) != -1) {
 		ts_cmd_run(opc, optarg);
 	}
 }

@@ -1,28 +1,18 @@
 hosts:
-# servers if no server partition is defined
-    test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-        - server-E
-        - server-F
-        - server-G
-        - server-H
-        - server-I
-        - server-J
-# servers if a server partition is defined
+    # servers if no server partition is defined
+    test_servers: 10
+    # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
     # client_reservation: daos-test
 orterun:
-    allow_run_as_root: True
+    allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 12 hour test
 timeout: 12H15M
 setup:
-    start_servers: True
-    start_agents: True
+    start_servers: true
+    start_agents: true
 server_config:
     engines_per_host: 2
     name: daos_server
@@ -38,7 +28,7 @@ server_config:
             fabric_iface_port: 31317
             log_file: daos_server0.log
             bdev_class: nvme
-            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
             scm_class: dcpm
             scm_list: ["/dev/pmem0"]
             scm_mount: /mnt/daos0
@@ -52,7 +42,7 @@ server_config:
             fabric_iface_port: 31417
             log_file: daos_server1.log
             bdev_class: nvme
-            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
             scm_class: dcpm
             scm_list: ["/dev/pmem1"]
             scm_mount: /mnt/daos1
@@ -82,7 +72,7 @@ container:
     daos_timeout: 30
 container_reserved:
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
     oclass: EC_2P1GX
     control_method: daos
     daos_timeout: 30
@@ -109,18 +99,18 @@ soak_harassers:
         - mdtest_harasser
     # one harrasser is run during each pass of soak jobs
     harasserlist:
-        #- snapshot
-        #- exclude_reintegrate
+        # - snapshot
+        # - exclude_reintegrate
         - exclude_reintegrate-offline
-        #- server-stop_server-start
-        #- server-stop_server-start-offline
-        #- server-stop_server-reintegrate
-        #- server-stop_server-reintegrate-offline
+        # - server-stop_server-start
+        # - server-stop_server-start-offline
+        # - server-stop_server-reintegrate
+        # - server-stop_server-reintegrate-offline
     harasser_to: 600
     # drain rank from all pools before stopping server
-    enable_drain: True
+    enable_drain: true
     # continue test if container destroy fails
-    ignore_soak_errors: True
+    ignore_soak_errors: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -152,45 +142,45 @@ ior_harasser:
     segment_count: 1
     dfs_oclass:
         - "EC_2P1GX"
-#        - "EC_4P1G1"
-#        - "EC_4P2GX"
-#        - "EC_8P2G1"
-#        - "EC_16P2GX"
-    dfuse:
-        mount_dir: "/tmp/daos_dfuse/ior"
-        disable_caching: True
-fio_harasser:
-  job_timeout: 20
-  names:
-      - global
-      - test
-  global:
-    directory: "/tmp/daos_dfuse/fio/"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
-    numjobs: 1
-  soak:
-    blocksize:
-        - '1M'
-    size:
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-    oclass:
-        - "EC_2P1GX"
         # - "EC_4P1G1"
         # - "EC_4P2GX"
         # - "EC_8P2G1"
         # - "EC_16P2GX"
-  dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: True
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior"
+        disable_caching: true
+fio_harasser:
+    job_timeout: 20
+    names:
+        - global
+        - test
+    global:
+        directory: "/tmp/daos_dfuse/fio/"
+        ioengine: 'libaio'
+        thread: 1
+        group_reporting: 1
+        direct: 1
+        verify: 'crc64'
+        iodepth: 16
+    test:
+        numjobs: 1
+    soak:
+        blocksize:
+            - '1M'
+        size:
+            - '1G'
+        rw:
+            - 'rw'
+            - 'randrw'
+        oclass:
+            - "EC_2P1GX"
+            # - "EC_4P1G1"
+            # - "EC_4P2GX"
+            # - "EC_8P2G1"
+            # - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/fio/"
+        disable_wb_caching: true
 mdtest_harasser:
     # maximum timeout for a single job in test in minutes
     job_timeout: 20
@@ -218,14 +208,14 @@ mdtest_harasser:
         - 0
     dfs_oclass:
         - "EC_2P1GX"
-#        - "EC_4P1G1"
-#        - "EC_4P2G1"
-#        - "EC_8P2G1"
-#        - "EC_16P2G1"
-    dfs_destroy: False
+        # - "EC_4P1G1"
+        # - "EC_4P2G1"
+        # - "EC_8P2G1"
+        # - "EC_16P2G1"
+    dfs_destroy: false
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
-        disable_caching: True
+        disable_caching: true
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
@@ -235,4 +225,4 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
-enable_telemetry: True
+enable_telemetry: true

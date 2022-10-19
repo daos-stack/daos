@@ -1,13 +1,8 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-test_clients:
-    - client-E
+  test_servers: server-[1-2]
+  test_clients: 1
 extra_servers:
-  test_servers:
-    - server-C
-    - server-D
+  test_servers: server-[3-4]
 timeout: 1100
 setup:
   start_servers_once: False
@@ -56,7 +51,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_2G1
-  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:1
+  properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:1
 ior:
   clientslots:
     slots: 48

@@ -151,13 +151,13 @@ func TestBackend_groomDiscoveredBdevs(t *testing.T) {
 		},
 		"vmd devices; vmd enabled": {
 			vmdEnabled:  true,
-			reqAddrList: []string{"0000:85:05.5"},
-			inCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
-				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
-				"850505:11:00.0", "850505:14:00.0", "5d0505:03:00.0"),
-			expCtrlrs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
-				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
-				"850505:11:00.0", "850505:14:00.0"),
+			reqAddrList: []string{"0000:05:05.5"},
+			inCtrlrs: ctrlrsFromPCIAddrs("050505:07:00.0", "050505:09:00.0",
+				"050505:0b:00.0", "050505:0d:00.0", "050505:0f:00.0",
+				"050505:11:00.0", "050505:14:00.0", "5d0505:03:00.0"),
+			expCtrlrs: ctrlrsFromPCIAddrs("050505:07:00.0", "050505:09:00.0",
+				"050505:0b:00.0", "050505:0d:00.0", "050505:0f:00.0",
+				"050505:11:00.0", "050505:14:00.0"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -865,6 +865,9 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
 			removedFiles := make([]string, 0)
 			remove := func(path string) error {
 				if tc.removeErr == nil {
@@ -880,7 +883,7 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 			}
 
 			var count uint = 0
-			testFn := createHugePageWalkFunc(testDir, stat, remove, &count)
+			testFn := createHugePageWalkFunc(log, testDir, stat, remove, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				test.CmpErr(t, ti.expErr, gotErr)
@@ -968,13 +971,6 @@ func TestBackend_Prepare(t *testing.T) {
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, mockAddrList(1, 2)),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
-					},
-					Args: []string{"reset"},
-				},
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, mockAddrList(4, 3)),
 					},
 					Args: []string{"reset"},
@@ -1311,7 +1307,7 @@ func TestBackend_Prepare(t *testing.T) {
 				return tc.vmdDetectRet, tc.vmdDetectErr
 			}
 			var hpCleanCall string
-			mockHpClean := func(in string) (uint, error) {
+			mockHpClean := func(_ logging.Logger, in string) (uint, error) {
 				hpCleanCall = in
 				return tc.hpRemCount, tc.hpCleanErr
 			}

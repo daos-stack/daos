@@ -116,6 +116,12 @@ func (tc *TierConfig) Validate() error {
 	return errors.New("no storage class set")
 }
 
+// SetNumaNodeIndex sets the NUMA node index for the tier.
+func (tc *TierConfig) SetNumaNodeIndex(idx uint) {
+	tc.Scm.NumaNodeIndex = idx
+	tc.Bdev.NumaNodeIndex = idx
+}
+
 func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	tc.Tier = tier
 	return tc
@@ -177,36 +183,65 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	return tc
 }
 
+// WithNumaNodeIndex sets the NUMA node index to be used for this tier.
+func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
+	tc.SetNumaNodeIndex(idx)
+	return tc
+}
+
 type TierConfigs []*TierConfig
 
-func (tcs TierConfigs) HaveBdevs() bool {
+func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
+	bdevs := []string{}
+	for _, bc := range tcs.BdevConfigs() {
+		if nvmeOnly && bc.Class != ClassNvme {
+			continue
+		}
+		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
+	}
+
+	return MustNewBdevDeviceList(bdevs...)
+}
+
+func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	return tcs.getBdevs(false)
+}
+
+func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	return tcs.getBdevs(true)
+}
+
+func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 	for _, bc := range tcs.BdevConfigs() {
 		if bc.Bdev.DeviceList.Len() > 0 {
-			return true
+			switch {
+			case nvmeOnly:
+				if bc.Class == ClassNvme {
+					return true
+				}
+			case emulOnly:
+				if bc.Class != ClassNvme {
+					return true
+				}
+			default:
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func (tcs TierConfigs) HaveBdevs() bool {
+	return tcs.checkBdevs(false, false)
 }
 
 func (tcs TierConfigs) HaveRealNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class == ClassNvme {
-			return true
-		}
-	}
-
-	return false
+	return tcs.checkBdevs(true, false)
 }
 
 func (tcs TierConfigs) HaveEmulatedNVMe() bool {
-	for _, bc := range tcs.BdevConfigs() {
-		if bc.Bdev.DeviceList.Len() > 0 && bc.Class != ClassNvme {
-			return true
-		}
-	}
-
-	return false
+	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) Validate() error {
@@ -256,9 +291,10 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint  string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize uint     `yaml:"scm_size,omitempty"`
-	DeviceList  []string `yaml:"scm_list,omitempty"`
+	MountPoint    string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize   uint     `yaml:"scm_size,omitempty"`
+	DeviceList    []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -511,10 +547,11 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  *BdevDeviceList `yaml:"bdev_list,omitempty"`
-	DeviceCount int             `yaml:"bdev_number,omitempty"`
-	FileSize    int             `yaml:"bdev_size,omitempty"`
-	BusidRange  *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
+	DeviceCount   int             `yaml:"bdev_number,omitempty"`
+	FileSize      int             `yaml:"bdev_size,omitempty"`
+	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	NumaNodeIndex uint            `yaml:"-"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -709,6 +746,21 @@ type Config struct {
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
 	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+}
+
+func (c *Config) SetNUMAAffinity(node uint) {
+	c.NumaNodeIndex = node
+	for _, tier := range c.Tiers {
+		tier.SetNumaNodeIndex(node)
+	}
+}
+
+func (c *Config) GetBdevs() *BdevDeviceList {
+	return c.Tiers.Bdevs()
+}
+
+func (c *Config) GetNVMeBdevs() *BdevDeviceList {
+	return c.Tiers.NVMeBdevs()
 }
 
 func (c *Config) Validate() error {

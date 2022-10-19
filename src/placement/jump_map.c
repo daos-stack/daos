@@ -244,14 +244,14 @@ static void debug_print_allow_status(uint32_t allow_status)
 }
 
 static inline uint32_t
-get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
+get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status, pool_comp_type_t fdom_lvl)
 {
 	struct pool_domain *next_dom;
 	struct pool_target *next_target;
 	uint32_t num_dom;
 	uint8_t status;
 
-	if (curr_dom->do_children == NULL)
+	if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl)
 		num_dom = curr_dom->do_target_nr;
 	else
 		num_dom = curr_dom->do_child_nr;
@@ -259,16 +259,7 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 	if (allow_status & PO_COMP_ST_NEW)
 		return num_dom;
 
-	if (curr_dom->do_children != NULL) {
-		next_dom = &curr_dom->do_children[num_dom - 1];
-		status = next_dom->do_comp.co_status;
-
-		while (num_dom - 1 > 0 && status == PO_COMP_ST_NEW) {
-			num_dom--;
-			next_dom = &curr_dom->do_children[num_dom - 1];
-			status = next_dom->do_comp.co_status;
-		}
-	} else {
+	if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl) {
 		next_target = &curr_dom->do_targets[num_dom - 1];
 		status = next_target->ta_comp.co_status;
 
@@ -276,6 +267,15 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 			num_dom--;
 			next_target = &curr_dom->do_targets[num_dom - 1];
 			status = next_target->ta_comp.co_status;
+		}
+	} else {
+		next_dom = &curr_dom->do_children[num_dom - 1];
+		status = next_dom->do_comp.co_status;
+
+		while (num_dom - 1 > 0 && status == PO_COMP_ST_NEW) {
+			num_dom--;
+			next_dom = &curr_dom->do_children[num_dom - 1];
+			status = next_dom->do_comp.co_status;
 		}
 	}
 
@@ -352,7 +352,7 @@ retry:
 		uint32_t        num_doms;
 
 		/* Retrieve number of nodes in this domain */
-		num_doms = get_num_domains(curr_dom, allow_status);
+		num_doms = get_num_domains(curr_dom, allow_status, fdom_lvl);
 
 		/* If choosing target (lowest fault domain level) */
 		if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl) {
@@ -1031,12 +1031,24 @@ jump_map_print(struct pl_map *map)
 static int
 jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
 {
-	struct pl_jump_map   *jmap = pl_map2jmap(map);
+	struct pl_jump_map	*jmap = pl_map2jmap(map);
+	struct pool_map		*pool_map = map->pl_poolmap;
+	int			 rc;
 
 	attr->pa_type	   = PL_TYPE_JUMP_MAP;
 	attr->pa_target_nr = jmap->jmp_target_nr;
-	attr->pa_domain_nr = jmap->jmp_domain_nr;
-	attr->pa_domain    = jmap->jmp_redundant_dom;
+
+	if (attr->pa_domain <= 0 || attr->pa_domain == jmap->jmp_redundant_dom ||
+	    attr->pa_domain > PO_COMP_TP_MAX) {
+		attr->pa_domain_nr = jmap->jmp_domain_nr;
+		attr->pa_domain    = jmap->jmp_redundant_dom;
+	} else {
+		rc = pool_map_find_domain(pool_map, attr->pa_domain, PO_COMP_ID_ALL, NULL);
+		if (rc < 0)
+			return rc;
+		attr->pa_domain_nr = rc;
+	}
+
 	return 0;
 }
 
@@ -1048,6 +1060,7 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  * \param[in]   md              The object metadata which contains data about
  *                              the object being placed such as the object ID.
  * \param[in]   mode		mode of daos_obj_open(DAOS_OO_RO, DAOS_OO_RW etc).
+ * \param[in]	rebuild_ver	rebuild version of the current pool.
  * \param[in]   shard_md        Shard metadata.
  * \param[out]  layout_pp       The layout generated for the object. Contains
  *                              references to the targets in the pool map where
@@ -1059,7 +1072,8 @@ jump_map_query(struct pl_map *map, struct pl_map_attr *attr)
  */
 static int
 jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
-		   unsigned int mode, struct daos_obj_shard_md *shard_md,
+		   unsigned int mode, uint32_t rebuild_version,
+		   struct daos_obj_shard_md *shard_md,
 		   struct pl_obj_layout **layout_pp)
 {
 	struct pl_jump_map	*jmap;
@@ -1121,7 +1135,7 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		if (is_extending)
 			allow_status |= PO_COMP_ST_UP;
 
-		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, -1,
+		rc = obj_layout_alloc_and_get(jmap, &jmop, md, allow_status, rebuild_version,
 					      &extend_layout, NULL, NULL);
 		if (rc)
 			D_GOTO(out, rc);

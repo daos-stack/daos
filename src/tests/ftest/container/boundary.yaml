@@ -1,10 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-timeout: 3600
+  test_servers: 4
+timeout: 1200
 server_config:
   name: daos_server
   servers:
@@ -14,6 +10,7 @@ pool:
   name: daos_server
   scm_size: 200M
   control_method: dmg
+  label: pool
 container:
   akey_size: 5
   dkey_size: 5
@@ -26,12 +23,12 @@ boundary_test: !mux
   test_1:
     num_pools: 1
     num_containers: 30000
-    with_io: False
+    with_io: false
   test_2:
     num_pools: 100
     num_containers: 200
-    with_io: False
+    with_io: false
   test_with_io:
     num_pools: 20
     num_containers: 200
-    with_io: True
+    with_io: true

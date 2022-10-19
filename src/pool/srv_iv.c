@@ -158,6 +158,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_SVC_LIST:
 			svc_list = prop_entry->dpe_val_ptr;
 			if (svc_list) {
+				int rc;
+
 				D_ASSERT(svc_list->rl_nr <
 					 PROP_SVC_LIST_MAX_TMP);
 				iv_prop->pip_svc_list.rl_nr = svc_list->rl_nr;
@@ -165,8 +167,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 						(void *)(iv_prop->pip_iv_buf +
 						roundup(offset, 8));
 				iv_prop->pip_svc_list_offset = offset;
-				d_rank_list_copy(&iv_prop->pip_svc_list,
-						 svc_list);
+				rc = d_rank_list_copy(&iv_prop->pip_svc_list, svc_list);
+				D_ASSERT(rc == 0);
 				offset += roundup(
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
@@ -196,6 +198,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_PO_SCRUB_THRESH:
 			iv_prop->pip_scrub_thresh = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			iv_prop->pip_svc_redun_fac = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -324,6 +329,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
+			break;
+		case DAOS_PROP_PO_SVC_REDUN_FAC:
+			prop_entry->dpe_val = iv_prop->pip_svc_redun_fac;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -582,7 +590,7 @@ pool_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+pool_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -851,6 +859,8 @@ ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 				 pih->pih_cont_hdl) == 0)
 			return 0;
 		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_pool_hdl);
 	}
 
 	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
@@ -881,6 +891,7 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
+			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);
 			ds_pool_put(pool);
 			return 0;
 		}

@@ -93,6 +93,7 @@ function setup_environment()
 		echo "Unable to find .build_vars.sh" && exit 1
 	fi
 
+	# shellcheck disable=SC1090
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
@@ -102,6 +103,7 @@ function setup_environment()
 	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
 	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
+	CGO_LDFLAGS+="${SL_BUILD_DIR+ -L${SL_BUILD_DIR}/src/control/lib/spdk}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
 	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
@@ -156,7 +158,8 @@ if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
-DAOS_BASE=${DAOS_BASE:-${SL_PREFIX%/install*}}
+DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
+
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)

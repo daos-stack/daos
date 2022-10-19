@@ -1,22 +1,18 @@
 hosts:
-# servers if no server partition is defined
-    test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-# servers if a server partition is defined
+    # servers if no server partition is defined
+    test_servers: 4
+    # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
     # client_reservation: daos-test
 orterun:
-    allow_run_as_root: True
+    allow_run_as_root: true
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 1 hour test
 timeout: 24H15M
 setup:
-    start_servers: True
-    start_agents: True
+    start_servers: true
+    start_agents: true
 server_config:
     engines_per_host: 2
     name: daos_server
@@ -31,7 +27,7 @@ server_config:
             fabric_iface_port: 31317
             log_file: daos_server0.log
             bdev_class: nvme
-            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
             scm_class: dcpm
             scm_list: ["/dev/pmem0"]
             scm_mount: /mnt/daos0
@@ -45,7 +41,7 @@ server_config:
             fabric_iface_port: 31417
             log_file: daos_server1.log
             bdev_class: nvme
-            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
             scm_class: dcpm
             scm_list: ["/dev/pmem1"]
             scm_mount: /mnt/daos1
@@ -76,18 +72,18 @@ container_reserved:
     control_method: daos
 faults:
     fault_list:
-    #    - DAOS_DTX_LOST_RPC_REQUEST
-    #    - DAOS_DTX_LOST_RPC_REPLY
-    #    - DAOS_DTX_LONG_TIME_RESEND
-       - DAOS_SHARD_OBJ_UPDATE_TIMEOUT
-       - DAOS_SHARD_OBJ_FETCH_TIMEOUT
-    #    - DAOS_SHARD_OBJ_FAIL
-    #    - DAOS_OBJ_UPDATE_NOSPACE
-    #    - DAOS_SHARD_OBJ_RW_CRT_ERROR
-    #    - DAOS_OBJ_REQ_CREATE_TIMEOUT
-    #    - DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE
-    #    - DAOS_OBJ_SPECIAL_SHARD
-    #    - DAOS_OBJ_TGT_IDX_CHANGE
+        # - DAOS_DTX_LOST_RPC_REQUEST
+        # - DAOS_DTX_LOST_RPC_REPLY
+        # - DAOS_DTX_LONG_TIME_RESEND
+        - DAOS_SHARD_OBJ_UPDATE_TIMEOUT
+        - DAOS_SHARD_OBJ_FETCH_TIMEOUT
+        # - DAOS_SHARD_OBJ_FAIL
+        # - DAOS_OBJ_UPDATE_NOSPACE
+        # - DAOS_SHARD_OBJ_RW_CRT_ERROR
+        # - DAOS_OBJ_REQ_CREATE_TIMEOUT
+        # - DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE
+        # - DAOS_OBJ_SPECIAL_SHARD
+        # - DAOS_OBJ_TGT_IDX_CHANGE
 
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -144,7 +140,7 @@ ior_faults:
         - 'RP_2G1'
     dfuse:
         mount_dir: "/tmp/daos_dfuse/ior/"
-        disable_caching: True
+        disable_caching: true
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -7,6 +6,7 @@
 import time
 import random
 import threading
+import queue
 
 from test_utils_pool import add_pool
 from write_host_file import write_host_file
@@ -14,7 +14,6 @@ from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from apricot import skipForTicket
-import queue
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -74,7 +73,7 @@ class OSAOnlineReintegration(OSAUtils):
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
-        rank = random.randint(1, exclude_servers) #nosec
+        rank = random.randint(1, exclude_servers)  # nosec
 
         # Start the daos_racer thread
         if racer is True:
@@ -167,9 +166,9 @@ class OSAOnlineReintegration(OSAUtils):
         Test Description: Validate Online Reintegration
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,online_reintegration_basic
+        :avocado: tags=online_reintegration,test_osa_online_reintegration
         """
         self.log.info("Online Reintegration : Basic test")
         self.run_online_reintegration_test(1)
@@ -178,9 +177,9 @@ class OSAOnlineReintegration(OSAUtils):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,online_reintegration_srv_stop
+        :avocado: tags=online_reintegration,test_osa_online_reintegration_server_stop
         """
         self.log.info("Online Reintegration : System stop/start")
         self.run_online_reintegration_test(1, server_boot=True)
@@ -192,9 +191,9 @@ class OSAOnlineReintegration(OSAUtils):
         without checksum
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,online_reintegration_without_csum
+        :avocado: tags=online_reintegration,test_osa_online_reintegration_without_csum
         """
         self.log.info("Online Reintegration : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -207,9 +206,9 @@ class OSAOnlineReintegration(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,online_reintegration_aggregation
+        :avocado: tags=online_reintegration,test_osa_online_reintegration_with_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -222,9 +221,9 @@ class OSAOnlineReintegration(OSAUtils):
         object class
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,online_reintegration_oclass
+        :avocado: tags=online_reintegration,test_osa_online_reintegration_oclass
         """
         self.log.info("Online Reintegration : Object Class")
         for oclass in self.test_oclass:

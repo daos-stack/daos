@@ -10,7 +10,7 @@ import uuid
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 
-RESULT_PASS = "PASS" #nosec
+RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
@@ -46,7 +46,7 @@ class OpenContainerTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=container_open
+        :avocado: tags=container_open,test_container_open
         """
         self.pool = []
         self.container = []
@@ -68,26 +68,20 @@ class OpenContainerTest(TestWithServers):
         # it shouldn't reach that point
         messages_case_1 = [
             "Case 1: Test Bug!",
-            "Error while opening the container with valid pool handle and " +
-            "container UUID",
+            "Error while opening the container with valid pool handle and container UUID",
             "Case 1: Test Bug!",
-            "Error while opening the container with valid pool handle and " +
-            "container UUID"
+            "Error while opening the container with valid pool handle and container UUID"
         ]
         messages_case_2 = [
-            "No error occurred from using container 2's UUID while opening " +
-            "container 1",
+            "No error occurred from using container 2's UUID while opening container 1",
             "Case 2: Test Bug!",
-            "No error occurred from using container 1's UUID while opening " +
-            "container 2",
+            "No error occurred from using container 1's UUID while opening container 2",
             "Case 2: Test Bug!"
         ]
         messages_case_3 = [
-            "No error occurred from using pool 2's handle while opening " +
-            "container 1",
+            "No error occurred from using pool 2's handle while opening container 1",
             "Case 3: Test Bug!",
-            "No error occurred from using pool1's handle while opening " +
-            "container 2",
+            "No error occurred from using pool1's handle while opening container 2",
             "Case 3: Test Bug!"
         ]
         result_messages = [messages_case_1, messages_case_2, messages_case_3]

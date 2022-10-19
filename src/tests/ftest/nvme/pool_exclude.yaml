@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-  test_clients:
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 5
+  test_clients: 3
 # If we define the server under test_servers, launch.py will convert it to the
 # actual server name passed into --test_servers. If above test_servers is hosts,
 # it'll be used as one of the servers at test startup time, so use something
@@ -56,7 +48,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
     oclass: RP_3G6
 ior:
   client_processes:

@@ -1,8 +1,14 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 
 timeout: 100
+
+server_config:
+  name: daos_server
+  servers:
+    targets: 4
+    nr_xs_helpers: 0
+    scm_size: 4
 
 pool:
   scm_size: 1G
@@ -13,11 +19,11 @@ container:
 
 properties:
   chksum_type:
-    configured: 100 # Default
+    configured: 100  # Default
     expected: 1
   srv_verify:
-    configured: True # Updated
+    configured: true  # Updated
     expected: 1
   chunk_size:
-    configured: 0 # Default
+    configured: 0  # Default
     expected: 16384

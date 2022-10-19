@@ -1,12 +1,8 @@
 server_manager:
   srv_timeout: 500
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-D
+  test_servers: 3
+  test_clients: 1
 timeout: 1000
 job_manager:
   manager_timeout: 300
@@ -57,7 +53,7 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
     oclass: RP_2G4
 ior:
   client_processes:

@@ -16,9 +16,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Engine) error {
@@ -27,18 +27,13 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		return nil
 	}
 
-	opts := &promexp.CollectorOpts{
-		Ignores: []string{
-			`.*_ID_(\d+)_rank`,
-		},
-	}
-	c, err := promexp.NewCollector(log, opts)
+	c, err := promexp.NewCollector(log, &promexp.CollectorOpts{})
 	if err != nil {
 		return err
 	}
 	prometheus.MustRegister(c)
 
-	addFn := func(idx uint32, rank system.Rank) func(context.Context) error {
+	addFn := func(idx uint32, rank ranklist.Rank) func(context.Context) error {
 		return func(context.Context) error {
 			log.Debugf("Setting up metrics collection for engine %d", idx)
 			es, cleanup, err := promexp.NewEngineSource(ctx, idx, rank.Uint32())
@@ -50,8 +45,8 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []Eng
 		}
 	}
 
-	delFn := func(idx uint32) func(context.Context, uint32, system.Rank, error, uint64) error {
-		return func(_ context.Context, _ uint32, rank system.Rank, _ error, _ uint64) error {
+	delFn := func(idx uint32) func(context.Context, uint32, ranklist.Rank, error, int) error {
+		return func(_ context.Context, _ uint32, rank ranklist.Rank, _ error, _ int) error {
 			log.Debugf("Tearing down metrics collection for engine %d (rank %s)", idx, rank.String())
 			c.RemoveSource(idx)
 			return nil
@@ -116,7 +111,7 @@ func startPrometheusExporter(ctx context.Context, log logging.Logger, port int, 
 		timedCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(timedCtx); err != nil {
-			log.Infof("HTTP server didn't shut down within timeout: %s", err.Error())
+			log.Noticef("HTTP server didn't shut down within timeout: %s", err.Error())
 		}
 	}, nil
 }

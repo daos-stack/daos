@@ -1,12 +1,8 @@
 server_manager:
   srv_timeout: 500
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-D
+  test_servers: 3
+  test_clients: 1
 timeout: 2400
 setup:
   start_servers_once: False
@@ -56,7 +52,7 @@ container:
     type: POSIX
     control_method: daos
     oclass: RP_3G6
-    properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rf:2
+    properties: cksum:crc64,cksum_size:16384,srv_cksum:on,rd_fac:2
 dkeys:
   single:
     no_of_dkeys:

@@ -6,11 +6,11 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=ubuntu:20.04
+ARG BASE_DISTRO=ubuntu:22.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -19,14 +19,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY ./utils/scripts/install-ubuntu.sh /tmp/install.sh
 RUN echo "APT::Get::Assume-Yes \"true\";" > /etc/apt/apt.conf.d/no-prompt
 RUN echo "APT::Install-Recommends \"false\";" > /etc/apt/apt.conf.d/no-recommends
-RUN apt-get update && apt-get install apt-utils && apt-get upgrade && chmod +x /tmp/install.sh && \
-  /tmp/install.sh && apt-get clean all
+RUN apt-get update && \
+    apt-get install apt-utils software-properties-common gpg gpg-agent && \
+    add-apt-repository ppa:longsleep/golang-backports && \
+    apt-get upgrade && \
+    chmod +x /tmp/install.sh && \
+    /tmp/install.sh && \
+    apt-get clean all
 
 RUN locale-gen en_US.UTF-8
 
 # use Java 8 instead of default Java 11
 RUN update-alternatives --set \
-    java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+    java /usr/lib/jvm/java-8-openjdk-*/jre/bin/java
 
 ARG UID=1000
 
@@ -84,8 +89,8 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
+ARG CB1
+RUN [ -z "$CB1" ] || { apt-get update && apt-get upgrade && apt-get clean all; }
 USER daos_server:daos_server
 
 # Set a label.  This is useful for searching for DAOS images, but is also used
@@ -120,10 +125,11 @@ WORKDIR /home/daos/daos/src/client/java
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    { mkdir /home/daos/.m2 && \
-    cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-    mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos; }
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
+        mkdir /home/daos/.m2 &&                                                               \
+        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
+    }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no

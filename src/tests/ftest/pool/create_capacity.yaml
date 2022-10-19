@@ -1,16 +1,8 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-  test_clients:
-    - client-H
+  test_servers: 7
+  test_clients: 1
 timeouts:
-  test_create_pool_quantity: 690
+  test_create_pool_quantity: 900
 server_config:
   name: daos_server
   servers:
@@ -30,5 +22,4 @@ pool:
   control_method: dmg
   scm_size: 60%
   nvme_size: 60%
-  svcn: 1
   quantity: 200

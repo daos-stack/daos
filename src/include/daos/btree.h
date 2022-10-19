@@ -24,7 +24,7 @@
 struct btr_record {
 	/**
 	 * It could either be memory ID for the child node, or body of this
-	 * record. The record body could be any of varous things:
+	 * record. The record body could be any of various things:
 	 *
 	 * - the value address of KV record.
 	 * - a structure includes both the variable-length key and value.
@@ -475,23 +475,23 @@ embedded_key_decode(d_iov_t *key, daos_anchor_t *anchor)
  */
 enum btr_feats {
 	/** Key is an unsigned integer.  Implies no hash or key callbacks */
-	BTR_FEAT_UINT_KEY		= (1 << 0),
+	BTR_FEAT_UINT_KEY = (1 << 0),
 	/** Key is not hashed or stored by library.  User must provide
 	 * to_key_cmp callback
 	 */
-	BTR_FEAT_DIRECT_KEY		= (1 << 1),
+	BTR_FEAT_DIRECT_KEY = (1 << 1),
 	/** Root is dynamically sized up to tree order.  This bit is set for a
 	 *  tree class
 	 */
-	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
+	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
-	BTR_FEAT_SKIP_LEAF_REBAL	= (1 << 3),
+	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
 
 	/** Put new entries above this line */
 	/** Convenience entry for calculating mask for all feats */
 	BTR_FEAT_HELPER,
 	/** Mask for all feats */
-	BTR_FEAT_MASK			= ((BTR_FEAT_HELPER - 1) << 1) - 1,
+	BTR_FEAT_MASK = ((BTR_FEAT_HELPER - 1) << 1) - 1,
 };
 
 D_CASSERT(((BTR_FEAT_HELPER - 1) & BTR_FEAT_MASK) == (BTR_FEAT_HELPER - 1));

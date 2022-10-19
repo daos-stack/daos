@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -12,7 +11,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from apricot import skipForTicket
 from daos_utils import DaosCommand
 
 
@@ -34,8 +32,8 @@ class OSAOnlineExtend(OSAUtils):
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
         # Start an additional server.
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -157,9 +155,9 @@ class OSAOnlineExtend(OSAUtils):
         enabled.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_with_csum
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend
         """
         self.log.info("Online Extend : With Checksum")
         self.run_online_extend_test(1)
@@ -169,9 +167,9 @@ class OSAOnlineExtend(OSAUtils):
         Test Description: Validate Online extend without checksum enabled.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_without_csum
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_without_checksum
         """
         self.log.info("Online Extend : Without Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -184,9 +182,9 @@ class OSAOnlineExtend(OSAUtils):
         object class.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_oclass
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_oclass
         """
         self.log.info("Online Extend : Oclass")
         self.run_online_extend_test(1, oclass=self.test_oclass[0])
@@ -196,9 +194,9 @@ class OSAOnlineExtend(OSAUtils):
         Test Description: Validate Online extend with mdtest application.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_mdtest
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_mdtest
         """
         self.log.info("Online Extend : Mdtest")
         self.run_online_extend_test(1, app_name="mdtest")
@@ -208,9 +206,9 @@ class OSAOnlineExtend(OSAUtils):
         Test Description: Validate Online extend with aggregation on.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_with_aggregation
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_with_aggregation
         """
         self.log.info("Online Extend : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
