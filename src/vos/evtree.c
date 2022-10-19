@@ -2134,9 +2134,9 @@ done:
 static inline void
 evt_check_sort_policy(struct evt_context *tcx)
 {
-	/** EVT_FEAT_SORT_DIST can get inbalanced and, under certain conditions, can cause a
+	/** EVT_FEAT_SORT_DIST can get imbalanced and, under certain conditions, can cause a
 	 *  segfault when the depth is larger than EVT_TRACE_MAX.  Rather than let it get too
-	 *  deep, let's detect cases where it starts getting deep and swith policies.
+	 *  deep, let's detect cases where it starts getting deep and switch policies.
 	 */
 	if (unlikely(tcx->tc_depth > 5 &&
 		     (tcx->tc_feats & EVT_FEATS_SUPPORTED) == EVT_FEAT_SORT_DIST)) {
