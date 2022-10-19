@@ -1273,12 +1273,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_flags = auxi->flags | flags;
 	if (auxi->obj_auxi->reintegrating)
 		orw->orw_flags |= ORF_REINTEGRATING_IO;
+	if (auxi->obj_auxi->rebuilding)
+		orw->orw_flags |= ORF_REBUILDING_IO;
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
 	if (auxi->obj_auxi->ec_degrade_fetch) {
 		struct obj_tgt_oiod *toiod;
 
+		D_ASSERT(args->reasb_req != NULL);
+		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);

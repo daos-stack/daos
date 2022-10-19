@@ -22,6 +22,7 @@ type PoolSetPropsFlag struct {
 func (f *PoolSetPropsFlag) UnmarshalFlag(fv string) error {
 	propHdlrs := daos.PoolProperties()
 	f.SettableKeys(propHdlrs.Keys()...)
+	f.DeprecatedKeyMap(daos.PoolDeprecatedProperties())
 
 	if err := f.SetPropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err
@@ -62,6 +63,7 @@ type PoolGetPropsFlag struct {
 func (f *PoolGetPropsFlag) UnmarshalFlag(fv string) error {
 	propHdlrs := daos.PoolProperties()
 	f.GettableKeys(propHdlrs.Keys()...)
+	f.DeprecatedKeyMap(daos.PoolDeprecatedProperties())
 
 	if err := f.GetPropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err

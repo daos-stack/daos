@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -334,14 +334,13 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 {
 	tse_task_t	*task;
 	daos_obj_id_t	 oid;
-	int		 cont_rf;
+	uint32_t	 cont_rf;
 	int		 rc;
 
-	cont_rf = dc_cont_hdl2redunfac(coh);
-	if (cont_rf < 0) {
-		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n",
-			DP_RC(cont_rf));
-		return cont_rf;
+	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
 
 	oid = daos_oit_gen_id(epoch, cont_rf);

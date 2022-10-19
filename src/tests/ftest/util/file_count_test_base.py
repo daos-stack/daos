@@ -27,13 +27,13 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         """
         # Create a container and add it to the overall list of containers
         container = self.get_container(self.pool, create=False)
-        # don't include oclass in daos cont cmd; include rf based on the class
+        # don't include oclass in daos cont cmd; include rd_fac based on the class
         if oclass:
             container.oclass.update(oclass)
             redundancy_factor = extract_redundancy_factor(oclass)
-            rf = 'rf:{}'.format(str(redundancy_factor))
+            rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
         properties = container.properties.value
-        cont_properties = (",").join(filter(None, [properties, rf]))
+        cont_properties = (",").join(filter(None, [properties, rd_fac]))
         if cont_properties is not None:
             container.properties.update(cont_properties)
         container.create()
@@ -55,11 +55,11 @@ class FileCountTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.dfs_oclass.update(oclass)
             self.mdtest_cmd.dfs_oclass.update(oclass)
             self.ior_cmd.dfs_dir_oclass.update(oclass)
-            # oclass_dir can not be EC must be RP based on rf
-            rf = extract_redundancy_factor(oclass)
-            if rf >= 2:
+            # oclass_dir can not be EC must be RP based on rd_fac
+            rd_fac = extract_redundancy_factor(oclass)
+            if rd_fac >= 2:
                 self.mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
-            elif rf == 1:
+            elif rd_fac == 1:
                 self.mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
             else:
                 self.mdtest_cmd.dfs_dir_oclass.update("SX")
