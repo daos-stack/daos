@@ -56,6 +56,7 @@ class DiskFailureTest(OSAUtils):
                     device_info[count]["rank"] = rank
                     tgt_ids = value['storage']['smd_info']['devices'][target]['tgt_ids']
                     device_info[count]["tgts"] = tgt_ids
+            count = count + 1
         return device_info
 
     def set_nvme_faulty(self, nvme_id=None):
@@ -141,7 +142,7 @@ class DiskFailureTest(OSAUtils):
                     self.log.info(resp)
                     # Now reintegrate the target to appropriate rank.
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               device_info[key]["uuid"],
+                                                               device_info[key]["rank"],
                                                                device_info[key]["tgts"])
                     time.sleep(15)
                 count = count + 1
