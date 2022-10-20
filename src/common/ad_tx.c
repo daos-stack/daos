@@ -224,11 +224,6 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 int
 ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags)
 {
-	struct umem_act_item	*it_undo = NULL, *it_redo = NULL;
-	bool			 ptr_only = flags & AD_TX_COPY_PTR;
-	bool			 undo = flags & AD_TX_UNDO;
-	bool			 redo = flags & AD_TX_REDO;
-
 	if (addr == NULL || ptr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
 
@@ -237,43 +232,43 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 		return 0;
 	}
 
-	if (undo) {
+	if (flags & AD_TX_UNDO) {
+		struct umem_act_item *it_undo;
+
 		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
 			return -DER_NOMEM;
-	}
 
-	if (redo) {
-		if (ptr_only)
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
-		else
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
-		if (it_redo == NULL && it_undo != NULL) {
-			D_FREE(it_undo);
-			return -DER_NOMEM;
-		}
-	}
-
-	if (undo) {
 		act_copy_payload(&it_undo->it_act, addr, size);
 		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
-	}
 
-	if (redo) {
-		if (ptr_only) {
+	} else {
+		struct umem_act_item *it_redo;
+
+		if (!(flags & AD_TX_REDO))
+			return -DER_INVAL;
+
+		if (flags & AD_TX_COPY_PTR) {
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
+			if (it_redo == NULL)
+				return -DER_NOMEM;
+
 			it_redo->it_act.ac_copy_ptr.addr = blob_ptr2addr(tx->tx_blob, addr);
 			it_redo->it_act.ac_copy_ptr.ptr = (uintptr_t)ptr;
 			it_redo->it_act.ac_set.size = size;
 		} else {
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+			if (it_redo == NULL)
+				return -DER_NOMEM;
+
 			act_copy_payload(&it_redo->it_act, ptr, size);
 			it_redo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 			it_redo->it_act.ac_copy.size = size;
 		}
 		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
 	}
-
 	return 0;
 }
 
