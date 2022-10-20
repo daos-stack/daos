@@ -4,10 +4,17 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  servers:
-    scm_size: 20
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 20
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
 server_manager:
   storage_prepare_timeout: 60
   storage_format_timeout: 60

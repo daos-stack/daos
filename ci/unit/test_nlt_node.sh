@@ -17,7 +17,7 @@ tar -xf opt-daos.tar
 sudo mv opt/daos /opt/
 
 # Setup daos admin etc.
-sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
+sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 # NLT will mount /mnt/daos itself.
 # TODO: Enable this for DAOS-10905

@@ -213,6 +213,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	struct dc_pool		*pool;
 	struct pl_map		*map;
 	uint32_t		old;
+	uint32_t		rebuild_ver;
 	int			i;
 	int			rc;
 
@@ -229,10 +230,11 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	rebuild_ver = pool->dp_rebuild_version;
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	dc_pool_put(pool);
-	rc = pl_obj_place(map, &obj->cob_md, mode, NULL, &layout);
+	rc = pl_obj_place(map, &obj->cob_md, mode, rebuild_ver, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, DF_OID" Failed to generate object layout fdom_lvl %d\n",
@@ -1014,6 +1016,9 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 		shard_tgt->st_flags |= DTF_DELAY_FORWARD;
 	if (obj_shard->do_reintegrating)
 		obj_auxi->reintegrating = 1;
+	if (obj_shard->do_rebuilding)
+		obj_auxi->rebuilding = 1;
+
 	rc = obj_shard2tgtid(obj, shard, map_ver, &shard_tgt->st_tgt_id);
 close:
 	obj_shard_close(obj_shard);
@@ -1333,15 +1338,15 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 {
 	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int			 obj_tf;	/* obj #tolerate failures */
-	int			 cont_rf;	/* cont redun_fac */
+	uint32_t		 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
 
-	cont_rf = dc_cont_hdl2redunfac(coh);
-	if (cont_rf < 0) {
+	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
+	if (rc) {
 		D_ERROR(DF_OID" dc_cont_hdl2redunfac failed, "DF_RC"\n",
-			DP_OID(obj->cob_md.omd_id), DP_RC(cont_rf));
-		return cont_rf;
+			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		return rc;
 	}
 
 	if (obj_is_ec(obj)) {
@@ -4559,6 +4564,7 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->obj = obj;
 	obj_auxi->dkey_hash = 0;
 	obj_auxi->reintegrating = 0;
+	obj_auxi->rebuilding = 0;
 	shard_task_list_init(obj_auxi);
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;
@@ -6719,15 +6725,17 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 		attr.pa_domain_nr, attr.pa_target_nr);
 
 	if (cid == OC_UNKNOWN) {
-		uint64_t rf_factor;
+		uint32_t rf;
 
-		rf_factor = dc_cont_hdl2redunfac(coh);
-		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-				   attr.pa_target_nr, type, hints, &ord,
+		rc = dc_cont_hdl2redunfac(coh, &rf);
+		if (rc) {
+			D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
 	}
 
 	if (rc)
@@ -6796,7 +6804,7 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
 	struct pl_map_attr	attr = {0};
-	uint64_t		rf_factor;
+	uint32_t		rf;
 	int			rc;
 	enum daos_obj_redun	ord;
 	struct cont_props	props;
@@ -6816,10 +6824,12 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
 
-	rf_factor = dc_cont_hdl2redunfac(coh);
-	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
-			   attr.pa_target_nr, type, hints,
-			   &ord, &nr_grp);
+	rc = dc_cont_hdl2redunfac(coh, &rf);
+	if (rc) {
+		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
 		return 0;
 
