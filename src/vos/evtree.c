@@ -2131,6 +2131,7 @@ done:
 	return rc == 0 ? alt_rc : rc;
 }
 
+#define EVT_DIST_DEPTH_LIMIT 6
 static inline void
 evt_check_sort_policy(struct evt_context *tcx)
 {
@@ -2138,11 +2139,12 @@ evt_check_sort_policy(struct evt_context *tcx)
 	 *  segfault when the depth is larger than EVT_TRACE_MAX.  Rather than let it get too
 	 *  deep, let's detect cases where it starts getting deep and switch policies.
 	 */
-	if (unlikely(tcx->tc_depth > 5 &&
+	if (unlikely(tcx->tc_depth > EVT_DIST_DEPTH_LIMIT &&
 		     (tcx->tc_feats & EVT_FEATS_SUPPORTED) == EVT_FEAT_SORT_DIST)) {
 		tcx->tc_feats ^= EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN;
 		tcx->tc_ops = evt_policies[2];
-		D_DEBUG(DB_IO, "evtree depth is greater than 10, switching sort policy\n");
+		D_DEBUG(DB_IO, "evtree depth is greater than %d, switching sort policy\n",
+			EVT_DIST_DEPTH_LIMIT);
 	}
 }
 
