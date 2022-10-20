@@ -899,7 +899,7 @@ class DaosServerManager(SubprocessManager):
                         self.log.info("    %s = %s", name, storage_tier[name])
                 engine_yaml_parameters.storage_tiers.append(storage_tier_parameters)
             self.manager.job.yaml.engine_params.append(engine_yaml_parameters)
-        self.manager.job.yaml.engine_params.reset_yaml_data_updated()
+        self.manager.job.yaml.reset_yaml_data_updated()
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
