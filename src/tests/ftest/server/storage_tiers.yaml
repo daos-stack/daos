@@ -1,7 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 150
+timeout: 1800
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -12,6 +12,7 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
+      log_mask: "ERR"
       storage:
         0:
           class: dcpm
@@ -20,33 +21,30 @@ server_config:
         1:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a"]
+        2:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        3:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
+      log_mask: "ERR"
       storage:
         0:
           class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
         1:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
-pool:
-  scm_size: 1G
-  control_method: dmg
-container:
-  type: POSIX
-  control_method: daos
-block_sizes: [10M, 500M]
-transfer_sizes: [256K, 1M]
-telemetry_metrics:
-  io_test_metrics_valid: [0, 18446744073709552000]
-ior:
-  api: POSIX
-  flags: "-v -w -k"
-  max_duration: 10
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+        2:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+        3:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
