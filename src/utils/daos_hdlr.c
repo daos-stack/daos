@@ -1388,7 +1388,7 @@ fs_copy(struct cmd_args_s *ap,
 		src_parent_path = dirname((char *)src_path);
 		if (src_parent_path[1] == '\0' && src_parent_path[0] == '/') {
 			/* root directory */
-			D_ASPRINTF(next_src_path, "/%s", symlink_value);;
+			D_ASPRINTF(next_src_path, "/%s", symlink_value);
 		} else {
 			D_ASPRINTF(next_src_path, "%s/%s", src_parent_path, symlink_value);
 		}
