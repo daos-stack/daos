@@ -303,8 +303,9 @@ type (
 	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size     uint
-		NUMANode uint
+		Size             uint
+		NUMANode         uint
+		DisableHugepages bool
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
