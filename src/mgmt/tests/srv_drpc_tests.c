@@ -2653,12 +2653,11 @@ pack_led_manage_req(Drpc__Call *call, Ctl__LedManageReq *req)
 }
 
 static void
-setup_led_manage_drpc_call(Drpc__Call *call, char *uuid)
+setup_led_manage_drpc_call(Drpc__Call *call, char *tr_addr)
 {
 	Ctl__LedManageReq req = CTL__LED_MANAGE_REQ__INIT;
 
-	req.ids = uuid;
-	req.use_tr_addr = false;
+	req.ids = tr_addr;
 	req.led_action = CTL__LED_ACTION__SET;
 	req.led_state = CTL__LED_STATE__QUICK_BLINK;
 	pack_led_manage_req(call, &req);
@@ -2680,7 +2679,7 @@ expect_drpc_dev_manage_resp_with_status(Drpc__Response *resp, int exp_status)
 }
 
 static void
-test_drpc_dev_manage_led_bad_uuid(void **state)
+test_drpc_dev_manage_led_bad_tr_addr(void **state)
 {
 	Drpc__Call	call = DRPC__CALL__INIT;
 	Drpc__Response	resp = DRPC__RESPONSE__INIT;
@@ -3053,7 +3052,7 @@ main(void)
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_bad_uuid),
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_mgmt_svc_fails),
 		POOL_UPGRADE_TEST(test_drpc_pool_upgrade_success),
-		LED_MANAGE_TEST(test_drpc_dev_manage_led_bad_uuid),
+		LED_MANAGE_TEST(test_drpc_dev_manage_led_bad_tr_addr),
 		LED_MANAGE_TEST(test_drpc_dev_manage_led_fails),
 		LED_MANAGE_TEST(test_drpc_dev_manage_led_success),
 		DEV_REPLACE_TEST(test_drpc_dev_replace_bad_old_uuid),
