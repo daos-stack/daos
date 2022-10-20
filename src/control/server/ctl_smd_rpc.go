@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -467,6 +468,10 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			Rank: rank.Uint32(), Results: devResults,
 		})
 	}
+
+	sort.Slice(rankResps, func(i, j int) bool {
+		return rankResps[i].Rank < rankResps[j].Rank
+	})
 
 	resp := &ctlpb.SmdManageResp{Ranks: rankResps}
 
