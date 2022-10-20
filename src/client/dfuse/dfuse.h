@@ -46,6 +46,7 @@ struct dfuse_projection_info {
 	/* Array of dfuse_eq */
 	struct dfuse_eq    *dpi_eqt;
 	int                 dpi_eqt_count;
+	ATOMIC uint64_t     dpi_eqt_idx;
 };
 
 struct dfuse_eq {

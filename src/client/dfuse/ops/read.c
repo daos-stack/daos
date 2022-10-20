@@ -42,11 +42,16 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_eq              *eqt       = fs_handle->dpi_eqt;
+	bool                          mock_read = false;
+	struct dfuse_eq              *eqt;
 	void                         *buff;
 	int                           rc;
-	bool                          mock_read = false;
 	struct dfuse_event           *ev;
+	uint64_t                      eqt_idx;
+
+	eqt_idx = atomic_fetch_add_relaxed(&fs_handle->dpi_eqt_idx, 1);
+
+	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
 
 	D_ALLOC_PTR(ev);
 	if (ev == NULL)

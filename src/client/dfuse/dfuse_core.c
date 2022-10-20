@@ -967,7 +967,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 	if (fs_handle == NULL)
 		return -DER_NOMEM;
 
-	fs_handle->dpi_eqt_count = 2;
+	fs_handle->dpi_eqt_count = 4;
 
 	D_ALLOC_ARRAY(fs_handle->dpi_eqt, fs_handle->dpi_eqt_count);
 	if (fs_handle->dpi_eqt == NULL)
@@ -990,6 +990,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 		D_GOTO(err_pt, rc);
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
+	atomic_store_relaxed(&fs_handle->dpi_eqt_idx, 0);
 
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
