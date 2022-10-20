@@ -335,9 +335,79 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
 $
 ```
 
-#### Via systemd.
+#### Via systemd for user.
 
-User can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
+User can mount/unmount the dfuse using systemd.
+
+```bash
+
+$ dmg pool create --scm-size=8G --nvme-size=64G samirrav_pool -u samirrav@ -g samirrav@
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : a635cc99-22b3-4af4-8cee-d756463b5ca0
+  Service Ranks        : [0-1]
+  Storage Ranks        : [0-1]
+  Total Size           : 144 GB
+  Storage tier 0 (SCM) : 16 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 128 GB (64 GB / rank)
+
+$ daos cont create samirrav_pool --type='POSIX' samirrav_cont
+  Container UUID : 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
+  Container Label: samirrav_cont
+  Container Type : POSIX
+
+Successfully created container 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
+$
+
+$ cat ~/.config/systemd/user/samirrav_dfuse.service
+[Service]
+ExecStart=dfuse  --foreground -m /scratch_fs/samirrav_dfuse/  --pool samirrav_pool --cont samirrav_cont
+ExecStop=fusermount3 -u /scratch_fs/samirrav_dfuse/
+
+[Install]
+WantedBy=default.target
+$
+
+$ systemctl --user daemon-reload
+
+$ systemctl --user list-unit-files | grep samirrav
+samirrav_dfuse.service         disabled
+
+$ systemctl --user status samirrav_dfuse.service
+● samirrav_dfuse.service
+   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+   Active: inactive (dead)
+
+$ systemctl --user start samirrav_dfuse.service
+
+$ systemctl --user status samirrav_dfuse.service
+● samirrav_dfuse.service
+   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+   Active: active (running) since Thu 2022-10-20 15:41:46 UTC; 1s ago
+ Main PID: 2845753 (dfuse)
+   CGroup: /user.slice/user-11832957.slice/user@11832957.service/samirrav_dfuse.service
+           └─2845753 /usr/bin/dfuse --foreground -m /scratch_fs/samirrav_dfuse/ --pool samirrav_pool --cont samirrav_cont
+
+$ df -h | grep fuse
+dfuse                         135G  1.3G  133G   1% /scratch_fs/samirrav_dfuse
+
+$ touch /scratch_fs/samirrav_dfuse/test1
+
+$ systemctl --user stop samirrav_dfuse.service
+$ df -h | grep fuse
+$ ls -l /scratch_fs/samirrav_dfuse/test1
+ls: cannot access '/scratch_fs/samirrav_dfuse/test1': No such file or directory
+
+$ systemctl --user start samirrav_dfuse.service
+$ ls -l /scratch_fs/samirrav_dfuse/test1
+-rw-rw-r-- 1 samirrav samirrav 0 Oct 20 15:42 /scratch_fs/samirrav_dfuse/test1
+
+```
+
+#### Via systemd for root.
+
+Root user can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
 Consider the previous example /etc/fstab entry which has the admin_pool and admin_cont.
 Steps mention below will explain, how to generate the systemd file and start/stop the dfuse service.
 
