@@ -8,7 +8,7 @@ import os
 from command_utils_base import \
     BasicParameter, LogParameter, YamlParameters, TransportCredentials
 
-MAX_STORAGE_TIERS = 4
+MAX_STORAGE_TIERS = 5
 
 
 class DaosServerTransportCredentials(TransportCredentials):
@@ -746,6 +746,13 @@ class StorageTierYamlParameters(YamlParameters):
         self.bdev_list = BasicParameter(None, position=5)
         self.bdev_number = BasicParameter(None, position=6)
         self.bdev_size = BasicParameter(None, position=7)
+
+        # Explicit storage tier roles for metadata on SSD; implicit roles used if not specified
+        # Options are:
+        # - "data" SSDs will be used to store actual data
+        # - "index" SSDs will be used to store the VOS index
+        # - "wal" SSDs will be used to store the write-ahead-log
+        self.roles = BasicParameter(None, position=8)
 
     @property
     def using_dcpm(self):

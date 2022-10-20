@@ -41,7 +41,7 @@ class StorageTiers(TestWithServers):
         """
         expected = [[], []]
         for engine in range(2):
-            for tier in range(3):
+            for tier in range(MAX_STORAGE_TIERS):
                 namespace = f"/run/server_config/engines/{engine}/storage/{tier}/*"
                 if tier == 0:
                     expected[engine].append({
@@ -54,6 +54,12 @@ class StorageTiers(TestWithServers):
                         "class": self.params.get("class", namespace),
                         "bdev_list": self.params.get("bdev_list", namespace)
                     })
+                    if tier == 2:
+                        expected[engine][-1]["tier"] = "wal"
+                    elif tier == 3:
+                        expected[engine][-1]["tier"] = "index"
+                    elif tier == 4:
+                        expected[engine][-1]["tier"] = "data"
 
         common_config = CommonConfig("daos_server", DaosServerTransportCredentials())
         config = DaosServerYamlParameters(None, common_config)

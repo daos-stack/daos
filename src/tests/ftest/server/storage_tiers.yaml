@@ -24,9 +24,15 @@ server_config:
         2:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+          role: wal
         3:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+          role: index
+        4:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+          role: data
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -45,6 +51,12 @@ server_config:
         2:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+          role: wal
         3:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+          role: index
+        4:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+          role: data
