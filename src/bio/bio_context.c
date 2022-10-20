@@ -539,11 +539,59 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 	return rc;
 }
 
+static int
+__bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+		  uuid_t uuid, enum bio_mc_flags flags, enum smd_dev_type st,
+		  spdk_blob_id open_blobid)
+{
+	struct bio_io_context	*ctxt;
+	int			 rc;
+	struct bio_xs_blobstore	*bxb;
+
+	D_ALLOC_PTR(ctxt);
+	if (ctxt == NULL)
+		return -DER_NOMEM;
+
+	D_INIT_LIST_HEAD(&ctxt->bic_link);
+	ctxt->bic_xs_ctxt = xs_ctxt;
+	uuid_copy(ctxt->bic_pool_id, uuid);
+
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_nvme_configured() ||
+	    (flags & BIO_MC_FL_NO_DATABLOB && st == SMD_DEV_TYPE_DATA)) {
+		*pctxt = ctxt;
+		return 0;
+	}
+
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	D_ASSERT(bxb != NULL);
+	rc = bio_bs_hold(bxb->bxb_blobstore);
+	if (rc) {
+		D_FREE(ctxt);
+		return rc;
+	}
+
+	ctxt->bic_xs_blobstore = bxb;
+	rc = bio_blob_open(ctxt, false, flags & BIO_MC_FL_SYSDB, open_blobid);
+	if (rc) {
+		D_FREE(ctxt);
+	} else {
+		d_list_add_tail(&ctxt->bic_link, &bxb->bxb_io_ctxts);
+		*pctxt = ctxt;
+	}
+
+	bio_bs_unhold(bxb->bxb_blobstore);
+	return rc;
+}
+
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
 		  uint64_t wal_sz, uint64_t data_sz, enum bio_mc_flags flags)
 {
-	int		rc = 0;
-	spdk_blob_id	data_blobid, wal_blobid, meta_blobid;
+	int			 rc = 0, rc1;
+	spdk_blob_id		 data_blobid = SPDK_BLOBID_INVALID, wal_blobid, meta_blobid;
+	struct bio_meta_context *mc = NULL;
+	struct meta_fmt_info	*fi = NULL;
+	struct bio_xs_blobstore *bxb;
 
 	if (data_sz > 0) {
 		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_DEV_TYPE_DATA, flags,
@@ -569,13 +617,75 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 			goto delete_meta;
 	}
 
-	return rc;
+	D_ALLOC_PTR(mc);
+	if (mc == NULL) {
+		rc = -DER_NOMEM;
+		goto delete_wal;
+	}
+	D_ALLOC_PTR(fi);
+	if (fi == NULL) {
+		rc = -DER_NOMEM;
+		goto delete_wal;
+	}
+
+	if (data_sz == 0)
+		flags |= BIO_MC_FL_NO_DATABLOB;
+
+	rc = __bio_ioctxt_open(&mc->mc_meta, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_META,
+			       SPDK_BLOBID_INVALID);
+	if (rc)
+		goto delete_wal;
+
+	rc = __bio_ioctxt_open(&mc->mc_wal, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_WAL,
+			       SPDK_BLOBID_INVALID);
+	if (rc)
+		goto close_meta;
+
+	/* fill meta_fmt_info */
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_META);
+	uuid_copy(fi->fi_meta_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_WAL);
+	uuid_copy(fi->fi_wal_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	/* No data blobstore is possible */
+	if (bxb != NULL) {
+		bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
+		uuid_copy(fi->fi_data_devid, bxb->bxb_blobstore->bb_dev->bb_uuid);
+	} else {
+		uuid_clear(fi->fi_data_devid);
+	}
+	fi->fi_meta_blobid = meta_blobid;
+	fi->fi_wal_blobid = wal_blobid;
+	fi->fi_data_blobid = data_blobid;
+	fi->fi_meta_size = meta_sz;
+	fi->fi_wal_size = wal_sz;
+	fi->fi_data_size = data_sz;
+	fi->fi_vos_id = xs_ctxt->bxc_tgt_id;
+
+	rc = meta_format(mc, fi, true);
+	if (rc)
+		D_ERROR("Unable to format newly created blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
+
+	rc1 = bio_ioctxt_close(mc->mc_wal, flags);
+	if (rc == 0)
+		rc = rc1;
+
+close_meta:
+	rc1 = bio_ioctxt_close(mc->mc_meta, flags);
+	if (rc == 0)
+		rc = rc1;
+delete_wal:
+	D_FREE(mc);
+	D_FREE(fi);
+	if (rc && wal_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL))
+		D_ERROR("Unable to delete newly created wal blob for xs:%p pool:"DF_UUID"\n",
+			xs_ctxt, DP_UUID(pool_id));
 delete_meta:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META))
+	if (rc && meta_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META))
 		D_ERROR("Unable to delete newly created meta blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 delete_data:
-	if (bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA))
+	if (rc && data_sz > 0 && bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA))
 		D_ERROR("Unable to delete newly created data blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(pool_id));
 	return rc;
@@ -694,51 +804,6 @@ bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem)
 
 }
 
-static int
-__bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		  uuid_t uuid, enum bio_mc_flags flags, enum smd_dev_type st,
-		  spdk_blob_id open_blobid)
-{
-	struct bio_io_context	*ctxt;
-	int			 rc;
-	struct bio_xs_blobstore	*bxb;
-
-	D_ALLOC_PTR(ctxt);
-	if (ctxt == NULL)
-		return -DER_NOMEM;
-
-	D_INIT_LIST_HEAD(&ctxt->bic_link);
-	ctxt->bic_xs_ctxt = xs_ctxt;
-	uuid_copy(ctxt->bic_pool_id, uuid);
-
-	/* NVMe isn't configured or pool doesn't have NVMe partition */
-	if (!bio_nvme_configured() ||
-	    (flags & BIO_MC_FL_NO_DATABLOB && st == SMD_DEV_TYPE_DATA)) {
-		*pctxt = ctxt;
-		return 0;
-	}
-
-	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
-	D_ASSERT(bxb != NULL);
-	rc = bio_bs_hold(bxb->bxb_blobstore);
-	if (rc) {
-		D_FREE(ctxt);
-		return rc;
-	}
-
-	ctxt->bic_xs_blobstore = bxb;
-	rc = bio_blob_open(ctxt, false, flags & BIO_MC_FL_SYSDB, open_blobid);
-	if (rc) {
-		D_FREE(ctxt);
-	} else {
-		d_list_add_tail(&ctxt->bic_link, &bxb->bxb_io_ctxts);
-		*pctxt = ctxt;
-	}
-
-	bio_bs_unhold(bxb->bxb_blobstore);
-	return rc;
-}
-
 int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 		    struct umem_instance *umem, uuid_t uuid)
 {
@@ -757,7 +822,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		enum bio_mc_flags flags, struct bio_meta_context **mc)
 {
 	struct bio_meta_context	*bio_mc;
-	int			 rc;
+	int			 rc, rc1;
 	spdk_blob_id		 open_blobid = SPDK_BLOBID_INVALID;
 
 	D_ALLOC_PTR(bio_mc);
@@ -771,30 +836,53 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_META, open_blobid);
 		if (rc)
-			goto failed;
+			goto free_mem;
+
 		/*
-		 * Check Meta blob header if pool nvme size is 0,
-		 * set BIO_MC_FL_NO_DATABLOB if needed.
-		 *
-		 * set sys WAL blob id properly.
+		 * Check Meta blob header if data blob is associated, and
+		 * get wal blob id.
 		 */
+		rc = meta_open(bio_mc);
+		if (rc)
+			goto close_meta_ioctxt;
+
+		if (bio_mc->mc_meta_hdr.mh_data_blobid == SPDK_BLOBID_INVALID)
+			flags |= BIO_MC_FL_NO_DATABLOB;
+
+		open_blobid = bio_mc->mc_meta_hdr.mh_wal_blobid;
 		rc = __bio_ioctxt_open(&bio_mc->mc_wal, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_WAL, open_blobid);
 		if (rc)
-			goto failed;
+			goto close_meta;
+
+		rc = wal_open(bio_mc);
+		if (rc)
+			goto close_wal_ioctxt;
 	}
 
 out:
 	rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, pool_id, flags,
 			       SMD_DEV_TYPE_DATA, open_blobid);
 	if (rc)
-		goto failed;
+		goto close_wal;
 
 	*mc = bio_mc;
 	return 0;
 
-failed:
-	bio_mc_close(bio_mc, flags);
+close_wal:
+	wal_close(bio_mc);
+close_wal_ioctxt:
+	rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
+	if (rc1)
+		D_ERROR("Failed to close wal ioctxt. %d", rc1);
+close_meta:
+	meta_close(bio_mc);
+close_meta_ioctxt:
+	rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
+	if (rc1)
+		D_ERROR("Failed to close meta ioctxt. %d", rc1);
+free_mem:
+	D_FREE(bio_mc);
 
 	return rc;
 }
@@ -894,13 +982,15 @@ int bio_mc_close(struct bio_meta_context *bio_mc, enum bio_mc_flags flags)
 		if (rc1)
 			rc = rc1;
 	}
-	if (bio_mc->mc_meta) {
-		rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
+	if (bio_mc->mc_wal) {
+		wal_close(bio_mc);
+		rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
 		if (rc1 && !rc)
 			rc = rc1;
 	}
-	if (bio_mc->mc_wal) {
-		rc1 = bio_ioctxt_close(bio_mc->mc_wal, flags);
+	if (bio_mc->mc_meta) {
+		meta_close(bio_mc);
+		rc1 = bio_ioctxt_close(bio_mc->mc_meta, flags);
 		if (rc1 && !rc)
 			rc = rc1;
 	}
