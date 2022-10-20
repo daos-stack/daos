@@ -69,7 +69,7 @@ class HostInfo():
 
     @property
     def all(self):
-        """Get all of the server and client hosts
+        """Get all of the server and client hosts.
 
         Returns:
             NodeSet: all the server and client hosts
@@ -152,6 +152,9 @@ class HostInfo():
             client_partition (str): client partition name
             client_reservation (str): client reservation name
 
+        Raises:
+            HostException: if there is a problem obtaining the hosts
+
         """
         self._servers = HostRole(server_hosts, server_partition, server_reservation)
         self._servers.update_hosts(log)
@@ -167,6 +170,10 @@ class HostInfo():
 
         Args:
             test (Test): the avocado test class
+
+        Raises:
+            HostException: if there is a problem obtaining the hosts
+
         """
         server_params = get_host_parameters(
             test, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
