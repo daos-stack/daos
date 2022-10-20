@@ -6,6 +6,7 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos_srv/ad_mem.h>
+#include "ad_mem.h"
 
 enum {
 	ACT_UNDO = 0,
@@ -45,17 +46,31 @@ enum {
 		}									\
 	} while (0)
 
+static inline void
+act_copy_payload(struct umem_action *act, void *addr, daos_size_t size)
+{
+	char	*dst = (char *)&act->ac_copy.payload[0];
+
+	if (size > 0)
+		memcpy(dst, addr, size);
+}
+
 /** start a ad-hoc memory transaction */
 int
-ad_tx_begin(struct ad_blob *blob, struct ad_tx *tx)
+ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 {
 	static __thread uint64_t	tx_id;
 	int				rc = 0;
 
-	tx->tx_blob = blob;
+	blob_addref(bh.bh_blob);
+	tx->tx_blob = bh.bh_blob;
 	tx->tx_id = ++tx_id;
 	D_INIT_LIST_HEAD(&tx->tx_redo);
 	D_INIT_LIST_HEAD(&tx->tx_undo);
+	D_INIT_LIST_HEAD(&tx->tx_ar_pub);
+	D_INIT_LIST_HEAD(&tx->tx_gp_pub);
+	D_INIT_LIST_HEAD(&tx->tx_gp_free);
+
 	tx->tx_redo_act_nr	= 0;
 	tx->tx_redo_payload_len	= 0;
 	tx->tx_redo_act_pos	= NULL;
@@ -64,7 +79,7 @@ ad_tx_begin(struct ad_blob *blob, struct ad_tx *tx)
 }
 
 static int
-ad_act_item_replay(struct umem_action *act)
+ad_act_item_replay(struct ad_tx *tx, struct umem_action *act)
 {
 	int rc = 0;
 
@@ -72,32 +87,32 @@ ad_act_item_replay(struct umem_action *act)
 	case UMEM_ACT_NOOP:
 		break;
 	case UMEM_ACT_COPY:
-		rc = ad_tx_copy(NULL, ad_addr2ptr(act->ac_copy.addr), act->ac_copy.size,
-				act->ac_copy.payload, 0);
+		rc = ad_tx_copy(NULL, blob_addr2ptr(tx->tx_blob, act->ac_copy.addr),
+				act->ac_copy.size, act->ac_copy.payload, 0);
 		break;
 	case UMEM_ACT_COPY_PTR:
-		rc = ad_tx_copy(NULL, ad_addr2ptr(act->ac_copy_ptr.addr), act->ac_copy_ptr.size,
-				(void *)act->ac_copy_ptr.ptr, 0);
+		rc = ad_tx_copy(NULL, blob_addr2ptr(tx->tx_blob, act->ac_copy_ptr.addr),
+				act->ac_copy_ptr.size, (void *)act->ac_copy_ptr.ptr, 0);
 		break;
 	case UMEM_ACT_ASSIGN:
-		rc = ad_tx_assign(NULL, ad_addr2ptr(act->ac_assign.addr), act->ac_assign.size,
-				  act->ac_assign.val);
+		rc = ad_tx_assign(NULL, blob_addr2ptr(tx->tx_blob, act->ac_assign.addr),
+				  act->ac_assign.size, act->ac_assign.val);
 		break;
 	case UMEM_ACT_MOVE:
-		rc = ad_tx_move(NULL, ad_addr2ptr(act->ac_move.dst), ad_addr2ptr(act->ac_move.src),
-				act->ac_move.size);
+		rc = ad_tx_move(NULL, blob_addr2ptr(tx->tx_blob, act->ac_move.dst),
+				blob_addr2ptr(tx->tx_blob, act->ac_move.src), act->ac_move.size);
 		break;
 	case UMEM_ACT_SET:
-		rc = ad_tx_set(NULL, ad_addr2ptr(act->ac_set.addr), act->ac_set.val,
-			       act->ac_set.size, false);
+		rc = ad_tx_set(NULL, blob_addr2ptr(tx->tx_blob, act->ac_set.addr),
+			       act->ac_set.val, act->ac_set.size, false);
 		break;
 	case UMEM_ACT_SET_BITS:
-		rc = ad_tx_setbit(NULL, ad_addr2ptr(act->ac_op_bits.addr), act->ac_op_bits.pos,
-				  act->ac_op_bits.num);
+		rc = ad_tx_setbits(NULL, blob_addr2ptr(tx->tx_blob, act->ac_op_bits.addr),
+				   act->ac_op_bits.pos, act->ac_op_bits.num);
 		break;
 	case UMEM_ACT_CLR_BITS:
-		rc = ad_tx_clrbit(NULL, ad_addr2ptr(act->ac_op_bits.addr), act->ac_op_bits.pos,
-				  act->ac_op_bits.num);
+		rc = ad_tx_clrbits(NULL, blob_addr2ptr(tx->tx_blob, act->ac_op_bits.addr),
+				   act->ac_op_bits.pos, act->ac_op_bits.num);
 		break;
 	case UMEM_ACT_CSUM:
 		break;
@@ -114,13 +129,13 @@ ad_act_item_replay(struct umem_action *act)
 }
 
 static int
-ad_tx_act_replay(d_list_t *list)
+ad_tx_act_replay(struct ad_tx *tx, d_list_t *list)
 {
 	struct umem_act_item	*it;
 	int			 rc = 0;
 
 	d_list_for_each_entry(it, list, it_link) {
-		rc = ad_act_item_replay(&it->it_act);
+		rc = ad_act_item_replay(tx, &it->it_act);
 		if (rc)
 			break;
 	}
@@ -146,16 +161,60 @@ ad_tx_end(struct ad_tx *tx, int err)
 	int	rc = 0;
 
 	if (err)
-		rc = ad_tx_act_replay(&tx->tx_undo);
+		rc = ad_tx_act_replay(tx, &tx->tx_undo);
 
 	/* TODO write actions in redo list to WAL */
-
+	rc = tx_complete(tx, err);
 	if (rc == 0) {
 		ad_tx_act_cleanup(&tx->tx_undo);
 		ad_tx_act_cleanup(&tx->tx_redo);
 	}
-
+	blob_decref(tx->tx_blob);
 	return rc;
+}
+
+/**
+ * snapshot data from address to either redo or undo log
+ */
+int
+ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
+{
+	bool	 undo = (flags & AD_TX_UNDO);
+	bool	 redo = (flags & AD_TX_REDO);
+
+	if (redo == undo)
+		return -DER_INVAL;
+
+	if (addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
+		return -DER_INVAL;
+
+	if (tx == NULL) /* noop */
+		return 0;
+
+	if (undo) {
+		struct umem_act_item	*it_undo;
+
+		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+		if (it_undo == NULL)
+			return -DER_NOMEM;
+
+		act_copy_payload(&it_undo->it_act, addr, size);
+		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
+		it_undo->it_act.ac_copy.size = size;
+		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
+	} else {
+		struct umem_act_item	*it_redo = NULL;
+
+		D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+		if (it_redo == NULL)
+			return -DER_NOMEM;
+
+		act_copy_payload(&it_redo->it_act, addr, size);
+		it_redo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
+		it_redo->it_act.ac_copy.size = size;
+		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
+	}
+	return 0;
 }
 
 /**
@@ -165,11 +224,6 @@ ad_tx_end(struct ad_tx *tx, int err)
 int
 ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags)
 {
-	struct umem_act_item	*it_undo = NULL, *it_redo = NULL;
-	bool			 ptr_only = flags & AD_TX_COPY_PTR;
-	bool			 undo = flags & AD_TX_UNDO;
-	bool			 redo = flags & AD_TX_REDO;
-
 	if (addr == NULL || ptr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
 
@@ -178,44 +232,79 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 		return 0;
 	}
 
-	if (undo) {
+	if (flags & AD_TX_UNDO) {
+		struct umem_act_item *it_undo;
+
 		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
 			return -DER_NOMEM;
-	}
 
-	if (redo) {
-		if (ptr_only)
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
-		else
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
-		if (it_redo == NULL && it_undo != NULL) {
-			D_FREE(it_undo);
-			return -DER_NOMEM;
-		}
-	}
-
-	if (undo) {
-		memcpy(it_undo->it_act.ac_copy.payload, addr, size);
-		it_undo->it_act.ac_copy.addr = ad_ptr2addr(addr);
+		act_copy_payload(&it_undo->it_act, addr, size);
+		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
-	}
 
-	if (redo) {
-		if (ptr_only) {
-			it_redo->it_act.ac_copy_ptr.addr = ad_ptr2addr(addr);
+	} else {
+		struct umem_act_item *it_redo;
+
+		if (!(flags & AD_TX_REDO))
+			return -DER_INVAL;
+
+		if (flags & AD_TX_COPY_PTR) {
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
+			if (it_redo == NULL)
+				return -DER_NOMEM;
+
+			it_redo->it_act.ac_copy_ptr.addr = blob_ptr2addr(tx->tx_blob, addr);
 			it_redo->it_act.ac_copy_ptr.ptr = (uintptr_t)ptr;
 			it_redo->it_act.ac_set.size = size;
 		} else {
-			memcpy(it_redo->it_act.ac_copy.payload, ptr, size);
-			it_redo->it_act.ac_copy.addr = ad_ptr2addr(addr);
+			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+			if (it_redo == NULL)
+				return -DER_NOMEM;
+
+			act_copy_payload(&it_redo->it_act, ptr, size);
+			it_redo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 			it_redo->it_act.ac_copy.size = size;
 		}
 		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
 	}
-
 	return 0;
+}
+
+static int
+get_integer(void *addr, int size)
+{
+	switch (size) {
+	default:
+		D_ASSERT(0);
+		break;
+	case 1:
+		return *((uint8_t *)addr);
+	case 2:
+		return *((uint16_t *)addr);
+	case 4:
+		return *((uint32_t *)addr);
+	}
+}
+
+static void
+assign_integer(void *addr, int size, uint32_t val)
+{
+	switch (size) {
+	default:
+		D_ASSERT(0);
+		break;
+	case 1:
+		*((uint8_t *)addr) = (uint8_t)val;
+		break;
+	case 2:
+		*((uint16_t *)addr) = (uint16_t)val;
+		break;
+	case 4:
+		*((uint32_t *)addr) = val;
+		break;
+	}
 }
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
@@ -228,12 +317,7 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 		return -DER_INVAL;
 
 	if (tx == NULL) {
-		if (size == 1)
-			*((uint8_t *)addr) = (uint8_t)val;
-		else if (size == 2)
-			*((uint16_t *)addr) = (uint16_t)val;
-		else
-			*((uint32_t *)addr) = val;
+		assign_integer(addr, size, val);
 		return 0;
 	}
 
@@ -241,23 +325,18 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_ASSIGN, size);
-	if (it_redo == NULL) {
-		D_FREE(it_undo);
-		return -DER_NOMEM;
-	}
-
-	it_undo->it_act.ac_assign.addr = ad_ptr2addr(addr);
+	it_undo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
 	it_undo->it_act.ac_assign.size = size;
-	if (size == 1)
-		it_undo->it_act.ac_assign.val = *((uint8_t *)addr);
-	else if (size == 2)
-		it_undo->it_act.ac_assign.val = *((uint16_t *)addr);
-	else
-		it_undo->it_act.ac_assign.val = *((uint32_t *)addr);
+	assign_integer(&it_undo->it_act.ac_assign.val, size, get_integer(addr, size));
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 
-	it_redo->it_act.ac_assign.addr = ad_ptr2addr(addr);
+	assign_integer(addr, size, val);
+
+	D_ALLOC_ACT(it_redo, UMEM_ACT_ASSIGN, size);
+	if (it_redo == NULL)
+		return -DER_NOMEM;
+
+	it_redo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
 	it_redo->it_act.ac_assign.size = size;
 	it_undo->it_act.ac_assign.val = val;
 	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
@@ -268,9 +347,11 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 /**
  * memset a storage region, save the operation for redo (and old value for undo if it's
  * required by @save_old).
+ * If AD_TX_LOG_ONLY is set for @flags, this function only logs the operation itself,
+ * it does not call the memset(), this is for reserve() interface.
  */
 int
-ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, bool save_old)
+ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags)
 {
 	struct umem_act_item	*it_undo, *it_redo;
 
@@ -278,32 +359,35 @@ ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, bool save_old)
 		return -DER_INVAL;
 
 	if (tx == NULL) {
-		memset(addr, c, size);
+		if (!(flags & AD_TX_LOG_ONLY))
+			memset(addr, c, size);
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_SET, size);
-	if (it_redo == NULL)
-		return -DER_NOMEM;
-
-	if (save_old) {
+	if (flags & AD_TX_UNDO) {
 		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
-		if (it_undo == NULL) {
-			D_FREE(it_redo);
+		if (it_undo == NULL)
 			return -DER_NOMEM;
-		}
 
-		memcpy(it_undo->it_act.ac_copy.payload, addr, size);
-		it_undo->it_act.ac_copy.addr = ad_ptr2addr(addr);
+		act_copy_payload(&it_undo->it_act, addr, size);
+		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 	}
 
-	it_redo->it_act.ac_set.addr = ad_ptr2addr(addr);
-	it_redo->it_act.ac_set.size = size;
-	it_redo->it_act.ac_set.val = c;
-	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
+	if (!(flags & AD_TX_LOG_ONLY))
+		memset(addr, c, size);
 
+	if (flags & AD_TX_REDO) {
+		D_ALLOC_ACT(it_redo, UMEM_ACT_SET, size);
+		if (it_redo == NULL)
+			return -DER_NOMEM;
+
+		it_redo->it_act.ac_set.addr = blob_ptr2addr(tx->tx_blob, addr);
+		it_redo->it_act.ac_set.size = size;
+		it_redo->it_act.ac_set.val = c;
+		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
+	}
 	return 0;
 }
 
@@ -333,13 +417,13 @@ ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 		return -DER_NOMEM;
 	}
 
-	memcpy(it_undo->it_act.ac_copy.payload, dst, size);
-	it_undo->it_act.ac_copy.addr = ad_ptr2addr(dst);
+	act_copy_payload(&it_undo->it_act, dst, size);
+	it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, dst);
 	it_undo->it_act.ac_copy.size = size;
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 
-	it_redo->it_act.ac_move.dst = ad_ptr2addr(dst);
-	it_redo->it_act.ac_move.src = ad_ptr2addr(src);
+	it_redo->it_act.ac_move.dst = blob_ptr2addr(tx->tx_blob, dst);
+	it_redo->it_act.ac_move.src = blob_ptr2addr(tx->tx_blob, src);
 	it_redo->it_act.ac_move.size = size;
 	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
 
@@ -348,10 +432,10 @@ ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 
 /** setbit in the bitmap, save the operation for redo and the reversed operation for undo */
 int
-ad_tx_setbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
+ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 {
 	struct umem_act_item	*it_undo, *it_redo;
-	uint32_t		 end = pos + nbits;
+	uint32_t		 end = pos + nbits - 1;
 
 	if (bmap == NULL)
 		return -DER_INVAL;
@@ -371,18 +455,18 @@ ad_tx_setbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_SET_BITS, 0);
-	if (it_redo == NULL) {
-		D_FREE(it_undo);
-		return -DER_NOMEM;
-	}
-
-	it_undo->it_act.ac_op_bits.addr = ad_ptr2addr(bmap);
+	it_undo->it_act.ac_op_bits.addr = blob_ptr2addr(tx->tx_blob, bmap);
 	it_undo->it_act.ac_op_bits.pos = pos;
 	it_undo->it_act.ac_op_bits.num = nbits;
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 
-	it_redo->it_act.ac_op_bits.addr = ad_ptr2addr(bmap);
+	setbit_range(bmap, pos, end);
+
+	D_ALLOC_ACT(it_redo, UMEM_ACT_SET_BITS, 0);
+	if (it_redo == NULL)
+		return -DER_NOMEM;
+
+	it_redo->it_act.ac_op_bits.addr = blob_ptr2addr(tx->tx_blob, bmap);
 	it_redo->it_act.ac_op_bits.pos = pos;
 	it_redo->it_act.ac_op_bits.num = nbits;
 	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
@@ -392,10 +476,10 @@ ad_tx_setbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 
 /** clear bit in the bitmap, save the operation for redo and the reversed operation for undo */
 int
-ad_tx_clrbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
+ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 {
 	struct umem_act_item	*it_undo, *it_redo;
-	uint32_t		 end = pos + nbits;
+	uint32_t		 end = pos + nbits - 1;
 
 	if (bmap == NULL)
 		return -DER_INVAL;
@@ -415,18 +499,18 @@ ad_tx_clrbit(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_CLR_BITS, 0);
-	if (it_redo == NULL) {
-		D_FREE(it_undo);
-		return -DER_NOMEM;
-	}
-
-	it_undo->it_act.ac_op_bits.addr = ad_ptr2addr(bmap);
+	it_undo->it_act.ac_op_bits.addr = blob_ptr2addr(tx->tx_blob, bmap);
 	it_undo->it_act.ac_op_bits.pos = pos;
 	it_undo->it_act.ac_op_bits.num = nbits;
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
 
-	it_redo->it_act.ac_op_bits.addr = ad_ptr2addr(bmap);
+	clrbit_range(bmap, pos, end);
+
+	D_ALLOC_ACT(it_redo, UMEM_ACT_CLR_BITS, 0);
+	if (it_redo == NULL)
+		return -DER_NOMEM;
+
+	it_redo->it_act.ac_op_bits.addr = blob_ptr2addr(tx->tx_blob, bmap);
 	it_redo->it_act.ac_op_bits.pos = pos;
 	it_redo->it_act.ac_op_bits.num = nbits;
 	AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
