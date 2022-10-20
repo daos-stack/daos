@@ -1,10 +1,10 @@
-#!/usr/bin/python
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_io_conf import IoConfTestBase
+
 
 class EcodRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf with EC object class.
@@ -27,8 +27,8 @@ class EcodRunIoConf(IoConfTestBase):
             Verify EC with data verification when target or ranks being excluded and added back.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_fault
-        :avocado: tags=ec_io_conf_run
+        :avocado: tags=ec_io_conf_run,test_daos_run_io_conf
         """
         self.execute_io_conf_run_test()
