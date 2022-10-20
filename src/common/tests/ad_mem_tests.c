@@ -242,6 +242,42 @@ adt_reserve_pub_2(void **state)
 }
 
 static void
+adt_reserve_pub_3(void **state)
+{
+	const int	     alloc_size = 64;
+	const int	     rsv_count = 1024;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[rsv_count];
+	daos_off_t	     addrs[rsv_count];
+	int		     i;
+	int		     c;
+	int		     rc;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Mixed reserved and cancel\n");
+	for (i = c = 0; i < rsv_count; i++) {
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[c]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed allocate\n");
+			return;
+		}
+		if (i % 3 == 0)
+			ad_cancel(&acts[c], 1);
+		else
+			c++;
+	}
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, c);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
 adt_reserve_free_1(void **state)
 {
 	const int	     alloc_size = 256;
@@ -320,6 +356,46 @@ adt_reserve_free_2(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+adt_delayed_free(void **state)
+{
+	const int	     alloc_size = 256;
+	struct ad_tx	     tx;
+	struct ad_reserv_act act;
+	daos_off_t	     addr;
+	daos_off_t	     addr2;
+	int		     rc;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Delayed free\n");
+	addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+	if (addr == 0) {
+		fprintf(stderr, "failed allocate\n");
+		return;
+	}
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, &act, 1);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+
+	printf("Free space\n");
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_free(&tx, addr);
+	assert_rc_equal(rc, 0);
+
+	addr2 = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+	assert_int_not_equal(addr, addr2);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 adt_setup(void **state)
 {
@@ -362,8 +438,10 @@ main(void)
 		cmocka_unit_test(adt_reserve_cancel_2),
 		cmocka_unit_test(adt_reserve_pub_1),
 		cmocka_unit_test(adt_reserve_pub_2),
+		cmocka_unit_test(adt_reserve_pub_3),
 		cmocka_unit_test(adt_reserve_free_1),
 		cmocka_unit_test(adt_reserve_free_2),
+		cmocka_unit_test(adt_delayed_free),
 	};
 	int	rc;
 
