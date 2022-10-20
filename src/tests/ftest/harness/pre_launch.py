@@ -35,12 +35,12 @@ class HarnessPreLaunchTest(TestWithoutServers):
             group_result = run_remote(
                 self.log, hostlist_clients, get_getent_command('group', group))
             if not group_result.passed:
-                self.fail(f'Group {group} does not exist')
+                self.fail('Group {} does not exist'.format(group))
             gid = group_result.output[0].stdout[0].split(':')[2]
             self.log.info('Checking if user %s exists', user)
-            user_result = run_remote(self.log, hostlist_clients, f'id {user}')
+            user_result = run_remote(self.log, hostlist_clients, 'id {}'.format(user))
             if not user_result.passed:
-                self.fail(f'User {user} does not exist')
+                self.fail('User {} does not exist'.format(user))
             self.log.info('Checking if user %s is in group %s', user, gid)
-            if not re.findall(f'gid={gid}', user_result.output[0].stdout[0]):
-                self.fail(f'User {user} not in group {group}')
+            if not re.findall('gid={}'.format(gid), user_result.output[0].stdout[0]):
+                self.fail('User {} not in group {}'.format(user, group))
