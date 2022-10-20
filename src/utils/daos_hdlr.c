@@ -1309,7 +1309,6 @@ fs_copy(struct cmd_args_s *ap,
 	struct fs_copy_stats *num)
 {
 	int		rc = 0;
-	int		len_parent_dir;
 	struct stat	src_stat;
 	struct stat	dst_stat;
 	struct stat	next_src_stat;
@@ -1319,8 +1318,7 @@ fs_copy(struct cmd_args_s *ap,
 	char		*tmp_name = NULL;
 	char		*next_src_path = NULL;
 	char		*symlink_value = NULL;
-	char		c_save;
-	char		*src_path_alias;
+	char		*src_parent_path = NULL;
 
 	/* Make sure the source exists. */
 	rc = file_lstat(ap, src_file_dfs, src_path, &src_stat);
@@ -1387,18 +1385,13 @@ fs_copy(struct cmd_args_s *ap,
 		if (rc)
 			goto out;
 		/* To determine parent dir */
-		len_parent_dir = strnlen(src_path, DFS_MAX_PATH);
-		while (len_parent_dir > 0)	{
-			if (src_path[len_parent_dir] == '/')
-				break;
-			len_parent_dir--;
+		src_parent_path = dirname((char *)src_path);
+		if (src_parent_path[1] == '\0' && src_parent_path[0] == '/') {
+			/* root directory */
+			D_ASPRINTF(next_src_path, "/%s", symlink_value);;
+		} else {
+			D_ASPRINTF(next_src_path, "%s/%s", src_parent_path, symlink_value);
 		}
-		c_save = src_path[len_parent_dir];
-		src_path_alias = (char *)src_path;
-		if (len_parent_dir >= 0 && src_path[len_parent_dir] == '/')
-			src_path_alias[len_parent_dir] = 0;
-		D_ASPRINTF(next_src_path, "%s/%s", src_path, symlink_value);
-		src_path_alias[len_parent_dir] = c_save;
 		rc = file_lstat(ap, src_file_dfs, next_src_path, &next_src_stat);
 		if (rc != 0) {
 			rc = daos_errno2der(rc);
