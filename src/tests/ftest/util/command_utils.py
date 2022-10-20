@@ -22,7 +22,8 @@ from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout, get_primary_group
+    get_subprocess_stdout
+from user_utils import get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -174,6 +175,7 @@ class ExecutableCommand(CommandWithParameters):
         status = True
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
+            self.log.debug("Checking the command output for any bad keywords: %s", regex)
             for output in (self.result.stdout_text, self.result.stderr_text):
                 match = re.findall(regex, output)
                 if match:
@@ -439,7 +441,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self.env = env.copy()
+        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -892,7 +894,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             source (str): source of the certificate files.
-            hosts (list): list of the destination hosts.
+            hosts (NodeSet): list of the destination hosts.
         """
         names = set()
         yaml = self.yaml

@@ -109,23 +109,12 @@
 #
 #core_dump_filter: 0x13
 #
-## NVMe SSD inclusion list
-## Immutable after running "dmg storage format".
-#
-## Only use NVMe controllers with specific PCI addresses.
-## Colons replaced by dots in PCI identifiers.
-## default: Use all the NVMe SSDs that don't have active mount points.
-#
-#bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
-#
 #
 ## NVMe SSD exclusion list
 ## Immutable after running "dmg storage format".
 #
 ## Only use NVMe controllers with specific PCI addresses.
-## Excludes drives listed in bdev_include and forces auto-detection to
-## skip those drives.
-## Colons replaced by dots in PCI identifiers.
+## Excludes drives listed and forces auto-detection to skip those drives.
 ## default: Use all the NVMe SSDs that don't have active mount points.
 #
 #bdev_exclude: ["0000:81:00.1"]
@@ -225,16 +214,16 @@
 #control_log_file: /tmp/daos_server.log
 #
 #
-## Enable daos_admin (privileged helper) logging.
+## Enable daos_server_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#helper_log_file: /tmp/daos_admin.log
+#helper_log_file: /tmp/daos_server_helper.log
 #
 #
-## Enable daos_firmware (privileged helper) logging.
+## Enable daos_firmware_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /tmp/daos_firmware.log
+#firmware_helper_log_file: /tmp/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.
@@ -279,9 +268,14 @@
 #  # Immutable after running "dmg storage format".
 #  #
 #  # Helper threads to accelerate checksum and server-side RPC dispatch.
+#  # When using EC, it is recommended to configure helper threads in
+#  # roughly a 1:4 ratio to the number of target threads. For example,
+#  # when using 16 targets it is recommended to set nr_xs_helpers to 4.
 #  #
 #  # The server should have sufficiently many physical cores to support the
 #  # number of helper threads, plus the number of targets.
+#  #
+#  # default: 0 (using existing target threads for this task)
 #
 #  nr_xs_helpers: 4
 #
@@ -311,11 +305,9 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
-#  # Optionally specify the fabric network interface port that will be used
-#  # by this engine but please only if you have a specific need, this will
-#  # normally be chosen automatically.
+#  # Specify the fabric network interface and interface port that will
+#  # be used by this engine. The fabric_iface_port must be different
+#  # for each engine on a DAOS server.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000

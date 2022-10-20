@@ -21,6 +21,10 @@ failed=0
 failures=()
 log_num=0
 
+if [ -z "$DAOS_BASE" ]; then
+    DAOS_BASE="."
+fi
+
 run_test()
 {
     local in="$*"
@@ -56,6 +60,7 @@ run_test()
     ((log_num += 1))
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
+    sudo chown -R "$USER" "${FILES[@]}"
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -67,14 +72,10 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
+    chmod 777 "${DAOS_BASE}"/test_results/xml
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
@@ -149,6 +150,13 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+    COMP="UTEST_vos"
+    cmd="-c pool -w key@0-4 key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    cmd="-c pool -w key@0-3 key@3-4 -w key@5-1 -w key@5-4 -R key@5-3 -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    cmd="-c pool -x key@10-400 -i -d -o pool -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
@@ -235,9 +243,7 @@ if [ -d "/mnt/daos" ]; then
         for ((i = 0; i < ${#failures[@]}; i++)); do
             echo "    ${failures[$i]}"
         done
-        if ! ${OLD_CI:-true}; then
-            exit 1
-        fi
+        exit 1
     fi
 else
     echo "/mnt/daos isn't present for unit tests"

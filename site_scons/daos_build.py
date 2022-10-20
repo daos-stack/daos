@@ -154,6 +154,7 @@ def library(env, *args, **kwargs):
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
+    denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     prog = denv.Program(*args, **kwargs)
@@ -166,6 +167,7 @@ def program(env, *args, **kwargs):
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
+    denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
     testbuild = denv.Program(*args, **kwargs)
@@ -207,13 +209,13 @@ def _configure_mpi_pkg(env):
     if _find_mpicc(env):
         return True
     try:
-        env.ParseConfig("pkg-config --cflags --libs $MPI_PKG")
-    except OSError as e:
-        print("\n**********************************")
-        print("Could not find package MPI_PKG=%s\n" % env.subst("$MPI_PKG"))
-        print("Unset it or update PKG_CONFIG_PATH")
-        print("**********************************")
-        raise e
+        env.ParseConfig('pkg-config --cflags --libs $MPI_PKG')
+    except OSError as error:
+        print('\n**********************************')
+        print(f'Could not find package MPI_PKG={env.subst("$MPI_PKG")}\n')
+        print('Unset it or update PKG_CONFIG_PATH')
+        print('**********************************')
+        raise error
 
     return True
 

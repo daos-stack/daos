@@ -1,11 +1,10 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-
+from logging import getLogger
 from grp import getgrgid
 from pwd import getpwuid
 import re
@@ -20,7 +19,7 @@ class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
 
-def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hostlist_suffix=None):
     """Get a dmg command object.
 
     Args:
@@ -32,6 +31,8 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
             utilizes the file specified by config_file.
+        hostlist_suffix (str, optional): Suffix to append to each host name.
+            Defaults to None.
 
     Returns:
         DmgCommand: the dmg command object
@@ -39,7 +40,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """
     transport_config = DmgTransportCredentials(cert_dir)
     config = DmgYamlParameters(config_file, group, transport_config)
-    command = DmgCommand(bin_dir, config)
+    command = DmgCommand(bin_dir, config, hostlist_suffix)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -749,25 +750,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("pool", "list"), no_query=no_query, verbose=verbose)
 
-    def pool_set_prop(self, pool, name, value):
+    def pool_set_prop(self, pool, properties):
         """Set property for a given Pool.
 
         Args:
-            pool (str): Pool uuid for which property is supposed
-                        to be set.
-            name (str): Property name to be set
-            value (str): Property value to be set
+            pool (str): Pool uuid for which property is supposed to be set.
+            properties (str): Property in the form of key:val[,key:val...]
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                       information.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: if the dmg pool set-prop command fails.
 
         """
-        return self._get_result(
-            ("pool", "set-prop"), pool=pool, name=name, value=value)
+        return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
     def pool_get_prop(self, pool, name):
         """Get the Property for a given pool.
@@ -1249,32 +1246,27 @@ def check_system_query_status(data):
     """Check if any server crashed.
 
     Args:
-        data (dict): dictionary of system query data obtained from
-            DmgCommand.system_query()
+        data (dict): dictionary of system query data obtained from DmgCommand.system_query()
 
     Returns:
         bool: True if no server crashed, False otherwise.
 
     """
+    log = getLogger()
     failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.
     if "response" in data and "members" in data["response"]:
         for member in data["response"]["members"]:
-            rank_info = [
-                "{}: {}".format(key, member[key]) for key in sorted(member)]
-            print(
-                "Rank {} info:\n  {}".format(
-                    member["rank"], "\n  ".join(rank_info)))
+            rank_info = ["{}: {}".format(key, member[key]) for key in sorted(member)]
+            log.debug("Rank %s info:\n  %s", member["rank"], "\n  ".join(rank_info))
             if "state" in member and member["state"].lower() in failed_states:
                 failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
     for rank in sorted(failed_rank_list):
-        print(
-            "Rank {} failed with state '{}'".format(
-                rank, failed_rank_list[rank]))
+        log.debug("Rank %s failed with state '%s'", rank, failed_rank_list[rank])
 
     # Return True if no ranks failed
     return not bool(failed_rank_list)

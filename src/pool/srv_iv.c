@@ -158,6 +158,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_SVC_LIST:
 			svc_list = prop_entry->dpe_val_ptr;
 			if (svc_list) {
+				int rc;
+
 				D_ASSERT(svc_list->rl_nr <
 					 PROP_SVC_LIST_MAX_TMP);
 				iv_prop->pip_svc_list.rl_nr = svc_list->rl_nr;
@@ -165,8 +167,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 						(void *)(iv_prop->pip_iv_buf +
 						roundup(offset, 8));
 				iv_prop->pip_svc_list_offset = offset;
-				d_rank_list_copy(&iv_prop->pip_svc_list,
-						 svc_list);
+				rc = d_rank_list_copy(&iv_prop->pip_svc_list, svc_list);
+				D_ASSERT(rc == 0);
 				offset += roundup(
 					svc_list->rl_nr * sizeof(d_rank_t), 8);
 			}
@@ -588,7 +590,7 @@ pool_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-pool_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+pool_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }

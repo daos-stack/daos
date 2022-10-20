@@ -478,6 +478,13 @@ vea_ut_setup(void **state)
 		return rc;
 	}
 
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST) {
+		fprintf(stderr, "register DBTREE_CLASS_IFV error %d\n", rc);
+		return rc;
+	}
+
 	rc = ut_setup(&ut_args);
 	if (rc == 0)
 		*state = &ut_args;

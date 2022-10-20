@@ -15,6 +15,7 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_event.h>
 #include <daos_obj_class.h>
+#include <daos_prop.h>
 
 #define DAOS_OBJ_NIL		((daos_obj_id_t){0})
 
@@ -111,6 +112,12 @@ static inline bool
 daos_otype_t_is_valid(enum daos_otype_t type)
 {
 	return type <= DAOS_OT_MAX;
+}
+
+static inline bool
+daos_pa_domain_is_valid(uint32_t pa_domain)
+{
+	return pa_domain == DAOS_PROP_CO_REDUN_NODE || pa_domain == DAOS_PROP_CO_REDUN_RANK;
 }
 
 static inline enum daos_otype_t
@@ -508,7 +515,7 @@ enum {
 	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
 						 * flat KV; 1 grp for others.
 						 */
-	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
+	DAOS_OCH_SHD_TINY	= (1 << 5),	/** 1 grp */
 	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
 	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
 	DAOS_OCH_SHD_EXT	= (1 << 8),	/** max(1024, 80%) */
