@@ -305,7 +305,6 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			if dds == nil {
 				return nil, errors.New("device with nil details in smd query resp")
 			}
-			svc.log.Debugf("smdQueryDevice(): %+v", *dds)
 
 			uuidMatch := dds.Uuid != "" && devUUIDs[dds.Uuid]
 			// Where possible specify the TrAddr over UUID as there may be multiple
@@ -317,7 +316,6 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 					edm[eisPtr] = append(edm[eisPtr], devID{trAddr: dds.TrAddr})
 					delete(trAddrs, dds.TrAddr)
 					delete(devUUIDs, dds.Uuid)
-					svc.log.Debugf("adding %s to drpc request list", dds.TrAddr)
 					continue
 				}
 			}
@@ -326,7 +324,6 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 				// Only add UUID entry if TrAddr is not available for a device.
 				edm[eisPtr] = append(edm[eisPtr], devID{uuid: dds.Uuid})
 				delete(devUUIDs, dds.Uuid)
-				svc.log.Debugf("adding %s to drpc request list", dds.Uuid)
 			}
 		}
 	}

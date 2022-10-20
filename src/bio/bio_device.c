@@ -733,8 +733,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		opts->led_state = (Ctl__LedState)cur_led_state;
 		return;
 	case CTL__LED_ACTION__SET:
-		D_DEBUG(DB_MGMT, "Setting VMD device %s LED state to %s\n", addr_buf,
-			LED_STATE_NAME(opts->led_state));
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */

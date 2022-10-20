@@ -238,11 +238,6 @@ bio_storage_dev_manage_led(void *arg)
 			DP_UUID(led_info->dev_uuid),
 			ctl__led_action__descriptor.values[led_info->action].name,
 			ctl__led_state__descriptor.values[*led_info->state].name);
-	else
-		D_DEBUG(DB_MGMT, "bio_led_manage on device:"DF_UUID" (action: %s, state %s)\n",
-			DP_UUID(led_info->dev_uuid),
-			ctl__led_action__descriptor.values[led_info->action].name,
-			ctl__led_state__descriptor.values[*led_info->state].name);
 
 	return rc;
 }
@@ -651,8 +646,6 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 		D_ERROR("Transport address not provided in request\n");
 		return -DER_INVAL;
 	}
-
-	D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->ids);
 
 	strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
 
