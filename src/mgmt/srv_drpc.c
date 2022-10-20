@@ -2208,9 +2208,10 @@ out:
 }
 
 static void
-drpc_dev_manage_pack(Ctl__DevManageResp *resp, uint8_t *body, Drpc__Response *drpc_resp)
+drpc_dev_manage_pack(Ctl__DevManageResp *resp, Drpc__Response *drpc_resp)
 {
 	size_t	len = ctl__dev_manage_resp__get_packed_size(resp);
+	uint8_t	body = NULL;
 
 	D_ALLOC(body, len);
 	if (body == NULL) {
@@ -2242,7 +2243,6 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__SetFaultyReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
-	uint8_t			*body = NULL;
 	uuid_t			 dev_uuid;
 	int			 rc = 0;
 
@@ -2277,7 +2277,7 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 pack_resp:
 	resp->status = rc;
-	drpc_dev_manage_pack(resp, body, drpc_resp);
+	drpc_dev_manage_pack(resp, drpc_resp);
 	drpc_dev_manage_free(resp);
 	ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
 }
@@ -2288,7 +2288,6 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__LedManageReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
-	uint8_t			*body = NULL;
 	int			 rc = 0;
 
 	req = ctl__led_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
@@ -2316,7 +2315,7 @@ ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_ERROR("Failed to manage LED state (%d)\n", rc);
 
 	resp->status = rc;
-	drpc_dev_manage_pack(resp, body, drpc_resp);
+	drpc_dev_manage_pack(resp, drpc_resp);
 	drpc_dev_manage_free(resp);
 	ctl__led_manage_req__free_unpacked(req, &alloc.alloc);
 }
@@ -2327,7 +2326,6 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__DevReplaceReq	*req = NULL;
 	Ctl__DevManageResp	*resp = NULL;
-	uint8_t			*body;
 	uuid_t			 old_uuid;
 	uuid_t			 new_uuid;
 	int			 rc = 0;
@@ -2387,7 +2385,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 pack_resp:
 	resp->status = rc;
-	drpc_dev_manage_pack(resp, body, drpc_resp);
+	drpc_dev_manage_pack(resp, drpc_resp);
 	drpc_dev_manage_free(resp);
 	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 }
