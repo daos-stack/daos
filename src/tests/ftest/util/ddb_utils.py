@@ -5,11 +5,11 @@
 """
 import os
 
-from command_utils_base import PositionalParameter, CommandWithPositionalParameters
+from command_utils_base import FormattedParameter, BasicParameter, CommandWithParameters
 from general_utils import run_pcmd
 
 
-class DdbCommandBase(CommandWithPositionalParameters):
+class DdbCommandBase(CommandWithParameters):
     """Defines the basic structures of ddb command."""
 
     def __init__(self, server_host, path, verbose=True, timeout=None, sudo=True):
@@ -32,18 +32,18 @@ class DdbCommandBase(CommandWithPositionalParameters):
         self.host = server_host
 
         # Write mode that's necessary for the commands that alters the data such as load.
-        self.write_mode = PositionalParameter(position=1, default=False, str_format="-w")
+        self.write_mode = FormattedParameter("-w", default=False, position=1)
 
         # Run ddb with single mode with -R. i.e., non-interactive mode.
-        self.run_cmd = PositionalParameter(position=2, default=True, str_format="-R")
+        self.run_cmd = FormattedParameter("-R", default=True, position=2)
 
         # Command to run on the VOS file that contains container, object info, etc.
         # Specify double quotes in str_format because the command needs to be wrapped
         # with them.
-        self.single_command = PositionalParameter(position=3, str_format="\"{}\"")
+        self.single_command = FormattedParameter("\"{}\"", position=3)
 
         # VOS file path.
-        self.vos_path = PositionalParameter(position=4)
+        self.vos_path = BasicParameter(None, position=4)
 
         # Members needed for run_pcmd().
         self.verbose = verbose

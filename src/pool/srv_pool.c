@@ -1160,7 +1160,7 @@ events_handler(void *arg)
 	D_DEBUG(DB_MD, DF_UUID": starting\n", DP_UUID(svc->ps_uuid));
 
 	for (;;) {
-		struct pool_svc_event  *event;
+		struct pool_svc_event  *event = NULL;
 		bool			stop;
 
 		ABT_mutex_lock(events->pse_mutex);
@@ -1708,8 +1708,6 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	d_rank_t		rank = dss_self_rank();
-
-	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
 
 	fini_events(svc);
 	pool_svc_cancel_and_wait_reconf(svc);
@@ -2640,6 +2638,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 			D_GOTO(out_svc, rc);
 	}
 
+	ds_rebuild_running_query(in->pci_op.pi_uuid, &out->pco_rebuild_ver);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3415,7 +3414,7 @@ out:
 }
 
 static void
-ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
+ds_pool_query_handler(crt_rpc_t *rpc, int version)
 {
 	struct pool_query_v5_in	 *in = crt_req_get(rpc);
 	struct pool_query_v5_out *out = crt_reply_get(rpc);
@@ -3444,6 +3443,9 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 			D_GOTO(out_svc, rc);
 	}
 
+	if (version >= 5)
+		ds_rebuild_running_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_ver);
+
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3467,7 +3469,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, bool return_pool_ver)
 		}
 	}
 
-	if (return_pool_ver) {
+	if (version >= 5) {
 		rc = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_GLOBAL_VERSION, &prop);
 		if (rc != 0)
 			D_GOTO(out_lock, rc);
@@ -3636,13 +3638,13 @@ out:
 void
 ds_pool_query_handler_v4(crt_rpc_t *rpc)
 {
-	ds_pool_query_handler(rpc, false);
+	ds_pool_query_handler(rpc, 4);
 }
 
 void
 ds_pool_query_handler_v5(crt_rpc_t *rpc)
 {
-	ds_pool_query_handler(rpc, true);
+	ds_pool_query_handler(rpc, 5);
 }
 
 /* Convert pool_comp_state_t to daos_target_state_t */

@@ -814,7 +814,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

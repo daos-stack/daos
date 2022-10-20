@@ -99,7 +99,7 @@ class RbldContainerCreate(IorTestBase):
 
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.server_managers[0].get_config_value("targets")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         ior_loop = self.params.get("ior_test_loop", "/run/ior/*")
         cont_qty = self.params.get("cont_qty", "/run/io/*")
