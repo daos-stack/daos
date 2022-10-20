@@ -26,14 +26,10 @@ dfuse_progress_thread(void *arg)
 		int rc;
 		int i;
 
-		DFUSE_TRA_INFO(eqt, "waiting, to_consume %d", to_consume);
-
 		for (i = 0; i < to_consume; i++) {
 cont:
 			errno = 0;
 			rc    = sem_wait(&eqt->de_sem);
-
-			DFUSE_TRA_INFO(eqt, "completed i %d rc %d", i, rc);
 
 			if (rc != 0) {
 				rc = errno;
