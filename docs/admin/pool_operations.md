@@ -106,10 +106,10 @@ The capacity of the pool can be specified in three different ways:
 
 !!! warning
     Concurrent creation of pools using **size percentage** could lead to
-    `ENOSPACE` errors.  Indeed, this operations is not atomic and the overall
-    available size retrieved in a first step could be different from the one
-    available when the second step will be performed (i.e. the creation of the
-    pool).
+    `ENOSPACE` errors.  Indeed, these operations are not atomic and the overall
+    available size retrieved in the first step could be different from the size
+    actually available when the second step will be performed (i.e. allocation
+    of space for the pool).
 
 Examples:
 
