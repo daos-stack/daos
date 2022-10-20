@@ -23,7 +23,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_eq              *eqt       = fs_handle->dpi_eqt;
+	struct dfuse_eq              *eqt       = &fs_handle->dpi_eqt[1];
 	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
 	int                           rc;
 	struct dfuse_event           *ev;

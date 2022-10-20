@@ -960,23 +960,20 @@ int
 dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh)
 {
 	struct dfuse_projection_info *fs_handle;
-	struct dfuse_eq              *eqt;
 	int                           rc;
+	int                           i;
 
 	D_ALLOC_PTR(fs_handle);
 	if (fs_handle == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_PTR(eqt);
-	if (eqt == NULL)
+	fs_handle->dpi_eqt_count = 2;
+
+	D_ALLOC_ARRAY(fs_handle->dpi_eqt, fs_handle->dpi_eqt_count);
+	if (fs_handle->dpi_eqt == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	fs_handle->dpi_eqt = eqt;
-	eqt->de_handle     = fs_handle;
-
 	DFUSE_TRA_UP(fs_handle, dfuse_info, "fs_handle");
-
-	DFUSE_TRA_UP(eqt, fs_handle, "event_queue");
 
 	fs_handle->dpi_info = dfuse_info;
 
@@ -994,21 +991,44 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
-	rc = daos_eq_create(&eqt->de_eq);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err_iht, rc);
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
-	rc = sem_init(&eqt->de_sem, 0, 0);
-	if (rc != 0)
-		D_GOTO(err_eq, rc = daos_errno2der(errno));
+		eqt->de_handle = fs_handle;
+
+		DFUSE_TRA_UP(eqt, fs_handle, "event_queue");
+
+		/* Create the semaphore before the eq as there's no way to check if sem_init()
+		 * has been called or not and it's invalid to call sem_destroy if it hasn't.  This
+		 * way we can avoid adding additional memory for tracking status of the semaphore.
+		 */
+		rc = sem_init(&eqt->de_sem, 0, 0);
+		if (rc != 0)
+			D_GOTO(err_eq, rc = daos_errno2der(errno));
+
+		rc = daos_eq_create(&eqt->de_eq);
+		if (rc != -DER_SUCCESS) {
+			sem_destroy(&eqt->de_sem);
+
+			D_GOTO(err_eq, rc);
+		}
+	}
 
 	fs_handle->dpi_shutdown = false;
 	*_fsh = fs_handle;
 	return rc;
 
 err_eq:
-	daos_eq_destroy(eqt->de_eq, DAOS_EQ_DESTROY_FORCE);
-err_iht:
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
+
+		if (daos_handle_is_inval(eqt->de_eq))
+			continue;
+
+		daos_eq_destroy(eqt->de_eq, DAOS_EQ_DESTROY_FORCE);
+
+		sem_destroy(&eqt->de_sem);
+	}
 	d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 err_pt:
 	d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
@@ -1069,10 +1089,10 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct dfuse_eq          *eqt  = fs_handle->dpi_eqt;
 	struct fuse_args          args = {0};
 	struct dfuse_inode_entry *ie   = NULL;
 	int                       rc;
+	int                       i;
 
 	args.argc = 5;
 
@@ -1137,11 +1157,16 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
-	rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
-	if (rc != 0)
-		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+	/* TODO: Shutdown properly here */
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
-	pthread_setname_np(eqt->de_thread, "dfuse_progress");
+		rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
+		if (rc != 0)
+			D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+
+		pthread_setname_np(eqt->de_thread, "dfuse_progress");
+	}
 
 	rc = dfuse_launch_fuse(fs_handle, &args);
 	fuse_opt_free_args(&args);
@@ -1253,20 +1278,25 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 int
 dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_eq *eqt = fs_handle->dpi_eqt;
-	d_list_t        *rlink;
-	uint64_t         refs    = 0;
-	int              handles = 0;
-	int              rc;
+	d_list_t *rlink;
+	uint64_t  refs    = 0;
+	int       handles = 0;
+	int       rc;
+	int       i;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
 	fs_handle->dpi_shutdown = true;
-	sem_post(&eqt->de_sem);
 
-	pthread_join(eqt->de_thread, NULL);
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
-	sem_destroy(&eqt->de_sem);
+		sem_post(&eqt->de_sem);
+
+		pthread_join(eqt->de_thread, NULL);
+
+		sem_destroy(&eqt->de_sem);
+	}
 
 	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
@@ -1312,13 +1342,19 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 int
 dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 {
-	struct dfuse_eq *eqt = fs_handle->dpi_eqt;
-	int              rc;
-	int              rc2 = -DER_SUCCESS;
+	int rc;
+	int rc2 = -DER_SUCCESS;
+	int i;
 
-	rc = daos_eq_destroy(eqt->de_eq, 0);
-	if (rc)
-		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
+
+		rc = daos_eq_destroy(eqt->de_eq, 0);
+		if (rc)
+			DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+
+		DFUSE_TRA_DOWN(eqt);
+	}
 
 	D_FREE(fs_handle->dpi_eqt);
 

@@ -43,7 +43,9 @@ struct dfuse_projection_info {
 	/** Next available inode number */
 	ATOMIC uint64_t     dpi_ino_next;
 	bool                dpi_shutdown;
+	/* Array of dfuse_eq */
 	struct dfuse_eq    *dpi_eqt;
+	int                 dpi_eqt_count;
 };
 
 struct dfuse_eq {
