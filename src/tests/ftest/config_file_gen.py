@@ -51,6 +51,9 @@ def generate_server_config(args):
     """
     common_cfg = CommonConfig(args.group_name, DaosServerTransportCredentials())
     config = DaosServerYamlParameters(args.server_file, common_cfg)
+    config.engine_params[0].storage.storage_tiers[0].storage_class.value = "ram"
+    config.engine_params[0].storage.storage_tiers[0].scm_mount.value = "/mnt/daos"
+    config.engine_params[0].storage.storage_tiers[0].scm_size.value = 16
     # Update the configuration file access points
     config.other_params.access_points.value = args.node_list.split(",")
     return create_config(args, config)
