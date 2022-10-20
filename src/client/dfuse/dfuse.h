@@ -35,19 +35,26 @@ struct dfuse_info {
 };
 
 struct dfuse_projection_info {
-	struct dfuse_info		*dpi_info;
+	struct dfuse_info  *dpi_info;
 	/** Hash table of open inodes, this matches kernel ref counts */
-	struct d_hash_table		dpi_iet;
+	struct d_hash_table dpi_iet;
 	/** Hash table of open pools */
-	struct d_hash_table		dpi_pool_table;
+	struct d_hash_table dpi_pool_table;
 	/** Next available inode number */
-	ATOMIC uint64_t			dpi_ino_next;
+	ATOMIC uint64_t     dpi_ino_next;
+	bool                dpi_shutdown;
+	struct dfuse_eq    *dpi_eqt;
+};
+
+struct dfuse_eq {
+	struct dfuse_projection_info *de_handle;
+
 	/* Event queue for async events */
-	daos_handle_t			dpi_eq;
+	daos_handle_t                 de_eq;
 	/** Semaphore to signal event waiting for async thread */
-	sem_t				dpi_sem;
-	pthread_t			dpi_thread;
-	bool				dpi_shutdown;
+	sem_t                         de_sem;
+
+	pthread_t                     de_thread;
 };
 
 /* Launch fuse, and do not return until complete */

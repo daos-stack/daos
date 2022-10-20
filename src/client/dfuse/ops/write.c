@@ -23,6 +23,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_eq              *eqt       = fs_handle->dpi_eqt;
 	const struct fuse_ctx        *fc        = fuse_req_ctx(req);
 	int                           rc;
 	struct dfuse_event           *ev;
@@ -55,7 +56,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
-	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
+	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
@@ -93,7 +94,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 		D_GOTO(err, rc);
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&fs_handle->dpi_sem);
+	sem_post(&eqt->de_sem);
 	return;
 
 err:

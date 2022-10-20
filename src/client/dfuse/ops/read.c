@@ -42,6 +42,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_eq              *eqt       = fs_handle->dpi_eqt;
 	void                         *buff;
 	int                           rc;
 	bool                          mock_read = false;
@@ -76,7 +77,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		return;
 	}
 
-	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
+	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_buff, rc = daos_der2errno(rc));
 
@@ -91,7 +92,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
-	sem_post(&fs_handle->dpi_sem);
+	sem_post(&eqt->de_sem);
 	return;
 err_buff:
 	D_FREE(buff);
