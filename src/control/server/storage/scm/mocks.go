@@ -17,6 +17,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+const (
+	defaultMountOpts = "defaults"
+)
+
 type (
 	mockIpmctlCfg struct {
 		initErr           error
@@ -124,7 +128,7 @@ type (
 
 	mountMap struct {
 		sync.RWMutex
-		mounted map[string]bool
+		mounted map[string]string
 	}
 
 	// MockSysConfig alters mock SystemProvider behavior.
@@ -153,22 +157,22 @@ type (
 	}
 )
 
-func (mm *mountMap) Set(mount string, mounted bool) {
+func (mm *mountMap) Set(mount string, mountOpts string) {
 	mm.Lock()
 	defer mm.Unlock()
 
-	mm.mounted[mount] = mounted
+	mm.mounted[mount] = mountOpts
 }
 
-func (mm *mountMap) Get(mount string) (bool, bool) {
+func (mm *mountMap) Get(mount string) (string, bool) {
 	mm.RLock()
 	defer mm.RUnlock()
 
-	mounted, exists := mm.mounted[mount]
-	return mounted, exists
+	opts, exists := mm.mounted[mount]
+	return opts, exists
 }
 
-func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
+func (msp *MockSysProvider) getMountOpts(target string) (string, error) {
 	err := msp.cfg.IsMountedErr
 	// hack... don't fail the format tests which also want
 	// to make sure that the device isn't already formatted.
@@ -186,17 +190,33 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
-	isMounted, exists := msp.isMounted.Get(target)
+	opts, exists := msp.isMounted.Get(target)
 	if !exists {
-		return msp.cfg.IsMountedBool, err
+		if msp.cfg.IsMountedBool {
+			opts = defaultMountOpts
+		}
+		return opts, err
 	}
-	return isMounted, err
+
+	return opts, nil
 }
 
-func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
+func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
+	opts, err := msp.getMountOpts(target)
+	if err != nil {
+		return false, err
+	}
+
+	return opts != "", nil
+}
+
+func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, opts string) error {
 	if msp.cfg.MountErr == nil {
+		if opts == "" {
+			opts = defaultMountOpts
+		}
 		msp.Lock()
-		msp.isMounted.Set(target, true)
+		msp.isMounted.Set(target, opts)
 		msp.Unlock()
 	}
 	return msp.cfg.MountErr
@@ -205,7 +225,7 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		msp.isMounted.Set(target, false)
+		msp.isMounted.Set(target, "")
 		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
@@ -256,7 +276,7 @@ func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider
 		log: log,
 		cfg: *cfg,
 		isMounted: mountMap{
-			mounted: make(map[string]bool),
+			mounted: make(map[string]string),
 		},
 	}
 	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
