@@ -4833,7 +4833,7 @@ retry_errstr(struct obj_auxi_args *obj_auxi)
 }
 
 static inline int
-retry_errcode(struct obj_auxi_args *obj_auxi)
+retry_errcode(struct obj_auxi_args *obj_auxi, int rc)
 {
 	if (obj_auxi->csum_retry)
 		return -DER_CSUM;
@@ -4841,8 +4841,10 @@ retry_errcode(struct obj_auxi_args *obj_auxi)
 		return -DER_TX_UNCERTAIN;
 	else if (obj_auxi->nvme_io_err)
 		return -DER_NVME_IO;
-	else
+	else if (!rc)
 		return -DER_IO;
+
+	return rc;
 }
 
 /* Selects next replica in the object's layout.
@@ -4867,10 +4869,16 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 	*shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) % grp_size + start_shard;
 	if (*shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
-		return retry_errcode(obj_auxi);
+		return retry_errcode(obj_auxi, 0);
 	}
 
 	return rc;
+}
+
+static inline bool
+obj_auxi_retryable(struct obj_auxi_args *obj_auxi)
+{
+	return (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err);
 }
 
 static int
@@ -4884,8 +4892,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	bool			ec_degrade = false;
 	int			rc = 0;
 
-	if (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->force_degraded ||
-	    obj_auxi->nvme_io_err)
+	if (obj_auxi_retryable(obj_auxi) || obj_auxi->force_degraded)
 		force_ec_degrade = true;
 
 	while (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) || force_ec_degrade) {
@@ -4912,7 +4919,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	if (rc) {
 		if (force_ec_degrade) {
 			obj_auxi->no_retry = 1;
-			rc = retry_errcode(obj_auxi);
+			rc = retry_errcode(obj_auxi, rc);
 		}
 		D_ERROR(DF_OID" can not get parity shard: "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
@@ -5097,7 +5104,7 @@ obj_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned int
 		rc = obj_ec_fetch_shards_get(obj, args, map_ver, obj_auxi, shard, shard_cnt);
 		if (rc)
 			D_GOTO(out, rc);
-	} else if ((obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err)) {
+	} else if (obj_auxi_retryable(obj_auxi)) {
 		*shard_cnt = 1;
 		rc = obj_retry_next_shard(obj, obj_auxi, map_ver, shard);
 		if (rc)
