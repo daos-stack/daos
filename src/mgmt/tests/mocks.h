@@ -154,14 +154,14 @@ extern uuid_t	ds_mgmt_pool_upgrade_uuid;
 void mock_ds_mgmt_pool_upgrade_setup(void);
 
 /*
-  Mock ds_mgmt_dev_manage_led
+ * Mock ds_mgmt_dev_manage_led
  */
 extern int	ds_mgmt_dev_manage_led_return;
 extern uuid_t	ds_mgmt_dev_manage_led_uuid;
 void mock_ds_mgmt_dev_manage_led_setup(void);
 
 /*
-  Mock ds_mgmt_dev_replace
+ * Mock ds_mgmt_dev_replace
  */
 extern int	ds_mgmt_dev_replace_return;
 extern uuid_t	ds_mgmt_dev_replace_old_uuid;
@@ -169,7 +169,7 @@ extern uuid_t	ds_mgmt_dev_replace_new_uuid;
 void mock_ds_mgmt_dev_replace_setup(void);
 
 /*
-  Mock ds_mgmt_dev_set_faulty
+ * Mock ds_mgmt_dev_set_faulty
  */
 extern int	ds_mgmt_dev_set_faulty_return;
 extern uuid_t	ds_mgmt_dev_set_faulty_uuid;
