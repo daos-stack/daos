@@ -649,7 +649,7 @@ ctl_init()
 		if (rc != -DER_SUCCESS)
 			return rc;
 	}
-
+	sleep(10);
 	for (i = 0; i < num_ranks; i++) {
 		ep.ep_grp = grp;
 		ep.ep_rank = ranks_to_send[i];
