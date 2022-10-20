@@ -275,7 +275,7 @@ type ledCmd struct {
 	smdManageCmd
 
 	Args struct {
-		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device"`
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs"`
 	} `positional-args:"yes"`
 }
 
