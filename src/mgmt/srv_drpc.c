@@ -2210,8 +2210,8 @@ out:
 static void
 drpc_dev_manage_pack(Ctl__DevManageResp *resp, Drpc__Response *drpc_resp)
 {
-	size_t	len = ctl__dev_manage_resp__get_packed_size(resp);
-	uint8_t	body = NULL;
+	size_t	 len = ctl__dev_manage_resp__get_packed_size(resp);
+	uint8_t	*body = NULL;
 
 	D_ALLOC(body, len);
 	if (body == NULL) {
