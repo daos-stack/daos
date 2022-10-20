@@ -49,8 +49,10 @@ enum {
 static inline void
 act_copy_payload(struct umem_action *act, void *addr, daos_size_t size)
 {
+	char	*dst = (char *)&act->ac_copy.payload[0];
+
 	if (size > 0)
-		memcpy(&act->ac_copy.payload[0], addr, size);
+		memcpy(dst, addr, size);
 }
 
 /** start a ad-hoc memory transaction */
