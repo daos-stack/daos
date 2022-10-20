@@ -628,7 +628,6 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 {
 	struct bio_led_manage_info	led_info = { 0 };
 	Ctl__LedState			led_state;
-	uuid_t				dev_uuid;
 	int				rc = 0;
 
 	D_ASSERT(req->ids != NULL);
@@ -648,38 +647,16 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	}
 
 	if (strlen(req->ids) == 0) {
-		D_ERROR("Neither transport address or device UUID are provided in request\n");
+		D_ERROR("Transport address not provided in request\n");
 		return -DER_INVAL;
 	}
 
-	/* Either tr_addr or uuid to be set in led_info */
-	if (req->use_tr_addr) {
-		D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->ids);
+	D_DEBUG(DB_MGMT, "Identifying controller:%s\n", req->ids);
 
-		strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
-		uuid_clear(dev_uuid);
-	} else {
-		rc = uuid_parse(req->ids, dev_uuid);
-		if (rc != 0) {
-			D_ERROR("Unable to parse device UUID %s: %d\n", req->ids, rc);
-			return rc;
-		}
-		if (uuid_is_null(dev_uuid))
-			return -DER_INVAL;
-
-		D_DEBUG(DB_MGMT, "Identifying device:"DF_UUID"\n", DP_UUID(dev_uuid));
-
-		D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
-		if (resp->device->uuid == NULL) {
-			D_ERROR("Failed to allocate device uuid in response");
-			return -DER_NOMEM;
-		}
-		uuid_unparse_lower(dev_uuid, resp->device->uuid);
-	}
+	strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
 
 	/* tr_addr will be used if set and get populated if not */
 	led_info.tr_addr = resp->device->tr_addr;
-	uuid_copy(led_info.dev_uuid, dev_uuid);
 	led_info.action = req->led_action;
 	led_state = req->led_state;
 	led_info.state = &led_state;
