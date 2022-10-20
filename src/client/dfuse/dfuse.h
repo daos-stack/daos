@@ -51,7 +51,7 @@ struct dfuse_eq {
 
 	/* Event queue for async events */
 	daos_handle_t                 de_eq;
-	/** Semaphore to signal event waiting for async thread */
+	/* Semaphore to signal event waiting for async thread */
 	sem_t                         de_sem;
 
 	pthread_t                     de_thread;

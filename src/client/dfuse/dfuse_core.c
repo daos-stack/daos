@@ -18,31 +18,37 @@
 static void *
 dfuse_progress_thread(void *arg)
 {
-	struct dfuse_eq              *deq = arg;
-	daos_event_t                 *dev[128];
-	int                           to_consume = 1;
+	struct dfuse_eq *eqt = arg;
+	daos_event_t    *dev[128];
+	int              to_consume = 1;
 
 	while (1) {
 		int rc;
 		int i;
 
+		DFUSE_TRA_INFO(eqt, "waiting, to_consume %d", to_consume);
+
 		for (i = 0; i < to_consume; i++) {
+cont:
 			errno = 0;
-			rc    = sem_wait(&deq->de_sem);
+			rc    = sem_wait(&eqt->de_sem);
+
+			DFUSE_TRA_INFO(eqt, "completed i %d rc %d", i, rc);
+
 			if (rc != 0) {
 				rc = errno;
 
 				if (rc == EINTR)
-					continue;
+					D_GOTO(cont, 0);
 
-				DFUSE_TRA_ERROR(deq, "Error from sem_wait: %d", rc);
+				DFUSE_TRA_ERROR(eqt, "Error from sem_wait: %d", rc);
 			}
 		}
 
-		if (deq->de_handle->dpi_shutdown)
+		if (eqt->de_handle->dpi_shutdown)
 			return NULL;
 
-		rc = daos_eq_poll(deq->de_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
+		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
 		if (rc >= 1) {
 			for (i = 0; i < rc; i++) {
 				struct dfuse_event *ev;
@@ -52,7 +58,7 @@ dfuse_progress_thread(void *arg)
 				ev->de_complete_cb(ev);
 				D_FREE(ev);
 			}
-			to_consume = rc - 1;
+			to_consume = rc;
 		} else {
 			to_consume = 1;
 		}
@@ -970,6 +976,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	fs_handle->dpi_eqt = eqt;
+	eqt->de_handle     = fs_handle;
 
 	DFUSE_TRA_UP(fs_handle, dfuse_info, "fs_handle");
 
@@ -1134,7 +1141,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
-	rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, fs_handle);
+	rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
 	if (rc != 0)
 		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
 
@@ -1316,6 +1323,8 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 	rc = daos_eq_destroy(eqt->de_eq, 0);
 	if (rc)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+
+	D_FREE(fs_handle->dpi_eqt);
 
 	rc2 = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 	if (rc2) {
