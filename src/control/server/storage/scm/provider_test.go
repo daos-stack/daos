@@ -530,6 +530,7 @@ func TestProvider_Format(t *testing.T) {
 		chmodErr       error
 		request        *storage.ScmFormatRequest
 		expResponse    *storage.ScmFormatResponse
+		expMountOpts   string
 		expErr         error
 	}{
 		"missing mount point": {
@@ -601,6 +602,22 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
+		},
+		"ramdisk: hugepages disabled": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Ramdisk: &storage.RamdiskParams{
+					Size:             1,
+					DisableHugepages: true,
+				},
+			},
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: goodMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+			expMountOpts: "mpol=prefer:0,size=1g",
 		},
 		"ramdisk: not mounted; mkdir fails": {
 			request: &storage.ScmFormatRequest{
@@ -783,6 +800,7 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
+			expMountOpts: dcpmMountOpts,
 		},
 		"dcpm: not mounted; not formatted; mkfs fails": {
 			request: &storage.ScmFormatRequest{
@@ -932,6 +950,19 @@ func TestProvider_Format(t *testing.T) {
 				}
 			}
 			cmpRes(t, tc.expResponse, res)
+
+			if tc.expMountOpts != "" {
+				msp, ok := p.sys.(*MockSysProvider)
+				if ok {
+					gotOpts, err := msp.getMountOpts(req.Mountpoint)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
+						t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
+					}
+				}
+			}
 		})
 	}
 }
