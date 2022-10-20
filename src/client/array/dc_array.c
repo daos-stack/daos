@@ -1424,10 +1424,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	} else if (user_sgl == NULL) {
 		D_ERROR("NULL scatter-gather list passed\n");
 		D_GOTO(err_task, rc = -DER_INVAL);
-	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size,
-				   &tot_num_records)) {
-		D_ERROR("Unequal extents of memory and array descriptors\n");
-		D_GOTO(err_task, rc = -DER_INVAL);
+	} else if (!io_extent_same(rg_iod, user_sgl, array->cell_size, &tot_num_records)) {
+		rc = -DER_INVAL;
+		D_ERROR("Unequal extents of memory and array descriptors: " DF_RC "\n", DP_RC(rc));
+		D_GOTO(err_task, rc);
 	}
 
 	oh = array->daos_oh;

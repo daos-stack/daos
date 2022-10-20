@@ -1011,6 +1011,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 		if (rc != -DER_SUCCESS) {
 			sem_destroy(&eqt->de_sem);
 
+			DFUSE_TRA_DOWN(eqt);
 			D_GOTO(err_eq, rc);
 		}
 	}
@@ -1029,11 +1030,13 @@ err_eq:
 		daos_eq_destroy(eqt->de_eq, DAOS_EQ_DESTROY_FORCE);
 
 		sem_destroy(&eqt->de_sem);
+		DFUSE_TRA_DOWN(eqt);
 	}
 	d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 err_pt:
 	d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
 err:
+	D_FREE(fs_handle->dpi_eqt);
 	D_FREE(fs_handle);
 	return rc;
 }
@@ -1352,7 +1355,7 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 
 		rc = daos_eq_destroy(eqt->de_eq, 0);
 		if (rc)
-			DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
+			DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ" DF_RC, DP_RC(rc));
 
 		DFUSE_TRA_DOWN(eqt);
 	}

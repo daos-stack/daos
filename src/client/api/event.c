@@ -881,11 +881,9 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	/** destroy the EQ cart context only if it's not the global one */
 	if (eqx->eqx_ctx != daos_eq_ctx) {
-		rc = crt_context_destroy(eqx->eqx_ctx,
-					 (flags & DAOS_EQ_DESTROY_FORCE));
+		rc = crt_context_destroy(eqx->eqx_ctx, (flags & DAOS_EQ_DESTROY_FORCE));
 		if (rc) {
-			D_ERROR("Failed to destroy CART context for EQ (%d)\n",
-				rc);
+			D_ERROR("Failed to destroy CART context for EQ: " DF_RC "\n", DP_RC(rc));
 			goto out;
 		}
 	}

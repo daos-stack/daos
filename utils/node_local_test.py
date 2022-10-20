@@ -1127,6 +1127,8 @@ class DFuse():
 
         my_env = get_base_env()
 
+        my_env['MALLOC_CHECK_'] = '3'
+
         if self.conf.args.dfuse_debug:
             my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
