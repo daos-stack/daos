@@ -2131,23 +2131,6 @@ done:
 	return rc == 0 ? alt_rc : rc;
 }
 
-#define EVT_DIST_DEPTH_LIMIT 10
-static inline void
-evt_check_sort_policy(struct evt_context *tcx)
-{
-	/** EVT_FEAT_SORT_DIST can get imbalanced and, under certain conditions, can cause a
-	 *  segfault when the depth is larger than EVT_TRACE_MAX.  Rather than let it get too
-	 *  deep, let's detect cases where it starts getting deep and switch policies.
-	 */
-	if (unlikely(tcx->tc_depth > EVT_DIST_DEPTH_LIMIT &&
-		     (tcx->tc_feats & EVT_FEATS_SUPPORTED) == EVT_FEAT_SORT_DIST)) {
-		tcx->tc_feats ^= EVT_FEAT_SORT_DIST | EVT_FEAT_SORT_DIST_EVEN;
-		tcx->tc_ops = evt_policies[2];
-		D_DEBUG(DB_IO, "evtree depth is greater than %d, switching sort policy\n",
-			EVT_DIST_DEPTH_LIMIT);
-	}
-}
-
 /**
  * Insert a versioned extent (rectangle) and its data offset into the tree.
  *
@@ -2169,8 +2152,6 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
-
-	evt_check_sort_policy(tcx);
 
 	if (tcx->tc_inob && entry->ei_inob && tcx->tc_inob != entry->ei_inob) {
 		D_ERROR("Variable record size not supported in evtree:"
@@ -3396,6 +3377,9 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
+
+	if (tcx->tc_depth > 6)
+		return evt_even_split(tcx, leaf, nd_src, nd_dst);
 
 	evt_mbr_read(&mbr, nd_src);
 
