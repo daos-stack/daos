@@ -338,9 +338,10 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__EVICTED;
-		if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
+		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NEW;
-		resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
+		else
+			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
 		/* Fetch LED State */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
