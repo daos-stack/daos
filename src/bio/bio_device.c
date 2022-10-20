@@ -27,7 +27,7 @@ struct led_opts {
 };
 
 static int
-revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
+revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev, bool faulty)
 {
 	struct bio_blobstore	*bbs;
 	unsigned int		 led_state = (unsigned int)CTL__LED_STATE__OFF;
@@ -39,6 +39,17 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 			d_bdev->bb_name);
 		return -DER_INVAL;
 	}
+
+	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
+	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
+			    &led_state);
+	if (rc != 0)
+		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
+			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
+			 DP_RC(rc));
+
+	if (!faulty)
+		return rc;
 
 	rc = smd_dev_set_state(d_bdev->bb_uuid, SMD_DEV_NORMAL);
 	if (rc) {
@@ -52,14 +63,6 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	D_ASSERT(owner_thread(bbs) != NULL);
 
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
-
-	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
-			    &led_state);
-	if (rc != 0)
-		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
-			 DP_RC(rc));
 
 	return 0;
 }
@@ -381,13 +384,13 @@ pool_list_out:
 }
 
 int
-bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
-		uuid_t new_dev_id)
+bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_dev_id)
 {
 	struct smd_dev_info	*old_info = NULL, *new_info = NULL;
 	struct bio_bdev		*old_dev, *new_dev;
 	struct bio_blobstore	*bbs;
 	int			 rc;
+	bool			 faulty;
 
 	/* Caller ensures the request handling ULT created on init xstream */
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -400,13 +403,6 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 		return rc;
 	}
 
-	if (old_info->sdi_state != SMD_DEV_FAULTY) {
-		D_ERROR("Old dev "DF_UUID" isn't in faulty state(%d)\n",
-			DP_UUID(old_dev_id), old_info->sdi_state);
-		rc = -DER_INVAL;
-		goto out;
-	}
-
 	old_dev = lookup_dev_by_id(old_dev_id);
 	if (old_dev == NULL) {
 		D_ERROR("Failed to find old dev "DF_UUID"\n",
@@ -415,11 +411,12 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 		goto out;
 	}
 
+	faulty = old_info->sdi_state == SMD_DEV_FAULTY
 	bbs = old_dev->bb_blobstore;
 	D_ASSERT(bbs != NULL);
 
 	/* Read bb_state from init xstream */
-	if (bbs->bb_state != BIO_BS_STATE_OUT) {
+	if ((faulty) && (bbs->bb_state != BIO_BS_STATE_OUT)) {
 		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
 			DP_UUID(old_dev->bb_uuid),
 			bio_state_enum_to_str(BIO_BS_STATE_OUT),
@@ -430,7 +427,14 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 
 	/* Change a faulty device back to normal, it's usually for testing */
 	if (uuid_compare(old_dev_id, new_dev_id) == 0) {
-		rc = revive_dev(xs_ctxt, old_dev);
+		rc = revive_dev(xs_ctxt, old_dev, faulty);
+		goto out;
+	}
+
+	if (!faulty) {
+		D_ERROR("Old dev "DF_UUID" isn't in faulty state(%d)\n",
+			DP_UUID(old_dev_id), old_info->sdi_state);
+		rc = -DER_INVAL;
 		goto out;
 	}
 
