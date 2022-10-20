@@ -157,7 +157,6 @@ message LedManageReq {
 	string ids = 1;			// List of Device-UUIDs and/or PCI-addresses
 	LedAction led_action = 3;	// LED action to perform
 	LedState led_state = 4;		// LED control case
-	bool use_tr_addr = 5;		// Identify device by transport (PCI) address
 }
 
 message DevReplaceReq {
