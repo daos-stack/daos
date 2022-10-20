@@ -20,7 +20,7 @@ from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from ClusterShell.NodeSet import NodeSet
 
 from user_utils import get_chown_command, get_primary_group
 from run_utils import get_clush_command
