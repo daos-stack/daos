@@ -46,6 +46,13 @@ enum {
 		}									\
 	} while (0)
 
+static inline void
+act_copy_payload(struct umem_action *act, void *addr, daos_size_t size)
+{
+	if (size > 0)
+		memcpy(&act->ac_copy.payload[0], addr, size);
+}
+
 /** start a ad-hoc memory transaction */
 int
 ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
@@ -189,7 +196,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 		if (it_undo == NULL)
 			return -DER_NOMEM;
 
-		memcpy(&it_undo->it_act.ac_copy.payload[0], addr, size);
+		act_copy_payload(&it_undo->it_act, addr, size);
 		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
@@ -200,7 +207,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 		if (it_redo == NULL)
 			return -DER_NOMEM;
 
-		memcpy(&it_redo->it_act.ac_copy.payload[0], addr, size);
+		act_copy_payload(&it_redo->it_act, addr, size);
 		it_redo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_redo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_redo, ACT_REDO);
@@ -246,7 +253,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 	}
 
 	if (undo) {
-		memcpy(&it_undo->it_act.ac_copy.payload[0], addr, size);
+		act_copy_payload(&it_undo->it_act, addr, size);
 		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
@@ -258,7 +265,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 			it_redo->it_act.ac_copy_ptr.ptr = (uintptr_t)ptr;
 			it_redo->it_act.ac_set.size = size;
 		} else {
-			memcpy(&it_redo->it_act.ac_copy.payload[0], ptr, size);
+			act_copy_payload(&it_redo->it_act, ptr, size);
 			it_redo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 			it_redo->it_act.ac_copy.size = size;
 		}
@@ -365,7 +372,7 @@ ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags
 		if (it_undo == NULL)
 			return -DER_NOMEM;
 
-		memcpy(&it_undo->it_act.ac_copy.payload[0], addr, size);
+		act_copy_payload(&it_undo->it_act, addr, size);
 		it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, addr);
 		it_undo->it_act.ac_copy.size = size;
 		AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);
@@ -413,7 +420,7 @@ ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 		return -DER_NOMEM;
 	}
 
-	memcpy(&it_undo->it_act.ac_copy.payload[0], dst, size);
+	act_copy_payload(&it_undo->it_act, dst, size);
 	it_undo->it_act.ac_copy.addr = blob_ptr2addr(tx->tx_blob, dst);
 	it_undo->it_act.ac_copy.size = size;
 	AD_TX_ACT_ADD(tx, it_undo, ACT_UNDO);

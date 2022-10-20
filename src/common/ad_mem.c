@@ -344,7 +344,7 @@ ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh)
 }
 
 /**
- * Format superbock of the blob, create the first arena, write these metadata to storage.
+ * Format superblock of the blob, create the first arena, write these metadata to storage.
  * NB: superblock is stored in the first arena.
  */
 int
