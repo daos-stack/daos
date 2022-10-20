@@ -3378,7 +3378,7 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	bool			 cond;
 	int64_t			 dist;
 
-	if (tcx->tc_depth > 6)
+	if (unlikely(tcx->tc_depth > 6))
 		return evt_even_split(tcx, leaf, nd_src, nd_dst);
 
 	evt_mbr_read(&mbr, nd_src);
