@@ -2131,7 +2131,7 @@ done:
 	return rc == 0 ? alt_rc : rc;
 }
 
-#define EVT_DIST_DEPTH_LIMIT 6
+#define EVT_DIST_DEPTH_LIMIT 10
 static inline void
 evt_check_sort_policy(struct evt_context *tcx)
 {
