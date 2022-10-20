@@ -2150,13 +2150,13 @@ out:
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
-	dfs_t                     *dfs;
-	daos_prop_t               *prop;
-	struct daos_prop_entry    *entry;
+	dfs_t			*dfs;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
 	struct daos_prop_co_roots *roots;
-	struct dfs_entry           root_dir;
-	int                        amode;
-	int                        rc;
+	struct dfs_entry	root_dir;
+	int			amode;
+	int			rc;
 
 	if (_dfs == NULL)
 		return EINVAL;
@@ -2221,7 +2221,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			/** Set uid to nobody */
 			rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
 		if (rc) {
-			D_ERROR("Unable to convert owner to uid " DF_RC "\n", DP_RC(rc));
+			D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
 		}
 
@@ -2232,7 +2232,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			/** Set gid to nobody */
 			rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
 		if (rc) {
-			D_ERROR("Unable to convert owner to gid " DF_RC "\n", DP_RC(rc));
+			D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_dfs, rc = daos_der2errno(rc));
 		}
 	}
