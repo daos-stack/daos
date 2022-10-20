@@ -1343,8 +1343,8 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 int
 dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 {
-	int rc;
-	int rc2 = -DER_SUCCESS;
+	int rc = -DER_SUCCESS;
+	int rc2;
 	int i;
 
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {

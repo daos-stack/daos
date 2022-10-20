@@ -4425,7 +4425,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
