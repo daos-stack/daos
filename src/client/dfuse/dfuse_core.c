@@ -47,7 +47,7 @@ cont:
 			int pending;
 
 			pending = daos_eq_query(eqt->de_eq, DAOS_EQR_ALL, 0, NULL);
-			DFUSE_TRA_ERROR(eqt, "There are %d events pending", pending);
+			DFUSE_TRA_INFO(eqt, "There are %d events pending", pending);
 
 			if (pending == 0)
 				return NULL;
