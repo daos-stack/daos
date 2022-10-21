@@ -29,15 +29,16 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_handler, get_file_handler
-from util.results_utils import create_html, create_xml, Job, Results, TestResult
-from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command, get_getent_command, get_groupadd_command, \
-    get_useradd_command, get_userdel_command
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from logger_utils import get_console_handler, get_file_handler
+from results_utils import create_html, create_xml, Job, Results, TestResult
+from run_utils import get_local_host, run_local, run_remote, RunException
+from user_utils import get_chown_command, getent, groupadd, useradd, userdel
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
-DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing_user")
+DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
@@ -68,11 +69,6 @@ YAML_KEYS = OrderedDict(
         ("storage_format_timeout", "timeout_multiplier"),
     ]
 )
-
-DAOS_TEST_GROUP_USERS = {
-    'daos_test_group_x': ['daos_test_user_x1', 'daos_test_user_x2'],
-    'daos_test_group_y': ['daos_test_user_y1']
-}
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -728,6 +724,20 @@ class TestInfo():
         return find_values(
             get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
+    def get_yaml_client_users(self):
+        """Find all the users in the specified yaml file.
+
+        Returns:
+            (bool, list): whether to create the users, list of users to create
+
+        """
+        yaml_data = get_yaml_data(self.yaml_file)
+        client_users = find_values(yaml_data, ["client_users"], val_type=list)
+        client_users = client_users['client_users'] if client_users else []
+        create = find_values(yaml_data, ["create_client_users"], val_type=bool)
+        create = create['create_client_users'] if create else False
+        return (create, client_users)
+
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
 
@@ -1024,14 +1034,6 @@ class Launch():
         # Get the core file pattern information
         core_files = self._get_core_file_pattern(
             args.test_servers, args.test_clients, args.process_cores)
-
-        # Setup additional test users
-        if args.user_setup:
-            try:
-                self._user_setup(args)
-            except RunException:
-                message = "Error setting up test users"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
@@ -1757,34 +1759,81 @@ class Launch():
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
                 test.hosts.clients)
 
-    def _user_setup(self, args):
-        """Setup test users on test nodes.
+    def user_setup(self, test):
+        """Setup test users on client nodes.
 
         Args:
-            args (argparse.Namespace): command line arguments for this program
+            test (TestInfo): the test information
 
-        Raises:
-            RunException: if setup fails
+        Returns:
+            int: status code: 0 = success, 128 = failure
 
         """
-        nodes = args.test_servers | args.test_clients
-        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
-        if not run_remote(logger, nodes, f'mkdir -p {parent_dir}').passed:
-            raise RunException(f'Failed to create user directory {parent_dir}')
-        for group, users in DAOS_TEST_GROUP_USERS.items():
-            logger.info('Creating group %s', group)
-            if not run_remote(logger, nodes, get_groupadd_command(group, True, True)).passed:
-                raise RunException(f'Failed to create group {group} on nodes {nodes}')
-            logger.info('Querying group %s', group)
-            if not run_remote(logger, nodes, get_getent_command('group', group)).passed:
-                raise RunException(f'Failed to query group {group} on nodes {nodes}')
-            for user in users:
+        do_create, users = test.get_yaml_client_users()
+        clients = test.hosts.clients
+
+        # Create user home directory
+        if do_create and users:
+            parent_dir = os.environ["DAOS_TEST_USER_DIR"]
+            if not run_remote(logger, clients, f'mkdir -p {parent_dir}').passed:
+                message = f'Error creating user home directory {parent_dir}'
+                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                return 128
+
+        # Keep track of created and queried groups to avoid redundant work
+        created_groups = []
+        queried_groups = {}
+
+        # Create and/or query all groups and users
+        for _user in users:
+            user, *group = _user.split(':')
+            group = group[0] if group else None
+
+            # Create the group
+            if group and do_create and group not in created_groups:
+                logger.info('Creating group %s', group)
+                if not groupadd(logger, clients, group, True, True).passed:
+                    message = f'Error creating group {group}'
+                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                    return 128
+                created_groups.append(group)
+
+            # Query the group and get the gid
+            if group and group not in queried_groups:
+                logger.info('Querying group %s', group)
+                result = getent(logger, clients, 'group', group)
+                if not result.passed:
+                    message = f'Error querying group {group}'
+                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                    return 128
+                gid = result.output[0].stdout[0].split(':')[2]
+                queried_groups[group] = gid
+
+            # Delete user if existing
+            if do_create:
                 logger.info('Deleting user %s if existing', user)
-                _ = run_remote(logger, nodes, get_userdel_command(user, True))
+                _ = userdel(logger, clients, user, True)
+
+            # Create user
+            if do_create:
                 logger.info('Creating user %s in group %s', user, group)
-                command = get_useradd_command(user, group, parent_dir, True)
-                if not run_remote(logger, nodes, command).passed:
-                    raise RunException(f'Failed to create user {user} on nodes {nodes}')
+                if not useradd(logger, clients, user, group, parent_dir, True).passed:
+                    message = f'Error creating user {user}'
+                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                    return 128
+
+            # Query user
+            logger.info('Querying user %s', user)
+            user_result = run_remote(logger, clients, f'id {user}')
+            if not user_result.passed:
+                message = f'Error querying user {user}'
+                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                return 128
+            if not re.findall(f'gid={gid}', user_result.output[0].stdout[0]):
+                message = f'User {user} not in expected group {group}'
+                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                return 128
+                
 
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):
@@ -2104,6 +2153,14 @@ class Launch():
                 step_status = self.prepare(test, repeat)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
+                    return_code |= step_status
+                    self.result.tests[-1].status = TestResult.INTERRUPT
+                    continue
+
+                # Setup additional test users
+                step_status = self.user_setup(test)
+                # self._user_setup(args)
+                if step_status:
                     return_code |= step_status
                     self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
@@ -3161,10 +3218,6 @@ def main():
         type=int,
         help="number of times to repeat test execution")
     parser.add_argument(
-        "-u", "--user_setup",
-        action="store_true",
-        help="setup user accounts used by some tests")
-    parser.add_argument(
         "-s", "--sparse",
         action="store_true",
         help="limit output to pass/fail")
@@ -3224,7 +3277,6 @@ def main():
         args.process_cores = True
         args.rename = True
         args.sparse = True
-        args.user_setup = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
 

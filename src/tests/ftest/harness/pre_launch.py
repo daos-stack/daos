@@ -9,7 +9,7 @@ import re
 from apricot import TestWithoutServers
 
 from run_utils import run_remote
-from user_utils import get_getent_command
+from user_utils import getent
 
 
 class HarnessPreLaunchTest(TestWithoutServers):
@@ -19,7 +19,7 @@ class HarnessPreLaunchTest(TestWithoutServers):
     """
 
     def test_harness_pre_launch_users(self):
-        """Verify all expected users are setup correctly with launch.py --user_setup.
+        """Verify all expected users are setup correctly by launch.py.
 
         :avocado: tags=all
         :avocado: tags=vm
@@ -28,12 +28,11 @@ class HarnessPreLaunchTest(TestWithoutServers):
         """
         hostlist_clients = self.get_hosts_from_yaml(
             "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
-        expected_users = self.params.get('users', '/run/test_harness_pre_launch_users/*')
+        expected_users = self.params.get('client_users', '/run/*')
         for user_group in expected_users:
             user, group = user_group.split(':')
             self.log.info('Checking if group %s exists', group)
-            group_result = run_remote(
-                self.log, hostlist_clients, get_getent_command('group', group))
+            group_result = getent(self.log, hostlist_clients, 'group', group)
             if not group_result.passed:
                 self.fail('Group {} does not exist'.format(group))
             gid = group_result.output[0].stdout[0].split(':')[2]

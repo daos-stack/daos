@@ -8,6 +8,8 @@ from grp import getgrgid
 from pwd import getpwnam
 import os
 
+from run_utils import run_remote
+
 
 def get_primary_group(user=None):
     """Get the name of the user's primary group.
@@ -50,70 +52,93 @@ def get_chown_command(user=None, group=None, options=None, file=None):
     return " ".join(command)
 
 
-def get_getent_command(database, key, sudo=False):
-    """Get a getent command string.
+def getent(log, hosts, database, key, sudo=False):
+    """Run getent remotely.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
         database (str): the administrative database
         key (str): the key/entry to check for
         sudo (bool): whether to execute commands with sudo
 
     Returns:
-        str: the getent command
+        RemoteCommandResult: result of run_remote()
 
     """
-    _sudo = 'sudo -n ' if sudo else ''
-    return f'{_sudo}getent {database} {key}'
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'getent',
+        database,
+        key]))
+    return run_remote(log, hosts, command)
 
 
-def get_groupadd_command(group, force=False, sudo=False):
-    """Get a groupadd command string.
+def groupadd(log, hosts, group, force=False, sudo=False):
+    """Run groupadd remotely.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
         group (str): the group to create
         force (bool, optional): whether to use the force option. Default is False
         sudo (bool, optional): whether to execute commands with sudo. Default is False
 
     Returns:
-        str: the groupadd command
+        RemoteCommandResult: result of run_remote()
 
     """
-    _sudo = 'sudo -n ' if sudo else ''
-    _force = '-f ' if force else ''
-    return f'{_sudo}groupadd -r {_force}{group}'
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'groupadd',
+        '-r',
+        '-f' if force else None,
+        group]))
+    return run_remote(log, hosts, command)
 
 
-def get_useradd_command(user, group=None, parent_dir=None, sudo=False):
-    """Get a useradd command string.
+def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
+    """Run useradd remotely.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
         user (str): user to create
         group (str, optional): user group. Default is None
         parent_dir (str, optional): parent home directory. Default is None
         sudo (bool): whether to execute commands with sudo. Default is False
 
     Returns:
-        str: the useradd command
+        RemoteCommandResult: result of run_remote()
 
     """
-    _sudo = 'sudo -n ' if sudo else ''
-    return ' '.join(filter(None, [
-        f'{_sudo}useradd -m',
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'useradd',
+        '-m',
         f'-g {group}' if group else None,
         f'-d {os.path.join(parent_dir, user)}' if parent_dir else None,
         user]))
+    return run_remote(log, hosts, command)
 
 
-def get_userdel_command(user, sudo=False):
-    """Get a userdel command string.
+def userdel(log, hosts, user, sudo=False):
+    """Run userdel remotely.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to run the command
         user (str): user to create
         sudo (bool): whether to execute commands with sudo. Default is False
 
     Returns:
-        str: the userdel command
+        RemoteCommandResult: result of run_remote()
 
     """
-    _sudo = 'sudo -n ' if sudo else ''
-    return f'{_sudo}userdel -f -r {user}'
+    command = ' '.join(filter(None, [
+        'sudo -n' if sudo else None,
+        'userdel',
+        '-f',
+        '-r',
+        user]))
+    return run_remote(log, hosts, command)
