@@ -4876,7 +4876,7 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 }
 
 static inline bool
-obj_auxi_retryable(struct obj_auxi_args *obj_auxi)
+need_retry_redundancy(struct obj_auxi_args *obj_auxi)
 {
 	return (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err);
 }
@@ -4892,7 +4892,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	bool			ec_degrade = false;
 	int			rc = 0;
 
-	if (obj_auxi_retryable(obj_auxi) || obj_auxi->force_degraded)
+	if (need_retry_redundancy(obj_auxi) || obj_auxi->force_degraded)
 		force_ec_degrade = true;
 
 	while (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) || force_ec_degrade) {
@@ -5104,7 +5104,7 @@ obj_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned int
 		rc = obj_ec_fetch_shards_get(obj, args, map_ver, obj_auxi, shard, shard_cnt);
 		if (rc)
 			D_GOTO(out, rc);
-	} else if (obj_auxi_retryable(obj_auxi)) {
+	} else if (need_retry_redundancy(obj_auxi)) {
 		*shard_cnt = 1;
 		rc = obj_retry_next_shard(obj, obj_auxi, map_ver, shard);
 		if (rc)

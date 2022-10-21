@@ -1055,7 +1055,10 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	/* No locking for BS state query here is tolerable */
 	if (xs_ctxt->bxc_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
 		D_ERROR("Blobstore is marked as FAULTY.\n");
-		biod->bd_result = -DER_NVME_IO;
+		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
+			biod->bd_result = -DER_NVME_IO;
+		else
+			biod->bd_result = -DER_IO;
 		return;
 	}
 
