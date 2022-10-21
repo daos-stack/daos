@@ -59,7 +59,7 @@ class PoolSvc(TestWithServers):
         return current_leader
 
     def test_pool_svc(self):
-        """Test svc arg during pool create.
+        """Test svc argument during pool create.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
