@@ -29,7 +29,7 @@ from general_utils import \
     stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
     set_avocado_config_value, nodeset_append_suffix
-from host_utils import get_host_parameters, HostRole, HostInfo
+from host_utils import get_test_host, get_test_host_info
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
@@ -557,10 +557,7 @@ class TestWithoutServers(Test):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
-        data = get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace)
-        role = HostRole(*data)
-        role.update_hosts(self.log)
-        return role.hosts
+        return get_test_host(self, yaml_key, partition_key, reservation_key, namespace)
 
 
 class TestWithServers(TestWithoutServers):
@@ -621,10 +618,6 @@ class TestWithServers(TestWithoutServers):
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
-        self.server_partition = None
-        self.client_partition = None
-        self.server_reservation = None
-        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -683,14 +676,9 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        info = HostInfo()
-        info.set_test_hosts(self)
-        self.hostlist_servers = info.servers
-        self.hostlist_clients = info.clients
-        self.server_partition = info.server_partition.name
-        self.client_partition = info.client_partition.name
-        self.server_reservation = info.server_partition.reservation
-        self.client_reservation = info.client_partition.reservation
+        self.host_info = get_test_host_info(self)
+        self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
+        self.hostlist_clients = NodeSet(self.host_info.clients.hosts)
 
         # Access points to use by default when starting servers and agents
         #  - for 1 or 2 servers use 1 access point
@@ -704,7 +692,7 @@ class TestWithServers(TestWithoutServers):
         if self.access_points_suffix:
             self.access_points = nodeset_append_suffix(
                 self.access_points, self.access_points_suffix)
-        info.access_points = self.access_points
+        self.host_info.access_points = self.access_points
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -721,7 +709,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Display host information
-        info.display(self.log)
+        self.host_info.display(self.log)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)

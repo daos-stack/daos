@@ -93,13 +93,13 @@ class SoakTestBase(TestWithServers):
         # Partition and reservation names are updated in the yaml file.
         # It is assumed that if there is no reservation (CI only), then all
         # the nodes in the partition will be used for soak.
-        if not self.client_partition:
+        if not self.host_info.clients.partition.name:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
-        self.srun_params = {"partition": self.client_partition}
-        if self.client_reservation:
-            self.srun_params["reservation"] = self.client_reservation
+        self.srun_params = {"partition": self.host_info.clients.partition.name}
+        if self.host_info.clients.partition.reservation:
+            self.srun_params["reservation"] = self.host_info.clients.partition.reservation
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
         self.slurm_exclude_nodes.add(local_host_list)
@@ -109,7 +109,7 @@ class SoakTestBase(TestWithServers):
             self.fail(
                 "There are no valid nodes in this partition to run "
                 "soak. Check partition {} for valid nodes".format(
-                    self.client_partition))
+                    self.host_info.clients.partition.name))
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -128,7 +128,7 @@ class SoakTestBase(TestWithServers):
             try:
                 run_command(
                     "scancel --partition {} -u {} {}".format(
-                        self.client_partition, self.username, job_id))
+                        self.host_info.clients.partition.name, self.username, job_id))
             except DaosTestError as error:
                 # Exception was raised due to a non-zero exit status
                 errors.append("Failed to cancel jobs {}: {}".format(

@@ -8,7 +8,7 @@ import re
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
-from run_utils import RunException, run_local, get_local_host
+from run_utils import RunException, run_local
 
 
 class HostException(Exception):
@@ -57,6 +57,122 @@ def get_node_set(hosts):
     return NodeSet(hosts)
 
 
+def get_partition_hosts(log, partition):
+    """Get the hosts defined in the specified slurm partition.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        partition (str): name of the slurm partition from which to obtain the names
+
+    Raises:
+        HostException: if there is a problem obtaining the hosts from the slurm partition
+
+    Returns:
+        NodeSet: slurm partition hosts
+
+    """
+    if partition is None:
+        return NodeSet()
+
+    # Get the partition name information
+    try:
+        result = run_local(log, ["scontrol", "show", "partition", partition])
+    except RunException as error:
+        raise HostException(
+            f"Unable to obtain hosts from the {partition} slurm partition") from error
+
+    # Get the list of hosts from the partition information
+    output = result.stdout
+    try:
+        return NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0])
+    except (NodeSetParseError, IndexError) as error:
+        raise HostException(
+            f"Unable to obtain hosts from the {partition} slurm partition output") from error
+
+
+def get_reservation_hosts(log, reservation):
+    """Get the hosts defined in the specified slurm reservation.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        partition (str): name of the slurm reservation from which to obtain the names
+
+    Raises:
+        HostException: if there is a problem obtaining the hosts from the slurm reservation
+
+    Returns:
+        NodeSet: slurm reservation hosts
+
+    """
+    if not reservation:
+        return NodeSet()
+
+    # Get the list of hosts from the reservation information
+    try:
+        result = run_local(
+            log, ["scontrol", "show", "reservation", reservation], timeout=10)
+    except RunException as error:
+        raise HostException(
+            f"Unable to obtain hosts from the {reservation} slurm reservation") from error
+
+    # Get the list of hosts from the reservation information
+    output = result.stdout
+    try:
+        return NodeSet(re.findall(r"\sNodes=(\S+)", output)[0])
+    except (NodeSetParseError, IndexError) as error:
+        raise HostException(
+            f"Unable to obtain hosts from the {reservation} slurm reservation output") from error
+
+
+def get_test_host_info(test):
+    """Get the host information for this test.
+
+    Args:
+        test (Test): the avocado test class
+
+    Raises:
+        HostException: if there is a problem obtaining the hosts
+
+    """
+    server_params = get_host_parameters(
+        test, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+    client_params = get_host_parameters(
+        test, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+    host_info = HostInfo()
+    try:
+        host_info.set_hosts(test.log, *server_params, *client_params)
+    except HostException as error:
+        test.fail(f"Unable to collect host information for the test: {error}")
+    return host_info
+
+
+def get_test_host(test, hosts_key, partition_key, reservation_key, namespace):
+    """Get the set of hosts defined by the provided test yaml parameters for this test.
+
+    Args:
+        test (Test): the avocado test class
+        hosts_key (str): test yaml key defining the hosts in the test yaml
+        partition_key (str): test yaml key defining the host partition in the test yaml
+        reservation_key (str): test yaml key defining the host reservation in the test yaml
+        namespace (str): test yaml path to the keys
+
+    Returns:
+        NodeSet: the set of hosts to test obtained from the test yaml
+
+    """
+    data = list(get_host_parameters(test, hosts_key, partition_key, reservation_key, namespace))
+    try:
+        data.append(get_partition_hosts(test.log, data[1]))
+    except HostException as error:
+        test.fail(f"Unable to collect partition information: {error}")
+    try:
+        data.append(get_reservation_hosts(test.log, data[2]))
+    except HostException as error:
+        test.fail(f"Unable to collect reservation information: {error}")
+    role = HostRole(*data)
+    return role.hosts
+
+
 class HostInfo():
     # pylint: disable=too-few-public-methods
     """Defines the hosts being utilized by the test."""
@@ -68,60 +184,32 @@ class HostInfo():
         self.access_points = NodeSet()
 
     @property
-    def all(self):
+    def all_hosts(self):
         """Get all of the server and client hosts.
 
         Returns:
             NodeSet: all the server and client hosts
 
         """
-        return self.servers | self.clients
+        return self.servers.hosts | self.clients.hosts
 
     @property
     def servers(self):
-        """Get the server hosts.
+        """Get the server role.
 
         Returns:
-            NodeSet: the server hosts
+            HostRole: the server role
         """
-        return self._servers.hosts
+        return self._servers
 
     @property
     def clients(self):
-        """Get the clients hosts.
+        """Get the client role.
 
         Returns:
-            NodeSet: the clients hosts
+            HostRole: the client role
         """
-        return self._clients.hosts
-
-    @property
-    def server_partition(self):
-        """Get the server partition information.
-
-        Returns:
-            HostPartition: the server partition
-        """
-        return self._servers.partition
-
-    @property
-    def client_partition(self):
-        """Get the client partition information.
-
-        Returns:
-            HostPartition: the client partition
-        """
-        return self._clients.partition
-
-    @property
-    def clients_with_localhost(self):
-        """Get the test clients including the localhost.
-
-        Returns:
-            NodeSet: test clients including the localhost
-
-        """
-        return self.clients | NodeSet(get_local_host())
+        return self._clients
 
     def display(self, log):
         """Display the host information.
@@ -131,17 +219,17 @@ class HostInfo():
         """
         log.info("-" * 100)
         log.info("--- HOST INFORMATION ---")
-        log.info("hostlist_servers:    %s", self.servers)
-        log.info("hostlist_clients:    %s", self.clients)
-        log.info("server_partition:    %s", self._servers.partition.name)
-        log.info("client_partition:    %s", self._clients.partition.name)
-        log.info("server_reservation:  %s", self._servers.partition.reservation)
-        log.info("client_reservation:  %s", self._clients.partition.reservation)
+        log.info("servers:             %s", self.servers.hosts)
+        log.info("clients:             %s", self.clients.hosts)
+        log.info("server_partition:    %s", self.servers.partition.name)
+        log.info("client_partition:    %s", self.clients.partition.name)
+        log.info("server_reservation:  %s", self.servers.partition.reservation)
+        log.info("client_reservation:  %s", self.clients.partition.reservation)
         log.info("access_points:       %s", self.access_points)
 
     def set_hosts(self, log, server_hosts, server_partition, server_reservation, client_hosts,
                   client_partition, client_reservation):
-        """Set the hosts.
+        """Set the host information.
 
         Args:
             log (logger): logger for the messages produced by this method
@@ -156,37 +244,18 @@ class HostInfo():
             HostException: if there is a problem obtaining the hosts
 
         """
-        self._servers = HostRole(server_hosts, server_partition, server_reservation)
-        self._servers.update_hosts(log)
-        self._clients = HostRole(client_hosts, client_partition, client_reservation)
-        self._clients.update_hosts(log)
+        self._servers = HostRole(
+            server_hosts, server_partition, server_reservation,
+            get_partition_hosts(log, server_partition),
+            get_reservation_hosts(log, server_reservation))
+
+        self._clients = HostRole(
+            client_hosts, client_partition, client_reservation,
+            get_partition_hosts(log, client_partition),
+            get_reservation_hosts(log, client_reservation))
 
         # Optionally remove any servers that may have ended up in the client list.  This can occur
         # with tests using slurm partitions as the client partition is setup with all of the hosts.
-        self._update_clients(log)
-
-    def set_test_hosts(self, test):
-        """Get the server and client hosts for this test.
-
-        Args:
-            test (Test): the avocado test class
-
-        Raises:
-            HostException: if there is a problem obtaining the hosts
-
-        """
-        server_params = get_host_parameters(
-            test, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
-        client_params = get_host_parameters(
-            test, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
-        self.set_hosts(test.log, *server_params, *client_params)
-
-    def _update_clients(self, log):
-        """Remove any servers from the set of clients if the clients were derived from a partition.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
         if self._clients.partition.hosts:
             log.debug(
                 "Excluding any %s servers from the current client list: %s",
@@ -197,142 +266,69 @@ class HostInfo():
 class HostRole():
     """Defines the hosts being utilized in a specific role by the test."""
 
-    def __init__(self, hosts=None, partition=None, reservation=None):
+    def __init__(self, hosts=None, partition=None, reservation=None, partition_hosts=None,
+                 reservation_hosts=None):
         """Initialize a HostRole object.
 
         Args:
             hosts (object, optional): hosts to define in this role. Defaults to None.
             partition (str, optional): slurm partition name. Defaults to None.
             reservation (str, optional): slurm reservation name. Defaults to None.
+            partition_hosts (NodeSet, optional): hosts defined in the reservation. Defaults to None.
+            reservation_hosts (NodeSet, optional): hosts defined in the reservation. Defaults to
+                None.
         """
-        self._hosts = get_node_set(hosts)
-        self.partition = HostPartition(partition, reservation)
+        self._partition = HostPartition(partition, partition_hosts, reservation, reservation_hosts)
+        if self.partition.hosts:
+            self._hosts = NodeSet(self.partition.hosts)
+        else:
+            self._hosts = get_node_set(hosts)
 
     @property
     def hosts(self):
-        """Get the set of hosts in the partition.
+        """Get the set of hosts in this role.
 
         Returns:
-            NodeSet: _description_
+            NodeSet: set of hosts in this role
         """
         return self._hosts
 
-    def update_hosts(self, log):
-        """Update the hosts with any hosts defined by the partition.
+    @property
+    def partition(self):
+        """Get the partition information for this role.
 
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        Raises:
-            HostException: if there is a problem obtaining the hosts
-
+        Returns:
+            NodeSet: partition information for this role
         """
-        self.partition.set_hosts(log)
-        if self.partition.hosts:
-            self._hosts = NodeSet(self.partition.hosts)
+        return self._partition
 
 
 class HostPartition():
-    """Defines the partition being utilized by the test."""
+    # pylint: disable=too-few-public-methods
+    """Defines the slurm partition being utilized by the test."""
 
-    def __init__(self, name=None, reservation=None):
+    def __init__(self, name, hosts, reservation=None, reservation_hosts=None):
         """Initialize a HostPartition object.
 
         Args:
-            name (str, optional): partition name. Defaults to None.
-            reservation (str, optional): reservation name. Defaults to None.
+            name (str): slurm partition name.
+            hosts (NodeSet): hosts defined in the slurm partition.
+            reservation (str, optional): slurm partition reservation name. Defaults to None.
+            reservation_hosts (NodeSet, optional): hosts defined in the slurm partition reservation.
+                Defaults to None.
         """
         self.name = name
+        self._hosts = NodeSet(hosts)
         self.reservation = reservation
-        self._hosts = NodeSet()
+        self.reservation_hosts = NodeSet(reservation_hosts)
 
     @property
     def hosts(self):
-        """Get the set of hosts in the partition.
+        """Get the set of hosts in the slurm partition.
 
         Returns:
-            NodeSet: _description_
+            NodeSet: hosts in the slurm partition
         """
+        if self.reservation and self.reservation_hosts:
+            return self._hosts.union(self.reservation_hosts)
         return self._hosts
-
-    def set_hosts(self, log):
-        """Set the hosts for this partition.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        Raises:
-            HostException: if there is a problem obtaining the hosts
-
-        """
-        partition_hosts = self.get_partition_hosts(log)
-        reservation_hosts = self.get_reservation_hosts(log)
-        if reservation_hosts:
-            self._hosts = partition_hosts.union(reservation_hosts)
-        else:
-            self._hosts = partition_hosts
-
-    def get_partition_hosts(self, log):
-        """Get the hosts defined in this partition.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        Raises:
-            HostException: if there is a problem obtaining the hosts from the partition
-
-        Returns:
-            NodeSet: partition hosts
-
-        """
-        if self.name is None:
-            return NodeSet()
-
-        # Get the partition name information
-        try:
-            result = run_local(log, ["scontrol", "show", "partition", self.name])
-        except RunException as error:
-            raise HostException(
-                f"Unable to obtain hosts from the {self.name} slurm partition") from error
-
-        # Get the list of hosts from the partition information
-        output = result.stdout
-        try:
-            hosts = NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0])
-        except (NodeSetParseError, IndexError) as error:
-            raise HostException(
-                f"Unable to obtain hosts from the {self.name} slurm partition output") from error
-
-        return hosts
-
-    def get_reservation_hosts(self, log):
-        """Get the hosts defined in this reservation.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-
-        Raises:
-            HostException: if there is a problem obtaining the hosts from the reservation
-
-        Returns:
-            NodeSet: reservation hosts
-
-        """
-        if not self.reservation:
-            return NodeSet()
-
-        # Get the list of hosts from the reservation information
-        try:
-            result = run_local(
-                log, ["scontrol", "show", "reservation", self.reservation], timeout=10)
-        except RunException as error:
-            raise HostException(
-                f"Unable to obtain hosts from the {self.reservation} reservation") from error
-
-        # Get the list of hosts from the reservation information
-        output = result.stdout
-        try:
-            return NodeSet(re.findall(r"\sNodes=(\S+)", output)[0])
-        except (NodeSetParseError, IndexError) as error:
-            raise HostException(
-                f"Unable to obtain hosts from the {self.reservation} reservation output") from error

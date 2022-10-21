@@ -625,7 +625,7 @@ class TestInfo():
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
-        self.hosts = HostInfo()
+        self.host_info = HostInfo()
 
     def __str__(self):
         """Get the test file as a string.
@@ -665,7 +665,7 @@ class TestInfo():
             info[keys[3]].add(get_local_host())
 
         try:
-            self.hosts.set_hosts(
+            self.host_info.set_hosts(
                 logger, info[keys[0]], info[keys[1]], info[keys[2]], info[keys[3]], info[keys[4]],
                 info[keys[5]])
         except HostException as error:
@@ -1689,8 +1689,8 @@ class Launch():
         logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
         for test in self.tests:
             logger.debug(
-                msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
-                test.hosts.clients)
+                msg_format, test.name.order, test.test_file, test.yaml_file,
+                test.host_info.servers.hosts, test.host_info.clients.hosts)
 
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):
@@ -2092,7 +2092,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
+        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
@@ -2100,7 +2100,7 @@ class Launch():
             f"ls -al {test_dir}",
         ]
         for command in commands:
-            if not run_remote(logger, test.hosts.all, command).passed:
+            if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2253,7 +2253,7 @@ class Launch():
                 "source": os.path.join(os.sep, "etc", "daos"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
                 "pattern": "daos_*.yml",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 300,
             }
@@ -2261,7 +2261,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2269,7 +2269,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 2,
                 "timeout": 900,
             }
@@ -2277,7 +2277,7 @@ class Launch():
                 "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
                 "pattern": "daos_dump*.txt*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2285,7 +2285,7 @@ class Launch():
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
                 "pattern": "valgrind*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2322,7 +2322,7 @@ class Launch():
 
         """
         service = "daos_agent.service"
-        hosts = test.hosts.clients_with_localhost
+        hosts = test.host_info.clients.hosts | NodeSet(get_local_host())
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2338,7 +2338,7 @@ class Launch():
 
         """
         service = "daos_server.service"
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2446,7 +2446,7 @@ class Launch():
             int: status code: 0 = success, 512 = failure
 
         """
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Resetting server storage after running %s", test)
         if hosts:
