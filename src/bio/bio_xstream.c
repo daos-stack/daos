@@ -1125,7 +1125,7 @@ assign_device(int tgt_id, enum smd_dev_type st)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id, SMD_DEV_TYPE_DATA);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id, st);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));

@@ -336,7 +336,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 	/**
 	 * Query per-server metadata to get blobID for this pool:target
 	 */
-	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA, &blob_id);
+	rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, st, &blob_id);
 	if (rc != 0) {
 		D_WARN("Blob for xs:%p, pool:"DF_UUID" doesn't exist\n",
 		       xs_ctxt, DP_UUID(uuid));
@@ -386,7 +386,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
-		rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id, SMD_DEV_TYPE_DATA);
+		rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		if (rc)
 			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
 				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),

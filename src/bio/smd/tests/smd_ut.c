@@ -19,7 +19,7 @@
 #include <daos/tests_lib.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
-#define DB_LIST_NR		(SMD_DEV_TYPE_MAX*2+1)
+#define DB_LIST_NR		(SMD_DEV_TYPE_MAX * 2 + 1)
 
 struct ut_db {
 	struct sys_db	ud_db;
@@ -46,9 +46,9 @@ db_name2list(struct sys_db *db, char *name)
 		return &ud->ud_lists[0];
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		if (!strcmp(name, TABLE_TGTS[st]))
-			return &ud->ud_lists[st+1];
+			return &ud->ud_lists[st + 1];
 		if (!strcmp(name, TABLE_POOLS[st]))
-			return &ud->ud_lists[st+SMD_DEV_TYPE_MAX+1];
+			return &ud->ud_lists[st + SMD_DEV_TYPE_MAX + 1];
 	}
 	D_ASSERT(0);
 	return NULL;
