@@ -411,7 +411,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_de
 		goto out;
 	}
 
-	faulty = old_info->sdi_state == SMD_DEV_FAULTY
+	faulty = old_info->sdi_state == SMD_DEV_FAULTY;
 	bbs = old_dev->bb_blobstore;
 	D_ASSERT(bbs != NULL);
 
