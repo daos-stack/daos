@@ -220,12 +220,10 @@ class IorTestBase(DfuseTestBase):
         elif operation == "read":
             self.ior_cmd.pattern = self.IOR_READ_PATTERN
         else:
-            self.fail("Exiting Test: Inappropriate operation type \
-                      for subprocess status check")
+            self.fail("Exiting Test: Inappropriate operation type for subprocess status check")
 
-        if not self.ior_cmd.check_ior_subprocess_status(
-                self.job_manager.process, self.ior_cmd):
-            self.fail("Exiting Test: Subprocess not running")
+        if not self.ior_cmd.check_subprocess_status(self.job_manager.process):
+            self.fail("IOR subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
