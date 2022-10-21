@@ -148,7 +148,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         off
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont
@@ -190,7 +190,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont2
@@ -229,7 +229,7 @@ Checksum Chunk Size   32 KiB
 Compression           off
 Deduplication         hash
 Dedupe Threshold      4.0 KiB
-EC Cell Size          1.0 MiB
+EC Cell Size          64 kiB
 Encryption            off
 Group                 jlombard@
 Label                 mycont3
@@ -260,7 +260,7 @@ The table below summarizes the available container properties.
 | rf\_lvl                 | Yes             | Redundancy Level which is the level in the fault domain hierarchy to use for object placement|
 | health                  | No              | Current state of the container|
 | alloc\_oid              | No              | Maximum allocated object ID by container allocator|
-| ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects|
+| ec\_cell\_sz            | Yes             | Erasure code cell size for erasure-coded objects|
 | cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16,32,64] or sha[1,256,512])|
 | cksum\_size             | Yes             | Checksum Size determining the maximum extent size that a checksum can cover|
 | srv\_cksum              | Yes             | Whether to verify checksum on the server before writing data (default: off)|
@@ -455,23 +455,50 @@ Server Checksumming   on
 
 ### Erasure Code
 
-DAOS erasure code implementation uses a fixed cell size that applies to all
-objects in the container. The cell size in DAOS is the size of each data and
-parity fragments (also called sometimes chunks). The cell size can be set at
-container creation time via the property:
+The DAOS erasure code implementation uses a fixed cell size that applies to all
+objects in the container.
+The cell size in DAOS is the size of a single data and parity fragment.
+By default, a container's `ec_cell_sz` property is inherited from the pool's
+default `ec_cell_sz`, which was 1MiB in DAOS 2.0 and has been reduced to
+64kiB in DAOS 2.2.  The container cell size can also be set at
+container creation time via the `--property` option:
 
 ```bash
-$ daos cont create tank --label mycont5 --type POSIX --properties rd_fac:1,cell_size:65536
+$ daos cont create tank --label mycont5 --type POSIX --properties rd_fac:1,cell_size:131072
   Container UUID : 90185799-0e22-4a0b-be9d-1a20900a35ee
   Container Label: mycont5
   Container Type : unknown
 Successfully created container 90185799-0e22-4a0b-be9d-1a20900a35ee
 ```
 
-This will force a cell size of 64KiB for all erasure-coded objects created in
-this container. If no cell size is specified, it will be inherited from the
-pool. The default cell size on the pool is set to 1MiB if not modified by the
-administrator at pool creation time.
+This will set an EC cell size of 128 KiB for all erasure-coded objects created in
+this container.
+
+DFS (POSIX) containers use a default `chunk_size` of 1MiB.
+This is the largest I/O request size that a DFS client will send to a storage target
+in a single request. The `chunk_size` can be displayed with the `daos cont query` command.
+When using Erasure Coding as the data protection mechanism, performance is best when
+the _stripe width_ of an EC stripe is either identical to the container's `chunk size`
+or an integer multiple of the _stripe width_ is equal to the container's `chunk_size`.
+For example:
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 128kiB is a perfect setting
+  for EC\_8P1GX and EC\_8P2GX: Eight EC cells of 128kiB exactly match the 1MiB chunk size.
+  It is also good for smaller erasure coding stripe widths like EC\_4P1GX and
+  EC\_4P2GX: Four EC cells of 128kiB are 512kiB, half of the 1MiB chunk size.
+  So a single DFS container chunk will fill two _full stripes_.
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 128kiB is **not** a good
+  fit for EC\_16P2GX and other more widely striped EC types: Sixteen EC cells of
+  128kiB are 2MiB, twice as big as the DFS container's chunk size.
+  This means that even the largest DFS client write operation results in a
+  _read-modify-write_ penalty, because it only fills **half** of an EC stripe.
+
+* With a DFS container chunk size of 1MiB, an `ec_cell_sz` of 64kiB is a perfect setting
+  for EC\_16P1GX and EC\_16P2GX: Sixteen EC cells of 64kiB exactly match the 1MiB chunk size.
+  Smaller EC stripe widths like EC\_8P2GX and EC\_4P1GX also work with this EC cell size,
+  which is the reason why 64kiB is the new DAOS 2.2 default for the `ec_cell_sz`.
+
 
 ### Checksum Background Scrubbing
 A pool ULT can be configured to scan the VOS trees to discover silent data
