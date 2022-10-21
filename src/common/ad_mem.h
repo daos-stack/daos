@@ -90,7 +90,7 @@ struct ad_group_metrics {
 };
 
 #define ARENA_GRP_SPEC_MAX	24
-#define ARENA_GRP_BMSZ		16
+#define ARENA_GRP_BMSZ		8
 
 /** Customized specs for arena. */
 struct ad_arena_spec {
