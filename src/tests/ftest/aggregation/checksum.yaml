@@ -28,10 +28,10 @@ ior:
   api: "DFS"
   client_processes:
     np: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
-      - "-w -E -k"
-      - "-r -R"
+    - "-w -E -k"
+    - "-r -R"
   repetitions: 1
   signature: 5
   transfersize_blocksize:

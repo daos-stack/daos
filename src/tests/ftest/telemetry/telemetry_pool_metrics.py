@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -40,10 +39,8 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
 
         """
         # Calculate the lower and upper bound values
-        upper_bound = (expected_value +
-                       (threshold_percent / 100 * expected_value))
-        lower_bound = (expected_value -
-                       (threshold_percent / 100 * expected_value))
+        upper_bound = (expected_value + (threshold_percent / 100 * expected_value))
+        lower_bound = (expected_value - (threshold_percent / 100 * expected_value))
         self.log.debug("Lower Bound: %s", lower_bound)
         self.log.debug("Actual Value: %s", actual_value)
         self.log.debug("Upper Bound: %s", upper_bound)
@@ -100,8 +97,8 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 # to get total expected written amount for only
                 # write operation.
                 if "update" in name:
-                    expected_total_amount_written = (self.ior_cmd.block_size.value *
-                                                     int(replication))
+                    expected_total_amount_written = (self.ior_cmd.block_size.value
+                                                     * int(replication))
                 else:
                     expected_total_amount_written = self.ior_cmd.block_size.value
                 # get difference between actual written value and expected
@@ -175,8 +172,8 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         # collect second set of pool metric data after read/write
         metrics_data[idx] = self.telemetry.get_pool_metrics(metric_list)
         # collect data for expected values
-        expected_total_objects = (self.ior_cmd.block_size.value /
-                                  self.ior_cmd.dfs_chunk.value) + 1
+        expected_total_objects = (self.ior_cmd.block_size.value
+                                  / self.ior_cmd.dfs_chunk.value) + 1
         #     Number of expected total objects, Chunk Size
         check_values = [expected_total_objects, self.ior_cmd.dfs_chunk.value]
         # perform verification check

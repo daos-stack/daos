@@ -15,6 +15,7 @@ from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 
+
 # pylint: disable=global-variable-not-assigned,global-statement
 # pylint: disable=too-many-ancestors
 class UpgradeDowngradeTest(IorTestBase):
@@ -40,7 +41,7 @@ class UpgradeDowngradeTest(IorTestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10) # nosec
+            size = random.randint(1, 10)  # nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
@@ -97,7 +98,7 @@ class UpgradeDowngradeTest(IorTestBase):
                 self.fail(
                     "FAIL: Value does not match after get({}), Expected "
                     "val={} and received val={}".format(attr, value,
-                                        decoded.get(attr.decode(), None)))
+                                                        decoded.get(attr.decode(), None)))
 
     def check_result(self, result):
         """check for command result, raise failure when error encountered
@@ -152,11 +153,9 @@ class UpgradeDowngradeTest(IorTestBase):
         Args:
             host (NodeSet): test host.
         """
-        cmds = [
-                "daos version",
+        cmds = ["daos version",
                 "dmg version",
-                "daos pool query {}".format(self.pool.identifier)
-               ]
+                "daos pool query {}".format(self.pool.identifier)]
         for cmd in cmds:
             self.log.info("==cmd= %s", cmd)
             result = pcmd(host, cmd, False)

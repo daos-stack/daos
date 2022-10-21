@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -93,9 +92,9 @@ class BasicTxTest(TestWithServers):
             # read from a snapshot or read from TX_NONE etc.
 
             # the original data should still be there too
-            #thedata5 = container.read_an_obj(thedatasize, dkey, akey,
+            # thedata5 = container.read_an_obj(thedatasize, dkey, akey,
             #                                 oid, transaction)
-            #if thedata != thedata5.value:
+            # if thedata != thedata5.value:
             #    self.fail("Write data 3, read it back, didn't match\n")
 
             container.close()

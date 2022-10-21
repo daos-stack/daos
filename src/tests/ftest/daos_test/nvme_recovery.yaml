@@ -3,9 +3,9 @@
 hosts:
   test_servers: 2
 timeout: 600
-#Remove this once DAOS-5134 is resolved
+# Remove this once DAOS-5134 is resolved
 setup:
-  start_servers_once: False
+  start_servers_once: false
 pool:
   scm_size: 8G
   nvme_size: 16G
@@ -48,13 +48,13 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 daos_tests:
   num_clients: 1
   test_name:

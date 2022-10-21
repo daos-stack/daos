@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -17,10 +16,10 @@ class DaosCommand(DaosCommandBase):
     METHOD_REGEX = {
         "run": r"(.*)",
         "container_query":
-            r"Pool UUID:\s+([0-9a-f-]+)\n" +
-            r"Container UUID:\s+([0-9a-f-]+)\n" +
-            r"Number of snapshots:\s+(\d+)\n" +
-            r"Latest Persistent Snapshot:\s+(\d+)\n" +
+            r"Pool UUID:\s+([0-9a-f-]+)\n"
+            r"Container UUID:\s+([0-9a-f-]+)\n"
+            r"Number of snapshots:\s+(\d+)\n"
+            r"Latest Persistent Snapshot:\s+(\d+)\n"
             r"Highest Aggregated Epoch:\s+(\d+)",
     }
 
@@ -744,16 +743,14 @@ class DaosCommand(DaosCommandBase):
             data["grp_nr"] = vals[0][2]
 
             data["layout"] = []
-            for i in range(1, len(vals)):
-                if vals[i][3] == "":
+            for idx in range(1, len(vals)):
+                if vals[idx][3] == "":
                     if "replica" in data["layout"][-1]:
-                        data["layout"][-1]["replica"].append(
-                            (vals[i][4], vals[i][5]))
+                        data["layout"][-1]["replica"].append((vals[idx][4], vals[idx][5]))
                     else:
-                        data["layout"][-1]["replica"] = [(
-                            vals[i][4], vals[i][5])]
+                        data["layout"][-1]["replica"] = [(vals[idx][4], vals[idx][5])]
                 else:
-                    data["layout"].append({"grp": vals[i][3]})
+                    data["layout"].append({"grp": vals[idx][3]})
         except IndexError:
             traceback.print_exc()
             self.log.error("--- re.findall output ---")

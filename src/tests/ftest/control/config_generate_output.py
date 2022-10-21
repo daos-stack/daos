@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -159,8 +158,7 @@ class ConfigGenerateOutput(TestWithServers):
         elif result.exit_status != 0 and failure_expected is not None:
             if failure_expected not in result.stderr_text:
                 errors.append(
-                    "Missing expected error message in failed dmg command!: " +
-                    "{}".format(result))
+                    "Missing expected error message in failed dmg command!: {}".format(result))
         else:
             errors.append(
                 "dmg command failed when expected to pass!: {}".format(result))

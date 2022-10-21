@@ -7,32 +7,32 @@ hosts:
 # (I'm looking at you "rebuild tests")
 timeout: 600
 timeouts:
-    test_daos_degraded_mode: 450
-    test_daos_management: 110
-    test_daos_pool: 180
-    test_daos_container: 450
-    test_daos_epoch: 125
-    test_daos_verify_consistency: 105
-    test_daos_io: 290
-    test_daos_ec_io: 450
-    test_daos_ec_obj: 600
-    test_daos_object_array: 105
-    test_daos_array: 106
-    test_daos_kv: 105
-    test_daos_capability: 104
-    test_daos_epoch_recovery: 104
-    test_daos_md_replication: 104
-    test_daos_rebuild_simple: 1500
-    test_daos_drain_simple: 500
-    test_daos_extend_simple: 500
-    test_daos_oid_allocator: 640
-    test_daos_checksum: 500
-    test_daos_rebuild_ec: 4800
-    test_daos_aggregate_ec: 200
-    test_daos_degraded_ec: 1900
-    test_daos_dedup: 220
+  test_daos_degraded_mode: 450
+  test_daos_management: 110
+  test_daos_pool: 180
+  test_daos_container: 450
+  test_daos_epoch: 125
+  test_daos_verify_consistency: 105
+  test_daos_io: 290
+  test_daos_ec_io: 450
+  test_daos_ec_obj: 600
+  test_daos_object_array: 105
+  test_daos_array: 106
+  test_daos_kv: 105
+  test_daos_capability: 104
+  test_daos_epoch_recovery: 104
+  test_daos_md_replication: 104
+  test_daos_rebuild_simple: 1500
+  test_daos_drain_simple: 500
+  test_daos_extend_simple: 500
+  test_daos_oid_allocator: 640
+  test_daos_checksum: 500
+  test_daos_rebuild_ec: 4800
+  test_daos_aggregate_ec: 200
+  test_daos_degraded_ec: 1900
+  test_daos_dedup: 220
 pool:
-  #This will create 8G of SCM and 16G of NVMe size of pool.
+  # This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
   nvme_size: 16G
 server_config:
@@ -82,13 +82,13 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 daos_tests:
   num_clients:
     test_daos_degraded_mode: 1
@@ -175,7 +175,7 @@ daos_tests:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
   scalable_endpoint:
-    test_daos_degraded_mode: True
+    test_daos_degraded_mode: true
   stopped_ranks:
     test_daos_degraded_mode: [5, 6, 7]
     test_daos_oid_allocator: [6, 7]

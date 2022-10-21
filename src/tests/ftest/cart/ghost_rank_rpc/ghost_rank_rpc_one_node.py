@@ -6,6 +6,7 @@
 '''
 from cart_utils import CartTest
 
+
 class CartGhostRankRpcOneNodeTest(CartTest):
     # pylint: disable=too-few-public-methods
     """Run CaRT ghost rank RPC test.

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -207,6 +206,7 @@ class DsyncCommand(MfuCommandBase):
         # destination path
         self.dst = BasicParameter(None)
 
+
 class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
 
@@ -304,6 +304,7 @@ class FsCopy():
 
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
                                              preserve_props=self.preserve_props)
+
 
 class ContClone():
     """Class defining an object of type ContClone.

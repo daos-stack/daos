@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -48,20 +47,20 @@ class NvmeEnospace(ServerFillUp):
         args:
             expected_err_count(int): Expected DER_NOSPACE count from client log.
         """
-        #Get the DER_NOSPACE and other error count from log
+        # Get the DER_NOSPACE and other error count from log
         self.der_nospace_count, self.other_errors_count = error_count(
             "-1007", self.hostlist_clients, self.client_log)
 
-        #Get the DER_NO_HDL and other error count from log
+        # Get the DER_NO_HDL and other error count from log
         der_nohdl_count, other_nohdl_err = error_count(
             "-1002", self.hostlist_clients, self.client_log)
 
-        #Check there are no other errors in log file except DER_NO_HDL
+        # Check there are no other errors in log file except DER_NO_HDL
         if self.other_errors_count != der_nohdl_count:
             self.fail('Found other errors, count {} in client log {}'
-                      .format(int(self.other_errors_count-other_nohdl_err),
+                      .format(int(self.other_errors_count - other_nohdl_err),
                               self.client_log))
-        #Check the DER_NOSPACE error count is higher if not test will FAIL
+        # Check the DER_NOSPACE error count is higher if not test will FAIL
         if self.der_nospace_count < der_nospace_err_count:
             self.fail('Expected DER_NOSPACE should be > {} and Found {}'
                       .format(der_nospace_err_count, self.der_nospace_count))
@@ -70,12 +69,12 @@ class NvmeEnospace(ServerFillUp):
         """
         Delete all the containers.
         """
-        #List all the container
+        # List all the container
         kwargs = {"pool": self.pool.uuid}
         data = self.daos_cmd.container_list(**kwargs)
         containers = [uuid_label["uuid"] for uuid_label in data["response"]]
 
-        #Destroy all the containers
+        # Destroy all the containers
         for _cont in containers:
             kwargs["cont"] = _cont
             kwargs["force"] = True
@@ -129,20 +128,20 @@ class NvmeEnospace(ServerFillUp):
         """
         Function to run test and validate DER_ENOSPACE and expected storage size
         """
-        #Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
-        #start filling
+        # Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
+        # start filling
         print('Starting main IOR load')
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
         print(self.pool.pool_percentage_used())
 
-        #Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
-        #filled
+        # Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
+        # filled
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=50)
         print(self.pool.pool_percentage_used())
 
-        #Fill 60% more of SCM pool, now NVMe will be Full so data will not be
-        #moved to NVMe but it will start filling SCM. SCM size will be going to
-        #full and this command expected to fail with DER_NOSPACE
+        # Fill 60% more of SCM pool, now NVMe will be Full so data will not be
+        # moved to NVMe but it will start filling SCM. SCM size will be going to
+        # full and this command expected to fail with DER_NOSPACE
         try:
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
             self.fail('This test suppose to FAIL because of DER_NOSPACE'
@@ -150,20 +149,19 @@ class NvmeEnospace(ServerFillUp):
         except TestFail as _error:
             self.log.info('Test expected to fail because of DER_NOSPACE')
 
-        #Display the pool%
+        # Display the pool%
         print(self.pool.pool_percentage_used())
 
-        #verify the DER_NO_SAPCE error count is expected and no other Error in
-        #client log
+        # verify the DER_NO_SAPCE error count is expected and no other Error in client log
         self.verify_enspace_log(self.der_nospace_count)
 
-        #Check both NVMe and SCM are full.
+        # Check both NVMe and SCM are full.
         pool_usage = self.pool.pool_percentage_used()
-        #NVMe should be almost full if not test will fail.
+        # NVMe should be almost full if not test will fail.
         if pool_usage['nvme'] > 8:
             self.fail('Pool NVMe used percentage should be < 8%, instead {}'.
                       format(pool_usage['nvme']))
-        #For SCM some % space used for system so it won't be 100% full.
+        # For SCM some % space used for system so it won't be 100% full.
         if pool_usage['scm'] > 50:
             self.fail('Pool SCM used percentage should be < 50%, instead {}'.
                       format(pool_usage['scm']))
@@ -173,7 +171,7 @@ class NvmeEnospace(ServerFillUp):
         Function to run test and validate DER_ENOSPACE and expected storage
         size. Single IOR job will run in background while space is filling.
         """
-        #Get the initial DER_ENOSPACE count
+        # Get the initial DER_ENOSPACE count
         self.der_nospace_count, self.other_errors_count = error_count(
             "-1007", self.hostlist_clients, self.client_log)
 
@@ -183,7 +181,7 @@ class NvmeEnospace(ServerFillUp):
         job.daemon = True
         job.start()
 
-        #Run IOR in Foreground
+        # Run IOR in Foreground
         self.run_enospace_foreground()
         # Verify the background job result has no FAIL for any IOR run
         for _result in self.test_result:
@@ -210,7 +208,7 @@ class NvmeEnospace(ServerFillUp):
         """
         print(self.pool.pool_percentage_used())
 
-        #Run IOR to fill the pool.
+        # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
     def test_enospace_lazy_with_fg(self):
@@ -234,17 +232,17 @@ class NvmeEnospace(ServerFillUp):
         """
         print(self.pool.pool_percentage_used())
 
-        #Repeat the test in loop.
+        # Repeat the test in loop.
         for _loop in range(10):
             print("-------enospc_lazy_fg Loop--------- {}".format(_loop))
-            #Run IOR to fill the pool.
+            # Run IOR to fill the pool.
             self.run_enospace_foreground()
-            #Delete all the containers
+            # Delete all the containers
             self.delete_all_containers()
-            #Delete container will take some time to release the space
+            # Delete container will take some time to release the space
             time.sleep(60)
 
-        #Run last IO
+        # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     def test_enospace_time_with_bg(self):
@@ -271,7 +269,7 @@ class NvmeEnospace(ServerFillUp):
         # Enabled TIme mode for Aggregation.
         self.pool.set_property("reclaim", "time")
 
-        #Run IOR to fill the pool.
+        # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
     def test_enospace_time_with_fg(self):
@@ -298,18 +296,18 @@ class NvmeEnospace(ServerFillUp):
         # Enabled TIme mode for Aggregation.
         self.pool.set_property("reclaim", "time")
 
-        #Repeat the test in loop.
+        # Repeat the test in loop.
         for _loop in range(10):
             print("-------enospc_time_fg Loop--------- {}".format(_loop))
             print(self.pool.pool_percentage_used())
-            #Run IOR to fill the pool.
+            # Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
-            #Delete all the containers
+            # Delete all the containers
             self.delete_all_containers()
-            #Delete container will take some time to release the space
+            # Delete container will take some time to release the space
             time.sleep(60)
 
-        #Run last IO
+        # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
 
     @skipForTicket("DAOS-8896")
@@ -328,28 +326,28 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_performance
         """
-        #Write the IOR Baseline and get the Read BW for later comparison.
+        # Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
-        #Write First
+        # Write First
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
-        #Read the baseline data set
+        # Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         print("IOR Baseline Read MiB {}".format(max_mib_baseline))
 
-        #Run IOR to fill the pool.
+        # Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-        #Read the same container which was written at the beginning.
+        # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
 
-        #Check if latest IOR read performance is in Tolerance of 5%, when
-        #Storage space is full.
-        if abs(max_mib_baseline-max_mib_latest) > (max_mib_baseline/100 * 5):
+        # Check if latest IOR read performance is in Tolerance of 5%, when
+        # Storage space is full.
+        if abs(max_mib_baseline - max_mib_latest) > (max_mib_baseline / 100 * 5):
             self.fail('Latest IOR read performance is not under 5% Tolerance'
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
@@ -379,43 +377,42 @@ class NvmeEnospace(ServerFillUp):
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
 
-        #Get the DER_NOSPACE and other error count from log
+        # Get the DER_NOSPACE and other error count from log
         self.der_nospace_count, self.other_errors_count = error_count(
             "-1007", self.hostlist_clients, self.client_log)
 
-        #Repeat the test in loop.
+        # Repeat the test in loop.
         for _loop in range(10):
             print("-------enospc_no_aggregation Loop--------- {}".format(_loop))
-            #Fill 75% of SCM pool
+            # Fill 75% of SCM pool
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
 
             print(self.pool.pool_percentage_used())
 
             try:
-                #Fill 10% more to SCM ,which should Fail because no SCM space
+                # Fill 10% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
                 self.fail('This test suppose to fail because of DER_NOSPACE'
                           'but it got Passed')
             except TestFail as _error:
                 self.log.info('Expected to fail because of DER_NOSPACE')
 
-            #Verify DER_NO_SAPCE error count is expected and no other Error
-            #in client log.
+            # Verify DER_NO_SAPCE error count is expected and no other Error in client log.
             self.verify_enspace_log(self.der_nospace_count)
 
-            #Delete all the containers
+            # Delete all the containers
             self.delete_all_containers()
 
-            #Get the pool usage
+            # Get the pool usage
             pool_usage = self.pool.pool_percentage_used()
-            #Delay to release the SCM size.
+            # Delay to release the SCM size.
             time.sleep(60)
             print(pool_usage)
-            #SCM pool size should be released (some still be used for system)
-            #Pool SCM free % should not be less than 62%
+            # SCM pool size should be released (some still be used for system)
+            # Pool SCM free % should not be less than 62%
             if pool_usage['scm'] > 62:
                 self.fail('SCM pool used percentage should be < 62, instead {}'.
                           format(pool_usage['scm']))
 
-        #Run last IO
+        # Run last IO
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)

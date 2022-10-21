@@ -85,7 +85,7 @@ mdtest_easy: &mdtest_easy_base
   num_of_files_dirs: 100000000
   stonewall_timer: 30
   stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_destroy: False
+  dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_easy_base
   dfs_oclass: S1
@@ -108,7 +108,7 @@ ior:
     ppn: 16
   test_file: daos:testFile
   repetitions: 2
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     ior_flags:
       - "-v -W -w -r -R"
@@ -153,17 +153,17 @@ ior_dm:
   block_size: 1M
   dfs_oclass: "EC_2P2GX"
   test_file: "/testFile"
-  dfs_destroy: False
+  dfs_destroy: false
 
 mdtest:
   client_processes:
     ppn: 16
   test_dir: "/"
   iteration: 1
-  dfs_destroy: True
+  dfs_destroy: true
   manager: "MPICH"
   mdtest_params:
-#     [api, write, read, branching_factor, num_of_dir_files, depth, flags]
+    # [api, write, read, branching_factor, num_of_dir_files, depth, flags]
     - [DFS, 4096, 4096, 1, 25, 0, ' ']
     - [DFS, 4096, 4096, 1, 25, 20, ' ']
     - [POSIX, 0, 0, 1, 25, 0, '-C -T -r']
@@ -174,6 +174,6 @@ mdtest:
     - [POSIX, 0, 0, 2, 10, 5, '-u -C -T -r']
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

@@ -4,9 +4,9 @@ hosts:
   test_servers: 1
 timeout: 110
 setup:
-  start_servers: False
-  start_agents_once: False
-  start_servers_once: False
+  start_servers: false
+  start_agents_once: false
+  start_servers_once: false
   agent_manager_class: Orterun
   server_manager_class: Orterun
 daos_server:

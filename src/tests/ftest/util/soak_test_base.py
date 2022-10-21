@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -305,7 +304,7 @@ class SoakTestBase(TestWithServers):
                 # nodesperjob = -1 indicates to use all nodes in client hostlist
                 if npj < 0:
                     npj = len(self.hostlist_clients)
-                if len(self.hostlist_clients)/npj < 1:
+                if len(self.hostlist_clients) / npj < 1:
                     raise SoakTestError(
                         "<<FAILED: There are only {} client nodes for this job."
                         " Job requires {}".format(

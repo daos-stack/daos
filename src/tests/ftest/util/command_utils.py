@@ -513,8 +513,7 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         super().get_params(test)
         self.get_sub_command_class()
-        if (self.sub_command_class is not None and
-                hasattr(self.sub_command_class, "get_params")):
+        if (self.sub_command_class is not None and hasattr(self.sub_command_class, "get_params")):
             self.sub_command_class.get_params(test)
 
     def get_sub_command_class(self):

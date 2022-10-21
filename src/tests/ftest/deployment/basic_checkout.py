@@ -11,6 +11,7 @@ from exception_utils import CommandFailure
 
 import oclass_utils
 
+
 class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
@@ -48,7 +49,7 @@ class BasicCheckout(PerformanceTestBase):
         elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2G1'):
             self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_8p2g1/*")
 
-        #run autotest
+        # run autotest
         self.log.info("Autotest start")
         daos_cmd = self.get_daos_command()
         try:
@@ -78,11 +79,11 @@ class BasicCheckout(PerformanceTestBase):
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
-        #run ior
+        # run ior
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
                                                  flags, dfuse_mount_dir)
 
-        #run ior with different ec oclass
+        # run ior with different ec oclass
         results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
                                                     [transfer_block_size[1]],
                                                     [flags[0]], dfuse_mount_dir)
@@ -96,7 +97,7 @@ class BasicCheckout(PerformanceTestBase):
         if errors:
             self.fail("Test FAILED")
 
-        #run mdtest
+        # run mdtest
         self.run_mdtest_multiple_variants(mdtest_params)
 
 

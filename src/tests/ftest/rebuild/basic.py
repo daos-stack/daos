@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
+
 
 class RbldBasic(TestWithServers):
     """Test class for rebuild tests.
@@ -83,8 +83,7 @@ class RbldBasic(TestWithServers):
             self.log.info(
                 "Expecting %s/%s rebuilt records in container %s after "
                 "excluding rank %s", rs_rec_nr[-1],
-                self.container[index].object_qty.value *
-                self.container[index].record_qty.value,
+                self.container[index].object_qty.value * self.container[index].record_qty.value,
                 self.container[index], rank)
 
         # Manually exclude the specified rank
@@ -116,11 +115,9 @@ class RbldBasic(TestWithServers):
 
         # Verify the data after rebuild
         for index in range(pool_quantity):
-            self.daos_cmd.container_set_prop(
-                          pool=self.pool[index].uuid,
-                          cont=self.container[index].uuid,
-                          prop="status",
-                          value="healthy")
+            self.daos_cmd.container_set_prop(pool=self.pool[index].uuid,
+                                             cont=self.container[index].uuid,
+                                             prop="status", value="healthy")
             if self.container[index].object_qty.value != 0:
                 self.assertTrue(
                     self.container[index].read_objects(),

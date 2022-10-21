@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +8,7 @@ import json
 from daos_core_base import DaosCoreBase
 from avocado.utils import process
 from general_utils import get_log_file
+
 
 class CsumErrorLog(DaosCoreBase):
     """

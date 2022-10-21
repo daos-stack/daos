@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -45,7 +44,7 @@ class ContainerAsync(TestWithServers):
         :avocado: tags=cont_create_async,test_create_async
         """
         self.add_pool()
-        ph = self.pool.pool.handle
+        pool_hdl = self.pool.pool.handle
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
@@ -67,7 +66,7 @@ class ContainerAsync(TestWithServers):
             # calls wait, but we're using DaosContainer, so we need to manually
             # call it.
             self.pool.destroy(1)
-            self.container[1].container.create(poh=ph, cb_func=cbh2.callback)
+            self.container[1].container.create(poh=pool_hdl, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
@@ -170,8 +169,7 @@ class ContainerAsync(TestWithServers):
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
-                "Async close of non-existing container succeeded! " +
-                "RC = {}".format(cbh2.ret_code))
+                "Async close of non-existing container succeeded! RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
@@ -208,8 +206,7 @@ class ContainerAsync(TestWithServers):
             cbh2.wait()
             self.assertTrue(
                 cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
-                "Async query of non-existing container succeeded! " +
-                "RC = {}".format(cbh2.ret_code))
+                "Async query of non-existing container succeeded! RC = {}".format(cbh2.ret_code))
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
