@@ -134,6 +134,9 @@ enum CheckFlag {
 	// If the admin does not want to interact with engine during check scan, then CIA_INTERACT
 	// will be converted to CIA_IGNORE. That will overwrite the CheckInconsistPolicy.
 	CF_AUTO		= 8;
+	// Handle dangling pool when start the check instance. If not specify the flag, dangling
+	// pool will not be handled (by default) unless all pools are checked from the scratch.
+	CF_DANGLING_POOL = 16;
 
 	// More flags with 2^n.
 }
