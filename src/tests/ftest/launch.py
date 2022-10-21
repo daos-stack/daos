@@ -1833,7 +1833,6 @@ class Launch():
                 message = f'User {user} not in expected group {group}'
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
-                
 
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):
