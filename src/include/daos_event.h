@@ -58,13 +58,13 @@ daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
 /**
- * Destroy an Event Queue, it waits on -EBUSY if EQ is not empty.
+ * Destroy an Event Queue, it returns -DER_BUSY if EQ is not empty.
  *
  * \param eqh [IN]	EQ to finalize
  * \param ev [IN]	Pointer to completion event
  * \param flags [IN]	Flags to indicate the behavior of the destroy.
  *
- * \return		Zero on success, EBUSY if there is any launched event
+ * \return		Zero on success, -DER_BUSY if there is any launched event
  */
 int
 daos_eq_destroy(daos_handle_t eqh, int flags);

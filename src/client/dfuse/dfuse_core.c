@@ -1032,11 +1032,14 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 err_eq:
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
+		int rc2;
 
 		if (daos_handle_is_inval(eqt->de_eq))
 			continue;
 
-		daos_eq_destroy(eqt->de_eq, DAOS_EQ_DESTROY_FORCE);
+		rc2 = daos_eq_destroy(eqt->de_eq, 0);
+		if (rc2 != -DER_SUCCESS)
+			DFUSE_TRA_ERROR(eqt, "Failed to destroy event queue:" DF_RC, DP_RC(rc2));
 
 		sem_destroy(&eqt->de_sem);
 		DFUSE_TRA_DOWN(eqt);
