@@ -2990,8 +2990,8 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 	case S_IFDIR:
 		if (obj->d.oclass)
 			info->doi_oclass_id = obj->d.oclass;
-		else if (dfs->attr.da_oclass_id)
-			info->doi_oclass_id = dfs->attr.da_oclass_id;
+		else if (dfs->attr.da_dir_oclass_id)
+			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
 		else
 			info->doi_oclass_id = daos_obj_get_oclass(dfs->coh, 0, 0, 0);
 
