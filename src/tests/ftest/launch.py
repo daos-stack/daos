@@ -1834,6 +1834,8 @@ class Launch():
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
 
+        return 0
+
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):
         # pylint: disable=too-many-nested-blocks,too-many-branches
