@@ -2953,8 +2953,8 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
 				continue;
 
 			offset &= ~PARITY_INDICATOR;
-			D_ASSERT(offset % cell_nr == 0);
-			D_ASSERT(recxs[i].rx_nr % cell_nr == 0);
+			D_ASSERTF(offset % cell_nr == 0, DF_RECX"\n", DP_RECX(recxs[i]));
+			D_ASSERTF(recxs[i].rx_nr % cell_nr == 0, DF_RECX"\n", DP_RECX(recxs[i]));
 			offset = obj_ec_idx_parity2daos(offset, cell_nr, stripe_nr);
 			recxs[i].rx_idx = convert_parity ? offset : PARITY_INDICATOR | offset;
 			recxs[i].rx_nr *= obj_ec_data_tgt_nr(oca);
@@ -2994,7 +2994,8 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
 						       cell_nr, tgt_idx);
 			daos_size = min(roundup(offset + 1, cell_nr) - offset,
 					size);
-			D_ASSERT(idx < total);
+			D_ASSERTF(idx < total, "idx %d total %u "DF_RECX"\n",
+				  idx, total, DP_RECX(recxs[i]));
 			tgt_recxs[idx].rx_idx = daos_off;
 			tgt_recxs[idx].rx_nr = daos_size;
 			if (recx_ephs != NULL)
