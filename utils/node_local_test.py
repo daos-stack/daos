@@ -1431,6 +1431,9 @@ def create_cont(conf,
                 ctype=None,
                 label=None,
                 path=None,
+                oclass=None,
+                dir_oclass=None,
+                hints=None,
                 valgrind=False,
                 log_check=True,
                 cwd=None):
@@ -1450,6 +1453,15 @@ def create_cont(conf,
 
     if ctype:
         cmd.extend(['--type', ctype])
+
+    if oclass:
+        cmd.extend(['--oclass', oclass])
+
+    if dir_oclass:
+        cmd.extend(['--dir_oclass', dir_oclass])
+
+    if hints:
+        cmd.extend(['--hints', hints])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -1672,6 +1684,48 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()], use_json=True)
         print(rc)
         assert rc.returncode == 0, rc
+
+    @needs_dfuse_with_opt(caching=False)
+    def test_oclass(self):
+        """Test container object class options"""
+
+        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='oclass_test',
+                                oclass='S1', dir_oclass='S2')
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      self.pool.id(), container],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server, self.conf, self.pool.id(), container=container)
+        dfuse.use_valgrind = False
+        dfuse.start()
+
+        dir1 = join(dfuse.dir, 'd1')
+        os.mkdir(dir1)
+        file1 = join(dir1, 'f1')
+        with open(file1, 'w') as ofd:
+            ofd.write('hello')
+
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of ' + dir1)
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(rc)
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S2', '1048576')
+
+        cmd = ['fs', 'get-attr', '--path', file1]
+        print('get-attr of ' + file1)
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(rc)
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        destroy_container(self.conf, self.pool.id(), container)
 
     def test_cache(self):
         """Test with caching enabled"""
