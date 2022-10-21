@@ -695,6 +695,12 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 	if (rc != 0 && rc != -DER_EXIST)
 		goto out;
 
+	/* IFV tree used by VEA */
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST)
+		goto out;
+
 	/* Only use hugepages if NVME SSD configuration existed. */
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
@@ -808,7 +814,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

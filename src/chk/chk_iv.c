@@ -58,7 +58,7 @@ chk_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-chk_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+chk_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }

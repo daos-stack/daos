@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
@@ -38,7 +39,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 	testPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",
-		Replicas:  []system.Rank{0, 1, 2},
+		Replicas:  []ranklist.Rank{0, 1, 2},
 	}
 
 	for name, tc := range map[string]struct {
@@ -61,7 +62,7 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 					{
 						Uuid:    testPool.PoolUUID.String(),
 						Label:   testPool.PoolLabel,
-						Svcreps: system.RanksToUint32(testPool.Replicas),
+						Svcreps: ranklist.RanksToUint32(testPool.Replicas),
 					},
 				},
 			},
@@ -102,13 +103,13 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 	existingPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",
-		Replicas:  []system.Rank{0, 1, 2},
+		Replicas:  []ranklist.Rank{0, 1, 2},
 	}
-	makeReqBytes := func(id, label string, replicas []system.Rank) []byte {
+	makeReqBytes := func(id, label string, replicas []ranklist.Rank) []byte {
 		req := &srvpb.CheckRegPoolReq{
 			Uuid:    id,
 			Label:   label,
-			Svcreps: system.RanksToUint32(replicas),
+			Svcreps: ranklist.RanksToUint32(replicas),
 		}
 		b, err := proto.Marshal(req)
 		if err != nil {
@@ -129,36 +130,36 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 			expErr: drpc.UnmarshalingPayloadFailure(),
 		},
 		"not replica": {
-			req:        makeReqBytes(newUUID, "new", []system.Rank{0}),
+			req:        makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
 			notReplica: true,
 			expResp:    &srvpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
 		},
 		"bad uuid": {
-			req:     makeReqBytes("ow", "new", []system.Rank{0}),
+			req:     makeReqBytes("ow", "new", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"bad label": {
-			req:     makeReqBytes(newUUID, newUUID, []system.Rank{0}),
+			req:     makeReqBytes(newUUID, newUUID, []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"empty label": {
-			req:     makeReqBytes(newUUID, "", []system.Rank{0}),
+			req:     makeReqBytes(newUUID, "", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"zero svcreps": {
-			req:     makeReqBytes(newUUID, "new", []system.Rank{}),
+			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
 		"duplicate uuid": {
-			req:     makeReqBytes(existingPool.PoolUUID.String(), "new", []system.Rank{0}),
+			req:     makeReqBytes(existingPool.PoolUUID.String(), "new", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
 		"duplicate label": {
-			req:     makeReqBytes(newUUID, existingPool.PoolLabel, []system.Rank{0}),
+			req:     makeReqBytes(newUUID, existingPool.PoolLabel, []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
 		"success": {
-			req:     makeReqBytes(newUUID, "new", []system.Rank{0}),
+			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{},
 		},
 	} {
@@ -197,7 +198,7 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 	existingPool := &system.PoolService{
 		PoolUUID:  uuid.New(),
 		PoolLabel: "test-pool",
-		Replicas:  []system.Rank{0, 1, 2},
+		Replicas:  []ranklist.Rank{0, 1, 2},
 	}
 	makeReqBytes := func(id string) []byte {
 		req := &srvpb.CheckDeregPoolReq{

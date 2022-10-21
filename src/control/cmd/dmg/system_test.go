@@ -19,14 +19,15 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
-	withRanks := func(req control.UnaryRequest, ranks ...system.Rank) control.UnaryRequest {
-		if rs, ok := req.(interface{ SetRanks(*system.RankSet) }); ok {
-			rs.SetRanks(system.RankSetFromRanks(ranks))
+	withRanks := func(req control.UnaryRequest, ranks ...ranklist.Rank) control.UnaryRequest {
+		if rs, ok := req.(interface{ SetRanks(*ranklist.RankSet) }); ok {
+			rs.SetRanks(ranklist.RankSetFromRanks(ranks))
 		}
 
 		return req

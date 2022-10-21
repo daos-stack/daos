@@ -19,6 +19,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -53,7 +54,7 @@ type Engine interface {
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
-	GetRank() (system.Rank, error)
+	GetRank() (ranklist.Rank, error)
 	GetTargetCount() int
 	Index() uint32
 	IsStarted() bool
@@ -61,7 +62,7 @@ type Engine interface {
 	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context, bool)
-	SetupRank(context.Context, system.Rank) error
+	SetupRank(context.Context, ranklist.Rank) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
@@ -111,7 +112,7 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]Engine, error)
 	h.RLock()
 	defer h.RUnlock()
 
-	rankList, err := system.ParseRanks(ranks)
+	rankList, err := ranklist.ParseRanks(ranks)
 	if err != nil {
 		return nil, err
 	}
@@ -266,11 +267,11 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *EngineHarness) readyRanks() []system.Rank {
+func (h *EngineHarness) readyRanks() []ranklist.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0)
+	ranks := make([]ranklist.Rank, 0)
 	for idx, ei := range h.instances {
 		if ei.IsReady() {
 			rank, err := ei.GetRank()

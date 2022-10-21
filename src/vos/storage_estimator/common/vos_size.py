@@ -172,7 +172,7 @@ class MetaOverhead():
 
     def init_dkeys(self, oid, obj_spec, num_of_targets):
         """Handle akey specification"""
-        start_pool = random.randint(0, self.num_pools - 1) #nosec
+        start_pool = random.randint(0, self.num_pools - 1)  # nosec
         pool_idx = start_pool
 
         for dkey_spec in obj_spec.get("dkeys"):
@@ -186,8 +186,7 @@ class MetaOverhead():
             if full_count == 0:
                 num_pools = partial_count
             for idx in range(0, num_pools):
-                pool_idx = ((idx % num_of_targets) +
-                            start_pool) % self.num_pools
+                pool_idx = ((idx % num_of_targets) + start_pool) % self.num_pools
                 pool = self.pools[pool_idx]
                 cont = pool["trees"][-1]
                 if cont["trees"] == [] or cont["trees"][-1]["oid"] != oid:

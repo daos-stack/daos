@@ -4,47 +4,51 @@ hosts:
   test_servers: 4
 timeout: 800
 timeouts:
-    test_rebuild_0to10: 2000
-    test_rebuild_12to15: 1500
-    test_rebuild_27: 1500
+  test_rebuild_0to10: 2000
+  test_rebuild_12to15: 1500
+  test_rebuild_27: 1500
 pool:
   nvme_size: 0G
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      # Uncomment when DAOS-4117 is fixed
-      # bdev_class: nvme
-      # bdev_list: ["0000:81:00.0"]
-      # scm_class: dcpm
-      # scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      # Uncomment when DAOS-4117 is fixed
-      # bdev_class: nvme
-      # bdev_list: ["0000:da:00.0"]
-      # scm_class: dcpm
-      # scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
     allow_insecure: False
 agent_config:
@@ -73,6 +77,7 @@ daos_tests:
     test_rebuild_27: DAOS_Rebuild_27
     test_rebuild_28: DAOS_Rebuild_28
     test_rebuild_29: DAOS_Rebuild_29
+    test_rebuild_30: DAOS_Rebuild_30
   daos_test:
     test_rebuild_0to10: r
     test_rebuild_12to15: r
@@ -90,6 +95,7 @@ daos_tests:
     test_rebuild_27: r
     test_rebuild_28: r
     test_rebuild_29: r
+    test_rebuild_30: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
     test_rebuild_12to15: -s3 -u subtests="12-15"
@@ -107,6 +113,7 @@ daos_tests:
     test_rebuild_27: -s6 -u subtests="27"
     test_rebuild_28: -s3 -u subtests="28"
     test_rebuild_29: -s5 -u subtests="29"
+    test_rebuild_30: -s5 -u subtests="30"
   stopped_ranks:
     test_rebuild_26: ["random"]
     test_rebuild_27: ["random"]

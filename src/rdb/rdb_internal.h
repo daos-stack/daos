@@ -150,15 +150,15 @@ struct rdb_raft_node {
 	struct rdb_raft_is	dn_is;
 };
 
-int rdb_raft_init(daos_handle_t pool, daos_handle_t mc,
-		  const d_rank_list_t *replicas);
-int rdb_raft_open(struct rdb *db);
+int rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas);
+int rdb_raft_open(struct rdb *db, uint64_t caller_term);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 void rdb_raft_close(struct rdb *db);
 int rdb_raft_dictate(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
+int rdb_raft_ping(struct rdb *db, uint64_t caller_term);
 int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas);
 int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);

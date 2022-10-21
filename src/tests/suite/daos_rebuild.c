@@ -370,6 +370,8 @@ rebuild_destroy_pool_cb(void *data)
 
 	rebuild_pool_disconnect_internal(data);
 
+	print_message("sleep 20 seconds to make rebuild ready\n");
+	sleep(20);
 	if (arg->myrank == 0) {
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -384,8 +386,7 @@ rebuild_destroy_pool_cb(void *data)
 	}
 
 	arg->pool.destroyed = true;
-	print_message("pool destroyed "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
+	print_message("pool destroyed "DF_UUIDF"\n", DP_UUID(arg->pool.pool_uuid));
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -1264,16 +1265,10 @@ static void
 rebuild_kill_rank_during_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
-	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc;
 
 	if (!test_runable(arg, 6))
-		return;
-
-	rc = rebuild_pool_create(&new_arg, arg, SETUP_CONT_CONNECT, NULL);
-	if (rc)
 		return;
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -1282,7 +1277,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
 	}
 
-	rebuild_io(new_arg, oids, OBJ_NR);
+	rebuild_io(arg, oids, OBJ_NR);
 
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
@@ -1292,7 +1287,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 				      0, NULL);
 	}
 
-	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
+	arg->rebuild_cb = rebuild_destroy_pool_cb;
 
 	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
 			    ranks_to_kill[0], -1);
@@ -1340,6 +1335,13 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 
 	sleep(5);
 	reintegrate_single_pool_rank(arg, leader, true);
+}
+
+static void
+rebuild_pool_destroy_during_rebuild_failure(void **state)
+{
+	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_UPDATE_FAIL |
+						    DAOS_FAIL_ALWAYS);
 }
 
 /** create a new pool/container for each test */
@@ -1417,6 +1419,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sub_teardown},
 	{"REBUILD29: rebuild kill PS leader during rebuild",
 	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD30: destroy pool during rebuild failure and retry",
+	  rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

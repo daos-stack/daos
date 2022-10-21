@@ -18,9 +18,9 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // SystemCmd is the struct representing the top-level system subcommand.
@@ -227,7 +227,7 @@ func (cmd *baseExcludeCmd) execute(clear bool) error {
 		return cmd.outputJSON(resp, resp.Errors())
 	}
 
-	updated := system.NewRankSet()
+	updated := ranklist.NewRankSet()
 	for _, result := range resp.Results {
 		updated.Add(result.Rank)
 	}
