@@ -13,6 +13,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos/object.h>
+#include "obj_internal.h"
 
 static d_iov_t *
 io_csums_iov(struct dss_enum_unpack_io *io)
@@ -1239,6 +1240,7 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 			daos_iov_free(&io->ui_dkey);
 			rc = daos_iov_copy(&io->ui_dkey, &key);
 		}
+		io->ui_dkey_hash = obj_dkey2hash(io->ui_oid.id_pub, &key);
 		D_DEBUG(DB_IO, "process dkey "DF_KEY": rc "DF_RC"\n",
 			DP_KEY(&key), DP_RC(rc));
 		return rc;

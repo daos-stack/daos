@@ -850,17 +850,16 @@ next:
 			VOS_TX_TRACE_FAIL(rc,
 					  "failed to iterate next (type=%d): "
 					  DF_RC"\n", type, DP_RC(rc));
+			if (rc == -DER_NONEXIST) {
+				daos_anchor_set_eof(anchor);
+				rc = 0;
+			}
 			break;
 		} else {
 			rc = advance_stage(type, rc, param, anchors, anchor,
 					   &stage, VOS_ITER_STAGE_FILTER, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
 		}
-	}
-
-	if (rc == -DER_NONEXIST) {
-		daos_anchor_set_eof(anchor);
-		rc = 0;
 	}
 out:
 	if (rc >= 0)
