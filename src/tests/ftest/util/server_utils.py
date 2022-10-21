@@ -844,7 +844,7 @@ class DaosServerManager(SubprocessManager):
             host = self._expected_states[rank]["host"]
         return host
 
-    def update_config_file_from_file(self, dst_hosts, test_dir, generated_yaml):
+    def update_config_file_from_file(self, dst_hosts, test_dir, generated_yaml, storage_class=None):
         """Update config file and object.
 
         Create and place the new config file in /etc/daos/daos_server.yml
@@ -856,7 +856,8 @@ class DaosServerManager(SubprocessManager):
             test_dir (str): Directory where the server config data from
                 generated_yaml will be written.
             generated_yaml (YAMLObject): New server config data.
-
+            storage_class (list, optional): if set only include storage classes identified in the
+                list. Defaults to None.
         """
         # Create a temporary file in test_dir and write the generated config.
         temp_file_path = os.path.join(test_dir, "temp_server.yml")
@@ -890,6 +891,10 @@ class DaosServerManager(SubprocessManager):
             engine_yaml_parameters.storage_tiers = []
             for tier, storage_tier in enumerate(engine["storage"]):
                 self.log.info("  storage tier %s:", tier)
+                if storage_class and storage_tier["class"] not in storage_class:
+                    self.log.info(
+                        "    * skipping %s - class not in %s", storage_tier["class"], storage_class)
+                    continue
                 storage_tier_parameters = StorageTierYamlParameters(index, tier)
                 for name in storage_tier_parameters.get_param_names():
                     param = getattr(storage_tier_parameters, name)

@@ -66,7 +66,7 @@ class ConfigGenerateRun(TestWithServers):
         # works.
         self.log.info("Copy config to /etc/daos and update engine_params")
         self.server_managers[0].update_config_file_from_file(
-            self.hostlist_servers, self.test_dir, generated_yaml)
+            self.hostlist_servers, self.test_dir, generated_yaml, ["dcpm"])
 
         # Start server with the generated config.
         self.log.info("Restarting server with the generated config")
