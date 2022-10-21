@@ -3461,7 +3461,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
+        container = create_cont(conf, pool.label, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3477,7 +3477,7 @@ def run_in_fg(server, conf, args):
                                 '--attr', key, '--value', str(value)],
                          show_stdout=True)
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
+    dfuse = DFuse(server, conf, pool=pool.label, caching=True, wbcache=False)
     if not args.launch_cmd:
         dfuse.log_flush = True
     dfuse.start()
@@ -3489,7 +3489,7 @@ def run_in_fg(server, conf, args):
     print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
     print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
-    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    print(f'daos container create --type POSIX {pool.label} --path {t_dir}/uns-link')
     print(f'daos container destroy --path {t_dir}/uns-link')
     print(f'daos cont list {pool.label}')
     try:

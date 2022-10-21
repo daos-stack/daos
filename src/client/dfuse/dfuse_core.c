@@ -11,9 +11,11 @@
 
 /* Async progress thread.
  *
- * This thread is started at launch time with an event queue and blocks
- * on a semaphore until a asynchronous event is created, at which point
- * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
+ * A number of threads are created at launch, each thread having it's own event queue with a
+ * semaphore to wakeup, posted for each entry added to the event queue and once for shutdown.
+ * When there are no entries on the eq then the thread will yield in the semaphore, when there
+ * are pending events it'll spin in eq_poll() for completion.  All pending events should be
+ * completed before thread exit, should exit be called with pending events.
  */
 static void *
 dfuse_progress_thread(void *arg)
@@ -41,8 +43,15 @@ cont:
 			}
 		}
 
-		if (eqt->de_handle->dpi_shutdown)
-			return NULL;
+		if (eqt->de_handle->dpi_shutdown) {
+			int pending;
+
+			pending = daos_eq_query(eqt->de_eq, DAOS_EQR_ALL, 0, NULL);
+			DFUSE_TRA_ERROR(eqt, "There are %d events pending", pending);
+
+			if (pending == 0)
+				return NULL;
+		}
 
 		rc = daos_eq_poll(eqt->de_eq, 1, DAOS_EQ_WAIT, 128, &dev[0]);
 		if (rc >= 1) {
@@ -56,7 +65,7 @@ cont:
 			}
 			to_consume = rc;
 		} else {
-			to_consume = 1;
+			to_consume = 0;
 		}
 	}
 	return NULL;

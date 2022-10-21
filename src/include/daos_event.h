@@ -104,7 +104,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running,
  * freed by the polling process.
  *
  * \param eqh [IN]	EQ handle
- * \param mode [IN]	Query mode
+ * \param mode [IN]	Query mode, bitmask of daos_eq_query_t
  * \param nevents [IN]	Size of \a events array
  * \param events [OUT]	Pointer to returned events array
  * \return		>= 0	Returned number of events
