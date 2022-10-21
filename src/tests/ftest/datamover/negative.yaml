@@ -1,31 +1,35 @@
 hosts:
-    test_servers: 1
-    test_clients: 1
+  test_servers: 1
+  test_clients: 1
 timeout: 300
 server_config:
-    name: daos_server
-    servers:
-        targets: 4
-        nr_xs_helpers: 0
-        scm_size: 6
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 6
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 5.1G
-    control_method: dmg
+  scm_size: 5.1G
+  control_method: dmg
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 ior:
-    client_processes:
-        np: 1
-    test_file: testFile
-    flags: "-v -w -k"
-    block_size: '1K'
-    transfer_size: '1K'
-    signature: 5
+  client_processes:
+    np: 1
+  test_file: testFile
+  flags: "-v -w -k"
+  block_size: '1K'
+  transfer_size: '1K'
+  signature: 5
 dcp:
-    client_processes:
-        np: 3
+  client_processes:
+    np: 3
 dfuse:
-    mount_dir: "/tmp/daos_dfuse"
+  mount_dir: "/tmp/daos_dfuse"
