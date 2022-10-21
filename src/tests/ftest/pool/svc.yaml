@@ -1,5 +1,6 @@
 hosts:
   test_servers: 5
+  access_points_qty: 5
 server_config:
   name: daos_server
   engines_per_host: 1

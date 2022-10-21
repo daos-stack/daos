@@ -114,54 +114,47 @@ class PoolSvc(TestWithServers):
                 len(set(self.pool.svc_ranks)),
                 "Duplicate values in returned rank list")
 
-            # The number of ranks we can stop depends on the expected number of PS
-            # replicas (svc_params[1]) as below:
-            # svc_params[1] - Ranks we can stop
-            # 1 - 0
-            # 3 - 1
-            # 5 - 2
-            if svc_params[1] >= 3:
-                # Query the pool to get the leader
-                pool_leader = self.check_leader()
-                non_leader_ranks = list(self.pool.svc_ranks)
-                non_leader_ranks.remove(pool_leader)
+            # Query the pool to get the leader
+            pool_leader = self.check_leader()
+            non_leader_ranks = list(self.pool.svc_ranks)
+            non_leader_ranks.remove(pool_leader)
 
-                # Stop the pool leader
-                self.log.info("Stopping the pool leader: %s", pool_leader)
+            # Stop the pool leader
+            self.log.info("Stopping the pool leader: %s", pool_leader)
+            try:
+                self.server_managers[-1].stop_ranks(
+                    [pool_leader], self.test_log)
+            except TestFail as error:
+                self.log.info(error)
+                self.fail(
+                    "Error stopping pool leader - "
+                    "DaosServerManager.stop_ranks([{}])".format(
+                        pool_leader))
+
+            self.pool.wait_for_rebuild(to_start=True, interval=1)
+            self.pool.wait_for_rebuild(to_start=False, interval=1)
+
+            # Verify the pool leader has changed
+            pool_leader = self.check_leader(pool_leader, True)
+            non_leader_ranks.remove(pool_leader)
+
+            if svc_params[1] == 5:
+                # Stop a pool non-leader
+                non_leader = non_leader_ranks[-1]
+                self.log.info(
+                    "Stopping a pool non-leader (%s): %s",
+                    non_leader_ranks, non_leader)
                 try:
-                    self.server_managers[-1].stop_ranks(
-                        [pool_leader], self.test_log)
+                    self.server_managers[-1].stop_ranks([non_leader], self.test_log)
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
-                        "Error stopping pool leader - "
-                        "DaosServerManager.stop_ranks([{}])".format(
-                            pool_leader))
+                        "Error stopping a pool non-leader - "
+                        "DaosServerManager.stop_ranks([{}])".format(non_leader))
 
                 self.pool.wait_for_rebuild(to_start=True, interval=1)
                 self.pool.wait_for_rebuild(to_start=False, interval=1)
-
-                # Verify the pool leader has changed
-                pool_leader = self.check_leader(pool_leader, True)
-                non_leader_ranks.remove(pool_leader)
-
-                if svc_params[1] == 5:
-                    # Stop a pool non-leader
-                    non_leader = non_leader_ranks[-1]
-                    self.log.info(
-                        "Stopping a pool non-leader (%s): %s",
-                        non_leader_ranks, non_leader)
-                    try:
-                        self.server_managers[-1].stop_ranks([non_leader], self.test_log)
-                    except TestFail as error:
-                        self.log.info(error)
-                        self.fail(
-                            "Error stopping a pool non-leader - "
-                            "DaosServerManager.stop_ranks([{}])".format(non_leader))
-
-                    self.pool.wait_for_rebuild(to_start=True, interval=1)
-                    self.pool.wait_for_rebuild(to_start=False, interval=1)
-                    # Verify the pool leader has not changed
-                    self.check_leader(pool_leader, False)
+                # Verify the pool leader has not changed
+                self.check_leader(pool_leader, False)
 
         self.log.info("Test passed!")
