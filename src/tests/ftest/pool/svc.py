@@ -114,31 +114,31 @@ class PoolSvc(TestWithServers):
                 len(set(self.pool.svc_ranks)),
                 "Duplicate values in returned rank list")
 
-            # Query the pool to get the leader
-            pool_leader = self.check_leader()
-            non_leader_ranks = list(self.pool.svc_ranks)
-            non_leader_ranks.remove(pool_leader)
+            if svc_params[1] > 2:
+                # Query the pool to get the leader
+                pool_leader = self.check_leader()
+                non_leader_ranks = list(self.pool.svc_ranks)
+                non_leader_ranks.remove(pool_leader)
 
-            # Stop the pool leader
-            self.log.info("Stopping the pool leader: %s", pool_leader)
-            try:
-                self.server_managers[-1].stop_ranks(
-                    [pool_leader], self.test_log)
-            except TestFail as error:
-                self.log.info(error)
-                self.fail(
-                    "Error stopping pool leader - "
-                    "DaosServerManager.stop_ranks([{}])".format(
-                        pool_leader))
+                # Stop the pool leader
+                self.log.info("Stopping the pool leader: %s", pool_leader)
+                try:
+                    self.server_managers[-1].stop_ranks(
+                        [pool_leader], self.test_log)
+                except TestFail as error:
+                    self.log.info(error)
+                    self.fail(
+                        "Error stopping pool leader - "
+                        "DaosServerManager.stop_ranks([{}])".format(
+                            pool_leader))
 
-            self.pool.wait_for_rebuild(to_start=True, interval=1)
-            self.pool.wait_for_rebuild(to_start=False, interval=1)
+                self.pool.wait_for_rebuild(to_start=True, interval=1)
+                self.pool.wait_for_rebuild(to_start=False, interval=1)
 
-            # Verify the pool leader has changed
-            pool_leader = self.check_leader(pool_leader, True)
-            non_leader_ranks.remove(pool_leader)
+                # Verify the pool leader has changed
+                pool_leader = self.check_leader(pool_leader, True)
+                non_leader_ranks.remove(pool_leader)
 
-            if svc_params[1] == 5:
                 # Stop a pool non-leader
                 non_leader = non_leader_ranks[-1]
                 self.log.info(
