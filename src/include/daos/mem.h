@@ -161,13 +161,13 @@ typedef enum {
 
 #define UTX_PRIV_SIZE	(512)
 struct umem_tx {
-	int			utx_class;	/* umem_class_id_t */
-	int			utx_stage;	/* enum umem_tx_stage */
-	uint64_t		utx_id;
+	struct umem_instance	*utx_umm;
+	int			 utx_stage;	/* enum umem_tx_stage */
+	uint64_t		 utx_id;
 	/* umem class specific TX data */
 	struct {
-		char		utx_space[UTX_PRIV_SIZE];
-	}			utx_private;
+		char		 utx_space[UTX_PRIV_SIZE];
+	}			 utx_private;
 };
 
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
@@ -618,42 +618,30 @@ umem_tx_end(struct umem_instance *umm, int err)
 
 /* Get number of umem_actions in TX redo list */
 static inline uint32_t
-umem_tx_act_nr(struct umem_instance *umm, struct umem_tx *tx)
+umem_tx_act_nr(struct umem_tx *tx)
 {
-	if (umm->umm_ops->mo_tx_act_nr)
-		return umm->umm_ops->mo_tx_act_nr(tx);
-	else
-		return -DER_INVAL;
+	return tx->utx_umm->umm_ops->mo_tx_act_nr(tx);
 }
 
 /* Get payload size of umem_actions in TX redo list */
 static inline uint32_t
-umem_tx_act_payload_sz(struct umem_instance *umm, struct umem_tx *tx)
+umem_tx_act_payload_sz(struct umem_tx *tx)
 {
-	if (umm->umm_ops->mo_tx_payload_sz)
-		return umm->umm_ops->mo_tx_payload_sz(tx);
-	else
-		return -DER_INVAL;
+	return tx->utx_umm->umm_ops->mo_tx_payload_sz(tx);
 }
 
 /* Get the first umem_action in TX redo list */
 static inline struct umem_action *
-umem_tx_act_first(struct umem_instance *umm, struct umem_tx *tx)
+umem_tx_act_first(struct umem_tx *tx)
 {
-	if (umm->umm_ops->mo_tx_act_first)
-		return umm->umm_ops->mo_tx_act_first(tx);
-	else
-		return NULL;
+	return tx->utx_umm->umm_ops->mo_tx_act_first(tx);
 }
 
 /* Get the next umem_action in TX redo list */
 static inline struct umem_action *
-umem_tx_act_next(struct umem_instance *umm, struct umem_tx *tx)
+umem_tx_act_next(struct umem_tx *tx)
 {
-	if (umm->umm_ops->mo_tx_act_next)
-		return umm->umm_ops->mo_tx_act_next(tx);
-	else
-		return NULL;
+	return tx->utx_umm->umm_ops->mo_tx_act_next(tx);
 }
 
 #ifdef DAOS_PMEM_BUILD

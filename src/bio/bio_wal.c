@@ -522,8 +522,8 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
 	blk_hdr.th_id = tx->utx_id;
-	blk_hdr.th_tot_ents = umem_tx_act_nr(mc->mc_meta->bic_umem, tx);
-	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(mc->mc_meta->bic_umem, tx);
+	blk_hdr.th_tot_ents = umem_tx_act_nr(tx);
+	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(tx);
 
 	/* Initialize first entry block */
 	get_trans_blk(bsgl, 0, blk_sz, &entry_blk);
@@ -542,7 +542,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	else
 		payload_blk.tb_off = bd->bd_payload_off;
 
-	act = umem_tx_act_first(mc->mc_meta->bic_umem, tx);
+	act = umem_tx_act_first(tx);
 	D_ASSERT(act != NULL);
 
 	while (act != NULL) {
@@ -614,7 +614,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			break;
 		}
 
-		act = umem_tx_act_next(mc->mc_meta->bic_umem, tx);
+		act = umem_tx_act_next(tx);
 	}
 
 	place_tail(mc, bsgl, bd, &payload_blk);
@@ -774,9 +774,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc 
 	int			 iov_nr, rc;
 
 	/* Calculate the required log blocks for this transaction */
-	calc_trans_blks(umem_tx_act_nr(mc->mc_meta->bic_umem, tx),
-			umem_tx_act_payload_sz(mc->mc_meta->bic_umem, tx),
-			blk_bytes, &blk_desc);
+	calc_trans_blks(umem_tx_act_nr(tx), umem_tx_act_payload_sz(tx), blk_bytes, &blk_desc);
 
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
 		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
