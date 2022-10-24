@@ -87,8 +87,10 @@ type MgmtSvcClient interface {
 	SystemCheckStop(ctx context.Context, in *CheckStopReq, opts ...grpc.CallOption) (*CheckStopResp, error)
 	// Query a system check
 	SystemCheckQuery(ctx context.Context, in *CheckQueryReq, opts ...grpc.CallOption) (*CheckQueryResp, error)
+	// Set system check properties
+	SystemCheckSetPolicy(ctx context.Context, in *CheckSetPolicyReq, opts ...grpc.CallOption) (*DaosResp, error)
 	// Query system check properties
-	SystemCheckProp(ctx context.Context, in *CheckPropReq, opts ...grpc.CallOption) (*CheckPropResp, error)
+	SystemCheckGetPolicy(ctx context.Context, in *CheckGetPolicyReq, opts ...grpc.CallOption) (*CheckGetPolicyResp, error)
 	// Send the desired action to repair an inconsistency.
 	SystemCheckRepair(ctx context.Context, in *CheckActReq, opts ...grpc.CallOption) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
@@ -414,9 +416,18 @@ func (c *mgmtSvcClient) SystemCheckQuery(ctx context.Context, in *CheckQueryReq,
 	return out, nil
 }
 
-func (c *mgmtSvcClient) SystemCheckProp(ctx context.Context, in *CheckPropReq, opts ...grpc.CallOption) (*CheckPropResp, error) {
-	out := new(CheckPropResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckProp", in, out, opts...)
+func (c *mgmtSvcClient) SystemCheckSetPolicy(ctx context.Context, in *CheckSetPolicyReq, opts ...grpc.CallOption) (*DaosResp, error) {
+	out := new(DaosResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckSetPolicy", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mgmtSvcClient) SystemCheckGetPolicy(ctx context.Context, in *CheckGetPolicyReq, opts ...grpc.CallOption) (*CheckGetPolicyResp, error) {
+	out := new(CheckGetPolicyResp)
+	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/SystemCheckGetPolicy", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -575,8 +586,10 @@ type MgmtSvcServer interface {
 	SystemCheckStop(context.Context, *CheckStopReq) (*CheckStopResp, error)
 	// Query a system check
 	SystemCheckQuery(context.Context, *CheckQueryReq) (*CheckQueryResp, error)
+	// Set system check properties
+	SystemCheckSetPolicy(context.Context, *CheckSetPolicyReq) (*DaosResp, error)
 	// Query system check properties
-	SystemCheckProp(context.Context, *CheckPropReq) (*CheckPropResp, error)
+	SystemCheckGetPolicy(context.Context, *CheckGetPolicyReq) (*CheckGetPolicyResp, error)
 	// Send the desired action to repair an inconsistency.
 	SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error)
 	// PoolUpgrade queries a DAOS pool.
@@ -701,8 +714,11 @@ func (UnimplementedMgmtSvcServer) SystemCheckStop(context.Context, *CheckStopReq
 func (UnimplementedMgmtSvcServer) SystemCheckQuery(context.Context, *CheckQueryReq) (*CheckQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckQuery not implemented")
 }
-func (UnimplementedMgmtSvcServer) SystemCheckProp(context.Context, *CheckPropReq) (*CheckPropResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckProp not implemented")
+func (UnimplementedMgmtSvcServer) SystemCheckSetPolicy(context.Context, *CheckSetPolicyReq) (*DaosResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckSetPolicy not implemented")
+}
+func (UnimplementedMgmtSvcServer) SystemCheckGetPolicy(context.Context, *CheckGetPolicyReq) (*CheckGetPolicyResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckGetPolicy not implemented")
 }
 func (UnimplementedMgmtSvcServer) SystemCheckRepair(context.Context, *CheckActReq) (*CheckActResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SystemCheckRepair not implemented")
@@ -1338,20 +1354,38 @@ func _MgmtSvc_SystemCheckQuery_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MgmtSvc_SystemCheckProp_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CheckPropReq)
+func _MgmtSvc_SystemCheckSetPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckSetPolicyReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MgmtSvcServer).SystemCheckProp(ctx, in)
+		return srv.(MgmtSvcServer).SystemCheckSetPolicy(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/SystemCheckProp",
+		FullMethod: "/mgmt.MgmtSvc/SystemCheckSetPolicy",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).SystemCheckProp(ctx, req.(*CheckPropReq))
+		return srv.(MgmtSvcServer).SystemCheckSetPolicy(ctx, req.(*CheckSetPolicyReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MgmtSvc_SystemCheckGetPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckGetPolicyReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MgmtSvcServer).SystemCheckGetPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/mgmt.MgmtSvc/SystemCheckGetPolicy",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MgmtSvcServer).SystemCheckGetPolicy(ctx, req.(*CheckGetPolicyReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1658,8 +1692,12 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MgmtSvc_SystemCheckQuery_Handler,
 		},
 		{
-			MethodName: "SystemCheckProp",
-			Handler:    _MgmtSvc_SystemCheckProp_Handler,
+			MethodName: "SystemCheckSetPolicy",
+			Handler:    _MgmtSvc_SystemCheckSetPolicy_Handler,
+		},
+		{
+			MethodName: "SystemCheckGetPolicy",
+			Handler:    _MgmtSvc_SystemCheckGetPolicy_Handler,
 		},
 		{
 			MethodName: "SystemCheckRepair",

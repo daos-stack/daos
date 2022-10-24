@@ -13,21 +13,25 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 type checkCmdRoot struct {
-	Enable  checkEnableCmd  `command:"enable" description:"Enable system checker"`
-	Disable checkDisableCmd `command:"disable" description:"Disable system checker"`
-	Start   checkStartCmd   `command:"start" description:"Start a system check"`
-	Stop    checkStopCmd    `command:"stop" description:"Stop a system check"`
-	Query   checkQueryCmd   `command:"query" description:"Query a system check"`
-	Prop    checkPropCmd    `command:"prop" description:"Get system check properties"`
-	Repair  checkRepairCmd  `command:"repair" description:"Repair a reported system check problem"`
+	Enable    checkEnableCmd    `command:"enable" description:"Enable system checker"`
+	Disable   checkDisableCmd   `command:"disable" description:"Disable system checker"`
+	Start     checkStartCmd     `command:"start" description:"Start a system check"`
+	Stop      checkStopCmd      `command:"stop" description:"Stop a system check"`
+	Query     checkQueryCmd     `command:"query" description:"Query a system check"`
+	SetPolicy checkSetPolicyCmd `command:"set-policy" description:"Set system checker policies"`
+	GetPolicy checkGetPolicyCmd `command:"get-policy" description:"Get system checker policies"`
+	Repair    checkRepairCmd    `command:"repair" description:"Repair a reported system check problem"`
 }
 
 type poolIDSet []PoolID
@@ -47,14 +51,18 @@ type checkCmdBase struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-
-	Args struct {
-		Pools poolIDSet `positional-arg-name:"[pool name or UUID [pool name or UUID]] "`
-	} `positional-args:"yes"`
 }
 
 func (c *checkCmdBase) Execute(_ []string) error {
 	return errors.New("not implemented")
+}
+
+type checkPoolCmdBase struct {
+	checkCmdBase
+
+	Args struct {
+		Pools poolIDSet `positional-arg-name:"[pool name or UUID [pool name or UUID]] "`
+	} `positional-args:"yes"`
 }
 
 type checkEnableCmd struct {
@@ -75,13 +83,58 @@ func (cmd *checkDisableCmd) Execute([]string) error {
 	return control.SystemCheckDisable(context.Background(), cmd.ctlInvoker, req)
 }
 
-type checkStartCmd struct {
-	checkCmdBase
+type setRepPolFlag struct {
+	ui.SetPropertiesFlag
 
-	DryRun  bool `short:"n" long:"dry-run" description:"Scan only; do not initiate repairs."`
-	Reset   bool `short:"r" long:"reset" description:"Reset the system check state."`
-	Failout bool `short:"f" long:"failout" description:"Stop on failure."`
-	Auto    bool `short:"a" long:"auto" description:"Attempt to automatically repair problems."`
+	SetPolicies []*control.SystemCheckPolicy
+}
+
+func (f *setRepPolFlag) UnmarshalFlag(fv string) error {
+	var keys []string
+	for _, class := range control.CheckerPolicyClasses() {
+		keys = append(keys, class.String())
+	}
+	f.SettableKeys(keys...)
+
+	if err := f.SetPropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
+
+	f.SetPolicies = make([]*control.SystemCheckPolicy, 0, len(f.ParsedProps))
+	for class, action := range f.ParsedProps {
+		policy, err := control.NewSystemCheckPolicy(class, action)
+		if err != nil {
+			return err
+		}
+		f.SetPolicies = append(f.SetPolicies, policy)
+	}
+
+	return nil
+}
+
+func (f *setRepPolFlag) Complete(match string) []flags.Completion {
+	actions := control.CheckerPolicyActions()
+	actKeys := make([]string, len(actions))
+	for i, act := range actions {
+		actKeys[i] = act.String()
+	}
+	comps := make(ui.CompletionMap)
+	for _, class := range control.CheckerPolicyClasses() {
+		comps[class.String()] = actKeys
+	}
+	f.SetCompletions(comps)
+
+	return f.SetPropertiesFlag.Complete(match)
+}
+
+type checkStartCmd struct {
+	checkPoolCmdBase
+
+	DryRun   bool          `short:"n" long:"dry-run" description:"Scan only; do not initiate repairs."`
+	Reset    bool          `short:"r" long:"reset" description:"Reset the system check state."`
+	Failout  bool          `short:"f" long:"failout" description:"Stop on failure."`
+	Auto     bool          `short:"a" long:"auto" description:"Attempt to automatically repair problems."`
+	Policies setRepPolFlag `short:"p" long:"policies" description:"Set repair policies."`
 }
 
 func (cmd *checkStartCmd) Execute(_ []string) error {
@@ -91,17 +144,18 @@ func (cmd *checkStartCmd) Execute(_ []string) error {
 	req.Uuids = cmd.Args.Pools.List()
 
 	if cmd.DryRun {
-		req.Flags |= control.SystemCheckFlagDryRun
+		req.Flags |= uint32(control.SystemCheckFlagDryRun)
 	}
 	if cmd.Reset {
-		req.Flags |= control.SystemCheckFlagReset
+		req.Flags |= uint32(control.SystemCheckFlagReset)
 	}
 	if cmd.Failout {
-		req.Flags |= control.SystemCheckFlagFailout
+		req.Flags |= uint32(control.SystemCheckFlagFailout)
 	}
 	if cmd.Auto {
-		req.Flags |= control.SystemCheckFlagAuto
+		req.Flags |= uint32(control.SystemCheckFlagAuto)
 	}
+	req.Policies = cmd.Policies.SetPolicies
 
 	if err := control.SystemCheckStart(ctx, cmd.ctlInvoker, req); err != nil {
 		return err
@@ -113,7 +167,7 @@ func (cmd *checkStartCmd) Execute(_ []string) error {
 }
 
 type checkStopCmd struct {
-	checkCmdBase
+	checkPoolCmdBase
 }
 
 func (cmd *checkStopCmd) Execute(_ []string) error {
@@ -132,10 +186,10 @@ func (cmd *checkStopCmd) Execute(_ []string) error {
 }
 
 type checkQueryCmd struct {
-	checkCmdBase
+	checkPoolCmdBase
 }
 
-func (cmd *checkCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
+func (cmd *checkPoolCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
 	cmd.Infof("Current phase: %s", resp.InsPhase)
 
 	if len(resp.Reports) == 0 {
@@ -184,15 +238,86 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 	return nil
 }
 
-type checkPropCmd struct {
+type checkSetPolicyCmd struct {
 	checkCmdBase
+
+	Args struct {
+		Policies setRepPolFlag `description:"Repair policies" required:"1"`
+	} `positional-args:"yes"`
 }
 
-func (cmd *checkPropCmd) Execute(_ []string) error {
+func (cmd *checkSetPolicyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	req := new(control.SystemCheckPropReq)
-	resp, err := control.SystemCheckProp(ctx, cmd.ctlInvoker, req)
+	req := &control.SystemCheckSetPolicyReq{
+		Policies: cmd.Args.Policies.SetPolicies,
+	}
+	err := control.SystemCheckSetPolicy(ctx, cmd.ctlInvoker, req)
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
+	if err != nil {
+		return err
+	}
+
+	cmd.Info("system checker policies updated")
+
+	return nil
+}
+
+type getRepPolFlag struct {
+	ui.GetPropertiesFlag
+
+	ReqClasses []control.SystemCheckFindingClass
+}
+
+func (f *getRepPolFlag) UnmarshalFlag(fv string) error {
+	var keys []string
+	for _, class := range control.CheckerPolicyClasses() {
+		keys = append(keys, class.String())
+	}
+	f.GettableKeys(keys...)
+
+	if err := f.GetPropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
+
+	i := 0
+	f.ReqClasses = make([]control.SystemCheckFindingClass, len(f.ParsedProps))
+	for class := range f.ParsedProps {
+		if err := f.ReqClasses[i].FromString(class); err != nil {
+			return err
+		}
+		i++
+	}
+
+	return nil
+}
+
+func (f *getRepPolFlag) Complete(match string) []flags.Completion {
+	comps := make(ui.CompletionMap)
+	for _, class := range control.CheckerPolicyClasses() {
+		comps[class.String()] = nil
+	}
+	f.SetCompletions(comps)
+
+	return f.GetPropertiesFlag.Complete(match)
+}
+
+type checkGetPolicyCmd struct {
+	checkCmdBase
+
+	Args struct {
+		Classes getRepPolFlag `description:"Inconsistency class names"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
+	ctx := context.Background()
+
+	req := new(control.SystemCheckGetPolicyReq)
+	req.SetClasses(cmd.Args.Classes.ReqClasses)
+	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)
 	}
@@ -200,7 +325,9 @@ func (cmd *checkPropCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.Infof("System check properties: %s\n", "TODO")
+	var buf bytes.Buffer
+	pretty.PrintCheckerPolicies(&buf, resp.CheckerFlags, resp.Policies...)
+	cmd.Info(buf.String())
 
 	return nil
 }
@@ -230,10 +357,7 @@ func (r *repairSeqNum) UnmarshalFlag(value string) error {
 }
 
 type checkRepairCmd struct {
-	cmdutil.LogCmd
-	cfgCmd
-	ctlInvokerCmd
-	jsonOutputCmd
+	checkCmdBase
 
 	ForAll bool `short:"f" long:"for-all" description:"Take the same action for all inconsistencies with the same class."`
 

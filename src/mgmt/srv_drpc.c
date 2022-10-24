@@ -2945,6 +2945,8 @@ ds_chk_prob_free(Mgmt__CheckInconsistPolicy **policies, uint32_t policy_nr)
 	}
 }
 
+#define ALL_CHK_POLICY	CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
+
 static int
 ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
 {
@@ -2963,7 +2965,10 @@ ds_chk_prop_cb(void *buf, struct chk_policy *policies, int cnt, uint32_t flags)
 			D_GOTO(out, rc = -DER_NOMEM);
 
 		mgmt__check_inconsist_policy__init(ply[i]);
-		ply[i]->inconsist_cas = policies[i].cp_class;
+		if (policies[i].cp_class == 0 && cnt == ALL_CHK_POLICY)
+			ply[i]->inconsist_cas = i;
+		else
+			ply[i]->inconsist_cas = policies[i].cp_class;
 		ply[i]->inconsist_act = policies[i].cp_action;
 	}
 

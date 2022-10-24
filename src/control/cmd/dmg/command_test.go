@@ -168,15 +168,17 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	case *control.SystemCheckDisableReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckStartReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.CheckStartResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckStopReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.CheckStopResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.CheckQueryResp{})
-	case *control.SystemCheckPropReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.CheckPropResp{})
+	case *control.SystemCheckGetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.CheckGetPolicyResp{})
+	case *control.SystemCheckSetPolicyReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemCheckRepairReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.CheckActResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemSetAttrReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.DaosResp{})
 	case *control.SystemGetAttrReq:
