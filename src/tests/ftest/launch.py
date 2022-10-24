@@ -29,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
+from slurm_setup import SlurmConfig
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
 from host_utils import get_node_set, HostInfo, HostException                    # noqa: E402
@@ -236,6 +237,26 @@ def find_command(source, pattern, depth, other=None):
     elif isinstance(other, str):
         command.append(other)
     return " ".join(command)
+
+
+def setup_slurm_partitions(hosts, partition):
+    """Set up the requested slurm partition on the specified hosts.
+
+    Args:
+        hosts (NodeSet): list of hosts on which to setup a slurm partition.
+        partition (str, optional): slurm partition name. Defaults to None.
+
+    Raises:
+        LaunchException: if there was error installing or setting up slurm
+
+    """
+    logger.debug("-" * 80)
+    logger.debug("Setting up slurm partition '%s' on %s", partition, hosts)
+    slurm_config = SlurmConfig(logger, get_local_host(), hosts, True)
+    if not slurm_config.install():
+        raise LaunchException(f"Error installing slurm on {hosts}")
+    if not slurm_config.start(partition, debug=True):
+        raise LaunchException(f"Error starting slurm on {hosts}")
 
 
 class AvocadoInfo():
@@ -636,17 +657,24 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_host_info(self, include_localhost=False):
+    def set_host_info(self, include_localhost=False, partition_hosts=None):
         """Set the test host information using the test yaml file.
 
         Args:
             include_localhost (bool, optional): should the local host be included in the list of
                 client matches. Defaults to False.
+            partition_hosts (NodeSet, optional): lists of hosts to use to create a partition if the
+                test specifies a client partition. Defaults to None.
 
         Raises:
-            LaunchException: if there is an error getting the host from the test yaml
+            LaunchException: if there is an error getting the host from the test yaml or a problem
+            setting up a slum partition
+
+        Returns:
+            bool: True if a slurm partition was created; False otherwise
 
         """
+        partition_created = False
         logger.debug("Extracting hosts from %s", self.yaml_file)
         yaml_data = get_yaml_data(self.yaml_file)
         keys = [
@@ -664,12 +692,19 @@ class TestInfo():
             logger.debug("Adding the localhost to the clients: %s", info[keys[3]])
             info[keys[3]].add(get_local_host())
 
+        # Configure a slurm partition using the specified hosts if the test uses a partition
+        if info[keys[1]] and partition_hosts:
+            setup_slurm_partitions(partition_hosts, info[keys[1]])
+            partition_created = True
+
         try:
             self.host_info.set_hosts(
                 logger, info[keys[0]], info[keys[1]], info[keys[2]], info[keys[3]], info[keys[4]],
                 info[keys[5]])
         except HostException as error:
             raise LaunchException("Error getting hosts from {self.yaml_file}") from error
+
+        return partition_created
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -722,6 +757,9 @@ class Launch():
 
         # Details about the run
         self.details = OrderedDict()
+
+        # Currently only support setting up slurm once
+        self._slurm_started = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -957,8 +995,11 @@ class Launch():
         logger.info("Modified test yaml files being created in: %s", yaml_dir)
 
         # Modify the test yaml files to run on this cluster
+        partition_hosts = NodeSet()
+        if not args.modify and args.setup_slurm:
+            partition_hosts.add(args.clients or args.servers)
         try:
-            self.setup_test_files(args, yaml_dir)
+            self.setup_test_files(args, yaml_dir, partition_hosts)
         except (RunException, LaunchException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1651,12 +1692,14 @@ class Launch():
             logger.debug("  Fault injection is disabled")
         return False
 
-    def setup_test_files(self, args, yaml_dir):
+    def setup_test_files(self, args, yaml_dir, partition_hosts):
         """Set up the test yaml files with any placeholder replacements.
 
         Args:
             args (argparse.Namespace): command line arguments for this program
             yaml_dir (str): directory in which to write the modified yaml files
+            partition_hosts (NodeSet): hosts to use to create a partition if required by the test.
+                If not specified no partitions will be created.
 
         Raises:
             RunException: if there is a problem updating the test yaml files
@@ -1679,7 +1722,9 @@ class Launch():
             run_local(logger, command, check=False)
 
             # Collect the host information from the updated test yaml
-            test.set_host_info(args.include_localhost)
+            if test.set_host_info(args.include_localhost, partition_hosts):
+                # A partition was successfully created, so do not create any more
+                partition_hosts = NodeSet()
 
         # Log the test information
         msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
@@ -2011,7 +2056,6 @@ class Launch():
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
-                    self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
 
                 # Avoid counting the test execution time as part of the processing time of this test
@@ -3071,6 +3115,10 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-ss", "--setup_slurm",
+        action="store_true",
+        help="setup slurm if required by the tests")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3128,6 +3176,7 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.setup_slurm = True
 
     # Perform the steps defined by the arguments specified
     try:

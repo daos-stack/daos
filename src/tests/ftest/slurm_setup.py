@@ -5,261 +5,381 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-# pylint: disable=import-error,no-name-in-module
-
 import argparse
+from datetime import datetime
 import getpass
 import logging
+import os
 import re
-import socket
 import sys
 
-from ClusterShell.NodeSet import NodeSet
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from host_utils import get_node_set                                                 # noqa: E402
+from logger_utils import get_console_handler                                        # noqa: E402
+from run_utils import get_clush_command_list, run_remote, get_local_host            # noqa: E402
 
-from util.logger_utils import get_console_handler
-from util.run_utils import get_clush_command_list, run_local, run_remote, RunException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
-SLURM_CONF = "/etc/slurm/slurm.conf"
 
-PACKAGE_LIST = ["slurm", "slurm-example-configs",
-                "slurm-slurmctld", "slurm-slurmd"]
+class SlurmConfig():
+    """Configure slurm on the specified hosts."""
 
-COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
-             "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
-             "cp /etc/slurm/slurmdbd.conf.example /etc/slurm/slurmdbd.conf"]
+    PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
+    CONFIG_FILES = [
+        os.path.join(os.sep, 'etc', 'slurm', 'slurm.conf'),
+        os.path.join(os.sep, 'etc', 'slurm', 'cgroup.conf'),
+        os.path.join(os.sep, 'etc', 'slurm', 'slurmdbd.conf')]
 
-MUNGE_STARTUP = [
-    "chown munge. {0}".format("/etc/munge/munge.key"),
-    "systemctl restart munge",
-    "systemctl enable munge"]
+    def __init__(self, log, nodes, control, sudo):
+        """Initialize a SlurmConfig object.
 
-SLURMCTLD_STARTUP = [
-    "systemctl restart slurmctld",
-    "systemctl enable slurmctld"]
+        Args:
+            log (logger): object configured to log messages
+            nodes (object): nodes to utilize as slurm nodes
+            control (object): node to utilize as the slurm control node
+            sudo (bool): whether or not to run commands with sudo
+        """
+        self.log = log
+        self.nodes = get_node_set(nodes)
+        self.control = get_node_set(control)
+        self.sudo = ['sudo', '-n'] if sudo else []
+        self._timestamp = {}
 
-SLURMCTLD_STARTUP_DEBUG = [
-    "cat /var/log/slurmctld.log",
-    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
+    @property
+    def all_nodes(self):
+        """Get all the nodes.
 
-SLURMD_STARTUP = [
-    "systemctl restart slurmd",
-    "systemctl enable slurmd"]
+        Returns:
+            NodeSet: all of the slurm nodes
+        """
+        return self.nodes | self.control
 
-SLURMD_STARTUP_DEBUG = [
-    "cat /var/log/slurmd.log",
-    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
+    def install(self):
+        """Install the slurm RPM packages on all the nodes.
 
+        Returns:
+            bool: if all the slurm packages were installed successfully
 
-def update_config_cmdlist(args):
-    """Create the command lines to update slurmd.conf file.
+        """
+        self.log.info('Installing packages on %s: %s', self.all_nodes, ', '.join(self.PACKAGES))
+        command = self.sudo + ['dnf', 'install', '-y'] + self.PACKAGES
+        return run_remote(self.log, self.all_nodes, ' '.join(command), timeout=600).passed
 
-    Args:
-        args (Namespace): command line arguments
+    def remove(self):
+        """Remove the slurm RPM packages on all the nodes.
 
-    Returns:
-        cmd_list: list of cmdlines to update config file
+        Returns:
+            bool: if all the slurm packages were removed successfully
 
-    """
-    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
-                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
-                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
-    sudo = "sudo" if args.sudo else ""
-    # Copy the slurm*example.conf files to /etc/slurm/
-    if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
-        sys.exit(1)
-    match = False
-    # grep SLURM_CONF to determine format of the the file
-    for ctl_host in ["SlurmctldHost", "ControlMachine"]:
-        command = r"grep {} {}".format(ctl_host, SLURM_CONF)
-        if run_remote(logger, all_nodes, command).passed:
-            ctl_str = "sed -i -e 's/{0}=linux0/{0}={1}/g' {2}".format(
-                ctl_host, args.control, SLURM_CONF)
-            cmd_list.insert(0, ctl_str)
-            match = True
-            break
-    if not match:
-        logger.error("% could not be updated. Check conf file format", SLURM_CONF)
-        sys.exit(1)
+        """
+        self.log.info("Removing packages from %s: %s", self.all_nodes, ', '.join(self.PACKAGES))
+        command = self.sudo + ['dnf', 'remove', '-y'] + self.PACKAGES
+        return run_remote(self.log, self.all_nodes, ' '.join(command), timeout=600).passed
 
-    # This info needs to be gathered from every node that can run a slurm job
-    command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
-    result = run_remote(logger, all_nodes, command)
-    for data in result.output:
-        info = {
-            match[0]: match[1]
-            for match in re.findall(r"(Socket|Core|Thread).*:\s+(\d+)", "\n".join(data.stdout))
-            if len(match) > 1}
+    def start(self, partition, user=None, debug=False):
+        """Start slurm.
 
-        if "Socket" not in info or "Core" not in info or "Thread" not in info:
-            # Did not find value for socket|core|thread so do not
-            # include in config file
-            pass
-        cmd_list.append("echo \"NodeName={0} Sockets={1} CoresPerSocket={2} "
-                        "ThreadsPerCore={3}\" |{4} tee -a {5}".format(
-                            data.hosts, info["Socket"], info["Core"], info["Thread"], sudo,
-                            SLURM_CONF))
+        Args:
+            partition (str): slurm partition name
+            user (str, optional): slurm user name. Defaults to None
+            debug (bool, optional): whether or not to display debug information if commands fail.
+                Defaults to False.
 
-    #
-    cmd_list.append("echo \"PartitionName={} Nodes={} Default=YES "
-                    "MaxTime=INFINITE State=UP\" |{} tee -a {}".format(
-                        args.partition, args.nodes, sudo, SLURM_CONF))
+        Returns:
+            bool: True if successful; False otherwise
 
-    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+        """
+        if not user:
+            user = getpass.getuser()
 
+        if not self._copy_example_config_files():
+            self.log.error("Error copying example config files")
+            return False
 
-def execute_cluster_cmds(nodes, cmdlist, sudo=False):
-    """Execute the list of cmds on hostlist nodes.
+        if not self._update_slurm_config(user, partition):
+            self.log.error("Error updating the slurm config file")
+            return False
 
-    Args:
-        nodes (NodeSet): nodes on which to execute the commands
-        cmdlist ([type]): list of cmdlines to execute
-        sudo (str, optional): Execute cmd with sudo privileges. Defaults to false.
+        if not self.start_munge(user):
+            self.log.error("Error starting munge")
+            return False
 
-     Returns:
-        ret_code: returns 0 if all commands passed on all hosts; 1 otherwise
+        if not self.start_slurm(user, debug):
+            self.log.error("Error starting slurm")
+            return False
 
-    """
-    for cmd in cmdlist:
-        if sudo:
-            cmd = "sudo {}".format(cmd)
-        if not run_remote(logger, nodes, cmd, timeout=600).passed:
-            # Do not bother executing any remaining commands if this one failed
-            return 1
-    return 0
+        return True
 
+    def _copy_example_config_files(self):
+        """Copy the example config files to all the nodes.
 
-def configuring_packages(args, action):
-    """Install required slurm and munge packages.
+        Returns:
+            bool: True if successful; False otherwise
 
-    Args:
-        args (Namespace): command line arguments
-        action (str):  install or remove
+        """
+        self.log.info("Copying example config files to %s", self.all_nodes)
+        for config_file in self.CONFIG_FILES:
+            command = self.sudo + ["cp", config_file + ".example", config_file]
+            if not run_remote(self.log, self.all_nodes, ' '.join(command)).passed:
+                return False
+        return True
 
-    """
-    # Install packages on control and compute nodes
-    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = []
-    for package in PACKAGE_LIST:
-        logger.info("%s %s on %s", action, package, all_nodes)
-        cmd_list.append("dnf {} -y ".format(action) + package)
-    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+    def _update_slurm_config(self, user, partition):
+        """Update the slurm config file.
 
+        Args:
+            user (str): slurm user name
+            partition (str): slurm partition name
 
-def start_munge(args):
-    """Start munge service on all nodes.
+        Returns:
+            bool: True if successful; False otherwise
 
-    Args:
-        args (Namespace): command line arguments
+        """
+        slurm_config = self.CONFIG_FILES[0]
+        self.log.info("Updating the %s file", slurm_config)
 
-    """
-    sudo = "sudo" if args.sudo else ""
-    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    # exclude the control node
-    nodes = NodeSet(str(args.nodes))
-    nodes.difference_update(str(args.control))
+        # Modify the slurm config file
+        control = None
+        with open(self.CONFIG_FILES[0], "r", encoding="utf-8") as config:
+            match = re.findall(r"(SlurmctldHost|ControlMachine)", "\n".join(config.readlines()))
+            if match:
+                control = match[0]
+        if not control:
+            self.log.error(
+                "Error unable to find 'SlurmctldHost' or 'ControlMachine' in %s", slurm_config)
+            return False
+        commands = [
+            f"sed -i -e 's/{control}=linux0/{control}={self.control}/g' {slurm_config}",
+            f"sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {slurm_config}",
+            f"sed -i -e 's/SlurmUser=slurm/SlurmUser={user}/g' {slurm_config}",
+            f"sed -i -e 's/NodeName/#NodeName/g' {slurm_config}"]
 
-    # copy key to all nodes FROM slurmctl node;
-    # change the protections/ownership on the munge dir on all nodes
-    cmd_list = [
-        "{0} chmod -R 777 /etc/munge; {0} chown {1}. /etc/munge".format(
-            sudo, args.user)]
-    if execute_cluster_cmds(all_nodes, cmd_list) > 0:
-        return 1
+        # Gathered socket, core, and thread information from every node that can run a slurm job
+        command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
+        result = run_remote(logger, self.all_nodes, command)
+        for data in result.output:
+            info = {
+                match[0]: match[1]
+                for match in re.findall(r"(Socket|Core|Thread).*:\s+(\d+)", "\n".join(data.stdout))
+                if len(match) > 1}
 
-    # Check if file exists on slurm control node
-    # change the protections/ownership on the munge key before copying
-    cmd_list = ["set -Eeu",
-                "rc=0",
-                "if [ ! -f /etc/munge/munge.key ]",
-                "then {} create-munge-key".format(sudo),
-                "fi",
-                "{} chmod 777 /etc/munge/munge.key".format(sudo),
-                "{} chown {}. /etc/munge/munge.key".format(sudo, args.user)]
+            if "Socket" in info and "Core" in info and "Thread" in info:
+                entries = [
+                    f'NodeName={data.hosts}',
+                    f'Sockets={info["Socket"]}',
+                    f'CoresPerSocket={info["Core"]}',
+                    f'ThreadsPerCore={info["Thread"]}']
+                commands.append(self._get_add_config_command(slurm_config, ' '.join(entries)))
 
-    if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
-        return 1
-    # remove any existing key from other nodes
-    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo)]
-    if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
-        return 1
+        # Add the partition information to the config file
+        entries = [
+            f"PartitionName={partition}",
+            f"Nodes={self.nodes}",
+            "Default=YES",
+            "MaxTime=INFINITE",
+            "State=UP"]
+        commands.append(self._get_add_config_command(slurm_config, ' '.join(entries)))
 
-    # copy munge.key to all hosts
-    command = get_clush_command_list(nodes)
-    command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
-    try:
-        run_local(logger, command, check=True)
-    except RunException:
-        return 1
+        # Update all the config files
+        for command in commands:
+            if not run_remote(self.log, self.all_nodes, command).passed:
+                return False
 
-    # set the protection back to defaults
-    cmd_list = [
-        "{} chmod 400 /etc/munge/munge.key".format(sudo),
-        "{} chown munge. /etc/munge/munge.key".format(sudo),
-        "{} chmod 700 /etc/munge".format(sudo),
-        "{} chown munge. /etc/munge".format(sudo)]
-    if execute_cluster_cmds(all_nodes, ["; ".join(cmd_list)]) > 0:
-        return 1
+        return True
 
-    # Start Munge service on all nodes
-    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    return execute_cluster_cmds(all_nodes, MUNGE_STARTUP, args.sudo)
+    def _get_add_config_command(self, config, entry):
+        """Get the command to add an entry to the config file.
 
+        Args:
+            config (str): _description_
+            entry (str): entry to add to the config file
 
-def start_slurm(args):
-    """Start the slurm services on all nodes.
+        Returns:
+            str: the command to add an entry to the config file
 
-    Args:
-        args (Namespace): command line arguments
+        """
+        return " ".join(["echo", f"\"{entry}\"", "|"] + self.sudo + ["tee", "-a", config])
 
-    """
-    # Setting up slurm on all nodes
-    all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = [
-        "mkdir -p /var/log/slurm",
-        "chown {}. {}".format(args.user, "/var/log/slurm"),
-        "mkdir -p /var/spool/slurmd",
-        "mkdir -p /var/spool/slurmctld",
-        "mkdir -p /var/spool/slurm/d",
-        "mkdir -p /var/spool/slurm/ctld",
-        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
-        "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
-        "chmod 775 {}".format("/var/spool/slurmctld"),
-        "rm -f /var/spool/slurmctld/clustername"]
+    def start_munge(self, user):
+        """Start munge service on all nodes.
 
-    if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
-        return 1
+        Args:
+            user (str): slurm user name
 
-    # Startup the slurm control service
-    status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
-    if status > 0 or args.debug:
-        execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
-    if status > 0:
-        return 1
+        Returns:
+            bool: True if successful; False otherwise
 
-    # Startup the slurm service
-    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
-    if status > 0 or args.debug:
-        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
-    if status > 0:
-        return 1
+        """
+        munge_dir = os.path.join(os.sep, 'etc', 'munge')
+        munge_key = os.path.join(munge_dir, 'munge.key')
+        self.log.info('Setting up munge on %s', self.all_nodes)
 
-    # ensure that the nodes are in the idle state
-    cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
-    status = execute_cluster_cmds(args.nodes, cmd_list, args.sudo)
-    if status > 0 or args.debug:
-        cmd_list = (SLURMCTLD_STARTUP_DEBUG)
-        execute_cluster_cmds(args.control, cmd_list, args.sudo)
-        cmd_list = (SLURMD_STARTUP_DEBUG)
-        execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
-    if status > 0:
-        return 1
-    return 0
+        # Get a list of non-control nodes
+        non_control = self.nodes.copy()
+        non_control.difference_update(self.control)
+
+        # copy key to all nodes FROM slurmctl node;
+        # change the protections/ownership on the munge dir on all nodes
+        self.log.debug('Temporarily changing munge config file permissions on %s', non_control)
+        commands = [
+            self.sudo + ['chmod', '-R', '777', munge_dir],
+            self.sudo + ['chown', f'{user}.', munge_dir],
+            self.sudo + ['rm', '-f', munge_key]
+        ]
+        for command in commands:
+            if not run_remote(self.log, non_control, ' '.join(command)).passed:
+                return False
+
+        # Ensure a munge key exists on the control node with the correct permissions
+        self.log.debug('Preparing munge config file on %s', self.control)
+        sudo_str = ' '.join(self.sudo)
+        commands = [
+            'set -Eeu',
+            'rc=0',
+            f'if [ ! -f {munge_key} ]',
+            f'then {sudo_str} create-munge-key',
+            'fi',
+            f'{sudo_str} chmod 777 {munge_key}',
+            f'{sudo_str} chown {user}. {munge_key}']
+        if not run_remote(self.log, self.control, '; '.join(commands)).passed:
+            return False
+
+        # Copy the munge.key to all hosts
+        self.log.debug('Copying munge config from %s to %s', self.control, non_control)
+        command = get_clush_command_list(non_control)
+        command.extend(['--copy', munge_key, '--dest', munge_key])
+        if not run_remote(self.log, self.control, ' '.join(command)).passed:
+            return False
+
+        # Set the protection back to defaults
+        self.log.debug('Resetting munge file permissions on %s', self.all_nodes)
+        commands = [
+            self.sudo + ['chmod', '400', munge_key],
+            self.sudo + ['chown', 'munge.', munge_key],
+            self.sudo + ['chmod', '700', munge_dir],
+            self.sudo + ['chown', 'munge.', munge_dir],
+        ]
+        for command in commands:
+            if not run_remote(self.log, self.all_nodes, ' '.join(command)).passed:
+                return False
+
+        # Start munge service on all nodes
+        self.log.info('Starting munge on %s', self.all_nodes)
+        commands = [
+            self.sudo + ['systemctl', 'restart', 'munge'],
+            self.sudo + ['systemctl', 'enable', 'munge'],
+        ]
+        for command in commands:
+            if not run_remote(self.log, self.all_nodes, ' '.join(command)).passed:
+                return False
+        return True
+
+    def start_slurm(self, user, debug):
+        """Start the slurm services on all nodes.
+
+        Args:
+            user (str): slurm user name
+            debug (bool): whether or not to display debug information if commands fail
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        # Setting up slurm on all nodes
+        self.log.info('Setting up slurm on %s', self.all_nodes)
+        slurm_log_dir = os.path.join(os.sep, 'var', 'log', 'slurm')
+        slurmd_dir = os.path.join(os.sep, 'var', 'spool', 'slurmd')
+        slurmctld_dir = os.path.join(os.sep, 'var', 'spool', 'slurmctld')
+        slurm_d_dir = os.path.join(os.sep, 'var', 'spool', 'slurm', 'd')
+        slurm_ctld_dir = os.path.join(os.sep, 'var', 'spool', 'slurm', 'ctld')
+        slurmd_log = os.path.join(os.sep, 'var', 'log', 'slurmd.log')
+        slurmctld_log = os.path.join(os.sep, 'var', 'log', 'slurmctld.log')
+
+        commands = [
+            self.sudo + ['mkdir', '-p', slurm_log_dir],
+            self.sudo + ['chown', f'{user}.', slurm_log_dir],
+            self.sudo + ['mkdir', '-p', slurmd_dir],
+            self.sudo + ['mkdir', '-p', slurm_d_dir],
+            self.sudo + ['mkdir', '-p', slurmctld_dir],
+            self.sudo + ['mkdir', '-p', slurm_ctld_dir],
+            self.sudo + ['chown', f'{user}.', slurmctld_dir],
+            self.sudo + ['chown', f'{user}.', slurm_ctld_dir],
+            self.sudo + ['chmod', '775', slurmctld_dir],
+            self.sudo + ['rm', '-f', os.path.join(slurmctld_dir, "clustername")],
+        ]
+        for command in commands:
+            if not run_remote(self.log, self.all_nodes, ' '.join(command)).passed:
+                return False
+
+        # Start the slurm control service
+        if not self._start_service('slurmctld', self.control, debug, slurmctld_log):
+            return False
+
+        # Startup the slurm service
+        if not self._start_service('slurmd', self.all_nodes, debug, slurmd_log):
+            return False
+
+        # Ensure that the nodes are in the idle state
+        command = self.sudo + ['scontrol', 'update', f'nodename={self.nodes}', 'state=idle']
+        if not run_remote(self.log, self.control, ' '.join(command)).passed:
+            if debug:
+                self._display_debug('slurmctld', self.control, slurmctld_log, False)
+                self._display_debug('slurmd', self.all_nodes, slurmd_log, True)
+            return False
+
+        return True
+
+    def _start_service(self, service, nodes, debug, log_file):
+        """Start the requested service on the specified nodes.
+
+        Args:
+            service (str): the service to start
+            nodes (NodeSet): nodes on which to start the service
+            debug (bool): whether or not to display additional information if commands fail
+            log_file (str): log file to display if there is an error and debug is set
+
+        Returns:
+            bool: True if successful; False otherwise
+
+        """
+        self.log.info('Starting the %s service on %s', service, nodes)
+        commands = [
+            self.sudo + ['systemctl', 'restart', service],
+            self.sudo + ['systemctl', 'enable', service],
+        ]
+        self._timestamp[service] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for command in commands:
+            if not run_remote(self.log, nodes, ' '.join(command)).passed:
+                if debug:
+                    self._display_debug(service, nodes, log_file, True)
+                return False
+        return True
+
+    def _display_debug(self, service, nodes, log_file, include_config):
+        """Display debug information about the specified service.
+
+        Args:
+            service (str): the service name
+            nodes (NodeSet): nodes on which the service is running
+            log_file (str): log file to display
+            include_config (bool): whether or not to display the config file
+        """
+        self.log.debug("Debug %s service information:", service)
+        debug_commands = [self.sudo + ['systemctl', 'status', service]]
+        if service in self._timestamp:
+            since = self._timestamp[service]
+            debug_commands.append(
+                self.sudo + ["journalctl", f"--grep={service}", f"--since=\"{since}\""])
+        debug_commands.append(self.sudo + ['cat', log_file])
+        if include_config:
+            debug_commands.append(self.sudo + ['grep', '-v', '"^#\\w"', self.CONFIG_FILES[0]])
+        for debug_command in debug_commands:
+            run_remote(self.log, nodes, ' '.join(debug_command))
 
 
 def main():
@@ -272,7 +392,7 @@ def main():
         help="Comma separated list of nodes to install slurm")
     parser.add_argument(
         "-c", "--control",
-        default=socket.gethostname().split('.', 1)[0],
+        default=get_local_host(),
         help="slurm control node; test control node if None")
     parser.add_argument(
         "-p", "--partition",
@@ -300,45 +420,26 @@ def main():
         help="Run all debug commands")
 
     args = parser.parse_args()
-    logger.info("Arguments: %s", args)
 
-    # Check params
-    if args.nodes is None:
-        logger.error("slurm_nodes: Specify at least one slurm node")
-        sys.exit(1)
+    # Setup the Launch object
+    slurm_config = SlurmConfig(logger, args.nodes, args.control, args.sudo)
 
-    # Convert control node and slurm node list into NodeSets
-    args.control = NodeSet(args.control)
-    args.nodes = NodeSet(args.nodes)
-
-    # Remove packages if specified with --remove and then exit
+    # If requested remove the packages and exit
     if args.remove:
-        ret_code = configuring_packages(args, "remove")
-        if ret_code > 0:
+        if not slurm_config.remove().passed:
             sys.exit(1)
         sys.exit(0)
 
-    # Install packages if specified with --install and continue with setup
+    # If requested install the packages
     if args.install:
-        ret_code = configuring_packages(args, "install")
-        if ret_code > 0:
+        if not slurm_config.install().passed:
             sys.exit(1)
 
-    # Edit the slurm conf files
-    ret_code = update_config_cmdlist(args)
-    if ret_code > 0:
+    # Setup slurm
+    if not slurm_config.start(args.partition, args.user, args.debug):
         sys.exit(1)
 
-    # Munge Setup
-    ret_code = start_munge(args)
-    if ret_code > 0:
-        sys.exit(1)
-
-    # Slurm Startup
-    ret_code = start_slurm(args)
-    if ret_code > 0:
-        sys.exit(1)
-
+    logger.info("Slurm setup complete")
     sys.exit(0)
 
 

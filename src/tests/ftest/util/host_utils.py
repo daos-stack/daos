@@ -124,55 +124,6 @@ def get_reservation_hosts(log, reservation):
             f"Unable to obtain hosts from the {reservation} slurm reservation output") from error
 
 
-def get_test_host_info(test):
-    """Get the host information for this test.
-
-    Args:
-        test (Test): the avocado test class
-
-    Raises:
-        HostException: if there is a problem obtaining the hosts
-
-    """
-    server_params = get_host_parameters(
-        test, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
-    client_params = get_host_parameters(
-        test, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
-    host_info = HostInfo()
-    try:
-        host_info.set_hosts(test.log, *server_params, *client_params)
-    except HostException as error:
-        test.fail(f"Unable to collect host information for the test: {error}")
-    return host_info
-
-
-def get_test_host(test, hosts_key, partition_key, reservation_key, namespace):
-    """Get the set of hosts defined by the provided test yaml parameters for this test.
-
-    Args:
-        test (Test): the avocado test class
-        hosts_key (str): test yaml key defining the hosts in the test yaml
-        partition_key (str): test yaml key defining the host partition in the test yaml
-        reservation_key (str): test yaml key defining the host reservation in the test yaml
-        namespace (str): test yaml path to the keys
-
-    Returns:
-        NodeSet: the set of hosts to test obtained from the test yaml
-
-    """
-    data = list(get_host_parameters(test, hosts_key, partition_key, reservation_key, namespace))
-    try:
-        data.append(get_partition_hosts(test.log, data[1]))
-    except HostException as error:
-        test.fail(f"Unable to collect partition information: {error}")
-    try:
-        data.append(get_reservation_hosts(test.log, data[2]))
-    except HostException as error:
-        test.fail(f"Unable to collect reservation information: {error}")
-    role = HostRole(*data)
-    return role.hosts
-
-
 class HostInfo():
     # pylint: disable=too-few-public-methods
     """Defines the hosts being utilized by the test."""
@@ -259,8 +210,8 @@ class HostInfo():
         if self._clients.partition.hosts:
             log.debug(
                 "Excluding any %s servers from the current client list: %s",
-                self.servers, self.clients)
-            self._clients.hosts.difference_update(self.servers)
+                self.servers.hosts, self.clients.hosts)
+            self._clients.hosts.difference_update(self.servers.hosts)
 
 
 class HostRole():

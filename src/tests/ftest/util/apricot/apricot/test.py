@@ -29,7 +29,8 @@ from general_utils import \
     stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
     set_avocado_config_value, nodeset_append_suffix
-from host_utils import get_test_host, get_test_host_info
+from host_utils import get_host_parameters, get_partition_hosts, get_reservation_hosts, HostRole, \
+    HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
@@ -557,7 +558,21 @@ class TestWithoutServers(Test):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
-        return get_test_host(self, yaml_key, partition_key, reservation_key, namespace)
+        data = list(get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace))
+        try:
+            data.append(get_partition_hosts(self.log, data[1]))
+        except HostException as error:
+            self.log.error(
+                "Error collecting hosts from the %s partition", partition_key, exc_info=error)
+            self.fail("Unable to collect partition information")
+        try:
+            data.append(get_reservation_hosts(self.log, data[2]))
+        except HostException as error:
+            self.log.error(
+                "Error collecting hosts from the %s reservation", reservation_key, exc_info=error)
+            self.fail("Unable to collect reservation information")
+        role = HostRole(*data)
+        return role.hosts
 
 
 class TestWithServers(TestWithoutServers):
@@ -615,6 +630,7 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = True
         self.slurm_exclude_servers = False
         self.slurm_exclude_nodes = NodeSet()
+        self.host_info = HostInfo()
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
@@ -676,7 +692,15 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.host_info = get_test_host_info(self)
+        server_params = get_host_parameters(
+            self, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        client_params = get_host_parameters(
+            self, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+        try:
+            self.host_info.set_hosts(self.log, *server_params, *client_params)
+        except HostException as error:
+            self.log.error("Error collecting host information", exc_info=error)
+            self.fail("Unable to collect host information for the test")
         self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
         self.hostlist_clients = NodeSet(self.host_info.clients.hosts)
 
