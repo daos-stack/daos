@@ -1783,6 +1783,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 post:
 	rc = bio_iod_post(biod, rc);
 out:
+	/* The DTX has been aborted during long time bulk data transfer. */
+	if (unlikely(dth->dth_aborted))
+		rc = -DER_CANCELED;
+
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
@@ -4212,6 +4216,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 		}
 	}
+
+	/* The DTX has been aborted during long time bulk data transfer. */
+	if (unlikely(dth->dth_aborted))
+		D_GOTO(out, rc = -DER_CANCELED);
 
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
