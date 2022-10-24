@@ -965,6 +965,7 @@ class DaosServer():
 
     def get_test_pool_id(self):
         """Return a pool label or uuid to be used for testing
+
         Create a pool as required"""
 
         if self.test_pool is None:
@@ -1427,7 +1428,7 @@ def run_daos_cmd(conf,
     dcr.rc = rc
     return dcr
 
-
+# pylint: disable-next=too-many-arguments
 def create_cont(conf,
                 pool=None,
                 ctype=None,
