@@ -8,7 +8,10 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -88,8 +91,10 @@ const (
 	SystemCheckFlagFailout = SystemCheckFlags(chkpb.CheckFlag_CF_FAILOUT)
 	SystemCheckFlagAuto    = SystemCheckFlags(chkpb.CheckFlag_CF_AUTO)
 
-	incClassPrefix  = "CIC_"
-	incActionPrefix = "CIA_"
+	incClassPrefix     = "CIC_"
+	incActionPrefix    = "CIA_"
+	incStatusPrefix    = "CIS_"
+	incScanPhasePrefix = "CSP_"
 )
 
 type SystemCheckFlags uint32
@@ -295,8 +300,123 @@ type SystemCheckQueryReq struct {
 	mgmtpb.CheckQueryReq
 }
 
+type SystemCheckStatus chkpb.CheckInstStatus
+
+func (s SystemCheckStatus) String() string {
+	return strings.TrimPrefix(chkpb.CheckInstStatus(s).String(), incStatusPrefix)
+}
+
+func (p SystemCheckStatus) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + p.String() + `"`), nil
+}
+
+const (
+	SystemCheckStatusInit       = SystemCheckStatus(chkpb.CheckInstStatus_CIS_INIT)
+	SystemCheckStatusRunning    = SystemCheckStatus(chkpb.CheckInstStatus_CIS_RUNNING)
+	SystemCheckStatusCompleted  = SystemCheckStatus(chkpb.CheckInstStatus_CIS_COMPLETED)
+	SystemCheckStatusStopped    = SystemCheckStatus(chkpb.CheckInstStatus_CIS_STOPPED)
+	SystemCheckStatusFailed     = SystemCheckStatus(chkpb.CheckInstStatus_CIS_FAILED)
+	SystemCheckStatusPaused     = SystemCheckStatus(chkpb.CheckInstStatus_CIS_PAUSED)
+	SystemCheckStatusImplicated = SystemCheckStatus(chkpb.CheckInstStatus_CIS_IMPLICATED)
+)
+
+type SystemCheckScanPhase chkpb.CheckScanPhase
+
+func (p SystemCheckScanPhase) String() string {
+	return strings.TrimPrefix(chkpb.CheckScanPhase(p).String(), incScanPhasePrefix)
+}
+
+func (p SystemCheckScanPhase) Description() string {
+	switch p {
+	case SystemCheckScanPhasePrepare:
+		return "Preparing check engine"
+	case SystemCheckScanPhasePoolList:
+		return "Comparing pool list on MS and storage nodes"
+	case SystemCheckScanPhasePoolMembership:
+		return "Comparing pool membership on MS and storage nodes"
+	case SystemCheckScanPhasePoolCleanup:
+		return "Cleaning up pool entries"
+	case SystemCheckScanPhaseContainerList:
+		return "Comparing container list on PS and storage nodes"
+	case SystemCheckScanPhaseContainerCleanup:
+		return "Cleaning up container entries"
+	case SystemCheckScanPhaseDtxResync:
+		return "DTX resync and cleanup"
+	case SystemCheckScanPhaseObjectScrub:
+		return "Scrubbing objects"
+	case SystemCheckScanPhaseObjectRebuild:
+		return "Rebuilding objects"
+	case SystemCheckScanPhaseAggregation:
+		return "EC and VOS aggregation"
+	case SystemCheckScanPhaseDone:
+		return "Check completed"
+	default:
+		return fmt.Sprintf("Unknown (%s)", p)
+	}
+}
+
+func (p SystemCheckScanPhase) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + p.String() + `"`), nil
+}
+
+const (
+	SystemCheckScanPhasePrepare          = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_PREPARE)
+	SystemCheckScanPhasePoolList         = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_POOL_LIST)
+	SystemCheckScanPhasePoolMembership   = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_POOL_MBS)
+	SystemCheckScanPhasePoolCleanup      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_POOL_CLEANUP)
+	SystemCheckScanPhaseContainerList    = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_CONT_LIST)
+	SystemCheckScanPhaseContainerCleanup = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_CONT_CLEANUP)
+	SystemCheckScanPhaseDtxResync        = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DTX_RESYNC)
+	SystemCheckScanPhaseObjectScrub      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_OBJ_SCRUB)
+	SystemCheckScanPhaseObjectRebuild    = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_REBUILD)
+	SystemCheckScanPhaseAggregation      = SystemCheckScanPhase(chkpb.CheckScanPhase_OSP_AGGREGATION)
+	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_DSP_DONE)
+)
+
+type SystemCheckRepairChoice struct {
+	Action SystemCheckRepairAction
+	Info   string
+}
+
+type SystemCheckReport struct {
+	chkpb.CheckReport
+}
+
+func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
+	choices := make([]*SystemCheckRepairChoice, len(r.ActChoices))
+	for i, c := range r.ActChoices {
+		choices[i] = &SystemCheckRepairChoice{
+			Action: SystemCheckRepairAction(c),
+			Info:   r.ActMsgs[i],
+		}
+	}
+
+	sort.Slice(choices, func(i, j int) bool {
+		return choices[i].Action < choices[j].Action
+	})
+	return choices
+}
+
+func (r *SystemCheckReport) IsInteractive() bool {
+	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
+}
+
+func (r *SystemCheckReport) Resolution() string {
+	msg := SystemCheckRepairAction(r.Action).String()
+	if len(r.ActMsgs) == 1 {
+		msg += ": " + r.ActMsgs[0]
+	}
+	return msg
+}
+
 type SystemCheckQueryResp struct {
-	mgmtpb.CheckQueryResp
+	Status    SystemCheckStatus    `json:"status"`
+	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
+	StartTime time.Time            `json:"start_time"`
+
+	// FIXME: Don't use protobuf types in public API.
+	Pools   []*mgmtpb.CheckQueryPool `json:"pools"`
+	Reports []*SystemCheckReport     `json:"reports"`
 }
 
 // SystemCheckQuery queries the system checker status.
@@ -315,17 +435,22 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	if err != nil {
 		return nil, err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
+	pbResp := new(mgmtpb.CheckQueryResp)
+	if err := convertMSResponse(ur, pbResp); err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("DAOS system check query response: %+v", ms)
+	rpcClient.Debugf("DAOS system check query response: %+v", pbResp)
 
-	resp := new(SystemCheckQueryResp)
-	if pbResp, ok := ms.(*mgmtpb.CheckQueryResp); ok {
-		resp.CheckQueryResp = *pbResp
-	} else {
-		return nil, errors.Errorf("unexpected response type %T", ms)
+	resp := &SystemCheckQueryResp{
+		Status:    SystemCheckStatus(pbResp.GetInsStatus()),
+		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
+		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
+		Pools:     pbResp.GetPools(),
+	}
+	for _, pbReport := range pbResp.GetReports() {
+		rpt := new(SystemCheckReport)
+		proto.Merge(rpt, pbReport)
+		resp.Reports = append(resp.Reports, rpt)
 	}
 	return resp, nil
 }

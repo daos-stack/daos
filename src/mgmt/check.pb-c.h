@@ -197,10 +197,19 @@ struct  _Mgmt__CheckQueryReq
    */
   size_t n_uuids;
   char **uuids;
+  /*
+   * shallow query (findings only)
+   */
+  protobuf_c_boolean shallow;
+  /*
+   * return findings with these sequences (implies shallow)
+   */
+  size_t n_seqs;
+  uint64_t *seqs;
 };
 #define MGMT__CHECK_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0,NULL }
 
 
 /*

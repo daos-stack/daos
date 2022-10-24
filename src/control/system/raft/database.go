@@ -259,7 +259,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
 			},
-			Checker: &CheckerDatabase{},
+			Checker: &CheckerDatabase{
+				Findings: make(CheckerFindingMap),
+			},
 			System: &SystemDatabase{
 				Attributes: make(map[string]string),
 			},

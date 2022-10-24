@@ -105,6 +105,11 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 		PoolLabel: "test-pool",
 		Replicas:  []ranklist.Rank{0, 1, 2},
 	}
+	otherPool := &system.PoolService{
+		PoolUUID:  uuid.New(),
+		PoolLabel: "test-pool2",
+		Replicas:  []ranklist.Rank{0, 1, 2},
+	}
 	makeReqBytes := func(id, label string, replicas []ranklist.Rank) []byte {
 		req := &srvpb.CheckRegPoolReq{
 			Uuid:    id,
@@ -129,11 +134,6 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 			req:    []byte{'b', 'a', 'd'},
 			expErr: drpc.UnmarshalingPayloadFailure(),
 		},
-		"not replica": {
-			req:        makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
-			notReplica: true,
-			expResp:    &srvpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
-		},
 		"bad uuid": {
 			req:     makeReqBytes("ow", "new", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
@@ -150,15 +150,29 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.InvalidInput)},
 		},
-		"duplicate uuid": {
-			req:     makeReqBytes(existingPool.PoolUUID.String(), "new", []ranklist.Rank{0}),
+		"not replica on update": {
+			req:        makeReqBytes(existingPool.PoolUUID.String(), "new-label", []ranklist.Rank{1}),
+			notReplica: true,
+			expResp:    &srvpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
+		},
+		"not replica on add": {
+			req:        makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
+			notReplica: true,
+			expResp:    &srvpb.CheckRegPoolResp{Status: int32(daos.MiscError)},
+		},
+		"duplicate label on update": {
+			req:     makeReqBytes(existingPool.PoolUUID.String(), otherPool.PoolLabel, []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
-		"duplicate label": {
+		"duplicate label on add": {
 			req:     makeReqBytes(newUUID, existingPool.PoolLabel, []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{Status: int32(daos.Exists)},
 		},
-		"success": {
+		"successful update": {
+			req:     makeReqBytes(existingPool.PoolUUID.String(), "new-label", []ranklist.Rank{1}),
+			expResp: &srvpb.CheckRegPoolResp{},
+		},
+		"successful add": {
 			req:     makeReqBytes(newUUID, "new", []ranklist.Rank{0}),
 			expResp: &srvpb.CheckRegPoolResp{},
 		},
@@ -172,6 +186,9 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
 				if err := mod.poolDB.AddPoolService(existingPool); err != nil {
+					t.Fatal(err)
+				}
+				if err := mod.poolDB.AddPoolService(otherPool); err != nil {
 					t.Fatal(err)
 				}
 			}

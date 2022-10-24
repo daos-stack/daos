@@ -74,6 +74,8 @@ message CheckQueryReq {
 	// UUID for the pools for which to query DAOS check.
 	// If empty, then query DAOS check for all pools in the system.
 	repeated string uuids = 2;
+	bool shallow = 3; // shallow query (findings only)
+	repeated uint64 seqs = 4; // return findings with these sequences (implies shallow)
 }
 
 // Time information on related component: system, pool or target.
