@@ -997,7 +997,7 @@ class Launch():
         # Modify the test yaml files to run on this cluster
         partition_hosts = NodeSet()
         if not args.modify and args.setup_slurm:
-            partition_hosts.add(args.clients or args.servers)
+            partition_hosts.add(args.test_clients or args.test_servers)
         try:
             self.setup_test_files(args, yaml_dir, partition_hosts)
         except (RunException, LaunchException):
@@ -2366,6 +2366,7 @@ class Launch():
 
         """
         service = "daos_agent.service"
+        # pylint: disable=unsupported-binary-operation
         hosts = test.host_info.clients.hosts | NodeSet(get_local_host())
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
