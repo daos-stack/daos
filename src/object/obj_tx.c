@@ -19,6 +19,7 @@
 #include <daos/mgmt.h>
 #include <daos/dtx.h>
 #include <daos/task.h>
+#include <daos/container.h>
 #include "obj_ec.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -64,8 +65,8 @@ struct dc_tx {
 	struct d_hlink		 tx_hlink;
 	/** The TX identifier, that contains the timestamp. */
 	struct dtx_id		 tx_id;
-	/** Container open handle */
-	daos_handle_t		 tx_coh;
+	/** Container ptr */
+	struct dc_cont		*tx_co;
 	/** Protects all fields below. */
 	pthread_mutex_t		 tx_lock;
 	/** The TX epoch. */
@@ -99,7 +100,7 @@ struct dc_tx {
 	/** Pool map version when trigger first IO. */
 	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
-	struct dc_pool		*tx_pool;
+	struct dc_pool          *tx_pool;
 
 	struct daos_cpd_sg	 tx_head;
 	struct daos_cpd_sg	 tx_reqs;
@@ -217,6 +218,7 @@ dc_tx_free(struct d_hlink *hlink)
 		tse_task_decref(tx->tx_epoch_task);
 
 	D_FREE(tx->tx_req_cache);
+	dc_cont_put(tx->tx_co);
 	dc_pool_put(tx->tx_pool);
 	D_MUTEX_DESTROY(&tx->tx_lock);
 	D_FREE(tx);
@@ -276,9 +278,10 @@ static int
 dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	    struct dc_tx **ptx)
 {
-	daos_handle_t	 ph;
-	struct dc_tx	*tx;
+	struct dc_tx	*tx = NULL;
 	int		 rc = 0;
+	struct dc_cont	*dc;
+	daos_handle_t	 ph;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_NO_HDL;
@@ -286,27 +289,33 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	ph = dc_cont_hdl2pool_hdl(coh);
 	D_ASSERT(daos_handle_is_valid(ph));
 
+	dc = dc_hdl2cont(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
 	D_ALLOC_PTR(tx);
-	if (tx == NULL)
-		return -DER_NOMEM;
+	if (tx == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	tx->tx_pool = dc_hdl2pool(ph);
+	if (tx->tx_pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	D_ALLOC_ARRAY(tx->tx_req_cache, DTX_SUB_REQ_DEF);
 	if (tx->tx_req_cache == NULL) {
-		D_FREE(tx);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto out;
 	}
 
 	tx->tx_total_slots = DTX_SUB_REQ_DEF;
 
 	rc = D_MUTEX_INIT(&tx->tx_lock, NULL);
-	if (rc != 0) {
-		D_FREE(tx->tx_req_cache);
-		D_FREE(tx);
-		return rc;
-	}
-
-	tx->tx_pool = dc_hdl2pool(ph);
-	D_ASSERT(tx->tx_pool != NULL);
+	if (rc != 0)
+		goto out;
 
 	if (epoch == 0) {
 		daos_dti_gen(&tx->tx_id, false);
@@ -328,7 +337,8 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 		tx->tx_epoch.oe_flags = 0;
 	}
 
-	tx->tx_coh = coh;
+	tx->tx_co = dc;
+	D_ASSERT(tx->tx_co != NULL);
 	tx->tx_flags = flags;
 	tx->tx_status = TX_OPEN;
 	daos_hhash_hlink_init(&tx->tx_hlink, &tx_h_ops);
@@ -355,6 +365,18 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	*ptx = tx;
 
 	return 0;
+out:
+	dc_cont_put(dc);
+
+	if (tx) {
+		if (tx->tx_pool)
+			dc_pool_put(tx->tx_pool);
+		if (tx->tx_req_cache)
+			D_FREE(tx->tx_req_cache);
+		D_FREE(tx);
+	}
+
+	return rc;
 }
 
 static void
@@ -369,8 +391,7 @@ dc_tx_cleanup_one(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr)
 		struct obj_iod_array	*iod_array = &dcu->dcu_iod_array;
 		struct daos_csummer	*csummer;
 
-		csummer = dc_cont_hdl2csummer(tx->tx_coh);
-
+		csummer = tx->tx_co->dc_csummer;
 		if (dcu->dcu_flags & ORF_CPD_BULK) {
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				if (dcu->dcu_bulks[i] != CRT_BULK_NULL)
@@ -1131,7 +1152,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	if (!daos_csummer_initialized(csummer))
 		goto pack;
 
-	props = dc_cont_hdl2props(obj->cob_coh);
+	props = obj->cob_co->dc_props;
 	if (!obj_csum_dedup_candidate(&props, dcu->dcu_iod_array.oia_iods,
 				      dcsr->dcsr_nr))
 		goto pack;
@@ -1563,7 +1584,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	int				 j;
 
 	D_INIT_LIST_HEAD(&dtr_list);
-	csummer = dc_cont_hdl2csummer(tx->tx_coh);
+	csummer = tx->tx_co->dc_csummer;
 	if (daos_csummer_initialized(csummer)) {
 		csummer_cop = daos_csummer_copy(csummer);
 		if (csummer_cop == NULL)
@@ -1872,7 +1893,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	oci = crt_req_get(req);
 	D_ASSERT(oci != NULL);
 
-	rc = dc_cont_hdl2uuid(tx->tx_coh, &oci->oci_co_hdl, &oci->oci_co_uuid);
+	rc = dc_cont2uuid(tx->tx_co, &oci->oci_co_hdl, &oci->oci_co_uuid);
 	D_ASSERT(rc == 0);
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
@@ -3261,6 +3282,7 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc = 0;
+	daos_handle_t	coh;
 
 	D_ASSERT(obj != NULL);
 
@@ -3269,7 +3291,8 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 
 	D_ASSERTF(task->dt_result == 0, "Unexpected initial task result %d\n", task->dt_result);
 
-	rc = dc_tx_alloc(obj->cob_coh, 0, DAOS_TF_ZERO_COPY, &tx);
+	dc_cont2hdl_noref(obj->cob_co, &coh);
+	rc = dc_tx_alloc(coh, 0, DAOS_TF_ZERO_COPY, &tx);
 	if (rc != 0) {
 		D_ERROR("Fail to open convert TX for opc %u: "DF_RC"\n", opc, DP_RC(rc));
 		goto out;
