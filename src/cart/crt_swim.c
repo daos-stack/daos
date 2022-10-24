@@ -536,7 +536,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	}
 
 	reply_rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
-	if (reply_rc && reply_rc != -DER_TIMEDOUT && reply_rc != -DER_UNREACH) {
+	if (reply_rc && reply_rc != -DER_TIMEDOUT && reply_rc != -DER_UNREACH &&
+	    reply_rc != -DER_CANCELED) {
 		if (reply_rc == -DER_UNINIT || reply_rc == -DER_NONEXIST) {
 			struct swim_member_update *upds;
 
@@ -796,13 +797,32 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state_prev,
 		SWIM_STATUS_CHARS[state_prev->sms_status], SWIM_STATUS_CHARS[state->sms_status],
 		state_prev->sms_incarnation, state->sms_incarnation);
 
+	/*
+	 * If the rank has become DEAD, mark corresponding epi objects and
+	 * abort corresponding inflight RPCs, to avoid waiting out RPC
+	 * timeouts.
+	 *
+	 * If the rank is INACTIVE or ALIVE, we mark corresponding epi objects
+	 * but make no attempt to abort RPCs, because we currently can't
+	 * determine whether the rank has restarted or just cleared a
+	 * suspicion. We may improve this in the future, perhaps by clearing
+	 * suspicions with only lower incarnation bits.
+	 *
+	 * Ignore the return values from the two crt_rank_epi_op calls; the
+	 * function logs errors.
+	 */
 	switch (state->sms_status) {
 	case SWIM_MEMBER_ALIVE:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_ALIVE);
 		cb_type = CRT_EVT_ALIVE;
 		break;
 	case SWIM_MEMBER_DEAD:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_DEAD_ABORT);
 		cb_type = CRT_EVT_DEAD;
 		break;
+	case SWIM_MEMBER_INACTIVE:
+		crt_rank_epi_op(rank, CRT_RANK_EPI_MARK_ALIVE);
+		return;
 	default:
 		return;
 	}
@@ -936,7 +956,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc == -DER_TIMEDOUT || rc == -DER_CANCELED) {
+	} else if (rc == -DER_TIMEDOUT) {
 		uint64_t now = swim_now_ms();
 
 		crt_swim_update_last_unpack_hlc(csm);

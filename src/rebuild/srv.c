@@ -878,7 +878,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 		 * map anymore -> we need to skip this rebuild.
 		 */
 		if (!changed) {
-			rc = -DER_CANCELED;
+			rc = -DER_OP_CANCELED;
 			D_ERROR("rebuild targets canceled\n");
 		}
 	}
@@ -1323,7 +1323,7 @@ rebuild_task_ult(void *arg)
 
 	rc = rebuild_leader_start(pool, task, &rgt);
 	if (rc != 0) {
-		if (rc == -DER_CANCELED ||
+		if (rc == -DER_OP_CANCELED ||
 		    (rc == -DER_NOTLEADER &&
 		     pool->sp_iv_ns->iv_master_rank != (d_rank_t)(-1) &&
 		     pool->sp_iv_ns->iv_master_rank != myrank)) {
