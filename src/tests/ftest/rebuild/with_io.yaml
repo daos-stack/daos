@@ -20,6 +20,7 @@ pool:
   control_method: dmg
   pool_query_timeout: 30
 container:
+  properties: rd_fac:2
   akey_size: 5
   dkey_size: 5
   data_size: 256
