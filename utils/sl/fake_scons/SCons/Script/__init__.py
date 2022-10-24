@@ -191,11 +191,28 @@ class DefaultEnvironment():
 
     def __getitem__(self, x):
         """Fake __getitem__"""
-        return []
+
+        class myItem():
+            """Fake class for Env variables"""
+
+            def __index__(self):
+                return 0
+
+            def __getitem__(self, x):
+                """Fake __getitem__"""
+
+            def __setitem__(self, x, value):
+                """Fake __setitem__"""
+                return
+
+        return myItem()
 
     def __setitem__(self, x, value):
         """Fake __setitem__"""
         return
+
+    def __index__(self):
+        return 0
 
     def Install(self, *_args, **_kw):
         """Fake Install"""

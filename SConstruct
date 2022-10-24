@@ -327,7 +327,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
     if 'LD_PRELOAD' in os.environ:
-        # pylint: disable=invalid-sequence-index
         env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
         for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
@@ -346,7 +345,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     if 'VIRTUAL_ENV' in os.environ:
         env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
-        # pylint: disable=invalid-sequence-index
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
