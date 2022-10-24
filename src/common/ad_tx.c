@@ -6,7 +6,10 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos_srv/ad_mem.h>
+#include <libpmemobj.h> /* for pobj_action */
 #include "ad_mem.h"
+
+static __thread struct ad_tx	*tls_tx;
 
 static char *
 act_opc2str(int act)
@@ -80,7 +83,7 @@ act_item_add(struct ad_tx *tx, struct umem_act_item *it, int undo_or_redo)
 	} while (0)
 
 static inline void
-act_copy_payload(struct umem_action *act, void *addr, daos_size_t size)
+act_copy_payload(struct umem_action *act, const void *addr, daos_size_t size)
 {
 	char	*dst = (char *)&act->ac_copy.payload[0];
 
@@ -105,6 +108,9 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 	tx->tx_redo_act_nr	= 0;
 	tx->tx_redo_payload_len	= 0;
 	tx->tx_redo_act_pos	= NULL;
+
+	tx->tx_layer = 1;
+	tx->tx_last_errno = 0;
 
 	return rc;
 }
@@ -191,7 +197,6 @@ ad_tx_end(struct ad_tx *tx, int err)
 {
 	int	rc = 0;
 
-	/* TODO write actions in redo list to WAL */
 	rc = tx_complete(tx, err);
 	if (rc)
 		ad_tx_act_replay(tx, &tx->tx_undo);
@@ -252,7 +257,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
  * for TX redo and undo.
  */
 int
-ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags)
+ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint32_t flags)
 {
 	if (addr == NULL || ptr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
@@ -608,3 +613,400 @@ ad_tx_redo_act_next(struct ad_tx *tx)
 	}
 	return &tx->tx_redo_act_pos->it_act;
 }
+
+static struct ad_tx *
+tx_get()
+{
+	return tls_tx;
+}
+
+static void
+tx_set(struct ad_tx *tx)
+{
+	tls_tx = tx;
+}
+
+static void
+tx_callback(struct ad_tx *tx)
+{
+	if (!tx->tx_stage_cb || tx->tx_layer != 0)
+		return;
+	tx->tx_stage_cb(ad_tx_stage(tx), tx->tx_stage_cb_arg);
+}
+
+static int
+tx_end(struct ad_tx *tx, int err)
+{
+	struct umem_tx	*utx;
+	int		 rc;
+
+	if (err == 0)
+		err = tx->tx_last_errno;
+	else
+		tx->tx_last_errno = err;
+
+	D_ASSERTF(tx->tx_layer >= 0, "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
+	if (tx->tx_layer != 0)
+		return 0;
+
+	rc = ad_tx_end(tx, err);
+	if (err == 0) {
+		if (rc == 0) {
+			ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
+		} else {
+			D_ERROR("ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
+			tx->tx_last_errno = rc;
+			ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
+		}
+	} else {
+		D_ASSERT(rc != 0);
+		D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_ONABORT,
+			  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+	}
+
+	tx_callback(tx);
+	if (tx_get() == tx)
+		tx_set(NULL);
+	/* Give a chance to UMEM_STAGE_NONE callback.
+	 * XXX with less opportunity comparing with PMDK as user may started new TX here,
+	 *     or change to always call it even if with new TX in TLS?
+	 */
+	if (tx_get() == NULL) {
+		ad_tx_stage_set(tx, UMEM_STAGE_NONE);
+		tx_callback(tx);
+	}
+	rc = tx->tx_last_errno;
+	utx = ad_tx2umem_tx(tx);
+	D_FREE(utx);
+
+	return rc;
+}
+
+static int
+tx_abort(struct ad_tx *tx, int err)
+{
+	if (err == 0)
+		err = -DER_CANCELED;
+
+	ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
+
+	return tx_end(tx, err);
+}
+
+int
+mo_ad_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
+{
+	struct umem_tx		*utx = NULL;
+	struct ad_tx		*tx;
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob;
+	struct umem_store	*store;
+	uint64_t		 tx_id;
+	int			 rc = 0;
+
+	blob = bh.bh_blob;
+	tx = tx_get();
+	if (tx == NULL) {
+		D_ALLOC_PTR(utx);
+		if (utx == NULL)
+			return -DER_NOMEM;
+
+		tx = umem_tx2ad_tx(utx);
+		rc = ad_tx_begin(bh, tx);
+		if (rc) {
+			D_ERROR("ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+			D_FREE(utx);
+			return rc;
+		}
+
+		store = &blob->bb_store;
+		rc = store->stor_ops->so_wal_reserv(store, &tx_id);
+		if (rc) {
+			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
+			blob_decref(blob); /* drop ref taken in ad_tx_begin */
+			D_FREE(utx);
+			return rc;
+		}
+
+		/* possibly yield in so_wal_reserv, but tls_tx should be NULL when it get back */
+		D_ASSERT(tx_get() == NULL);
+		tx->tx_stage_cb = umem_stage_callback;
+		tx->tx_stage_cb_arg = txd;
+		ad_tx_id_set(tx, tx_id);
+		ad_tx_stage_set(tx, UMEM_STAGE_WORK);
+		tx_set(tx);
+		D_DEBUG(DB_TRACE, "TX "DF_U64" started\n", tx_id);
+	} else if (ad_tx_stage(tx) == UMEM_STAGE_WORK) {
+		if (blob != tx->tx_blob) {
+			D_ERROR("Nested TX for different blob\n");
+			rc = -DER_INVAL;
+			goto err_abort;
+		}
+		if (tx->tx_stage_cb_arg != txd) {
+			D_ERROR("Cannot set different TX callback argument\n");
+			rc = -DER_INVAL;
+			goto err_abort;
+		}
+		tx->tx_layer++;
+		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
+	} else {
+		D_ERROR("Invalid stage %d to begin new tx\n", ad_tx_stage(tx));
+		rc = -DER_INVAL;
+		goto err_abort;
+	}
+
+	return 0;
+
+err_abort:
+	D_ASSERT(rc != 0);
+	D_ASSERT(tx != NULL);
+	rc = tx_abort(tx, rc);
+	return rc;
+}
+
+int
+mo_ad_tx_abort(struct umem_instance *umm, int err)
+{
+	struct ad_tx	*tx = tx_get();
+
+	D_ASSERTF(tx->tx_layer > 0,
+		  "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
+	tx->tx_layer--;
+
+	return tx_abort(tx, err);
+}
+
+int
+mo_ad_tx_commit(struct umem_instance *umm)
+{
+	struct ad_tx	*tx = tx_get();
+	int		 rc = 0;
+
+	D_ASSERTF(tx->tx_layer > 0,
+		  "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
+	tx->tx_layer--;
+	if (tx->tx_layer == 0) {
+		/* possibly yield when tx_end() -> ad_tx_end() -> tx_complete() -> so_wal_submit */
+		tx_set(NULL);
+		rc = tx_end(tx, 0);
+	}
+
+	return rc;
+}
+
+int
+mo_ad_tx_stage(void)
+{
+	struct ad_tx	*tx = tx_get();
+
+	/* XXX when return UMEM_STAGE_NONE possibly with TX in committing */
+	return (tx == NULL) ? UMEM_STAGE_NONE : ad_tx_stage(tx);
+}
+
+int
+mo_ad_tx_free(struct umem_instance *umm, umem_off_t umoff)
+{
+	struct ad_tx	*tx = tx_get();
+	int		 rc = 0;
+
+	/*
+	 * This free call could be on error cleanup code path where
+	 * the transaction is already aborted due to previous failed
+	 * ad_tx call. Let's just skip it in this case.
+	 *
+	 * The reason we don't fix caller to avoid calling tx_free()
+	 * in an aborted transaction is that the caller code could be
+	 * shared by both transactional and non-transactional (where
+	 * UMEM_CLASS_VMEM is used, see btree code) interfaces, and
+	 * the explicit umem_free() on error cleanup is necessary for
+	 * non-transactional case.
+	 */
+	if (ad_tx_stage(tx) == UMEM_STAGE_ONABORT)
+		return 0;
+
+	if (!UMOFF_IS_NULL(umoff))
+		rc = ad_tx_free(tx, umoff);
+
+	return rc;
+}
+
+umem_off_t
+mo_ad_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
+	       unsigned int type_num)
+{
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+
+	return ad_alloc(bh, 0, size, NULL);
+}
+
+int
+mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size)
+{
+	struct ad_tx		*tx = tx_get();
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob = bh.bh_blob;
+	void			*ptr;
+
+	D_ASSERT(offset == 0);
+	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
+		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+	ptr = blob_addr2ptr(blob, umoff);
+	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
+}
+
+int
+mo_ad_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
+	      uint64_t flags)
+{
+	/* NOOP for UMEM_XADD_NO_SNAPSHOT */
+	if (flags & UMEM_XADD_NO_SNAPSHOT)
+		return 0;
+
+	return mo_ad_tx_add(umm, umoff, offset, size);
+}
+
+int
+mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
+{
+	struct ad_tx		*tx = tx_get();
+
+	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
+		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+
+	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
+}
+
+umem_off_t
+mo_ad_reserve(struct umem_instance *umm, struct pobj_action *pact, size_t size,
+	      unsigned int type_num)
+{
+	struct ad_reserv_act	*act = (struct ad_reserv_act *)pact;
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+
+	return ad_reserve(bh, 0, size, NULL, act);
+}
+
+void
+mo_ad_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+{
+	struct ad_reserv_act	*act;
+	int			 i;
+
+	for (i = 0; i < actv_cnt; i++) {
+		act = (struct ad_reserv_act *)(&actv[i]);
+		ad_cancel(act, 1);
+	}
+}
+
+int
+mo_ad_tx_publish(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+{
+	struct ad_tx		*tx = tx_get();
+	struct ad_reserv_act	*act;
+	int			 i;
+	int			 rc = 0;
+
+	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
+		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+
+	for (i = 0; i < actv_cnt; i++) {
+		act = (struct ad_reserv_act *)(&actv[i]);
+		rc = ad_tx_publish(tx, act, 1);
+		if (rc) {
+			D_ERROR("TX "DF_U64", ad_tx_publish failed, "DF_RC"\n",
+				ad_tx_id(tx), DP_RC(rc));
+			break;
+		}
+	}
+
+	return rc;
+}
+
+void *
+mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len)
+{
+	struct ad_tx	*tx = tx_get();
+	bool		 tx_started = false;
+	int		 rc = 0;
+
+	if (tx == NULL) {
+		rc = mo_ad_tx_begin(umm, NULL);
+		if (rc) {
+			D_ERROR("mo_ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+			return NULL;
+		}
+		tx_started = true;
+		tx = tx_get();
+	}
+
+	rc = ad_tx_copy(tx, dest, len, src, AD_TX_UNDO);
+	if (rc) {
+		D_ERROR("ad_tx_copy failed, "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
+
+	memcpy(dest, src, len);
+
+	rc = ad_tx_copy(tx, dest, len, src, AD_TX_REDO);
+	if (rc) {
+		D_ERROR("ad_tx_copy failed, "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
+
+	if (tx_started)
+		rc = mo_ad_tx_commit(umm);
+
+	return rc == 0 ? dest: NULL;
+
+failed:
+	D_ASSERT(rc != 0);
+	if (tx_started)
+		mo_ad_tx_abort(umm, rc);
+
+	return NULL;
+}
+
+umem_off_t
+mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
+{
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+
+	return ad_alloc(bh, 0, size, NULL);
+}
+
+int
+mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff)
+{
+	struct ad_tx		*tx = tx_get();
+	bool			 tx_started = false;
+	int			 rc = 0;
+
+	if (tx == NULL) {
+		rc = mo_ad_tx_begin(umm, NULL);
+		if (rc) {
+			D_ERROR("mo_ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+		tx_started = true;
+		tx = tx_get();
+	}
+
+	rc = ad_tx_free(tx, umoff);
+	if (rc) {
+		D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
+
+	if (tx_started)
+		rc = mo_ad_tx_commit(umm);
+
+	return rc;
+
+failed:
+	D_ASSERT(rc != 0);
+	if (tx_started)
+		rc = mo_ad_tx_abort(umm, rc);
+
+	return rc;
+}
+

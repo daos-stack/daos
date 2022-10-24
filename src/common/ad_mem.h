@@ -12,6 +12,8 @@
 #include <daos/common.h>
 #include <daos_srv/ad_mem.h>
 
+typedef void (*ad_tx_cb_t)(int stage, void *data);
+
 /** ad-hoc allocator transaction handle */
 struct ad_tx {
 	struct ad_blob		*tx_blob;
@@ -23,6 +25,11 @@ struct ad_tx {
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct umem_act_item	*tx_redo_act_pos;
+	/* the number of layer of nested TX, outermost layer is 1, +1 for inner TX */
+	int			 tx_layer;
+	int			 tx_last_errno;
+	ad_tx_cb_t		 tx_stage_cb;
+	void			*tx_stage_cb_arg;
 };
 
 /** action parameters for free() */
@@ -347,6 +354,24 @@ static inline uint64_t
 ad_tx_id(struct ad_tx *atx)
 {
 	return ad_tx2umem_tx(atx)->utx_id;
+}
+
+static inline void
+ad_tx_id_set(struct ad_tx *atx, uint64_t id)
+{
+	ad_tx2umem_tx(atx)->utx_id = id;
+}
+
+static inline int
+ad_tx_stage(struct ad_tx *atx)
+{
+	return ad_tx2umem_tx(atx)->utx_stage;
+}
+
+static inline void
+ad_tx_stage_set(struct ad_tx *atx, int stage)
+{
+	ad_tx2umem_tx(atx)->utx_stage = stage;
 }
 
 #endif /* __AD_MEM_H__ */

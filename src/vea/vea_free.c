@@ -479,7 +479,7 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 	d_iov_t			*unmap_iov;
 	int			 i, rc = 0;
 
-	D_ASSERT(umem_tx_none());
+	D_ASSERT(umem_tx_none(vsi->vsi_umem));
 	D_ASSERT(unmap_sgl->sg_nr_out == 0);
 
 	d_list_for_each_entry_safe(entry, tmp, &vsi->vsi_agg_lru, ve_link) {
@@ -571,7 +571,7 @@ trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush,
 	int		 rc;
 
 	D_ASSERT(nr_flush > 0);
-	if (!umem_tx_none()) {
+	if (!umem_tx_none(vsi->vsi_umem)) {
 		rc = -DER_INVAL;
 		goto out;
 	}

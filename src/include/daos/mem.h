@@ -139,13 +139,6 @@ enum umem_tx_stage {
 	MAX_UMEM_TX_STAGE
 };
 
-#ifdef DAOS_PMEM_BUILD
-bool umem_tx_inprogress(void);
-bool umem_tx_none(void);
-
-int umem_tx_errno(int err);
-#endif
-
 typedef enum {
 	/** volatile memory */
 	UMEM_CLASS_VMEM,
@@ -159,7 +152,7 @@ typedef enum {
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
 
-#define UTX_PRIV_SIZE	(512)
+#define UTX_PRIV_SIZE	(256)
 struct umem_tx {
 	struct umem_instance	*utx_umm;
 	int			 utx_stage;	/* enum umem_tx_stage */
@@ -274,6 +267,9 @@ typedef struct {
 	int		 (*mo_tx_commit)(struct umem_instance *umm);
 
 #ifdef DAOS_PMEM_BUILD
+	/** get TX stage */
+	int		 (*mo_tx_stage)(void);
+
 	/**
 	 * Reserve space with specified size.
 	 *
@@ -355,22 +351,6 @@ typedef struct {
 	 */
 	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
 					   size_t size);
-#endif
-	/**
-	 * Add one commit or abort callback to current transaction.
-	 *
-	 * PMDK doesn't provide public API to get stage_callback_arg, so
-	 * we have to make @txd as an input parameter.
-	 *
-	 * \param umm	[IN]	umem class instance.
-	 * \param txd	[IN]	transaction stage data.
-	 * \param cb	[IN]	commit or abort callback.
-	 * \param data	[IN]	callback data.
-	 */
-	int		 (*mo_tx_add_callback)(struct umem_instance *umm,
-					       struct umem_tx_stage_data *txd,
-					       int stage, umem_tx_cb_t cb,
-					       void *data);
 
 	/**
 	 * Get number of umem_actions in TX redo list.
@@ -399,6 +379,22 @@ typedef struct {
 	 * \param tx	[IN]	umem_rx pointer
 	 */
 	struct umem_action *	(*mo_tx_act_next)(struct umem_tx *tx);
+#endif
+	/**
+	 * Add one commit or abort callback to current transaction.
+	 *
+	 * PMDK doesn't provide public API to get stage_callback_arg, so
+	 * we have to make @txd as an input parameter.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param txd	[IN]	transaction stage data.
+	 * \param cb	[IN]	commit or abort callback.
+	 * \param data	[IN]	callback data.
+	 */
+	int		 (*mo_tx_add_callback)(struct umem_instance *umm,
+					       struct umem_tx_stage_data *txd,
+					       int stage, umem_tx_cb_t cb,
+					       void *data);
 } umem_ops_t;
 
 #define UMM_SLABS_CNT	7
@@ -432,6 +428,8 @@ struct umem_instance {
 };
 
 #ifdef DAOS_PMEM_BUILD
+void umem_stage_callback(int stage, void *data);
+
 static inline bool
 umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
 {
@@ -616,6 +614,18 @@ umem_tx_end(struct umem_instance *umm, int err)
 		return umem_tx_commit(umm);
 }
 
+#ifdef DAOS_PMEM_BUILD
+bool umem_tx_inprogress(struct umem_instance *umm);
+bool umem_tx_none(struct umem_instance *umm);
+
+int umem_tx_errno(int err);
+
+static inline int
+umem_tx_stage(struct umem_instance *umm)
+{
+	return umm->umm_ops->mo_tx_stage();
+}
+
 /* Get number of umem_actions in TX redo list */
 static inline uint32_t
 umem_tx_act_nr(struct umem_tx *tx)
@@ -644,7 +654,6 @@ umem_tx_act_next(struct umem_tx *tx)
 	return tx->utx_umm->umm_ops->mo_tx_act_next(tx);
 }
 
-#ifdef DAOS_PMEM_BUILD
 struct umem_rsrvd_act;
 
 /* Get the active reserved actions cnt pending for publications */

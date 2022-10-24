@@ -323,7 +323,7 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 	D_ASSERT(vos_dth_get() == NULL);
 
 	if (agg_param->ap_yield_func == NULL) {
-		bio_yield();
+		bio_yield(agg_param->ap_umm);
 		credits_set(&agg_param->ap_credits, true);
 		return false;
 	}

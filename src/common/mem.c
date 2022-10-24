@@ -16,6 +16,7 @@
 #include <daos/mem.h>
 #ifdef DAOS_PMEM_BUILD
 #include <libpmemobj.h>
+#include <daos_srv/ad_mem.h>
 #endif
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
@@ -223,15 +224,15 @@ umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
 }
 
 bool
-umem_tx_none(void)
+umem_tx_none(struct umem_instance *umm)
 {
-	return (pmemobj_tx_stage() == TX_STAGE_NONE);
+	return (umem_tx_stage(umm) == UMEM_STAGE_NONE);
 }
 
 bool
-umem_tx_inprogress(void)
+umem_tx_inprogress(struct umem_instance *umm)
 {
-	return (pmemobj_tx_stage() == TX_STAGE_WORK);
+	return (umem_tx_stage(umm) == UMEM_STAGE_WORK);
 }
 
 /** Convert an offset to an id.   No invalid flags will be maintained
@@ -342,7 +343,6 @@ pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
-
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
@@ -367,8 +367,7 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 }
 
 static void
-pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
-		    bool noop)
+umem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt, bool noop)
 {
 	struct umem_tx_stage_item	*txi, *txi_arr;
 	unsigned int			 i, num = *cnt;
@@ -399,38 +398,43 @@ pmem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt,
 	D_FREE(txi_arr);
 }
 
+D_CASSERT((int)UMEM_STAGE_NONE		== (int)TX_STAGE_NONE);
+D_CASSERT((int)UMEM_STAGE_WORK		== (int)TX_STAGE_WORK);
+D_CASSERT((int)UMEM_STAGE_ONCOMMIT	== (int)TX_STAGE_ONCOMMIT);
+D_CASSERT((int)UMEM_STAGE_ONABORT	== (int)TX_STAGE_ONABORT);
+D_CASSERT((int)UMEM_STAGE_FINALLY	== (int)TX_STAGE_FINALLY);
+D_CASSERT((int)MAX_UMEM_TX_STAGE	== (int)MAX_TX_STAGE);
+
 /*
  * This callback will be called on the outermost transaction commit (stage
  * == TX_STAGE_ONCOMMIT), abort (stage == TX_STAGE_ONABORT) and end (stage
  * == TX_STAGE_NONE).
  */
-static void
-pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
+void
+umem_stage_callback(int stage, void *data)
 {
 	struct umem_tx_stage_data	*txd = data;
 	struct umem_tx_stage_item	*vec;
 	unsigned int			*cnt;
 
-	D_ASSERT(stage >= TX_STAGE_NONE && stage < MAX_TX_STAGE);
+	D_ASSERT(stage >= UMEM_STAGE_NONE && stage < MAX_UMEM_TX_STAGE);
 	D_ASSERT(txd != NULL);
 	D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
 
 	switch (stage) {
-	case TX_STAGE_ONCOMMIT:
+	case UMEM_STAGE_ONCOMMIT:
 		vec = txd->txd_commit_vec;
 		cnt = &txd->txd_commit_cnt;
 		/* Abandon the abort callbacks */
-		pmem_process_cb_vec(txd->txd_abort_vec, &txd->txd_abort_cnt,
-				    true);
+		umem_process_cb_vec(txd->txd_abort_vec, &txd->txd_abort_cnt, true);
 		break;
-	case TX_STAGE_ONABORT:
+	case UMEM_STAGE_ONABORT:
 		vec = txd->txd_abort_vec;
 		cnt = &txd->txd_abort_cnt;
 		/* Abandon the commit callbacks */
-		pmem_process_cb_vec(txd->txd_commit_vec, &txd->txd_commit_cnt,
-				    true);
+		umem_process_cb_vec(txd->txd_commit_vec, &txd->txd_commit_cnt, true);
 		break;
-	case TX_STAGE_NONE:
+	case UMEM_STAGE_NONE:
 		D_ASSERT(txd->txd_commit_cnt == 0);
 		D_ASSERT(txd->txd_abort_cnt == 0);
 		vec = txd->txd_end_vec;
@@ -441,7 +445,13 @@ pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
 		return;
 	}
 
-	pmem_process_cb_vec(vec, cnt, false);
+	umem_process_cb_vec(vec, cnt, false);
+}
+
+static void
+pmem_stage_callback(PMEMobjpool *pop, int stage, void *data)
+{
+	umem_stage_callback(stage, data);
 }
 
 static int
@@ -488,6 +498,12 @@ pmem_defer_free(struct umem_instance *umm, umem_off_t off,
 	PMEMoid	id = umem_off2id(umm, off);
 
 	pmemobj_defer_free(pop, id, act);
+}
+
+static int
+pmem_tx_stage(void)
+{
+	return pmemobj_tx_stage();
 }
 
 static umem_off_t
@@ -632,6 +648,7 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_abort		= pmem_tx_abort,
 	.mo_tx_begin		= pmem_tx_begin,
 	.mo_tx_commit		= pmem_tx_commit,
+	.mo_tx_stage		= pmem_tx_stage,
 	.mo_reserve		= pmem_reserve,
 	.mo_defer_free		= pmem_defer_free,
 	.mo_cancel		= pmem_cancel,
@@ -659,6 +676,31 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
+
+static umem_ops_t	ad_ops = {
+	.mo_tx_free		= mo_ad_tx_free,
+	.mo_tx_alloc		= mo_ad_tx_alloc,
+	.mo_tx_add		= mo_ad_tx_add,
+	.mo_tx_xadd		= mo_ad_tx_xadd,
+	.mo_tx_add_ptr		= mo_ad_tx_add_ptr,
+	.mo_tx_abort		= mo_ad_tx_abort,
+	.mo_tx_begin		= mo_ad_tx_begin,
+	.mo_tx_commit		= mo_ad_tx_commit,
+	.mo_tx_stage		= mo_ad_tx_stage,
+	.mo_reserve		= mo_ad_reserve,
+	/* defer_free will go to umem_free() -> mo_tx_free, see umem_defer_free */
+	.mo_defer_free		= NULL,
+	.mo_cancel		= mo_ad_cancel,
+	.mo_tx_publish		= mo_ad_tx_publish,
+	.mo_atomic_copy		= mo_ad_atomic_copy,
+	.mo_atomic_alloc	= mo_ad_atomic_alloc,
+	.mo_atomic_free		= mo_ad_atomic_free,
+	/* NOOP flush for ADMEM */
+	.mo_atomic_flush	= NULL,
+	/* share same mo_tx_add_callback as PMEM */
+	.mo_tx_add_callback	= pmem_tx_add_callback,
+};
+
 #endif
 
 /* volatile memory operations */
@@ -726,6 +768,11 @@ static struct umem_class umem_class_defined[] = {
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
+	},
+	{
+		.umc_id		= UMEM_CLASS_AD,
+		.umc_ops	= &ad_ops,
+		.umc_name	= "ad-hoc",
 	},
 #endif
 	{
@@ -883,11 +930,16 @@ umem_fini_txd(struct umem_tx_stage_data *txd)
 }
 
 #ifdef	DAOS_PMEM_BUILD
+
+/* ad_reserv_act uses space of pobj_action, so the umem_rsrvd_act_xxx APIs and mo_xxx functions
+ * can work for both PMDK and ADMEM.
+ */
+D_CASSERT(sizeof(struct ad_reserv_act) <= sizeof(struct pobj_action));
+
 struct umem_rsrvd_act {
 	unsigned int		rs_actv_cnt;
 	unsigned int		rs_actv_at;
 	struct pobj_action	rs_actv[0];
-
 };
 
 int

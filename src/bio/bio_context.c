@@ -1120,7 +1120,7 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		i++;
 		unmap_cnt--;
 
-		drain_inflight_ios(xs_ctxt, bxb);
+		drain_inflight_ios(xs_ctxt, bxb, ioctxt->bic_umem);
 
 		ba->bca_inflights++;
 		bxb->bxb_blob_rw++;

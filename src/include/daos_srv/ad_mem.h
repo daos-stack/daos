@@ -39,7 +39,7 @@ enum ad_tx_copy_flags {
  * for TX redo and undo.
  */
 int
-ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags);
+ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint32_t flags);
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
 int
@@ -158,5 +158,34 @@ daos_off_t ad_alloc(struct ad_blob_handle bh, int type, daos_size_t size, uint32
 
 void *ad_addr2ptr(struct ad_blob_handle bh, daos_off_t addr);
 daos_off_t ad_ptr2addr(struct ad_blob_handle bh, void *ptr);
+
+static inline struct ad_blob_handle
+umm2ad_blob_hdl(struct umem_instance *umm)
+{
+	struct ad_blob_handle	hdl;
+
+	hdl.bh_blob = (struct ad_blob *)umm->umm_pool; /* FIXME */
+	return hdl;
+}
+
+int mo_ad_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd);
+int mo_ad_tx_abort(struct umem_instance *umm, int err);
+int mo_ad_tx_commit(struct umem_instance *umm);
+int mo_ad_tx_stage(void);
+int mo_ad_tx_free(struct umem_instance *umm, umem_off_t umoff);
+umem_off_t mo_ad_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
+			  unsigned int type_num);
+int mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size);
+int mo_ad_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
+		  uint64_t flags);
+int mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size);
+umem_off_t mo_ad_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
+			 unsigned int type_num);
+void mo_ad_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt);
+int mo_ad_tx_publish(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt);
+void *mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len);
+umem_off_t mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num);
+int mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff);
+
 
 #endif /* __DAOS_AD_HOC_MEM_H__ */

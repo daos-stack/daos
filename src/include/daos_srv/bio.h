@@ -717,10 +717,10 @@ void *bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
  * Wrapper of ABT_thread_yield()
  */
 static inline void
-bio_yield(void)
+bio_yield(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
-	D_ASSERT(umem_tx_none());
+	D_ASSERT(umem_tx_none(umm));
 #endif
 	ABT_thread_yield();
 }

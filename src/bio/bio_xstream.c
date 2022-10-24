@@ -365,7 +365,8 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 }
 
 void
-drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bxb)
+drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bxb,
+		   struct umem_instance *umm)
 {
 
 	if (ctxt == NULL || bxb == NULL || bxb->bxb_blob_rw <= BIO_BS_POLL_WATERMARK)
@@ -375,7 +376,7 @@ drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bxb)
 		if (ctxt->bxc_self_polling)
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 		else
-			bio_yield();
+			bio_yield(umm);
 	} while (bxb->bxb_blob_rw >= BIO_BS_STOP_WATERMARK);
 }
 

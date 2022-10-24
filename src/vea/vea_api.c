@@ -96,7 +96,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		 * This function can't be called in pmemobj transaction since
 		 * the callback for block header initialization could yield.
 		 */
-		D_ASSERT(umem_tx_none());
+		D_ASSERT(umem_tx_none(umem));
 
 		rc = cb(cb_data, umem);
 		if (rc != 0)
@@ -443,10 +443,10 @@ int
 vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	       d_list_t *resrvd_list)
 {
-	D_ASSERT(umem_tx_inprogress() ||
-		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	D_ASSERT(vsi != NULL);
 	D_ASSERT(resrvd_list != NULL);
+	D_ASSERT(umem_tx_inprogress(vsi->vsi_umem) ||
+		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	/*
 	 * We choose to don't rollback the in-memory hint updates even if the
 	 * transaction manipulcated by caller is aborted, that'll result in
@@ -545,7 +545,7 @@ done:
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Flush the expired aging free extents to compound index */
 	if (rc == 0) {
-		if (umem_tx_none())
+		if (umem_tx_none(umem))
 			aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
 		else
 			schedule_aging_flush(vsi);
@@ -694,7 +694,7 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 int
 vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
 {
-	if (!umem_tx_none()) {
+	if (!umem_tx_none(vsi->vsi_umem)) {
 		D_ERROR("This function isn't supposed to be called in transaction!\n");
 		return -DER_INVAL;
 	}
