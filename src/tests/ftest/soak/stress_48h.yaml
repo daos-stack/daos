@@ -98,7 +98,7 @@ soak_stress:
   test_timeout: 48
   joblist:
     - fio_stress
-    #- daos_racer
+    # - daos_racer
     - ior_stress
     - mdtest_stress
     - vpic_stress

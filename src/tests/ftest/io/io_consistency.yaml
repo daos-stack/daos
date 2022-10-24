@@ -29,13 +29,13 @@ ior:
   io_consistency: !mux
     FPP:
       api_flag:
-        - [DFS , "-v -w -k -F"]
+        - [DFS, "-v -w -k -F"]
         - [POSIX, "-v -r -R -F"]
     SSF:
       api_flag:
-        - [DFS , "-v -w -k"]
+        - [DFS, "-v -w -k"]
         - [POSIX, "-v -r -R"]
-  dfs_destroy: False
+  dfs_destroy: false
   test_file: /testFile
   signature: 5
   repetitions: 1
@@ -48,4 +48,4 @@ ior:
       dfs_oclass: "SX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true

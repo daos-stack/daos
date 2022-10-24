@@ -53,8 +53,8 @@ ior:
   flags: "-v -D 60 -w -r"
   dfs_oclass: "SX"
   block_size: '100G'
-  write_x: 0.08 # Max 8% performance difference.
-  read_x: 0.08  # Loosely derived from 3% stddev + 5% actual deviation.
+  write_x: 0.08  # Max 8% performance difference.
+  read_x: 0.08   # Loosely derived from 3% stddev + 5% actual deviation.
   transfersize: !mux
     512B:
       transfer_size: '512B'
@@ -66,4 +66,4 @@ ior:
       transfer_size: '1M'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true

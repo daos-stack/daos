@@ -56,7 +56,7 @@ mdtest: &mdtest_base
   num_of_files_dirs: 100000000
   stonewall_timer: 30
   stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_destroy: False
+  dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_base
   dfs_oclass: S1

@@ -31,7 +31,7 @@ ior:
   test_file: testFile
   repetitions: 1
   # Remove the below line once DAOS-3143 is resolved
-  dfs_destroy: False
+  dfs_destroy: false
   api: POSIX
   transfer_size: '4K'
   block_size: '512M'
@@ -43,4 +43,4 @@ ior:
       flags: "-F -k -e -D 600 -v -w -W -r -R"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true

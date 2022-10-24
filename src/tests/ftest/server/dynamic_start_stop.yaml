@@ -17,4 +17,4 @@ pool:
   scm_size: 1G
   control_method: dmg
 dmg:
-  json: True
+  json: true

@@ -65,23 +65,23 @@ ior_dfs_ec_16p2gx:
   <<: *ior_base
   api: DFS
   dfs_oclass: EC_16P2GX
-  dfs_chunk: 2115360 # Multiple of 47008 and at least 128KiB * 16
+  dfs_chunk: 2115360  # Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
 ior_dfuse_sx:
   <<: *ior_base
   api: POSIX
-  dfs_oclass: SX # dfs params are translated to container params
+  dfs_oclass: SX  # dfs params are translated to container params
   dfs_chunk: 470080
   transfer_size: 47008
 ior_dfuse_ec_16p2gx:
   <<: *ior_base
   api: POSIX
-  dfs_oclass: EC_16P2GX # dfs params are translated to container params
-  dfs_chunk: 2115360 ## Multiple of 47008 and at least 128KiB * 16
+  dfs_oclass: EC_16P2GX  # dfs params are translated to container params
+  dfs_chunk: 2115360  ## Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
-  disable_caching: True
+  disable_caching: true
 performance:
   env:
     - D_LOG_MASK=ERR

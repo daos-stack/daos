@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from rebuild_test_base import RebuildTestBase
 from daos_utils import DaosCommand
+
 
 class RbldReadArrayTest(RebuildTestBase):
     # pylint: disable=too-many-ancestors
@@ -22,11 +22,9 @@ class RbldReadArrayTest(RebuildTestBase):
         """Read the objects during rebuild."""
 
         self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
+                                         cont=self.container.uuid,
+                                         prop="status", value="healthy")
 
         message = "Reading the array objects during rebuild"
         self.log.info(message)

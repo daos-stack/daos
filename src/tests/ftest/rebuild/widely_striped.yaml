@@ -25,7 +25,7 @@ testparams:
   ranks_to_kill:
     - [6]
     - [5]
-    - [3,4]
+    - [3, 4]
 pool:
   scm_size: 10G
   nvme_size: 60G
@@ -44,7 +44,7 @@ mdtest:
     np: 30
   num_of_files_dirs: 4067         # creating total of 120K files
   test_dir: "/"
-  dfs_destroy: False
+  dfs_destroy: false
   dfs_oclass: RP_3G1
   dfs_dir_oclass: RP_3G1
   manager: "MPICH"

@@ -3,7 +3,7 @@
 
 ENV:
   default:
-    #!filter-only : /run/tests/no_pmix_launcher
+    # !filter-only : /run/tests/no_pmix_launcher
     - D_LOG_MASK: "WARN"
     - OFI_INTERFACE: "eth0"
 env_CRT_PHY_ADDR_STR: !mux

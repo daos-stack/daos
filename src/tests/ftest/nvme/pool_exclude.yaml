@@ -7,7 +7,7 @@ hosts:
 # other than hosts.
 timeout: 1000
 setup:
-  start_servers_once: False
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -59,7 +59,7 @@ ior:
     np: 48
   test_file: /testFile
   repetitions: 10
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     write_flags: "-w -F -k -G 1"
     read_flags: "-F -r -R -k -G 1"
@@ -67,12 +67,12 @@ ior:
     dfs_oclass: RP_3G6
     dfs_dir_oclass: RP_3G6
     ior_test_sequence:
-    #   - [scm_size, nvme_size, transfersize, blocksize]
-    #    The values are set to be in the multiples of 10.
-    #    Values are appx GB.
-        - [50000000000, 300000000000, 4000, 50000000]          #[4K, 51M]
-        - [50000000000, 300000000000, 1000000, 500000000]      #[1M, 512M]
-        - [50000000000, 300000000000, 1000000000, 8000000000]  #[1G, 8G]
+      #   - [scm_size, nvme_size, transfersize, blocksize]
+      #    The values are set to be in the multiples of 10.
+      #    Values are appx GB.
+      - [50000000000, 300000000000, 4000, 50000000]          # [4K, 51M]
+      - [50000000000, 300000000000, 1000000, 500000000]      # [1M, 512M]
+      - [50000000000, 300000000000, 1000000000, 8000000000]  # [1G, 8G]
 test_obj_class:
   oclass:
     - RP_3G6
@@ -80,8 +80,8 @@ test_obj_class:
 loop_test:
   iterations: 2
 aggregation:
-  test_with_aggregation: True
+  test_with_aggregation: true
 rebuild:
-  test_with_rebuild: True
+  test_with_rebuild: true
 checksum:
-  test_with_checksum: False
+  test_with_checksum: false
