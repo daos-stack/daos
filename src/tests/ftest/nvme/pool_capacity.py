@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,6 +7,7 @@ import time
 import threading
 import uuid
 from itertools import product
+import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
@@ -15,7 +15,6 @@ from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from exception_utils import CommandFailure
-import queue
 
 
 class NvmePoolCapacity(TestWithServers):

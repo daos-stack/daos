@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -39,7 +38,7 @@ class FaultDomain(TestWithServers):
         """
         test_passed = True
         rank = None
-        error_messages = list()
+        error_messages = []
         fault_paths = self.params.get("fault_path", '/run/*')
         number_pools = self.params.get("number_pools", '/run/*')
 
