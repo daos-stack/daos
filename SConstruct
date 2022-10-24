@@ -22,11 +22,6 @@ wrap scons-3.""")
 
 SCons.Warnings.warningAsException()
 
-try:
-    input = raw_input  # pylint: disable=redefined-builtin
-except NameError:
-    pass
-
 
 def get_version(env):
     """ Read version from VERSION file """
@@ -50,6 +45,8 @@ API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM spec file """
+
+    # pylint: disable=consider-using-f-string
     spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
@@ -151,6 +148,7 @@ def build_misc(build_prefix):
 def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
+        # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
             import pygit2
@@ -376,6 +374,8 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     set_defaults(env, daos_version)
 
+    daos_build.setup(env)
+
     base_env = env.Clone()
 
     base_env_mpi = env.Clone()
@@ -383,8 +383,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     compiler_setup.base_setup(env)
 
     if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(base_env_mpi)
-        if not mpi:
+        if not base_env_mpi.d_configure_mpi():
             print("\nSkipping compilation for tests that need MPI")
             print("Install and load mpich or openmpi\n")
             base_env_mpi = None
@@ -407,12 +406,9 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     buildinfo.save('.build_vars.json')
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        daos_build.install(env, "lib/daos/",
-                           ['.build_vars.sh', '.build_vars.json'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                    ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/',
-                    ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 

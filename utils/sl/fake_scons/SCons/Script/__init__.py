@@ -21,7 +21,6 @@
 
 import os
 import sys
-import copy
 
 # pylint: disable=no-self-use
 # pylint: disable=too-many-public-methods
@@ -194,6 +193,10 @@ class DefaultEnvironment():
         """Fake __getitem__"""
         return []
 
+    def __setitem__(self, x, value):
+        """Fake __setitem__"""
+        return
+
     def Install(self, *_args, **_kw):
         """Fake Install"""
 
@@ -209,12 +212,16 @@ class DefaultEnvironment():
         """Fake Object"""
         return []
 
+    def SConscript(self, s_dir):
+        "Fake SConscript"
+        return
+
     def Replace(self, *_args, **_kw):
         """Fake Replace"""
 
     def Clone(self, *_args, **_kw):
         """Fake Replace"""
-        return copy.copy(self)
+        return DefaultEnvironment()
 
     def Append(self, *_args, **_kw):
         """Fake Append"""
@@ -237,12 +244,36 @@ class DefaultEnvironment():
         """Fake GetOption"""
         return []
 
-    def AppendENVPath(self, key, value):
+    def SetOption(self, key, value):
+        """Fake SetOption"""
+        return
+
+    def ParseConfig(self, command):
+        """Fake ParseConfig"""
+        return
+
+    def AppendENVPath(self, key, value, sep=None):
         """Fake AppendENVPath"""
         return
 
     def PrependENVPath(self, key, value):
         """Fake PrependENVPath"""
+        return
+
+    def d_add_build_rpath(self, pathin='.'):
+        """Fake d_add_build_rpath"""
+        return
+
+    def d_add_rpaths(self, offset, set_go, is_bin):
+        """Fake d_add_rpaths"""
+        return
+
+    def d_configure_mpi(self):
+        """Fake d_configure_mpi"""
+        return
+
+    def Preprocess(self, files):
+        """Fake Preprocess"""
         return
 
 

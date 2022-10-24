@@ -23,12 +23,11 @@ class DaosLiteral(Literal):
         return hash(self.lstr)
 
 
-def add_rpaths(env, install_off, set_cgo_ld, is_bin):
+def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
     if GetOption('no_rpath'):
         if set_cgo_ld:
-            env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS "),
-                              sep=" ")
+            env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS "), sep=" ")
         return
     env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     rpaths = env.subst("$RPATH_FULL").split()
@@ -45,18 +44,17 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
             continue
         relpath = os.path.relpath(rpath, prefix)
         if relpath != rpath:
-            joined = os.path.normpath(os.path.join(install_off, relpath))
-            path = r'\$$ORIGIN/%s' % (joined)
             if set_cgo_ld:
-                env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath=$ORIGIN/%s/%s" %
-                                  (install_off, relpath), sep=" ")
+                env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}%s',
+                                  sep=" ")
             else:
-                env.AppendUnique(RPATH=[DaosLiteral(path)])
+                joined = os.path.normpath(os.path.join(install_off, relpath))
+                env.AppendUnique(RPATH=[DaosLiteral(fr'\$$ORIGIN/{joined}')])
     for rpath in rpaths:
         path = os.path.join(prefix, rpath)
         if is_bin:
             # NB: Also use full path so intermediate linking works
-            env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
+            env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
         else:
             # NB: Also use full path so intermediate linking works
             env.AppendUnique(RPATH=[path])
@@ -65,11 +63,13 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
         env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
 
 
-def add_build_rpath(env, pathin="."):
+def _add_build_rpath(self, pathin="."):
     """Add a build directory to rpath"""
+
+    env = self
     path = Dir(pathin).path
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
-    env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
+    env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
+    env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
     # We actually run installed binaries from the build area to generate
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
@@ -117,7 +117,7 @@ def _add_lib(libtype, libname, target):
     libraries[libname][libtype] = target
 
 
-def run_command(env, target, sources, daos_libs, command):
+def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
@@ -141,7 +141,7 @@ def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
-    add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
+    _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     lib = denv.SharedLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
     _add_lib('shared', libname, lib)
@@ -156,7 +156,7 @@ def program(env, *args, **kwargs):
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
-    add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
+    _add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     prog = denv.Program(*args, **kwargs)
     static_deps, shared_deps = _known_deps(env, **kwargs)
     Depends(prog, static_deps)
@@ -169,7 +169,7 @@ def test(env, *args, **kwargs):
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
-    add_rpaths(denv, kwargs.get("install_off", None), False, True)
+    _add_rpaths(denv, kwargs.get("install_off", None), False, True)
     testbuild = denv.Program(*args, **kwargs)
     static_deps, shared_deps = _known_deps(env, **kwargs)
     Depends(testbuild, static_deps)
@@ -180,13 +180,6 @@ def test(env, *args, **kwargs):
 def add_static_library(name, target):
     """Add a static library to our db"""
     _add_lib('static', name, target)
-
-
-def install(env, subdir, files):
-    """install file to the subdir"""
-    denv = env.Clone()
-    path = "$PREFIX/%s" % subdir
-    denv.Install(path, files)
 
 
 def _find_mpicc(env):
@@ -220,7 +213,7 @@ def _configure_mpi_pkg(env):
     return True
 
 
-def configure_mpi(env):
+def _configure_mpi(env):
     """Check if mpi exists and configure environment"""
 
     if GetOption('help'):
@@ -235,8 +228,16 @@ def configure_mpi(env):
         if not load_mpi(mpi):
             continue
         if _find_mpicc(env):
-            print("%s is installed" % mpi)
+            print(f'{mpi} is installed')
             return True
-        print("No %s installed and/or loaded" % mpi)
+        print('No {mpi} installed and/or loaded')
     print("No MPI installed")
     return False
+
+
+def setup(env):
+    """Add daos specific methods to environment"""
+    env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
+    env.AddMethod(_configure_mpi, 'd_configure_mpi')
+    env.AddMethod(_run_command, 'd_run_command')
+    env.AddMethod(_add_rpaths, 'd_add_rpaths')
