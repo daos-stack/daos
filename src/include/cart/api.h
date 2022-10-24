@@ -2228,6 +2228,8 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * \param[in] ctxs               Array of contexts
  * \param[in] num_ctxs           Number of contexts
  * \param[in] ranks              Modification rank list
+ * \param[in] incarnations       Array of incarnations corresponding to rank
+ *                               list
  * \param[in] uris               Array of URIs corresponding to contexts and
  *                               rank list
  * \param[in] op                 Modification operation.
@@ -2252,9 +2254,9 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * [uri0 for provider2 identified by ctx2]
  * etc...
  */
-int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
-			int num_ctxs, d_rank_list_t *ranks, char **uris,
-			crt_group_mod_op_t op, uint32_t version);
+int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
+			     d_rank_list_t *ranks, uint64_t *incarnations, char **uris,
+			     crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the
