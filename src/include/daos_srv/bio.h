@@ -990,14 +990,12 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  * Submit WAL I/O and wait for completion
  *
  * \param[in]	mc		BIO meta context
- * \param[in]	tx_id		WAL transaction ID
- * \param[in]	actv		Actions involved in this transaction
+ * \param[in]	tx		umem_tx pointer
  * \param[in]	biod_data	BIO descriptor for data update (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
-		   struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance

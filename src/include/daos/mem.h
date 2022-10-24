@@ -129,7 +129,7 @@ umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)
 #define UMOFF_PF		DF_X64
 #define UMOFF_P(umoff)		umem_off2offset(umoff)
 
-enum umem_pobj_tx_stage {
+enum umem_tx_stage {
 	UMEM_STAGE_NONE,	/* no transaction in this thread */
 	UMEM_STAGE_WORK,	/* transaction in progress */
 	UMEM_STAGE_ONCOMMIT,	/* successfully committed */
@@ -153,9 +153,22 @@ typedef enum {
 	UMEM_CLASS_PMEM,
 	/** persistent memory but ignore PMDK snapshot */
 	UMEM_CLASS_PMEM_NO_SNAP,
+	/** ad-hoc memory */
+	UMEM_CLASS_AD,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
+
+#define UTX_PRIV_SIZE	(512)
+struct umem_tx {
+	int			utx_class;	/* umem_class_id_t */
+	int			utx_stage;	/* enum umem_tx_stage */
+	uint64_t		utx_id;
+	/* umem class specific TX data */
+	struct {
+		char		utx_space[UTX_PRIV_SIZE];
+	}			utx_private;
+};
 
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
@@ -358,6 +371,34 @@ typedef struct {
 					       struct umem_tx_stage_data *txd,
 					       int stage, umem_tx_cb_t cb,
 					       void *data);
+
+	/**
+	 * Get number of umem_actions in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	uint32_t	(*mo_tx_act_nr)(struct umem_tx *tx);
+
+	/**
+	 * Get payload size of umem_actions in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	uint32_t	(*mo_tx_payload_sz)(struct umem_tx *tx);
+
+	/**
+	 * Get the first umem_action in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	struct umem_action *	(*mo_tx_act_first)(struct umem_tx *tx);
+
+	/**
+	 * Get the next umem_action in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	struct umem_action *	(*mo_tx_act_next)(struct umem_tx *tx);
 } umem_ops_t;
 
 #define UMM_SLABS_CNT	7
@@ -573,6 +614,46 @@ umem_tx_end(struct umem_instance *umm, int err)
 		return umem_tx_abort(umm, err);
 	else
 		return umem_tx_commit(umm);
+}
+
+/* Get number of umem_actions in TX redo list */
+static inline uint32_t
+umem_tx_act_nr(struct umem_instance *umm, struct umem_tx *tx)
+{
+	if (umm->umm_ops->mo_tx_act_nr)
+		return umm->umm_ops->mo_tx_act_nr(tx);
+	else
+		return -DER_INVAL;
+}
+
+/* Get payload size of umem_actions in TX redo list */
+static inline uint32_t
+umem_tx_act_payload_sz(struct umem_instance *umm, struct umem_tx *tx)
+{
+	if (umm->umm_ops->mo_tx_payload_sz)
+		return umm->umm_ops->mo_tx_payload_sz(tx);
+	else
+		return -DER_INVAL;
+}
+
+/* Get the first umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_first(struct umem_instance *umm, struct umem_tx *tx)
+{
+	if (umm->umm_ops->mo_tx_act_first)
+		return umm->umm_ops->mo_tx_act_first(tx);
+	else
+		return NULL;
+}
+
+/* Get the next umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_next(struct umem_instance *umm, struct umem_tx *tx)
+{
+	if (umm->umm_ops->mo_tx_act_next)
+		return umm->umm_ops->mo_tx_act_next(tx);
+	else
+		return NULL;
 }
 
 #ifdef DAOS_PMEM_BUILD

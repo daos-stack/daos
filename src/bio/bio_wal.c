@@ -298,31 +298,6 @@ done:
 	return rc;
 }
 
-/* TODO following four umem_xxx functions will be replaced real umem functions */
-static struct umem_action *
-umem_act_first(struct umem_action *actv)
-{
-	return NULL;
-}
-
-static struct umem_action *
-umem_act_next(struct umem_action *actv)
-{
-	return NULL;
-}
-
-static unsigned int
-umem_act_nr(struct umem_action *actv)
-{
-	return 0;
-}
-
-static uint32_t
-umem_act_payload_sz(struct umem_action *actv)
-{
-	return 0;
-}
-
 struct wal_blks_desc {
 	unsigned int	bd_blks;	/* Total blocks for this transaction */
 	unsigned int	bd_payload_idx;	/* Start block index for payload */
@@ -533,8 +508,8 @@ place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks
 }
 
 static void
-fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_action *actv,
-		uint64_t tx_id, unsigned int blk_sz, struct wal_blks_desc *bd)
+fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_tx *tx,
+		unsigned int blk_sz, struct wal_blks_desc *bd)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct umem_action	*act;
@@ -546,9 +521,9 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
-	blk_hdr.th_id = tx_id;
-	blk_hdr.th_tot_ents = umem_act_nr(actv);
-	blk_hdr.th_tot_payload = umem_act_payload_sz(actv);
+	blk_hdr.th_id = tx->utx_id;
+	blk_hdr.th_tot_ents = umem_tx_act_nr(mc->mc_meta->bic_umem, tx);
+	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(mc->mc_meta->bic_umem, tx);
 
 	/* Initialize first entry block */
 	get_trans_blk(bsgl, 0, blk_sz, &entry_blk);
@@ -567,7 +542,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	else
 		payload_blk.tb_off = bd->bd_payload_off;
 
-	act = umem_act_first(actv);
+	act = umem_tx_act_first(mc->mc_meta->bic_umem, tx);
 	D_ASSERT(act != NULL);
 
 	while (act != NULL) {
@@ -639,7 +614,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			break;
 		}
 
-		act = umem_act_next(actv);
+		act = umem_tx_act_next(mc->mc_meta->bic_umem, tx);
 	}
 
 	place_tail(mc, bsgl, bd, &payload_blk);
@@ -784,8 +759,7 @@ data_completion(void *arg, int err)
 }
 
 int
-bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
-	       struct bio_desc *biod_data)
+bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct bio_desc		*biod;
@@ -796,10 +770,13 @@ bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *
 	unsigned int		 blks, unused_off;
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	uint64_t		 tx_id = tx->utx_id;
 	int			 iov_nr, rc;
 
 	/* Calculate the required log blocks for this transaction */
-	calc_trans_blks(umem_act_nr(actv), umem_act_payload_sz(actv), blk_bytes, &blk_desc);
+	calc_trans_blks(umem_tx_act_nr(mc->mc_meta->bic_umem, tx),
+			umem_tx_act_payload_sz(mc->mc_meta->bic_umem, tx),
+			blk_bytes, &blk_desc);
 
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
 		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
@@ -860,7 +837,7 @@ bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *
 	}
 
 	/* Fill DMA buffer with transaction entries */
-	fill_trans_blks(mc, bsgl, actv, tx_id, blk_bytes, &blk_desc);
+	fill_trans_blks(mc, bsgl, tx, blk_bytes, &blk_desc);
 
 	/* Set proper completion callbacks for data I/O & WAL I/O */
 	if (biod_data != NULL) {
