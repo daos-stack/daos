@@ -1428,6 +1428,7 @@ def run_daos_cmd(conf,
     dcr.rc = rc
     return dcr
 
+
 # pylint: disable-next=too-many-arguments
 def create_cont(conf,
                 pool=None,
