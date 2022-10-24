@@ -116,14 +116,14 @@ void pl_map_print(struct pl_map *map)
  * is not NULL.
  */
 int
-pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	     unsigned int mode, struct daos_obj_shard_md *shard_md,
+pl_obj_place(struct pl_map *map, struct daos_obj_md *md, unsigned int mode,
+	     uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_obj_place != NULL);
 
-	return map->pl_ops->o_obj_place(map, md, mode, shard_md, layout_pp);
+	return map->pl_ops->o_obj_place(map, md, mode, rebuild_ver, shard_md, layout_pp);
 }
 
 /**
@@ -242,7 +242,8 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);
 		if (rc != 0 && target->ta_comp.co_rank == rank &&
-		    target->ta_comp.co_index == target_index && i == id_shard)
+		    target->ta_comp.co_index == target_index &&
+		    layout->ol_shards[i].po_shard == id_shard)
 			return true; /* Found a target and rank matches */
 	}
 

@@ -2153,8 +2153,11 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 
 			dae->dae_dth = NULL;
 			dth->dth_aborted = 1;
-			dtx_act_ent_cleanup(cont, dae, dth, true);
 			dth->dth_ent = NULL;
+			/*
+			 * dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
+			 * when remove the DTX entry from active DTX table.
+			 */
 		}
 	}
 
@@ -2713,6 +2716,9 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+			if (dth->dth_ent != NULL)
+				D_ASSERT(dth->dth_ent == dae);
+
 			/* Cannot cleanup 'committed' DTX entry. */
 			if (dae->dae_committable || dae->dae_committed)
 				goto out;
@@ -2737,7 +2743,7 @@ out:
 }
 
 void
-vos_dtx_cleanup(struct dtx_handle *dth)
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 {
 	struct vos_dtx_act_ent	*dae;
 	struct vos_container	*cont;
@@ -2757,7 +2763,9 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			return;
 	}
 
-	dth->dth_pinned = 0;
+	if (unpin)
+		dth->dth_pinned = 0;
+
 	cont = vos_hdl2cont(dth->dth_coh);
 	/** This will abort the transaction and callback to
 	 *  vos_dtx_cleanup_internal
