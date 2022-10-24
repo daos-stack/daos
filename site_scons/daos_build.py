@@ -45,7 +45,7 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         relpath = os.path.relpath(rpath, prefix)
         if relpath != rpath:
             if set_cgo_ld:
-                env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}%s',
+                env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}',
                                   sep=" ")
             else:
                 joined = os.path.normpath(os.path.join(install_off, relpath))
@@ -63,10 +63,9 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
 
 
-def _add_build_rpath(self, pathin="."):
+def _add_build_rpath(env, pathin="."):
     """Add a build directory to rpath"""
 
-    env = self
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
