@@ -693,7 +693,7 @@ class TestInfo():
             info[keys[3]].add(get_local_host())
 
         # Configure a slurm partition using the specified hosts if the test uses a partition
-        if info[keys[1]] and partition_hosts:
+        if info[keys[4]] and partition_hosts:
             setup_slurm_partitions(partition_hosts, info[keys[1]])
             partition_created = True
 
