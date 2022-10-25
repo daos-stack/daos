@@ -2887,7 +2887,7 @@ bulk_update_transfer_done_aux_wrapper(void *arg)
 
 	info = arg;
 
-	D_DEBUG(DB_TRACE, "Triggering bulk_update_transfer_done_aux() rc=%d\n", cb_info->bci_rc);
+	D_DEBUG(DB_TRACE, "Triggering bulk_update_transfer_done_aux() rc=%d\n", info->bci_rc);
 
 	bulk_update_transfer_done_aux(info);
 
