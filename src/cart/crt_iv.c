@@ -3071,7 +3071,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			if (update_cb_info == NULL)
 				D_GOTO(send_error, rc = -DER_NOMEM);
 
-			sync_type = (crt_iv_sync_t *) input->ivu_sync_type.iov_buf;
+			sync_type = (crt_iv_sync_t *)input->ivu_sync_type.iov_buf;
 
 			RPC_PUB_ADDREF(rpc_req);
 			IVNS_ADDREF(ivns_internal);
