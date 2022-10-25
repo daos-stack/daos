@@ -99,7 +99,6 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                         self.run_ior_with_pool(
                             create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
                     else:
-                        self.processes = ior_np
                         self.run_ior_with_pool(create_pool=False)
                     results.append(["PASS", str(self.ior_cmd)])
                 except TestFail:
