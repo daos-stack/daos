@@ -572,7 +572,7 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	}
 
 	ctxt->bic_xs_blobstore = bxb;
-	rc = bio_blob_open(ctxt, false, flags & BIO_MC_FL_SYSDB, open_blobid);
+	rc = bio_blob_open(ctxt, false, flags & BIO_MC_FL_SYSDB, st, open_blobid);
 	if (rc) {
 		D_FREE(ctxt);
 	} else {
@@ -702,7 +702,8 @@ get_super_cb(void *arg1, spdk_blob_id blobid, int bserrno)
 }
 
 int
-bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id open_blobid)
+bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, enum smd_dev_type st,
+		spdk_blob_id open_blobid)
 {
 	struct bio_xs_context		*xs_ctxt = ctxt->bic_xs_ctxt;
 	spdk_blob_id			 blob_id;
@@ -736,7 +737,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id
 		 */
 		if (!is_sys || !bio_is_meta_on_ssd_configured()) {
 			rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
-					       SMD_DEV_TYPE_DATA, &blob_id);
+					       st, &blob_id);
 			if (rc != 0) {
 				D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID", tgt:%d\n",
 					xs_ctxt, DP_UUID(ctxt->bic_pool_id), xs_ctxt->bxc_tgt_id);
