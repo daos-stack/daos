@@ -414,7 +414,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 
 		switch errors.Cause(err) {
-		case errInstanceNotReady, FaultDataPlaneNotStarted:
+		case errInstanceNotReady:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
 			resp.Status = int32(drpc.DaosTryAgain)

@@ -24,6 +24,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
@@ -201,6 +203,13 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
 			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable,
 			drpc.DaosExcluded:
+			return true
+		default:
+			return false
+		}
+	case *fault.Fault:
+		switch e.Code {
+		case code.ServerDataPlaneNotStarted:
 			return true
 		default:
 			return false
