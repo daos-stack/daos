@@ -2381,7 +2381,9 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	crt_reply_send(cb_info->uci_child_rpc);
 	/* ADDREF done in crt_hdlr_iv_update */
 	RPC_PUB_DECREF(cb_info->uci_child_rpc);
-	crt_bulk_free(cb_info->uci_bulk_hdl);
+
+	if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(cb_info->uci_bulk_hdl);
 
 	/* addref in transfer_back_to_child() */
 	IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2415,6 +2417,13 @@ int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 
 	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
 	D_ASSERT(iv_ops != NULL);
+
+	if (update_rc != 0) {
+		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL) {
+			crt_bulk_free(cb_info->uci_bulk_hdl);
+			cb_info->uci_bulk_hdl = CRT_BULK_NULL;
+		}
+	}
 
 	if (do_refresh)
 		iv_ops->ivo_on_refresh(ivns, key, 0,
