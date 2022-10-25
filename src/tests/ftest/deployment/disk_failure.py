@@ -13,7 +13,7 @@ from avocado.utils import process
 
 class DiskFailureTest(OSAUtils):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Verify network failure is properly handled and recovered.
+    """Test class Description: Verify disk failure is properly handled.
 
     :avocado: recursive
     """
@@ -42,8 +42,6 @@ class DiskFailureTest(OSAUtils):
                 self.fail("dmg command failed: {}".format(data['error']))
             else:
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
-        # uuid = []
-        # ranks = []
         device_info = {}
         count = 0
         for value in list(resp['host_storage_map'].values()):
@@ -65,7 +63,7 @@ class DiskFailureTest(OSAUtils):
         Args:
             device_id (str): Device UUID
         Returns:
-            dmg device faulty information.
+            resp (json format) : dmg device faulty information.
         """
         data = {}
         if nvme_id is None:
@@ -85,13 +83,8 @@ class DiskFailureTest(OSAUtils):
         """Run IOR and create disk failures while IO is happening.
 
         Args:
-            ior_namespace (str): Yaml namespace that defines the object class used for
-                IOR.
-            container_namespace (str): Yaml namespace that defines the container
-                redundancy factor.
+            num_pool : Total number of pools to run the testing.
         """
-        #dev_id = []
-        #rank = []
         device_info = {}
         pool = {}
 
@@ -106,7 +99,7 @@ class DiskFailureTest(OSAUtils):
         for val in range(0, num_pool):
             threads = []
             self.pool = pool[val]
-            # The following thread runs while performing osa operations.
+            # The following thread runs while raising disk faults
             threads.append(threading.Thread(target=self.run_ior_thread,
                                             kwargs={"action": "Write",
                                                     "oclass": self.ior_cmd.dfs_oclass.value,
@@ -130,8 +123,7 @@ class DiskFailureTest(OSAUtils):
             self.print_and_assert_on_rebuild_failure(done)
             for thrd in threads:
                 thrd.join()
-                #if not self.out_queue.empty():
-                #    self.assert_on_exception()
+
             # Now replace the faulty NVME device.
             count = 0
             for key in device_info.keys():
@@ -140,10 +132,12 @@ class DiskFailureTest(OSAUtils):
                                                                  new_uuid=device_info[key]["uuid"])
                     time.sleep(10)
                     self.log.info(resp)
+                    # Convert target list to string
+                    targets = ",".join(map(str, device_info[key]["tgts"]))
                     # Now reintegrate the target to appropriate rank.
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
                                                                device_info[key]["rank"],
-                                                               device_info[key]["tgts"])
+                                                               targets)
                     time.sleep(15)
                 count = count + 1
             done = "Faulty NVMEs replaced"
@@ -174,17 +168,16 @@ class DiskFailureTest(OSAUtils):
         """
         self.verify_disk_failure(1)
 
-    def test_disk_reset(self):
+    def test_disk_fault_to_normal(self):
         """Jira ID: DAOS-11284
-        Test disk failures during the IO operation.
+        Test a disk inducing faults and resetting is back to normal state.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=deployment
-        :avocado: tags=disk_reset
+        :avocado: tags=disk_fault_to_normal
         """
         device_info = {}
-
         # Get the list of device ids.
         device_info = self.get_nvme_device_info()
         for key in device_info.keys():
