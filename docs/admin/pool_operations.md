@@ -104,6 +104,13 @@ The capacity of the pool can be specified in three different ways:
     So in the first example above, specifying `--scm-size=256GB`
     would fail as 256 GB is smaller than the minimum 256 GiB.
 
+!!! warning
+    Concurrent creation of pools using **size percentage** could lead to
+    `ENOSPACE` errors.  Indeed, these operations are not atomic and the overall
+    available size retrieved in the first step could be different from the size
+    actually available when the second step will be performed (i.e. allocation
+    of space for the pool).
+
 Examples:
 
 To create a pool labeled `tank`:
