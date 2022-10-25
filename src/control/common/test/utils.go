@@ -191,6 +191,9 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 	if t.Failed() {
 		fmt.Printf("captured log output:\n%s", buf.String())
 	}
+	if r, ok := buf.(interface{ Reset() }); ok {
+		r.Reset()
+	}
 }
 
 // DefaultCmpOpts gets default go-cmp comparison options for tests.

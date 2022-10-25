@@ -133,9 +133,15 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 			},
 		}
 
-		if err := db.AddPoolService(ps); err != nil {
+		lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+		if err != nil {
 			t.Fatal(err)
 		}
+
+		if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+			t.Fatal(err)
+		}
+		lock.Release()
 	}
 	t.Log("waiting for snapshot")
 	waitForSnapshots(ctx, t, log, dbCfg, 2)

@@ -758,15 +758,21 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			db := MockDatabase(t, log)
-			for _, ps := range tc.poolSvcs {
-				if err := db.AddPoolService(ps); err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			defer cancel()
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+					t.Fatal(err)
+				}
+				lock.Release()
+			}
 
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
@@ -838,11 +844,18 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			ctx := context.Background()
 			db := MockDatabase(t, log)
 			for _, ps := range tc.poolSvcs {
-				if err := db.AddPoolService(ps); err != nil {
+				lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+				if err != nil {
 					t.Fatal(err)
 				}
+
+				if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+					t.Fatal(err)
+				}
+				lock.Release()
 			}
 
 			poolSvcs, err := db.PoolServiceList(tc.all)

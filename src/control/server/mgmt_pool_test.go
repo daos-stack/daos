@@ -34,6 +34,19 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
+func getPoolLockCtx(t *testing.T, parent context.Context, sysdb *raft.Database, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	lock, err := sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return lock, lock.InContext(parent)
+}
+
 func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolService) {
 	t.Helper()
 
@@ -54,7 +67,9 @@ func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolServi
 		i++
 	}
 
-	if err := sysdb.AddPoolService(ps); err != nil {
+	lock, ctx := getPoolLockCtx(t, nil, sysdb, ps.PoolUUID)
+	defer lock.Release()
+	if err := sysdb.AddPoolService(ctx, ps); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -112,16 +127,17 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			if err := svc.sysdb.AddPoolService(&system.PoolService{
-				PoolUUID: uuid.MustParse(test.MockUUID(0)),
+			poolUUID := uuid.MustParse(test.MockUUID(0))
+			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
+			defer lock.Release()
+
+			if err := svc.sysdb.AddPoolService(ctx, &system.PoolService{
+				PoolUUID: poolUUID,
 				State:    tc.state,
 				Storage:  &system.PoolServiceStorage{},
 			}); err != nil {
 				t.Fatal(err)
 			}
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
 
 			req := &mgmtpb.PoolCreateReq{
 				Sys:        build.DefaultSystemName,
@@ -887,7 +903,10 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			if poolSvc == nil {
 				poolSvc = testPoolService
 			}
-			if err := tc.mgmtSvc.sysdb.AddPoolService(poolSvc); err != nil {
+			lock, ctx := getPoolLockCtx(t, nil, tc.mgmtSvc.sysdb, poolSvc.PoolUUID)
+			defer lock.Release()
+
+			if err := tc.mgmtSvc.sysdb.AddPoolService(ctx, poolSvc); err != nil {
 				t.Fatal(err)
 			}
 
@@ -902,7 +921,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(context.TODO(), tc.req)
+			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(ctx, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1302,9 +1321,11 @@ func TestListPools_Success(t *testing.T) {
 
 	svc := newTestMgmtSvc(t, log)
 	for _, ps := range testPools {
-		if err := svc.sysdb.AddPoolService(ps); err != nil {
+		lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, ps.PoolUUID)
+		if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 			t.Fatal(err)
 		}
+		lock.Release()
 		expectedResp.Pools = append(expectedResp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,

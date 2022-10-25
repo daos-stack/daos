@@ -209,7 +209,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		}
 	case *fault.Fault:
 		switch e.Code {
-		case code.ServerDataPlaneNotStarted:
+		case code.ServerDataPlaneNotStarted, code.SystemPoolLocked:
 			return true
 		default:
 			return false
