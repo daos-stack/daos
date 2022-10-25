@@ -473,12 +473,12 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	 */
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
-	idx = grp_start + d_rand() % grp_size;
-	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
+	idx = d_rand() % obj_get_replicas(obj);
+	for (i = 0; i < obj_get_replicas(obj); i++) {
 		uint32_t tgt_id;
 		int index;
 
-		index = idx % grp_size + grp_start;
+		index = (idx + i) % obj_get_replicas(obj) + grp_start;
 		/* let's skip the rebuild shard */
 		if (obj->cob_shards->do_shards[index].do_rebuilding)
 			continue;
@@ -504,7 +504,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	if (i == grp_size)
+	if (i == obj_get_replicas(obj))
 		return -DER_NONEXIST;
 
 	return idx;
@@ -5415,6 +5415,16 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 
+	/* The data might be needed to forwarded to other targets (or not forwarded anymore)
+	 * after pool map refreshed, especially during online extending or reintegration,
+	 * which needs to be binded or unbinded.
+	 * So let's free the existent bulk, and recreate the bulk later.
+	 */
+	if (obj_auxi->io_retry && obj_auxi->bulks != NULL) {
+		obj_bulk_fini(obj_auxi);
+		obj_io_set_new_shard_task(obj_auxi);
+	}
+
 	rc = obj_update_shards_get(obj, args, map_ver, obj_auxi, &shard, &shard_cnt);
 	if (rc != 0) {
 		D_ERROR(DF_OID" get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
@@ -6797,9 +6807,9 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	return rc;
 }
 
-daos_oclass_id_t
-daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-		    daos_oclass_hints_t hints, uint32_t args)
+int
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+		    uint32_t args, daos_oclass_id_t *cid)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
@@ -6821,7 +6831,10 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	props = dc_cont_hdl2props(coh);
 	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
+	if (rc) {
+		D_ERROR("pl_map_query failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 	dc_pool_put(pool);
 
 	rc = dc_cont_hdl2redunfac(coh, &rf);
@@ -6831,7 +6844,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	}
 	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
-		return 0;
+		return rc;
 
-	return (ord << OC_REDUN_SHIFT) | nr_grp;
+	*cid = (ord << OC_REDUN_SHIFT) | nr_grp;
+	return 0;
 }
