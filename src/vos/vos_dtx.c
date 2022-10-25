@@ -2231,7 +2231,7 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("Not allow to set flag on committed/aborted DTX entry "DF_DTI"\n",
+			D_ERROR("Not allow to set flag on committed (1) DTX entry "DF_DTI"\n",
 				DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
@@ -2244,7 +2244,7 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
 		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
 			dae->dae_committable ? "committable" :
-			dae->dae_committed ? "committed" : "aborted", DP_DTI(dti));
+			dae->dae_committed ? "committed (2)" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
