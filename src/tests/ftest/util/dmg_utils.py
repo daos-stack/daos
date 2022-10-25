@@ -321,7 +321,7 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
-    def storage_identify_vmd(self, uuid=None,  verbose=False):
+    def storage_identify_vmd(self, uuid=None, verbose=False):
         """Get the result of the 'dmg storage identify vmd".
 
         Args:
@@ -339,7 +339,7 @@ class DmgCommand(DmgCommandBase):
             ("storage", "identify", "vmd"), uuid=uuid,
             verbose=verbose)
 
-    def storage_replace_nvme(self, old_uuid=None,  new_uuid=None, no_reint=False):
+    def storage_replace_nvme(self, old_uuid=None, new_uuid=None, no_reint=False):
         """Get the result of the 'dmg storage replace nvme' command.
 
         Args:
