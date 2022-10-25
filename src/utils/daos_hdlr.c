@@ -1159,12 +1159,14 @@ fs_copy_dir(struct cmd_args_s *ap,
 		D_GOTO(out, rc);
 	}
 
-	/* create the destination directory if it does not exist */
-	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if (rc == EEXIST) {
-		DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-	} else if (rc != 0) {
-		D_GOTO(out, rc = daos_errno2der(rc));
+	/* create the destination directory if it does not exist. Assume root always exists */
+	if (strcmp(dst_path, "/") != 0) {
+		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
+		if (rc == EEXIST) {
+			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
+		} else if (rc != 0) {
+			D_GOTO(out, rc = daos_errno2der(rc));
+		}
 	}
 	/* copy all directory entries */
 	while (1) {

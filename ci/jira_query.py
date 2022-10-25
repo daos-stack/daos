@@ -5,6 +5,8 @@ import os
 import sys
 import json
 import urllib
+import random
+import string
 import jira
 
 # Script to improve interaction with Jenkins, GitHub and Jira.  This is intended to work in several
@@ -40,9 +42,15 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 def set_output(key, value):
     """ Set a key-value pair in GitHub actions metadata"""
 
-    clean_value = value.replace('\n', '%0A')
-    print(f'::set-output name={key}::{clean_value}')
-    print(f'{key}:{value}')
+    env_file = os.getenv('GITHUB_OUTPUT')
+    if not env_file:
+        clean_value = value.replace('\n', '%0A')
+        print(f'::set-output name={key}::{clean_value}')
+        return
+
+    delim = ''.join(random.choices(string.ascii_uppercase, k=7))  # nosec
+    with open(env_file, 'a') as file:
+        file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
 # pylint: disable=too-many-branches
