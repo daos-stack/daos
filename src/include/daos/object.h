@@ -237,8 +237,8 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-				   daos_oclass_hints_t hints, uint32_t args);
+int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+			uint32_t args, daos_oclass_id_t *cid);
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
