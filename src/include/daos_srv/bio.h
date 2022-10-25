@@ -88,6 +88,8 @@ struct bio_sglist {
 #define			 BIO_MAX_VOS_TGT_CNT	96
 /* System xstream target ID */
 #define			 BIO_SYS_TGT_ID		1024
+/* for standalone VOS */
+#define			 BIO_STANDALONE_TGT_ID	-1
 
 /* Opaque I/O descriptor */
 struct bio_desc;

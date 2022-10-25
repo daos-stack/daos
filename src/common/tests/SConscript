@@ -55,6 +55,8 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     daos_build.test(tenv, 'policy_tests', 'policy_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'ad_mem_tests', 'ad_mem_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv)
     define_compress_timing(daos_build, tenv)
 

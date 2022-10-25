@@ -353,6 +353,11 @@
 #    # The size of ram is specified by scm_size in GB units.
 #    scm_size: 16
 #
+#    # When class is set to ram, tmpfs will be mounted with hugepage
+#    # support, if the kernel supports it. If this is not desirable,
+#    # the behavior may be disabled here.
+#    scm_hugepages_disabled: true
+#
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine
 #    # instance.

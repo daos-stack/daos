@@ -137,6 +137,12 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	return tc
 }
 
+// WithScmDisableHugepages disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+	tc.Scm.DisableHugepages = true
+	return tc
+}
+
 // WithScmMountPoint sets the path to the device used for SCM storage.
 func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	tc.Scm.MountPoint = scmPath
@@ -265,12 +271,12 @@ func (tcs TierConfigs) Validate() error {
 
 // Validation of bdev tier role assignments is based on the following assumptions and rules:
 //
-// - A role can only be assigned to one entire tier, i.e. tier 2 & 3 cannot both be assigned the
-//   Meta role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
-//   in the case where > 3 bdev tiers exist.
-// - All roles (WAL, Meta and Data) need to be assigned in bdev tiers if scm class is ram.
-// - If the (first) scm tier is of class dcpm, then only one bdev tier with Data role is supported,
-//   no third tier (for now).
+//   - A role can only be assigned to one entire tier, i.e. tier 2 & 3 cannot both be assigned the
+//     Meta role. This doesn’t apply to the Data role which can be applied to multiple tiers e.g.
+//     in the case where > 3 bdev tiers exist.
+//   - All roles (WAL, Meta and Data) need to be assigned in bdev tiers if scm class is ram.
+//   - If the (first) scm tier is of class dcpm, then only one bdev tier with Data role is supported,
+//     no third tier (for now).
 func (tcs TierConfigs) validateBdevTierRoles() error {
 	sc := tcs.ScmConfigs()[0]
 	bcs := tcs.BdevConfigs()
@@ -316,13 +322,13 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 // Set NVME class tier roles either based on explicit settings or heuristics.
 //
 // Role assignments will be decided based on the following rule set:
-// - For 1 bdev tier, all roles will be assigned to that tier.
-// - For 2 bdev tiers, WAL and Meta roles will be assigned to the first bdev tier and Data to
-//   the second bdev tier.
-// - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
-//   second bdev tier and Data to all remaining bdev tiers.
-// - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
-// - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
+//   - For 1 bdev tier, all roles will be assigned to that tier.
+//   - For 2 bdev tiers, WAL and Meta roles will be assigned to the first bdev tier and Data to
+//     the second bdev tier.
+//   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
+//     second bdev tier and Data to all remaining bdev tiers.
+//   - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
+//   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) assignBdevTierRoles() error {
 	scs := tcs.ScmConfigs()
 	bcs := tcs.BdevConfigs()
@@ -418,10 +424,11 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint    string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize   uint     `yaml:"scm_size,omitempty"`
-	DeviceList    []string `yaml:"scm_list,omitempty"`
-	NumaNodeIndex uint     `yaml:"-"`
+	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DeviceList       []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex    uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -437,6 +444,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
+		}
+		if sc.DisableHugepages {
+			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
 		if sc.RamdiskSize == 0 {
