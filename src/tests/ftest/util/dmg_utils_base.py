@@ -7,8 +7,7 @@ from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils_base import FormattedParameter, CommandWithParameters,\
-    PositionalParameter, CommandWithPositionalParameters
+from command_utils_base import FormattedParameter, CommandWithParameters, BasicParameter
 from command_utils import CommandWithSubCommand, YamlCommand
 from general_utils import nodeset_append_suffix
 
@@ -133,67 +132,67 @@ class DmgCommandBase(YamlCommand):
             else:
                 self.sub_command_class = None
 
-        class DisableSubCommand(CommandWithPositionalParameters):
+        class DisableSubCommand(CommandWithParameters):
             """Defines an object for the dmg check disable command."""
 
             def __init__(self):
                 """Create a dmg check disable object."""
                 super().__init__("/run/dmg/check/disable/*", "disable")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
-        class EnableSubCommand(CommandWithPositionalParameters):
+        class EnableSubCommand(CommandWithParameters):
             """Defines an object for the dmg check enable command."""
 
             def __init__(self):
                 """Create a dmg check enable object."""
                 super().__init__("/run/dmg/check/enable/*", "enable")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
-        class PropSubCommand(CommandWithPositionalParameters):
+        class PropSubCommand(CommandWithParameters):
             """Defines an object for the dmg check prop command."""
 
             def __init__(self):
                 """Create a dmg check prop object."""
                 super().__init__("/run/dmg/check/prop/*", "prop")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
-        class QuerySubCommand(CommandWithPositionalParameters):
+        class QuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg check query command."""
 
             def __init__(self):
                 """Create a dmg check query object."""
                 super().__init__("/run/dmg/check/query/*", "query")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
-        class RepairSubCommand(CommandWithPositionalParameters):
+        class RepairSubCommand(CommandWithParameters):
             """Defines an object for the dmg check repair command."""
 
             def __init__(self):
                 """Create a dmg check repair object."""
                 super().__init__("/run/dmg/check/repair/*", "repair")
-                self.seq_num = PositionalParameter(1)
-                self.action = PositionalParameter(2)
+                self.seq_num = BasicParameter(None, position=1)
+                self.action = BasicParameter(None, position=2)
                 self.for_all = FormattedParameter("--for-all", False)
 
-        class StartSubCommand(CommandWithPositionalParameters):
+        class StartSubCommand(CommandWithParameters):
             """Defines an object for the dmg check start command."""
 
             def __init__(self):
                 """Create a dmg check start object."""
                 super().__init__("/run/dmg/check/start/*", "start")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.dry_run = FormattedParameter("--dry-run", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.failout = FormattedParameter("--failout", False)
                 self.auto = FormattedParameter("--auto", False)
 
-        class StopSubCommand(CommandWithPositionalParameters):
+        class StopSubCommand(CommandWithParameters):
             """Defines an object for the dmg check stop command."""
 
             def __init__(self):
                 """Create a dmg check stop object."""
                 super().__init__("/run/dmg/check/stop/*", "stop")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
     class ConfigSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg config sub command."""
@@ -336,69 +335,69 @@ class DmgCommandBase(YamlCommand):
                 self.label = FormattedParameter("--label={}", None)
                 self.nranks = FormattedParameter("--nranks={}", None)
 
-        class DeleteAclSubCommand(CommandWithPositionalParameters):
+        class DeleteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool delete-acl command."""
 
             def __init__(self):
                 """Create a dmg pool delete-acl command object."""
                 super().__init__("/run/dmg/pool/delete-acl/*", "delete-acl")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.principal = FormattedParameter("-p {}", None)
 
-        class DestroySubCommand(CommandWithPositionalParameters):
+        class DestroySubCommand(CommandWithParameters):
             """Defines an object for the dmg pool destroy command."""
 
             def __init__(self):
                 """Create a dmg pool destroy command object."""
                 super().__init__("/run/dmg/pool/destroy/*", "destroy")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.force = FormattedParameter("--force", False)
                 self.recursive = FormattedParameter("--recursive", False)
 
-        class DrainSubCommand(CommandWithPositionalParameters):
+        class DrainSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool drain command."""
 
             def __init__(self):
                 """Create a dmg pool drain command object."""
                 super().__init__("/run/dmg/pool/drain/*", "drain")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
-        class EvictSubCommand(CommandWithPositionalParameters):
+        class EvictSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool evict command."""
 
             def __init__(self):
                 """Create a dmg pool evict command object."""
                 super().__init__("/run/dmg/pool/evict/*", "evict")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
 
-        class ExcludeSubCommand(CommandWithPositionalParameters):
+        class ExcludeSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool exclude command."""
 
             def __init__(self):
                 """Create a dmg pool exclude command object."""
                 super().__init__("/run/dmg/pool/exclude/*", "exclude")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
-        class ExtendSubCommand(CommandWithPositionalParameters):
+        class ExtendSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool extend command."""
 
             def __init__(self):
                 """Create a dmg pool extend command object."""
                 super().__init__("/run/dmg/pool/extend/*", "extend")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.ranks = FormattedParameter("--ranks={}", None)
 
-        class GetAclSubCommand(CommandWithPositionalParameters):
+        class GetAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool get-acl command."""
 
             def __init__(self):
                 """Create a dmg pool get-acl command object."""
                 super().__init__("/run/dmg/pool/get-acl/*", "get-acl")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.outfile = FormattedParameter("--outfile={}", None)
                 self.force = FormattedParameter("--force", False)
                 self.verbose = FormattedParameter("--verbose", False)
@@ -412,52 +411,52 @@ class DmgCommandBase(YamlCommand):
                 self.no_query = FormattedParameter("--no-query", False)
                 self.verbose = FormattedParameter("--verbose", False)
 
-        class OverwriteAclSubCommand(CommandWithPositionalParameters):
+        class OverwriteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool overwrite-acl command."""
 
             def __init__(self):
                 """Create a dmg pool overwrite-acl command object."""
                 super().__init__(
                     "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.acl_file = FormattedParameter("-a {}", None)
 
-        class QuerySubCommand(CommandWithPositionalParameters):
+        class QuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg pool query command."""
 
             def __init__(self):
                 """Create a dmg pool query command object."""
                 super().__init__("/run/dmg/pool/query/*", "query")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.show_enabled = FormattedParameter("--show-enabled", False)
                 self.show_disabled = FormattedParameter("--show-disabled", False)
 
-        class ReintegrateSubCommand(CommandWithPositionalParameters):
+        class ReintegrateSubCommand(CommandWithParameters):
             """Defines an object for dmg pool reintegrate command."""
 
             def __init__(self):
                 """Create a dmg pool reintegrate command object."""
                 super().__init__("/run/dmg/pool/reintegrate/*", "reintegrate")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
-        class SetPropSubCommand(CommandWithPositionalParameters):
+        class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""
 
             def __init__(self):
                 """Create a dmg pool set-prop command object."""
                 super().__init__("/run/dmg/pool/set-prop/*", "set-prop")
-                self.pool = PositionalParameter(1)
-                self.properties = PositionalParameter(2)
+                self.pool = BasicParameter(None, position=1)
+                self.properties = BasicParameter(None, position=2)
 
-        class UpdateAclSubCommand(CommandWithPositionalParameters):
+        class UpdateAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool update-acl command."""
 
             def __init__(self):
                 """Create a dmg pool update-acl command object."""
                 super().__init__("/run/dmg/pool/update-acl/*", "update-acl")
-                self.pool = PositionalParameter(1)
+                self.pool = BasicParameter(None, position=1)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
 

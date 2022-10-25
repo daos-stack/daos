@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -283,7 +283,7 @@ This is the package that bridges the difference between the MOFED openmpi
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
-%global _debuginfo_subpackages 0
+%global _debuginfo_subpackages 1
 %debug_package
 %endif
 
@@ -528,9 +528,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.1.101-3
+- Set flag to build per-subpackage debuginfo packages for Leap 15
+
 * Thu Oct 6 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.101-2
 - Rename daos_admin -> daos_server_helper
-
 
 * Tue Sep 20 2022 Johann Lombardi <johann.lombardi@intel.com> 2.3.101-1
 - Bump version to 2.3.101

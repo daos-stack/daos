@@ -4,15 +4,18 @@ timeouts:
   test_create_and_query: 180
 server_config:
   name: daos_server
-  servers:
+  engines_per_host: 1
+  engines:
     0:
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-  name: daos_server
   control_method: dmg
   scm_size: 10000000000  # 10 GB
   nvme_size: 100000000000  # 100 GB

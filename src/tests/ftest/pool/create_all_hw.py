@@ -29,7 +29,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
 
         self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
 
-        self.engine_target_size = int(self.params.get("targets", "server_config/servers/0/*"))
+        self.engine_target_size = int(self.server_managers[-1].get_config_value("targets"))
         self.log.info("Running test with %d targets", self.engine_target_size)
 
     def get_pool_available_bytes(self):
