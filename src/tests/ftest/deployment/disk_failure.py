@@ -113,7 +113,7 @@ class DiskFailureTest(OSAUtils):
 
             count = 0
             # Evict some of the targets from the system
-            for key in device_info.keys():
+            for key, _ in device_info.items():
                 if count < 1:
                     resp = self.set_nvme_faulty(device_info[key]["uuid"])
                     time.sleep(5)
@@ -126,7 +126,7 @@ class DiskFailureTest(OSAUtils):
 
             # Now replace the faulty NVME device.
             count = 0
-            for key in device_info.keys():
+            for key, _ in device_info.items():
                 if count < 1:
                     resp = self.dmg_command.storage_replace_nvme(old_uuid=device_info[key]["uuid"],
                                                                  new_uuid=device_info[key]["uuid"])
@@ -180,7 +180,7 @@ class DiskFailureTest(OSAUtils):
         device_info = {}
         # Get the list of device ids.
         device_info = self.get_nvme_device_info()
-        for key in device_info.keys():
+        for key, _ in device_info.items():
             resp = self.dmg_command.storage_replace_nvme(old_uuid=device_info[key]["uuid"],
                                                          new_uuid=device_info[key]["uuid"])
             self.log.info(resp)
