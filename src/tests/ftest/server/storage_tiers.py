@@ -49,17 +49,17 @@ class StorageTiers(TestWithServers):
                         "scm_list": self.params.get("scm_list", namespace),
                         "scm_mount": self.params.get("scm_mount", namespace)
                     })
+                elif tier == 1:
+                    expected[engine].append({
+                        "class": self.params.get("class", namespace),
+                        "bdev_list": self.params.get("bdev_list", namespace),
+                    })
                 else:
                     expected[engine].append({
                         "class": self.params.get("class", namespace),
-                        "bdev_list": self.params.get("bdev_list", namespace)
+                        "bdev_list": self.params.get("bdev_list", namespace),
+                        "role": self.params.get("role", namespace)
                     })
-                    if tier == 2:
-                        expected[engine][-1]["tier"] = "wal"
-                    elif tier == 3:
-                        expected[engine][-1]["tier"] = "index"
-                    elif tier == 4:
-                        expected[engine][-1]["tier"] = "data"
 
         common_config = CommonConfig("daos_server", DaosServerTransportCredentials())
         config = DaosServerYamlParameters(None, common_config)
