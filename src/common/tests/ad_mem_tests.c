@@ -658,6 +658,37 @@ adt_tx_perf(void **state)
 	printf("TX rate = %d/sec\n", ops);
 }
 
+static void
+adt_no_space(void **state)
+{
+	const int	     alloc_size = 4096;
+	struct ad_tx	     tx;
+	struct ad_reserv_act act;
+	daos_off_t	     addr;
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Consume all space\n");
+	for (i = 0;; i++) {
+		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+		if (addr == 0) {
+			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
+			       (int)((alloc_size * i) >> 20), arena);
+			return;
+		}
+
+		rc = ad_tx_begin(adt_bh, &tx);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_publish(&tx, &act, 1);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_end(&tx, 0);
+		assert_rc_equal(rc, 0);
+	}
+}
+
 static int
 adt_setup(void **state)
 {
@@ -709,6 +740,8 @@ main(void)
 		cmocka_unit_test(adt_rsv_free_2),
 		cmocka_unit_test(adt_delayed_free_1),
 		cmocka_unit_test(adt_tx_perf),
+		/* Must be the last test */
+		cmocka_unit_test(adt_no_space),
 	};
 	int	rc;
 

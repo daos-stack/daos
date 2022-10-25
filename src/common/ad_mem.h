@@ -319,6 +319,12 @@ blob_addr(struct ad_blob *blob)
 	return blob->bb_store.stor_addr;
 }
 
+static inline int
+blob_arena_max(struct ad_blob *blob)
+{
+	return blob->bb_pgs_nr;
+}
+
 void blob_addref(struct ad_blob *blob);
 void blob_decref(struct ad_blob *blob);
 void *blob_addr2ptr(struct ad_blob *blob, daos_off_t addr);
