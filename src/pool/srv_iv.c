@@ -1459,7 +1459,7 @@ ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
 	arg.pool = pool;
 	arg.eventual = eventual;
 	rc = dss_ult_create(pool_iv_srv_hdl_fetch_ult, &arg, DSS_XS_SYS,
-			    0, DSS_DEEP_STACK_SZ, NULL);
+			    0, 0, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
