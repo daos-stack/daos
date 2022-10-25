@@ -325,7 +325,7 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 /* smd_lock() and smd_tx_begin() are called by caller */
 int
 smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
-				uint32_t *tgts)
+			      uint32_t *tgts)
 {
 	struct smd_pool		pool;
 	struct d_uuid		id;

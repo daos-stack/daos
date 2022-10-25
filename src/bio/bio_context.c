@@ -703,7 +703,7 @@ get_super_cb(void *arg1, spdk_blob_id blobid, int bserrno)
 
 int
 bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, enum smd_dev_type st,
-		spdk_blob_id open_blobid)
+	      spdk_blob_id open_blobid)
 {
 	struct bio_xs_context		*xs_ctxt = ctxt->bic_xs_ctxt;
 	spdk_blob_id			 blob_id;
