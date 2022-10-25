@@ -6797,9 +6797,9 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	return rc;
 }
 
-daos_oclass_id_t
-daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-		    daos_oclass_hints_t hints, uint32_t args)
+int
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+		    uint32_t args, daos_oclass_id_t *cid)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
@@ -6821,7 +6821,10 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	props = dc_cont_hdl2props(coh);
 	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
+	if (rc) {
+		D_ERROR("pl_map_query failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 	dc_pool_put(pool);
 
 	rc = dc_cont_hdl2redunfac(coh, &rf);
@@ -6831,7 +6834,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	}
 	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
-		return 0;
+		return rc;
 
-	return (ord << OC_REDUN_SHIFT) | nr_grp;
+	*cid = (ord << OC_REDUN_SHIFT) | nr_grp;
+	return 0;
 }
