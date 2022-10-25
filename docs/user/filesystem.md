@@ -278,7 +278,7 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/daos_dfuse_samir
 $
 ```
 
-#### Via fstab.
+#### Via fstab
 
 Only root can run 'mount -a' command so this example should be run as root user.
 
@@ -335,7 +335,7 @@ dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
 $
 ```
 
-#### Via systemd for user.
+#### Via systemd for user
 
 User can mount/unmount the dfuse using systemd.
 
@@ -405,7 +405,7 @@ $ ls -l /scratch_fs/samirrav_dfuse/test1
 
 ```
 
-#### Via systemd for root.
+#### Via systemd for root
 
 Root user can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
 Consider the previous example /etc/fstab entry which has the admin_pool and admin_cont.
@@ -486,7 +486,7 @@ Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /scratch_fs/r
 $
 ```
 
-#### Via systemd during system power ON.
+#### Via systemd during system power ON
 
   Same systemd file mention in previous example is used to mount the fuse during system power ON.
 
