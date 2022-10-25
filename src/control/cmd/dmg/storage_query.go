@@ -13,19 +13,19 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 type rankCmd struct {
 	Rank *uint32 `short:"r" long:"rank" description:"Constrain operation to the specified server rank"`
 }
 
-func (r *rankCmd) GetRank() system.Rank {
+func (r *rankCmd) GetRank() ranklist.Rank {
 	if r.Rank == nil {
-		return system.NilRank
+		return ranklist.NilRank
 	}
-	return system.Rank(*r.Rank)
+	return ranklist.Rank(*r.Rank)
 }
 
 type smdQueryCmd struct {
@@ -78,7 +78,7 @@ func (cmd *devHealthQueryCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		OmitPools:        true,
 		IncludeBioHealth: true,
-		Rank:             system.NilRank,
+		Rank:             ranklist.NilRank,
 		UUID:             cmd.UUID,
 	}
 	return cmd.makeRequest(ctx, req)
@@ -95,7 +95,7 @@ func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
 	req := &control.SmdQueryReq{
 		OmitPools:        true,
 		IncludeBioHealth: true,
-		Rank:             system.Rank(cmd.Rank),
+		Rank:             ranklist.Rank(cmd.Rank),
 		Target:           strconv.Itoa(int(cmd.TgtId)),
 	}
 	return cmd.makeRequest(ctx, req)

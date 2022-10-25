@@ -8,7 +8,6 @@
 from getpass import getuser
 import math
 import os
-import socket
 import time
 import random
 import yaml
@@ -21,11 +20,15 @@ from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd, get_primary_group
+    stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
+from run_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
-from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils_params import \
+    DaosServerTransportCredentials, DaosServerYamlParameters, EngineYamlParameters, \
+    StorageTierYamlParameters
+from user_utils import get_chown_command
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -166,8 +169,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), local_host.split())
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -394,6 +396,7 @@ class DaosServerManager(SubprocessManager):
         complete = False
         timed_out = False
         start = time.time()
+        elapsed = 0.0
 
         # Search for patterns in the dmg system query output:
         #   - the expected number of pattern matches are detected (success)
@@ -403,12 +406,14 @@ class DaosServerManager(SubprocessManager):
                 and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
-            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            elapsed = time.time() - start
+            timed_out = elapsed > self.manager.job.pattern_timeout.value
             if not complete and not timed_out:
                 time.sleep(1)
 
         # Summarize results
-        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+        self.manager.job.report_subprocess_status(
+            elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 
@@ -462,7 +467,7 @@ class DaosServerManager(SubprocessManager):
 
         cmd_list = set()
         for engine_params in self.manager.job.yaml.engine_params:
-            scm_mount = engine_params.scm_mount.value
+            scm_mount = engine_params.get_value("scm_mount")
 
             # Support single or multiple scm_mount points
             if not isinstance(scm_mount, list):
@@ -470,7 +475,8 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "sudo chown -R {}:{} {}".format(user, get_primary_group(user), " ".join(scm_mount)))
+                "sudo -n {}".format(get_chown_command(user, options="-R", file=" ".join(scm_mount)))
+            )
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
@@ -859,7 +865,7 @@ class DaosServerManager(SubprocessManager):
                 yaml.dump(generated_yaml, write_file, default_flow_style=False)
         except Exception as error:
             raise CommandFailure(
-                "Error writing the yaml file! {}: {}".format(temp_file_path, error)) from error
+                f"Error writing the yaml file! {temp_file_path}: {error}") from error
 
         # Copy the config from temp dir to /etc/daos of the server node.
         default_server_config = get_default_config_file("server")
@@ -868,8 +874,7 @@ class DaosServerManager(SubprocessManager):
                 dst_hosts, temp_file_path, default_server_config, verbose=False, sudo=True)
         except DaosTestError as error:
             raise CommandFailure(
-                "ERROR: Copying yaml configuration file to {}: "
-                "{}".format(dst_hosts, error)) from error
+                f"ERROR: Copying yaml configuration file to {dst_hosts}: {error}") from error
 
         # Before restarting daos_server, we need to clear SCM. Unmount the mount
         # point, wipefs the disks, etc. This clearing step is built into the
@@ -879,24 +884,22 @@ class DaosServerManager(SubprocessManager):
         self.log.info("Resetting engine_params")
         self.manager.job.yaml.engine_params = []
         engines = generated_yaml["engines"]
-        for idx, engine in enumerate(engines):
-            self.log.info("engine %d", idx)
-            for storage_tier in engine["storage"]:
-                if storage_tier["class"] != "dcpm":
-                    continue
-
-                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
-                self.log.info("class = %s", storage_tier["class"])
-                self.log.info("scm_list = %s", storage_tier["scm_list"])
-
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
-                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
-                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
-                per_engine_yaml_parameters.scm_size.update(None)
-                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
-                per_engine_yaml_parameters.reset_yaml_data_updated()
-
-                self.manager.job.yaml.engine_params.append(per_engine_yaml_parameters)
+        for index, engine in enumerate(engines):
+            self.log.info("engine %d", index)
+            engine_yaml_parameters = EngineYamlParameters(index)
+            engine_yaml_parameters.storage_tiers = []
+            for tier, storage_tier in enumerate(engine["storage"]):
+                self.log.info("  storage tier %s:", tier)
+                storage_tier_parameters = StorageTierYamlParameters(index, tier)
+                for name in storage_tier_parameters.get_param_names():
+                    param = getattr(storage_tier_parameters, name)
+                    name = param.yaml_key or name
+                    if name in storage_tier:
+                        param.update(storage_tier[name])
+                        self.log.info("    %s = %s", name, storage_tier[name])
+                engine_yaml_parameters.storage_tiers.append(storage_tier_parameters)
+            self.manager.job.yaml.engine_params.append(engine_yaml_parameters)
+        self.manager.job.yaml.engine_params.reset_yaml_data_updated()
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

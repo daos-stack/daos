@@ -671,8 +671,13 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		/** TODO: set Lustre FID here. */
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
+		dfs_attr.da_dir_oclass_id = attrp->da_dir_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
+		if (attrp->da_hints[0] != 0) {
+			strncpy(dfs_attr.da_hints, attrp->da_hints, DAOS_CONT_HINT_MAX_LEN);
+			dfs_attr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
+		}
 		if (create_with_label)
 			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
 							&attrp->da_cuuid, NULL, NULL);
@@ -719,7 +724,6 @@ static int
 duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
 			mode_t mode, struct duns_attr_t *attrp)
 {
-	char			oclass[10];
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
 	int			rc, rc2;
@@ -734,7 +738,6 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 	}
 
 	uuid_unparse(info.pi_uuid, attrp->da_pool);
-	daos_oclass_id2name(attrp->da_oclass_id, oclass);
 
 	/* create container */
 	rc = create_cont(poh, attrp, false);
@@ -789,7 +792,7 @@ err:
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
-	char			oclass[10], type[10];
+	char			type[10];
 	daos_pool_info_t	info = {0};
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
@@ -933,10 +936,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	uuid_unparse(info.pi_uuid, attrp->da_pool);
-	if (attrp->da_oclass_id != OC_UNKNOWN)
-		daos_oclass_id2name(attrp->da_oclass_id, oclass);
-	else
-		strcpy(oclass, "UNKNOWN");
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */

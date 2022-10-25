@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,13 +7,12 @@ import time
 import random
 import threading
 import copy
+import queue
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
 from exception_utils import CommandFailure
 from test_utils_pool import add_pool
-from apricot import skipForTicket
-import queue
 
 
 class OSAOfflineParallelTest(OSAUtils):
@@ -92,9 +90,9 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6) #nosec
-        target_list.append(n)
-        target_list.append(n+1)
+        exc = random.randint(0, 6)  # nosec
+        target_list.append(exc)
+        target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Exclude rank 2.
@@ -212,9 +210,9 @@ class OSAOfflineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands in parallel.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=offline_parallel,offline_parallel_basic_test
+        :avocado: tags=offline_parallel,test_osa_offline_parallel_test
         """
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, data=True)
@@ -227,9 +225,9 @@ class OSAOfflineParallelTest(OSAUtils):
         without enabling checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa
-        :avocado: tags=offline_parallel,offline_parallel_without_csum
+        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -244,9 +242,9 @@ class OSAOfflineParallelTest(OSAUtils):
         with a rank rebooted using system stop/start.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa
-        :avocado: tags=offline_parallel,offline_parallel_srv_rank_boot
+        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_rank_boot
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -255,7 +253,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Restart a rank")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7195,DAOS-7247")
     def test_osa_offline_parallel_test_with_aggregation(self):
         """
         JIRA ID: DAOS-7161
@@ -264,9 +261,9 @@ class OSAOfflineParallelTest(OSAUtils):
         with aggregation turned on.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa
-        :avocado: tags=offline_parallel,offline_parallel_with_aggregation
+        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_with_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -281,9 +278,9 @@ class OSAOfflineParallelTest(OSAUtils):
         with different object class.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa
-        :avocado: tags=offline_parallel,offline_parallel_oclass
+        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_oclass
         """
         self.log.info("Offline Parallel Test : OClass")
         # Presently, the script is limited and supports only one extra

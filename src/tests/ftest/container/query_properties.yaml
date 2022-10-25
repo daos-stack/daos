@@ -5,10 +5,16 @@ timeout: 100
 
 server_config:
   name: daos_server
-  servers:
-    targets: 4
-    nr_xs_helpers: 0
-    scm_size: 4
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 
 pool:
   scm_size: 1G
@@ -19,11 +25,11 @@ container:
 
 properties:
   chksum_type:
-    configured: 100 # Default
+    configured: 100  # Default
     expected: 1
   srv_verify:
-    configured: True # Updated
+    configured: true  # Updated
     expected: 1
   chunk_size:
-    configured: 0 # Default
+    configured: 0  # Default
     expected: 16384

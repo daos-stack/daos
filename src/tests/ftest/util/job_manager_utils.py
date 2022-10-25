@@ -16,7 +16,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, run_remote
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
+from run_utils import run_remote
 from write_host_file import write_host_file
 
 
@@ -1174,7 +1175,7 @@ class Clush(JobManager):
 
         """
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
-        self.result = run_remote(self._hosts, command, self.verbose, self.timeout)
+        self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
 
         if self.result.timeout:
             raise CommandFailure(

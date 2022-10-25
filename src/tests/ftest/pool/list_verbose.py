@@ -134,7 +134,7 @@ class ListVerboseTest(IorTestBase):
             created (int): SCM size used to create the pool.
             rank_count (int): Number of ranks that the pool is created on.
         """
-        targets = self.params.get("targets", "/run/server_config/*/")
+        targets = self.server_managers[0].get_config_value("targets")
         self.log.info("rank_count = %d; targets = %d", rank_count, targets)
 
         total_targets = rank_count * targets
@@ -177,7 +177,7 @@ class ListVerboseTest(IorTestBase):
             # Verify scm_size using the threshold rather than the exact match.
             rank_count = len(pool.target_list.value)
             if scm_size[index] is None:
-                created = pool.scm_size.value * rank_count
+                created = pool.scm_per_rank * rank_count
             else:
                 created = scm_size[index]
             self.verify_scm_size(

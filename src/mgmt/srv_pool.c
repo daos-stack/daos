@@ -232,7 +232,7 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets, true);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
 	}
 
 out:

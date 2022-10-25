@@ -198,7 +198,7 @@ start_gc_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_gc_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
@@ -260,7 +260,7 @@ start_flush_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, 0);
+	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_flush_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create flush ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
@@ -1565,9 +1565,12 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (ret == 0 && pool->sp_global_version >= 1) {
+	if (ret == 0) {
 		/** If necessary, upgrade the vos pool format */
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+		if (pool->sp_global_version >= 2)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+		else if (pool->sp_global_version == 1)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
 	}
 
 	ds_pool_child_put(child);
@@ -1587,6 +1590,11 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+
+	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+		pool->sp_disable_rebuild = 0;
+	else
+		pool->sp_disable_rebuild = 1;
 
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
@@ -1677,6 +1685,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
+	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 

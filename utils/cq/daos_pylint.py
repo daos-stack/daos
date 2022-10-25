@@ -267,7 +267,7 @@ class FileTypeList():
 
         Returns True if warnings issued to GitHub."""
 
-        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-branches,too-many-locals
 
         def word_is_allowed(word, code):
             """Return True if misspelling is permitted"""
@@ -329,6 +329,11 @@ class FileTypeList():
                 vals['path'] = msg.path
                 vals['line'] = msg.line
             return vals
+
+        def msg_to_github(vals):
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
 
         failed = False
         rep = CollectingReporter()
@@ -437,21 +442,32 @@ sys.path.append('site_scons')"""
                 if vals['category'] == 'warning':
                     continue
                 failed = True
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if file_warnings:
             print('Warnings from modified files:')
-        for msg in file_warnings:
-            vals = parse_msg(msg)
-            print(args.msg_template.format(**vals))
-            if args.format == 'github':
-                # Report all messages in modified files, but do it at the notice level.
+
+            # Low priority warnings, these are reported but are reported last.  As GitHub only
+            # displays 10 annotations at a given severity level this means they will only be shown
+            # to the user if there are no other warnings in modified files.
+            lp_warnings_i = []
+            lp_warnings_f = []
+            for msg in file_warnings:
+                vals = parse_msg(msg)
+                print(args.msg_template.format(**vals))
+                if args.format == 'github':
+                    if msg.symbol == 'invalid-name':
+                        lp_warnings_i.append(msg)
+                    elif msg.symbol == 'consider-using-f-string':
+                        lp_warnings_f.append(msg)
+                    else:
+                        # Report all messages in modified files, but do it at the notice level.
+                        vals['category'] = 'notice'
+                        msg_to_github(vals)
+            for msg in lp_warnings_i + lp_warnings_f:
+                vals = parse_msg(msg)
                 vals['category'] = 'notice'
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if not types or args.reports == 'n':
             return failed
@@ -511,6 +527,8 @@ class OutPutRegion:
 
 def main():
     """Main program"""
+
+    # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
     parser = argparse.ArgumentParser()
@@ -586,12 +604,12 @@ def main():
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                try:
+                if parts[2] == '+1':
+                    # Handle new, one line files.
+                    post_start = 0
+                    post_len = 1
+                else:
                     (post_start, post_len) = parts[2][1:].split(',')
-                except ValueError:
-                    print(f'Unable to split parts[2] ("{parts[2]}") from line "{line.rstrip()}" '
-                          'on line number {lineno}')
-                    raise
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:

@@ -1273,12 +1273,16 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_flags = auxi->flags | flags;
 	if (auxi->obj_auxi->reintegrating)
 		orw->orw_flags |= ORF_REINTEGRATING_IO;
+	if (auxi->obj_auxi->rebuilding)
+		orw->orw_flags |= ORF_REBUILDING_IO;
 	orw->orw_tgt_idx = auxi->ec_tgt_idx;
 	if (args->reasb_req && args->reasb_req->orr_oca)
 		orw->orw_tgt_max = obj_ec_tgt_nr(args->reasb_req->orr_oca) - 1;
 	if (auxi->obj_auxi->ec_degrade_fetch) {
 		struct obj_tgt_oiod *toiod;
 
+		D_ASSERT(args->reasb_req != NULL);
+		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);
@@ -2234,12 +2238,11 @@ out:
 }
 
 int
-dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-		       uint32_t flags, struct dc_object *obj, daos_key_t *dkey,
-		       daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
-		       const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       struct dtx_id *dti, unsigned int *map_ver,
-		       unsigned int req_map_ver, daos_handle_t th, tse_task_t *task)
+dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+		       uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
 	struct obj_query_key_1_in	*okqi;
@@ -2247,10 +2250,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
 	crt_endpoint_t			 tgt_ep;
-	uint64_t			 dkey_hash;
 	int				 rc;
-
-	tse_task_stack_pop_data(task, &dkey_hash, sizeof(dkey_hash));
 
 	pool = obj_shard_ptr2pool(shard);
 	if (pool == NULL)

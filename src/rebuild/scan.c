@@ -603,7 +603,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				DP_UOID(oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
+	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+		   rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		struct pl_obj_layout *layout = NULL;
 		bool still_needed;
 		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
@@ -613,7 +614,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		 * still includes the current rank. If not, the object can be
 		 * deleted/reclaimed because it is no longer reachable
 		 */
-		rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &layout);
+		rc = pl_obj_place(map, &md, DAOS_OO_RO, rpt->rt_rebuild_ver, NULL, &layout);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -673,7 +674,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
 			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
-			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+			 rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -851,7 +853,7 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op != RB_OP_RECLAIM) {
+	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rpt_get(rpt);
 		rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
 				    0, 0, &ult_send);
@@ -968,10 +970,13 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	 */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
-		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) {
-			D_INFO(DF_UUID" rebuild %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
-			       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver,
-			       rpt->rt_leader_term, rsi->rsi_rebuild_ver,
+		    ((rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) ||
+		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
+		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
+		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
+			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
+			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term);
 			rpt->rt_abort = 1;
 		}
