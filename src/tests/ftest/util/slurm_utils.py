@@ -12,9 +12,12 @@ import time
 import threading
 import re
 
-from general_utils import run_command, DaosTestError
 from ClusterShell.NodeSet import NodeSet
 
+from general_utils import run_command, DaosTestError
+from run_utils import run_remote
+
+PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()
 
 
@@ -39,43 +42,64 @@ def cancel_jobs(job_id):
     return result.exit_status
 
 
-def create_slurm_partition(nodelist, name):
+def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMITED', state='up'):
     """Create a slurm partition for soak jobs.
 
     Client nodes will be allocated for this partition.
 
     Args:
-        nodelist (list): list of nodes for job allocation
-        name (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
+        hosts (NodeSet): hosts to include in the partition
+        default (str, optional): _description_. Defaults to 'yes'.
+        max_time (str, optional): _description_. Defaults to 'UNLIMITED'.
+        state (str, optional): _description_. Defaults to 'up'.
 
     Returns:
-        int: return status from scontrol command
+        RemoteCommandResult: results from the scontrol command
 
     """
-    # If the partition exists; delete it because if may have wrong nodes
-    command = "scontrol delete PartitionName={}".format(name)
-    result = run_command(command, raise_exception=False)
-    if result.exit_status == 0:
-        command = "scontrol create PartitionName={} Nodes={}".format(
-            name, ",".join(nodelist))
-        result = run_command(command, raise_exception=False)
-    return result.exit_status
+    command = ['scontrol', 'create']
+    command.append('='.join(['PartitionName', name]))
+    command.append('='.join(['Nodes', hosts]))
+    command.append('='.join(['Default', default]))
+    command.append('='.join(['MaxTime', max_time]))
+    command.append('='.join(['State', state]))
+    return run_remote(log, control, ' '.join(command))
 
 
-def delete_slurm_partition(name):
+def delete_partition(log, control, name):
     """Remove the partition from slurm.
 
     Args:
-        name (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
 
     Returns:
         int: return status from scontrol command
 
     """
-    # If the partition exists; delete it because if may have wrong nodes
-    command = "scontrol delete PartitionName={}".format(name)
-    result = run_command(command, raise_exception=False)
-    return result.exit_status
+    command = ['scontrol', 'delete']
+    command.append('='.join(['PartitionName', name]))
+    return run_remote(log, control, ' '.join(command))
+
+
+def show_partition(log, control, name):
+    """Show the slurm partition.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm partition name
+
+    Returns:
+        RemoteCommandResult: results from the scontrol command
+
+    """
+    command = ['scontrol', 'show', 'partition', name]
+    return run_remote(log, control, ' '.join(command))
 
 
 def get_reserved_nodes(reservation, partition):
@@ -314,3 +338,59 @@ def srun(hosts, cmd, srun_params=None, timeout=60):
         result = None
         raise SlurmFailed("srun failed : {}".format(error)) from error
     return result
+
+
+def install_slurm(log, hosts, sudo, timeout=600):
+    """Install slurm packages.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to install slurm
+        sudo (bool): whether or not to issue the commands with sudo.
+        timeout (int, optional): command timeout in seconds. Defaults to 600.
+
+    Returns:
+        bool: True if slurm was installed successfully on all hosts
+
+    """
+    log.info('Installing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    sudo_command = ['sudo', '-n'] if sudo else []
+    command = sudo_command + ['dnf', 'install', '-y'] + PACKAGES
+    return run_remote(log, hosts, ' '.join(command), timeout=timeout).passed
+
+
+def remove_slurm(log, hosts, sudo, timeout=600):
+    """Remove slurm packages.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to remove slurm
+        sudo (bool): whether or not to issue the commands with sudo.
+        timeout (int, optional): command timeout in seconds. Defaults to 600.
+
+    Returns:
+        bool: True if slurm was removed successfully on all hosts
+
+    """
+    log.info('Removing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    sudo_command = ['sudo', '-n'] if sudo else []
+    command = sudo_command + ['dnf', 'remove', '-y'] + PACKAGES
+    return run_remote(log, hosts, ' '.join(command), timeout=timeout).passed
+
+
+def slurm_installed(log, hosts):
+    """Determine if slurm is installed on the specified hosts.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to determine if slurm is installed
+
+    Returns:
+        bool: True if all slurm packages are installed on all hosts
+
+    """
+    log.info('Determining if slurm is installed on %s', hosts)
+    regex = ['\'(', '|'.join(PACKAGES), ')-[0-9]\'']
+    command = ['rpm', '-qa', '|', 'grep', '-E', ''.join(regex)]
+    result = run_remote(log, hosts, ' '.join(command))
+    return result.homogeneous and len(result.output[0].stdout) >= len(PACKAGES)

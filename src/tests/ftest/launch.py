@@ -36,6 +36,7 @@ from host_utils import get_node_set, HostInfo, HostException                    
 from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
 from run_utils import get_local_host, run_local, run_remote, RunException       # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
 from user_utils import get_chown_command                                        # noqa: E402
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
@@ -634,6 +635,16 @@ class TestName():
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
+    YAML_INFO_KEYS = [
+        "test_servers",
+        "server_partition",
+        "server_reservation",
+        "test_clients",
+        "client_partition",
+        "client_reservation",
+        "client_users"
+    ]
+
     def __init__(self, test_file, order):
         """Initialize a TestInfo object.
 
@@ -647,6 +658,7 @@ class TestInfo():
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
         self.host_info = HostInfo()
+        self.yaml_info = {}
 
     def __str__(self):
         """Get the test file as a string.
@@ -657,54 +669,47 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_host_info(self, include_localhost=False, partition_hosts=None):
-        """Set the test host information using the test yaml file.
+    def set_yaml_info(self, include_localhost=False):
+        """Set the test yaml data from the test yaml file.
 
         Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-            partition_hosts (NodeSet, optional): lists of hosts to use to create a partition if the
-                test specifies a client partition. Defaults to None.
+            include_localhost (bool, optional): whether or not the local host be included in the
+                set of client hosts. Defaults to False.
+        """
+        self.yaml_info = {}
+        yaml_data = get_yaml_data(self.yaml_file)
+        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+
+        logger.debug("Test yaml information for %s:", self.test_file)
+        for key in self.YAML_INFO_KEYS:
+            if key in (self.YAML_INFO_KEYS[0], self.YAML_INFO_KEYS[3]):
+                self.yaml_info[key] = get_node_set(info[key] if key in info else None)
+            else:
+                self.yaml_info[key] = info[key] if key in info else None
+            logger.debug("  %-18s = %s", key, info[key])
+
+        if include_localhost:
+            self.yaml_info[self.YAML_INFO_KEYS[3]].add(NodeSet(get_local_host()))
+            logger.debug(
+                "Adding the localhost to the clients: %s", self.yaml_info[self.YAML_INFO_KEYS[3]])
+
+    def set_host_info(self):
+        """Set the test host information using the test yaml file.
 
         Raises:
             LaunchException: if there is an error getting the host from the test yaml or a problem
             setting up a slum partition
 
-        Returns:
-            bool: True if a slurm partition was created; False otherwise
-
         """
-        partition_created = False
-        logger.debug("Extracting hosts from %s", self.yaml_file)
-        yaml_data = get_yaml_data(self.yaml_file)
-        keys = [
-            YAML_KEYS["test_servers"], "server_partition", "server_reservation",
-            YAML_KEYS["test_clients"], "client_partition", "client_reservation"
-        ]
-        info = find_values(yaml_data, keys)
-        for key in keys:
-            if key not in info:
-                info[key] = None
-            logger.debug("  Found %-18s = %s", key, info[key])
-
-        if include_localhost:
-            info[keys[3]] = get_node_set(info[keys[3]])
-            logger.debug("Adding the localhost to the clients: %s", info[keys[3]])
-            info[keys[3]].add(get_local_host())
-
-        # Configure a slurm partition using the specified hosts if the test uses a partition
-        if info[keys[4]] and partition_hosts:
-            setup_slurm_partitions(partition_hosts, info[keys[1]])
-            partition_created = True
-
+        logger.debug("Using %s to define host information", self.yaml_file)
         try:
             self.host_info.set_hosts(
-                logger, info[keys[0]], info[keys[1]], info[keys[2]], info[keys[3]], info[keys[4]],
-                info[keys[5]])
+                logger, self.yaml_info[self.YAML_INFO_KEYS[0]],
+                self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
+                self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
+                self.yaml_info[self.YAML_INFO_KEYS[5]])
         except HostException as error:
             raise LaunchException("Error getting hosts from {self.yaml_file}") from error
-
-        return partition_created
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -758,8 +763,9 @@ class Launch():
         # Details about the run
         self.details = OrderedDict()
 
-        # Currently only support setting up slurm once
-        self._slurm_started = False
+        # Options for creating slurm partitions
+        self.partition_hosts = NodeSet()
+        self.add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -995,11 +1001,8 @@ class Launch():
         logger.info("Modified test yaml files being created in: %s", yaml_dir)
 
         # Modify the test yaml files to run on this cluster
-        partition_hosts = NodeSet()
-        if not args.modify and args.setup_slurm:
-            partition_hosts.add(args.test_clients or args.test_servers)
         try:
-            self.setup_test_files(args, yaml_dir, partition_hosts)
+            self.setup_test_files(args, yaml_dir)
         except (RunException, LaunchException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1013,6 +1016,10 @@ class Launch():
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
         setup_result.end()
+
+        # Define options for creating any slurm partitions required by the tests
+        self.partition_hosts.add(args.test_clients or args.test_servers)
+        self.add_partition = args.setup_slurm
 
         # Execute the tests
         status = self.run_tests(
@@ -1692,14 +1699,12 @@ class Launch():
             logger.debug("  Fault injection is disabled")
         return False
 
-    def setup_test_files(self, args, yaml_dir, partition_hosts):
+    def setup_test_files(self, args, yaml_dir):
         """Set up the test yaml files with any placeholder replacements.
 
         Args:
             args (argparse.Namespace): command line arguments for this program
             yaml_dir (str): directory in which to write the modified yaml files
-            partition_hosts (NodeSet): hosts to use to create a partition if required by the test.
-                If not specified no partitions will be created.
 
         Raises:
             RunException: if there is a problem updating the test yaml files
@@ -1722,20 +1727,7 @@ class Launch():
             run_local(logger, command, check=False)
 
             # Collect the host information from the updated test yaml
-            if test.set_host_info(args.include_localhost, partition_hosts):
-                # A partition was successfully created, so do not create any more
-                partition_hosts = NodeSet()
-
-        # Log the test information
-        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
-        logger.debug("-" * 80)
-        logger.debug("Test information:")
-        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
-        for test in self.tests:
-            logger.debug(
-                msg_format, test.name.order, test.test_file, test.yaml_file,
-                test.host_info.servers.hosts, test.host_info.clients.hosts)
+            test.set_yaml_info(args.include_localhost)
 
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):
@@ -2116,6 +2108,11 @@ class Launch():
         logger.debug("=" * 80)
         logger.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
+        # Setup the test host information, including creating any required slurm partitions
+        status = self._setup_host_information(test)
+        if status:
+            return status
+
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
         if status:
@@ -2123,6 +2120,64 @@ class Launch():
 
         # Generate certificate files for the test
         return self._generate_certs()
+
+    def _setup_host_information(self, test):
+        """Set up the test host information and any required partitions.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        logger.debug("-" * 80)
+        logger.debug("Setting up host information for %s", test)
+
+        # Verify any required partitions exist
+        if test.yaml_info["client_partition"]:
+            partition = test.yaml_info["client_partition"]
+            logger.debug(
+                "Determining if the %s client partition exists", partition)
+            control = NodeSet(get_local_host())
+            exists = show_partition(logger, control, partition).passed
+            if not exists and not self.add_partition:
+                message = f"Error missing {partition} partition"
+                self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                return 128
+            if self.add_partition and exists:
+                logger.debug(
+                    "Removing existing %s partition to ensure correct configuration", partition)
+                if not delete_partition(logger, control, partition).passed:
+                    message = f"Error removing existing {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+            if self.add_partition:
+                hosts = self.partition_hosts.difference(test.yaml_info["test_servers"])
+                logger.debug("Adding the %s partition with the %s hosts", partition, hosts)
+                if not create_partition(logger, control, partition, hosts).passed:
+                    message = f"Error adding the {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+
+        # Define the hosts for this test
+        try:
+            test.set_hosts()
+        except LaunchException:
+            message = "Error setting up host information"
+            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            return 128
+
+        # Log the test information
+        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
+        logger.debug("-" * 80)
+        logger.debug("Test information:")
+        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
+        logger.debug(
+            msg_format, test.name.order, test.test_file, test.yaml_file,
+            test.host_info.servers.hosts, test.host_info.clients.hosts)
+        return 0
 
     def _setup_test_directory(self, test):
         """Set up the common test directory on all hosts.
