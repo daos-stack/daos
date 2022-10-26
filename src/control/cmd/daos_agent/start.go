@@ -79,7 +79,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
-	fabricCache := newLocalFabricCache(cmd.log, ficEnabled)
+	fabricCache := newLocalFabricCache(cmd.log, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
 		// Cache is required to use user-defined fabric interfaces
 		fabricCache.enabled.SetTrue()

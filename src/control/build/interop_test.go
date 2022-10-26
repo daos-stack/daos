@@ -94,7 +94,7 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 		},
 		"2.4 agent compatible with 2.2 server": {
 			a: testComponent(t, "server", "2.2.0"),
-			b: testComponent(t, "agent", "2.4.0"),
+			b: testComponent(t, "agent", "2.3.100"),
 		},
 		"2.6 server not compatible with 2.2 agent": {
 			a:      testComponent(t, "server", "2.6.0"),
@@ -112,9 +112,8 @@ func TestBuild_CheckCompatibility(t *testing.T) {
 			expErr: errors.New("incompatible components"),
 		},
 		"unversioned agent (assume 2.0.x) compatible with 2.2.x server": {
-			a:          testComponent(t, "server", "2.1.100"),
-			b:          testComponent(t, "agent", "0.0.0"),
-			customRule: build.Server22xAgent20x,
+			a: testComponent(t, "server", "2.1.100"),
+			b: testComponent(t, "agent", "0.0.0"),
 		},
 		// --- Unit testing ---
 		"nil a": {
