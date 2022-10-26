@@ -734,9 +734,7 @@ class TestInfo():
         yaml_data = get_yaml_data(self.yaml_file)
         client_users = find_values(yaml_data, ["client_users"], val_type=list)
         client_users = client_users['client_users'] if client_users else []
-        create = find_values(yaml_data, ["create_client_users"], val_type=bool)
-        create = create['create_client_users'] if create else False
-        return (create, client_users)
+        return client_users
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -1042,7 +1040,7 @@ class Launch():
         # Execute the tests
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold)
+            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1759,79 +1757,117 @@ class Launch():
                 msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
                 test.hosts.clients)
 
-    def user_setup(self, test):
+    @staticmethod
+    def _query_create_group(hosts, group, create=False):
+        """Query and optionally create a group on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            group (str): group to query and create
+            create (bool, optional): whether to create the group if non-existent
+
+        Raises:
+            LaunchException: if there is an errory querying or creating the group
+
+        Returns:
+            str: the group's gid
+
+        """
+        # Query the group and get the gid
+        logger.info('Querying group %s', group)
+        result = getent(logger, hosts, 'group', group)
+        if result.passed:
+            return result.output[0].stdout[0].split(':')[2]
+        if not create:
+            raise LaunchException(f'Error querying group {group}')
+
+        # Create and re-query
+        logger.info('Creating group %s', group)
+        if not groupadd(logger, hosts, group, True, True).passed:
+            raise LaunchException(f'Error creating group {group}')
+        logger.info('Querying group %s', group)
+        result = getent(logger, hosts, 'group', group)
+        if result.passed:
+            return result.output[0].stdout[0].split(':')[2]
+        raise LaunchException(f'Error querying group {group}')
+
+    @staticmethod
+    def _query_create_user(hosts, user, gid=None, create=False):
+        """Query and optionaly create a user on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            user (str): user to query and create
+            gid (str, optional): user's primary gid. Default is None
+            create (bool, optional): whether to create the group if non-existent. Default is False
+
+        Raises:
+            LaunchException: if there is an errory querying or creating the user
+
+        """
+        user_exists = False
+        try:
+            # Query and verify user
+            logger.info('Querying user %s', user)
+            result = run_remote(logger, hosts, f'id {user}')
+            if not result.passed:
+                logger.info('here1')
+                raise LaunchException(f'Error querying user {user}')
+            user_exists = True
+            if not re.findall(f'groups={gid}\(', result.output[0].stdout[0]):
+                raise LaunchException(f'User {user} groups not as expected')
+            return
+        except LaunchException:
+            if not create:
+                raise
+
+        # User exists but is not setup as desired. Delete and re-create properly
+        if user_exists:
+            logger.info('Deleting user %s', user)
+            _ = userdel(logger, hosts, user, True)
+
+        logger.info('Creating user %s in group %s', user, gid)
+        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
+        if not useradd(logger, hosts, user, gid, parent_dir, True).passed:
+            raise LaunchException(f'Error creating user {user}')
+
+    def _user_setup(self, test, create=False):
         """Setup test users on client nodes.
 
         Args:
             test (TestInfo): the test information
+            create (bool, optional): whether to create extra test users defined by the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
 
         """
-        do_create, users = test.get_yaml_client_users()
+        users = test.get_yaml_client_users()
         clients = test.hosts.clients
+        if users:
+            logger.info('Setting up test users on %s', clients)
 
-        # Create user home directory
-        if do_create and users:
-            parent_dir = os.environ["DAOS_TEST_USER_DIR"]
-            if not run_remote(logger, clients, f'mkdir -p {parent_dir}').passed:
-                message = f'Error creating user home directory {parent_dir}'
-                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-                return 128
+        # Keep track of queried groups to avoid redundant work
+        group_gid = {}
 
-        # Keep track of created and queried groups to avoid redundant work
-        created_groups = []
-        queried_groups = {}
-
-        # Create and/or query all groups and users
+        # Query and optionally create all groups and users
         for _user in users:
             user, *group = _user.split(':')
             group = group[0] if group else None
 
-            # Create the group
-            if group and do_create and group not in created_groups:
-                logger.info('Creating group %s', group)
-                if not groupadd(logger, clients, group, True, True).passed:
-                    message = f'Error creating group {group}'
-                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-                    return 128
-                created_groups.append(group)
-
-            # Query the group and get the gid
-            if group and group not in queried_groups:
-                logger.info('Querying group %s', group)
-                result = getent(logger, clients, 'group', group)
-                if not result.passed:
-                    message = f'Error querying group {group}'
-                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-                    return 128
-                gid = result.output[0].stdout[0].split(':')[2]
-                queried_groups[group] = gid
-
-            # Delete user if existing
-            if do_create:
-                logger.info('Deleting user %s if existing', user)
-                _ = userdel(logger, clients, user, True)
-
-            # Create user
-            if do_create:
-                logger.info('Creating user %s in group %s', user, group)
-                if not useradd(logger, clients, user, group, parent_dir, True).passed:
-                    message = f'Error creating user {user}'
-                    self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            # Save the group's gid
+            if group and group not in group_gid:
+                try:
+                    group_gid[group] = self._query_create_group(clients, group, create)
+                except LaunchException as error:
+                    self._fail_test(self.result.tests[-1], "Prepare", error, sys.exc_info())
                     return 128
 
-            # Query user
-            logger.info('Querying user %s', user)
-            user_result = run_remote(logger, clients, f'id {user}')
-            if not user_result.passed:
-                message = f'Error querying user {user}'
-                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
-                return 128
-            if not re.findall(f'gid={gid}', user_result.output[0].stdout[0]):
-                message = f'User {user} not in expected group {group}'
-                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            gid = group_gid.get(group, None)
+            try:
+                self._query_create_user(clients, user, gid, create)
+            except LaunchException as error:
+                self._fail_test(self.result.tests[-1], "Prepare", error, sys.exc_info())
                 return 128
 
         return 0
@@ -2111,7 +2147,7 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold):
+                  core_files, threshold, user_create):
         """Run all the tests.
 
         Args:
@@ -2124,6 +2160,7 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2151,17 +2188,9 @@ class Launch():
                 test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
 
                 # Prepare the hosts to run the tests
-                step_status = self.prepare(test, repeat)
+                step_status = self.prepare(test, repeat, user_create)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
-                    return_code |= step_status
-                    self.result.tests[-1].status = TestResult.INTERRUPT
-                    continue
-
-                # Setup additional test users
-                step_status = self.user_setup(test)
-                # self._user_setup(args)
-                if step_status:
                     return_code |= step_status
                     self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
@@ -2210,12 +2239,13 @@ class Launch():
         except RunException:
             pass
 
-    def prepare(self, test, repeat):
+    def prepare(self, test, repeat, user_create):
         """Prepare the test for execution.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -2226,6 +2256,11 @@ class Launch():
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
+        if status:
+            return status
+
+        # Setup additional test users
+        status = self._user_setup(test, user_create)
         if status:
             return status
 
@@ -2244,12 +2279,14 @@ class Launch():
         """
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        user_dir = os.environ["DAOS_TEST_USER_DIR"]
         logger.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
+            f"mkdir -p {user_dir}"
         ]
         for command in commands:
             if not run_remote(logger, test.hosts.all, command).passed:
@@ -3223,6 +3260,10 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3280,6 +3321,7 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.user_create = True
 
     # Perform the steps defined by the arguments specified
     try:

@@ -12,19 +12,19 @@ from run_utils import run_remote
 from user_utils import getent
 
 
-class HarnessPreLaunchTest(TestWithoutServers):
+class HarnessLaunchSetupTest(TestWithoutServers):
     """Harness pre-launch test cases.
 
     :avocado: recursive
     """
 
-    def test_harness_pre_launch_users(self):
+    def test_harness_launch_setup_users(self):
         """Verify all expected users are setup correctly by launch.py.
 
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness
-        :avocado: tags=test_harness_pre_launch_users
+        :avocado: tags=test_harness_launch_setup_users
         """
         hostlist_clients = self.get_hosts_from_yaml(
             "test_clients", "server_partition", "server_reservation", "/run/hosts/*")
@@ -36,10 +36,9 @@ class HarnessPreLaunchTest(TestWithoutServers):
             if not group_result.passed:
                 self.fail('Group {} does not exist'.format(group))
             gid = group_result.output[0].stdout[0].split(':')[2]
-            self.log.info('Checking if user %s exists', user)
-            user_result = run_remote(self.log, hostlist_clients, 'id {}'.format(user))
+            self.log.info('Querying user %s', user)
+            user_result = run_remote(self.log, hostlist_clients, f'id {user}')
             if not user_result.passed:
-                self.fail('User {} does not exist'.format(user))
-            self.log.info('Checking if user %s is in group %s', user, gid)
-            if not re.findall('gid={}'.format(gid), user_result.output[0].stdout[0]):
-                self.fail('User {} not in group {}'.format(user, group))
+                self.fail('Error querying user {}'.format(user))
+            if not re.findall(f'groups={gid}\(', user_result.output[0].stdout[0]):
+                self.fail('User {} groups not as expected'.format(user))
