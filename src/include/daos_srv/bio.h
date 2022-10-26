@@ -1012,4 +1012,67 @@ int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_acti
  */
 int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
 
+/*
+ * Replay committed transactions in WAL on post-crash recovery
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	replay_cb	Replay callback for individual action
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action *act));
+
+/*
+ * Flush back WAL header
+ *
+ * \param[in]	mc		BIO meta context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_flush_header(struct bio_meta_context *mc);
+
+/*
+ * Acquire highest committed transaction ID before checkpointing
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[out]	tx_id		Highest committed transaction ID
+ *
+ * \return			Zero:		Success;
+ *				-DER_ALREADY:	Nothing to be checkpointed;
+ *				Negative value:	Error;
+ */
+int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
+
+/*
+ * After checkpointing, set highest checkpointed transaction ID, reclaim WAL space
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	tx_id		The highest checkpointed transaction ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
+
+/*
+ * Read meta blob
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	bsgl		BIO SGL describing the IOVs to be read
+ * \param[out]	sgl		SGL for the read buffer
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
+
+/*
+ * Read meta blob
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	bsgl		BIO SGL describing the IOVs to be written
+ * \param[in]	sgl		SGL for the data to be written
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
+
 #endif /* __BIO_API_H__ */
