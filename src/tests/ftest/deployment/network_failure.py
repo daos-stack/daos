@@ -449,9 +449,22 @@ class NetworkFailureTest(IorTestBase):
 
         # Some ranks may be excluded after bringing up the network interface. Check if
         # all ranks are joined. If not, restart the servers and check again.
-        time.sleep(60)
         dmg_command = self.get_dmg_command()
-        if not check_system_query_status(dmg_command.system_query()):
+
+        # First, wait up to 60 sec for server(s) to crash. Whether a rank is marked as
+        # dead is determined by SWIM, so we need to give some time for the protocol to
+        # make the decision.
+        count = 0
+        server_crashed = False
+        while count < 60:
+            if not check_system_query_status(dmg_command.system_query()):
+                server_crashed = True
+                break
+            count += 1
+            time.sleep(1)
+
+        # If server crash was detected, restart.
+        if server_crashed:
             self.log.info("Not all ranks are joined. Restart the servers.")
             dmg_command.system_stop()
             dmg_command.system_start()
