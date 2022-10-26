@@ -252,7 +252,7 @@ pipeline {
                     env.COMMIT_MESSAGE.split('\n').each { line ->
                         String key, value
                         try {
-                            (key, value) = line.split(':')
+                            (key, value) = line.split(':', 2)
                             if (key.contains(' ')) {
                                 return
                             }

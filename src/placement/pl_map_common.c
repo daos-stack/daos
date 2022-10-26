@@ -250,7 +250,7 @@ need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow
 	}
 
 	/* For other cases, let's ignore all future pool map changes for current rebuild. */
-	if (tgt->ta_comp.co_in_ver > allow_version)
+	if (allow_version != 0 && tgt->ta_comp.co_in_ver > allow_version)
 		return true;
 
 	return false;
@@ -491,7 +491,7 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
 			new_shards[grp_idx].po_rebuilding = 1;
 
-		if (f_shard->fs_status == PO_COMP_ST_UP)
+		if (f_shard->fs_status == PO_COMP_ST_UP || f_shard->fs_status == PO_COMP_ST_NEW)
 			new_shards[grp_idx].po_reintegrating = 1;
 	}
 
