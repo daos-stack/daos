@@ -11,6 +11,7 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
+      - 'utils/scripts/helpers/*.sh'
       - utils/ci
       - ci
       - requirements.txt
