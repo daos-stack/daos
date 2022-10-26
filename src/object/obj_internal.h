@@ -375,7 +375,8 @@ struct obj_auxi_args {
 					 cond_modify:1,
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
-					 reintegrating:1;
+					 reintegrating:1,
+					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -491,9 +492,8 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-		  enum daos_otype_t otype, daos_oclass_hints_t hints,
-		  enum daos_obj_redun *ord, uint32_t *nr);
+int dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
+		  daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr);
 
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,

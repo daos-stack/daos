@@ -33,7 +33,7 @@ the current supported object types. The default one is DAOS\_OT\_MULTI\_HASHED
 that does not impose any type of the akey or dkey and can store either a
 single value or array value under an akey. Lexical and integer (i.e. UINT64)
 keys are supported. The KV object type provides a simplified data model
-bypassing the akey and allowing only single single, while array object stores
+bypassing the akey and allowing only single value, while array object stores
 array chunks under integer dkeys.
 
 ## Object Class
