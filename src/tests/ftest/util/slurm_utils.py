@@ -32,7 +32,7 @@ def cancel_jobs(job_id):
         job_id (int): slurm job id
 
     Raises:
-        SlurmFailed: if there is an error cancelling the slurm jobs
+        SlurmFailed: if there is an error canceling the slurm jobs
 
     Returns:
         int: return status from scancel command

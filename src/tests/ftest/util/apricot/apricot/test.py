@@ -114,11 +114,9 @@ class Test(avocadoTest):
             self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
-        item_list = self.logdir.split('/')
-        for index, item in enumerate(item_list):
-            if item == 'job-results':
-                self.job_id = item_list[index + 1]
-                break
+        # Set the job_id to the unique sub directory name of the test-results sub directory
+        self.log.debug("self.logdir: %s", self.logdir)
+        self.job_id = self.logdir.split('/')[-3]
 
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
@@ -316,20 +314,6 @@ class Test(avocadoTest):
             ": {}".format(reason) if reason else "")
         self._teardown_cancel.add(ticket)
 
-    def get_test_info(self):
-        """Get the python file, class, and method from the test name.
-
-        Returns:
-            tuple: the test filename, python class, and python method
-
-        """
-        keys = ("id", "file", "class", "method", "variant")
-        info = [self.name.uid]
-        info.extend(self.name.name.split(":"))
-        info.extend(info.pop(-1).split("."))
-        info.append(self.name.variant)
-        return {key: info[index] for index, key in enumerate(keys)}
-
     def get_test_name(self):
         """Obtain the test method name from the Avocado test name.
 
@@ -337,7 +321,7 @@ class Test(avocadoTest):
             str: name of the test method
 
         """
-        return self.get_test_info()["method"]
+        return self.name.name.split(".")[-1]
 
     def get_elapsed_time(self):
         """Get the elapsed test time.
@@ -751,7 +735,7 @@ class TestWithServers(TestWithoutServers):
         for line in lines:
             self.log.debug("  %s", line)
 
-        if not self.start_servers_once or self.get_test_info()["id"] == 1:
+        if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
             # before starting any tests.  Currently only handles 'orterun'
             # processes, but can be expanded.
@@ -763,8 +747,8 @@ class TestWithServers(TestWithoutServers):
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
-            if (self.agent_manager_class == "Systemctl" or
-                    self.server_manager_class == "Systemctl"):
+            if (self.agent_manager_class == "Systemctl"
+                    or self.server_manager_class == "Systemctl"):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(

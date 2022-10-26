@@ -263,7 +263,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         """
         # make dirname unique to datamover test
-        method = self.get_test_info()["method"]
+        method = self.get_test_name()
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
         path = join(parent or self.posix_root.value, dir_name)

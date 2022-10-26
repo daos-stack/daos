@@ -22,10 +22,11 @@ class HarnessSlurmTest(TestWithoutServers):
         :avocado: tags=hw,small,medium,large
         :avocado: tags=harness,harness_slurm_test,test_partition
         """
+        partition = self.params.get('client_partition', '/run/hosts/*', 'unknown')
         control = get_local_host()
         result = sinfo(self.log, control)
         if not result.passed:
             self.fail('Error running sinfo')
-        if 'daos_client_partition' not in '\n'.join(result.all_stdout.values()):
+        if partition not in '\n'.join(result.all_stdout.values()):
             self.fail('Error partition not found in sinfo output')
         self.log.info('Test passed!')
