@@ -90,7 +90,7 @@ struct ad_group_metrics {
 };
 
 #define ARENA_GRP_SPEC_MAX	24
-#define ARENA_GRP_BMSZ		16
+#define ARENA_GRP_BMSZ		8
 
 /** Customized specs for arena. */
 struct ad_arena_spec {
@@ -317,6 +317,12 @@ static inline daos_size_t
 blob_addr(struct ad_blob *blob)
 {
 	return blob->bb_store.stor_addr;
+}
+
+static inline int
+blob_arena_max(struct ad_blob *blob)
+{
+	return blob->bb_pgs_nr;
 }
 
 void blob_addref(struct ad_blob *blob);
