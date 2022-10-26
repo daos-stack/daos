@@ -528,6 +528,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Oct 26 2022 Joseph Moore <joseph.moore@intel.com> 2.3.101-4
+- Update to mercury 2.2.0-4
+
 * Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.1.101-3
 - Set flag to build per-subpackage debuginfo packages for Leap 15
 
