@@ -186,6 +186,9 @@ int mo_ad_tx_publish(struct umem_instance *umm, struct pobj_action *actv, int ac
 void *mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len);
 umem_off_t mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num);
 int mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff);
-
+uint32_t mo_ad_tx_act_nr(struct umem_tx *utx);
+uint32_t mo_ad_tx_payload_sz(struct umem_tx *utx);
+struct umem_action *mo_ad_tx_act_first(struct umem_tx *utx);
+struct umem_action *mo_ad_tx_act_next(struct umem_tx *utx);
 
 #endif /* __DAOS_AD_HOC_MEM_H__ */

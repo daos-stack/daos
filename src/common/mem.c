@@ -697,6 +697,10 @@ static umem_ops_t	ad_ops = {
 	.mo_atomic_free		= mo_ad_atomic_free,
 	/* NOOP flush for ADMEM */
 	.mo_atomic_flush	= NULL,
+	.mo_tx_act_nr		= mo_ad_tx_act_nr,
+	.mo_tx_payload_sz	= mo_ad_tx_payload_sz,
+	.mo_tx_act_first	= mo_ad_tx_act_first,
+	.mo_tx_act_next		= mo_ad_tx_act_next,
 	/* share same mo_tx_add_callback as PMEM */
 	.mo_tx_add_callback	= pmem_tx_add_callback,
 };

@@ -1010,3 +1010,26 @@ failed:
 	return rc;
 }
 
+uint32_t
+mo_ad_tx_act_nr(struct umem_tx *utx)
+{
+	return ad_tx_redo_act_nr(umem_tx2ad_tx(utx));
+}
+
+uint32_t
+mo_ad_tx_payload_sz(struct umem_tx *utx)
+{
+	return ad_tx_redo_payload_len(umem_tx2ad_tx(utx));
+}
+
+struct umem_action *
+mo_ad_tx_act_first(struct umem_tx *utx)
+{
+	return ad_tx_redo_act_first(umem_tx2ad_tx(utx));
+}
+
+struct umem_action *
+mo_ad_tx_act_next(struct umem_tx *utx)
+{
+	return ad_tx_redo_act_next(umem_tx2ad_tx(utx));
+}

@@ -129,7 +129,7 @@ umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)
 #define UMOFF_PF		DF_X64
 #define UMOFF_P(umoff)		umem_off2offset(umoff)
 
-enum umem_tx_stage {
+enum umem_pobj_tx_stage {
 	UMEM_STAGE_NONE,	/* no transaction in this thread */
 	UMEM_STAGE_WORK,	/* transaction in progress */
 	UMEM_STAGE_ONCOMMIT,	/* successfully committed */
@@ -155,7 +155,7 @@ typedef enum {
 #define UTX_PRIV_SIZE	(256)
 struct umem_tx {
 	struct umem_instance	*utx_umm;
-	int			 utx_stage;	/* enum umem_tx_stage */
+	int			 utx_stage;	/* enum umem_pobj_tx_stage */
 	uint64_t		 utx_id;
 	/* umem class specific TX data */
 	struct {
