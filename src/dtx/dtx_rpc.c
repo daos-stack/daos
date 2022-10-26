@@ -1142,9 +1142,13 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	if (rc == 0) {
 		D_ASSERT(dth->dth_share_tbd_count == 0);
 
-		vos_dtx_cleanup(dth);
-		dtx_handle_reinit(dth);
-		rc = -DER_AGAIN;
+		if (dth->dth_aborted) {
+			rc = -DER_CANCELED;
+		} else {
+			vos_dtx_cleanup(dth, false);
+			dtx_handle_reinit(dth);
+			rc = -DER_AGAIN;
+		}
 	}
 
 	return rc;
