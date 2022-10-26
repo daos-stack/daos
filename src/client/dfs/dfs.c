@@ -478,10 +478,10 @@ dfs_suggest_oclass(dfs_t *dfs, const char *hint, daos_oclass_id_t *cid)
 	if (rc)
 		D_GOTO(out, rc);
 
-	*cid = daos_obj_get_oclass(dfs->coh, type, obj_hint, 0);
-	if (*cid < 0) {
-		D_ERROR("Failed to generate object class from hints %s\n", hint);
-		return EINVAL;
+	rc = daos_obj_get_oclass(dfs->coh, type, obj_hint, 0, cid);
+	if (rc) {
+		D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
 	}
 out:
 	D_FREE(local);
@@ -1789,8 +1789,10 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		else
 			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 
-		if (attr->da_hints[0] != 0)
+		if (attr->da_hints[0] != 0) {
 			strncpy(dattr.da_hints, attr->da_hints, DAOS_CONT_HINT_MAX_LEN);
+			dattr.da_hints[DAOS_CONT_HINT_MAX_LEN - 1] = '\0';
+		}
 	} else {
 		dattr.da_oclass_id = 0;
 		dattr.da_dir_oclass_id = 0;
@@ -2988,12 +2990,17 @@ dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
-		if (obj->d.oclass)
+		if (obj->d.oclass) {
 			info->doi_oclass_id = obj->d.oclass;
-		else if (dfs->attr.da_dir_oclass_id)
+		} else if (dfs->attr.da_dir_oclass_id) {
 			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
-		else
-			info->doi_oclass_id = daos_obj_get_oclass(dfs->coh, 0, 0, 0);
+		} else {
+			rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0, &info->doi_oclass_id);
+			if (rc) {
+				D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
+				return daos_der2errno(rc);
+			}
+		}
 
 		if (obj->d.chunk_size)
 			info->doi_chunk_size = obj->d.chunk_size;
