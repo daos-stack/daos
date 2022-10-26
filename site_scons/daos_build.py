@@ -229,7 +229,7 @@ def _configure_mpi(env):
         if _find_mpicc(env):
             print(f'{mpi} is installed')
             return True
-        print('No {mpi} installed and/or loaded')
+        print(f'No {mpi} installed and/or loaded')
     print("No MPI installed")
     return False
 
