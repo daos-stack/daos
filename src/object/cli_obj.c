@@ -301,6 +301,28 @@ obj_layout_refresh(struct dc_object *obj)
 	return rc;
 }
 
+/** Dump layout for debugging purposes*/
+void
+dc_obj_dump(struct dc_object *obj, int rc)
+{
+	int i;
+
+	D_CDEBUG(rc == 0, DB_PL, DLOG_ERR, "dump layout for "DF_OID", ver %d\n",
+		DP_OID(obj->cob_md.omd_id), obj->cob_version);
+
+	for (i = 0; i < obj->cob_shards_nr; i++)
+		D_CDEBUG(rc == 0, DB_PL, DLOG_ERR, "%d: shard_id %d/%d, rank/tgt %d/%d,"
+			 " f_seq %d, %s %s\n", i, obj->cob_shards->do_shards[i].do_shard,
+			 obj->cob_shards->do_shards[i].do_shard_idx,
+			 obj->cob_shards->do_shards[i].do_target_rank,
+			 obj->cob_shards->do_shards[i].do_target_idx,
+			 obj->cob_shards->do_shards[i].do_fseq,
+			 obj->cob_shards->do_shards[i].do_rebuilding ?
+			 "rebuilding" : "healthy",
+			 obj->cob_shards->do_shards[i].do_reintegrating ?
+			 "reintegrating" : "healthy");
+}
+
 static bool
 tgt_in_failed_tgts_list(int32_t tgt, struct obj_auxi_tgt_list *tgt_list)
 {

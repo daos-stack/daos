@@ -819,4 +819,7 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
 
 int
 iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);
+
+void
+dc_obj_dump(struct dc_object *obj, int mask);
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

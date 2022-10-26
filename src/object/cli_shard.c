@@ -1030,6 +1030,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			if (rc) {
 				D_ERROR(DF_UOID" obj_ec_parity_check failed, "DF_RC".\n",
 					DP_UOID(orw->orw_oid), DP_RC(rc));
+				dc_obj_dump(rw_args->shard_args->auxi.obj_auxi->obj, rc);
 				goto out;
 			}
 		}
