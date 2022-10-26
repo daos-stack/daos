@@ -1816,7 +1816,6 @@ class Launch():
             user_exists = True
             if not re.findall(f'groups={gid}\(', result.output[0].stdout[0]):
                 raise LaunchException(f'User {user} groups not as expected')
-            return
         except LaunchException:
             if not create:
                 raise
