@@ -3057,10 +3057,9 @@ out:
  * for another RPC request.
  */
 static int
-transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
-		  struct pool_svc *svc, crt_rpc_t *rpc, crt_bulk_t remote_bulk)
+transfer_cont_buf(void *cont_buf, size_t cont_buf_size, struct pool_svc *svc,
+		  crt_rpc_t *rpc, crt_bulk_t remote_bulk)
 {
-	size_t				 cont_buf_size;
 	daos_size_t			 remote_bulk_size;
 	d_iov_t				 cont_iov;
 	d_sg_list_t			 cont_sgl;
@@ -3071,17 +3070,15 @@ transfer_cont_buf(struct daos_pool_cont_info *cont_buf, size_t ncont,
 	int				*status;
 	int				 rc;
 
-	D_ASSERT(ncont > 0);
-	cont_buf_size = ncont * sizeof(struct daos_pool_cont_info);
+	D_ASSERT(cont_buf_size > 0);
 
 	/* Check if the client bulk buffer is large enough. */
 	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (remote_bulk_size < cont_buf_size) {
-		D_ERROR(DF_UUID": remote container buffer("DF_U64")"
-			" < required (%lu)\n", DP_UUID(svc->ps_uuid),
-			remote_bulk_size, cont_buf_size);
+		D_ERROR(DF_UUID": remote container buffer("DF_U64") < required (%zu)\n",
+			DP_UUID(svc->ps_uuid), remote_bulk_size, cont_buf_size);
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
@@ -3188,7 +3185,7 @@ realloc_resp:
 	uuid_clear(in->plci_op.pi_hdl);
 	in->plci_ncont = resp_ncont;
 	rc = list_cont_bulk_create(info->dmi_ctx, &in->plci_cont_bulk,
-				   resp_cont, in->plci_ncont);
+				   resp_cont, in->plci_ncont * sizeof(struct daos_pool_cont_info));
 	if (rc != 0)
 		D_GOTO(out_resp_buf, rc);
 
@@ -3303,16 +3300,14 @@ ds_pool_list_cont_handler(crt_rpc_t *rpc)
 				 ncont, in->plci_ncont);
 		D_GOTO(out_free_cont_buf, rc = -DER_TRUNC);
 	} else {
-		D_DEBUG(DB_MD, DF_UUID": hdl="DF_UUID": has %"PRIu64
-				 " containers\n", DP_UUID(in->plci_op.pi_uuid),
-				 DP_UUID(in->plci_op.pi_hdl), ncont);
+		size_t nbytes = ncont * sizeof(struct daos_pool_cont_info);
+
+		D_DEBUG(DB_MD, DF_UUID": hdl="DF_UUID": has %"PRIu64 "containers\n",
+				 DP_UUID(in->plci_op.pi_uuid), DP_UUID(in->plci_op.pi_hdl), ncont);
 
 		/* Send any results only if client provided a handle */
-		if (cont_buf && (in->plci_ncont > 0) &&
-		    (in->plci_cont_bulk != CRT_BULK_NULL)) {
-			rc = transfer_cont_buf(cont_buf, ncont, svc, rpc,
-					       in->plci_cont_bulk);
-		}
+		if (cont_buf && (in->plci_ncont > 0) && (in->plci_cont_bulk != CRT_BULK_NULL))
+			rc = transfer_cont_buf(cont_buf, nbytes, svc, rpc, in->plci_cont_bulk);
 	}
 
 out_free_cont_buf:
@@ -3327,6 +3322,135 @@ out:
 	out->plco_op.po_rc = rc;
 	out->plco_ncont = ncont;
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->plci_op.pi_uuid), rpc, rc);
+	crt_reply_send(rpc);
+}
+
+/* TODO: consider moving to common function for client and engine use */
+static bool
+pool_cont_filter_is_valid(uuid_t pool_uuid, daos_pool_cont_filter_t *filt)
+{
+	uint32_t	i;
+
+	/* TODO: decide if filt == NULL is ok especially on client side */
+	D_ASSERT(filt != NULL);
+
+	D_DEBUG(DB_MD, DF_UUID": filter with %u parts, combine with logical %s\n",
+		DP_UUID(pool_uuid), filt->pcf_nparts, (filt->pcf_combine_func == 0) ? "AND" : "OR");
+	if ((filt->pcf_nparts > 0) && (filt->pcf_parts == NULL)) {
+		D_ERROR(DF_UUID": filter has %u parts but pcf_parts is NULL\n", DP_UUID(pool_uuid),
+			filt->pcf_nparts);
+		return false;
+	}
+	for (i = 0; i < filt->pcf_nparts; i++) {
+		daos_pool_cont_filter_part_t *part = filt->pcf_parts[i];
+
+		if (part->pcfp_key >= PCF_FUNC_MAX) {
+			D_ERROR(DF_UUID": filter part key %u is outside of valid range %u..%u\n",
+				DP_UUID(pool_uuid), part->pcfp_key, PCF_FUNC_EQ,
+				(PCF_FUNC_MAX - 1));
+			return false;
+		}
+		D_DEBUG(DB_MD, DF_UUID": filter part %u: key(%s) %s "DF_U64"\n",
+			DP_UUID(pool_uuid), i,
+			daos_pool_cont_filter_key_str(part->pcfp_key),
+			daos_pool_cont_filter_func_str(part->pcfp_func),
+			part->pcfp_val64);
+	}
+
+	return true;
+}
+
+/* CaRT RPC handler for pool container filtering
+ * Requires a pool handle.
+ */
+void
+ds_pool_filter_cont_handler(crt_rpc_t *rpc)
+{
+	struct pool_filter_cont_in	*in = crt_req_get(rpc);
+	struct pool_filter_cont_out	*out = crt_reply_get(rpc);
+	struct daos_pool_cont_info2	*cont_buf = NULL;
+	uint64_t			 ncont = 0;
+	struct pool_svc			*svc;
+	struct rdb_tx			 tx;
+	d_iov_t				 key;
+	d_iov_t				 value;
+	int				 rc;
+
+	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_UUID(in->pfci_op.pi_uuid), rpc, DP_UUID(in->pfci_op.pi_hdl));
+
+	rc = pool_svc_lookup_leader(in->pfci_op.pi_uuid, &svc, &out->pfco_op.po_hint);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Verify pool handle only if RPC initiated by a client
+	 * (not for mgmt svc to pool svc RPCs that do not have a handle).
+	 */
+	if (daos_rpc_from_client(rpc)) {
+		rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+
+		ABT_rwlock_rdlock(svc->ps_lock);
+
+		/* Verify the pool handle. Note: since rebuild will not
+		 * connect the pool, so we only verify the non-rebuild
+		 * pool.
+		 */
+		if (!is_pool_from_srv(in->pfci_op.pi_uuid,
+				      in->pfci_op.pi_hdl)) {
+			d_iov_set(&key, in->pfci_op.pi_hdl, sizeof(uuid_t));
+			d_iov_set(&value, NULL, 0);
+			rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+			if (rc == -DER_NONEXIST)
+				rc = -DER_NO_HDL;
+				/* defer goto out_svc until unlock/tx_end */
+		}
+
+		ABT_rwlock_unlock(svc->ps_lock);
+		rdb_tx_end(&tx);
+		if (rc != 0)
+			D_GOTO(out_svc, rc);
+	}
+
+	/* Debug log and check filter specification */
+	if (!pool_cont_filter_is_valid(in->pfci_op.pi_uuid, &in->pfci_filt)) {
+		D_ERROR(DF_UUID": filter input failed\n", DP_UUID(in->pfci_op.pi_uuid));
+		D_GOTO(out_svc, rc = -DER_INVAL);
+	}
+
+	/* Call container service to get the filtered list of containers */
+	rc = ds_cont_filter(in->pfci_op.pi_uuid, &in->pfci_filt, &cont_buf, &ncont);
+	if (rc != 0) {
+		D_GOTO(out_svc, rc);
+	} else if ((in->pfci_ncont > 0) && (ncont > in->pfci_ncont)) {
+		/* Got a list, but client buffer not supplied or too small */
+		D_DEBUG(DB_MD, DF_UUID": hdl="DF_UUID": %"PRIu64" matching containers "
+			"(more than client: %"PRIu64")\n",DP_UUID(in->pfci_op.pi_uuid),
+			DP_UUID(in->pfci_op.pi_hdl), ncont, in->pfci_ncont);
+		D_GOTO(out_free_cont_buf, rc = -DER_TRUNC);
+	} else {
+		size_t nbytes = ncont * sizeof(struct daos_pool_cont_info2);
+
+		D_DEBUG(DB_MD, DF_UUID": hdl="DF_UUID": %"PRIu64" matching containers\n",
+			DP_UUID(in->pfci_op.pi_uuid), DP_UUID(in->pfci_op.pi_hdl), ncont);
+
+		/* Send any results only if client provided a handle */
+		if (cont_buf && (in->pfci_ncont > 0) && (in->pfci_cont_bulk != CRT_BULK_NULL))
+			rc = transfer_cont_buf(cont_buf, nbytes, svc, rpc, in->pfci_cont_bulk);
+	}
+out_free_cont_buf:
+	if (cont_buf) {
+		D_FREE(cont_buf);
+		cont_buf = NULL;
+	}
+out_svc:
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pfco_op.po_hint);
+	pool_svc_put_leader(svc);
+out:
+	out->pfco_op.po_rc = rc;
+	out->pfco_ncont = ncont;
+	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->pfci_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
 }
 
