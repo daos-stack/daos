@@ -35,12 +35,12 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky, fedora, leap.15]
+        distro: [ubuntu, rocky.9, fedora, leap.15]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
-          - distro: rocky
+          - distro: rocky.9
             base: el.8
             with: rockylinux/rockylinux:8
           - distro: fedora
@@ -221,7 +221,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky9]
+        distro: [alma.8, alma.9, rocky.8]
         include:
           - distro: alma.8
             base: el.8
@@ -229,7 +229,7 @@ jobs:
           - distro: alma.9
             base: el.9
             with: almalinux:9
-          - distro: rocky8
+          - distro: rocky.8
             base: el.8
             with: rockylinux/rockylinux:8
     env:

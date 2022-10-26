@@ -74,10 +74,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [rocky9, fedora, leap.15]
+        distro: [rocky.9, fedora, leap.15]
         compiler: [clang, gcc]
         include:
-          - distro: rocky9
+          - distro: rocky.9
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
