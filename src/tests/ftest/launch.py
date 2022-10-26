@@ -29,13 +29,14 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from slurm_setup import SlurmConfig
+
+# Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from host_utils import get_node_set, HostInfo, HostException                    # noqa: E402
+from host_utils import get_node_set, get_local_host, HostInfo, HostException    # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
-from run_utils import get_local_host, run_local, run_remote, RunException       # noqa: E402
+from run_utils import run_local, run_remote, RunException                       # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
 from user_utils import get_chown_command                                        # noqa: E402
 
@@ -238,26 +239,6 @@ def find_command(source, pattern, depth, other=None):
     elif isinstance(other, str):
         command.append(other)
     return " ".join(command)
-
-
-def setup_slurm_partitions(hosts, partition):
-    """Set up the requested slurm partition on the specified hosts.
-
-    Args:
-        hosts (NodeSet): list of hosts on which to setup a slurm partition.
-        partition (str, optional): slurm partition name. Defaults to None.
-
-    Raises:
-        LaunchException: if there was error installing or setting up slurm
-
-    """
-    logger.debug("-" * 80)
-    logger.debug("Setting up slurm partition '%s' on %s", partition, hosts)
-    slurm_config = SlurmConfig(logger, get_local_host(), hosts, True)
-    if not slurm_config.install():
-        raise LaunchException(f"Error installing slurm on {hosts}")
-    if not slurm_config.start(partition, debug=True):
-        raise LaunchException(f"Error starting slurm on {hosts}")
 
 
 class AvocadoInfo():
@@ -686,15 +667,18 @@ class TestInfo():
                 self.yaml_info[key] = get_node_set(info[key] if key in info else None)
             else:
                 self.yaml_info[key] = info[key] if key in info else None
-            logger.debug("  %-18s = %s", key, info[key])
+            logger.debug("  %-18s = %s", key, self.yaml_info[key])
 
         if include_localhost:
-            self.yaml_info[self.YAML_INFO_KEYS[3]].add(NodeSet(get_local_host()))
+            self.yaml_info[self.YAML_INFO_KEYS[3]].add(get_local_host())
             logger.debug(
                 "Adding the localhost to the clients: %s", self.yaml_info[self.YAML_INFO_KEYS[3]])
 
-    def set_host_info(self):
+    def set_host_info(self, control_node):
         """Set the test host information using the test yaml file.
+
+        Args:
+            control_node (NodeSet): the slurm control node
 
         Raises:
             LaunchException: if there is an error getting the host from the test yaml or a problem
@@ -704,7 +688,7 @@ class TestInfo():
         logger.debug("Using %s to define host information", self.yaml_file)
         try:
             self.host_info.set_hosts(
-                logger, self.yaml_info[self.YAML_INFO_KEYS[0]],
+                logger, control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
                 self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
                 self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
                 self.yaml_info[self.YAML_INFO_KEYS[5]])
@@ -753,7 +737,7 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
-        self.local_host = NodeSet(get_local_host())
+        self.local_host = get_local_host()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -764,8 +748,9 @@ class Launch():
         self.details = OrderedDict()
 
         # Options for creating slurm partitions
-        self.partition_hosts = NodeSet()
-        self.add_partition = False
+        self.slurm_control_node = NodeSet()
+        self.slurm_partition_hosts = NodeSet()
+        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -1018,8 +1003,13 @@ class Launch():
         setup_result.end()
 
         # Define options for creating any slurm partitions required by the tests
-        self.partition_hosts.add(args.test_clients or args.test_servers)
-        self.add_partition = args.setup_slurm
+        try:
+            self.slurm_control_node = NodeSet(args.slurm_control_node)
+        except TypeError:
+            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
+        self.slurm_add_partition = args.slurm_setup
 
         # Execute the tests
         status = self.run_tests(
@@ -1074,7 +1064,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = get_local_host()
+        self.details["launch host"] = str(get_local_host())
 
     def _create_log_dir(self):
         """Create the log directory and rename it if it already exists.
@@ -2137,32 +2127,37 @@ class Launch():
         # Verify any required partitions exist
         if test.yaml_info["client_partition"]:
             partition = test.yaml_info["client_partition"]
-            logger.debug(
-                "Determining if the %s client partition exists", partition)
-            control = NodeSet(get_local_host())
-            exists = show_partition(logger, control, partition).passed
-            if not exists and not self.add_partition:
+            logger.debug("Determining if the %s client partition exists", partition)
+            exists = show_partition(logger, self.slurm_control_node, partition).passed
+            if not exists and not self.slurm_add_partition:
                 message = f"Error missing {partition} partition"
                 self._fail_test(self.result.tests[-1], "Prepare", message, None)
                 return 128
-            if self.add_partition and exists:
-                logger.debug(
+            if self.slurm_add_partition and exists:
+                logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
-                if not delete_partition(logger, control, partition).passed:
+                if not delete_partition(logger, self.slurm_control_node, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self._fail_test(self.result.tests[-1], "Prepare", message, None)
                     return 128
-            if self.add_partition:
-                hosts = self.partition_hosts.difference(test.yaml_info["test_servers"])
-                logger.debug("Adding the %s partition with the %s hosts", partition, hosts)
-                if not create_partition(logger, control, partition, hosts).passed:
+            if self.slurm_add_partition:
+                hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
+                logger.debug(
+                    "Partition hosts from '%s', excluding test servers '%s': %s",
+                    self.slurm_partition_hosts, test.yaml_info["test_servers"], hosts)
+                if not hosts:
+                    message = "Error no partition hosts exist after removing the test servers"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+                logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
+                if not create_partition(logger, self.slurm_control_node, partition, hosts).passed:
                     message = f"Error adding the {partition} partition"
                     self._fail_test(self.result.tests[-1], "Prepare", message, None)
                     return 128
 
         # Define the hosts for this test
         try:
-            test.set_hosts()
+            test.set_host_info(self.slurm_control_node)
         except LaunchException:
             message = "Error setting up host information"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2422,7 +2417,7 @@ class Launch():
         """
         service = "daos_agent.service"
         # pylint: disable=unsupported-binary-operation
-        hosts = test.host_info.clients.hosts | NodeSet(get_local_host())
+        hosts = test.host_info.clients.hosts | get_local_host()
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2990,10 +2985,10 @@ class Launch():
             2: "ERROR: Failed avocado jobs detected!",
             4: "ERROR: Failed avocado commands detected!",
             8: "Interrupted avocado jobs detected!",
-            16: "ERROR: Failed archiving files after one or more tests!",
+            16: "ERROR: Failed to archive files after one or more tests!",
             32: "ERROR: Failed log size threshold check after one or more tests!",
             64: "ERROR: Failed to create a junit xml test error file!",
-            128: "ERROR: Failed to preparing the hosts before running the test!",
+            128: "ERROR: Failed to prepare the hosts before running the one or more tests!",
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
@@ -3171,9 +3166,16 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--setup_slurm",
+        "-ss", "--slurm_setup",
         action="store_true",
-        help="setup slurm if required by the tests")
+        help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "-sc", "--slurm_control_node",
+        action="store",
+        default=str(get_local_host()),
+        type=str,
+        help="slurm control node where scontrol commands will be issued to check for the existence "
+             "of any slurm partitions required by the tests")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3232,7 +3234,7 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
-        args.setup_slurm = True
+        args.slurm_setup = True
 
     # Perform the steps defined by the arguments specified
     try:

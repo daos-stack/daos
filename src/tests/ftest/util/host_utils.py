@@ -4,11 +4,11 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import re
+from socket import gethostname
 
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from ClusterShell.NodeSet import NodeSet
 
-from run_utils import RunException, run_local
+from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 
 
 class HostException(Exception):
@@ -57,71 +57,14 @@ def get_node_set(hosts):
     return NodeSet(hosts)
 
 
-def get_partition_hosts(log, partition):
-    """Get the hosts defined in the specified slurm partition.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        partition (str): name of the slurm partition from which to obtain the names
-
-    Raises:
-        HostException: if there is a problem obtaining the hosts from the slurm partition
+def get_local_host():
+    """Get the local host name.
 
     Returns:
-        NodeSet: slurm partition hosts
+        NodeSet: a NodeSet including the local host
 
     """
-    if partition is None:
-        return NodeSet()
-
-    # Get the partition name information
-    try:
-        result = run_local(log, ["scontrol", "show", "partition", partition])
-    except RunException as error:
-        raise HostException(
-            f"Unable to obtain hosts from the {partition} slurm partition") from error
-
-    # Get the list of hosts from the partition information
-    output = result.stdout
-    try:
-        return NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0])
-    except (NodeSetParseError, IndexError) as error:
-        raise HostException(
-            f"Unable to obtain hosts from the {partition} slurm partition output") from error
-
-
-def get_reservation_hosts(log, reservation):
-    """Get the hosts defined in the specified slurm reservation.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        partition (str): name of the slurm reservation from which to obtain the names
-
-    Raises:
-        HostException: if there is a problem obtaining the hosts from the slurm reservation
-
-    Returns:
-        NodeSet: slurm reservation hosts
-
-    """
-    if not reservation:
-        return NodeSet()
-
-    # Get the list of hosts from the reservation information
-    try:
-        result = run_local(
-            log, ["scontrol", "show", "reservation", reservation], timeout=10)
-    except RunException as error:
-        raise HostException(
-            f"Unable to obtain hosts from the {reservation} slurm reservation") from error
-
-    # Get the list of hosts from the reservation information
-    output = result.stdout
-    try:
-        return NodeSet(re.findall(r"\sNodes=(\S+)", output)[0])
-    except (NodeSetParseError, IndexError) as error:
-        raise HostException(
-            f"Unable to obtain hosts from the {reservation} slurm reservation output") from error
+    return get_node_set(gethostname().split(".")[0])
 
 
 class HostInfo():
@@ -178,12 +121,13 @@ class HostInfo():
         log.info("client_reservation:  %s", self.clients.partition.reservation)
         log.info("access_points:       %s", self.access_points)
 
-    def set_hosts(self, log, server_hosts, server_partition, server_reservation, client_hosts,
-                  client_partition, client_reservation):
+    def set_hosts(self, log, control_host, server_hosts, server_partition, server_reservation,
+                  client_hosts, client_partition, client_reservation):
         """Set the host information.
 
         Args:
             log (logger): logger for the messages produced by this method
+            control_host (object): slurm control host
             server_hosts (object): hosts to define as servers
             server_partition (str): server partition name
             server_reservation (str): server reservation name
@@ -195,15 +139,21 @@ class HostInfo():
             HostException: if there is a problem obtaining the hosts
 
         """
-        self._servers = HostRole(
-            server_hosts, server_partition, server_reservation,
-            get_partition_hosts(log, server_partition),
-            get_reservation_hosts(log, server_reservation))
+        try:
+            self._servers = HostRole(
+                server_hosts, server_partition, server_reservation,
+                get_partition_hosts(log, control_host, server_partition),
+                get_reservation_hosts(log, control_host, server_reservation))
+        except SlurmFailed as error:
+            raise HostException("Error defining the server hosts") from error
 
-        self._clients = HostRole(
-            client_hosts, client_partition, client_reservation,
-            get_partition_hosts(log, client_partition),
-            get_reservation_hosts(log, client_reservation))
+        try:
+            self._clients = HostRole(
+                client_hosts, client_partition, client_reservation,
+                get_partition_hosts(log, control_host, client_partition),
+                get_reservation_hosts(log, control_host, client_reservation))
+        except SlurmFailed as error:
+            raise HostException("Error defining the server hosts") from error
 
         # Optionally remove any servers that may have ended up in the client list.  This can occur
         # with tests using slurm partitions as the client partition is setup with all of the hosts.
@@ -231,7 +181,7 @@ class HostRole():
         """
         self._partition = HostPartition(partition, partition_hosts, reservation, reservation_hosts)
         if self.partition.hosts:
-            self._hosts = NodeSet(self.partition.hosts)
+            self._hosts = get_node_set(self.partition.hosts)
         else:
             self._hosts = get_node_set(hosts)
 
@@ -269,9 +219,9 @@ class HostPartition():
                 Defaults to None.
         """
         self.name = name
-        self._hosts = NodeSet(hosts)
+        self._hosts = get_node_set(hosts)
         self.reservation = reservation
-        self.reservation_hosts = NodeSet(reservation_hosts)
+        self.reservation_hosts = get_node_set(reservation_hosts)
 
     @property
     def hosts(self):

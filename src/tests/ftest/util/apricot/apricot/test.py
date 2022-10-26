@@ -9,6 +9,7 @@ from ast import literal_eval
 import os
 import json
 import re
+import sys
 from time import time
 
 from avocado import fail_on, skip, TestFail
@@ -29,10 +30,10 @@ from general_utils import \
     stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
     set_avocado_config_value, nodeset_append_suffix
-from host_utils import get_host_parameters, get_partition_hosts, get_reservation_hosts, HostRole, \
-    HostInfo, HostException
+from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
+from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
@@ -558,18 +559,21 @@ class TestWithoutServers(Test):
             NodeSet: the set of hosts to test obtained from the test yaml
 
         """
+        control = get_local_host()
         data = list(get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace))
         try:
-            data.append(get_partition_hosts(self.log, data[1]))
-        except HostException as error:
+            data.append(get_partition_hosts(self.log, control, data[1]))
+        except SlurmFailed:
             self.log.error(
-                "Error collecting hosts from the %s partition", partition_key, exc_info=error)
+                "Error collecting hosts from the %s partition",
+                partition_key, exc_info=sys.exc_info())
             self.fail("Unable to collect partition information")
         try:
-            data.append(get_reservation_hosts(self.log, data[2]))
-        except HostException as error:
+            data.append(get_reservation_hosts(self.log, control, data[2]))
+        except SlurmFailed:
             self.log.error(
-                "Error collecting hosts from the %s reservation", reservation_key, exc_info=error)
+                "Error collecting hosts from the %s reservation",
+                reservation_key, exc_info=sys.exc_info())
             self.fail("Unable to collect reservation information")
         role = HostRole(*data)
         return role.hosts
@@ -697,9 +701,9 @@ class TestWithServers(TestWithoutServers):
         client_params = get_host_parameters(
             self, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
         try:
-            self.host_info.set_hosts(self.log, *server_params, *client_params)
-        except HostException as error:
-            self.log.error("Error collecting host information", exc_info=error)
+            self.host_info.set_hosts(self.log, get_local_host(), *server_params, *client_params)
+        except HostException:
+            self.log.error("Error collecting host information", exc_info=sys.exc_info())
             self.fail("Unable to collect host information for the test")
         self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
         self.hostlist_clients = NodeSet(self.host_info.clients.hosts)

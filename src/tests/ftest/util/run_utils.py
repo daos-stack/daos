@@ -78,6 +78,19 @@ class RemoteCommandResult():
         """
         return any(data.timeout for data in self.output)
 
+    @property
+    def all_stdout(self):
+        """Get all of the stdout from the issued command from each host.
+
+        Returns:
+            dict: the stdout (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stdout = {}
+        for data in self.output:
+            stdout[str(data.hosts)] = '\n'.join(data.stdout)
+        return stdout
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 
@@ -129,6 +142,22 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+def get_switch_user(user="root"):
+    """Get the switch user command for the requested user.
+
+    Args:
+        user (str): user account. Defaults to "root".
+
+    Returns:
+        list: the sudo command as a list
+
+    """
+    command = ["sudo", "-n"]
+    if user != "root":
+        command.extend(["-u", user])
+    return command
+
+
 def get_clush_command_list(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
@@ -148,8 +177,8 @@ def get_clush_command_list(hosts, args=None, sudo=False):
         command.insert(1, args)
     if sudo:
         # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
+        # command.extend(["-o", "-oStrictHostKeyChecking=no", get_switch_user()])
+        command.extend(get_switch_user())
     return command
 
 
@@ -208,7 +237,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
                 - stderr (not used; included in stdout)
 
     """
-    local_host = get_local_host()
+    local_host = gethostname().split(".")[0]
     command_str = " ".join(command)
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
@@ -221,7 +250,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     try:
         # pylint: disable=subprocess-run-check
-        result = subprocess.run(command, **kwargs)
+        result = subprocess.run(command, **kwargs)     # nosec
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out

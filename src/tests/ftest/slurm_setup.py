@@ -17,7 +17,7 @@ import sys
 from ClusterShell.NodeSet import NodeSet
 
 from util.logger_utils import get_console_handler
-from util.run_utils import get_clush_command_list, run_local, run_remote, RunException
+from util.run_utils import get_clush_command_list, run_remote
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     for cmd in cmdlist:
         if sudo:
             cmd = "sudo {}".format(cmd)
-        if not run_remote(logger, nodes, cmd).passed:
+        if not run_remote(logger, nodes, cmd, timeout=600).passed:
             # Do not bother executing any remaining commands if this one failed
             return 1
     return 0
@@ -139,16 +139,14 @@ def configuring_packages(args, action):
 
     Args:
         args (Namespace): command line arguments
-        action (str):  install or remove
+        action (str): 'install' or 'remove'
 
     """
     # Install packages on control and compute nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = []
-    for package in PACKAGE_LIST:
-        logger.info("%s %s on %s", action, package, all_nodes)
-        cmd_list.append("dnf {} -y ".format(action) + package)
-    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+    logger.info("%s slurm packages on %s: %s", action, all_nodes, ", ".join(PACKAGE_LIST))
+    command = ["dnf", action, "-y"] + PACKAGE_LIST
+    return execute_cluster_cmds(all_nodes, [" ".join(command)], args.sudo)
 
 
 def start_munge(args):
@@ -192,9 +190,7 @@ def start_munge(args):
     # copy munge.key to all hosts
     command = get_clush_command_list(nodes)
     command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
-    try:
-        run_local(logger, command, check=True)
-    except RunException:
+    if execute_cluster_cmds(args.control, [" ".join(command)]) > 0:
         return 1
 
     # set the protection back to defaults

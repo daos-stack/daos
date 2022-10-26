@@ -12,7 +12,7 @@ import time
 import threading
 import re
 
-from ClusterShell.NodeSet import NodeSet
+from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
 from general_utils import run_command, DaosTestError
 from run_utils import run_remote
@@ -31,14 +31,16 @@ def cancel_jobs(job_id):
     Args:
         job_id (int): slurm job id
 
+    Raises:
+        SlurmFailed: if there is an error cancelling the slurm jobs
+
     Returns:
         int: return status from scancel command
 
     """
     result = run_command("scancel {}".format(job_id), raise_exception=False)
     if result.exit_status > 0:
-        raise SlurmFailed(
-            "Slurm: scancel failed to kill job {}".format(job_id))
+        raise SlurmFailed("Slurm: scancel failed to kill job {}".format(job_id))
     return result.exit_status
 
 
@@ -61,11 +63,11 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
 
     """
     command = ['scontrol', 'create']
-    command.append('='.join(['PartitionName', name]))
-    command.append('='.join(['Nodes', hosts]))
-    command.append('='.join(['Default', default]))
-    command.append('='.join(['MaxTime', max_time]))
-    command.append('='.join(['State', state]))
+    command.append('='.join(['PartitionName', str(name)]))
+    command.append('='.join(['Nodes', str(hosts)]))
+    command.append('='.join(['Default', str(default)]))
+    command.append('='.join(['MaxTime', str(max_time)]))
+    command.append('='.join(['State', str(state)]))
     return run_remote(log, control, ' '.join(command))
 
 
@@ -82,7 +84,7 @@ def delete_partition(log, control, name):
 
     """
     command = ['scontrol', 'delete']
-    command.append('='.join(['PartitionName', name]))
+    command.append('='.join(['PartitionName', str(name)]))
     return run_remote(log, control, ' '.join(command))
 
 
@@ -102,43 +104,97 @@ def show_partition(log, control, name):
     return run_remote(log, control, ' '.join(command))
 
 
-def get_reserved_nodes(reservation, partition):
-    """Get the reserved nodes.
+def show_reservation(log, control, name):
+    """Show the slurm reservation.
 
     Args:
-        reservation (str): reservation name
-        partition (str): partition name
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        name (str): slurm reservation name
 
     Returns:
-        list: return list of reserved nodes in partition
+        RemoteCommandResult: results from the scontrol command
 
     """
-    partition_hosts = []
-    hosts = []
-    # Get the partition information
-    cmd = "scontrol show partition {}".format(partition)
-    partition_result = run_command(cmd, raise_exception=False)
+    command = ['scontrol', 'show', 'reservation', name]
+    return run_remote(log, control, ' '.join(command))
 
-    if partition_result:
-        # Get the list of hosts from the reservation information
-        output = partition_result.stdout_text
-        match = re.search(r"\sNodes=(\S+)", str(output))
-        if match is not None:
-            partition_hosts = list(NodeSet(match.group(1)))
-            print("partition_hosts = {}".format(partition_hosts))
-            # partition hosts exists; continue with valid partition
-            cmd = "scontrol show reservation {}".format(reservation)
-            reservation_result = run_command(cmd, raise_exception=False)
-            if reservation_result:
-                # Get the list of hosts from the reservation information
-                output = reservation_result.stdout_text
-                match = re.search(r"\sNodes=(\S+)", str(output))
-                if match is not None:
-                    reservation_hosts = list(NodeSet(match.group(1)))
-                    print("reservation_hosts = {}".format(reservation_hosts))
-                    if set(reservation_hosts).issubset(set(partition_hosts)):
-                        hosts = reservation_hosts
-    return hosts
+
+def sinfo(log, control):
+    """Run the sinfo command.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+
+    Returns:
+        RemoteCommandResult: results from the sinfo command
+
+    """
+    return run_remote(log, control, 'sinfo')
+
+
+def get_partition_hosts(log, control, partition):
+    """Get the hosts defined in the specified slurm partition.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control_host (NodeSet): slurm control host
+        partition (str): name of the slurm partition from which to obtain the names
+
+    Raises:
+        SlurmFailed: if there is a problem obtaining the hosts from the slurm partition
+
+    Returns:
+        NodeSet: slurm partition hosts
+
+    """
+    if partition is None:
+        return NodeSet()
+
+    # Get the partition name information
+    result = show_partition(log, control, partition)
+    if not result.passed:
+        raise SlurmFailed(f'Unable to obtain hosts from the {partition} slurm partition')
+
+    # Get the list of hosts from the partition information
+    try:
+        output = '\n'.join(result.all_stdout.values())
+        return NodeSet(','.join(re.findall(r'\s+Nodes=(.*)', output)))
+    except (NodeSetParseError, TypeError) as error:
+        raise SlurmFailed(
+            f'Unable to obtain hosts from the {partition} slurm partition output') from error
+
+
+def get_reservation_hosts(log, control, reservation):
+    """Get the hosts defined in the specified slurm reservation.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        partition (str): name of the slurm reservation from which to obtain the names
+
+    Raises:
+        SlurmFailed: if there is a problem obtaining the hosts from the slurm reservation
+
+    Returns:
+        NodeSet: slurm reservation hosts
+
+    """
+    if not reservation:
+        return NodeSet()
+
+    # Get the list of hosts from the reservation information
+    result = show_reservation(log, control, reservation)
+    if not result.passed:
+        raise SlurmFailed(f'Unable to obtain hosts from the {reservation} slurm reservation')
+
+    # Get the list of hosts from the reservation information
+    try:
+        output = '\n'.join(result.all_stdout.values())
+        return NodeSet(','.join(re.findall(r'\sNodes=(\S+)', output)))
+    except (NodeSetParseError, TypeError) as error:
+        raise SlurmFailed(
+            f'Unable to obtain hosts from the {reservation} slurm reservation output') from error
 
 
 def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
@@ -324,6 +380,9 @@ def srun(hosts, cmd, srun_params=None, timeout=60):
         cmd (str): cmdline to execute
         srun_params(dict): additional params for srun
         timeout
+
+    Raises:
+        SlurmFailed: if there is an error running the srun command
 
     Returns:
         CmdResult: object containing the result (exit status, stdout, etc.) of
