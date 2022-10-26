@@ -278,6 +278,7 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 #define CHK_DUMMY_POOL		"00000000-0000-0000-0000-000020220531"
 #define CHK_INVAL_PHASE		(uint32_t)(-1)
+#define CHK_INVAL_STATUS	(uint32_t)(-1)
 
 #define CHK_BTREE_ORDER		16
 
@@ -356,34 +357,26 @@ struct chk_property {
 };
 
 /*
- * XXX: For each check instance, there are one leader instance and 1 ~ N engine instances.
- *	For each rank, there can be at most one leader instance and one engine instance.
+ * For each check instance, there are one leader instance and 1 ~ N engine instances.
+ * For each rank, there can be at most one leader instance and one engine instance.
  *
- *	Currently, we do not support to run multiple check instances in the system (even
- *	if they are on different ranks sets) at the same time. If multiple pools need to
- *	be checked, then please either specify their uuids together (or not specify pool
- *	option, then check all pools by default) via single "dmg check" command, or wait
- *	one check instance done and then start next.
+ * Currently, we do not support to run multiple check instances in the system (even
+ * if they are on different ranks sets) at the same time. If multiple pools need to
+ * be checked, then please either specify their uuids together (or not specify pool
+ * option, then check all pools by default) via single "dmg check" command, or wait
+ * one check instance done and then start next.
  */
 struct chk_instance {
 	struct chk_bookmark	 ci_bk;
 	struct chk_property	 ci_prop;
-	/*
-	 * For leader, ci_{btr,hdl,list} trace the ranks (engines) that still run check.
-	 * For engine, they trace the local pools that are still in checking or pending.
-	 */
-	union {
-		struct btr_root	 ci_rank_btr;
-		struct btr_root	 ci_pool_btr;
-	};
-	union {
-		daos_handle_t	 ci_rank_hdl;
-		daos_handle_t	 ci_pool_hdl;
-	};
-	union {
-		d_list_t	 ci_rank_list;
-		d_list_t	 ci_pool_list;
-	};
+
+	struct btr_root		 ci_rank_btr;
+	daos_handle_t		 ci_rank_hdl;
+	d_list_t		 ci_rank_list;
+
+	struct btr_root		 ci_pool_btr;
+	daos_handle_t		 ci_pool_hdl;
+	d_list_t		 ci_pool_list;
 
 	struct btr_root		 ci_pending_btr;
 	daos_handle_t		 ci_pending_hdl;
@@ -506,6 +499,12 @@ struct chk_pool_filter_args {
 	uuid_t			*cpfa_pools;
 };
 
+struct chk_traverse_pools_args {
+	uint64_t		 ctpa_gen;
+	struct chk_instance	*ctpa_ins;
+	uint32_t		 ctpa_status;
+};
+
 extern struct crt_proto_format	chk_proto_fmt;
 
 extern struct crt_corpc_ops	chk_start_co_ops;
@@ -529,14 +528,13 @@ void chk_pools_dump(int pool_nr, uuid_t pools[]);
 
 int chk_pool_filter(uuid_t uuid, void *arg);
 
-int chk_dup_label(char **tgt, const char *src, size_t len);
+void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret);
 
-void chk_stop_sched(struct chk_instance *ins);
+int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
 
-int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
-		     uint32_t flags, int phase, d_rank_t leader,
-		     struct chk_property *prop, d_rank_list_t **rlist);
+int chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen);
+
+int chk_pools_add_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
 		       struct chk_bookmark *bk, struct chk_instance *ins,
@@ -551,9 +549,14 @@ int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_r
 
 void chk_pending_destroy(struct chk_pending_rec *cpr);
 
-int chk_ins_init(struct chk_instance *ins);
+int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		     uint32_t flags, int phase, d_rank_t leader,
+		     struct chk_property *prop, d_rank_list_t **rlist);
 
-void chk_ins_fini(struct chk_instance *ins);
+int chk_ins_init(struct chk_instance **p_ins);
+
+void chk_ins_fini(struct chk_instance **p_ins);
 
 /* chk_engine.c */
 
@@ -767,6 +770,12 @@ chk_destroy_pending_tree(struct chk_instance *ins)
 }
 
 static inline void
+chk_destroy_pool_tree(struct chk_instance *ins)
+{
+	chk_destroy_tree(&ins->ci_pool_hdl, &ins->ci_pool_btr);
+}
+
+static inline void
 chk_query_free(struct chk_query_pool_shard *shards, uint32_t shard_nr)
 {
 	int	i;
@@ -886,6 +895,80 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 		ABT_thread_free(&cpr->cpr_thread);
 	} else {
 		ABT_mutex_unlock(cpr->cpr_mutex);
+	}
+}
+
+static inline bool
+chk_pool_in_zombie(struct chk_pool_rec *cpr)
+{
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	bool			 found = false;
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		if (clue->pc_dir == DS_POOL_DIR_ZOMBIE) {
+			found = true;
+			break;
+		}
+	}
+
+	return found;
+}
+
+static inline int
+chk_pool_has_err(struct chk_pool_rec *cpr)
+{
+	struct chk_pool_shard	*cps;
+	struct ds_pool_clue	*clue;
+	int			 rc = 0;
+
+	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
+		clue = cps->cps_data;
+		if (clue->pc_rc < 0) {
+			rc = clue->pc_rc;
+			break;
+		}
+	}
+
+	return rc >= 0 ? 0 : rc;
+}
+
+static inline int
+chk_pools_add_from_dir(uuid_t uuid, void *args)
+{
+	struct chk_traverse_pools_args	*ctpa = args;
+
+	return chk_pool_start_one(ctpa->ctpa_ins, uuid, ctpa->ctpa_gen);
+}
+
+static inline int
+chk_dup_label(char **tgt, const char *src, size_t len)
+{
+	int	rc = 0;
+
+	if (src == NULL) {
+		*tgt = NULL;
+	} else {
+		D_STRNDUP(*tgt, src, len);
+		if (*tgt == NULL)
+			rc = -DER_NOMEM;
+	}
+
+	return rc;
+}
+
+static inline void
+chk_stop_sched(struct chk_instance *ins)
+{
+	ABT_mutex_lock(ins->ci_abt_mutex);
+	if (ins->ci_sched != ABT_THREAD_NULL && ins->ci_sched_running) {
+		ins->ci_sched_running = 0;
+		ABT_cond_broadcast(ins->ci_abt_cond);
+		ABT_mutex_unlock(ins->ci_abt_mutex);
+		ABT_thread_free(&ins->ci_sched);
+	} else {
+		ABT_mutex_unlock(ins->ci_abt_mutex);
 	}
 }
 
