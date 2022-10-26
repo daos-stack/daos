@@ -118,21 +118,8 @@ chk_pool_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct chk_pool_rec	*cpr = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_iov_t			*val_iov = args;
-	struct chk_pool_shard	*cps;
 
 	rec->rec_off = UMOFF_NULL;
-
-	while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
-				       cps_link)) != NULL) {
-		if (cps->cps_free_cb != NULL)
-			cps->cps_free_cb(cps->cps_data);
-		else
-			D_FREE(cps->cps_data);
-		D_FREE(cps);
-	}
-
-	D_FREE(cpr->cpr_clues.pcs_array);
-
 	if (val_iov != 0)
 		d_iov_set(val_iov, cpr, sizeof(*cpr));
 	else

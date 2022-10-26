@@ -100,24 +100,26 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			rc = -DER_IVCB_FORWARD;
 		} else {
 			/*
-			 * If it is message to engine, then it must be triggered by leader.
+			 * If it is message to engine, then it may be triggered by check leader,
+			 * but it also may be from the pool service leader to other pool shards.
 			 * Return zero that will trigger IV_SYNC to other check engines.
 			 */
-			D_ASSERT(chk_is_on_leader(src_iv->ci_gen, -1, false));
+			if (!src_iv->ci_from_psl)
+				D_ASSERT(chk_is_on_leader(src_iv->ci_gen, -1, false));
 
 			rc = 0;
 		}
 	} else if (src_iv->ci_to_leader) {
 		*dst_iv = *src_iv;
-		rc = chk_leader_notify(dst_iv->ci_gen, dst_iv->ci_rank, dst_iv->ci_phase,
-				       dst_iv->ci_status);
+		rc = chk_leader_notify(dst_iv);
 	} else {
 		/*
 		 * We got an IV SYNC (refresh) RPC from some engine. But because the engine
 		 * always set CRT_IV_SHORTCUT_TO_ROOT for sync, then this should not happen.
 		 */
-		D_ERROR("Got invalid IV SYNC with gen "DF_X64", rank %u, phase %u, status %d\n",
-			src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_status);
+		D_ERROR("Got invalid IV SYNC with gen "DF_X64", rank %u, phase %u, status %d/%d\n",
+			src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_ins_status,
+			src_iv->ci_pool_status);
 		rc = -DER_IO;
 	}
 
@@ -131,12 +133,17 @@ chk_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 {
 	struct chk_iv	*dst_iv = entry->iv_value.sg_iovs[0].iov_buf;
 	struct chk_iv	*src_iv = src->sg_iovs[0].iov_buf;
+	int		 rc = 0;
 
 	D_ASSERT(src_iv->ci_to_leader == 0);
 
-	*dst_iv = *src_iv;
-	return chk_engine_notify(dst_iv->ci_gen, dst_iv->ci_uuid, dst_iv->ci_rank, dst_iv->ci_phase,
-				 dst_iv->ci_status, dst_iv->ci_remove_pool ? true : false);
+	/* Do not need local refresh for the pool service leader. */
+	if (src_iv->ci_rank != dss_self_rank() || !src_iv->ci_from_psl) {
+		*dst_iv = *src_iv;
+		rc = chk_engine_notify(dst_iv);
+	}
+
+	return rc;
 }
 
 static int
@@ -168,10 +175,10 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 
 	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
 		/*
-		 * XXX: It is the check engine sends IV message to the check leader on
-		 *	the same rank. Then directly notify the check leader without RPC.
+		 * It is the check engine sends IV message to the check leader on
+		 * the same rank. Then directly notify the check leader without RPC.
 		 */
-		rc = chk_leader_notify(iv->ci_gen, iv->ci_rank, iv->ci_phase, iv->ci_status);
+		rc = chk_leader_notify(iv);
 	} else {
 		iov.iov_buf = iv;
 		iov.iov_len = sizeof(*iv);

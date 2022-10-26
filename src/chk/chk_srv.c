@@ -161,14 +161,30 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 }
 
 static void
+ds_chk_pool_start_hdlr(crt_rpc_t *rpc)
+{
+	struct chk_pool_start_in	*cpsi = crt_req_get(rpc);
+	struct chk_pool_start_out	*cpso = crt_reply_get(rpc);
+	int				 rc;
+
+	rc = chk_engine_pool_start(cpsi->cpsi_gen, cpsi->cpsi_pool, cpsi->cpsi_phase);
+
+	cpso->cpso_status = rc;
+	cpso->cpso_rank = dss_self_rank();
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to reply check pool start: "DF_RC"\n", DP_RC(rc));
+}
+
+static void
 ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
 {
 	struct chk_pool_mbs_in	*cpmi = crt_req_get(rpc);
 	struct chk_pool_mbs_out	*cpmo = crt_reply_get(rpc);
 	int			 rc;
 
-	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_label,
-				 cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
+	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_phase,
+				 cpmi->cpmi_label, cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
 				 cpmi->cpmi_targets.ca_arrays, &cpmo->cpmo_hint);
 
 	cpmo->cpmo_status = rc;
