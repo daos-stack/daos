@@ -1494,7 +1494,7 @@ rebuild_ults(void *arg)
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
-					    DSS_XS_SELF, 0, 0, NULL);
+					    DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				/* TODO: This needs to be expanded to select the
