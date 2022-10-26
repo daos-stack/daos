@@ -827,12 +827,14 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 {
 	D_ASSERT(cpr->cpr_refs > 0);
 
-	if (cpr->cpr_thread != ABT_THREAD_NULL) {
-		ABT_mutex_lock(cpr->cpr_mutex);
+	ABT_mutex_lock(cpr->cpr_mutex);
+	if (cpr->cpr_thread != ABT_THREAD_NULL && !cpr->cpr_stop) {
 		cpr->cpr_stop = 1;
 		ABT_cond_broadcast(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		ABT_thread_free(&cpr->cpr_thread);
+	} else {
+		ABT_mutex_unlock(cpr->cpr_mutex);
 	}
 }
 

@@ -71,12 +71,11 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 		if (strncmp(DAOS_PROP_NO_PO_LABEL, value.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0) {
 			clue_out->pc_label_len = 0;
 		} else {
-			D_ALLOC(clue_out->pc_label, value.iov_len + 1);
+			D_STRNDUP(clue_out->pc_label, value.iov_buf, value.iov_len);
 			if (clue_out->pc_label == NULL)
 				D_GOTO(out_root, rc = -DER_NOMEM);
 
 			clue_out->pc_label_len = value.iov_len;
-			memcpy(clue_out->pc_label, value.iov_buf, value.iov_len);
 		}
 	} else if (rc == -DER_NONEXIST) {
 		clue_out->pc_label_len = 0;

@@ -431,7 +431,7 @@ chk_pool_has_err(struct chk_pool_rec *cpr)
 		}
 	}
 
-	return rc;
+	return rc >= 0 ? 0 : rc;
 }
 
 static int
@@ -474,13 +474,17 @@ chk_leader_locate_pool_clue(struct chk_pool_rec *cpr)
 	D_ASSERT(cpr->cpr_advice < cpr->cpr_shard_nr);
 
 	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-		clue = cps->cps_data;
-		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
-			continue;
+		if (i++ == cpr->cpr_advice) {
+			clue = cps->cps_data;
 
-		if (i++ == cpr->cpr_advice)
+			D_ASSERT(clue != NULL);
+			D_ASSERT(clue->pc_svc_clue != NULL);
+
 			break;
+		}
 	}
+
+	D_ASSERT(clue != NULL);
 
 	return clue;
 }
@@ -559,7 +563,11 @@ chk_leader_reset_pool_svc(struct chk_pool_rec *cpr)
 
 	D_ASSERT(chosen >= 0 && clues->pcs_len > chosen);
 
-	D_ALLOC_ARRAY(ranks, clues->pcs_len);
+	/* If the chosen one is the unique PS replica, then do nothing. */
+	if (clues->pcs_len == 1)
+		D_GOTO(out, rc = 0);
+
+	D_ALLOC_ARRAY(ranks, clues->pcs_len - 1);
 	if (ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -644,13 +652,13 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			break;
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
 		}
-
-		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 2;
 		break;
 	}
 
@@ -818,14 +826,15 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 interact:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			break;
+			cpr->cpr_skip = 1;
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 3;
 		}
-
-		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
-		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 3;
 		break;
 	}
 
@@ -957,6 +966,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 
 	result = chk_pool_has_err(cpr);
 	if (result != 0) {
+		cpr->cpr_skip = 1;
 		D_WARN(DF_LEADER" some engine failed to report information for pool "
 		       DF_UUIDF", skip it\n", DP_LEADER(ins), DP_UUID(cpr->cpr_uuid));
 		goto out;
@@ -1008,13 +1018,14 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 				/* Ignore the inconsistency if admin does not want interaction. */
+				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 				cbk->cb_statistics.cs_ignored++;
-				break;
+				cpr->cpr_skip = 1;
+			} else {
+				options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+				options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+				option_nr = 2;
 			}
-
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
 			break;
 		}
 	} else {
@@ -1088,7 +1099,9 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 				/* Ignore the inconsistency if admin does not want interaction. */
+				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 				cbk->cb_statistics.cs_ignored++;
+				cpr->cpr_skip = 1;
 				break;
 			}
 
@@ -1178,6 +1191,8 @@ ignore:
 			result = chk_leader_destroy_pool(cpr, seq, true);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
 		}
 		/*
 		 * If want to destroy the corrupted pool, then skip subsequent check in spite of
@@ -1403,6 +1418,7 @@ try_ps:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
 			break;
 		}
@@ -1584,9 +1600,9 @@ chk_leader_handle_pools_list(struct chk_sched_args *csa)
 				continue;
 
 			clue = chk_leader_locate_pool_clue(cpr);
-			if ((clue->pc_label == NULL && clp->clp_label == NULL) ||
-			    (clue->pc_label != NULL && clp->clp_label != NULL &&
-			     strcmp(clue->pc_label, clp->clp_label) == 0))
+			if ((clue->pc_label == NULL && clp[i].clp_label == NULL) ||
+			    (clue->pc_label != NULL && clp[i].clp_label != NULL &&
+			     strcmp(clue->pc_label, clp[i].clp_label) == 0))
 				continue;
 
 			rc = chk_leader_handle_pool_label(cpr, clue, &clp[i]);
@@ -2652,6 +2668,7 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_pending_rec	*cpr = NULL;
 	int			 rc;
 
@@ -2672,7 +2689,7 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 	if (rc != 0)
 		goto out;
 
-	D_ASSERT(cpr->cpr_busy == 1);
+	D_ASSERT(cpr->cpr_busy);
 
 	if (cpr->cpr_on_leader) {
 		ABT_mutex_lock(cpr->cpr_mutex);
@@ -2684,13 +2701,13 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 		cpr->cpr_action = act;
 		ABT_cond_broadcast(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
-	}
-
-	if (!cpr->cpr_on_leader || for_all) {
+		if (for_all && likely(prop->cp_policies[cpr->cpr_class] != act)) {
+			prop->cp_policies[cpr->cpr_class] = act;
+			rc = chk_prop_update(prop, NULL);
+		}
+	} else  {
 		rc = chk_act_remote(ins->ci_ranks, cbk->cb_gen, seq,
 				    cpr->cpr_class, act, cpr->cpr_rank, for_all);
-		if (rc != 0)
-			goto out;
 	}
 
 out:
@@ -2720,7 +2737,8 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	*seq = ++(ins->ci_seq);
+	if (*seq == 0)
+		*seq = ++(ins->ci_seq);
 
 	D_INFO(DF_LEADER" handle %s report from rank %u with seq "
 	       DF_X64" class %u, action %u, result %d\n", DP_LEADER(ins),
@@ -2752,25 +2770,31 @@ log:
 	if (decision == NULL || cpr == NULL)
 		goto out;
 
-	D_ASSERT(cpr->cpr_busy == 1);
+	D_ASSERT(cpr->cpr_busy);
 
 	D_INFO(DF_LEADER" need interaction for class %u with seq "DF_X64"\n",
 	       DP_LEADER(ins), cru->cru_cla, *seq);
 
 	ABT_mutex_lock(cpr->cpr_mutex);
-	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+
+again:
+	if (!ins->ci_sched_running || cpr->cpr_exiting) {
 		ABT_mutex_unlock(cpr->cpr_mutex);
-	} else {
-		ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
-		ABT_mutex_unlock(cpr->cpr_mutex);
-		if (!ins->ci_sched_running || cpr->cpr_exiting)
-			goto out;
+		goto out;
 	}
 
-	*decision = cpr->cpr_action;
+	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+		*decision = cpr->cpr_action;
+		ABT_mutex_unlock(cpr->cpr_mutex);
+		goto out;
+	}
+
+	ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
+
+	goto again;
 
 out:
-	if (cpr != NULL)
+	if ((rc != 0 || decision != NULL) && cpr != NULL)
 		chk_pending_destroy(cpr);
 
 	return rc;
@@ -2789,8 +2813,7 @@ chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status)
 
 	/* Ignore the notification that is not applicable to current rank. */
 
-	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER ||
-	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
+	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	if (cbk->cb_gen != gen)
