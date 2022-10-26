@@ -208,6 +208,7 @@ out:
 	D_FREE(report.dkey);
 	D_FREE(report.akey);
 	D_FREE(report.timestamp);
+	D_FREE(report.act_details);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Check leader upcall for instance "DF_X64" for seq "DF_X64": "DF_RC"\n",

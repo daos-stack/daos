@@ -384,7 +384,9 @@ ds_chk_listpool_upcall(struct chk_list_pool **clp)
 	if (reqb == NULL)
 		D_GOTO(out_req, rc = -DER_NOMEM);
 
-	srv__check_list_pool_req__pack(&req, reqb);
+	rc = srv__check_list_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
 
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_LIST_POOL, reqb, size, 0, &dresp);
 	if (rc != 0)
@@ -470,7 +472,10 @@ ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svc
 	if (reqb == NULL)
 		D_GOTO(out_req, rc = -DER_NOMEM);
 
-	srv__check_reg_pool_req__pack(&req, reqb);
+	rc = srv__check_reg_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REG_POOL, reqb, size, 0, &dresp);
 	if (rc != 0)
 		goto out_req;
@@ -517,7 +522,10 @@ ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid)
 	if (reqb == NULL)
 		D_GOTO(out_req, rc = -DER_NOMEM);
 
-	srv__check_dereg_pool_req__pack(&req, reqb);
+	rc = srv__check_dereg_pool_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_DEREG_POOL, reqb, size, 0, &dresp);
 	if (rc != 0)
 		goto out_req;
@@ -563,7 +571,10 @@ ds_chk_report_upcall(void *rpt)
 	if (reqb == NULL)
 		D_GOTO(out_req, rc = -DER_NOMEM);
 
-	srv__check_report_req__pack(&req, reqb);
+	rc = srv__check_report_req__pack(&req, reqb);
+	if (rc < 0)
+		goto out_req;
+
 	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_CHK_REPORT, reqb, size, 0, &dresp);
 	if (rc != 0)
 		goto out_req;

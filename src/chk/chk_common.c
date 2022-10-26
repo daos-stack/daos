@@ -259,6 +259,8 @@ out:
 		if (cpr != NULL) {
 			if (cpr->cpr_mutex != ABT_MUTEX_NULL)
 				ABT_mutex_free(&cpr->cpr_mutex);
+			if (cpr->cpr_cond != ABT_COND_NULL)
+				ABT_cond_free(&cpr->cpr_cond);
 			D_FREE(cpr);
 		}
 	}
@@ -276,10 +278,19 @@ chk_pending_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	d_list_del_init(&cpr->cpr_ins_link);
 	d_list_del_init(&cpr->cpr_rank_link);
 
-	if (val_iov != NULL)
+	if (val_iov != NULL) {
 		d_iov_set(val_iov, cpr, sizeof(*cpr));
-	else
-		chk_pending_destroy(cpr);
+	} else {
+		ABT_mutex_lock(cpr->cpr_mutex);
+		if (cpr->cpr_busy) {
+			cpr->cpr_exiting = 1;
+			ABT_cond_broadcast(cpr->cpr_cond);
+			ABT_mutex_unlock(cpr->cpr_mutex);
+		} else {
+			ABT_mutex_unlock(cpr->cpr_mutex);
+			chk_pending_destroy(cpr);
+		}
+	}
 
 	return 0;
 }
@@ -319,7 +330,7 @@ btr_ops_t chk_pending_ops = {
 void
 chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 {
-	char	 buf[128];
+	char	 buf[80];
 	char	*ptr = buf;
 	int	 rc;
 	int	 i;
@@ -330,27 +341,26 @@ chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks)
 	D_INFO("Ranks List:\n");
 
 	while (rank_nr >= 8) {
-		snprintf(ptr, 127, "%8u %8u %8u %8u %8u %8u %8u %8u",
-			 ranks[0], ranks[1], ranks[2], ranks[3],
-			 ranks[4], ranks[5], ranks[6], ranks[7]);
-		D_INFO("%s\n", ptr);
+		D_INFO("%8u %8u %8u %8u %8u %8u %8u %8u\n",
+		       ranks[0], ranks[1], ranks[2], ranks[3],
+		       ranks[4], ranks[5], ranks[6], ranks[7]);
 		rank_nr -= 8;
 		ranks += 8;
 	}
 
 	if (rank_nr > 0) {
-		rc = snprintf(ptr, 127, "%8u", ranks[0]);
+		rc = snprintf(ptr, 79, "%8u", ranks[0]);
 		D_ASSERT(rc > 0);
 		ptr += rc;
-	}
 
-	for (i = 1; i < rank_nr; i++) {
-		rc = snprintf(ptr, 127, " %8u", ranks[i]);
-		D_ASSERT(rc > 0);
-		ptr += rc;
-	}
+		for (i = 1; i < rank_nr; i++) {
+			rc = snprintf(ptr, 79 - 8 * i, " %8u", ranks[i]);
+			D_ASSERT(rc > 0);
+			ptr += rc;
+		}
 
-	D_INFO("%s\n", buf);
+		D_INFO("%s\n", buf);
+	}
 }
 
 void
@@ -426,13 +436,9 @@ chk_dup_label(char **tgt, const char *src, size_t len)
 	if (src == NULL) {
 		*tgt = NULL;
 	} else {
-		D_ASSERT(len > 0);
-
-		D_ALLOC(*tgt, len + 1);
+		D_STRNDUP(*tgt, src, len);
 		if (*tgt == NULL)
 			rc = -DER_NOMEM;
-		else
-			memcpy(*tgt, src, len);
 	}
 
 	return rc;
@@ -441,12 +447,14 @@ chk_dup_label(char **tgt, const char *src, size_t len)
 void
 chk_stop_sched(struct chk_instance *ins)
 {
+	ABT_mutex_lock(ins->ci_abt_mutex);
 	if (ins->ci_sched != ABT_THREAD_NULL && ins->ci_sched_running) {
-		ABT_mutex_lock(ins->ci_abt_mutex);
 		ins->ci_sched_running = 0;
 		ABT_cond_broadcast(ins->ci_abt_cond);
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		ABT_thread_free(&ins->ci_sched);
+	} else {
+		ABT_mutex_unlock(ins->ci_abt_mutex);
 	}
 }
 
@@ -579,7 +587,7 @@ chk_pool_del_shard(daos_handle_t hdl, uuid_t uuid, d_rank_t rank)
 					  cpr->cpr_shard_nr, DP_UUID(uuid));
 
 				d_iov_set(&riov, NULL, 0);
-				rc = dbtree_delete(hdl, BTR_PROBE_EQ, &kiov, &riov);
+				rc = dbtree_delete(hdl, BTR_PROBE_BYPASS, &kiov, &riov);
 				if (rc == 0) {
 					D_ASSERT(cpr == riov.iov_buf);
 

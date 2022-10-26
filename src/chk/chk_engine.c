@@ -42,12 +42,6 @@ struct chk_query_pool_args {
 	struct chk_query_pool_shard	*cqpa_shards;
 };
 
-struct chk_query_xstream_args {
-	uuid_t				 cqxa_uuid;
-	struct chk_query_pool_args	*cqxa_args;
-	struct chk_query_target		 cqxa_target;
-};
-
 struct chk_cont_list_args {
 	uuid_t				 ccla_pool;
 	uint32_t			 ccla_cap;
@@ -386,6 +380,12 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	int				 result = 0;
 	int				 rc = 0;
 
+	/*
+	 * NOTE: The subsequent check after handling orphan pm entry will not access the
+	 *	 orphan pm entry. So here even if we failed to handle the orphan pm entry,
+	 *	 it will not affect the subsequent check. Then does not set cpr_skip for
+	 *	 this case.
+	 */
 	if (index < 0)
 		cla = CHK__CHECK_INCONSIST_CLASS__CIC_ENGINE_NONEXIST_IN_MAP;
 	else
@@ -424,12 +424,10 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
-		cpr->cpr_skip = 1;
 		break;
 	default:
 		/*
@@ -441,13 +439,13 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			break;
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
 		}
-
-		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 2;
 		break;
 	}
 
@@ -461,7 +459,7 @@ report:
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects orphan %s entry in pool map for "
 		 DF_UUIDF", rank %u, index %d",
-		 index < 0 ? "rank" : "shard", DP_UUID(cpr->cpr_uuid), rank, index);
+		 index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank, index);
 	cru.cru_msg = msg;
 	cru.cru_options = options;
 	cru.cru_result = result;
@@ -472,12 +470,11 @@ report:
 		 DF_ENGINE" detects orphan %s entry in pool map for "
 		 DF_UUIDF", rank %u, index %d, action %u (%s), handle_rc %d, "
 		 "report_rc %d, decision %d\n",
-		 DP_ENGINE(ins), index < 0 ? "rank" : "shard", DP_UUID(cpr->cpr_uuid), rank,
+		 DP_ENGINE(ins), index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank,
 		 index, act, option_nr ? "need interact" : "no interact", result, rc, decision);
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
-		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -490,7 +487,7 @@ report:
 	default:
 		D_ERROR(DF_ENGINE" got invalid decision %d for orphan %s entry in pool map "
 			"for pool "DF_UUIDF", rank %u, index %d. Ignore the inconsistency.\n",
-			DP_ENGINE(ins), decision, index < 0 ? "rank" : "shard",
+			DP_ENGINE(ins), decision, index < 0 ? "rank" : "target",
 			DP_UUID(cpr->cpr_uuid), rank, index);
 		/*
 		 * Invalid option, ignore the inconsistency.
@@ -500,7 +497,6 @@ report:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		cbk->cb_statistics.cs_ignored++;
-		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -520,7 +516,6 @@ report:
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		cpr->cpr_skip = 1;
 		break;
 	}
 
@@ -574,6 +569,7 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
+		cpr->cpr_skip = 1;
 		break;
 	default:
 		/*
@@ -585,13 +581,14 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			break;
+			cpr->cpr_skip = 1;
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
 		}
-
-		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 2;
 		break;
 	}
 
@@ -623,6 +620,11 @@ report:
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
+		/*
+		 * Skip the pool with danglong pm entry if failed to interact with admin for
+		 * further action.
+		 */
+		cpr->cpr_skip = 1;
 		result = rc;
 	}
 
@@ -646,6 +648,7 @@ report:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 		cbk->cb_statistics.cs_ignored++;
+		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -659,9 +662,6 @@ report:
 	goto report;
 
 out:
-	/* For dangling PM entry, mark it as 'skip' in spite of which repair action to take. */
-	cpr->cpr_skip = 1;
-
 	chk_engine_post_repair(ins, &result);
 
 	return result;
@@ -683,6 +683,8 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cbk->cb_statistics.cs_total++;
 	cbk->cb_statistics.cs_ignored++;
 	cpr->cpr_dirty = 1;
+	/* Skip the pool with unknown pm entry. */
+	cpr->cpr_skip = 1;
 
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
@@ -825,7 +827,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 	int			 rc = 0;
 	int			 i;
 	int			 j;
-	bool			 down = false;
+	bool			 down;
 
 	rank_nr = pool_map_find_nodes(map, PO_COMP_ID_ALL, &doms);
 	if (rank_nr <= 0)
@@ -836,6 +838,8 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 		if (r_comp->co_flags & PO_COMPF_CHK_DONE ||
 		    r_comp->co_status == PO_COMP_ST_DOWN || r_comp->co_status == PO_COMP_ST_DOWNOUT)
 			continue;
+
+		down = false;
 
 		for (j = 0; j < doms[i].do_target_nr; j++) {
 			t_comp = &doms[i].do_targets[j].ta_comp;
@@ -1062,13 +1066,13 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
-			break;
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+			option_nr = 2;
 		}
-
-		options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
-		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 2;
 		break;
 	}
 
@@ -1184,7 +1188,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 	act = prop->cp_policies[cla];
 	cbk->cb_statistics.cs_total++;
 
-	if (label != NULL) {
+	if (!daos_iov_empty(label)) {
 		switch (act) {
 		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
 			/*
@@ -1224,13 +1228,13 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 				/* Ignore the inconsistency if admin does not want interaction. */
+				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 				cbk->cb_statistics.cs_ignored++;
-				break;
+			} else {
+				options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+				options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+				option_nr = 2;
 			}
-
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
 			break;
 		}
 	} else {
@@ -1270,13 +1274,13 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 				/* Ignore the inconsistency if admin does not want interaction. */
+				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 				cbk->cb_statistics.cs_ignored++;
-				break;
+			} else {
+				options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+				options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+				option_nr = 2;
 			}
-
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
 			break;
 		}
 	}
@@ -1291,8 +1295,9 @@ report:
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects inconsistent container label: SVC %s vs property %s",
-		 label != NULL ? (char *)label->iov_buf : "(null)", ccr->ccr_label_prop != NULL ?
-		 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)");
+		 daos_iov_empty(label) ? "(null)" : (char *)label->iov_buf,
+		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
+		 "(null)");
 	cru.cru_msg = msg;
 	cru.cru_options = options;
 	cru.cru_result = result;
@@ -1303,9 +1308,9 @@ report:
 		 DF_ENGINE" detects inconsistent container label for "DF_UUIDF"/"DF_UUIDF
 		 ": %s vs %s, action %u (%s), handle_rc %d, report_rc %d, decision %d\n",
 		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
-		 label != NULL ? (char *)label->iov_buf : "(null)", ccr->ccr_label_prop != NULL ?
-		 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)", act,
-		 option_nr ? "need interact" : "no interact", result, rc, decision);
+		 daos_iov_empty(label) ? "(null)" : (char *)label->iov_buf,
+		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
+		 "(null)", act, option_nr ? "need interact" : "no interact", result, rc, decision);
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
@@ -1334,7 +1339,7 @@ ignore:
 		cbk->cb_statistics.cs_ignored++;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
-		if (label == NULL)
+		if (daos_iov_empty(label))
 			goto ignore;
 
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
@@ -1369,9 +1374,7 @@ out:
 	 * then do not skip current container for subsequent DAOS check.
 	 */
 
-	if (prop_in != NULL)
-		daos_prop_free(prop_in);
-
+	daos_prop_free(prop_in);
 	chk_engine_post_repair(ins, &result);
 
 	return result;
@@ -1398,18 +1401,23 @@ chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg
 		D_GOTO(out, rc = (rc == -DER_NONEXIST ? 0 : rc));
 
 	ccr = riov.iov_buf;
-	if (ccr->ccr_label_prop == NULL ||
-	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN) != 0)
-		rc = daos_iov_copy(&ccr->ccr_label_ps, key);
-	else
-		ccr->ccr_label_checked = 1;
+	if (key->iov_buf == NULL) {
+		if (ccr->ccr_label_prop == NULL)
+			ccr->ccr_label_checked = 1;
+	} else {
+		if (ccr->ccr_label_prop == NULL ||
+		    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
+			    DAOS_PROP_LABEL_MAX_LEN) != 0)
+			rc = daos_iov_copy(&ccr->ccr_label_ps, key);
+		else
+			ccr->ccr_label_checked = 1;
+	}
 
 out:
-	if (rc != 0 && cclca->cclca_cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
-		return rc;
+	if (!(cclca->cclca_cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
+		rc = 0;
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -1419,7 +1427,6 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct cont_svc			*svc;
 	struct chk_cont_rec		*ccr;
-	d_iov_t				*label;
 	struct chk_cont_label_cb_args	 cclca = { 0 };
 	int				 rc = 0;
 	bool				 failout;
@@ -1462,12 +1469,8 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 		goto out;
 
 	d_list_for_each_entry(ccr, &aggregator->ccla_list, ccr_link) {
-		if (!ccr->ccr_label_checked && ccr->ccr_label_prop != NULL) {
-			if (daos_iov_empty(&ccr->ccr_label_ps))
-				label = NULL;
-			else
-				label = &ccr->ccr_label_ps;
-			rc = chk_engine_cont_set_label(cpr, ccr, svc, label);
+		if (!ccr->ccr_skip && !ccr->ccr_label_checked) {
+			rc = chk_engine_cont_set_label(cpr, ccr, svc, &ccr->ccr_label_ps);
 			if (rc != 0)
 				goto out;
 		}
@@ -2324,9 +2327,9 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 out:
 	ins->ci_stopping = 0;
 
-	if (rc == 0) {
-		D_INFO(DF_ENGINE" stopped on rank %u with %d pools\n",
-		       DP_ENGINE(ins), dss_self_rank(), pool_nr > 0 ? pool_nr : prop->cp_pool_nr);
+	if (rc >= 0) {
+		D_INFO(DF_ENGINE" stopped on rank %u with %d pools: rc %d\n", DP_ENGINE(ins),
+		       dss_self_rank(), pool_nr > 0 ? pool_nr : prop->cp_pool_nr, rc);
 
 		if (pool_nr > 0)
 			chk_pools_dump(pool_nr, pools);
@@ -2347,9 +2350,7 @@ out:
 static int
 chk_engine_query_one(void *args)
 {
-	struct dss_coll_stream_args	*reduce = args;
-	struct dss_stream_arg_type	*streams = reduce->csa_streams;
-	struct chk_query_xstream_args	*cqxa;
+	struct chk_query_pool_shard	*shard = args;
 	struct chk_query_target		*target;
 	char				*path = NULL;
 	daos_handle_t			 poh = DAOS_HDL_INVAL;
@@ -2357,24 +2358,23 @@ chk_engine_query_one(void *args)
 	int				 tid = dss_get_module_info()->dmi_tgt_id;
 	int				 rc;
 
-	cqxa = streams[tid].st_arg;
-	target = &cqxa->cqxa_target;
-	rc = ds_mgmt_tgt_pool_exist(cqxa->cqxa_uuid,  &path);
+	target = &shard->cqps_targets[tid];
+	rc = ds_mgmt_tgt_pool_exist(shard->cqps_uuid,  &path);
 	/* We allow the target nonexist. */
 	if (rc <= 0)
 		goto out;
 
-	rc = vos_pool_open(path, cqxa->cqxa_uuid, VOS_POF_FOR_CHECK_QUERY, &poh);
+	rc = vos_pool_open(path, shard->cqps_uuid, VOS_POF_FOR_CHECK_QUERY, &poh);
 	if (rc != 0) {
 		D_ERROR("Failed to open vos pool "DF_UUIDF" on target %u/%d: "DF_RC"\n",
-			DP_UUID(cqxa->cqxa_uuid), dss_self_rank(), tid, DP_RC(rc));
+			DP_UUID(shard->cqps_uuid), dss_self_rank(), tid, DP_RC(rc));
 		goto out;
 	}
 
 	rc = vos_pool_query(poh, &info);
 	if (rc != 0) {
 		D_ERROR("Failed to query vos pool "DF_UUIDF" on target %u/%d: "DF_RC"\n",
-			DP_UUID(cqxa->cqxa_uuid), dss_self_rank(), tid, DP_RC(rc));
+			DP_UUID(shard->cqps_uuid), dss_self_rank(), tid, DP_RC(rc));
 		goto out;
 	}
 
@@ -2391,42 +2391,6 @@ out:
 	return rc;
 }
 
-static void
-chk_engine_query_reduce(void *a_args, void *s_args)
-{
-	struct chk_query_xstream_args	*aggregator = a_args;
-	struct chk_query_xstream_args	*stream = s_args;
-	struct chk_query_pool_shard	*shard;
-	struct chk_query_target		*target;
-
-	shard = &aggregator->cqxa_args->cqpa_shards[aggregator->cqxa_args->cqpa_idx];
-	target = &shard->cqps_targets[shard->cqps_target_nr];
-	*target = stream->cqxa_target;
-	shard->cqps_target_nr++;
-}
-
-static int
-chk_engine_query_stream_alloc(struct dss_stream_arg_type *args, void *a_arg)
-{
-	struct chk_query_xstream_args	*cqxa = a_arg;
-	int				 rc = 0;
-
-	D_ALLOC(args->st_arg, sizeof(struct chk_query_xstream_args));
-	if (args->st_arg == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	memcpy(args->st_arg, cqxa, sizeof(struct chk_query_xstream_args));
-
-out:
-	return rc;
-}
-
-static void
-chk_engine_query_stream_free(struct dss_stream_arg_type *args)
-{
-	D_FREE(args->st_arg);
-}
-
 static int
 chk_engine_query_pool(uuid_t uuid, void *args)
 {
@@ -2434,9 +2398,8 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	struct chk_query_pool_shard	*shard;
 	struct chk_query_pool_shard	*new_shards;
 	struct chk_bookmark		 cbk;
-	struct chk_query_xstream_args	 cqxa = { 0 };
 	struct dss_coll_args		 coll_args = { 0 };
-	struct dss_coll_ops		 coll_ops;
+	struct dss_coll_ops		 coll_ops = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	int				 rc = 0;
 
@@ -2449,10 +2412,9 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 		cqpa->cqpa_cap <<= 1;
 	}
 
-	shard = &cqpa->cqpa_shards[cqpa->cqpa_idx];
+	shard = &cqpa->cqpa_shards[cqpa->cqpa_idx++];
 	uuid_copy(shard->cqps_uuid, uuid);
 	shard->cqps_rank = dss_self_rank();
-	shard->cqps_target_nr = 0;
 
 	uuid_unparse_lower(uuid, uuid_str);
 	rc = chk_bk_fetch_pool(&cbk, uuid_str);
@@ -2461,6 +2423,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 		shard->cqps_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
 		memset(&shard->cqps_statistics, 0, sizeof(shard->cqps_statistics));
 		memset(&shard->cqps_time, 0, sizeof(shard->cqps_time));
+		shard->cqps_target_nr = 0;
 		shard->cqps_targets = NULL;
 
 		D_GOTO(out, rc = 0);
@@ -2477,17 +2440,10 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	shard->cqps_phase = cbk.cb_phase;
 	memcpy(&shard->cqps_statistics, &cbk.cb_statistics, sizeof(shard->cqps_statistics));
 	memcpy(&shard->cqps_time, &cbk.cb_time, sizeof(shard->cqps_time));
-
-	uuid_copy(cqxa.cqxa_uuid, uuid);
-	cqxa.cqxa_args = cqpa;
-
-	coll_args.ca_func_args = &coll_args.ca_stream_args;
-	coll_args.ca_aggregator = &cqxa;
+	shard->cqps_target_nr = dss_tgt_nr;
 
 	coll_ops.co_func = chk_engine_query_one;
-	coll_ops.co_reduce = chk_engine_query_reduce;
-	coll_ops.co_reduce_arg_alloc = chk_engine_query_stream_alloc;
-	coll_ops.co_reduce_arg_free = chk_engine_query_stream_free;
+	coll_args.ca_func_args = shard;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
 
@@ -2629,7 +2585,7 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 	rc = chk_pending_del(ins, seq, &cpr);
 	if (rc == 0) {
 		/* The cpr will be destroyed by the waiter via chk_engine_report(). */
-		D_ASSERT(cpr->cpr_busy == 1);
+		D_ASSERT(cpr->cpr_busy);
 
 		ABT_mutex_lock(cpr->cpr_mutex);
 		/*
@@ -2642,10 +2598,10 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 		ABT_mutex_unlock(cpr->cpr_mutex);
 	}
 
-	if (rc != 0 || !(flags & CAF_FOR_ALL))
-		goto out;
+	if (rc == -DER_NONEXIST && flags & CAF_FOR_ALL)
+		rc = 0;
 
-	if (likely(prop->cp_policies[cla] != act)) {
+	if (rc == 0 && flags & CAF_FOR_ALL && likely(prop->cp_policies[cla] != act)) {
 		prop->cp_policies[cla] = act;
 		rc = chk_prop_update(prop, NULL);
 	}
@@ -2896,22 +2852,28 @@ log:
 	if (rc != 0 || cpr == NULL)
 		goto out;
 
-	D_ASSERT(cpr->cpr_busy == 1);
+	D_ASSERT(cpr->cpr_busy);
 
 	D_INFO(DF_ENGINE" on rank %u need interaction for class %u\n",
 	       DP_ENGINE(ins), cru->cru_rank, cru->cru_cla);
 
 	ABT_mutex_lock(cpr->cpr_mutex);
-	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+
+again:
+	if (!ins->ci_sched_running || cpr->cpr_exiting) {
 		ABT_mutex_unlock(cpr->cpr_mutex);
-	} else {
-		ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
-		ABT_mutex_unlock(cpr->cpr_mutex);
-		if (!ins->ci_sched_running || cpr->cpr_exiting)
-			goto out;
+		goto out;
 	}
 
-	*decision = cpr->cpr_action;
+	if (cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+		*decision = cpr->cpr_action;
+		ABT_mutex_unlock(cpr->cpr_mutex);
+		goto out;
+	}
+
+	ABT_cond_wait(cpr->cpr_cond, cpr->cpr_mutex);
+
+	goto again;
 
 out:
 	if (cpr != NULL)
