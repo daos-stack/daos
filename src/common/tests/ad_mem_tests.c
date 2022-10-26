@@ -18,6 +18,7 @@
 
 static struct ad_blob_handle adt_bh;
 static char	*adt_store;
+static int	 adt_arena_type = 1;
 
 static void
 addr_swap(void *array, int a, int b)
@@ -219,7 +220,6 @@ adt_undo_1(void **state)
 
 	ad_cancel(&act, 1);
 }
-
 
 static void
 adt_rsv_cancel_1(void **state)
@@ -494,6 +494,89 @@ adt_rsv_pub_4(void **state)
 }
 
 static void
+adt_rsv_inval(void **state)
+{
+	const int	     alloc_size = 8192; /* unsupported size */
+	struct ad_reserv_act act;
+	daos_off_t	     addr;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("reserve invalid size should fail\n");
+	addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+	assert_int_equal(addr, 0);
+}
+
+static struct ad_group_spec adt_gsp[] = {
+	{
+		.gs_unit	= 512,
+		.gs_count	= 256,
+	},
+	{
+		.gs_unit	= 768,
+		.gs_count	= 256,
+	},
+	{
+		.gs_unit	= 1024,
+		.gs_count	= 256,
+	},
+	{
+		.gs_unit	= 2048,
+		.gs_count	= 256,
+	},
+	{
+		.gs_unit	= 4096,
+		.gs_count	= 256,
+	},
+	{
+		.gs_unit	= 8192,
+		.gs_count	= 256,
+	},
+};
+
+static void
+adt_reg_arena(void **state)
+{
+	const int	     alloc_sz1 = 768;
+	const int	     alloc_sz2 = 8192;
+	const int	     loop = 300; /* > 256 */
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[2];
+	daos_off_t	     addrs[2];
+	int		     i;
+	int		     rc;
+	uint32_t	     arena = AD_ARENA_ANY;
+	uint32_t	     arena_old = 0;
+
+	printf("register new arena and allocate from it\n");
+	rc = ad_arena_register(adt_bh, adt_arena_type, adt_gsp, ARRAY_SIZE(adt_gsp));
+	assert_rc_equal(rc, 0);
+
+	printf("registered new type=%d\n", adt_arena_type);
+
+	for (i = 0; i < loop; i++) {
+		addrs[0] = ad_reserve(adt_bh, adt_arena_type, alloc_sz1, &arena, &acts[0]);
+		assert_int_not_equal(addrs[0], 0);
+
+		addrs[1] = ad_reserve(adt_bh, adt_arena_type, alloc_sz2, &arena, &acts[1]);
+		assert_int_not_equal(addrs[1], 0);
+
+		if (arena == AD_ARENA_ANY || arena != arena_old) {
+			printf("allocate from arena = %d\n", arena);
+			arena_old = arena;
+		}
+
+		rc = ad_tx_begin(adt_bh, &tx);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_publish(&tx, acts, 2);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_end(&tx, 0);
+		assert_rc_equal(rc, 0);
+	}
+}
+
+static void
 adt_rsv_free_1(void **state)
 {
 	const int	     alloc_size = 256;
@@ -613,7 +696,7 @@ adt_delayed_free_1(void **state)
 }
 
 static void
-adt_tx_perf(void **state)
+adt_tx_perf_1(void **state)
 {
 	const int	     alloc_size = 64;
 	const int	     op_per_tx = 2;
@@ -659,7 +742,7 @@ adt_tx_perf(void **state)
 }
 
 static void
-adt_no_space(void **state)
+adt_no_space_1(void **state)
 {
 	const int	     alloc_size = 4096;
 	struct ad_tx	     tx;
@@ -736,12 +819,14 @@ main(void)
 		cmocka_unit_test(adt_rsv_pub_4),
 		cmocka_unit_test(adt_rsv_pub_abort_1),
 		cmocka_unit_test(adt_rsv_pub_abort_2),
+		cmocka_unit_test(adt_rsv_inval),
+		cmocka_unit_test(adt_reg_arena),
 		cmocka_unit_test(adt_rsv_free_1),
 		cmocka_unit_test(adt_rsv_free_2),
 		cmocka_unit_test(adt_delayed_free_1),
-		cmocka_unit_test(adt_tx_perf),
+		cmocka_unit_test(adt_tx_perf_1),
 		/* Must be the last test */
-		cmocka_unit_test(adt_no_space),
+		cmocka_unit_test(adt_no_space_1),
 	};
 	int	rc;
 
