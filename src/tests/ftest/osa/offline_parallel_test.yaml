@@ -94,7 +94,7 @@ mdtest:
   depth: 0
 test_obj_class:
   oclass:
-    - S1
+    - RP_2G8
 loop_test:
   iterations: 3
 aggregation:
