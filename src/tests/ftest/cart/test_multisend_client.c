@@ -29,7 +29,9 @@ rpc_cb_common(const struct crt_cb_info *info)
 	sem_post(&test.tg_token_to_proceed);
 }
 
-static int handler_ping(crt_rpc_t *rpc)
+/* stub */
+static int
+handler_ping(crt_rpc_t *rpc)
 {
 	return 0;
 }
@@ -63,6 +65,10 @@ test_run()
 
 	DBG_PRINT("Client starting with %d contexts\n", test.tg_num_ctx);
 
+	if (test.tg_force_rank != -1)
+		DBG_PRINT("Forcing simple RPC to the fixed target %d:0\n",
+			  test.tg_force_rank);
+
 	rc = crtu_cli_start_basic(test.tg_local_group_name,
 				  test.tg_remote_group_name,
 				  &grp, &rank_list, &test.tg_crt_ctx[0],
@@ -71,8 +77,9 @@ test_run()
 				  test.tg_use_daos_agent_env);
 	D_ASSERTF(rc == 0, "crtu_cli_start_basic()\n");
 
-	if (test.tg_num_ctx < 1 || test.tg_num_ctx > MAX_NUM_CTX) {
-		DBG_PRINT("Wrong number of ctx specified\n");
+	if (test.tg_num_ctx < 1 || test.tg_num_ctx > MAX_NUM_CLIENT_CTX) {
+		DBG_PRINT("Wrong number of ctx specified. Can't exceed %d\n",
+			  MAX_NUM_CLIENT_CTX);
 		return ;
 	}
 
@@ -123,7 +130,11 @@ test_run()
 			ctx = test.tg_crt_ctx[ctx_idx];
 			ctx_idx = (ctx_idx + 1) % test.tg_num_ctx;
 
-			rank = chunk_index % test.tg_remote_group_size;
+
+			if (test.tg_force_rank == -1)
+				rank = chunk_index % test.tg_remote_group_size;
+			else
+				rank = test.tg_force_rank;
 
 			/* Pick a new server based on a test mode selected */
 			server_ep.ep_grp = grp;
@@ -134,30 +145,40 @@ test_run()
 			D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 				  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
-			rc = d_sgl_init(&sgl, 1);
-			D_ASSERTF(rc == 0, "d_sgl_init() failed; rc: %d\n", rc);
-
-			sgl.sg_iovs[0].iov_buf = dma_buff + (chunk_size * chunk_index);
-			sgl.sg_iovs[0].iov_len = chunk_size;
-			sgl.sg_iovs[0].iov_buf_len = chunk_size;
-
-			rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl[chunk_index]);
-			D_ASSERTF(rc == 0, "crt_bulk_create() failed; rc: %d\n", rc);
-
 			input = crt_req_get(rpc_req);
-			input->bulk_hdl = bulk_hdl[chunk_index];
-			input->chunk_size = chunk_size;
-			input->chunk_index = chunk_index;
-			input->do_put = test.tg_do_put;
+
+			/* TODO: for now rdma is disabled when forcing all rpcs to the same rank */
+			if (test.tg_force_rank == -1) {
+				rc = d_sgl_init(&sgl, 1);
+				D_ASSERTF(rc == 0, "d_sgl_init() failed; rc: %d\n", rc);
+
+				sgl.sg_iovs[0].iov_buf = dma_buff + (chunk_size * chunk_index);
+				sgl.sg_iovs[0].iov_len = chunk_size;
+				sgl.sg_iovs[0].iov_buf_len = chunk_size;
+
+				rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW,
+						     &bulk_hdl[chunk_index]);
+				D_ASSERTF(rc == 0, "crt_bulk_create() failed; rc: %d\n", rc);
+
+				input->bulk_hdl = bulk_hdl[chunk_index];
+				input->chunk_size = chunk_size;
+				input->chunk_index = chunk_index;
+				input->do_put = test.tg_do_put;
+			} else {
+				input->chunk_size = 0;
+				input->bulk_hdl = CRT_BULK_NULL;
+				input->chunk_index = 0;
+				input->do_put = false;
+			}
 
 			rc = crt_req_send(rpc_req, rpc_cb_common, &bulk_hdl[chunk_index]);
 			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-			if (test.tg_test_mode == 1)
+			if (test.tg_test_mode == TEST_MODE_SYNC)
 				crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 		}
 
-		if (test.tg_test_mode == 2) {
+		if (test.tg_test_mode == TEST_MODE_ASYNC) {
 			for (chunk_index = 0; chunk_index < num_chunks; chunk_index++) {
 				crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 			}
@@ -168,13 +189,20 @@ test_run()
 	time_delta = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 +
 		     (tv_end.tv_usec - tv_start.tv_usec);
 
-	DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %d kb each took %ld usec\n",
-		  test.tg_test_mode == 1 ? "Synchronous" : "Asynchronous",
-		  test.tg_do_put == true ? "PUT" : "GET",
-		  num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations);
+	if (test.tg_force_rank == -1 ) {
+		DBG_PRINT("%s mode (%s) : Transfer of %d chunks size %dkb each took "
+			  "%ld usec (%d repeats)\n",
+			  test.tg_test_mode == TEST_MODE_SYNC ? "Synchronous" : "Asynchronous",
+			  test.tg_do_put == true ? "PUT" : "GET",
+			  num_chunks, test.tg_chunk_size_kb, time_delta/num_iterations,
+			  num_iterations);
+	} else {
+		DBG_PRINT("%s mode, RPCs forced to target %d:0 ; delta %ld usec (%d repeats)\n",
+			  test.tg_test_mode == TEST_MODE_SYNC ? "Synchronous" : "Asynchronous",
+			  test.tg_force_rank, time_delta/num_iterations, num_iterations);
+	}
 
 	/* SHUTDOWN servers */
-
 	if (test.tg_do_shutdown) {
 		for (i = 0; i < test.tg_remote_group_size; i++) {
 
@@ -213,6 +241,8 @@ test_run()
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+
+	D_FREE(dma_buff);
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
