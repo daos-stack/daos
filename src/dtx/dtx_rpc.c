@@ -822,7 +822,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 
 out:
 	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
-	if (rc2 > 0 || rc2 == -DER_NONEXIST)
+	if (rc2 > 0 || rc2 == -DER_NONEXIST || rc2 == -DER_EXCLUDED)
 		rc2 = 0;
 
 	if (dtis != &dti)
