@@ -178,7 +178,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
 	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
-	bool			sep_mode;
 	int			cur_ctx_num;
 	int			max_ctx_num;
 	d_list_t		*ctx_list;
@@ -189,7 +188,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	sep_mode = crt_provider_is_sep(provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
