@@ -2568,9 +2568,10 @@ retry:
 					DF_UOID": "DF_RC"\n",
 					DP_UOID(arg->oid), DP_RC(rc));
 			} else {
-				/* Keep retry on leader if it is inprogress,
-				 * since the new dtx leader might still
-				 * resync the uncommitted records.
+				/* Keep retry on leader if it is inprogress or shutdown,
+				 * since the new dtx leader might still resync the
+				 * uncommitted records, or it will choose a new leader
+				 * once the pool map is updated.
 				 */
 				D_DEBUG(DB_REBUILD, "retry leader "DF_UOID"\n",
 					DP_UOID(arg->oid));
@@ -3062,8 +3063,15 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(cont_uuid), ih.cookie, root->root_hdl.cookie);
 
-	dp = ds_pool_lookup(tls->mpt_pool_uuid);
-	D_ASSERT(dp != NULL);
+	rc = ds_pool_lookup(tls->mpt_pool_uuid, &dp);
+	if (rc) {
+		D_ERROR(DF_UUID" ds_pool_lookup failed: "DF_RC"\n",
+			DP_UUID(tls->mpt_pool_uuid), DP_RC(rc));
+		if (rc == -DER_SHUTDOWN)
+			rc = 0;
+		D_GOTO(out_put, rc);
+	}
+
 	rc = ds_cont_fetch_snaps(dp->sp_iv_ns, cont_uuid, &snapshots,
 				 &snap_cnt);
 	if (rc) {
@@ -3156,7 +3164,8 @@ free:
 out_put:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
-	ds_pool_put(dp);
+	if (dp != NULL)
+		ds_pool_put(dp);
 	return rc;
 }
 
@@ -3327,17 +3336,18 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	uuid_copy(po_uuid, migrate_in->om_pool_uuid);
 	uuid_copy(po_hdl_uuid, migrate_in->om_poh_uuid);
 
-	pool = ds_pool_lookup(po_uuid);
-	if (pool == NULL) {
-		D_DEBUG(DB_TRACE, DF_UUID" pool service is not started yet\n",
-			DP_UUID(po_uuid));
-		D_GOTO(out, rc = -DER_AGAIN);
-	}
-
-	if (pool->sp_stopping) {
-		D_DEBUG(DB_TRACE, DF_UUID" pool service is stopping.\n",
-			DP_UUID(po_uuid));
-		D_GOTO(out, rc = 0);
+	rc = ds_pool_lookup(po_uuid, &pool);
+	if (rc != 0) {
+		if (rc == -DER_SHUTDOWN) {
+			D_DEBUG(DB_REBUILD, DF_UUID" pool service is stopping.\n",
+				DP_UUID(po_uuid));
+			rc = 0;
+		} else {
+			D_DEBUG(DB_REBUILD, DF_UUID" pool service is not started yet. "DF_RC"\n",
+				DP_UUID(po_uuid), DP_RC(rc));
+			rc = -DER_AGAIN;
+		}
+		D_GOTO(out, rc);
 	}
 
 	/* Check if the pool tls exists */

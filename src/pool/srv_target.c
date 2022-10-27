@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -528,27 +528,34 @@ ds_pool_cache_fini(void)
 	daos_lru_cache_destroy(pool_cache);
 }
 
-struct ds_pool *
-ds_pool_lookup(const uuid_t uuid)
+/**
+ * If the pool can not be found due to non-existence or it is being stopped, then
+ * @pool will be set to NULL and return proper failure code, otherwise return 0 and
+ * set @pool.
+ */
+int
+ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
-	struct ds_pool		*pool;
 	int			 rc;
 
+	D_ASSERT(pool != NULL);
+	*pool = NULL;
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       NULL /* create_args */, &llink);
 	if (rc != 0)
-		return NULL;
+		return rc;
 
-	pool = pool_obj(llink);
-	if (pool->sp_stopping) {
+	*pool = pool_obj(llink);
+	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
-		ds_pool_put(pool);
-		return NULL;
+		ds_pool_put(*pool);
+		*pool = NULL;
+		return -DER_SHUTDOWN;
 	}
 
-	return pool;
+	return 0;
 }
 
 void
@@ -778,11 +785,10 @@ ds_pool_stop(uuid_t uuid)
 
 	ds_pool_failed_remove(uuid);
 
-	pool = ds_pool_lookup(uuid);
+	ds_pool_lookup(uuid, &pool);
 	if (pool == NULL)
 		return;
-	if (pool->sp_stopping)
-		return;
+	D_ASSERT(!pool->sp_stopping);
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
@@ -1435,10 +1441,10 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	/* Aggregate query over all targets on the node */
-	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
-	if (pool == NULL) {
-		D_ERROR("Failed to find pool "DF_UUID"\n",
-			DP_UUID(in->tqi_op.pi_uuid));
+	rc = ds_pool_lookup(in->tqi_op.pi_uuid, &pool);
+	if (rc) {
+		D_ERROR("Failed to find pool "DF_UUID": %d\n",
+			DP_UUID(in->tqi_op.pi_uuid), rc);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -1550,9 +1556,10 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		 * See the comment on validating the pool handle in
 		 * ds_pool_query_handler.
 		 */
-		pool = ds_pool_lookup(in->tmi_op.pi_uuid);
-		if (pool == NULL) {
-			D_ERROR(DF_UUID": failed to look up pool\n", DP_UUID(in->tmi_op.pi_uuid));
+		rc = ds_pool_lookup(in->tmi_op.pi_uuid, &pool);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to look up pool: %d\n",
+				DP_UUID(in->tmi_op.pi_uuid), rc);
 			rc = -DER_NONEXIST;
 			goto out;
 		}

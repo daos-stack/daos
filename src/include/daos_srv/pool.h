@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,7 +83,7 @@ struct ds_pool {
 	void			*sp_metrics[DAOS_NR_MODULE];
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 

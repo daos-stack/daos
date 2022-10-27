@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -776,8 +776,8 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool;
 	int			rc = 0;
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	D_ASSERT(pool != NULL);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
