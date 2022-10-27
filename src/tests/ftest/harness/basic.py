@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -112,25 +111,26 @@ class HarnessBasicTest(TestWithoutServers):
         cmocka_utils.run_cmocka_test(self, command)
 
         # Verify a generated cmocka xml file exists
-        expected = os.path.join(self.outputdir, f"{name}_cmocka_results.xml")
+        expected = os.path.join(self.outputdir, "{}_cmocka_results.xml".format(name))
         self.log.info("Verifying the existence of the generated cmocka file: %s", expected)
         if not os.path.isfile(expected):
-            self.fail(f"No {expected} file found")
+            self.fail("No {} file found".format(expected))
 
         # Verify the generated cmocka xml file contains the expected error
         self.log.info("Verifying contents of the generated cmocka file: %s", expected)
         with open(expected, "r", encoding="utf-8") as file_handle:
             actual_contents = file_handle.readlines()
-        error_message = f"Missing cmocka results for hostname in {self.outputdir}"
+        error_message = "Missing cmocka results for hostname in {}".format(self.outputdir)
         expected_lines = [
-            f"<testsuite errors=\"1\" failures=\"0\" name=\"{name}\" skipped=\"0\" tests=\"1\"",
-            f"<testcase classname=\"{name}\" name=\"{self.name}\"",
-            f"<error message=\"{error_message}\" type=\"Missing file\">"
+            "<testsuite errors=\"1\" failures=\"0\" name=\"{}\" skipped=\"0\" tests=\"1\"".format(
+                name),
+            "<testcase classname=\"{}\" name=\"{}\"".format(name, self.name),
+            "<error message=\"{}\" type=\"Missing file\">".format(error_message)
         ]
         for index, actual_line in enumerate(actual_contents[1:4]):
             self.log.debug("  expecting: %s", expected_lines[index])
             self.log.debug("  in actual: %s", actual_line[:-1].strip())
             if expected_lines[index] not in actual_line:
-                self.fail(f"Badly formed {expected} file")
+                self.fail("Badly formed {} file".format(expected))
 
         self.log.info("Test passed")
