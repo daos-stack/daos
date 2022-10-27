@@ -179,6 +179,24 @@ chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+static int
+chk_pool_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct chk_pool_start_in	*in_source = crt_req_get(source);
+	struct chk_pool_start_out	*out_source = crt_reply_get(source);
+	struct chk_pool_start_out	*out_result = crt_reply_get(result);
+
+	if (out_source->cpso_status != 0) {
+		D_ERROR("Failed to pool start with gen "DF_X64" on rank %u: "DF_RC"\n",
+			in_source->cpsi_gen, out_source->cpso_rank, DP_RC(out_source->cpso_status));
+
+		if (out_result->cpso_status == 0)
+			out_result->cpso_status = out_source->cpso_status;
+	}
+
+	return 0;
+}
+
 struct crt_corpc_ops chk_start_co_ops = {
 	.co_aggregate	= chk_start_aggregator,
 	.co_pre_forward	= NULL,
@@ -206,6 +224,11 @@ struct crt_corpc_ops chk_act_co_ops = {
 
 struct crt_corpc_ops chk_cont_list_co_ops = {
 	.co_aggregate	= chk_cont_list_aggregator,
+	.co_pre_forward	= NULL,
+};
+
+struct crt_corpc_ops chk_pool_start_co_ops = {
+	.co_aggregate	= chk_pool_start_aggregator,
 	.co_pre_forward	= NULL,
 };
 
@@ -553,8 +576,44 @@ out:
 }
 
 int
-chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint32_t flags,
-		    uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint)
+chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase)
+{
+	crt_rpc_t			*req;
+	struct chk_pool_start_in	*cpsi;
+	struct chk_pool_start_out	*cpso;
+	int				 rc;
+
+	rc = chk_co_rpc_prepare(rank_list, CHK_POOL_START, NULL, &req);
+	if (rc != 0)
+		goto out;
+
+	cpsi = crt_req_get(req);
+	cpsi->cpsi_gen = gen;
+	uuid_copy(cpsi->cpsi_pool, uuid);
+	cpsi->cpsi_phase = phase;
+
+	rc = dss_rpc_send(req);
+	if (rc != 0)
+		goto out;
+
+	cpso = crt_reply_get(req);
+	rc = cpso->cpso_status;
+
+out:
+	if (req != NULL)
+		crt_req_decref(req);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Start pool ("DF_UUIDF") with gen "DF_X64": "DF_RC"\n",
+		 DP_UUID(uuid), gen, DP_RC(rc));
+
+	return rc;
+}
+
+int
+chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
+		    uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+		    struct rsvc_hint *hint)
 {
 	crt_rpc_t		*req;
 	struct chk_pool_mbs_in	*cpmi;
@@ -569,6 +628,7 @@ chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint3
 	cpmi->cpmi_gen = gen;
 	uuid_copy(cpmi->cpmi_pool, uuid);
 	cpmi->cpmi_flags = flags;
+	cpmi->cpmi_phase = phase;
 	cpmi->cpmi_label = label;
 	cpmi->cpmi_targets.ca_count = mbs_nr;
 	cpmi->cpmi_targets.ca_arrays = mbs_array;
@@ -586,9 +646,9 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Sent pool ("DF_UUIDF") members and label %s to rank %u with gen "
+		 "Sent pool ("DF_UUIDF") members and label %s to rank %u with phase %u gen "
 		 DF_X64": "DF_RC"\n",
-		 DP_UUID(uuid), label != NULL ? label : "(null)", rank, gen, DP_RC(rc));
+		 DP_UUID(uuid), label != NULL ? label : "(null)", rank, phase, gen, DP_RC(rc));
 
 	return rc;
 }
@@ -1044,6 +1104,7 @@ CRT_RPC_DEFINE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 CRT_RPC_DEFINE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 CRT_RPC_DEFINE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
 CRT_RPC_DEFINE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST);
+CRT_RPC_DEFINE(chk_pool_start, DAOS_ISEQ_CHK_POOL_START, DAOS_OSEQ_CHK_POOL_START);
 CRT_RPC_DEFINE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 CRT_RPC_DEFINE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 CRT_RPC_DEFINE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);

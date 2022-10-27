@@ -45,6 +45,8 @@
 		0,	&CQF_chk_act,		ds_chk_act_hdlr,	&chk_act_co_ops),	\
 	X(CHK_CONT_LIST,									\
 		0,	&CQF_chk_cont_list,	ds_chk_cont_list_hdlr,	&chk_cont_list_co_ops),	\
+	X(CHK_POOL_START,									\
+		0,	&CQF_chk_pool_start,	ds_chk_pool_start_hdlr,	&chk_pool_start_co_ops),\
 	X(CHK_POOL_MBS,										\
 		0,	&CQF_chk_pool_mbs,	ds_chk_pool_mbs_hdlr,	NULL),			\
 	X(CHK_REPORT,										\
@@ -175,6 +177,22 @@ CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
 CRT_RPC_DECLARE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST);
 
 /*
+ * CHK_POOL_START:
+ * From check leader to check engine to start the pool shard.
+ */
+#define DAOS_ISEQ_CHK_POOL_START						\
+	((uint64_t)		(cpsi_gen)		CRT_VAR)		\
+	((uuid_t)		(cpsi_pool)		CRT_VAR)		\
+	((uint32_t)		(cpsi_phase)		CRT_VAR)		\
+	((uint32_t)		(cpsi_padding)		CRT_VAR)
+
+#define DAOS_OSEQ_CHK_POOL_START						\
+	((int32_t)		(cpso_status)		CRT_VAR)		\
+	((uint32_t)		(cpso_rank)		CRT_VAR)
+
+CRT_RPC_DECLARE(chk_pool_start, DAOS_ISEQ_CHK_POOL_START, DAOS_OSEQ_CHK_POOL_START);
+
+/*
  * CHK_POOL_MBS:
  * From check leader to check engine to notify the pool members.
  */
@@ -182,7 +200,7 @@ CRT_RPC_DECLARE(chk_cont_list, DAOS_ISEQ_CHK_CONT_LIST, DAOS_OSEQ_CHK_CONT_LIST)
 	((uint64_t)		(cpmi_gen)		CRT_VAR)		\
 	((uuid_t)		(cpmi_pool)		CRT_VAR)		\
 	((uint32_t)		(cpmi_flags)		CRT_VAR)		\
-	((uint32_t)		(cpmi_padding)		CRT_VAR)		\
+	((uint32_t)		(cpmi_phase)		CRT_VAR)		\
 	((d_string_t)		(cpmi_label)		CRT_VAR)		\
 	((struct chk_pool_mbs)	(cpmi_targets)		CRT_ARRAY)		\
 
@@ -402,9 +420,10 @@ struct chk_iv {
 	uuid_t			 ci_uuid;
 	d_rank_t		 ci_rank;
 	uint32_t		 ci_phase;
-	uint32_t		 ci_status;
-	uint32_t		 ci_to_leader:1,
-				 ci_remove_pool:1;
+	uint32_t		 ci_ins_status;
+	uint32_t		 ci_pool_status;
+	uint32_t		 ci_to_leader:1, /* To check leader. */
+				 ci_from_psl:1; /* From pool service leader. */
 };
 
 /* Check engine uses it to trace pools. Query logic uses it to organize the result. */
@@ -427,6 +446,7 @@ struct chk_pool_rec {
 				 cpr_stop:1,
 				 cpr_done:1,
 				 cpr_skip:1,
+				 cpr_destroyed:1,
 				 cpr_healthy:1,
 				 cpr_delay_label:1,
 				 cpr_exist_on_ms:1,
@@ -494,6 +514,7 @@ extern struct crt_corpc_ops	chk_query_co_ops;
 extern struct crt_corpc_ops	chk_mark_co_ops;
 extern struct crt_corpc_ops	chk_act_co_ops;
 extern struct crt_corpc_ops	chk_cont_list_co_ops;
+extern struct crt_corpc_ops	chk_pool_start_co_ops;
 
 extern btr_ops_t		chk_pool_ops;
 extern btr_ops_t		chk_pending_ops;
@@ -552,13 +573,15 @@ int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint3
 
 int chk_engine_cont_list(uint64_t gen, uuid_t uuid, uuid_t **conts, uint32_t *count);
 
-int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, const char *label, uint32_t flags,
-			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
+int chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase);
+
+int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label,
+			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+			struct rsvc_hint *hint);
 
 int chk_engine_report(struct chk_report_unit *cru, int *decision);
 
-int chk_engine_notify(uint64_t gen, uuid_t uuid, d_rank_t rank, uint32_t phase,
-		      uint32_t status, bool remove_pool);
+int chk_engine_notify(struct chk_iv *iv);
 
 void chk_engine_rejoin(void);
 
@@ -584,7 +607,7 @@ struct ds_iv_ns *chk_leader_get_iv_ns(void);
 
 int chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision);
 
-int chk_leader_notify(uint64_t gen, d_rank_t rank, uint32_t phase, uint32_t status);
+int chk_leader_notify(struct chk_iv *iv);
 
 int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uint32_t phase);
 
@@ -614,8 +637,11 @@ int chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_
 
 int chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb, void *args);
 
-int chk_pool_mbs_remote(d_rank_t rank, uint64_t gen, uuid_t uuid, char *label, uint32_t flags,
-			uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
+int chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase);
+
+int chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
+			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+			struct rsvc_hint *hint);
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
@@ -662,6 +688,13 @@ int chk_traverse_pools(sys_db_trav_cb_t cb, void *args);
 void chk_vos_init(void);
 
 void chk_vos_fini(void);
+
+static inline void
+chk_ins_set_fail(struct chk_instance *ins, uint32_t phase)
+{
+	if (ins->ci_slowest_fail_phase == CHK_INVAL_PHASE || ins->ci_slowest_fail_phase > phase)
+		ins->ci_slowest_fail_phase = phase;
+}
 
 static inline bool
 chk_rank_in_list(d_rank_list_t *rlist, d_rank_t rank)
@@ -789,17 +822,35 @@ chk_pool_get(struct chk_pool_rec *cpr)
 static inline void
 chk_pool_put(struct chk_pool_rec *cpr)
 {
-	/* XXX: before being destroyed, keep it in the list. */
+	struct chk_pool_shard	*cps;
+	int			 i;
+
+	/* NOTE: Before being destroyed, keep it in the list. */
 	D_ASSERT(!d_list_empty(&cpr->cpr_link));
 
 	if (--(cpr->cpr_refs) == 0) {
 		d_list_del(&cpr->cpr_link);
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
 
+		while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
+					       cps_link)) != NULL) {
+			if (cps->cps_free_cb != NULL)
+				cps->cps_free_cb(cps->cps_data);
+			else
+				D_FREE(cps->cps_data);
+			D_FREE(cps);
+		}
+		D_FREE(cpr->cpr_clues.pcs_array);
+
 		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
 			ABT_mutex_free(&cpr->cpr_mutex);
 		if (cpr->cpr_cond != ABT_COND_NULL)
 			ABT_cond_free(&cpr->cpr_cond);
+
+		if (!cpr->cpr_ins->ci_is_leader && cpr->cpr_mbs != NULL) {
+			for (i = 0; i < cpr->cpr_shard_nr; i++)
+				D_FREE(cpr->cpr_mbs[i].cpm_tgt_status);
+		}
 
 		D_FREE(cpr->cpr_mbs);
 		D_FREE(cpr->cpr_label);
