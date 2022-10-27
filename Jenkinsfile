@@ -577,19 +577,23 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8', true) + '"' +
-                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                                deps_build: true,
+                                                                parallel_build: true,
+                                                                qb: quickBuild()) +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quickBuildDeps('el8') + '"' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
+                        sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'no',
-                                   scons_args: sconsFaultsArgs()
+                                   stash_opt: true,
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
