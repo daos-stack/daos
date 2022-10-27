@@ -371,8 +371,7 @@ out:
 	if (tx) {
 		if (tx->tx_pool)
 			dc_pool_put(tx->tx_pool);
-		if (tx->tx_req_cache)
-			D_FREE(tx->tx_req_cache);
+		D_FREE(tx->tx_req_cache);
 		D_FREE(tx);
 	}
 
