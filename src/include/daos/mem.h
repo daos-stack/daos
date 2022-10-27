@@ -147,7 +147,7 @@ typedef enum {
 	/** persistent memory but ignore PMDK snapshot */
 	UMEM_CLASS_PMEM_NO_SNAP,
 	/** ad-hoc memory */
-	UMEM_CLASS_AD,
+	UMEM_CLASS_ADMEM,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
@@ -694,6 +694,9 @@ umem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 		umm->umm_ops->mo_atomic_flush(umm, addr, len);
 	return;
 }
+
+int umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		   int stage, umem_tx_cb_t cb, void *data);
 #endif
 
 static inline int

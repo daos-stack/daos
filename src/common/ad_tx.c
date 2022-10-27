@@ -687,8 +687,8 @@ tx_abort(struct ad_tx *tx, int err)
 	return tx_end(tx, err);
 }
 
-int
-mo_ad_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
+static int
+umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	struct umem_tx		*utx = NULL;
 	struct ad_tx		*tx;
@@ -736,9 +736,9 @@ mo_ad_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 			rc = -DER_INVAL;
 			goto err_abort;
 		}
-		if (tx->tx_stage_cb_arg != txd) {
+		if (txd != NULL && txd != tx->tx_stage_cb_arg) {
 			D_ERROR("Cannot set different TX callback argument\n");
-			rc = -DER_INVAL;
+			rc = -DER_CANCELED;
 			goto err_abort;
 		}
 		tx->tx_layer++;
@@ -758,8 +758,8 @@ err_abort:
 	return rc;
 }
 
-int
-mo_ad_tx_abort(struct umem_instance *umm, int err)
+static int
+umo_tx_abort(struct umem_instance *umm, int err)
 {
 	struct ad_tx	*tx = tx_get();
 
@@ -770,8 +770,8 @@ mo_ad_tx_abort(struct umem_instance *umm, int err)
 	return tx_abort(tx, err);
 }
 
-int
-mo_ad_tx_commit(struct umem_instance *umm)
+static int
+umo_tx_commit(struct umem_instance *umm)
 {
 	struct ad_tx	*tx = tx_get();
 	int		 rc = 0;
@@ -788,8 +788,8 @@ mo_ad_tx_commit(struct umem_instance *umm)
 	return rc;
 }
 
-int
-mo_ad_tx_stage(void)
+static int
+umo_tx_stage(void)
 {
 	struct ad_tx	*tx = tx_get();
 
@@ -797,8 +797,8 @@ mo_ad_tx_stage(void)
 	return (tx == NULL) ? UMEM_STAGE_NONE : ad_tx_stage(tx);
 }
 
-int
-mo_ad_tx_free(struct umem_instance *umm, umem_off_t umoff)
+static int
+umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
 	struct ad_tx	*tx = tx_get();
 	int		 rc = 0;
@@ -824,17 +824,17 @@ mo_ad_tx_free(struct umem_instance *umm, umem_off_t umoff)
 	return rc;
 }
 
-umem_off_t
-mo_ad_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
-	       unsigned int type_num)
+static umem_off_t
+umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
+	     unsigned int type_num)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 
 	return ad_alloc(bh, 0, size, NULL);
 }
 
-int
-mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size)
+static int
+umo_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size)
 {
 	struct ad_tx		*tx = tx_get();
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
@@ -848,19 +848,19 @@ mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_
 	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
 }
 
-int
-mo_ad_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
-	      uint64_t flags)
+static int
+umo_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
+	    uint64_t flags)
 {
 	/* NOOP for UMEM_XADD_NO_SNAPSHOT */
 	if (flags & UMEM_XADD_NO_SNAPSHOT)
 		return 0;
 
-	return mo_ad_tx_add(umm, umoff, offset, size);
+	return umo_tx_add(umm, umoff, offset, size);
 }
 
-int
-mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
+static int
+umo_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
 	struct ad_tx		*tx = tx_get();
 
@@ -870,22 +870,22 @@ mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
 }
 
-umem_off_t
-mo_ad_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
+static umem_off_t
+umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 
 	return ad_reserve(bh, 0, size, NULL, (struct ad_reserv_act *)act);
 }
 
-void
-mo_ad_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
+static void
+umo_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	ad_cancel((struct ad_reserv_act *)actv, actv_cnt);
 }
 
-int
-mo_ad_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
+static int
+umo_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	struct ad_tx		*tx = tx_get();
 
@@ -895,23 +895,19 @@ mo_ad_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 	return ad_tx_publish(tx, (struct ad_reserv_act *)actv, actv_cnt);
 }
 
-void *
-mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len)
+static void *
+umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len)
 {
-	struct ad_tx	*tx = tx_get();
-	bool		 tx_started = false;
+	struct ad_tx	*tx;
 	int		 rc = 0;
 
-	if (tx == NULL) {
-		rc = mo_ad_tx_begin(umm, NULL);
-		if (rc) {
-			D_ERROR("mo_ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
-			return NULL;
-		}
-		tx_started = true;
-		tx = tx_get();
+	rc = umo_tx_begin(umm, NULL);
+	if (rc) {
+		D_ERROR("umo_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+		return NULL;
 	}
 
+	tx = tx_get();
 	rc = ad_tx_copy(tx, dest, len, src, AD_TX_UNDO);
 	if (rc) {
 		D_ERROR("ad_tx_copy failed, "DF_RC"\n", DP_RC(rc));
@@ -926,43 +922,37 @@ mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t
 		goto failed;
 	}
 
-	if (tx_started)
-		rc = mo_ad_tx_commit(umm);
+	rc = umo_tx_commit(umm);
 
 	return rc == 0 ? dest: NULL;
 
 failed:
 	D_ASSERT(rc != 0);
-	if (tx_started)
-		mo_ad_tx_abort(umm, rc);
+	umo_tx_abort(umm, rc);
 
 	return NULL;
 }
 
-umem_off_t
-mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
+static umem_off_t
+umo_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 
 	return ad_alloc(bh, 0, size, NULL);
 }
 
-int
-mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff)
+static int
+umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	struct ad_tx		*tx = tx_get();
-	bool			 tx_started = false;
+	struct ad_tx		*tx;
 	int			 rc = 0;
 
-	if (tx == NULL) {
-		rc = mo_ad_tx_begin(umm, NULL);
-		if (rc) {
-			D_ERROR("mo_ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
-			return rc;
-		}
-		tx_started = true;
-		tx = tx_get();
+	rc = umo_tx_begin(umm, NULL);
+	if (rc) {
+		D_ERROR("umo_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
+	tx = tx_get();
 
 	rc = ad_tx_free(tx, umoff);
 	if (rc) {
@@ -970,39 +960,63 @@ mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 		goto failed;
 	}
 
-	if (tx_started)
-		rc = mo_ad_tx_commit(umm);
+	rc = umo_tx_commit(umm);
 
 	return rc;
 
 failed:
 	D_ASSERT(rc != 0);
-	if (tx_started)
-		rc = mo_ad_tx_abort(umm, rc);
-
+	umo_tx_abort(umm, rc);
 	return rc;
 }
 
-uint32_t
-mo_ad_tx_act_nr(struct umem_tx *utx)
+static uint32_t
+umo_tx_act_nr(struct umem_tx *utx)
 {
 	return ad_tx_redo_act_nr(umem_tx2ad_tx(utx));
 }
 
-uint32_t
-mo_ad_tx_payload_sz(struct umem_tx *utx)
+static uint32_t
+umo_tx_payload_sz(struct umem_tx *utx)
 {
 	return ad_tx_redo_payload_len(umem_tx2ad_tx(utx));
 }
 
-struct umem_action *
-mo_ad_tx_act_first(struct umem_tx *utx)
+static struct umem_action *
+umo_tx_act_first(struct umem_tx *utx)
 {
 	return ad_tx_redo_act_first(umem_tx2ad_tx(utx));
 }
 
-struct umem_action *
-mo_ad_tx_act_next(struct umem_tx *utx)
+static struct umem_action *
+umo_tx_act_next(struct umem_tx *utx)
 {
 	return ad_tx_redo_act_next(umem_tx2ad_tx(utx));
 }
+
+umem_ops_t	ad_mem_ops = {
+	.mo_tx_free		= umo_tx_free,
+	.mo_tx_alloc		= umo_tx_alloc,
+	.mo_tx_add		= umo_tx_add,
+	.mo_tx_xadd		= umo_tx_xadd,
+	.mo_tx_add_ptr		= umo_tx_add_ptr,
+	.mo_tx_abort		= umo_tx_abort,
+	.mo_tx_begin		= umo_tx_begin,
+	.mo_tx_commit		= umo_tx_commit,
+	.mo_tx_stage		= umo_tx_stage,
+	.mo_reserve		= umo_reserve,
+	/* defer_free will go to umem_free() -> mo_tx_free, see umem_defer_free */
+	.mo_defer_free		= NULL,
+	.mo_cancel		= umo_cancel,
+	.mo_tx_publish		= umo_tx_publish,
+	.mo_atomic_copy		= umo_atomic_copy,
+	.mo_atomic_alloc	= umo_atomic_alloc,
+	.mo_atomic_free		= umo_atomic_free,
+	/* NOOP flush for ADMEM */
+	.mo_atomic_flush	= NULL,
+	.mo_tx_act_nr		= umo_tx_act_nr,
+	.mo_tx_payload_sz	= umo_tx_payload_sz,
+	.mo_tx_act_first	= umo_tx_act_first,
+	.mo_tx_act_next		= umo_tx_act_next,
+	.mo_tx_add_callback	= umem_tx_add_cb,
+};

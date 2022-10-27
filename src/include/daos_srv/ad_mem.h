@@ -168,27 +168,6 @@ umm2ad_blob_hdl(struct umem_instance *umm)
 	return hdl;
 }
 
-int mo_ad_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd);
-int mo_ad_tx_abort(struct umem_instance *umm, int err);
-int mo_ad_tx_commit(struct umem_instance *umm);
-int mo_ad_tx_stage(void);
-int mo_ad_tx_free(struct umem_instance *umm, umem_off_t umoff);
-umem_off_t mo_ad_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
-			  unsigned int type_num);
-int mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size);
-int mo_ad_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
-		  uint64_t flags);
-int mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size);
-umem_off_t mo_ad_reserve(struct umem_instance *umm, void *act, size_t size,
-			 unsigned int type_num);
-void mo_ad_cancel(struct umem_instance *umm, void *actv, int actv_cnt);
-int mo_ad_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt);
-void *mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len);
-umem_off_t mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num);
-int mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff);
-uint32_t mo_ad_tx_act_nr(struct umem_tx *utx);
-uint32_t mo_ad_tx_payload_sz(struct umem_tx *utx);
-struct umem_action *mo_ad_tx_act_first(struct umem_tx *utx);
-struct umem_action *mo_ad_tx_act_next(struct umem_tx *utx);
+extern umem_ops_t ad_mem_ops;
 
 #endif /* __DAOS_AD_HOC_MEM_H__ */

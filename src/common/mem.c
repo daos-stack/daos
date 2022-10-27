@@ -573,9 +573,9 @@ pmem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 	pmemobj_flush(pop, addr, len);
 }
 
-static int
-pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
-		     int stage, umem_tx_cb_t cb, void *data)
+int
+umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+	       int stage, umem_tx_cb_t cb, void *data)
 {
 	struct umem_tx_stage_item	*txi, **pvec;
 	unsigned int			*cnt, *cnt_max;
@@ -654,7 +654,7 @@ static umem_ops_t	pmem_ops = {
 	.mo_atomic_alloc	= pmem_atomic_alloc,
 	.mo_atomic_free		= pmem_atomic_free,
 	.mo_atomic_flush	= pmem_atomic_flush,
-	.mo_tx_add_callback	= pmem_tx_add_callback,
+	.mo_tx_add_callback	= umem_tx_add_cb,
 };
 
 int
@@ -673,34 +673,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
-static umem_ops_t	ad_ops = {
-	.mo_tx_free		= mo_ad_tx_free,
-	.mo_tx_alloc		= mo_ad_tx_alloc,
-	.mo_tx_add		= mo_ad_tx_add,
-	.mo_tx_xadd		= mo_ad_tx_xadd,
-	.mo_tx_add_ptr		= mo_ad_tx_add_ptr,
-	.mo_tx_abort		= mo_ad_tx_abort,
-	.mo_tx_begin		= mo_ad_tx_begin,
-	.mo_tx_commit		= mo_ad_tx_commit,
-	.mo_tx_stage		= mo_ad_tx_stage,
-	.mo_reserve		= mo_ad_reserve,
-	/* defer_free will go to umem_free() -> mo_tx_free, see umem_defer_free */
-	.mo_defer_free		= NULL,
-	.mo_cancel		= mo_ad_cancel,
-	.mo_tx_publish		= mo_ad_tx_publish,
-	.mo_atomic_copy		= mo_ad_atomic_copy,
-	.mo_atomic_alloc	= mo_ad_atomic_alloc,
-	.mo_atomic_free		= mo_ad_atomic_free,
-	/* NOOP flush for ADMEM */
-	.mo_atomic_flush	= NULL,
-	.mo_tx_act_nr		= mo_ad_tx_act_nr,
-	.mo_tx_payload_sz	= mo_ad_tx_payload_sz,
-	.mo_tx_act_first	= mo_ad_tx_act_first,
-	.mo_tx_act_next		= mo_ad_tx_act_next,
-	/* share same mo_tx_add_callback as PMEM */
-	.mo_tx_add_callback	= pmem_tx_add_callback,
-};
 
 #endif
 
@@ -771,8 +743,8 @@ static struct umem_class umem_class_defined[] = {
 		.umc_name	= "pmem",
 	},
 	{
-		.umc_id		= UMEM_CLASS_AD,
-		.umc_ops	= &ad_ops,
+		.umc_id		= UMEM_CLASS_ADMEM,
+		.umc_ops	= &ad_mem_ops,
 		.umc_name	= "ad-hoc",
 	},
 #endif
@@ -945,7 +917,7 @@ umem_rsrvd_item_size(struct umem_instance *umm)
 	switch (umm->umm_id) {
 	case UMEM_CLASS_PMEM:
 		return sizeof(struct pobj_action);
-	case UMEM_CLASS_AD:
+	case UMEM_CLASS_ADMEM:
 		return sizeof(struct ad_reserv_act);
 	default:
 		D_ERROR("bad umm_id %d\n", umm->umm_id);

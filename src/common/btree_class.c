@@ -24,7 +24,7 @@ static int
 btr_check_tx(struct btr_attr *attr, struct umem_instance *umm)
 {
 	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM &&
-	    attr->ba_uma.uma_id != UMEM_CLASS_AD)
+	    attr->ba_uma.uma_id != UMEM_CLASS_ADMEM)
 		return BTR_NO_TX;
 
 #ifdef DAOS_PMEM_BUILD
