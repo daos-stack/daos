@@ -147,7 +147,7 @@ struct ad_group_spec {
 };
 
 int ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
-		      struct ad_group_spec *specs, unsigned int specs_nr, struct ad_tx *tx);
+		      struct ad_group_spec *specs, unsigned int specs_nr);
 daos_off_t ad_reserve(struct ad_blob_handle bh, int type, daos_size_t size, uint32_t *arena_id,
 		      struct ad_reserv_act *act);
 int ad_tx_free(struct ad_tx *tx, daos_off_t addr);

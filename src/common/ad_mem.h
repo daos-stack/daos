@@ -37,7 +37,7 @@ struct ad_free_act {
 #define GRP_UNIT_BMSZ		8
 /** 32K is the minimum size of a group */
 #define GRP_SIZE_SHIFT		(15)
-#define GRP_SIZE_MIN		(1 << GRP_SIZE_SHIFT)
+#define GRP_SIZE_MASK		((1 << GRP_SIZE_SHIFT) - 1)
 
 /** durable format of group (128 bytes) */
 struct ad_group_df {
@@ -99,7 +99,7 @@ struct ad_arena_spec {
 	/** arena unit size, reserved for future use */
 	uint32_t		as_unit;
 	/* last active arena of this type, this is not really part of spec... */
-	uint32_t		as_arena_last;
+	uint32_t		as_last_used;
 	/** number of group specs (valid members of as_specs) */
 	uint32_t		as_specs_nr;
 	/** group sizes and number of units within each group */
@@ -274,9 +274,9 @@ struct ad_blob {
 	/** number of pages */
 	unsigned int		 bb_pgs_nr;
 	/**
-	 * XXX: last used arena ID, the current implementation chooses arena ID incrementally,
-	 * because freeing arena is not supported yet. In the future, it should scan bitmap to
-	 * choose ID for arena allocation.
+	 * last used arena ID.
+	 * TODO: instead of choosing the last used, select arena based on their "weight",
+	 * which is computed out from free space of arena.
 	 */
 	uint32_t		 bb_arena_last[ARENA_SPEC_MAX];
 	/** NB: either initialize @bb_mmap or @bb_pages, only support @bb_map in phase-1 */
