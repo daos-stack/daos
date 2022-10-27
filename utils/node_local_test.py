@@ -1426,6 +1426,7 @@ def run_daos_cmd(conf,
     return dcr
 
 
+# pylint: disable-next=too-many-arguments
 def create_cont(conf,
                 pool=None,
                 ctype=None,
@@ -4253,8 +4254,30 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = True
 
-    rc = test_cmd.launch()
-    return rc
+    return test_cmd.launch()
+
+
+def test_alloc_cont_create(server, conf, wf):
+    """Run container creation under fault injection.
+
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
+    """
+
+    pool = server.get_test_pool_id()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                pool,
+                '--properties',
+                f'rf:1,srv_cksum:on,label:{cont_id}']
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.wf = wf
+
+    return test_cmd.launch()
 
 
 def test_alloc_fail_cat(server, conf):
@@ -4583,6 +4606,9 @@ def run(wf, args):
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
+                # container create with properties test.
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 
