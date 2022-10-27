@@ -302,7 +302,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t f
 	return 0;
 }
 
-static int
+static uint32_t
 get_integer(void *addr, int size)
 {
 	switch (size) {

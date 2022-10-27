@@ -779,6 +779,7 @@ adt_no_space_1(void **state)
 	}
 	array_size = i;
 
+	adt_addrs_shuffle(addr_array, array_size);
 	rc = ad_tx_begin(adt_bh, &tx);
 	assert_rc_equal(rc, 0);
 
@@ -808,6 +809,7 @@ adt_no_space_1(void **state)
 		assert_rc_equal(rc, 0);
 	}
 	printf("array_size: %d, i: %d\n", array_size, i);
+	D_ASSERT(i == array_size);
 	D_FREE(addr_array);
 }
 

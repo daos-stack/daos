@@ -47,15 +47,15 @@ static struct ad_group_spec grp_specs_def[] = {
 	{
 		.gs_unit	= 1024,
 		.gs_count	= 256,
-	},	/* group size = 256K */
+	},	/* group size = 512K */
 	{
 		.gs_unit	= 2048,
 		.gs_count	= 128,
-	},	/* group size = 256K */
+	},	/* group size = 1M */
 	{
 		.gs_unit	= 4096,
 		.gs_count	= 64,
-	},	/* group size = 256K */
+	},	/* group size = 2M */
 };
 
 static struct ad_blob	*dummy_blob;
@@ -163,11 +163,33 @@ blob_bmap_size(struct ad_blob *blob)
 #define GROUP_LRU_MAX	(256 << 10)
 #define ARENA_LRU_MAX	(64 << 10)
 
+static bool
+heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
+{
+	struct ad_maxheap_node *nodea, *nodeb;
+
+	nodea = container_of(a, struct ad_maxheap_node, mh_node);
+	nodeb = container_of(b, struct ad_maxheap_node, mh_node);
+
+	if (nodea->mh_weight == nodeb->mh_weight)
+		return nodea->mh_arena_id < nodeb->mh_arena_id;
+
+	/* Max heap, the largest free extent is heap root */
+	return nodea->mh_weight > nodeb->mh_weight;
+}
+
+struct d_binheap_ops heap_ops = {
+	.hop_enter	= NULL,
+	.hop_exit	= NULL,
+	.hop_compare	= heap_node_cmp,
+};
+
 static int
 blob_init(struct ad_blob *blob)
 {
-	char	*buf = NULL;
-	int	 i;
+	char			*buf = NULL;
+	int			i;
+	int			rc = -DER_NOMEM;
 
 	D_ASSERT(blob->bb_pgs_nr > 0);
 
@@ -180,6 +202,9 @@ blob_init(struct ad_blob *blob)
 
 	D_ALLOC(blob->bb_pages, blob->bb_pgs_nr * sizeof(*blob->bb_pages));
 	if (!blob->bb_pages)
+		goto failed;
+	D_ALLOC(blob->bb_mh_nodes, blob->bb_pgs_nr * sizeof(struct ad_maxheap_node));
+	if (!blob->bb_mh_nodes)
 		goto failed;
 
 	if (blob->bb_fd < 0) { /* Test only */
@@ -234,10 +259,16 @@ blob_init(struct ad_blob *blob)
 		blob->bb_gps_lru_size++;
 		d_list_add(&group->gp_link, &blob->bb_gps_lru);
 	}
+
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &heap_ops,
+				      &blob->bb_arena_free_heap);
+	if (rc != 0)
+		goto failed;
+
 	return 0;
 failed:
 	blob_fini(blob);
-	return -DER_NOMEM;
+	return rc;
 }
 
 static int
@@ -261,10 +292,74 @@ blob_fini(struct ad_blob *blob)
 	while ((arena = d_list_pop_entry(&blob->bb_ars_lru, struct ad_arena, ar_link)))
 		free_arena(arena, true);
 
+	d_binheap_destroy(&blob->bb_arena_free_heap);
+	D_FREE(blob->bb_mh_nodes);
 	D_FREE(blob->bb_bmap_rsv);
 	D_FREE(blob->bb_pages);
 	D_FREE(blob->bb_mmap);
 	return 0;
+}
+
+static uint32_t
+arena_free_size(struct ad_arena_df *ad)
+{
+	int		    grp_idx;
+	uint32_t	    weight = 0;
+	struct ad_group_df  *gd;
+	uint32_t	    grp_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
+
+	for (grp_idx = 0; grp_idx < grp_max; grp_idx++) {
+		if (!isset64(ad->ad_bmap, grp_idx)) {
+			weight += (1 << GRP_SIZE_SHIFT);
+			continue;
+		}
+	}
+
+	for (grp_idx = 0; grp_idx < ad->ad_grp_nr; grp_idx++) {
+		gd = &ad->ad_groups[grp_idx];
+		weight += gd->gd_unit_free * gd->gd_unit;
+	}
+
+	return weight;
+}
+
+#define ARENA_WEIGHT_BITS 12
+
+/* Avoid to change weight of an arena on every alloc/free (reorder arena) */
+static inline uint32_t
+arena_weight(int free_size)
+{
+	return (free_size + (1 << ARENA_WEIGHT_BITS) - 1) >> ARENA_WEIGHT_BITS;
+}
+
+static int
+arena_insert_free_entry(struct ad_blob *blob, uint32_t arena_id, int free_size)
+{
+	struct ad_maxheap_node	*mh_node;
+	int			 rc;
+
+	D_ASSERT(arena_id < blob->bb_pgs_nr);
+	mh_node = &blob->bb_mh_nodes[arena_id];
+
+	mh_node->mh_free_size = free_size;
+	mh_node->mh_weight = arena_weight(free_size);
+	mh_node->mh_arena_id = arena_id;
+	mh_node->mh_in_tree = 1;
+	rc = d_binheap_insert(&blob->bb_arena_free_heap, &mh_node->mh_node);
+	D_ASSERT(rc == 0);
+
+	return rc;
+}
+
+static void
+arena_remove_free_entry(struct ad_blob *blob, uint32_t arena_id)
+{
+	struct ad_maxheap_node	*mh_node;
+
+	D_ASSERT(arena_id < blob->bb_pgs_nr);
+	mh_node = &blob->bb_mh_nodes[arena_id];
+	mh_node->mh_in_tree = 0;
+	d_binheap_remove(&blob->bb_arena_free_heap, &mh_node->mh_node);
 }
 
 static int
@@ -273,6 +368,8 @@ blob_load(struct ad_blob *blob)
 	struct ad_blob_df *bd = blob->bb_df;
 	int		   i;
 	int		   rc = 0;
+	struct ad_arena_df *ad;
+	bool		   free_bitmap_exist = false;
 
 	for (i = 0; i < blob->bb_pgs_nr; i++) {
 		struct ad_page		*page;
@@ -290,11 +387,27 @@ blob_load(struct ad_blob *blob)
 			D_ERROR("Failed to load storage contents: %d\n", rc);
 			goto out;
 		}
+		if (isset64(bd->bd_bmap, i)) {
+			ad = (struct ad_arena_df *)blob->bb_pages[i].pa_rpg;
+
+			rc = arena_insert_free_entry(blob, i, arena_free_size(ad));
+			if (rc) {
+				D_ERROR("Failed to insert arena free memory entry: %d\n", rc);
+				goto out;
+			}
+		} else {
+			free_bitmap_exist = true;
+		}
 	}
 
+	if (free_bitmap_exist)
+		blob->bb_bmap_free_exist = 1;
+
 	/* NB: @bd points to the first page, its content has been brought in by the above read.*/
-	for (i = 0; i < bd->bd_asp_nr; i++)
+	for (i = 0; i < bd->bd_asp_nr; i++) {
 		blob->bb_arena_last[i] = bd->bd_asp[i].as_last_used;
+		arena_remove_free_entry(blob, blob->bb_arena_last[i]);
+	}
 out:
 	return rc;
 }
@@ -395,7 +508,7 @@ ad_blob_post_create(struct ad_blob_handle bh)
 	if (rc)
 		goto failed;
 
-	arena->ar_unpub = false;
+	arena->ar_unpub = 0;
 
 	blob->bb_arena_last[0]	= bd->bd_asp[0].as_last_used;
 	/* already published arena[0], clear the reserved bit */
@@ -411,8 +524,8 @@ ad_blob_post_create(struct ad_blob_handle bh)
 		goto failed;
 	}
 	arena_decref(arena);
-
 	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
+	blob->bb_bmap_free_exist = 1;
 	blob_set_opened(blob);
 	return 0;
 failed:
@@ -445,7 +558,7 @@ ad_blob_prep_open(char *path, struct ad_blob_handle *bh)
 
 			blob->bb_fd = -1;
 			blob->bb_ref = 1;
-			blob->bb_dummy = true;
+			blob->bb_dummy = 1;
 		}
 	}
 	bh->bh_blob = blob;
@@ -649,11 +762,12 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 static int
 arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 {
-	struct ad_arena	    *arena = NULL;
-	struct ad_arena_df  *ad = NULL;
-	struct ad_group_df  *gd;
-	int		     i;
-	int		     rc;
+	struct ad_arena		*arena = NULL;
+	struct ad_arena_df	*ad = NULL;
+	struct ad_group_df	*gd;
+	int			 i;
+	int			 rc;
+	struct ad_maxheap_node	*node;
 
 	D_ASSERT(arena_id != AD_ARENA_ANY);
 	rc = arena_find(blob, &arena_id, &ad);
@@ -709,6 +823,11 @@ arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 	if (ad->ad_grp_nr > 0) {
 		qsort(arena->ar_size_sorter, ad->ad_grp_nr, sizeof(gd), group_size_cmp);
 		qsort(arena->ar_addr_sorter, ad->ad_grp_nr, sizeof(gd), group_addr_cmp);
+	}
+	node = &arena->ar_blob->bb_mh_nodes[arena_id];
+	if (!node->mh_in_tree) {
+		node->mh_free_size = arena_free_size(ad);
+		node->mh_weight = arena_weight(node->mh_free_size);
 	}
 out:
 	if (arena_p)
@@ -781,7 +900,7 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	rc = arena_load(blob, id, &arena);
 	D_ASSERT(rc == 0);
 
-	arena->ar_unpub = true;
+	arena->ar_unpub = 1;
 	*arena_p = arena;
 	return 0;
 }
@@ -1413,7 +1532,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	gd->gd_back_ptr	   = (unsigned long)grp;
 	gd->gd_incarnation = blob_incarnation(blob);
 
-	grp->gp_unpub	= true;
+	grp->gp_unpub	= 1;
 	grp->gp_ref	= 1;
 	grp->gp_df	= gd;
 
@@ -1521,15 +1640,43 @@ failed:
 	return rc;
 }
 
+static void
+arena_reorder_if_needed(struct ad_arena *arena)
+{
+	uint32_t		 arena_id = arena->ar_df->ad_id;
+	struct ad_blob		*blob = arena->ar_blob;
+	struct ad_maxheap_node	*node = &blob->bb_mh_nodes[arena_id];
+	int			 new_weight = arena_weight(node->mh_free_size);
+
+	/* NB, handle this once */
+	if (node->mh_in_tree && new_weight != node->mh_weight) {
+		d_binheap_remove(&blob->bb_arena_free_heap, &node->mh_node);
+		node->mh_weight = new_weight;
+		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
+		return;
+	}
+
+	/* bring arena back if free space more than 1/4 of total size */
+	if (!node->mh_in_tree && node->mh_full && node->mh_free_size > ARENA_SIZE / 4) {
+		node->mh_weight = new_weight;
+		node->mh_in_tree = 1;
+		node->mh_full = 0;
+		node->mh_arena_id = arena->ar_df->ad_id;
+		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
+		return;
+	}
+}
+
 static int
 arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_act *act,
 		   daos_off_t *addr_p)
 {
-	struct ad_group	   *grp;
-	daos_off_t	    addr;
-	int		    grp_at;
-	int		    rc;
-	bool		    tried = false;
+	struct ad_group		*grp;
+	daos_off_t		 addr;
+	int			 grp_at;
+	int			 rc;
+	bool			 tried = false;
+	struct ad_maxheap_node	*node;
 
 	rc = arena_find_grp(arena, size, &grp_at, &grp);
 	if (rc == -DER_ENOENT ||	/* no arena, no group */
@@ -1548,11 +1695,12 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 				"No group(size=%d) found in arena=%d, reserve a new one\n",
 				(int)size, arena2id(arena));
 
+			node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
 			rc = arena_reserve_grp(arena, size, &grp_at, &grp);
 			if (rc == -DER_NOSPACE) { /* cannot create a new group, full arena */
 				/* XXX: other sized groups may have space. */
 				D_DEBUG(DB_TRACE, "Full arena=%d\n", arena->ar_df->ad_id);
-				arena->ar_full = true;
+				node->mh_full = 1;
 				return rc;
 			}
 			if (rc != 0) {
@@ -1576,6 +1724,10 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	}
 	/* NB: reorder only does minimum amount of works most of the time */
 	arena_reorder_grp(arena, grp, grp_at, true);
+	node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+	D_ASSERT(node->mh_free_size >= grp->gp_df->gd_unit);
+	node->mh_free_size -= grp->gp_df->gd_unit;
+	arena_reorder_if_needed(arena);
 	group_decref(grp);
 
 	arena_addref(arena);
@@ -1609,11 +1761,12 @@ static daos_off_t
 ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		uint32_t *arena_id, struct ad_reserv_act *act)
 {
-	struct ad_arena	*arena = NULL;
-	daos_off_t	 addr;
-	uint32_t	 id;
-	bool		 tried;
-	int		 rc;
+	struct ad_arena		*arena = NULL;
+	daos_off_t		 addr;
+	uint32_t		 id;
+	bool			 tried;
+	int			 rc;
+	struct ad_maxheap_node	*ad_node;
 
 	if (arena_id && *arena_id != AD_ARENA_ANY)
 		id = *arena_id;
@@ -1626,20 +1779,41 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
 			/* fall through and create a new one */
-		} else if (arena->ar_full) {
-			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
-			arena_decref(arena);
-			arena = NULL;
+		} {
+			ad_node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+			if (ad_node->mh_full) {
+				D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
+				arena_decref(arena);
+				arena = NULL;
+			}
 		}
 	}
 
 	tried = false;
 	while (1) {
 		if (arena == NULL) {
-			rc = arena_reserve(blob, type, NULL, &arena);
-			if (rc) {
-				D_ERROR("Failed to reserve new arena: %d\n", rc);
-				return 0;
+			if (blob->bb_bmap_free_exist) {
+				rc = arena_reserve(blob, type, NULL, &arena);
+				if (rc)
+					blob->bb_bmap_free_exist = 0;
+			}
+			if (blob->bb_bmap_free_exist == 0) {
+				struct d_binheap_node	*node;
+again:
+				node = d_binheap_remove_root(&blob->bb_arena_free_heap);
+				if (node == NULL) {
+					D_ERROR("Failed to reserve new arena.\n");
+					return 0;
+				}
+				ad_node = container_of(node, struct ad_maxheap_node, mh_node);
+				ad_node->mh_in_tree = 0;
+				rc = arena_load(blob, ad_node->mh_arena_id, &arena);
+				if (rc) {
+					D_DEBUG(DB_TRACE, "failed to load arena %u: %d\n",
+						ad_node->mh_arena_id, rc);
+					goto again;
+				}
+				blob->bb_arena_last[type] = ad_node->mh_arena_id;
 			}
 			tried = true;
 		}
@@ -1678,11 +1852,12 @@ tx_complete(struct ad_tx *tx, int err)
 {
 	struct ad_blob	   *blob  = tx->tx_blob;
 	struct umem_store  *store = &blob->bb_store;
-	struct ad_arena    *arena;
+	struct ad_arena    *arena, *arena_last = NULL;
 	struct ad_group	   *group;
 	struct ad_free_act *fac;
 	int		    i;
 	int		    rc;
+	struct ad_maxheap_node	*node;
 
 	if (!err)
 		rc = store->stor_ops->so_wal_submit(store, tx->tx_id, &tx->tx_redo);
@@ -1690,19 +1865,19 @@ tx_complete(struct ad_tx *tx, int err)
 		rc = err;
 
 	while ((arena = d_list_pop_entry(&tx->tx_ar_pub, struct ad_arena, ar_link))) {
-		arena->ar_publishing = false;
+		arena->ar_publishing = 0;
 		if (err) { /* keep the refcount and pin it */
 			d_list_add(&arena->ar_link, &blob->bb_ars_rsv);
 			continue;
 		}
 		clrbit64(blob->bb_bmap_rsv, arena->ar_df->ad_id);
 		D_ASSERT(arena->ar_unpub);
-		arena->ar_unpub = false;
+		arena->ar_unpub = 0;
 		arena_decref(arena);
 	}
 
 	while ((group = d_list_pop_entry(&tx->tx_gp_pub, struct ad_group, gp_link))) {
-		group->gp_publishing = false;
+		group->gp_publishing = 0;
 		if (err) { /* keep the refcount and pin it */
 			d_list_add(&group->gp_link, &blob->bb_gps_rsv);
 			continue;
@@ -1710,10 +1885,11 @@ tx_complete(struct ad_tx *tx, int err)
 		for (i = 0; i < group->gp_bit_nr; i++)
 			clrbit64(group->gp_arena->ar_bmap_rsv, group->gp_bit_at + i);
 		D_ASSERT(group->gp_unpub);
-		group->gp_unpub = false;
+		group->gp_unpub = 0;
 		group_decref(group);
 	}
 
+	arena = NULL;
 	while ((fac = d_list_pop_entry(&tx->tx_gp_free, struct ad_free_act, fa_link))) {
 		int	pos;
 
@@ -1731,13 +1907,30 @@ tx_complete(struct ad_tx *tx, int err)
 			pos = arena_locate_grp(group->gp_arena, group);
 			group->gp_unit_rsv--;
 			/* NB: reorder only does minimum amount of works most of the time */
+			arena = group->gp_arena;
 			arena_reorder_grp(group->gp_arena, group, pos, false);
+			node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+			node->mh_free_size += group->gp_df->gd_unit;
+			if (arena != arena_last) {
+				if (arena_last != NULL) {
+					arena_reorder_if_needed(arena_last);
+					arena_decref(arena_last);
+				}
+				arena_last = arena;
+				arena_addref(arena_last);
+				arena = NULL;
+			}
 		} else {
 			/* cancel the delayed free, no reorder */
 			group->gp_unit_rsv--;
 		}
 		group_decref(group);
 		D_FREE(fac);
+	}
+
+	if (arena != NULL) {
+		arena_reorder_if_needed(arena);
+		arena_decref(arena);
 	}
 	/* TODO: if rc != 0, run all undo operations */
 	return rc;
@@ -1761,7 +1954,7 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			if (rc)
 				break;
 
-			arena->ar_publishing = true;
+			arena->ar_publishing = 1;
 			if (d_list_empty(&arena->ar_link)) {
 				arena_addref(arena);
 				d_list_add_tail(&arena->ar_link, &tx->tx_ar_pub);
@@ -1780,7 +1973,7 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			if (rc)
 				break;
 
-			group->gp_publishing = true;
+			group->gp_publishing = 1;
 			if (d_list_empty(&group->gp_link)) {
 				group_addref(group);
 				d_list_add_tail(&group->gp_link, &tx->tx_gp_pub);
@@ -1812,14 +2005,17 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 void
 ad_cancel(struct ad_reserv_act *acts, int act_nr)
 {
-	int	i;
+	struct ad_arena	*arena = NULL, *arena_last = NULL;
+	struct ad_blob	*blob;
+	struct ad_group *group;
+	int		 i;
+	int		 pos;
+	struct ad_maxheap_node	*node;
 
 	for (i = 0; i < act_nr; i++) {
-		struct ad_arena	*arena = acts[i].ra_arena;
-		struct ad_group *group = acts[i].ra_group;
-		struct ad_blob	*blob  = arena->ar_blob;
-		int		 pos;
-
+		group = acts[i].ra_group;
+		arena = acts[i].ra_arena;
+		blob = arena->ar_blob;
 		D_DEBUG(DB_TRACE, "cancel bit=%d\n", acts[i].ra_bit);
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 
@@ -1831,6 +2027,16 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		group->gp_unit_rsv--;
 		/* NB: reorder only does minimum amount of works most of the time */
 		arena_reorder_grp(arena, group, pos, false);
+		node = &blob->bb_mh_nodes[arena->ar_df->ad_id];
+		node->mh_free_size += group->gp_df->gd_unit;
+		if (arena != arena_last) {
+			if (arena_last != NULL) {
+				arena_reorder_if_needed(arena_last);
+				arena_decref(arena_last);
+			}
+			arena_last = arena;
+			arena_addref(arena_last);
+		}
 
 		/* NB: arena and group are remained as "reserved" for now */
 		if (group->gp_unpub && d_list_empty(&group->gp_link)) { /* pin it */
@@ -1850,6 +2056,12 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		}
 		acts[i].ra_arena = NULL;
 		acts[i].ra_group = NULL;
+		arena = NULL;
+	}
+
+	if (arena != NULL) {
+		arena_reorder_if_needed(arena);
+		arena_decref(arena);
 	}
 }
 

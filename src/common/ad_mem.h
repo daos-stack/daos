@@ -11,6 +11,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/ad_mem.h>
+#include <gurt/heap.h>
 
 /** ad-hoc allocator transaction handle */
 struct ad_tx {
@@ -65,9 +66,9 @@ struct ad_group {
 	/** address of durable format */
 	struct ad_group_df	*gp_df;
 	/** unpublished group */
-	bool			 gp_unpub;
+	unsigned int		 gp_unpub:1,
 	/** being published */
-	bool			 gp_publishing;
+				 gp_publishing:1;
 	int			 gp_ref;
 	/** number of reserved units */
 	int			 gp_unit_rsv;
@@ -172,16 +173,9 @@ struct ad_arena {
 	/** number of groups */
 	int			  ar_grp_nr;
 	/** unpublished arena */
-	bool			  ar_unpub;
+	unsigned int		  ar_unpub:1,
 	/** being published */
-	bool			  ar_publishing;
-	/**
-	 * Arena is full, it's set to true when any type of group failed to allocate memory
-	 * and create more groups.
-	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
-	 * set arenea as full only if it encounters multiple failures.
-	 */
-	bool			  ar_full;
+				  ar_publishing:1;
 	/** pointers for size binary search, it is only used by the DRAM mirror*/
 	struct ad_group_df	**ar_size_sorter;
 	/** pointers for address binary search, it is only used by the DRAM mirror*/
@@ -243,6 +237,21 @@ struct ad_blob_df {
 
 #define DUMMY_BLOB	"dummy.blob"
 
+struct ad_maxheap_node {
+	struct d_binheap_node	mh_node;
+	int			mh_weight;
+	int			mh_free_size;
+	uint32_t		mh_arena_id;
+	unsigned int		mh_in_tree:1,
+	/**
+	 * Arena is full, it's set to true when any type of group failed to allocate memory
+	 * and create more groups.
+	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
+	 * set arenea as full only if it encounters multiple failures.
+	 */
+				mh_full:1;
+};
+
 /** DRAM blob open handle */
 struct ad_blob {
 	/** external umem store */
@@ -268,9 +277,11 @@ struct ad_blob {
 	/** reference counter */
 	int			 bb_ref;
 	/** is dummy blob, for unit test */
-	bool			 bb_dummy;
+	unsigned int		 bb_dummy:1,
 	/** opened blob */
-	bool			 bb_opened;
+				 bb_opened:1,
+	/** free bitmap exist or not */
+				 bb_bmap_free_exist:1;
 	/** number of pages */
 	unsigned int		 bb_pgs_nr;
 	/**
@@ -287,6 +298,10 @@ struct ad_blob {
 	struct ad_blob_df	*bb_df;
 	/** reserved bits for arena allocation */
 	uint64_t		*bb_bmap_rsv;
+	/* max heap nodes pointer */
+	struct ad_maxheap_node	*bb_mh_nodes;
+	/* max heap for free memory of arena */
+	struct d_binheap	 bb_arena_free_heap;
 };
 
 static inline void
