@@ -179,10 +179,10 @@ int mo_ad_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, s
 int mo_ad_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
 		  uint64_t flags);
 int mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size);
-umem_off_t mo_ad_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
+umem_off_t mo_ad_reserve(struct umem_instance *umm, void *act, size_t size,
 			 unsigned int type_num);
-void mo_ad_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt);
-int mo_ad_tx_publish(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt);
+void mo_ad_cancel(struct umem_instance *umm, void *actv, int actv_cnt);
+int mo_ad_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt);
 void *mo_ad_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len);
 umem_off_t mo_ad_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num);
 int mo_ad_atomic_free(struct umem_instance *umm, umem_off_t umoff);

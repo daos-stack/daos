@@ -6,7 +6,6 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos_srv/ad_mem.h>
-#include <libpmemobj.h> /* for pobj_action */
 #include "ad_mem.h"
 
 static __thread struct ad_tx	*tls_tx;
@@ -667,14 +666,9 @@ tx_end(struct ad_tx *tx, int err)
 	tx_callback(tx);
 	if (tx_get() == tx)
 		tx_set(NULL);
-	/* Give a chance to UMEM_STAGE_NONE callback.
-	 * XXX with less opportunity comparing with PMDK as user may started new TX here,
-	 *     or change to always call it even if with new TX in TLS?
-	 */
-	if (tx_get() == NULL) {
-		ad_tx_stage_set(tx, UMEM_STAGE_NONE);
-		tx_callback(tx);
-	}
+	/* trigger UMEM_STAGE_NONE callback, this TX is finished but possibly with other WIP TX */
+	ad_tx_stage_set(tx, UMEM_STAGE_NONE);
+	tx_callback(tx);
 	rc = tx->tx_last_errno;
 	utx = ad_tx2umem_tx(tx);
 	D_FREE(utx);
@@ -877,49 +871,28 @@ mo_ad_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 }
 
 umem_off_t
-mo_ad_reserve(struct umem_instance *umm, struct pobj_action *pact, size_t size,
-	      unsigned int type_num)
+mo_ad_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
-	struct ad_reserv_act	*act = (struct ad_reserv_act *)pact;
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 
-	return ad_reserve(bh, 0, size, NULL, act);
+	return ad_reserve(bh, 0, size, NULL, (struct ad_reserv_act *)act);
 }
 
 void
-mo_ad_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+mo_ad_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
 {
-	struct ad_reserv_act	*act;
-	int			 i;
-
-	for (i = 0; i < actv_cnt; i++) {
-		act = (struct ad_reserv_act *)(&actv[i]);
-		ad_cancel(act, 1);
-	}
+	ad_cancel((struct ad_reserv_act *)actv, actv_cnt);
 }
 
 int
-mo_ad_tx_publish(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+mo_ad_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	struct ad_tx		*tx = tx_get();
-	struct ad_reserv_act	*act;
-	int			 i;
-	int			 rc = 0;
 
 	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
 		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
-	for (i = 0; i < actv_cnt; i++) {
-		act = (struct ad_reserv_act *)(&actv[i]);
-		rc = ad_tx_publish(tx, act, 1);
-		if (rc) {
-			D_ERROR("TX "DF_U64", ad_tx_publish failed, "DF_RC"\n",
-				ad_tx_id(tx), DP_RC(rc));
-			break;
-		}
-	}
-
-	return rc;
+	return ad_tx_publish(tx, (struct ad_reserv_act *)actv, actv_cnt);
 }
 
 void *

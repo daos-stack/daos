@@ -491,13 +491,12 @@ pmem_tx_commit(struct umem_instance *umm)
 }
 
 static void
-pmem_defer_free(struct umem_instance *umm, umem_off_t off,
-		struct pobj_action *act)
+pmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
 	PMEMoid	id = umem_off2id(umm, off);
 
-	pmemobj_defer_free(pop, id, act);
+	pmemobj_defer_free(pop, id, (struct pobj_action *)act);
 }
 
 static int
@@ -507,29 +506,27 @@ pmem_tx_stage(void)
 }
 
 static umem_off_t
-pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
-	     unsigned int type_num)
+pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
 
-	return umem_id2off(umm, pmemobj_reserve(pop, act, size, type_num));
+	return umem_id2off(umm, pmemobj_reserve(pop, (struct pobj_action *)act, size, type_num));
 }
 
 static void
-pmem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
+pmem_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
 
-	pmemobj_cancel(pop, actv, actv_cnt);
+	pmemobj_cancel(pop, (struct pobj_action *)actv, actv_cnt);
 }
 
 static int
-pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
-		int actv_cnt)
+pmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	int	rc;
 
-	rc = pmemobj_tx_publish(actv, actv_cnt);
+	rc = pmemobj_tx_publish((struct pobj_action *)actv, actv_cnt);
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
@@ -935,16 +932,27 @@ umem_fini_txd(struct umem_tx_stage_data *txd)
 
 #ifdef	DAOS_PMEM_BUILD
 
-/* ad_reserv_act uses space of pobj_action, so the umem_rsrvd_act_xxx APIs and mo_xxx functions
- * can work for both PMDK and ADMEM.
- */
-D_CASSERT(sizeof(struct ad_reserv_act) <= sizeof(struct pobj_action));
-
 struct umem_rsrvd_act {
-	unsigned int		rs_actv_cnt;
-	unsigned int		rs_actv_at;
-	struct pobj_action	rs_actv[0];
+	unsigned int		 rs_actv_cnt;
+	unsigned int		 rs_actv_at;
+	/* "struct pobj_action" or "struct ad_reserv_act" type array */
+	void			*rs_actv;
 };
+
+static size_t
+umem_rsrvd_item_size(struct umem_instance *umm)
+{
+	switch (umm->umm_id) {
+	case UMEM_CLASS_PMEM:
+		return sizeof(struct pobj_action);
+	case UMEM_CLASS_AD:
+		return sizeof(struct ad_reserv_act);
+	default:
+		D_ERROR("bad umm_id %d\n", umm->umm_id);
+		return 0;
+	};
+	return 0;
+}
 
 int
 umem_rsrvd_act_cnt(struct umem_rsrvd_act *rsrvd_act)
@@ -955,30 +963,33 @@ umem_rsrvd_act_cnt(struct umem_rsrvd_act *rsrvd_act)
 }
 
 int
-umem_rsrvd_act_alloc(struct umem_rsrvd_act **rsrvd_act, int cnt)
+umem_rsrvd_act_alloc(struct umem_instance *umm, struct umem_rsrvd_act **rsrvd_act, int cnt)
 {
-	size_t size;
+	size_t	act_size = umem_rsrvd_item_size(umm);
+	size_t	size;
+	void	*buf;
 
-	size = sizeof(struct umem_rsrvd_act) +
-		sizeof(struct pobj_action) * cnt;
-	D_ALLOC(*rsrvd_act, size);
-	if (*rsrvd_act == NULL)
+	size = sizeof(struct umem_rsrvd_act) + act_size * cnt;
+	D_ALLOC(buf, size);
+	if (buf == NULL)
 		return -DER_NOMEM;
 
+	*rsrvd_act = buf;
 	(*rsrvd_act)->rs_actv_cnt = cnt;
+	(*rsrvd_act)->rs_actv = buf + sizeof(struct umem_rsrvd_act);
 	return 0;
 }
 
 int
-umem_rsrvd_act_realloc(struct umem_rsrvd_act **rsrvd_act, int max_cnt)
+umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **rsrvd_act, int max_cnt)
 {
 	if (*rsrvd_act == NULL ||
 	    (*rsrvd_act)->rs_actv_cnt < max_cnt) {
-		struct umem_rsrvd_act    *tmp_rsrvd_act;
-		size_t                   size;
+		struct umem_rsrvd_act	*tmp_rsrvd_act;
+		size_t			 act_size = umem_rsrvd_item_size(umm);
+		size_t			 size;
 
-		size = sizeof(struct umem_rsrvd_act) *
-			sizeof(struct pobj_action) * max_cnt;
+		size = sizeof(struct umem_rsrvd_act) + act_size * max_cnt;
 
 		D_REALLOC_Z(tmp_rsrvd_act, *rsrvd_act, size);
 		if (tmp_rsrvd_act == NULL)
@@ -986,6 +997,7 @@ umem_rsrvd_act_realloc(struct umem_rsrvd_act **rsrvd_act, int max_cnt)
 
 		*rsrvd_act = tmp_rsrvd_act;
 		(*rsrvd_act)->rs_actv_cnt = max_cnt;
+		(*rsrvd_act)->rs_actv = (void *)&tmp_rsrvd_act[1];
 	}
 	return 0;
 }
@@ -1002,13 +1014,14 @@ umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act,
 	     size_t size)
 {
 	if (umm->umm_ops->mo_reserve) {
-		struct pobj_action	*act;
+		void			*act;
+		size_t			 act_size = umem_rsrvd_item_size(umm);
 		umem_off_t		 off;
 
 		D_ASSERT(rsrvd_act != NULL);
 		D_ASSERT(rsrvd_act->rs_actv_cnt > rsrvd_act->rs_actv_at);
 
-		act = &rsrvd_act->rs_actv[rsrvd_act->rs_actv_at];
+		act = rsrvd_act->rs_actv + act_size * rsrvd_act->rs_actv_at;
 		off = umm->umm_ops->mo_reserve(umm, act, size,
 					       UMEM_TYPE_ANY);
 		if (!UMOFF_IS_NULL(off))
@@ -1036,9 +1049,10 @@ umem_defer_free(struct umem_instance *umm, umem_off_t off,
 		(umm)->umm_name, UMOFF_P(off), (umm)->umm_base,
 		(umm)->umm_pool_uuid_lo);
 	if (umm->umm_ops->mo_defer_free) {
-		struct pobj_action      *act;
+		void		*act;
+		size_t		 act_size = umem_rsrvd_item_size(umm);
 
-		act = &rsrvd_act->rs_actv[rsrvd_act->rs_actv_at];
+		act = rsrvd_act->rs_actv + act_size * rsrvd_act->rs_actv_at;
 		umm->umm_ops->mo_defer_free(umm, off, act);
 		rsrvd_act->rs_actv_at++;
 	} else {

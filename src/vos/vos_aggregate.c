@@ -1244,7 +1244,7 @@ out:
 }
 
 static int
-fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
+fill_segments(daos_handle_t ih, struct agg_merge_window *mw, struct umem_instance *umm,
 	      unsigned int *acts)
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
@@ -1258,7 +1258,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	rc = umem_rsrvd_act_realloc(&io->ic_rsrvd_scm, scm_max);
+	rc = umem_rsrvd_act_realloc(umm, &io->ic_rsrvd_scm, scm_max);
 	if (rc)
 		return rc;
 	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
@@ -1758,7 +1758,7 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	}
 
 	/* Transfer data from old logical records to reserved new segments */
-	rc = fill_segments(ih, mw, acts);
+	rc = fill_segments(ih, mw, agg_param->ap_umm, acts);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
 			"Fill segments "DF_EXT" error: "DF_RC"\n",

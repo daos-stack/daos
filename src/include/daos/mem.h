@@ -194,7 +194,6 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
 struct umem_instance;
-struct pobj_action;
 
 /* Flags associated with various umem ops */
 #define UMEM_FLAG_ZERO		(((uint64_t)1) << 0)
@@ -278,8 +277,7 @@ typedef struct {
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm,
-				       struct pobj_action *act, size_t size,
+	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
 				       unsigned int type_num);
 
 	/**
@@ -290,9 +288,7 @@ typedef struct {
 	 * \param off	[IN]		offset of allocation
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 */
-	void		 (*mo_defer_free)(struct umem_instance *umm,
-					  umem_off_t off,
-					  struct pobj_action *act);
+	void		 (*mo_defer_free)(struct umem_instance *umm, umem_off_t off, void *act);
 
 	/**
 	 * Cancel the reservation.
@@ -301,8 +297,7 @@ typedef struct {
 	 * \param actv	[IN]	action array to be canceled.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	void		 (*mo_cancel)(struct umem_instance *umm,
-				      struct pobj_action *act, int actv_cnt);
+	void		 (*mo_cancel)(struct umem_instance *umm, void *act, int actv_cnt);
 
 	/**
 	 * Publish the reservation (make it persistent).
@@ -311,9 +306,7 @@ typedef struct {
 	 * \param actv	[IN]	action array to be published.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	int		 (*mo_tx_publish)(struct umem_instance *umm,
-					  struct pobj_action *act,
-					  int actv_cnt);
+	int		 (*mo_tx_publish)(struct umem_instance *umm, void *act, int actv_cnt);
 
 	/**
 	 * Atomically copy the contents from src to the destination address.
@@ -659,9 +652,9 @@ struct umem_rsrvd_act;
 /* Get the active reserved actions cnt pending for publications */
 int umem_rsrvd_act_cnt(struct umem_rsrvd_act *act);
 /* Allocate array of structures for reserved actions */
-int umem_rsrvd_act_alloc(struct umem_rsrvd_act **act, int cnt);
+int umem_rsrvd_act_alloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int cnt);
 /* Extend the array of structures for reserved actions to max_cnt */
-int umem_rsrvd_act_realloc(struct umem_rsrvd_act **act, int max_cnt);
+int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int max_cnt);
 /* Free up the array of reserved actions */
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
