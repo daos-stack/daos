@@ -22,6 +22,7 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	daos_epoch_t		dre_epoch;
 	daos_unit_oid_t		dre_oid;
+	uint32_t		dre_inline_mbs:1;
 	uint64_t		dre_dkey_hash;
 	struct dtx_entry	dre_dte;
 };
@@ -46,8 +47,11 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 {
 	drh->drh_count--;
 	d_list_del(&dre->dre_link);
-	if (--(dre->dre_dte.dte_refs) == 0)
+	if (--(dre->dre_dte.dte_refs) == 0) {
+		if (dre->dre_inline_mbs == 0)
+			D_FREE(dre->dre_dte.dte_mbs);
 		D_FREE(dre);
+	}
 }
 
 static int
@@ -121,6 +125,8 @@ next:
 
 			dre = d_list_entry(dtes[i], struct dtx_resync_entry,
 					   dre_dte);
+			if (dre->dre_inline_mbs == 0)
+				D_FREE(dre->dre_dte.dte_mbs);
 			D_FREE(dre);
 		}
 	} else {
@@ -403,6 +409,19 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			continue;
 		}
 
+		if (dre->dre_dte.dte_mbs == NULL) {
+			rc = vos_dtx_load_mbs(cont->sc_hdl, &dre->dre_xid, &dre->dre_dte.dte_mbs);
+			if (rc != 0) {
+				if (rc != -DER_NONEXIST)
+					D_WARN("Failed to load mbs, do not know the leader for DTX "
+					       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
+					       DP_DTI(&dre->dre_xid), dra->resync_version,
+					       dra->discard_version, dre->dre_dte.dte_ver, rc);
+				dtx_dre_release(drh, dre);
+				continue;
+			}
+		}
+
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
 
@@ -481,7 +500,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	struct dtx_resync_entry		*dre;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
-	size_t				 size;
 
 	/* We commit the DTXs periodically, there will be not too many DTXs
 	 * to be checked when resync. So we can load all those uncommitted
@@ -527,8 +545,11 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
-	size = sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize;
-	D_ALLOC(dre, size);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+		D_ALLOC_PTR(dre);
+	else
+		D_ALLOC(dre, sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+
 	if (dre == NULL)
 		return -DER_NOMEM;
 
@@ -536,16 +557,23 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	dre->dre_dkey_hash = ent->ie_dkey_hash;
 
 	dte = &dre->dre_dte;
-	mbs = (struct dtx_memberships *)(dte + 1);
 
-	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-	mbs->dm_flags = ent->ie_dtx_mbs_flags;
-	mbs->dm_dte_flags = ent->ie_dtx_flags;
-	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
+		dre->dre_inline_mbs = 0;
+		dte->dte_mbs = NULL;
+	} else {
+		mbs = (struct dtx_memberships *)(dte + 1);
 
-	dte->dte_mbs = mbs;
+		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+		mbs->dm_flags = ent->ie_dtx_mbs_flags;
+		mbs->dm_dte_flags = ent->ie_dtx_flags;
+		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+		dre->dre_inline_mbs = 1;
+		dte->dte_mbs = mbs;
+	}
 
 out:
 	dre->dre_epoch = ent->ie_epoch;
@@ -744,8 +772,8 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool;
 	int			rc = 0;
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	D_ASSERT(pool != NULL);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
