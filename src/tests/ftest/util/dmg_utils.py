@@ -321,11 +321,11 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
-    def storage_identify_vmd(self, uuid=None, verbose=False):
+    def storage_identify_vmd(self, uuid, verbose=False):
         """Get the result of the 'dmg storage identify vmd".
 
         Args:
-            uuid (str): Device UUID to query. Defaults to None.
+            uuid (str): Device UUID to query.
             verbose (bool, optional): create verbose output. Defaults to False.
 
         Returns:
@@ -339,12 +339,12 @@ class DmgCommand(DmgCommandBase):
             ("storage", "identify", "vmd"), uuid=uuid,
             verbose=verbose)
 
-    def storage_replace_nvme(self, old_uuid=None, new_uuid=None, no_reint=False):
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
         """Get the result of the 'dmg storage replace nvme' command.
 
         Args:
-            old_uuid (str): Old NVME Device ID. Defaults to None.
-            new_uuid (str): New NVME Device ID replacing the old device. Defaults to None.
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
             no_reint (bool, optional): Don't perform reintegration. Defaults to False.
 
         Returns:
