@@ -27,7 +27,7 @@ class DiskFailureTest(OSAUtils):
     def get_nvme_device_info(self):
         """Get the list of nvme device-ids.
 
-        Returns: 
+        Returns:
             list: list of uuid and ranks
         """
         self.dmg_command.json.value = True
