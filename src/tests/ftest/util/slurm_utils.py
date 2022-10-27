@@ -14,7 +14,6 @@ import re
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
-from general_utils import run_command, DaosTestError
 from run_utils import run_remote
 
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
@@ -25,23 +24,20 @@ class SlurmFailed(Exception):
     """Thrown when something goes wrong with slurm."""
 
 
-def cancel_jobs(job_id):
+def cancel_jobs(log, control, job_id):
     """Cancel slurm jobs.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         job_id (int): slurm job id
 
-    Raises:
-        SlurmFailed: if there is an error canceling the slurm jobs
-
     Returns:
-        int: return status from scancel command
+        RemoteCommandResult: results from the scancel command
 
     """
-    result = run_command("scancel {}".format(job_id), raise_exception=False)
-    if result.exit_status > 0:
-        raise SlurmFailed("Slurm: scancel failed to kill job {}".format(job_id))
-    return result.exit_status
+    command = ['scancel', job_id]
+    return run_remote(log, control, ' '.join(command))
 
 
 def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMITED', state='up'):
@@ -132,6 +128,26 @@ def sinfo(log, control):
 
     """
     return run_remote(log, control, 'sinfo')
+
+
+def sbatch(log, control, script, log_file=None):
+    """Run the specified script with the sbatch command.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        script (str): script file suitable to by run by slurm
+        log_file (str, optional): logfile to generate. Defaults to None.
+
+    Returns:
+        RemoteCommandResult: results from the sbatch command
+
+    """
+    command = ['sbatch']
+    if log_file:
+        command.extend(['-o', log_file])
+    command.append(script)
+    return run_remote(log, control, ' '.join(command))
 
 
 def get_partition_hosts(log, control, partition):
@@ -249,10 +265,12 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
     return scriptfile
 
 
-def run_slurm_script(script, logfile=None):
+def run_slurm_script(log, control, script, logfile=None):
     """Run slurm script.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         script (str): script file suitable to by run by slurm
         logfile (str, optional): logfile to generate. Defaults to None.
 
@@ -264,25 +282,22 @@ def run_slurm_script(script, logfile=None):
 
     """
     job_id = None
-    if logfile is not None:
-        script = " -o " + logfile + " " + script
-    cmd = "sbatch " + script
-    try:
-        result = run_command(cmd, timeout=10)
-    except DaosTestError as error:
-        raise SlurmFailed("job failed : {}".format(error)) from error
-    if result:
-        output = result.stdout_text
-        match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
+    result = sbatch(log, control, script, logfile)
+    if result.passed:
+        match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", "\n".join(result.all_stdout.values()))
         if match is not None:
             job_id = match.group(1)
+    else:
+        raise SlurmFailed("Error running sbatch")
     return job_id
 
 
-def check_slurm_job(handle):
+def check_slurm_job(log, control, handle):
     """Get the state of a job initiated via slurm.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         handle (str): slurm job id
 
     Returns:
@@ -290,13 +305,13 @@ def check_slurm_job(handle):
             UNKNOWN if the handle doesn't match a known slurm job.
 
     """
-    command = "scontrol show job {}".format(handle)
-    result = run_command(command, raise_exception=False, verbose=False)
-    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout_text)
-    if match is not None:
-        state = match.group(1)
-    else:
-        state = "UNKNOWN"
+    state = "UNKNOWN"
+    command = ["scontrol", "show", "job", handle]
+    result = run_remote(log, control, ' '.join(command), verbose=False)
+    if result.passed:
+        match = re.search(r"JobState=([a-zA-Z]+)", "\n".join(result.all_stdout.values()))
+        if match is not None:
+            state = match.group(1)
     return state
 
 
@@ -316,31 +331,30 @@ def register_for_job_results(handle, test, maxwait=3600):
     athread.start()
 
 
-def watch_job(handle, maxwait, test_obj):
+def watch_job(log, control, handle, maxwait, test_obj):
     """Watch for a slurm job to finish use callback function with the result.
 
-    handle   --the slurm job handle
-    maxwait  --max time in seconds to wait
-    test_obj --whom to notify when its done
-
-    return   --none, all results handled through callback
+    Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
+        handle (str): the slurm job handle
+        maxwait (int): max time in seconds to wait
+        test_obj (_type_): whom to notify when its done
     """
     wait_time = 0
     while True:
-        state = check_slurm_job(handle)
+        state = check_slurm_job(log, control, handle)
         if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
             if wait_time > maxwait:
                 state = "MAXWAITREACHED"
-                print("Job {} has timedout after {} secs".format(handle,
-                                                                 maxwait))
+                log.error("Job %s has timed out after %s secs", handle, maxwait)
                 break
             wait_time += 5
             time.sleep(5)
         else:
             break
 
-    print("FINAL STATE: slurm job {} completed with : {} at {}\n".format(
-        handle, state, time.ctime()))
+    log.debug("FINAL STATE: slurm job %s completed with : %s at %s", handle, state, time.ctime())
     params = {"handle": handle, "state": state}
     with W_LOCK:
         test_obj.job_done(params)
@@ -372,31 +386,24 @@ def srun_str(hosts, cmd, srun_params=None, timeout=None):
     return str(cmd)
 
 
-def srun(hosts, cmd, srun_params=None, timeout=60):
+def srun(log, control, hosts, cmd, srun_params=None, timeout=60):
     """Run srun cmd on slurm partition.
 
     Args:
+        log (logger): logger for the messages produced by this method
+        control (NodeSet): slurm control host
         hosts (str): hosts to allocate
-        cmd (str): cmdline to execute
-        srun_params(dict): additional params for srun
-        timeout
-
-    Raises:
-        SlurmFailed: if there is an error running the srun command
+        cmd (str): cmdline to execute via srun
+        srun_params (dict, optional): additional params for srun. Defaults to None.
+        timeout (int, optional): timeout for the srun command. Defaults to 60.
 
     Returns:
-        CmdResult: object containing the result (exit status, stdout, etc.) of
-            the srun command
+        RemoteCommandResult: results from the srun command
 
     """
     srun_time = max(int(timeout / 60), 1)
     cmd = srun_str(hosts, cmd, srun_params, str(srun_time))
-    try:
-        result = run_command(cmd, timeout)
-    except DaosTestError as error:
-        result = None
-        raise SlurmFailed("srun failed : {}".format(error)) from error
-    return result
+    return run_remote(log, control, cmd, timeout=timeout)
 
 
 def install_slurm(log, hosts, sudo, timeout=600):

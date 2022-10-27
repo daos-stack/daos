@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -14,12 +13,15 @@ import random
 from filecmp import cmp
 from getpass import getuser
 import socket
+
 from apricot import TestWithServers
-from general_utils import run_command, DaosTestError
-from exception_utils import CommandFailure
-import slurm_utils
 from ClusterShell.NodeSet import NodeSet
+
 from agent_utils import include_local_host
+from exception_utils import CommandFailure
+from general_utils import run_command, DaosTestError
+from host_utils import get_local_host
+import slurm_utils
 from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
@@ -68,6 +70,7 @@ class SoakTestBase(TestWithServers):
         self.mpi_module = None
         self.sudo_cmd = None
         self.slurm_exclude_servers = True
+        self.control = get_local_host()
 
     def setUp(self):
         """Define test setup to be done."""
@@ -353,7 +356,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(str(script))
+                job_id = slurm_utils.run_slurm_script(self.log, self.control, str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
@@ -406,7 +409,8 @@ class SoakTestBase(TestWithServers):
                         "<< SOAK test timeout in Job Completion at %s >>",
                         time.ctime())
                     for job in job_id_list:
-                        _ = slurm_utils.cancel_jobs(int(job))
+                        if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
+                            self.fail("Error canceling Job {}".format(job))
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
@@ -480,12 +484,12 @@ class SoakTestBase(TestWithServers):
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
-                self.soaktest_dir), self.srun_params)
-        if result.exit_status > 0:
+            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
+            "mkdir -p {}".format(self.soaktest_dir), self.srun_params)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: logfile directory not"
-                "created on clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: logfile directory not created on clients>>: {}".format(
+                    self.hostlist_clients))
         # Create local avocado log directory for this pass
         os.makedirs(outputsoaktest_dir)
         # Create shared log directory for this pass
@@ -572,12 +576,12 @@ class SoakTestBase(TestWithServers):
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
-                self.soak_dir), self.srun_params)
-        if result.exit_status > 0:
+            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
+            "rm -rf {}".format(self.soak_dir), self.srun_params)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak directories not removed"
-                "from clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: Soak directories not removed from clients>>: {}".format(
+                    self.hostlist_clients))
         # cleanup test_node
         for log_dir in [self.soak_dir, self.sharedsoak_dir]:
             cmd = "rm -rf {}/*".format(log_dir)
