@@ -21,12 +21,14 @@ class DiskFailureTest(OSAUtils):
         super().setUp()
         self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
         self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/iorflags/*')
+            "ior_test_sequence", '/run/ior/*')
         self.daos_command = self.get_daos_command()
 
     def get_nvme_device_info(self):
         """Get the list of nvme device-ids.
-        Returns: List of uuid and ranks
+
+        Returns: 
+            list: list of uuid and ranks
         """
         self.dmg_command.json.value = True
         try:
@@ -37,11 +39,8 @@ class DiskFailureTest(OSAUtils):
             self.dmg_command.json.value = False
         data = json.loads(result.stdout_text)
         resp = data['response']
-        if data['error'] or len(resp['host_errors']) > 0:
-            if data['error']:
-                self.fail("dmg command failed: {}".format(data['error']))
-            else:
-                self.fail("dmg command failed: {}".format(resp['host_errors']))
+        if data['error']:
+            self.fail("dmg command failed: {}".format(data['error']))
         device_info = {}
         count = 0
         for value in list(resp['host_storage_map'].values()):
@@ -83,9 +82,8 @@ class DiskFailureTest(OSAUtils):
         """Run IOR and create disk failures while IO is happening.
 
         Args:
-            num_pool : Total number of pools to run the testing.
+            num_pool (int) : Total number of pools to run the testing.
         """
-        device_info = {}
         pool = {}
 
         # Get the device information.
@@ -93,10 +91,9 @@ class DiskFailureTest(OSAUtils):
         self.log.info("Device information")
         self.log.info("==================")
         self.log.info(device_info)
-        for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
 
         for val in range(0, num_pool):
+            pool[val] = add_pool(self, connect=False)
             threads = []
             self.pool = pool[val]
             # The following thread runs while raising disk faults
@@ -113,9 +110,10 @@ class DiskFailureTest(OSAUtils):
 
             count = 0
             # Evict some of the targets from the system
-            for key, _ in device_info.items():
+            for key, value in device_info.items():
+                self.log.info("Key: %s, Value: %s", key, value)
                 if count < 1:
-                    resp = self.set_nvme_faulty(device_info[key]["uuid"])
+                    resp = self.set_nvme_faulty(value["uuid"])
                     time.sleep(5)
                     self.log.info(resp)
                 count = count + 1
@@ -126,17 +124,18 @@ class DiskFailureTest(OSAUtils):
 
             # Now replace the faulty NVME device.
             count = 0
-            for key, _ in device_info.items():
+            for key, value in device_info.items():
+                self.log.info("Key: %s, Value: %s", key, value)
                 if count < 1:
-                    resp = self.dmg_command.storage_replace_nvme(old_uuid=device_info[key]["uuid"],
-                                                                 new_uuid=device_info[key]["uuid"])
+                    resp = self.dmg_command.storage_replace_nvme(old_uuid=value["uuid"],
+                                                                 new_uuid=value["uuid"])
                     time.sleep(10)
                     self.log.info(resp)
                     # Convert target list to string
-                    targets = ",".join(map(str, device_info[key]["tgts"]))
+                    targets = ",".join(map(str, value["tgts"]))
                     # Now reintegrate the target to appropriate rank.
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               device_info[key]["rank"],
+                                                               value["rank"],
                                                                targets)
                     time.sleep(15)
                 count = count + 1
@@ -164,7 +163,7 @@ class DiskFailureTest(OSAUtils):
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=deployment
-        :avocado: tags=disk_failure
+        :avocado: tags=disk_failure,test_disk_failure_w_rf
         """
         self.verify_disk_failure(1)
 
@@ -175,12 +174,13 @@ class DiskFailureTest(OSAUtils):
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=deployment
-        :avocado: tags=disk_fault_to_normal
+        :avocado: tags=disk_failure,test_disk_fault_to_normal
         """
         device_info = {}
         # Get the list of device ids.
         device_info = self.get_nvme_device_info()
-        for key, _ in device_info.items():
-            resp = self.dmg_command.storage_replace_nvme(old_uuid=device_info[key]["uuid"],
-                                                         new_uuid=device_info[key]["uuid"])
+        for key, val in device_info.items():
+            self.log.info("Key: %s, Value: %s", key, val)
+            resp = self.dmg_command.storage_replace_nvme(old_uuid=val["uuid"],
+                                                         new_uuid=val["uuid"])
             self.log.info(resp)
