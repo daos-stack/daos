@@ -19,6 +19,3 @@ The included document versions are associated with DAOS v2.2.
 They may also describe features that are currently under development
 for a future DAOS release. Those features will be clearly marked as such.
 
-!!! warning
-    DAOS v2.2 is under active development. Use at your own risk. Please consider
-    a stable DAOS release (i.e., 2.0.x) for production deployments.
