@@ -26,6 +26,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -79,8 +80,8 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	propWithVal := func(key, val string) *control.PoolProperty {
-		hdlr := control.PoolProperties()[key]
+	propWithVal := func(key, val string) *daos.PoolProperty {
+		hdlr := daos.PoolProperties()[key]
 		prop := hdlr.GetProperty(key)
 		if val != "" {
 			if err := prop.SetValue(val); err != nil {
@@ -124,8 +125,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -141,8 +142,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -158,8 +159,8 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.06, 0.94},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-					Properties: []*control.PoolProperty{
+					Ranks:      []ranklist.Rank{},
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -188,13 +189,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (size nranks)",
 			"pool create --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --num-ranks"),
+			errors.New("--size may not be mixed with --nranks"),
 		},
 		{
-			"Create pool with incompatible arguments (size ranks)",
-			"pool create --size 100% --ranks 1,2,3",
+			"Create pool with incompatible arguments (size tier-ratio)",
+			"pool create --size 100% --tier-ratio 16",
 			"",
-			errors.New("--size may not be mixed with --ranks"),
+			errors.New("--size may not be mixed with --tier-ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
@@ -229,7 +230,7 @@ func TestPoolCommands(t *testing.T) {
 					TierRatio:  []float64{0.1, 0.9},
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -248,8 +249,22 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual ranks",
+			fmt.Sprintf("pool create --size %s --ranks 1,2", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []ranklist.Rank{1, 2},
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.06, 0.94},
 				}),
 			}, " "),
 			nil,
@@ -264,7 +279,7 @@ func TestPoolCommands(t *testing.T) {
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 				}),
 			}, " "),
 			nil,
@@ -277,7 +292,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -291,7 +306,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -305,7 +320,7 @@ func TestPoolCommands(t *testing.T) {
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
-					Ranks:      []system.Rank{},
+					Ranks:      []ranklist.Rank{},
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -328,13 +343,13 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub-freq", "1"),
 					},
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
-					Ranks:     []system.Rank{},
+					Ranks:     []ranklist.Rank{},
 					TierBytes: []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -425,7 +440,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1},
+					Ranks: []ranklist.Rank{1},
 				}),
 			}, " "),
 			nil,
@@ -436,7 +451,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolExtendReq{
 					ID:    "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Ranks: []system.Rank{1, 2, 3},
+					Ranks: []ranklist.Rank{1, 2, 3},
 				}),
 			}, " "),
 			nil,
@@ -489,6 +504,17 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Destroy pool with recursive",
+			"pool destroy 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --recursive",
+			strings.Join([]string{
+				printRequest(t, &control.PoolDestroyReq{
+					ID:        "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
+					Recursive: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Evict pool",
 			"pool evict 031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
 			strings.Join([]string{
@@ -520,7 +546,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -534,7 +560,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -548,7 +574,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{propWithVal("label", "foo")},
+					Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
 				}),
 			}, " "),
 			nil,
@@ -578,6 +604,12 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rd_fac property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
 			"Set pool rf property is not allowed",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
 			"",
@@ -601,7 +633,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
 					},
 				}),
@@ -1004,6 +1036,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 	for name, tc := range map[string]struct {
 		StorageRatio     string
 		HostsConfigArray []control.MockHostStorageConfig
+		TgtRanks         string
 		ExpectedOutput   ExpectedOutput
 	}{
 		"single server": {
@@ -1017,6 +1050,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1050,6 +1084,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1083,6 +1118,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1103,24 +1139,21 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(1) * uint64(humanize.TByte),
 							},
-						},
-						{ // Check if not mounted SCM is well managed
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes: uint64(0),
-								AvailBytes: uint64(0),
-							},
+							Rank: 1,
 						},
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 2,
 						},
 						{
 							MockStorageConfig: control.MockStorageConfig{
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(50) * uint64(humanize.GByte),
 							},
+							Rank: 3,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1164,6 +1197,111 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				},
 			},
 		},
+		"double server;rank filter": {
+			StorageRatio: "100%",
+			HostsConfigArray: []control.MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+				{
+					HostName: "bar",
+					ScmConfig: []control.MockScmConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(100) * uint64(humanize.GByte),
+								AvailBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(50) * uint64(humanize.GByte),
+							},
+							Rank: 3,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.GByte),
+							},
+							Rank: 4,
+						},
+					},
+					NvmeConfig: []control.MockNvmeConfig{
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 1,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(400) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(1) * uint64(humanize.TByte),
+								AvailBytes: uint64(300) * uint64(humanize.GByte),
+							},
+							Rank: 2,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(2) * uint64(humanize.TByte),
+							},
+							Rank: 3,
+						},
+						{
+							MockStorageConfig: control.MockStorageConfig{
+								TotalBytes: uint64(3) * uint64(humanize.TByte),
+								AvailBytes: uint64(1) * uint64(humanize.GByte),
+							},
+							Rank: 4,
+						},
+					},
+				},
+			},
+			TgtRanks: "0,1,2,3",
+			ExpectedOutput: ExpectedOutput{
+				PoolConfig: control.MockPoolRespConfig{
+					HostName:  "foo",
+					Ranks:     "0,1,2,3",
+					ScmBytes:  uint64(50) * uint64(humanize.GByte),
+					NvmeBytes: uint64(700) * uint64(humanize.GByte),
+				},
+			},
+		},
 		"No NVME": {
 			StorageRatio: "100%",
 			HostsConfigArray: []control.MockHostStorageConfig{
@@ -1175,6 +1313,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{},
@@ -1201,6 +1340,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(100) * uint64(humanize.GByte),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1235,6 +1375,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 								TotalBytes: uint64(100) * uint64(humanize.GByte),
 								AvailBytes: uint64(1),
 							},
+							Rank: 0,
 						},
 					},
 					NvmeConfig: []control.MockNvmeConfig{
@@ -1292,6 +1433,12 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 			poolCreateCmd.setInvoker(mockInvoker)
 			poolCreateCmd.SetLog(log)
 			poolCreateCmd.Size = tc.StorageRatio
+			if tc.TgtRanks != "" {
+				if err := poolCreateCmd.RankList.UnmarshalFlag(tc.TgtRanks); err != nil {
+					t.Fatal(err)
+				}
+			}
+			poolCreateCmd.TierRatio = `6,94`
 
 			err := poolCreateCmd.Execute(nil)
 
@@ -1299,7 +1446,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 				test.AssertTrue(t, err != nil, "Expected an error")
 				testExpectedError(t, tc.ExpectedOutput.Error, err)
 			} else {
-				test.AssertTrue(t, err == nil, "Expected no error")
+				test.AssertTrue(t, err == nil, fmt.Sprintf("Expected no error: err=%q\n", err))
 				test.AssertEqual(t, len(mockInvoker.Requests), 2, "Invalid number of request sent")
 				test.AssertTrue(t,
 					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.StorageScanReq{}),
@@ -1322,6 +1469,17 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					poolCreateRequest.TotalBytes,
 					uint64(0),
 					"Invalid size of TotalBytes attribute: disabled with manual allocation")
+				if tc.TgtRanks != "" {
+					test.AssertEqual(t,
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
+						tc.ExpectedOutput.PoolConfig.Ranks,
+						"Invalid list of Ranks")
+				} else {
+					test.AssertEqual(t,
+						ranklist.RankList(poolCreateRequest.Ranks).String(),
+						"",
+						"Invalid list of Ranks")
+				}
 				test.AssertTrue(t,
 					poolCreateRequest.TierRatio == nil,
 					"Invalid size of TierRatio attribute: disabled with manual allocation")

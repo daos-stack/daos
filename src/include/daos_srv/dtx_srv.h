@@ -17,12 +17,13 @@
 #define DTX_REFRESH_MAX 4
 
 struct dtx_share_peer {
-	d_list_t		dsp_link;
-	struct dtx_id		dsp_xid;
-	daos_unit_oid_t		dsp_oid;
-	daos_epoch_t		dsp_epoch;
-	uint64_t		dsp_dkey_hash;
-	struct dtx_memberships	dsp_mbs;
+	d_list_t		 dsp_link;
+	struct dtx_id		 dsp_xid;
+	daos_unit_oid_t		 dsp_oid;
+	daos_epoch_t		 dsp_epoch;
+	uint64_t		 dsp_dkey_hash;
+	uint32_t		 dsp_inline_mbs:1;
+	struct dtx_memberships	*dsp_mbs;
 };
 
 /**
@@ -87,6 +88,8 @@ struct dtx_handle {
 					 dth_aborted:1,
 					 /* The modification is done by others. */
 					 dth_already:1,
+					 /* Need validation on leader before commit/committable. */
+					 dth_need_validation:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -274,6 +277,15 @@ int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
+static inline void
+dtx_dsp_free(struct dtx_share_peer *dsp)
+{
+	if (dsp->dsp_inline_mbs == 0)
+		D_FREE(dsp->dsp_mbs);
+
+	D_FREE(dsp);
+}
+
 static inline uint64_t
 dtx_hlc_age2sec(uint64_t hlc)
 {
@@ -310,8 +322,7 @@ struct dtx_scan_args {
 	uint32_t	version;
 };
 
-int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid,
-	       uint32_t ver, bool block, bool resync_all);
+int dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block);
 void dtx_resync_ult(void *arg);
 
 #endif /* __DAOS_DTX_SRV_H__ */

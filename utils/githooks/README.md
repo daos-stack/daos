@@ -10,9 +10,5 @@ It supports adding local hooks by placing your custom hook in
 To use the commit hooks here, do the following locally, or alternatively copy the files into place.
 
 ```sh
-for d in utils/githooks/*.d; do
-    h=${d%.d}
-    h=${h##*/}
-    ln -s ../../utils/githooks/$h .git/hooks/$h
-done
+git config core.hookspath utils/githooks
 ```

@@ -98,11 +98,6 @@ chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 
-# remove any defined releasever
-# any deviation from the default releasever for a distro should be
-# handled on a per-test-run, or even per-dnf command basis
-rm -f  /etc/yum/vars/releasever
-
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
 if ! post_provision_config_nodes; then
@@ -115,7 +110,7 @@ fi
 # for that device and future bindings to the device do not work, resulting in messages like, "NVMe
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
 if lspci | grep -i nvme; then
-  daos_server storage prepare -n --reset && rmmod vfio_pci && modprobe vfio_pci
+  daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
 systemctl enable nfs-server.service

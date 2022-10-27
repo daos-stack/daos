@@ -1,30 +1,31 @@
 hosts:
-    test_servers:
-        - server-A
-    test_clients:
-        - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 180
 server_config:
-    name: daos_server
-    servers:
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
 pool:
-    mode: 146
-    name: daos_server
-    size: 5G
-    control_method: dmg
+  size: 5G
+  control_method: dmg
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 ior:
-    client_processes:
-        np: 1
-    test_file: testFile
-    flags: "-v -w -k"
-    block_size: '6G'  # Over 5G
-    transfer_size: '1M'
-    signature: 5
+  client_processes:
+    np: 1
+  test_file: testFile
+  flags: "-v -w -k"
+  block_size: '6G'  # Over 5G
+  transfer_size: '1M'
+  signature: 5
 dcp:
-    client_processes:
-        np: 3
+  client_processes:
+    np: 3

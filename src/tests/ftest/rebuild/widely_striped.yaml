@@ -1,42 +1,43 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-    - server-G
-  test_clients:
-    - client-H
-timeout: 500
+  test_servers: 7
+  test_clients: 1
+timeout: 1200
 server_config:
   name: daos_server
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0","0000:da:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  crt_timeout: 60
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      env_vars:
+        - SWIM_PROTOCOL_PERIOD_LEN=2000
+        - SWIM_SUSPECT_TIMEOUT=19000
+        - SWIM_PING_TIMEOUT=1900
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 testparams:
   ranks_to_kill:
     - [6]
     - [5]
     - [3,4]
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 10G
   nvme_size: 60G
-  svcn: 1
+  svcn: 5
   control_method: dmg
-  rebuild_timeout: 120
-  pool_query_timeout: 30
+  rebuild_timeout: 240
+  pool_query_timeout: 60
 container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
-  properties: "rf:2"
+  properties: "rd_fac:2"
 mdtest:
   api: DFS
   client_processes:

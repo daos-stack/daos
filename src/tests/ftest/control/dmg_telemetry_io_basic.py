@@ -57,7 +57,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                                     if value > m_data[name2][host][rank][target][size]:
                                         status = False
                                         invalid += " *_min > _max"
-                                # Verify if value decremental
+                                # Verify if value decreased
                                 if ("_min" in name or "_max" in name) and key > 0:
                                     if value < metrics_data[key-1][name][host][rank][target][size]:
                                         status = False
@@ -89,10 +89,10 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             DAOS engine IO telemetry basic metrics infrastructure.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=control,telemetry
         :avocado: tags=test_with_telemetry_basic,test_io_telemetry
-        :avocado: tags=test_io_telemetry_basic
+        :avocado: tags=test_io_telemetry_basic,test_io_telmetry_metrics_basic
 
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
@@ -101,20 +101,20 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
         test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS +\
             TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
             TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
-        i = 0
+        loop = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
         metrics_data = {}
         for block_size in block_sizes:
             for transfer_size in transfer_sizes:
-                metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
-                i += 1
+                metrics_data[loop] = self.telemetry.get_io_metrics(test_metrics)
+                loop += 1
                 self.log.info("==Start ior testloop: %s, Block Size = %s, "
-                              "transfer_size =  %s", i, block_size,
+                              "transfer_size =  %s", loop, block_size,
                               transfer_size)
                 self.ior_cmd.block_size.update(block_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
-                test_file_suffix = "_{}".format(i)
+                test_file_suffix = "_{}".format(loop)
                 # Run ior command.
                 try:
                     self.run_ior_with_pool(
@@ -122,7 +122,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                         test_file_suffix=test_file_suffix)
                 except TestFail:
                     self.log.info("#ior command failed!")
-        metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
+        metrics_data[loop] = self.telemetry.get_io_metrics(test_metrics)
         self.display_io_test_metrics(metrics_data)
         self.verify_io_test_metrics(test_metrics, metrics_data, threshold)
         self.log.info("------Test passed------")

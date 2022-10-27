@@ -93,7 +93,7 @@ enum {
 	RT_OVERLAP_PARTIAL	= (1 << 6),
 };
 
-static struct evt_policy_ops evt_ssof_pol_ops;
+static struct evt_policy_ops  evt_soff_pol_ops;
 static struct evt_policy_ops evt_sdist_pol_ops;
 static struct evt_policy_ops evt_sdist_even_pol_ops;
 /**
@@ -101,10 +101,10 @@ static struct evt_policy_ops evt_sdist_even_pol_ops;
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
  */
 static struct evt_policy_ops *evt_policies[] = {
-	&evt_ssof_pol_ops,
-	&evt_sdist_pol_ops,
-	&evt_sdist_even_pol_ops,
-	NULL,
+    &evt_soff_pol_ops,
+    &evt_sdist_pol_ops,
+    &evt_sdist_even_pol_ops,
+    NULL,
 };
 
 static void
@@ -800,6 +800,8 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	struct evt_extent	*this_ext;
 	struct evt_extent	*next_ext;
 	struct evt_list_entry	*le;
+	struct evt_list_entry   *next_le;
+	struct evt_list_entry   *tmp_le;
 	struct evt_entry	*this_ent;
 	struct evt_entry	*next_ent;
 	struct evt_entry	*temp_ent;
@@ -848,12 +850,36 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 		return 0;
 
 	if (removals_only) {
-		/** We just want to see records not covered by a removal.  At this point,
-		 *  every record remaining in the list satisfies this condition so mark them all
-		 *  visible for sorting.
+		/** Ok, everything remaining in the list is not covered by a removal.  One more
+		 *  step is required to merge records at the same major epoch so we don't attempt
+		 *  to insert overlapping removal records.  Once this step is complete, we can sort
+		 *  the remaining records and return to the caller.
 		 */
-		d_list_for_each_entry(le, &covered, le_link) {
+		while ((le = d_list_pop_entry(&covered, struct evt_list_entry, le_link)) != NULL) {
 			this_ent = &le->le_ent;
+			d_list_for_each_entry_safe(next_le, tmp_le, &covered, le_link) {
+				next_ent = &next_le->le_ent;
+				if (next_ent->en_sel_ext.ex_lo > (this_ent->en_sel_ext.ex_hi + 1)) {
+					/** If the physical extent is also beyond the end,
+					 *  everything else in the list is guaranteed to be later
+					 *  so we can break the loop. Otherwise, just continue to
+					 *  next entry.
+					 */
+					if (next_ent->en_ext.ex_lo > (this_ent->en_ext.ex_hi + 1))
+						break;
+					continue;
+				}
+				if (next_ent->en_epoch != this_ent->en_epoch)
+					continue;
+				set_visibility(next_ent, EVT_COVERED);
+				d_list_del(&next_le->le_link);
+				/** For removals, we don't care about the actual extent,
+				 *  so we can just fake it.  We only want to know what
+				 *  removal to insert.
+				 */
+				this_ent->en_sel_ext.ex_hi = next_ent->en_sel_ext.ex_hi;
+			}
+			/** Mark the current entry as visible for sorting */
 			evt_mark_visible(this_ent, false, num_visible);
 		}
 		return 0;
@@ -2568,6 +2594,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				if (rc < 0)
 					D_GOTO(out, rc);
 
+				D_ASSERTF(rect->rc_minor_epc != EVT_MINOR_EPC_MAX,
+					  "Should never have overlap with removals: " DF_RECT
+					  " overlaps with " DF_RECT "\n",
+					  DP_RECT(&rtmp), DP_RECT(rect));
+
 				/* NB: This is temporary to allow full overwrite
 				 * in same epoch to avoid breaking rebuild.
 				 * Without some sequence number and client
@@ -3274,32 +3305,30 @@ move:
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
-		  const struct evt_rect *rt1, const struct evt_rect *rt2)
+evt_soff_cmp_rect(struct evt_context *tcx, const struct evt_node *nd, const struct evt_rect *rt1,
+		  const struct evt_rect *rt2)
 {
 	return evt_rect_cmp(rt1, rt2);
 }
 
 static int
-evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed, uint8_t **csum_bufp)
+evt_soff_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
+		const struct evt_entry_in *ent, bool *changed, uint8_t **csum_bufp)
 {
-	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect, csum_bufp);
+	return evt_common_insert(tcx, nd, in_off, ent, changed, evt_soff_cmp_rect, csum_bufp);
 }
 
 static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
+evt_soff_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
 {
-	return evt_common_adjust(tcx, nd, at, evt_ssof_cmp_rect);
+	return evt_common_adjust(tcx, nd, at, evt_soff_cmp_rect);
 }
 
-static struct evt_policy_ops evt_ssof_pol_ops = {
-	.po_insert		= evt_ssof_insert,
-	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_even_split,
-	.po_rect_weight		= evt_common_rect_weight,
+static struct evt_policy_ops evt_soff_pol_ops = {
+    .po_insert      = evt_soff_insert,
+    .po_adjust      = evt_soff_adjust,
+    .po_split       = evt_even_split,
+    .po_rect_weight = evt_common_rect_weight,
 };
 
 /**
@@ -3333,7 +3362,7 @@ evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 	if (dist1 > dist2)
 		return 1;
 
-	/* All else being equal, revert to ssof */
+	/* All else being equal, revert to soff */
 	return evt_rect_cmp(rt1, rt2);
 }
 
@@ -3348,6 +3377,9 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
+
+	if (unlikely(tcx->tc_depth > 6))
+		return evt_even_split(tcx, leaf, nd_src, nd_dst);
 
 	evt_mbr_read(&mbr, nd_src);
 
@@ -3702,6 +3734,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 
 	evt_ent_array_for_each(ent, ent_array) {
 		D_ASSERT(ent->en_minor_epc != EVT_MINOR_EPC_MAX);
+
 		entry.ei_rect.rc_ex = ent->en_sel_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
 		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
@@ -3893,7 +3926,7 @@ evt_drain(daos_handle_t toh, int *credits, bool *destroyed)
 	if (rc)
 		goto out;
 
-	if (tcx->tc_creds_on)
+	if (credits)
 		*credits = tcx->tc_creds;
 out:
 	rc = evt_tx_end(tcx, rc);

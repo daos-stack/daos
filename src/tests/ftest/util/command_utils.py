@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -23,7 +22,8 @@ from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout, get_primary_group
+    get_subprocess_stdout
+from user_utils import get_primary_group
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -34,8 +34,7 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False,
-                 check_results=None):
+    def __init__(self, namespace, command, path="", subprocess=False, check_results=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -58,7 +57,7 @@ class ExecutableCommand(CommandWithParameters):
         self.exit_status_exception = True
         self.output_check = "both"
         self.verbose = True
-        self.env = None
+        self.env = EnvironmentVariables()
         self.sudo = False
 
         # A list of environment variable names to set and export prior to
@@ -105,7 +104,7 @@ class ExecutableCommand(CommandWithParameters):
 
     @property
     def process(self):
-        """Getter for process attribute of the ExecutableCommand class."""
+        """Get the process attribute of the ExecutableCommand class."""
         return self._process
 
     @property
@@ -145,7 +144,7 @@ class ExecutableCommand(CommandWithParameters):
         """
         # Clear any previous run results
         self.result = None
-        command = self.__str__()
+        command = str(self)
         try:
             # Block until the command is complete or times out
             self.result = run_command(
@@ -176,6 +175,7 @@ class ExecutableCommand(CommandWithParameters):
         status = True
         if self.result and self.check_results_list:
             regex = r"({})".format("|".join(self.check_results_list))
+            self.log.debug("Checking the command output for any bad keywords: %s", regex)
             for output in (self.result.stdout_text, self.result.stderr_text):
                 match = re.findall(regex, output)
                 if match:
@@ -198,7 +198,7 @@ class ExecutableCommand(CommandWithParameters):
         if self._process is None:
             # Start the job manager command as a subprocess
             kwargs = {
-                "cmd": self.__str__(),
+                "cmd": str(self),
                 "verbose": self.verbose,
                 "allow_output_check": "combined",
                 "shell": False,
@@ -384,6 +384,19 @@ class ExecutableCommand(CommandWithParameters):
                 "No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also gets env_vars from /run/client/* and self.namespace.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        for namespace in ['/run/client/*', self.namespace]:
+            if namespace is not None:
+                self.env.update_from_list(test.params.get("env_vars", namespace, []))
+
     def update_env_names(self, new_names):
         """Update environment variable names to export for the command.
 
@@ -408,7 +421,8 @@ class ExecutableCommand(CommandWithParameters):
                 values to export.
 
         """
-        env = EnvironmentVariables()
+        env = self.env.copy()
+        # Update with variables from the server manager
         for name in self._env_names:
             if name == "D_LOG_FILE":
                 if not log_file:
@@ -427,7 +441,7 @@ class ExecutableCommand(CommandWithParameters):
             env (EnvironmentVariables): a dictionary of environment variable
                 names and values to export prior to running the command
         """
-        self.env = env.copy()
+        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -699,6 +713,7 @@ class SubProcessCommand(CommandWithSubCommand):
             complete = False
             timed_out = False
             start = time.time()
+            elapsed = 0.0
 
             # Search for patterns in the subprocess output until:
             #   - the expected number of pattern matches are detected (success)
@@ -707,25 +722,26 @@ class SubProcessCommand(CommandWithSubCommand):
             while not complete and not timed_out and sub_process.poll() is None:
                 detected = len(re.findall(self.pattern, get_subprocess_stdout(sub_process)))
                 complete = detected == self.pattern_count
-                timed_out = time.time() - start > self.pattern_timeout.value
+                elapsed = time.time() - start
+                timed_out = elapsed > self.pattern_timeout.value
 
             # Summarize results
-            self.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+            self.report_subprocess_status(elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 
-    def report_subprocess_status(self, start, detected, complete, timed_out, sub_process):
+    def report_subprocess_status(self, elapsed, detected, complete, timed_out, sub_process):
         """Summarize the results of checking the status of the command.
 
         Args:
-            start (float): start time of check
+            elapsed (float): elapsed time of check
             detected (int): number of patterns detected in the check
             complete (bool): whether the check succeeded
             timed_out (bool): whether the check timed out
             sub_process (process.SubProcess): subprocess used to run the command
         """
         msg = "{}/{} '{}' messages detected in".format(detected, self.pattern_count, self.pattern)
-        runtime = "{}/{} seconds".format(time.time() - start, self.pattern_timeout.value)
+        runtime = "{}/{} seconds".format(elapsed, self.pattern_timeout.value)
 
         if not complete:
             # Report the error / timeout
@@ -733,7 +749,7 @@ class SubProcessCommand(CommandWithSubCommand):
             details = ""
             if timed_out:
                 reason = "TIMEOUT detected, exceeded {} seconds".format(self.pattern_timeout.value)
-                runtime = "{} seconds".format(time.time() - start)
+                runtime = "{} seconds".format(elapsed)
             if not self.verbose:
                 # Include the stdout if verbose is not enabled
                 details = ":\n{}".format(get_subprocess_stdout(sub_process))
@@ -880,7 +896,7 @@ class YamlCommand(SubProcessCommand):
 
         Args:
             source (str): source of the certificate files.
-            hosts (list): list of the destination hosts.
+            hosts (NodeSet): list of the destination hosts.
         """
         names = set()
         yaml = self.yaml
@@ -922,7 +938,7 @@ class YamlCommand(SubProcessCommand):
         specified by the YamlParameters.filename.
 
         Args:
-            hosts (list): hosts to which to copy the configuration file.
+            hosts (NodeSet): hosts to which to copy the configuration file.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file
@@ -1003,8 +1019,8 @@ class SubprocessManager(ObjectWithParameters):
         self.manager = get_job_manager_class(manager, command, True)
         self._id = self.manager.job.command.replace("daos_", "")
 
-        # Define the list of hosts that will execute the daos command
-        self._hosts = []
+        # Define the hosts that will execute the daos command
+        self._hosts = NodeSet()
 
         # The socket directory verification is not required with systemctl
         self._verify_socket_dir = manager != "Systemctl"
@@ -1049,7 +1065,7 @@ class SubprocessManager(ObjectWithParameters):
         """Set the hosts used to execute the daos command.
 
         Args:
-            value (tuple): a tuple of a list of hosts, a path in which to create
+            value (tuple): a tuple of a NodeSet of hosts, a path in which to create
                 the hostfile, and a number of slots to specify per host in the
                 hostfile (can be None)
         """
@@ -1061,11 +1077,11 @@ class SubprocessManager(ObjectWithParameters):
         Defined as a private method to enable overriding the setter method.
 
         Args:
-            hosts (list): list of hosts on which to run the command
+            hosts (NodeSet): list of hosts on which to run the command
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = list(hosts)
+        self._hosts = hosts.copy()
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -1094,7 +1110,7 @@ class SubprocessManager(ObjectWithParameters):
 
         """
         # Create the yaml file for the daos command
-        self.manager.job.temporary_file_hosts = self._hosts
+        self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file()
 
         # Start the daos command
@@ -1242,7 +1258,7 @@ class SubprocessManager(ObjectWithParameters):
 
         """
         status = {"expected": True, "restart": False}
-        show_log_hosts = []
+        show_log_hosts = NodeSet()
 
         # Get the current state of each job process
         current_states = self.get_current_state()
@@ -1257,7 +1273,7 @@ class SubprocessManager(ObjectWithParameters):
         self.log.info(
             "<%s> Verifying %s states: group=%s, hosts=%s",
             self._id.upper(), self._id, self.get_config_value("name"),
-            NodeSet.fromlist(self._hosts))
+            self._hosts)
         if current_states and self._expected_states:
             log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
             self.log.info(
@@ -1293,10 +1309,8 @@ class SubprocessManager(ObjectWithParameters):
 
                 # Keep track of any server in the errored state or in an
                 # unexpected state in order to display its log
-                if (current in self._states["errored"] or
-                        current not in expected):
-                    if current_host not in show_log_hosts:
-                        show_log_hosts.append(current_host)
+                if (current in self._states["errored"] or current not in expected):
+                    show_log_hosts.add(current_host)
 
                 self.log.info(
                     log_format, rank, current_host,

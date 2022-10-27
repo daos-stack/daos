@@ -117,6 +117,10 @@ enum daos_pool_props {
 	 * default: 0 (disabled)
 	 */
 	DAOS_PROP_PO_SCRUB_THRESH,
+	/**
+	 * Pool service redundancy factor.
+	 */
+	DAOS_PROP_PO_SVC_REDUN_FAC,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -124,7 +128,7 @@ enum daos_pool_props {
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
 #define DAOS_PROP_PO_REDUN_FAC_MAX	4
-#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)
@@ -153,6 +157,15 @@ enum {
 	DAOS_UPGRADE_STATUS_FAILED = 3,
 };
 
+#define DAOS_PROP_PO_SVC_REDUN_FAC_MAX		4
+#define DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT	2
+
+static inline bool
+daos_svc_rf_is_valid(uint64_t svc_rf)
+{
+	return svc_rf <= DAOS_PROP_PO_SVC_REDUN_FAC_MAX;
+}
+
 /**
  * Number of pool property types
  */
@@ -177,6 +190,11 @@ enum {
 	DAOS_SCRUB_MODE_TIMED = 2,
 	DAOS_SCRUB_MODE_INVALID = 3,
 };
+
+/* Checksum Scrubbing Defaults */
+#define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+#define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
+#define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
@@ -397,6 +415,9 @@ enum {
 	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
+
+/** default fault domain level */
+#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
 
 /** container status flag */
 enum {

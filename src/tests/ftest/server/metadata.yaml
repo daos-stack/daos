@@ -1,57 +1,50 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-C
+  test_servers: 4
+  test_clients: 1
 timeouts:
   test_metadata_fillup: 300
   test_metadata_addremove: 900
-  test_metadata_server_restart: 900
+  test_metadata_server_restart: 960
   test_container_removal_after_der_nospace: 180
 server_config:
   name: daos_server
   engines_per_host: 2
-  servers:
+  engines:
     0:
       targets: 8
+      nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 0
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      scm_mount: /mnt/daos0
-      scm_list: ["/dev/pmem0"]
-      # common items below (same in server 0 and server 1)
-      scm_class: dcpm
-      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=group_metadata_only
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
     1:
       targets: 8
+      nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      scm_mount: /mnt/daos1
-      scm_list: ["/dev/pmem1"]
-      # common items below (same in server 0 and server 1)
-      scm_class: dcpm
-      nr_xs_helpers: 4
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=group_metadata_only
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
 pool:
-  name: daos_server
   svcn: 3
   scm_size: 1G
   nvme_size: 8G
@@ -62,13 +55,9 @@ container:
 ior:
   clientslots:
     slots: 1
-  repetitions: 1
   dfs_destroy: False
-  iorwriteflags:
-    F: "-w -W -k -G 1"
-  iorreadflags:
-    F: "-r -R -G 1"
-  objectclass:
-    dfs_oclass: "SX"
+  iorwriteflags: "-w -W -k -G 1"
+  iorreadflags: "-r -R -G 1"
+  dfs_oclass: "SX"
 metadata:
-  mean_percent: 0.5
+  mean_percent: 1

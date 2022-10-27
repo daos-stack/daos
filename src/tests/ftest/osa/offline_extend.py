@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,7 +7,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
-from apricot import skipForTicket
 
 
 class OSAOfflineExtend(OSAUtils):
@@ -27,8 +25,8 @@ class OSAOfflineExtend(OSAUtils):
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.extra_servers = self.params.get("test_servers",
-                                             "/run/extra_servers/*")
+        self.extra_servers = self.get_hosts_from_yaml(
+            "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", '/run/test_ranks/*')
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
@@ -134,7 +132,7 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,offline_extend_with_csum
+        :avocado: tags=offline_extend,test_osa_offline_extend
         """
         self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
@@ -147,7 +145,7 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_without_csum
+        :avocado: tags=offline_extend,test_osa_offline_extend_without_checksum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -162,12 +160,11 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_multiple_pools
+        :avocado: tags=offline_extend,test_osa_offline_extend_multiple_pools
         """
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
-    @skipForTicket("DAOS-7493")
     def test_osa_offline_extend_oclass(self):
         """Test ID: DAOS-6924
         Test Description: Validate Offline extend without
@@ -176,14 +173,13 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_oclass
+        :avocado: tags=offline_extend,test_osa_offline_extend_oclass
         """
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.run_offline_extend_test(4, data=True,
                                      oclass=self.test_oclass)
 
-    @skipForTicket("DAOS-7195")
     def test_osa_offline_extend_during_aggregation(self):
         """Test ID: DAOS-6294
         Test Description: Extend rank while aggregation
@@ -192,7 +188,7 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,offline_extend_during_aggregation
+        :avocado: tags=offline_extend,test_osa_offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -208,7 +204,7 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,offline_extend_after_snapshot
+        :avocado: tags=offline_extend,test_osa_offline_extend_after_snapshot
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot",
                                                   '/run/snapshot/*')

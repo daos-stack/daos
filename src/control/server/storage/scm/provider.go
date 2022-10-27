@@ -45,11 +45,10 @@ const (
 type (
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
-		getModules() (storage.ScmModules, error)
-		getRegionState() (storage.ScmState, error)
-		getNamespaces() (storage.ScmNamespaces, error)
+		getModules(int) (storage.ScmModules, error)
+		getNamespaces(int) (storage.ScmNamespaces, error)
 		prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
-		prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
+		prepReset(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error)
 		GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareInfo, error)
 		UpdateFirmware(deviceUID string, firmwarePath string) error
 	}
@@ -276,37 +275,49 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 }
 
 // Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	modules, err := p.backend.getModules()
+func (p *Provider) Scan(req storage.ScmScanRequest) (_ *storage.ScmScanResponse, err error) {
+	msg := fmt.Sprintf("scm backend scan: req %+v", req)
+	defer func() {
+		if err != nil {
+			msg = fmt.Sprintf("%s failed: %s", msg, err)
+		}
+		p.log.Debug(msg)
+	}()
+
+	resp := &storage.ScmScanResponse{
+		Modules:    storage.ScmModules{},
+		Namespaces: storage.ScmNamespaces{},
+	}
+
+	// If socket ID set in request, only scan devices attached to that socket.
+	sockSelector := sockAny
+	if req.SocketID != nil {
+		sockSelector = int(*req.SocketID)
+	}
+
+	modules, err := p.backend.getModules(sockSelector)
 	if err != nil {
 		return nil, err
 	}
-	p.log.Debugf("scm backend: %d modules", len(modules))
-
-	// If there are no modules, don't bother with the rest of the scan.
 	if len(modules) == 0 {
-		return &storage.ScmScanResponse{
-			State: storage.ScmStateNoModules,
-		}, nil
+		msg = fmt.Sprintf("%s: no pmem modules", msg)
+		return resp, nil
 	}
+	msg = fmt.Sprintf("%s: %d pmem modules", msg, len(modules))
+	resp.Modules = modules
 
-	namespaces, err := p.backend.getNamespaces()
+	namespaces, err := p.backend.getNamespaces(sockSelector)
 	if err != nil {
 		return nil, err
 	}
-	p.log.Debugf("scm backend: namespaces %+v", namespaces)
-
-	state, err := p.backend.getRegionState()
-	if err != nil {
-		return nil, err
+	if len(namespaces) == 0 {
+		msg = fmt.Sprintf("%s: no pmem namespaces", msg)
+		return resp, nil
 	}
-	p.log.Debugf("scm backend: state %q", state)
+	msg = fmt.Sprintf("%s: %d pmem namespace", msg, len(namespaces))
+	resp.Namespaces = namespaces
 
-	return &storage.ScmScanResponse{
-		State:      state,
-		Modules:    modules,
-		Namespaces: namespaces,
-	}, nil
+	return resp, nil
 }
 
 type scanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
@@ -314,18 +325,13 @@ type scanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
 func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage.ScmPrepareResponse, error) {
 	p.log.Debug("scm provider prepare: calling provider scan")
 
-	scanReq := storage.ScmScanRequest{}
+	scanReq := storage.ScmScanRequest{
+		SocketID: req.SocketID,
+	}
 
 	scanResp, err := scan(scanReq)
 	if err != nil {
 		return nil, err
-	}
-
-	if scanResp.State == storage.ScmStateNoModules {
-		return &storage.ScmPrepareResponse{
-			State:      scanResp.State,
-			Namespaces: storage.ScmNamespaces{},
-		}, nil
 	}
 
 	if req.Reset {
@@ -351,7 +357,7 @@ func (p *Provider) prepare(req storage.ScmPrepareRequest, scan scanFn) (*storage
 		}
 
 		p.log.Debug("scm provider prepare: calling backend prepReset")
-		return p.backend.prepReset(scanResp)
+		return p.backend.prepReset(req, scanResp)
 	}
 
 	p.log.Debug("scm provider prepare: calling backend prep")
@@ -514,7 +520,7 @@ func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmForm
 		return nil, FaultFormatMissingParam
 	}
 
-	res, err := p.MountRamdisk(req.Mountpoint, req.Ramdisk.Size)
+	res, err := p.MountRamdisk(req.Mountpoint, req.Ramdisk)
 	if err != nil {
 		return nil, err
 	}
@@ -592,13 +598,21 @@ func (p *Provider) MountDcpm(device, target string) (*storage.ScmMountResponse, 
 
 // MountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
 // the specified mountpoint.
-func (p *Provider) MountRamdisk(target string, size uint) (*storage.ScmMountResponse, error) {
-	var opts string
-	if size > 0 {
-		opts = fmt.Sprintf("size=%dg", size)
+func (p *Provider) MountRamdisk(target string, params *storage.RamdiskParams) (*storage.ScmMountResponse, error) {
+	if params == nil {
+		return nil, FaultFormatMissingParam
 	}
 
-	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, opts)
+	var opts = []string{
+		// https://www.kernel.org/doc/html/latest/filesystems/tmpfs.html
+		// mpol=prefer:Node prefers to allocate memory from the given Node
+		fmt.Sprintf("mpol=prefer:%d", params.NUMANode),
+	}
+	if params.Size > 0 {
+		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
+	}
+
+	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, strings.Join(opts, ","))
 }
 
 // Mount attempts to mount the target specified in the supplied request.
@@ -607,7 +621,7 @@ func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.ScmMountResponse
 	case storage.ClassDcpm:
 		return p.MountDcpm(req.Device, req.Target)
 	case storage.ClassRam:
-		return p.MountRamdisk(req.Target, req.Size)
+		return p.MountRamdisk(req.Target, req.Ramdisk)
 	default:
 		return nil, errors.New(storage.ScmMsgClassNotSupported)
 	}

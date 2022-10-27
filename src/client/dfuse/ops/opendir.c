@@ -36,7 +36,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
 
-		if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
+		if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout, NULL))
 			fi_out.keep_cache = 1;
 	}
 #endif
@@ -69,7 +69,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 			oh->doh_kreaddir_finished);
 
 	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
-		DFUSE_TRA_INFO(oh, "Directory handle may have populated cache, saving");
+		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
 		dfuse_cache_set_time(oh->doh_ie);
 	}
 

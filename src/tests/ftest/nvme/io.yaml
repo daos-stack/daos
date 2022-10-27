@@ -2,44 +2,43 @@
 # required quantity is indicated by the placeholders
 
 hosts:
- test_servers:
-  - server-A
-  - server-B
-  - server-C
-  - server-D
- test_clients:
-  - client-E
+  test_servers: 4
+  test_clients: 1
 timeout: 28800
 server_config:
- name: daos_server
- servers:
-  log_mask: ERR
-  bdev_class: nvme
-  bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-  scm_class: dcpm
-  scm_list: ["/dev/pmem0"]
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
- mode: 511
- name: daos_server
- prop_name: reclaim
- prop_value: disabled
- control_method: dmg
+  prop_name: reclaim
+  prop_value: disabled
+  control_method: dmg
 ior:
- flags: "-w -r -k -vv"
- repetitions: 1
- test_file: /testFile
- object_type:
-  - "SX"
-  - "S1"
-  - "S4"
-  - "RP_2GX"
-  - "RP_2G1"
-  - "RP_3GX"
-  - "RP_3G1"
-  - "RP_4GX"
-  - "RP_4G1"
- dfs_destroy: False
- ior_sequence:
+  flags: "-w -r -k -vv"
+  repetitions: 1
+  test_file: /testFile
+  object_type:
+    - "SX"
+    - "S1"
+    - "S4"
+    - "RP_2GX"
+    - "RP_2G1"
+    - "RP_3GX"
+    - "RP_3G1"
+    - "RP_4GX"
+    - "RP_4G1"
+  dfs_destroy: False
+  ior_sequence:
 #   - [scmsize%, nvmesize%, stripesize, blocksize, clientslots]
     - ["2%", "75%", 1048576, 17179869184, 1]        #[2%, 75%, 1M, 16G, 1]
     - ["1%", "4%", 4096, 1073741824, 1]             #[1%, 4%, 4k, 1G, 1]

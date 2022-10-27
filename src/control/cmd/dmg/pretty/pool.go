@@ -14,8 +14,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getTierNameText(tierIdx int) string {
@@ -191,7 +192,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 		if pool.PoolLayoutVer != pool.UpgradeLayoutVer {
 			upgradeString = fmt.Sprintf("%d->%d", pool.PoolLayoutVer, pool.UpgradeLayoutVer)
 		}
-		row["Upgrade?"] = upgradeString
+		row["UpgradeNeeded?"] = upgradeString
 	}
 
 	return row
@@ -214,7 +215,7 @@ func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 
 	titles := []string{"Pool", "Size", "State", "Used", "Imbalance", "Disabled"}
 	if upgrade {
-		titles = append(titles, "Upgrade?")
+		titles = append(titles, "UpgradeNeeded?")
 	}
 	formatter := txtfmt.NewTableFormatter(titles...)
 
@@ -247,7 +248,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 
 	svcReps := "N/A"
 	if len(pool.ServiceReplicas) != 0 {
-		rl := system.RanksToUint32(pool.ServiceReplicas)
+		rl := ranklist.RanksToUint32(pool.ServiceReplicas)
 		svcReps = formatRanks(rl)
 	}
 
@@ -257,12 +258,12 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	row := txtfmt.TableRow{
-		"Label":    label,
-		"UUID":     pool.UUID,
-		"State":    pool.State,
-		"SvcReps":  svcReps,
-		"Disabled": fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
-		"Upgrade?": upgrade,
+		"Label":          label,
+		"UUID":           pool.UUID,
+		"State":          pool.State,
+		"SvcReps":        svcReps,
+		"Disabled":       fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
+		"UpgradeNeeded?": upgrade,
 	}
 
 	for _, tu := range pool.Usage {
@@ -286,7 +287,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 			t.TierName+" Imbalance")
 	}
 	titles = append(titles, "Disabled")
-	titles = append(titles, "Upgrade?")
+	titles = append(titles, "UpgradeNeeded?")
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
@@ -322,7 +323,7 @@ func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, 
 }
 
 // PrintPoolProperties displays a two-column table of pool property names and values.
-func PrintPoolProperties(poolID string, out io.Writer, properties ...*control.PoolProperty) {
+func PrintPoolProperties(poolID string, out io.Writer, properties ...*daos.PoolProperty) {
 	fmt.Fprintf(out, "Pool %s properties:\n", poolID)
 
 	nameTitle := "Name"

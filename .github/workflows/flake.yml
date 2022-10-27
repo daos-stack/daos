@@ -7,18 +7,19 @@ on:
   pull_request:
     paths:
       - '**/*.py'
+      - .github/workflows/flake.yml
 
 jobs:
   flake8-lint:
-    runs-on: ubuntu-latest
-    name: Lint
+    runs-on: ubuntu-22.04
+    name: Flake8 check
     steps:
       - name: Check out source repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3'
       - name: Add parser
@@ -33,7 +34,7 @@ jobs:
           # W503 and W504 are related as they conflict.  W503 is the preferred style, however we
           # have code that matches W504 so accept either at this point.  The commit hook is setup to
           # ignore W503.
-          ignore: 'F841,W503,W504,E126,E127,E128,E226,E261,E262,E265,E266,E302,E402,E731'
+          ignore: 'F841,W503,W504,E126,E128,E226,E261,E265,E302,E402'
           exclude: 'src/control/vendor,src/client/pydaos/raw'
           # Max line length is 100, and pylint will warn about lines longer than this, but some
           # existing lines are longer so allow them here.

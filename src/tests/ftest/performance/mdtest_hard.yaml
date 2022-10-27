@@ -1,47 +1,43 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-C
-    - client-D
-    - client-E
-    - client-F
-    - client-G
+  test_servers: 3
+  test_clients: 5
 timeout: 300
 server_config:
-    name: daos_server
-    control_log_mask: INFO
-    engines_per_host: 2
-    servers:
+  name: daos_server
+  control_log_mask: INFO
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: ERR
+      storage:
         0:
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          log_mask: ERR
-          bdev_class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
-          scm_class: dcpm
+          class: dcpm
           scm_list: ["/dev/pmem0"]
           scm_mount: /mnt/daos0
         1:
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          log_mask: ERR
-          bdev_class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
-          scm_class: dcpm
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: ERR
+      storage:
+        0:
+          class: dcpm
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
 pool:
-  mode: 146
-  name: daos_server
   size: 95%
   control_method: dmg
   properties: ec_cell_sz:128KiB
@@ -74,3 +70,5 @@ mdtest_dfs_ec_16p2g1:
 performance:
   env:
     - D_LOG_MASK=ERR
+mpirun:
+  bind_to: socket

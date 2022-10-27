@@ -25,11 +25,6 @@
 #include <daos_srv/policy.h>
 
 /*
- * Aggregation of pool/container/object/keys disk format change.
- */
-#define DS_POOL_GLOBAL_VERSION		1
-
-/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -42,7 +37,7 @@ struct ds_pool {
 	uint32_t		sp_map_version;	/* temporary */
 	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
-	uint32_t		sp_redun_fac;
+	uint64_t		sp_redun_fac;
 	/* Performance Domain Affinity Level of EC object. */
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
@@ -68,7 +63,14 @@ struct ds_pool {
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
-				sp_fetch_hdls:1;
+				sp_fetch_hdls:1,
+				sp_disable_rebuild:1,
+				sp_need_discard:1;
+
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
 
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
@@ -87,7 +89,7 @@ struct ds_pool {
 	uint64_t		sp_scrub_thresh;
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 
@@ -142,6 +144,7 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
+	uint64_t	spc_discard_done:1;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -177,10 +180,12 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    const d_rank_list_t *target_addrs, int ndomains,
+			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int ds_pool_svc_stop(uuid_t pool_uuid);
+int ds_pool_svc_rf_to_nreplicas(int svc_rf);
+int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -250,6 +255,8 @@ map_ranks_fini(d_rank_list_t *ranks);
 
 int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 		      d_rank_list_t *ranks);
+int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, int **tgts,
+				 unsigned int *tgts_cnt);
 int ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts,
 			       unsigned int *failed_tgts_cnt);
 int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
@@ -276,6 +283,7 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
+int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
@@ -297,10 +305,11 @@ ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rlvl, uint32
 static inline uint32_t
 ds_pool_get_version(struct ds_pool *pool)
 {
-	uint32_t	ver;
+	uint32_t	ver = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	ver = pool_map_get_version(pool->sp_map);
+	if (pool->sp_map != NULL)
+		ver = pool_map_get_version(pool->sp_map);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return ver;

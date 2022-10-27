@@ -1,21 +1,21 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
+  test_servers: 5
 timeouts:
   test_one_pool: 240
+  test_rank_filter: 240
   test_two_pools: 160
   test_recycle_pools: 320
 server_config:
   name: daos_server
-  servers:
+  engines_per_host: 1
+  engines:
     0:
-      scm_class: ram
-      scm_mount: /mnt/daos
-      scm_size: 4
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  name: daos_server
   control_method: dmg

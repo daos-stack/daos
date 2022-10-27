@@ -32,37 +32,37 @@ class AutoOCSelectionTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=oc_selection
+        :avocado: tags=oc_selection,test_oc_selection
         """
         self.add_pool()
 
         # (Redundancy Factor, Object Class, Failure Expected)
         prop_oclasses = [
-            ("rf:0", "S1", False),
-            ("rf:0", "RP_2G1", False),
-            ("rf:0", "RP_3G1", False),
-            ("rf:0", "RP_4G1", False),
-            ("rf:0", "RP_5G1", False),
-            ("rf:1", "S1", True),
-            ("rf:1", "RP_2G1", False),
-            ("rf:1", "RP_3G1", False),
-            ("rf:1", "RP_4G1", False),
-            ("rf:1", "RP_5G1", False),
-            ("rf:2", "S1", True),
-            ("rf:2", "RP_2G1", True),
-            ("rf:2", "RP_3G1", False),
-            ("rf:2", "RP_4G1", False),
-            ("rf:2", "RP_5G1", False),
-            ("rf:3", "S1", True),
-            ("rf:3", "RP_2G1", True),
-            ("rf:3", "RP_3G1", True),
-            ("rf:3", "RP_4G1", False),
-            ("rf:3", "RP_5G1", False),
-            ("rf:4", "S1", True),
-            ("rf:4", "RP_2G1", True),
-            ("rf:4", "RP_3G1", True),
-            ("rf:4", "RP_4G1", True),
-            ("rf:4", "RP_5G1", False)
+            ("rd_fac:0", "S1", False),
+            ("rd_fac:0", "RP_2G1", False),
+            ("rd_fac:0", "RP_3G1", False),
+            ("rd_fac:0", "RP_4G1", False),
+            ("rd_fac:0", "RP_5G1", False),
+            ("rd_fac:1", "S1", True),
+            ("rd_fac:1", "RP_2G1", False),
+            ("rd_fac:1", "RP_3G1", False),
+            ("rd_fac:1", "RP_4G1", False),
+            ("rd_fac:1", "RP_5G1", False),
+            ("rd_fac:2", "S1", True),
+            ("rd_fac:2", "RP_2G1", True),
+            ("rd_fac:2", "RP_3G1", False),
+            ("rd_fac:2", "RP_4G1", False),
+            ("rd_fac:2", "RP_5G1", False),
+            ("rd_fac:3", "S1", True),
+            ("rd_fac:3", "RP_2G1", True),
+            ("rd_fac:3", "RP_3G1", True),
+            ("rd_fac:3", "RP_4G1", False),
+            ("rd_fac:3", "RP_5G1", False),
+            ("rd_fac:4", "S1", True),
+            ("rd_fac:4", "RP_2G1", True),
+            ("rd_fac:4", "RP_3G1", True),
+            ("rd_fac:4", "RP_4G1", True),
+            ("rd_fac:4", "RP_5G1", False)
         ]
 
         self.container = []

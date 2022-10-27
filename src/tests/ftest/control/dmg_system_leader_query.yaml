@@ -1,8 +1,15 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
+  test_servers: 3
 timeout: 120
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4

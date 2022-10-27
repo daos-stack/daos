@@ -87,8 +87,8 @@ daos_ec_cs_valid(uint32_t cell_sz)
 	if (cell_sz < DAOS_EC_CELL_MIN || cell_sz > DAOS_EC_CELL_MAX)
 		return false;
 
-	/* should be multiplier of the min size */
-	if (cell_sz % DAOS_EC_CELL_MIN != 0)
+	/* should be multiplier of the min size, EC/ISAL lib require 32 byte alignment */
+	if (cell_sz % 32 != 0)
 		return false;
 
 	return true;
@@ -237,8 +237,8 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-				   daos_oclass_hints_t hints, uint32_t args);
+int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+			uint32_t args, daos_oclass_id_t *cid);
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
@@ -441,7 +441,7 @@ daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 				daos_obj_id_t *oid, enum daos_otype_t type,
 				daos_oclass_id_t cid, daos_oclass_hints_t hints,
-				uint32_t args);
+				uint32_t args, uint32_t pa_domains);
 
 int dc_obj_init(void);
 void dc_obj_fini(void);
