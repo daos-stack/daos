@@ -63,7 +63,7 @@ dfs_test_mount(void **state)
 	/** close and destroy non posix container */
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = dfs_cont_destroy(arg->pool.poh, str, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
@@ -73,15 +73,18 @@ dfs_test_mount(void **state)
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
 	/** try to open the container and mount it, should succeed */
-	rc = daos_cont_open(arg->pool.poh, "cont0", DAOS_COO_RW, &coh, NULL, NULL);
+	rc = dfs_cont_open(arg->pool.poh, "cont0", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
+	/** destroy the container while it's still cached (using dfs_connect) - should fail */
 	rc = dfs_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
+	assert_rc_equal(rc, EBUSY);
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont0", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with an invalid label */
@@ -92,7 +95,7 @@ dfs_test_mount(void **state)
 	rc = dfs_cont_create_with_label(arg->pool.poh, "cont1", NULL, &cuuid, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** open with label */
-	rc = daos_cont_open(arg->pool.poh, "cont1", DAOS_COO_RW, &coh, NULL, NULL);
+	rc = dfs_cont_open(arg->pool.poh, "cont1", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	/** mount */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -118,6 +121,9 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, -DER_BUSY);
 	/** destroy using the DFS API */
 	rc = dfs_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
+	assert_rc_equal(rc, EBUSY);
+	/** dfs_destroy will take the refcount and destroy */
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont1", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = dfs_fini();
@@ -161,7 +167,7 @@ dfs_test_mount(void **state)
 
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = dfs_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_rc_equal(rc, 0);
@@ -1211,7 +1217,7 @@ dfs_test_mt_connect(void **state)
 	for (i = 0; i < dfs_test_thread_nr; i++)
 		assert_int_equal(dfs_test_rc[i], 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, name, 0, NULL);
+	rc = dfs_cont_destroy(arg->pool.poh, name, 0, NULL);
 	assert_rc_equal(rc, 0);
 	par_barrier(PAR_COMM_WORLD);
 }
@@ -1995,9 +2001,9 @@ dfs_test_oclass_hints(void **state)
 	memset(dattr.da_hints, 0, DAOS_CONT_HINT_MAX_LEN);
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, "h_cont", 0, NULL);
+	rc = dfs_cont_destroy(arg->pool.poh, "h_cont", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
@@ -2041,9 +2047,9 @@ dfs_test_oclass_hints(void **state)
 
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, "oc_cont0", 0, NULL);
+	rc = dfs_cont_destroy(arg->pool.poh, "oc_cont0", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** create container with RF = 1 */
@@ -2093,9 +2099,9 @@ dfs_test_oclass_hints(void **state)
 
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, "oc_cont1", 0, NULL);
+	rc = dfs_cont_destroy(arg->pool.poh, "oc_cont1", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** create container with RF = 2 */
@@ -2145,12 +2151,76 @@ dfs_test_oclass_hints(void **state)
 
 	rc = dfs_umount(dfs_l);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_close(coh, NULL);
+	rc = dfs_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, "oc_cont2", 0, NULL);
+	rc = dfs_cont_destroy(arg->pool.poh, "oc_cont2", 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	daos_prop_free(prop);
+}
+
+static void
+dfs_test_multiple_pools(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_t			*dfs1, *dfs2;
+	uuid_t			uuid1, uuid2;
+	daos_handle_t		poh1, poh2;
+	daos_handle_t		coh1, coh2;
+	char			str1[37], str2[37];
+	int			rc;
+
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid1);
+	assert_rc_equal(rc, 0);
+	uuid_unparse_lower(uuid1, str1);
+
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid2);
+	assert_rc_equal(rc, 0);
+	uuid_unparse_lower(uuid2, str2);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	/** try creating the same container label on different pools, should succeed */
+	rc = dfs_connect(str1, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs1);
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(str2, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs1);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_pool_connect(str1, arg->group, DAOS_PC_RW, &poh1, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_pool_connect(str2, arg->group, DAOS_PC_RW, &poh2, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_cont_open(poh1, "cont0", DAOS_COO_RW, &coh1, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_cont_open(poh2, "cont0", DAOS_COO_RW, &coh2, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_pool_disconnect(poh1, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_pool_disconnect(poh2, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	rc = dmg_pool_destroy(dmg_config_file, uuid1, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	rc = dmg_pool_destroy(dmg_config_file, uuid2, arg->group, 1);
+	assert_rc_equal(rc, 0);
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
@@ -2194,6 +2264,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_readdir, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST20: dfs oclass hints",
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST21: dfs multiple pools",
+	  dfs_test_multiple_pools, async_disable, test_case_teardown},
 };
 
 static int

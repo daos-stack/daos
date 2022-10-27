@@ -1846,11 +1846,6 @@ dfs_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *e
 {
 	int rc;
 
-	rc = dfs_hdl_cont_destroy(poh, cont, force);
-	if (rc != 0 && rc != ENOENT) {
-		D_ERROR("Failed to destroy cont hash entry: %d (%s)\n", rc, strerror(rc));
-		return rc;
-	}
 	rc = daos_cont_destroy(poh, cont, force, ev);
 	return daos_der2errno(rc);
 }
@@ -2140,7 +2135,7 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 
 	amode = (flags & O_ACCMODE);
 
-	pool_hdl = dfs_hdl_lookup(pool, DFS_H_POOL);
+	pool_hdl = dfs_hdl_lookup(pool, DFS_H_POOL, NULL);
 	if (pool_hdl == NULL) {
 		/** Connect to pool */
 		rc = daos_pool_connect(pool, sys, (amode == O_RDWR) ? DAOS_PC_RW : DAOS_PC_RO, &poh,
@@ -2150,7 +2145,7 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_hdl_insert(pool, DFS_H_POOL, &poh, &pool_hdl);
+		rc = dfs_hdl_insert(pool, DFS_H_POOL, NULL, &poh, &pool_hdl);
 		if (rc)
 			D_GOTO(err, rc);
 	} else {
@@ -2159,7 +2154,8 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
 	pool_h_bump = true;
 
 	cmode = (amode == O_RDWR) ? DAOS_COO_RW : DAOS_COO_RO;
-	cont_hdl = dfs_hdl_lookup(cont, DFS_H_CONT);
+
+	cont_hdl = dfs_hdl_lookup(cont, DFS_H_CONT, pool);
 	if (cont_hdl == NULL) {
 		rc = daos_cont_open(poh, cont, cmode, &coh, NULL, NULL);
 		if (rc == -DER_NONEXIST && (flags & O_CREAT)) {
@@ -2202,7 +2198,7 @@ mount:
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_hdl_insert(cont, DFS_H_CONT, &coh, &cont_hdl);
+		rc = dfs_hdl_insert(cont, DFS_H_CONT, pool, &coh, &cont_hdl);
 		if (rc)
 			D_GOTO(err, rc);
 	} else {
@@ -2270,6 +2266,63 @@ dfs_disconnect(dfs_t *dfs)
 		D_GOTO(out, rc);
 	}
 out:
+	return rc;
+}
+
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev)
+{
+	daos_handle_t		poh = {0};
+	bool			pool_h_bump = false;
+	struct dfs_mnt_hdls	*pool_hdl = NULL;
+	int			rc, rc2;
+
+	if (pool == NULL || cont == NULL)
+		return EINVAL;
+
+	if (!dfs_is_init()) {
+		D_ERROR("dfs_init() must be called before dfs_destroy() can be used\n");
+		return EACCES;
+	}
+
+	pool_hdl = dfs_hdl_lookup(pool, DFS_H_POOL, NULL);
+	if (pool_hdl == NULL) {
+		/** Connect to pool */
+		rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &poh, NULL, NULL);
+		if (rc) {
+			D_ERROR("Failed to connect to pool %s "DF_RC"\n", pool, DP_RC(rc));
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_hdl_insert(pool, DFS_H_POOL, NULL, &poh, &pool_hdl);
+		if (rc)
+			D_GOTO(err, rc);
+	} else {
+		poh.cookie = pool_hdl->handle.cookie;
+	}
+	pool_h_bump = true;
+
+	rc = dfs_hdl_cont_destroy(pool, cont, force);
+	if (rc != 0 && rc != ENOENT) {
+		D_ERROR("Failed to destroy cont hash entry: %d (%s)\n", rc, strerror(rc));
+		return rc;
+	}
+
+	rc = daos_cont_destroy(poh, cont, force, ev);
+	if (rc) {
+		D_ERROR("Failed to destroy container %s "DF_RC"\n", cont, DP_RC(rc));
+		D_GOTO(err, rc = daos_der2errno(rc));
+	}
+	dfs_hdl_release(pool_hdl);
+	return rc;
+err:
+	if (pool_h_bump) {
+		dfs_hdl_release(pool_hdl);
+	} else if (daos_handle_is_valid(poh)) {
+		rc2 = daos_pool_disconnect(poh, NULL);
+		if (rc2)
+			D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+	}
 	return rc;
 }
 
@@ -2974,7 +3027,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 	ptr += pool_iov.iov_buf_len;
-	rc = dfs_hdl_insert(pool, DFS_H_POOL, &poh, &pool_hdl);
+	rc = dfs_hdl_insert(pool, DFS_H_POOL, NULL, &poh, &pool_hdl);
 	if (rc)
 		D_GOTO(err, rc);
 	pool_h_bump = true;
@@ -2991,7 +3044,7 @@ dfs_global2local_all(int flags, d_iov_t glob, dfs_t **_dfs)
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 	ptr += cont_iov.iov_buf_len;
-	rc = dfs_hdl_insert(cont, DFS_H_CONT, &coh, &cont_hdl);
+	rc = dfs_hdl_insert(cont, DFS_H_CONT, pool, &coh, &cont_hdl);
 	if (rc)
 		D_GOTO(err, rc);
 	cont_h_bump = true;

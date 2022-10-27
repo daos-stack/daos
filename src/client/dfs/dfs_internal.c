@@ -184,16 +184,23 @@ unlock:
 }
 
 struct dfs_mnt_hdls *
-dfs_hdl_lookup(const char *str, int type)
+dfs_hdl_lookup(const char *str, int type, const char *pool)
 {
-	d_list_t *rlink = NULL;
+	d_list_t	*rlink = NULL;
 
-	if (type == DFS_H_POOL)
+	if (type == DFS_H_POOL) {
 		rlink = d_hash_rec_find(poh_hash, str, strlen(str));
-	else if (type == DFS_H_CONT)
-		rlink = d_hash_rec_find(coh_hash, str, strlen(str));
-	else
+	} else if (type == DFS_H_CONT) {
+		char		cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
+		daos_size_t	len;
+
+		D_ASSERT(pool);
+		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
+		D_ASSERT(len >= strlen(pool) + strlen(str) + 1);
+		rlink = d_hash_rec_find(coh_hash, cont_pool, strlen(str));
+	} else {
 		D_ASSERT(0);
+	}
 	if (rlink == NULL)
 		return NULL;
 
@@ -210,7 +217,8 @@ dfs_hdl_release(struct dfs_mnt_hdls *hdl)
 }
 
 int
-dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl)
+dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
+	       struct dfs_mnt_hdls **_hdl)
 {
 	struct dfs_mnt_hdls	*hdl;
 	d_list_t		*rlink;
@@ -223,10 +231,10 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 	hdl->type = type;
 	hdl->handle.cookie = oh->cookie;
 	hdl->ref = 2;
-	strncpy(hdl->value, str, DAOS_PROP_LABEL_MAX_LEN + 1);
 	hdl->value[DAOS_PROP_LABEL_MAX_LEN] = 0;
 
 	if (type == DFS_H_POOL) {
+		strncpy(hdl->value, str, DAOS_PROP_LABEL_MAX_LEN + 1);
 		rlink = d_hash_rec_find_insert(poh_hash, hdl->value, strlen(hdl->value) + 1,
 					       &hdl->entry);
 		if (rlink != &hdl->entry) {
@@ -239,6 +247,14 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 			oh->cookie = hdl->handle.cookie;
 		}
 	} else if (type == DFS_H_CONT) {
+		char		cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
+		daos_size_t	len;
+
+		D_ASSERT(pool);
+		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
+		D_ASSERT(len >= strlen(pool) + strlen(str) + 1);
+
+		strncpy(hdl->value, cont_pool, DAOS_PROP_LABEL_MAX_LEN * 2 + 1);
 		rlink = d_hash_rec_find_insert(coh_hash, hdl->value, strlen(hdl->value) + 1,
 					       &hdl->entry);
 		if (rlink != &hdl->entry) {
@@ -262,20 +278,26 @@ err_free:
 }
 
 int
-dfs_hdl_cont_destroy(daos_handle_t poh, const char *cont, bool force)
+dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force)
 {
-	d_list_t *rlink = NULL;
-	struct dfs_mnt_hdls *hdl;
+	d_list_t		*rlink = NULL;
+	struct dfs_mnt_hdls	*hdl;
+	char			cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
+	daos_size_t		len;
+
+	D_ASSERT(pool);
+	len = snprintf(cont_pool, strlen(pool) + strlen(cont) + 2, "%s/%s", pool, cont);
+	D_ASSERT(len >= strlen(pool) + strlen(cont) + 1);
 
 	if (coh_hash == NULL)
 		return 0;
 
 	if (force) {
-		if (!d_hash_rec_delete(coh_hash, cont, strlen(cont)))
+		if (!d_hash_rec_delete(coh_hash, cont_pool, strlen(cont_pool)))
 			return ENOENT;
 	}
 
-	rlink = d_hash_rec_find(coh_hash, cont, strlen(cont));
+	rlink = d_hash_rec_find(coh_hash, cont_pool, strlen(cont_pool));
 	if (rlink == NULL)
 		return ENOENT;
 

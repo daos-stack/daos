@@ -158,6 +158,25 @@ int
 dfs_disconnect(dfs_t *dfs);
 
 /**
+ * Evict all the container handles from the hashtable and destroy the container.
+ *
+ * \param[in]   pool    Pool label where the container is.
+ * \param[in]	sys	DAOS system name to use for the pool.
+ *			Pass NULL to use the default system.
+ * \param[in]   cont    Container label to destroy.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles from other open calls).
+ *			This parameter will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
+
+/**
  * A DFS wrapper around daos_pool_connect that returns positive errno instead of negative DER.
  *
  * \param[in]	pool	label or UUID string to identify a pool.
@@ -166,8 +185,7 @@ dfs_disconnect(dfs_t *dfs);
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
  * \param[in,out]
- *		info	Optional, returned pool information,
- *			see daos_pool_info_bit.
+ *		info	Optional, returned pool information, see daos_pool_info_bit.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -256,7 +274,9 @@ int
 dfs_cont_close(daos_handle_t coh, daos_event_t *ev);
 
 /**
- * A DFS wrapper around daos_cont_destroy that returns positive errno instead of negative DER.
+ * A DFS wrapper around daos_cont_destroy that returns positive errno instead of negative DER. Note
+ * that this does not evict any container handle from cache in case the DFS container was mounted
+ * with dfs_connect. In such case, to destroy the container, one must use dfs_destroy() instead.
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to idenfity the container to
