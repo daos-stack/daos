@@ -262,7 +262,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             str: the posix path.
 
         """
-        # make dirname unique to datamover test
+        # make directory name unique to datamover test
         method = self.get_test_name()
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 

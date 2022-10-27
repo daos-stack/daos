@@ -154,8 +154,8 @@ def get_switch_user(user="root"):
     """
     command = ["sudo", "-n"]
     if user != "root":
-        # User runuser to avoid using a password
-        command.extend(["runuser", "-u", user])
+        # Use runuser to avoid using a password
+        command.extend(["runuser", "-u", user, "--"])
     return command
 
 

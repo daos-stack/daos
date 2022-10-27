@@ -213,18 +213,25 @@ def get_reservation_hosts(log, control, reservation):
             f'Unable to obtain hosts from the {reservation} slurm reservation output') from error
 
 
-def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
+def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch_params=None):
     """Generate a script for submitting a job to slurm.
 
-    path      --where to write the script file
-    name      --job name
-    output    --where to put the output (full path)
-    nodecount --number of compute nodes to execute on
-    cmds      --shell commands that are to be executed
-    sbatch    --dictionary containing other less often used parameters to
-                sbatch, e.g. mem:100
-    uniq string  --a unique string to append to the job and log files
-    returns   --the full path of the script
+    Args:
+        path (str): where to write the script file
+        name (str): job name
+        output (str): where to put the output (full path)
+        nodecount (int): number of compute nodes to execute on
+        cmds (list): shell commands that are to be executed
+        uniq (str): a unique string to append to the job and log files
+        sbatch_params (dict, optional): dictionary containing other less often used parameters to
+                sbatch, e.g. mem:100. Defaults to None.
+
+    Raises:
+        SlurmFailed: if missing require parameters for the slurm script
+
+    Returns:
+        str: the full path of the script
+
     """
     if name is None or nodecount is None or cmds is None:
         raise SlurmFailed("Bad parameters passed for slurm script.")
@@ -244,8 +251,8 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
         if output is not None:
             output = output + str(uniq)
             script_file.write("#SBATCH --output={}\n".format(output))
-        if sbatch:
-            for key, value in list(sbatch.items()):
+        if sbatch_params:
+            for key, value in list(sbatch_params.items()):
                 if value is not None:
                     if key == "error":
                         value = value + str(uniq)

@@ -747,8 +747,7 @@ class TestWithServers(TestWithoutServers):
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
-            if (self.agent_manager_class == "Systemctl"
-                    or self.server_manager_class == "Systemctl"):
+            if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
