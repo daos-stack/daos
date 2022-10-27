@@ -322,7 +322,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			storage:
 			-
 				class: dcpm
-				scm_mount: /mnt/pmem0
+				scm_mount: /mnt/daos0
 				scm_list:
 				- /dev/pmem0
 			-
@@ -342,7 +342,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 			storage:
 			-
 				class: dcpm
-				scm_mount: /mnt/pmem1
+				scm_mount: /mnt/daos1
 				scm_list:
 				- /dev/pmem1
 			-
