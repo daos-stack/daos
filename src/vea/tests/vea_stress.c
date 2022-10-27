@@ -51,7 +51,7 @@ struct vs_perf_cntr {
 };
 
 enum {
-	VS_OP_RESERV	= 0,
+	VS_OP_RESERVE	= 0,
 	VS_OP_PUBLISH,
 	VS_OP_FREE,
 	VS_OP_MERGE,
@@ -319,7 +319,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 			fprintf(stderr, "failed to reserve %u blks for io\n", blk_cnt);
 			goto error;
 		}
-		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 		/*
 		 * Reserved list will be freed on publish, duplicate it to track the
@@ -468,7 +468,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 		fprintf(stderr, "failed to reserve %u blks for aggregation\n", merge_blks);
 		return rc;
 	}
-	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 	rsrvd = d_list_entry(r_list.prev, struct vea_resrvd_ext, vre_link);
 	D_ASSERT(rsrvd->vre_blk_cnt == merge_blks);
@@ -921,8 +921,8 @@ static inline char *
 vs_op2str(unsigned int op)
 {
 	switch (op) {
-	case VS_OP_RESERV:
-		return "reserv";
+	case VS_OP_RESERVE:
+		return "reserve";
 	case VS_OP_PUBLISH:
 		return "tx_publish";
 	case VS_OP_FREE:

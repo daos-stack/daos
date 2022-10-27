@@ -202,8 +202,7 @@ class NetworkFailureTest(IorTestBase):
         errors = []
         self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
-        self.interface = self.params.get(
-            "fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
         self.log.info("interface to update = %s", self.interface)
 
         if self.test_env == "ci":
@@ -390,7 +389,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 4. Take down the interface where the pool isn't created.
         errors = []
-        self.interface = self.params.get("fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
 
         # wolf
         if self.test_env == "ci":
