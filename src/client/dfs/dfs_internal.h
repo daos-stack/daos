@@ -32,6 +32,7 @@ struct dfs_mnt_hdls {
 	daos_handle_t	handle;
 	int		ref;
 	int		type;
+	daos_handle_t	poh; /* valid only for container handles */
 };
 
 struct dfs_mnt_hdls *
@@ -40,6 +41,8 @@ void
 dfs_hdl_release(struct dfs_mnt_hdls *hdl);
 int
 dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls **_hdl);
+int
+dfs_hdl_cont_destroy(daos_handle_t poh, const char *cont, bool force);
 int
 dfs_is_init();
 

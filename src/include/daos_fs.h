@@ -158,6 +158,38 @@ int
 dfs_disconnect(dfs_t *dfs);
 
 /**
+ * A DFS wrapper around daos_pool_connect that returns positive errno instead of negative DER.
+ *
+ * \param[in]	pool	label or UUID string to identify a pool.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to connect to the default system.
+ * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
+ * \param[out]	poh	Returned open handle.
+ * \param[in,out]
+ *		info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
+		 daos_pool_info_t *info, daos_event_t *ev);
+
+/**
+ * A DFS wrapper around daos_pool_disconnect that returns positive errno instead of negative DER.
+ *
+ * \param[in]	poh	Pool connection handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
+
+/**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
  * on the container.
  *
@@ -192,38 +224,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t
 int
 dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
 			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
-
-/**
- * A DFS wrapper around daos_pool_connect that returns positive errno instead of negative DER.
- *
- * \param[in]	pool	label or UUID string to identify a pool.
- * \param[in]	sys	DAOS system name to use for the pool connect.
- *			Pass NULL to connect to the default system.
- * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
- * \param[out]	poh	Returned open handle.
- * \param[in,out]
- *		info	Optional, returned pool information,
- *			see daos_pool_info_bit.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev);
-
-/**
- * A DFS wrapper around daos_pool_disconnect that returns positive errno instead of negative DER.
- *
- * \param[in]	poh	Pool connection handle
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
 
 /**
  * A DFS wrapper around daos_cont_open that returns positive errno instead of negative DER, with one

@@ -161,6 +161,7 @@ dfs_fini(void)
 		d_hash_rec_decref(coh_hash, rlink);
 	}
 	d_hash_table_destroy(coh_hash, false);
+	coh_hash = NULL;
 
 	while (1) {
 		rlink = d_hash_rec_first(poh_hash);
@@ -170,6 +171,7 @@ dfs_fini(void)
 		d_hash_rec_decref(poh_hash, rlink);
 	}
 	d_hash_table_destroy(poh_hash, false);
+	poh_hash = NULL;
 
 	rc = daos_fini();
 	if (rc)
@@ -257,6 +259,34 @@ dfs_hdl_insert(const char *str, int type, daos_handle_t *oh, struct dfs_mnt_hdls
 err_free:
 	D_FREE(hdl);
 	return rc;
+}
+
+int
+dfs_hdl_cont_destroy(daos_handle_t poh, const char *cont, bool force)
+{
+	d_list_t *rlink = NULL;
+	struct dfs_mnt_hdls *hdl;
+
+	if (coh_hash == NULL)
+		return 0;
+
+	if (force) {
+		if (!d_hash_rec_delete(coh_hash, cont, strlen(cont)))
+			return ENOENT;
+	}
+
+	rlink = d_hash_rec_find(coh_hash, cont, strlen(cont));
+	if (rlink == NULL)
+		return ENOENT;
+
+	hdl = hdl_obj(rlink);
+	if (hdl->ref > 2) {
+		D_ERROR("Container handle is still open or DFS mount still connected\n");
+		return EBUSY;
+	}
+	d_hash_rec_decref(coh_hash, rlink);
+	d_hash_rec_decref(coh_hash, rlink);
+	return 0;
 }
 
 void

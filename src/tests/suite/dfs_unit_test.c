@@ -81,6 +81,8 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
+	rc = dfs_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
+	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with an invalid label */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "invalid:-/label", NULL, &cuuid, NULL, NULL);
@@ -111,15 +113,15 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, EINVAL);
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
+	/** try to destroy container without force, using the daos API, should fail */
+	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
+	assert_int_equal(rc, -DER_BUSY);
+	/** destroy using the DFS API */
+	rc = dfs_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = dfs_fini();
 	assert_int_equal(rc, 0);
-
-	/** destroy the containers */
-	rc = dfs_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
-	assert_rc_equal(rc, 0);
-	rc = dfs_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
-	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with a valid label, no uuid out */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, NULL, NULL, NULL);

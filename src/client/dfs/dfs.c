@@ -1846,6 +1846,11 @@ dfs_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *e
 {
 	int rc;
 
+	rc = dfs_hdl_cont_destroy(poh, cont, force);
+	if (rc != 0 && rc != ENOENT) {
+		D_ERROR("Failed to destroy cont hash entry: %d (%s)\n", rc, strerror(rc));
+		return rc;
+	}
 	rc = daos_cont_destroy(poh, cont, force, ev);
 	return daos_der2errno(rc);
 }
