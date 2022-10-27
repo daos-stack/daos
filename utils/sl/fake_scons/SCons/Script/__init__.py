@@ -287,6 +287,10 @@ class DefaultEnvironment():
 
     def d_configure_mpi(self):
         """Fake d_configure_mpi"""
+        return DefaultEnvironment()
+
+    def compiler_setup(self):
+        """Fake compiler_setup"""
         return
 
     def Preprocess(self, files):

@@ -372,19 +372,21 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     set_defaults(env, daos_version)
 
+    # Add project specific methods to SCons environments.
     daos_build.setup(env)
+    compiler_setup.setup(env)
 
     base_env = env.Clone()
 
-    base_env_mpi = env.Clone()
-
-    compiler_setup.base_setup(env)
-
     if not GetOption('help') and not GetOption('clean'):
-        if not base_env_mpi.d_configure_mpi():
+        base_env_mpi = env.d_configure_mpi()
+        if not base_env_mpi:
             print("\nSkipping compilation for tests that need MPI")
             print("Install and load mpich or openmpi\n")
-            base_env_mpi = None
+    else:
+        base_env_mpi = None
+
+    env.compiler_setup()
 
     args = GetOption('analyze_stack')
     if args is not None:

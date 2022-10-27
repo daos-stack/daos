@@ -8,7 +8,6 @@ from SCons.Script import WhereIs
 from SCons.Script import Depends
 from SCons.Script import Exit
 from env_modules import load_mpi
-import compiler_setup
 
 libraries = {}
 missing = set()
@@ -191,7 +190,7 @@ def _find_mpicc(env):
     env.Replace(CC="mpicc")
     env.Replace(LINK="mpicc")
     env.PrependENVPath('PATH', os.path.dirname(mpicc))
-    compiler_setup.base_setup(env)
+    env.compiler_setup()
 
     return True
 
@@ -212,11 +211,13 @@ def _configure_mpi_pkg(env):
     return True
 
 
-def _configure_mpi(env):
+def _configure_mpi(self):
     """Check if mpi exists and configure environment"""
 
     if GetOption('help'):
-        return True
+        return None
+
+    env = self.Clone()
 
     env['CXX'] = None
 
@@ -228,10 +229,10 @@ def _configure_mpi(env):
             continue
         if _find_mpicc(env):
             print(f'{mpi} is installed')
-            return True
+            return env
         print(f'No {mpi} installed and/or loaded')
     print("No MPI installed")
-    return False
+    return None
 
 
 def setup(env):
