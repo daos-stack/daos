@@ -35,14 +35,14 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        distro: [ubuntu, rocky.9, fedora, leap.15]
+        distro: [ubuntu, rocky, fedora, leap.15]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
-          - distro: rocky.9
-            base: el.8
-            with: rockylinux/rockylinux:8
+          - distro: rocky
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
             with: fedora:36
@@ -144,13 +144,13 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        distro: [ubuntu, rocky9, fedora, leap.15]
+        distro: [ubuntu, rocky, fedora, leap.15]
         compiler: [clang, gcc]
         include:
           - distro: ubuntu
             base: ubuntu
             with: ubuntu:22.04
-          - distro: rocky9
+          - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
