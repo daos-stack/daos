@@ -1200,6 +1200,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	int			 grp_start;
 	int			 rc = 0;
 	int			 idx;
+	uint32_t		 shard_idx;
 	uint8_t			 tgt_flags = 0;
 	int			 i;
 
@@ -1239,13 +1240,14 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		start_tgt = obj_get_grp_size(obj) - 1;
 	}
 	/* Descending order to guarantee that EC parity is handled firstly. */
-	for (i = 0, idx = start_tgt; i < obj_get_grp_size(obj);
-	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj))) {
+	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < obj_get_grp_size(obj);
+	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj)),
+	     shard_idx = idx + grp_start) {
 		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
 		    isclr(reasb_req->tgt_bitmap, idx))
 			continue;
 
-		rc = obj_shard_open(obj, idx + grp_start, tx->tx_pm_ver, &shard);
+		rc = obj_shard_open(obj, shard_idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
@@ -1273,9 +1275,9 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if (shard->do_reintegrating)
 			tx->tx_reintegrating = 1;
-		/* XXX: It is possible that more than one shards locate on the
-		 *	same DAOS target under OSA mode, then the "idx" may be
-		 *	not equal to "shard->do_shard".
+		/*
+		 * NOTE: It is possible that more than one shards locate on the same DAOS target
+		 *	 under OSA mode, then the shard_idx may be not equal to "shard->do_shard".
 		 */
 
 		D_ASSERTF(shard->do_target_id < dtrg_nr,
@@ -1285,7 +1287,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dtrg = &dtrgs[shard->do_target_id];
 
 		dtrg->dtrg_flags |= tgt_flags;
-		if (unlikely(shard->do_shard != idx))
+		if (unlikely(shard->do_shard != shard_idx))
 			dtrg->dtrg_flags |= DTF_REASSEMBLE_REQ;
 
 		if (dtrg->dtrg_req_idx == NULL) {
@@ -1329,7 +1331,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		dcri = &dtrg->dtrg_req_idx[dtrg->dtrg_read_cnt +
 					   dtrg->dtrg_write_cnt];
-		dcri->dcri_shard_off = idx;
+		dcri->dcri_shard_off = shard_idx;
 		dcri->dcri_shard_id = shard->do_shard;
 		dcri->dcri_req_idx = req_idx;
 		dcri->dcri_padding = 0;
