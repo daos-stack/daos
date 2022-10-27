@@ -137,6 +137,10 @@ enum CheckFlag {
 	// Handle dangling pool when start the check instance. If not specify the flag, dangling
 	// pool will not be handled (by default) unless all pools are checked from the scratch.
 	CF_DANGLING_POOL = 16;
+	// Overwrite former set CF_FAILOUT flag, cannot be specified together with CF_FAILOUT.
+	CF_NO_FAILOUT	= 32;
+	// Overwrite former set CF_AUTO flag, cannot be specified together with CF_AUTO.
+	CF_NO_AUTO	= 64;
 
 	// More flags with 2^n.
 }

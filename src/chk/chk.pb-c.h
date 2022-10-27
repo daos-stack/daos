@@ -227,7 +227,15 @@ typedef enum _Chk__CheckFlag {
    * Handle dangling pool when start the check instance. If not specify the flag, dangling
    * pool will not be handled (by default) unless all pools are checked from the scratch.
    */
-  CHK__CHECK_FLAG__CF_DANGLING_POOL = 16
+  CHK__CHECK_FLAG__CF_DANGLING_POOL = 16,
+  /*
+   * Overwrite former set CF_FAILOUT flag, cannot be specified together with CF_FAILOUT.
+   */
+  CHK__CHECK_FLAG__CF_NO_FAILOUT = 32,
+  /*
+   * Overwrite former set CF_AUTO flag, cannot be specified together with CF_AUTO.
+   */
+  CHK__CHECK_FLAG__CF_NO_AUTO = 64
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CHK__CHECK_FLAG)
 } Chk__CheckFlag;
 /*
