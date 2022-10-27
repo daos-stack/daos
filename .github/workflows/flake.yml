@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - '**/*.py'
+      - .github/workflows/flake.yml
 
 jobs:
   flake8-lint:
@@ -14,11 +15,11 @@ jobs:
     name: Flake8 check
     steps:
       - name: Check out source repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3'
       - name: Add parser
