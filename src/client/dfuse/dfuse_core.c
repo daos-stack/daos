@@ -43,7 +43,6 @@ dfuse_progress_thread(void *arg)
 			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
 			ev->de_complete_cb(ev);
-			D_FREE(ev);
 		}
 	}
 	return NULL;
@@ -1055,12 +1054,57 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	D_FREE(ie);
 }
 
+static void
+dfuse_read_event_init(void *arg, void *handle)
+{
+	struct dfuse_event *ev = arg;
+
+	ev->de_handle = handle;
+}
+
+static bool
+dfuse_read_event_reset(void *arg)
+{
+	struct dfuse_event *ev = arg;
+	int                 rc;
+
+	if (ev->de_iov.iov_buf == NULL) {
+		D_ALLOC(ev->de_iov.iov_buf, 1024 * 1024);
+		if (ev->de_iov.iov_buf == NULL)
+			return false;
+
+		ev->de_iov.iov_len     = 1024 * 1024;
+		ev->de_iov.iov_buf_len = 1024 * 1024;
+		ev->de_sgl.sg_iovs     = &ev->de_iov;
+		ev->de_sgl.sg_nr       = 1;
+	}
+
+	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
+	if (rc != -DER_SUCCESS) {
+		return false;
+	}
+
+	return true;
+}
+
+static void
+dfuse_read_event_release(void *arg)
+{
+	struct dfuse_event *ev = arg;
+
+	D_FREE(ev->de_iov.iov_buf);
+}
+
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct fuse_args		args = {0};
-	struct dfuse_inode_entry	*ie = NULL;
-	int				rc;
+	struct fuse_args          args     = {0};
+	struct dfuse_inode_entry *ie       = NULL;
+	struct d_slab_reg         slab_reg = {.sr_init    = dfuse_read_event_init,
+					      .sr_reset   = dfuse_read_event_reset,
+					      .sr_release = dfuse_read_event_release,
+					      POOL_TYPE_INIT(dfuse_event, de_list)};
+	int                       rc;
 
 	args.argc = 5;
 
@@ -1124,6 +1168,14 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       &ie->ie_htl,
 			       false);
 	D_ASSERT(rc == -DER_SUCCESS);
+
+	rc = d_slab_init(&fs_handle->dpi_slab, fs_handle);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_ie_remove, rc);
+
+	fs_handle->dpi_read_slab = d_slab_register(&fs_handle->dpi_slab, &slab_reg);
+	if (fs_handle->dpi_read_slab == NULL)
+		D_GOTO(err_ie_remove, rc - DER_IO);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
@@ -1290,6 +1342,8 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
+
+	d_slab_destroy(&fs_handle->dpi_slab);
 
 	return 0;
 }

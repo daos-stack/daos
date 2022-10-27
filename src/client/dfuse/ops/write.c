@@ -15,6 +15,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	else
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
 	D_FREE(ev->de_iov.iov_buf);
+	D_FREE(ev);
 }
 
 void

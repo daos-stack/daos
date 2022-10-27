@@ -15,6 +15,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/slab.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -48,6 +49,10 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+
+	struct d_slab                    dpi_slab;
+	struct d_slab_type              *dpi_read_slab;
+	size_t                           dpi_max_read;
 };
 
 /* Launch fuse, and do not return until complete */
@@ -159,6 +164,8 @@ struct dfuse_event {
 	off_t                 de_req_position; /**< The file position requested by fuse */
 	d_iov_t               de_iov;
 	d_sg_list_t           de_sgl;
+	d_list_t                      de_list;
+	struct dfuse_projection_info *de_handle;
 	struct dfuse_obj_hdl *de_oh;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };

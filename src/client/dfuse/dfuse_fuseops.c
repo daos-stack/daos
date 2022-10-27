@@ -71,6 +71,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
 
+	fs_handle->dpi_max_read = conn->max_read;
+
 #if HAVE_CACHE_READDIR
 	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
 #else
