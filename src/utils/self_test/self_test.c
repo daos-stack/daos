@@ -1828,6 +1828,7 @@ int main(int argc, char *argv[])
 
 	if (use_daos_agent_vars == false) {
 		char *env;
+		char *attach_path;
 
 		env = getenv("CRT_PHY_ADDR_STR");
 		if (env == NULL) {
@@ -1842,7 +1843,6 @@ int main(int argc, char *argv[])
 			printf("Example: export OFI_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
-		char *attach_path;
 
 		if (attach_info_path)
 			attach_path = attach_info_path;
