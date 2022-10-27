@@ -739,9 +739,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     unique = get_random_string(5, self.used)
     self.used.append(unique)
     mount_dir = dfuse.mount_dir.value + unique
-    dfuse.mount_dir.update(mount_dir)
-    dfuse.set_dfuse_params(pool)
-    dfuse.set_dfuse_cont_param(container)
+    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.uuid)
     dfuse_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
