@@ -415,99 +415,159 @@ chk_pool_filter(uuid_t uuid, void *arg)
 	return found ? 0 : 1;
 }
 
-int
-chk_dup_label(char **tgt, const char *src, size_t len)
+void
+chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret)
 {
-	int	rc = 0;
+	struct chk_bookmark	*cbk;
+	struct chk_pool_rec	*cpr;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	char			 uuid_str[DAOS_UUID_STR_SIZE];
+	int			 rc = 0;
 
-	if (src == NULL) {
-		*tgt = NULL;
+	/*
+	 * Remove the pool record from the tree firstly, that will cause related scan ULT
+	 * for such pool to exit, and then can update the pool's bookmark without race.
+	 */
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, uuid, sizeof(uuid_t));
+	rc = dbtree_delete(ins->ci_pool_hdl, BTR_PROBE_EQ, &kiov, &riov);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
+			rc = 0;
+		else
+			D_ERROR("%s on rank %u failed to delete pool record "
+				DF_UUIDF" with status %u, phase %u: "DF_RC"\n",
+				ins->ci_is_leader ? "leader" : "engine", dss_self_rank(),
+				DP_UUID(uuid), status, phase, DP_RC(rc));
 	} else {
-		D_STRNDUP(*tgt, src, len);
-		if (*tgt == NULL)
-			rc = -DER_NOMEM;
+		cpr = (struct chk_pool_rec *)riov.iov_buf;
+		cbk = &cpr->cpr_bk;
+
+		chk_pool_wait(cpr);
+		chk_pool_shutdown(cpr);
+
+		if ((cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+		     cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) &&
+		    status != CHK_INVAL_STATUS) {
+			if (phase != CHK_INVAL_PHASE && phase > cbk->cb_phase)
+				cbk->cb_phase = phase;
+			cbk->cb_pool_status = status;
+			cbk->cb_time.ct_stop_time = time(NULL);
+			uuid_unparse_lower(uuid, uuid_str);
+			rc = chk_bk_update_pool(cbk, uuid_str);
+		}
+
+		/* Drop the reference that is held when create in chk_pool_alloc(). */
+		chk_pool_put(cpr);
 	}
 
+	if (ret != NULL)
+		*ret = rc;
+}
+
+int
+chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
+{
+	struct chk_traverse_pools_args	*ctpa = args;
+	char				*uuid_str = key->iov_buf;
+	struct chk_bookmark		 cbk;
+	int				 rc = 0;
+
+	if (!daos_is_valid_uuid_string(uuid_str))
+		D_GOTO(out, rc = 0);
+
+	rc = chk_bk_fetch_pool(&cbk, uuid_str);
+	if (rc != 0)
+		goto out;
+
+	if (cbk.cb_gen >= ctpa->ctpa_gen)
+		D_GOTO(out, rc = 0);
+
+	rc = chk_bk_delete_pool(uuid_str);
+
+out:
 	return rc;
 }
 
-void
-chk_stop_sched(struct chk_instance *ins)
+int
+chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 {
-	ABT_mutex_lock(ins->ci_abt_mutex);
-	if (ins->ci_sched != ABT_THREAD_NULL && ins->ci_sched_running) {
-		ins->ci_sched_running = 0;
-		ABT_cond_broadcast(ins->ci_abt_cond);
-		ABT_mutex_unlock(ins->ci_abt_mutex);
-		ABT_thread_free(&ins->ci_sched);
-	} else {
-		ABT_mutex_unlock(ins->ci_abt_mutex);
+	struct chk_bookmark	cbk;
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			rc;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	rc = chk_bk_fetch_pool(&cbk, uuid_str);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		goto out;
+
+	if (cbk.cb_magic != CHK_BK_MAGIC_POOL) {
+		cbk.cb_magic = CHK_BK_MAGIC_POOL;
+		cbk.cb_version = DAOS_CHK_VERSION;
+		cbk.cb_gen = gen;
+		cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+	} else if (cbk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED) {
+		chk_ins_set_fail(ins, cbk.cb_phase);
 	}
+
+	/* Always refresh the start time. */
+	cbk.cb_time.ct_start_time = time(NULL);
+	/* QUEST: How to estimate the left time? */
+	cbk.cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk.cb_phase;
+	cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
+				&cbk, ins, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
+
+	rc = chk_bk_update_pool(&cbk, uuid_str);
+	if (rc != 0)
+		chk_pool_del_shard(ins->ci_pool_hdl, uuid, dss_self_rank());
+
+out:
+	return rc;
 }
 
 int
-chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		 struct chk_policy *policies, int pool_nr, uuid_t pools[],
-		 uint32_t flags, int phase, d_rank_t leader,
-		 struct chk_property *prop, d_rank_list_t **rlist)
+chk_pools_add_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 {
-	d_rank_list_t	*result = NULL;
-	uint32_t	 saved = prop->cp_rank_nr;
-	int		 rc = 0;
-	int		 i;
+	struct chk_traverse_pools_args	*ctpa = args;
+	struct chk_instance		*ins = ctpa->ctpa_ins;
+	char				*uuid_str = key->iov_buf;
+	uuid_t				 uuid;
+	struct chk_bookmark		 cbk;
+	int				 rc = 0;
 
-	D_ASSERT(rlist != NULL);
+	if (!daos_is_valid_uuid_string(uuid_str))
+		D_GOTO(out, rc = 0);
 
-	if (rank_nr != 0) {
-		result = uint32_array_to_rank_list(ranks, rank_nr);
-		if (result == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	rc = chk_bk_fetch_pool(&cbk, uuid_str);
+	if (rc != 0)
+		goto out;
 
-		prop->cp_rank_nr = rank_nr;
-	} else if (*rlist == NULL) {
-		D_ERROR("Rank list cannot be NULL for check start\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	if (cbk.cb_gen != ctpa->ctpa_gen)
+		D_GOTO(out, rc = 0);
 
-	prop->cp_leader = leader;
-	prop->cp_flags = flags;
-	prop->cp_phase = phase;
+	if (cbk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED)
+		chk_ins_set_fail(ins, cbk.cb_phase);
 
-	/* Reuse former policies if "policy_nr == 0". */
-	if (policy_nr > 0) {
-		memset(prop->cp_policies, 0, sizeof(Chk__CheckInconsistAction) * CHK_POLICY_MAX);
-		for (i = 0; i < policy_nr; i++) {
-			if (unlikely(policies[i].cp_class >= CHK_POLICY_MAX)) {
-				D_ERROR("Invalid DAOS inconsistency class %u\n",
-					policies[i].cp_class);
-				D_GOTO(out, rc = -DER_INVAL);
-			}
+	uuid_parse(uuid_str, uuid);
 
-			prop->cp_policies[policies[i].cp_class] = policies[i].cp_action;
-		}
-	}
+	/* Always refresh the start time. */
+	cbk.cb_time.ct_start_time = time(NULL);
+	/* QUEST: How to estimate the left time? */
+	cbk.cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk.cb_phase;
+	cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
+				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
+	if (rc != 0)
+		goto out;
 
-	/* Reuse former pools if "pool_nr == 0". */
-	if (pool_nr >= CHK_POOLS_MAX || pool_nr < 0) {
-		prop->cp_pool_nr = -1;
-	} else if (pool_nr > 0) {
-		for (i = 0; i < pool_nr; i++)
-			uuid_copy(prop->cp_pools[i], pools[i]);
-		prop->cp_pool_nr = pool_nr;
-	}
-
-	if (prop->cp_pool_nr == 0)
-		prop->cp_pool_nr = -1;
-
-	rc = chk_prop_update(prop, result);
-	if (rc == 0) {
-		if (result != NULL)
-			*rlist = result;
-	} else {
-		/* Keep the prop->cp_rank_nr to always match the rank list. */
-		prop->cp_rank_nr = saved;
-		d_rank_list_free(result);
-	}
+	rc = chk_bk_update_pool(&cbk, uuid_str);
+	if (rc != 0)
+		chk_pool_del_shard(ctpa->ctpa_ins->ci_pool_hdl, uuid, dss_self_rank());
 
 out:
 	return rc;
@@ -677,24 +737,96 @@ chk_pending_destroy(struct chk_pending_rec *cpr)
 }
 
 int
-chk_ins_init(struct chk_instance *ins)
+chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		 struct chk_policy *policies, int pool_nr, uuid_t pools[],
+		 uint32_t flags, int phase, d_rank_t leader,
+		 struct chk_property *prop, d_rank_list_t **rlist)
 {
-	int	rc;
+	d_rank_list_t	*result = NULL;
+	uint32_t	 saved = prop->cp_rank_nr;
+	int		 rc = 0;
+	int		 i;
 
-	D_ASSERT(ins != NULL);
+	D_ASSERT(rlist != NULL);
 
-	D_INIT_LIST_HEAD(&ins->ci_pending_list);
-	ins->ci_sched = ABT_THREAD_NULL;
-	ins->ci_seq = crt_hlc_get();
-	ins->ci_pending_hdl = DAOS_HDL_INVAL;
+	if (rank_nr != 0) {
+		result = uint32_array_to_rank_list(ranks, rank_nr);
+		if (result == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 
-	if (ins->ci_is_leader) {
-		ins->ci_rank_hdl = DAOS_HDL_INVAL;
-		D_INIT_LIST_HEAD(&ins->ci_rank_list);
-	} else {
-		ins->ci_pool_hdl = DAOS_HDL_INVAL;
-		D_INIT_LIST_HEAD(&ins->ci_pool_list);
+		prop->cp_rank_nr = rank_nr;
+	} else if (*rlist == NULL) {
+		D_ERROR("Rank list cannot be NULL for check start\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	prop->cp_leader = leader;
+	prop->cp_flags = flags;
+	prop->cp_phase = phase;
+
+	/* Reuse former policies if "policy_nr == 0". */
+	if (policy_nr > 0) {
+		memset(prop->cp_policies, 0, sizeof(Chk__CheckInconsistAction) * CHK_POLICY_MAX);
+		for (i = 0; i < policy_nr; i++) {
+			if (unlikely(policies[i].cp_class >= CHK_POLICY_MAX)) {
+				D_ERROR("Invalid DAOS inconsistency class %u\n",
+					policies[i].cp_class);
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+
+			prop->cp_policies[policies[i].cp_class] = policies[i].cp_action;
+		}
+	}
+
+	/* Reuse former pools if "pool_nr == 0". */
+	if (pool_nr >= CHK_POOLS_MAX || pool_nr < 0) {
+		prop->cp_pool_nr = -1;
+	} else if (pool_nr > 0) {
+		for (i = 0; i < pool_nr; i++)
+			uuid_copy(prop->cp_pools[i], pools[i]);
+		prop->cp_pool_nr = pool_nr;
+	}
+
+	if (prop->cp_pool_nr == 0)
+		prop->cp_pool_nr = -1;
+
+	rc = chk_prop_update(prop, result);
+	if (rc == 0) {
+		if (result != NULL)
+			*rlist = result;
+	} else {
+		/* Keep the prop->cp_rank_nr to always match the rank list. */
+		prop->cp_rank_nr = saved;
+		d_rank_list_free(result);
+	}
+
+out:
+	return rc;
+}
+
+int
+chk_ins_init(struct chk_instance **p_ins)
+{
+	struct chk_instance	*ins = NULL;
+	int			 rc = 0;
+
+	D_ASSERT(p_ins != NULL);
+
+	D_ALLOC_PTR(ins);
+	if (ins == NULL)
+		D_GOTO(out_init, rc = -DER_NOMEM);
+
+	ins->ci_seq = crt_hlc_get();
+	ins->ci_sched = ABT_THREAD_NULL;
+
+	ins->ci_rank_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&ins->ci_rank_list);
+
+	ins->ci_pool_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&ins->ci_pool_list);
+
+	ins->ci_pending_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&ins->ci_pending_list);
 
 	rc = ABT_rwlock_create(&ins->ci_abt_lock);
 	if (rc != ABT_SUCCESS)
@@ -712,17 +844,23 @@ chk_ins_init(struct chk_instance *ins)
 
 out_mutex:
 	ABT_mutex_free(&ins->ci_abt_mutex);
-	ins->ci_abt_mutex = ABT_MUTEX_NULL;
 out_lock:
 	ABT_rwlock_free(&ins->ci_abt_lock);
-	ins->ci_abt_lock = ABT_RWLOCK_NULL;
 out_init:
+	if (rc == 0)
+		*p_ins = ins;
+
 	return rc;
 }
 
 void
-chk_ins_fini(struct chk_instance *ins)
+chk_ins_fini(struct chk_instance **p_ins)
 {
+	struct chk_instance	*ins;
+
+	D_ASSERT(p_ins != NULL);
+
+	ins = *p_ins;
 	if (ins == NULL)
 		return;
 
@@ -733,16 +871,14 @@ chk_ins_fini(struct chk_instance *ins)
 
 	d_rank_list_free(ins->ci_ranks);
 
+	D_ASSERT(daos_handle_is_inval(ins->ci_rank_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_rank_list));
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pending_list));
-
-	if (ins->ci_is_leader) {
-		D_ASSERT(daos_handle_is_inval(ins->ci_rank_hdl));
-		D_ASSERT(d_list_empty(&ins->ci_rank_list));
-	} else {
-		D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
-		D_ASSERT(d_list_empty(&ins->ci_pool_list));
-	}
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);
@@ -757,4 +893,5 @@ chk_ins_fini(struct chk_instance *ins)
 		ABT_rwlock_free(&ins->ci_abt_lock);
 
 	D_FREE(ins);
+	*p_ins = NULL;
 }

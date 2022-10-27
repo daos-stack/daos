@@ -29,12 +29,6 @@
 
 static struct chk_instance	*chk_engine;
 
-struct chk_traverse_pools_args {
-	uint64_t			 ctpa_gen;
-	struct chk_instance		*ctpa_ins;
-	uint32_t			 ctpa_status;
-};
-
 struct chk_query_pool_args {
 	struct chk_instance		*cqpa_ins;
 	uint32_t			 cqpa_cap;
@@ -165,85 +159,6 @@ btr_ops_t chk_cont_ops = {
 	.to_rec_fetch	= chk_cont_fetch,
 	.to_rec_update  = chk_cont_update,
 };
-
-static void
-chk_destroy_pool_tree(struct chk_instance *ins)
-{
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
-
-	/*
-	 * Take reference on each pool record to guarantee that the pool list will not be
-	 * broken when we traverse the pool list even if there is yield during the travel.
-	 */
-	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link)
-		chk_pool_get(cpr);
-
-	/*
-	 * Once the pool record is deleted from the tree, the initial reference held when
-	 * created will be released: if it is current ULT delete the record from the tree,
-	 * then it will be via chk_pool_free()->chk_pool_put(). Otherwise, if it has been
-	 * deleted from the tree by others, then related logic will call chk_pool_put().
-	 */
-	chk_destroy_tree(&ins->ci_pool_hdl, &ins->ci_pool_btr);
-
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-		chk_pool_wait(cpr);
-		chk_pool_shutdown(cpr);
-		/* Release the reference held just above. */
-		chk_pool_put(cpr);
-	}
-}
-
-static void
-chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, uint32_t status, uint32_t phase, int *ret)
-{
-	struct chk_bookmark	*cbk;
-	struct chk_pool_rec	*cpr;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	char			 uuid_str[DAOS_UUID_STR_SIZE];
-	int			 rc = 0;
-
-	/*
-	 * Remove the pool record from the tree firstly, that will cause related scan ULT
-	 * for such pool to exit, and then can update the pool's bookmark without race.
-	 */
-
-	d_iov_set(&riov, NULL, 0);
-	d_iov_set(&kiov, uuid, sizeof(uuid_t));
-	rc = dbtree_delete(ins->ci_pool_hdl, BTR_PROBE_EQ, &kiov, &riov);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
-			rc = 0;
-		else
-			D_ERROR(DF_ENGINE" on rank %u failed to delete pool record "
-				DF_UUIDF" with status %u: "DF_RC"\n",
-				DP_ENGINE(ins), dss_self_rank(), DP_UUID(uuid), status, DP_RC(rc));
-	} else {
-		cpr = (struct chk_pool_rec *)riov.iov_buf;
-		cbk = &cpr->cpr_bk;
-
-		chk_pool_wait(cpr);
-		chk_pool_shutdown(cpr);
-
-		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
-		    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) {
-			if (phase != CHK_INVAL_PHASE && phase > cbk->cb_phase)
-				cbk->cb_phase = phase;
-			cbk->cb_pool_status = status;
-			cbk->cb_time.ct_stop_time = time(NULL);
-			uuid_unparse_lower(uuid, uuid_str);
-			rc = chk_bk_update_pool(cbk, uuid_str);
-		}
-
-		/* Drop the reference that is held when create in chk_pool_alloc(). */
-		chk_pool_put(cpr);
-	}
-
-	if (ret != NULL)
-		*ret = rc;
-}
 
 static void
 chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_status)
@@ -1894,122 +1809,6 @@ out:
 	return rc;
 }
 
-/* Remove all old pool bookmarks. */
-static int
-chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
-{
-	struct chk_traverse_pools_args	*ctpa = args;
-	char				*uuid_str = key->iov_buf;
-	struct chk_bookmark		 cbk;
-	int				 rc = 0;
-
-	if (!daos_is_valid_uuid_string(uuid_str))
-		D_GOTO(out, rc = 0);
-
-	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc != 0)
-		goto out;
-
-	if (cbk.cb_gen >= ctpa->ctpa_gen)
-		D_GOTO(out, rc = 0);
-
-	rc = chk_bk_delete_pool(uuid_str);
-
-out:
-	return rc;
-}
-
-static int
-chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
-{
-	struct chk_bookmark	cbk;
-	char			uuid_str[DAOS_UUID_STR_SIZE];
-	int			rc;
-
-	uuid_unparse_lower(uuid, uuid_str);
-	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc != 0 && rc != -DER_NONEXIST)
-		goto out;
-
-	if (cbk.cb_magic != CHK_BK_MAGIC_POOL) {
-		cbk.cb_magic = CHK_BK_MAGIC_POOL;
-		cbk.cb_version = DAOS_CHK_VERSION;
-		cbk.cb_gen = gen;
-		cbk.cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
-	} else if (cbk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED) {
-		chk_ins_set_fail(ins, cbk.cb_phase);
-	}
-
-	/* Always refresh the start time. */
-	cbk.cb_time.ct_start_time = time(NULL);
-	/* XXX: How to estimate the left time? */
-	cbk.cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk.cb_phase;
-	cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid, dss_self_rank(),
-				&cbk, ins, NULL, NULL, NULL);
-	if (rc != 0)
-		goto out;
-
-	rc = chk_bk_update_pool(&cbk, uuid_str);
-	if (rc != 0)
-		chk_pool_del_shard(ins->ci_pool_hdl, uuid, dss_self_rank());
-
-out:
-	return rc;
-}
-
-static int
-chk_pools_add_from_dir(uuid_t uuid, void *args)
-{
-	struct chk_traverse_pools_args	*ctpa = args;
-	struct chk_instance		*ins = ctpa->ctpa_ins;
-
-	return chk_pool_start_one(ins, uuid, ctpa->ctpa_gen);
-}
-
-static int
-chk_pools_add_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
-{
-	struct chk_traverse_pools_args	*ctpa = args;
-	struct chk_instance		*ins = ctpa->ctpa_ins;
-	char				*uuid_str = key->iov_buf;
-	uuid_t				 uuid;
-	struct chk_bookmark		 cbk;
-	int				 rc = 0;
-
-	if (!daos_is_valid_uuid_string(uuid_str))
-		D_GOTO(out, rc = 0);
-
-	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc != 0)
-		goto out;
-
-	if (cbk.cb_gen != ctpa->ctpa_gen)
-		D_GOTO(out, rc = 0);
-
-	if (cbk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED)
-		chk_ins_set_fail(ins, cbk.cb_phase);
-
-	uuid_parse(uuid_str, uuid);
-
-	/* Always refresh the start time. */
-	cbk.cb_time.ct_start_time = time(NULL);
-	/* QUEST: How to estimate the left time? */
-	cbk.cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk.cb_phase;
-	cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
-				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
-	if (rc != 0)
-		goto out;
-
-	rc = chk_bk_update_pool(&cbk, uuid_str);
-	if (rc != 0)
-		chk_pool_del_shard(ctpa->ctpa_ins->ci_pool_hdl, uuid, dss_self_rank());
-
-out:
-	return rc;
-}
-
 int
 chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
@@ -3276,11 +3075,7 @@ chk_engine_init(void)
 	struct chk_bookmark	*cbk;
 	int			 rc;
 
-	D_ALLOC(chk_engine, sizeof(*chk_engine));
-	if (chk_engine == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = chk_ins_init(chk_engine);
+	rc = chk_ins_init(&chk_engine);
 	if (rc != 0)
 		goto fini;
 
@@ -3294,7 +3089,7 @@ chk_engine_init(void)
 	cbk = &chk_engine->ci_bk;
 	rc = chk_bk_fetch_engine(cbk);
 	if (rc == -DER_NONEXIST)
-		rc = 0;
+		goto prop;
 
 	/* It may be caused by local data corruption, let's break. */
 	if (rc != 0)
@@ -3306,24 +3101,33 @@ chk_engine_init(void)
 		D_GOTO(fini, rc = -DER_IO);
 	}
 
+	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+		/*
+		 * Leader crashed before normally exit, reset the status as 'PAUSED'
+		 * to avoid blocking next CHK_START.
+		 */
+		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_PAUSED;
+		cbk->cb_time.ct_stop_time = time(NULL);
+		rc = chk_bk_update_engine(cbk);
+		if (rc != 0) {
+			D_ERROR(DF_ENGINE" failed to reset status as 'PAUSED': "DF_RC"\n",
+				DP_ENGINE(chk_engine), DP_RC(rc));
+			goto fini;
+		}
+	}
+
+prop:
 	rc = chk_prop_fetch(&chk_engine->ci_prop, NULL);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
-
-	if (rc != 0)
-		goto fini;
-
-	goto out;
-
 fini:
-	chk_ins_fini(chk_engine);
-	chk_engine = NULL;
-out:
+	if (rc != 0)
+		chk_ins_fini(&chk_engine);
 	return rc;
 }
 
 void
 chk_engine_fini(void)
 {
-	chk_ins_fini(chk_engine);
+	chk_ins_fini(&chk_engine);
 }

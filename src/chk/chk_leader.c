@@ -25,57 +25,13 @@
 
 static struct chk_instance	*chk_leader;
 
-struct chk_sched_args {
-	struct chk_instance	*csa_ins;
-	struct btr_root		 csa_btr;
-	daos_handle_t		 csa_hdl;
-	d_list_t		 csa_list;
-	uint32_t		 csa_count;
-	uint32_t		 csa_refs;
+struct chk_query_args {
+	struct chk_instance	*cqa_ins;
+	struct btr_root		 cqa_btr;
+	daos_handle_t		 cqa_hdl;
+	d_list_t		 cqa_list;
+	uint32_t		 cqa_count;
 };
-
-static struct chk_sched_args *
-chk_csa_alloc(struct chk_instance *ins)
-{
-	struct umem_attr	 uma = { 0 };
-	struct chk_sched_args	*csa;
-	int			 rc;
-
-	D_ALLOC_PTR(csa);
-	if (csa == NULL)
-		goto out;
-
-	D_INIT_LIST_HEAD(&csa->csa_list);
-	csa->csa_refs = 1;
-	csa->csa_ins = ins;
-
-	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
-				   &csa->csa_btr, &csa->csa_hdl);
-	if (rc != 0)
-		D_FREE(csa);
-
-out:
-	return csa;
-}
-
-static inline void
-chk_csa_get(struct chk_sched_args *csa)
-{
-	csa->csa_refs++;
-}
-
-static inline void
-chk_csa_put(struct chk_sched_args *csa)
-{
-	if (csa != NULL) {
-		csa->csa_refs--;
-		if (csa->csa_refs == 0) {
-			dbtree_destroy(csa->csa_hdl, NULL);
-			D_FREE(csa);
-		}
-	}
-}
 
 struct chk_rank_rec {
 	/* Link into chk_instance::ci_rank_list. */
@@ -278,7 +234,7 @@ out:
 }
 
 static inline void
-chk_destroy_rank_tree(struct chk_instance *ins)
+chk_leader_destroy_trees(struct chk_instance *ins)
 {
 	/*
 	 * Because the pending reocrd is attached some rank record, then destroy
@@ -286,6 +242,7 @@ chk_destroy_rank_tree(struct chk_instance *ins)
 	 */
 	chk_destroy_pending_tree(ins);
 	chk_destroy_tree(&ins->ci_rank_hdl, &ins->ci_rank_btr);
+	chk_destroy_pool_tree(ins);
 }
 
 static void
@@ -309,7 +266,7 @@ chk_leader_exit(struct chk_instance *ins, uint32_t status, bool bcast)
 				DF_RC"\n", DP_LEADER(ins), status, DP_RC(rc));
 	}
 
-	chk_destroy_rank_tree(ins);
+	chk_leader_destroy_trees(ins);
 
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_ins_status = status;
@@ -399,42 +356,6 @@ chk_leader_cpr2ranklist(struct chk_pool_rec *cpr, bool svc)
 	}
 
 	return ranks;
-}
-
-static bool
-chk_pool_in_zombie(struct chk_pool_rec *cpr)
-{
-	struct chk_pool_shard	*cps;
-	struct ds_pool_clue	*clue;
-	bool			 found = false;
-
-	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-		clue = cps->cps_data;
-		if (clue->pc_dir == DS_POOL_DIR_ZOMBIE) {
-			found = true;
-			break;
-		}
-	}
-
-	return found;
-}
-
-static int
-chk_pool_has_err(struct chk_pool_rec *cpr)
-{
-	struct chk_pool_shard	*cps;
-	struct ds_pool_clue	*clue;
-	int			 rc = 0;
-
-	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-		clue = cps->cps_data;
-		if (clue->pc_rc < 0) {
-			rc = clue->pc_rc;
-			break;
-		}
-	}
-
-	return rc >= 0 ? 0 : rc;
 }
 
 static int
@@ -1560,11 +1481,11 @@ out:
 }
 
 static int
-chk_leader_handle_pools_list(struct chk_sched_args *csa)
+chk_leader_handle_pools_list(struct chk_instance *ins)
 {
 	struct chk_pool_filter_args	 cpfa = { 0 };
-	struct chk_property		*prop = &csa->csa_ins->ci_prop;
-	struct chk_bookmark		*cbk = &csa->csa_ins->ci_bk;
+	struct chk_property		*prop = &ins->ci_prop;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct ds_pool_clue		*clue = NULL;
 	struct chk_list_pool		*clp = NULL;
 	struct chk_pool_rec		*cpr;
@@ -1595,7 +1516,7 @@ chk_leader_handle_pools_list(struct chk_sched_args *csa)
 
 		d_iov_set(&riov, NULL, 0);
 		d_iov_set(&kiov, clp[i].clp_uuid, sizeof(uuid_t));
-		rc = dbtree_lookup(csa->csa_hdl, &kiov, &riov);
+		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
 		if (rc == 0) {
 			cpr = (struct chk_pool_rec *)riov.iov_buf;
 			cpr->cpr_exist_on_ms = 1;
@@ -1615,7 +1536,7 @@ chk_leader_handle_pools_list(struct chk_sched_args *csa)
 
 			rc = chk_leader_handle_pool_label(cpr, clue, &clp[i]);
 		} else if (rc == -DER_NONEXIST) {
-			rc = chk_leader_dangling_pool(csa->csa_ins, clp[i].clp_uuid);
+			rc = chk_leader_dangling_pool(ins, clp[i].clp_uuid);
 		} else {
 			D_ERROR("Failed to verify pool "DF_UUIDF" existence with %s: "DF_RC"\n",
 				DP_UUID(clp[i].clp_uuid), (prop->cp_flags &
@@ -1628,7 +1549,7 @@ chk_leader_handle_pools_list(struct chk_sched_args *csa)
 			goto out;
 	}
 
-	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
 		if (cpr->cpr_skip)
 			continue;
 
@@ -1678,7 +1599,7 @@ out:
 
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle pools list: "DF_RC"\n",
-			DP_LEADER(csa->csa_ins), DP_RC(rc));
+			DP_LEADER(ins), DP_RC(rc));
 
 	return rc;
 }
@@ -1767,13 +1688,13 @@ out_post:
 }
 
 static int
-chk_leader_handle_pools_svc(struct chk_sched_args *csa)
+chk_leader_handle_pools_svc(struct chk_instance *ins)
 {
 	struct chk_pool_rec	*cpr;
 	struct chk_pool_rec	*tmp;
 	int			 rc = 0;
 
-	d_list_for_each_entry_safe(cpr, tmp, &csa->csa_list, cpr_link) {
+	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
 		if (!cpr->cpr_skip) {
 			rc = chk_leader_start_pool_svc(cpr);
 			if (rc == 0 && !cpr->cpr_skip)
@@ -1808,8 +1729,7 @@ chk_leader_need_stop(struct chk_instance *ins)
 static void
 chk_leader_sched(void *args)
 {
-	struct chk_sched_args	*csa = args;
-	struct chk_instance	*ins = csa->csa_ins;
+	struct chk_instance	*ins = args;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	uint32_t		 phase;
 	uint32_t		 status;
@@ -1842,7 +1762,7 @@ handle:
 	 * still potential dangling pool entries on MS. Let's check it before complete.
 	 */
 	if (unlikely(d_list_empty(&ins->ci_rank_list))) {
-		rc = chk_leader_handle_pools_list(csa);
+		rc = chk_leader_handle_pools_list(ins);
 		if (rc == 0)
 			rc = 1;
 
@@ -1856,7 +1776,7 @@ handle:
 	}
 
 	if (cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_PREPARE) {
-		rc = chk_leader_handle_pools_list(csa);
+		rc = chk_leader_handle_pools_list(ins);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 
@@ -1877,7 +1797,7 @@ handle:
 		if (rc >= 0)
 			goto out;
 
-		rc = chk_leader_handle_pools_svc(csa);
+		rc = chk_leader_handle_pools_svc(ins);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 
@@ -1948,7 +1868,6 @@ out:
 	}
 
 	chk_leader_exit(ins, status, bcast);
-	chk_csa_put(csa);
 
 	D_INFO(DF_LEADER" scheduler exit at phase %u with status %u: "DF_RC"\n",
 	       DP_LEADER(ins), cbk->cb_phase, status, DP_RC(rc));
@@ -2149,7 +2068,7 @@ chk_leader_free_clue(void *data)
 static int
 chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void *data, uint32_t nr)
 {
-	struct chk_sched_args	*csa = args;
+	struct chk_instance	*ins = args;
 	struct ds_pool_clue	*clues = data;
 	struct ds_pool_clue	*clue;
 	int			 rc = 0;
@@ -2159,7 +2078,7 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 
 	/* The engine has completed the check, remove it from the rank list. */
 	if (result > 0) {
-		rc = chk_rank_del(csa->csa_ins, rank);
+		rc = chk_rank_del(ins, rank);
 		goto out;
 	}
 
@@ -2172,9 +2091,8 @@ chk_leader_start_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 		if (rc != 0)
 			goto out;
 
-		rc = chk_pool_add_shard(csa->csa_hdl, &csa->csa_list, clue->pc_uuid,
-					clue->pc_rank, NULL, csa->csa_ins, NULL,
-					clue, chk_leader_free_clue);
+		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, clue->pc_uuid,
+					clue->pc_rank, NULL, ins, NULL, clue, chk_leader_free_clue);
 		if (rc != 0) {
 			chk_leader_free_clue(clue);
 			goto out;
@@ -2190,7 +2108,7 @@ out:
 
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle start CB with ranks %u phase %d, result %d: "
-			DF_RC"\n", DP_LEADER(csa->csa_ins), rank, phase, result, DP_RC(rc));
+			DF_RC"\n", DP_LEADER(ins), rank, phase, result, DP_RC(rc));
 
 	return rc;
 }
@@ -2204,7 +2122,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	d_rank_list_t		*rank_list = ins->ci_ranks;
-	struct chk_sched_args	*csa = NULL;
 	struct chk_rank_bundle	 rbund = { 0 };
 	struct umem_attr	 uma = { 0 };
 	d_iov_t			 riov;
@@ -2229,7 +2146,14 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 		goto out_log;
 
 	D_ASSERT(rank_list != NULL);
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_rank_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
@@ -2263,6 +2187,11 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	if (rc != 0)
 		goto out_iv;
 
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
+				   &ins->ci_pool_btr, &ins->ci_pool_hdl);
+	if (rc != 0)
+		goto out_tree;
+
 	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_PA, 0, CHK_BTREE_ORDER, &uma,
 				   &ins->ci_pending_btr, &ins->ci_pending_hdl);
 	if (rc != 0)
@@ -2290,29 +2219,17 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 	if (rc != 0)
 		goto out_tree;
 
-	csa = chk_csa_alloc(ins);
-	if (csa == NULL)
-		D_GOTO(out_bk, rc = -DER_NOMEM);
-
-	/* Take another reference for RPC. */
-	chk_csa_get(csa);
-
 	ins->ci_sched_running = 1;
 
-	rc = dss_ult_create(chk_leader_sched, csa, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
+	rc = dss_ult_create(chk_leader_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
 			    &ins->ci_sched);
-	if (rc != 0) {
-		chk_csa_put(csa);
-		goto out_csa;
-	}
+	if (rc != 0)
+		goto out_bk;
 
 	rc = chk_start_remote(rank_list, cbk->cb_gen, rank_nr, ranks, policy_nr, policies,
-			      pool_nr, pools, flags, phase, myrank, chk_leader_start_cb, csa);
+			      pool_nr, pools, flags, phase, myrank, chk_leader_start_cb, ins);
 	if (rc != 0)
 		goto out_sched;
-
-	/* Drop the reference for RPC. */
-	chk_csa_put(csa);
 
 	ABT_mutex_lock(ins->ci_abt_mutex);
 	ins->ci_started = 1;
@@ -2323,8 +2240,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks,
 
 out_sched:
 	chk_stop_sched(ins);
-out_csa:
-	chk_csa_put(csa);
 out_bk:
 	if (rc != -DER_ALREADY && cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_time.ct_stop_time = time(NULL);
@@ -2332,7 +2247,7 @@ out_bk:
 		chk_bk_update_leader(cbk);
 	}
 out_tree:
-	chk_destroy_rank_tree(ins);
+	chk_leader_destroy_trees(ins);
 out_iv:
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 out_group:
@@ -2502,7 +2417,7 @@ chk_leader_free_shard(void *data)
 static int
 chk_leader_query_cb(void *args, uint32_t rank, uint32_t phase, int result, void *data, uint32_t nr)
 {
-	struct chk_sched_args		*csa = args;
+	struct chk_query_args		*cqa = args;
 	struct chk_query_pool_shard	*shards = data;
 	struct chk_query_pool_shard	*shard;
 	int				 rc = 0;
@@ -2519,8 +2434,8 @@ chk_leader_query_cb(void *args, uint32_t rank, uint32_t phase, int result, void 
 		if (rc != 0)
 			goto out;
 
-		rc = chk_pool_add_shard(csa->csa_hdl, &csa->csa_list, shard->cqps_uuid,
-					shard->cqps_rank, NULL, csa->csa_ins, &csa->csa_count,
+		rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, shard->cqps_uuid,
+					shard->cqps_rank, NULL, cqa->cqa_ins, &cqa->cqa_count,
 					shard, chk_leader_free_shard);
 		if (rc != 0) {
 			chk_leader_free_shard(shard);
@@ -2537,9 +2452,42 @@ out:
 
 	if (rc != 0)
 		D_ERROR(DF_LEADER" failed to handle query CB with ranks %u phase %d, result %d: "
-			DF_RC"\n", DP_LEADER(csa->csa_ins), rank, phase, result, DP_RC(rc));
+			DF_RC"\n", DP_LEADER(cqa->cqa_ins), rank, phase, result, DP_RC(rc));
 
 	return rc;
+}
+
+static struct chk_query_args *
+chk_cqa_alloc(struct chk_instance *ins)
+{
+	struct umem_attr	 uma = { 0 };
+	struct chk_query_args	*cqa;
+	int			 rc;
+
+	D_ALLOC_PTR(cqa);
+	if (cqa == NULL)
+		goto out;
+
+	D_INIT_LIST_HEAD(&cqa->cqa_list);
+	cqa->cqa_ins = ins;
+
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
+				   &cqa->cqa_btr, &cqa->cqa_hdl);
+	if (rc != 0)
+		D_FREE(cqa);
+
+out:
+	return cqa;
+}
+
+static void
+chk_cqa_free(struct chk_query_args *cqa)
+{
+	if (cqa != NULL) {
+		dbtree_destroy(cqa->cqa_hdl, NULL);
+		D_FREE(cqa);
+	}
 }
 
 int
@@ -2548,7 +2496,7 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_sched_args	*csa = NULL;
+	struct chk_query_args	*cqa = NULL;
 	struct chk_pool_rec	*cpr;
 	struct chk_pool_shard	*cps;
 	uint32_t		 idx = 0;
@@ -2574,31 +2522,31 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 			D_GOTO(out, rc = -DER_NOTLEADER);
 	}
 
-	csa = chk_csa_alloc(ins);
-	if (csa == NULL)
+	cqa = chk_cqa_alloc(ins);
+	if (cqa == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = chk_query_remote(ins->ci_ranks, ins->ci_bk.cb_gen, pool_nr,
-			      pools, chk_leader_query_cb, csa);
+			      pools, chk_leader_query_cb, cqa);
 	if (rc != 0)
 		goto out;
 
 	rc = head_cb(cbk->cb_ins_status, cbk->cb_phase, &cbk->cb_statistics, &cbk->cb_time,
-		     csa->csa_count, buf);
+		     cqa->cqa_count, buf);
 	if (rc != 0)
 		goto out;
 
-	d_list_for_each_entry(cpr, &csa->csa_list, cpr_link) {
+	d_list_for_each_entry(cpr, &cqa->cqa_list, cpr_link) {
 		d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 			rc = pool_cb(cps->cps_data, idx++, buf);
 			if (rc != 0)
 				goto out;
 
-			D_ASSERT(csa->csa_count >= idx);
+			D_ASSERT(cqa->cqa_count >= idx);
 		}
 	}
 out:
-	chk_csa_put(csa);
+	chk_cqa_free(cqa);
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n",
 		 cbk->cb_gen, pool_nr, DP_RC(rc));
@@ -2928,14 +2876,11 @@ chk_leader_init(void)
 	struct chk_bookmark	*cbk;
 	int			 rc;
 
-	D_ALLOC(chk_leader, sizeof(*chk_leader));
-	if (chk_leader == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	chk_leader->ci_is_leader = 1;
-	rc = chk_ins_init(chk_leader);
+	rc = chk_ins_init(&chk_leader);
 	if (rc != 0)
 		goto fini;
+
+	chk_leader->ci_is_leader = 1;
 
 	/*
 	 * XXX: DAOS global consistency check depends on all related engines' local
@@ -2947,7 +2892,7 @@ chk_leader_init(void)
 	cbk = &chk_leader->ci_bk;
 	rc = chk_bk_fetch_leader(cbk);
 	if (rc == -DER_NONEXIST)
-		rc = 0;
+		goto prop;
 
 	/* It may be caused by local data corruption, let's break. */
 	if (rc != 0)
@@ -2959,23 +2904,28 @@ chk_leader_init(void)
 		D_GOTO(fini, rc = -DER_IO);
 	}
 
+	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+		/*
+		 * Leader crashed before normally exit, reset the status as 'PAUSED'
+		 * to avoid blocking next CHK_START.
+		 */
+		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_PAUSED;
+		cbk->cb_time.ct_stop_time = time(NULL);
+		rc = chk_bk_update_leader(cbk);
+		if (rc != 0) {
+			D_ERROR(DF_LEADER" failed to reset status as 'PAUSED': "DF_RC"\n",
+				DP_LEADER(chk_leader), DP_RC(rc));
+			goto fini;
+		}
+	}
+
+prop:
 	rc = chk_prop_fetch(&chk_leader->ci_prop, &chk_leader->ci_ranks);
-	if (rc == -DER_NONEXIST)
-		rc = 0;
-
-	if (rc != 0)
-		goto fini;
-
-	rc = crt_register_event_cb(chk_leader_mark_rank_dead, NULL);
-	if (rc != 0)
-		goto fini;
-
-	goto out;
-
+	if (rc == 0 || rc == -DER_NONEXIST)
+		rc = crt_register_event_cb(chk_leader_mark_rank_dead, NULL);
 fini:
-	chk_ins_fini(chk_leader);
-	chk_leader = NULL;
-out:
+	if (rc != 0)
+		chk_ins_fini(&chk_leader);
 	return rc;
 }
 
@@ -2983,5 +2933,5 @@ void
 chk_leader_fini(void)
 {
 	crt_unregister_event_cb(chk_leader_mark_rank_dead, NULL);
-	chk_ins_fini(chk_leader);
+	chk_ins_fini(&chk_leader);
 }
