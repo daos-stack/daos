@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -25,14 +24,15 @@ def extract_redundancy_factor(oclass):
         return int(match.group(1)) - 1
     return 0
 
-def calculate_min_servers(oclass):
-    """Calculate the minimum number of required servers for an object class.
+
+def calculate_min_engines(oclass):
+    """Calculate the minimum number of required engines for an object class.
 
     Args:
         oclass (str): the object class.
 
     Returns:
-        int: the minimum number of required servers.
+        int: the minimum number of required engines.
 
     """
     patterns = [
@@ -40,7 +40,7 @@ def calculate_min_servers(oclass):
         "RP_([0-9]+)"
     ]
     for pattern in patterns:
-        # Findall returns a list where each element is a tuple of groups ()
+        # returns a list where each element is a tuple of groups ()
         match = re.findall(pattern, oclass)
         if match:
             # Sum all groups (). Only index 0 should exist.
