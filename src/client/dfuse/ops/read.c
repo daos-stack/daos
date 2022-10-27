@@ -83,5 +83,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	d_slab_release(fs_handle->dpi_read_slab, ev);
+	if (ev)
+		d_slab_release(fs_handle->dpi_read_slab, ev);
 }
