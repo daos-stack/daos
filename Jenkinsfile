@@ -718,6 +718,8 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
+                                 unstash_tests: false,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
