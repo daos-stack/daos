@@ -78,6 +78,26 @@ class RemoteCommandResult():
         """
         return any(data.timeout for data in self.output)
 
+    @property
+    def passed_hosts(self):
+        """Get all passed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command passed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode == 0)
+
+    @property
+    def failed_hosts(self):
+        """Get all failed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command failed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 
