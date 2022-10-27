@@ -48,14 +48,6 @@ dc_deprecated(tse_task_t *task)
 }
 
 int
-dc_reserved(tse_task_t *task)
-{
-	D_ERROR("This API is reserved for future use\n");
-	tse_task_complete(task, -DER_NOSYS);
-	return -DER_NOSYS;
-}
-
-int
 dc_mgmt_profile(char *path, int avg, bool start)
 {
 	struct dc_mgmt_sys	*sys;

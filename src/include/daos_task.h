@@ -119,21 +119,9 @@ typedef enum {
 	DAOS_OPC_KV_LIST,
 
 	/** More Pool APIs */
-	DAOS_OPC_POOL_FILTER_CONT = 79,
+	DAOS_OPC_POOL_FILTER_CONT,
 
-	/* Reserve to 128 opcodes for more APIs */
-
-	/** More Container APIs */
-
-	/** More Transaction APIs */
-
-	/** More Object APIs */
-
-	/** More Array APIs */
-
-	/** More KV APIs */
-
-	DAOS_OPC_MAX = 127,
+	DAOS_OPC_MAX
 } daos_opc_t;
 
 /** mgmt set params */

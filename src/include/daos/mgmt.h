@@ -27,7 +27,6 @@ struct cp_arg {
 
 int dc_cp(tse_task_t *task, void *data);
 int dc_deprecated(tse_task_t *task);
-int dc_reserved(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_get_bs_state(tse_task_t *task);
 

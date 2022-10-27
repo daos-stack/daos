@@ -9,7 +9,7 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
-#include <daos_cont.h>
+#include <daos_types.h>
 
 #define daos_pool_connect daos_pool_connect2
 
@@ -503,13 +503,13 @@ daos_pool_cont_filter_func_str(enum daos_pool_cont_filter_func f)
 	}
 }
 
-/** container metadata key numeric identifier */
+/** container metadata key numeric identifier (specify in daos_pool_cont_filter_part_t.pcfp_key) */
 enum daos_pool_cont_filter_key {
-	/** container metadata open time (UNIX time or HLC?). */
+	/** container metadata open time (use with daos_pool_cont_filter_part_t.pcfp_val64) */
 	PCF_KEY_MD_OTIME = 0,
-	/** container metadata modify time (UNIX time or HLC?). */
+	/** container metadata modify time (use with daos_pool_cont_filter_part_t.pcfp_val64) */
 	PCF_KEY_MD_MTIME,
-	/** container number of snapshots */
+	/** container number of snapshots (use with daos_pool_cont_filter_part_t.pcfp_val64) */
 	PCF_KEY_NUM_SNAPSHOTS,
 	/* TODO: add number of open handles, e.g., PCF_KEY_NUM_HANDLES
 	 * when available in pool/container service
@@ -534,9 +534,13 @@ daos_pool_cont_filter_key_str(enum daos_pool_cont_filter_key k)
 
 /** Logical condition part of a filter of a pool's containers. */
 typedef struct daos_pool_cont_filter_part {
-	/** logical function to apply (e.g., <, >, == ; see daos_pool_cont_filter_func) */
+	/** logical function to apply (e.g., <, >, ==). See daos_pool_cont_filter_func) */
 	uint32_t			pcfp_func;
+
+	/** key identifier. See daos_pool_cont_filter_key) */
 	uint32_t			pcfp_key;
+
+	/** value to compare current metadata value with */
 	union {
 		uint64_t		pcfp_val64;
 		d_string_t		pcfp_valstr;
