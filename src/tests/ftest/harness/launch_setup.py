@@ -37,8 +37,8 @@ class HarnessLaunchSetupTest(TestWithoutServers):
                 self.fail('Group {} does not exist'.format(group))
             gid = group_result.output[0].stdout[0].split(':')[2]
             self.log.info('Querying user %s', user)
-            user_result = run_remote(self.log, hostlist_clients, f'id {user}')
+            user_result = run_remote(self.log, hostlist_clients, 'id {}'.format(user))
             if not user_result.passed:
                 self.fail('Error querying user {}'.format(user))
-            if not re.findall(rf'groups={gid}\(', user_result.output[0].stdout[0]):
+            if not re.findall(r'groups={}\('.format(gid), user_result.output[0].stdout[0]):
                 self.fail('User {} groups not as expected'.format(user))
