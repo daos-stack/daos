@@ -1446,7 +1446,7 @@ def create_cont(conf,
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties', f'label:{label}'])
+        cmd.append(label)
 
     if path:
         cmd.extend(['--path', path])
