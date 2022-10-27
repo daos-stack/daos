@@ -1767,7 +1767,7 @@ class Launch():
             create (bool, optional): whether to create the group if non-existent
 
         Raises:
-            LaunchException: if there is an errory querying or creating the group
+            LaunchException: if there is an error querying or creating the group
 
         Returns:
             str: the group's gid
@@ -1793,7 +1793,7 @@ class Launch():
 
     @staticmethod
     def _query_create_user(hosts, user, gid=None, create=False):
-        """Query and optionaly create a user on remote hosts.
+        """Query and optionally create a user on remote hosts.
 
         Args:
             hosts (NodeSet): hosts on which to query and create the group
@@ -1802,7 +1802,7 @@ class Launch():
             create (bool, optional): whether to create the group if non-existent. Default is False
 
         Raises:
-            LaunchException: if there is an errory querying or creating the user
+            LaunchException: if there is an error querying or creating the user
 
         """
         user_exists = False
@@ -1814,7 +1814,7 @@ class Launch():
                 logger.info('here1')
                 raise LaunchException(f'Error querying user {user}')
             user_exists = True
-            if not re.findall(f'groups={gid}\(', result.output[0].stdout[0]):
+            if not re.findall(rf'groups={gid}\(', result.output[0].stdout[0]):
                 raise LaunchException(f'User {user} groups not as expected')
         except LaunchException:
             if not create:
@@ -2147,6 +2147,7 @@ class Launch():
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
                   core_files, threshold, user_create):
+        # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:

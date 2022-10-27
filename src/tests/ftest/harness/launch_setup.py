@@ -40,5 +40,5 @@ class HarnessLaunchSetupTest(TestWithoutServers):
             user_result = run_remote(self.log, hostlist_clients, f'id {user}')
             if not user_result.passed:
                 self.fail('Error querying user {}'.format(user))
-            if not re.findall(f'groups={gid}\(', user_result.output[0].stdout[0]):
+            if not re.findall(rf'groups={gid}\(', user_result.output[0].stdout[0]):
                 self.fail('User {} groups not as expected'.format(user))
