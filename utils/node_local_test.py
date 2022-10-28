@@ -4276,6 +4276,7 @@ def test_alloc_cont_create(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
+    test_cmd.check_post_stdout = False
 
     return test_cmd.launch()
 

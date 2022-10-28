@@ -290,10 +290,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_label_is_valid(
-						prop->dpp_entries[i].dpe_str)) {
-				D_ERROR("invalid label \"%s\"\n",
-					prop->dpp_entries[i].dpe_str);
+			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
 				return false;
 			}
 			break;
