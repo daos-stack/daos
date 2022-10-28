@@ -820,13 +820,17 @@ class YamlCommand(SubProcessCommand):
         if self.yaml is not None and hasattr(self.yaml, "get_params"):
             self.yaml.get_params(test)
 
-    def create_yaml_file(self):
+    def create_yaml_file(self, yaml_data=None):
         """Create the yaml file with the current yaml file parameters.
 
         This should be called before running the daos command and after all the
         yaml file parameters have been defined.  Any updates to the yaml file
         parameter definitions would require calling this method before calling
         the daos command in order for them to have any effect.
+
+        Args:
+            yaml_data (object, optional): data to use in place of information
+                stored in self.yaml to create the yaml file. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file.
@@ -835,7 +839,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
-            if self.yaml.create_yaml(self.temporary_file):
+            if self.yaml.create_yaml(self.temporary_file, yaml_data):
                 self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):

@@ -555,15 +555,17 @@ class YamlParameters(ObjectWithParameters):
         for name in self.get_param_names():
             getattr(self, name).updated = False
 
-    def create_yaml(self, filename=None):
+    def create_yaml(self, filename=None, yaml_data=None):
         """Create a yaml file from the parameter values.
 
         A yaml file will only be created if at least one of its parameter values
         have be updated (BasicParameter.updated = True).
 
         Args:
-            filename (str, optional): the yaml file to generate with the
-                parameters. Defaults to None, which uses self.filename.
+            filename (str, optional): the yaml file to generate with the parameters. Defaults to
+                None, which uses self.filename.
+            yaml_data (object, optional): data to use in place of get_yaml_data() when writing the
+                yaml file. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error creating the yaml file
@@ -572,12 +574,13 @@ class YamlParameters(ObjectWithParameters):
             bool: whether or not an updated yaml file was created
 
         """
-        create_yaml = self.is_yaml_data_updated()
+        create_yaml = True if yaml_data else self.is_yaml_data_updated()
         if create_yaml:
             # Write a new yaml file if any of the parameters have been updated
             if filename is None:
                 filename = self.filename
-            yaml_data = self.get_yaml_data()
+            if yaml_data is None:
+                yaml_data = self.get_yaml_data()
             self.log.info("Writing yaml configuration file %s", filename)
             try:
                 with open(filename, 'w') as write_file:
