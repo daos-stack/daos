@@ -83,7 +83,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
-
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
@@ -2056,30 +2055,6 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
-
-
-/**
- * Retrieve a secondary uri of self for the specified tag.
- * The uri must be freed by the user using D_FREE().
- *
- * \param[in] idx               Secondary provider index
- * \param[out] uri              Returned uri string This is a NULL terminated
- *                              string of size up to CRT_ADDR_STR_MAX_LEN
- *                              (including the trailing NULL). Must be freed by
- *                              the user.
- *
- * \return                      DER_SUCCESS on success, negative value
- *                              on failure.
- */
-int crt_self_uri_get_secondary(int idx, char **uri);
-
-/**
- * Returns number of secondary providers initialized.
- *
- * \return                      Number of secondary providers.
- */
-int
-crt_get_nr_secondary_providers(void);
 
 /**
  * Retrieve incarnation of self.
