@@ -9,7 +9,6 @@ from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
 
 
-
 class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
