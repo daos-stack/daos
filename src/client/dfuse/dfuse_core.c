@@ -1174,7 +1174,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	fs_handle->dpi_read_slab = d_slab_register(&fs_handle->dpi_slab, &slab_reg);
 	if (fs_handle->dpi_read_slab == NULL)
-		D_GOTO(err_ie_remove, rc = -DER_IO);
+		D_GOTO(err_ie_remove, rc - DER_IO); /* TODO: fix this */
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
@@ -1189,9 +1189,10 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		return rc;
 
 err_ie_remove:
+	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
