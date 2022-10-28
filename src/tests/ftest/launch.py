@@ -1923,9 +1923,11 @@ def install_debuginfos():
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
-                'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
-                'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5',
+                'libabt0' if "suse" in distro_info.name.lower() else "argobots",
+                'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
+                'hdf5-vol-daos-mpich-tests', 'hdf5-vol-daos-openmpi',
+                'hdf5-vol-daos-openmpi-tests', 'ior']:
         try:
             debug_pkg = resolve_debuginfo(pkg)
         except RuntimeError as error:
