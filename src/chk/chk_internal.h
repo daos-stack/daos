@@ -525,6 +525,7 @@ struct chk_pool_rec {
 				 cpr_done:1,
 				 cpr_skip:1,
 				 cpr_for_orphan:1,
+				 cpr_notified_exit:1,
 				 cpr_destroyed:1,
 				 cpr_healthy:1,
 				 cpr_delay_label:1,
@@ -1023,6 +1024,29 @@ chk_pools_add_from_dir(uuid_t uuid, void *args)
 	struct chk_traverse_pools_args	*ctpa = args;
 
 	return chk_pool_start_one(ctpa->ctpa_ins, uuid, ctpa->ctpa_gen);
+}
+
+static inline uint32_t
+chk_pools_find_slowest(struct chk_instance *ins, bool *done)
+{
+	struct chk_pool_rec	*cpr;
+	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+
+	if (done != NULL)
+		*done = true;
+
+	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+		if (cpr->cpr_skip || cpr->cpr_done)
+			continue;
+
+		if (done != NULL)
+			*done = false;
+
+		if (cpr->cpr_bk.cb_phase < phase)
+			phase = cpr->cpr_bk.cb_phase;
+	}
+
+	return phase;
 }
 
 static inline int

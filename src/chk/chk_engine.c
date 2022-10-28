@@ -198,29 +198,6 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 	}
 }
 
-static uint32_t
-chk_engine_find_slowest(struct chk_instance *ins, bool *done)
-{
-	struct chk_pool_rec	*cpr;
-	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
-
-	if (done != NULL)
-		*done = true;
-
-	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
-		if (cpr->cpr_skip || cpr->cpr_done)
-			continue;
-
-		if (done != NULL)
-			*done = false;
-
-		if (cpr->cpr_bk.cb_phase < phase)
-			phase = cpr->cpr_bk.cb_phase;
-	}
-
-	return phase;
-}
-
 static inline void
 chk_engine_post_repair(struct chk_instance *ins, int *result)
 {
@@ -1571,7 +1548,7 @@ chk_engine_sched(void *args)
 
 		dss_sleep(300);
 
-		phase = chk_engine_find_slowest(ins, &done);
+		phase = chk_pools_find_slowest(ins, &done);
 		if (done) {
 			D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
 			D_GOTO(out, rc = 1);
@@ -2891,7 +2868,7 @@ chk_engine_rejoin(void)
 	if (rc != 0)
 		goto out;
 
-	phase = chk_engine_find_slowest(ins, NULL);
+	phase = chk_pools_find_slowest(ins, NULL);
 	if (phase != cbk->cb_phase)
 		need_iv = true;
 
