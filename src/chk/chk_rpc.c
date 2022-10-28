@@ -59,9 +59,8 @@ chk_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		if (out_result->cso_child_status == 0)
 			out_result->cso_child_status = out_source->cso_status;
 	} else {
-		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_phase,
-			      out_source->cso_status, out_source->cso_clues.ca_arrays,
-			      out_source->cso_clues.ca_count);
+		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_status,
+			      out_source->cso_clues.ca_arrays, out_source->cso_clues.ca_count);
 		if (rc != 0 && out_result->cso_child_status == 0)
 			out_result->cso_child_status = rc;
 	}
@@ -84,8 +83,8 @@ chk_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 
 		if (out_result->cso_child_status == 0)
 			out_result->cso_child_status = out_source->cso_status;
-	} else if (out_source->cso_status > 0) {
-		rc = ccrp->cb(ccrp->args, out_source->cso_rank, 0, out_source->cso_status, NULL, 0);
+	} else if (out_source->cso_status > 0 && ccrp->cb != NULL) {
+		rc = ccrp->cb(ccrp->args, out_source->cso_rank, out_source->cso_status, NULL, 0);
 		if (rc != 0 && out_result->cso_child_status == 0)
 			out_result->cso_child_status = rc;
 	}
@@ -109,7 +108,7 @@ chk_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		if (out_result->cqo_child_status == 0)
 			out_result->cqo_child_status = out_source->cqo_status;
 	} else {
-		rc = ccrp->cb(ccrp->args, 0, 0, out_source->cqo_status,
+		rc = ccrp->cb(ccrp->args, 0, out_source->cqo_status,
 			      out_source->cqo_shards.ca_arrays, out_source->cqo_shards.ca_count);
 		if (rc != 0 && out_result->cqo_child_status == 0)
 			out_result->cqo_child_status = rc;
@@ -170,7 +169,7 @@ chk_cont_list_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 		if (out_result->cclo_child_status == 0)
 			out_result->cclo_child_status = out_source->cclo_status;
 	} else {
-		rc = ccrp->cb(ccrp->args, out_source->cclo_rank, 0, 0,
+		rc = ccrp->cb(ccrp->args, out_source->cclo_rank, 0,
 			      out_source->cclo_conts.ca_arrays, out_source->cclo_conts.ca_count);
 		if (rc != 0 && out_result->cclo_child_status == 0)
 			out_result->cclo_child_status = rc;
@@ -258,7 +257,7 @@ chk_sg_rpc_prepare(d_rank_t rank, crt_opcode_t opc, crt_rpc_t **req)
 int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		 uuid_t pools[], uint32_t flags, int phase, d_rank_t leader,
+		 uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
 		 chk_co_rpc_cb_t start_cb, void *args)
 {
 	struct chk_co_rpc_priv	 ccrp;
@@ -278,6 +277,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	csi->csi_flags = flags;
 	csi->csi_phase = phase;
 	csi->csi_leader_rank = leader;
+	csi->csi_api_flags = flags;
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
 	csi->csi_policies.ca_count = policy_nr;
@@ -309,7 +309,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		 *	as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
-			rc = start_cb(args, cso->cso_rank, cso->cso_phase, cso->cso_status,
+			rc = start_cb(args, cso->cso_rank, cso->cso_status,
 				      cso->cso_clues.ca_arrays, cso->cso_clues.ca_count);
 	}
 
@@ -364,8 +364,8 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		 *	engines, does not include the check engine on the same rank
 		 *	as the check leader resides. Let's aggregate it here.
 		 */
-		if (rc > 0)
-			rc = stop_cb(args, cso->cso_rank, 0, cso->cso_status, NULL, 0);
+		if (rc > 0 && stop_cb != NULL)
+			rc = stop_cb(args, cso->cso_rank, cso->cso_status, NULL, 0);
 	}
 
 out:
@@ -423,7 +423,7 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		 *	as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc == 0)
-			rc = query_cb(args, 0, 0, cqo->cqo_status, cqo->cqo_shards.ca_arrays,
+			rc = query_cb(args, 0, cqo->cqo_status, cqo->cqo_shards.ca_arrays,
 				      cqo->cqo_shards.ca_count);
 	}
 
@@ -560,7 +560,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		 *	resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
-			rc = list_cb(args, cclo->cclo_rank, 0, 0,
+			rc = list_cb(args, cclo->cclo_rank, 0,
 				     cclo->cclo_conts.ca_arrays, cclo->cclo_conts.ca_count);
 	}
 
@@ -987,7 +987,7 @@ crt_proc_struct_ds_pool_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct ds_p
 	if (unlikely(rc != 0))
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_padding);
+	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_phase);
 	if (unlikely(rc != 0))
 		return rc;
 

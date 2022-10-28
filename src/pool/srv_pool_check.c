@@ -254,9 +254,14 @@ glance_at_one(uuid_t uuid, void *varg)
 {
 	struct glance_arg      *arg = varg;
 	struct ds_pool_clues   *clues = &arg->ga_clues;
+	int			phase = 0;
+	int			rc;
 
-	if (arg->ga_filter != NULL && arg->ga_filter(uuid, arg->ga_filter_arg) != 0)
-		goto out;
+	if (arg->ga_filter != NULL) {
+		rc = arg->ga_filter(uuid, arg->ga_filter_arg, &phase);
+		if (rc != 0)
+			goto out;
+	}
 
 	if (clues->pcs_cap < clues->pcs_len + 1) {
 		int			new_cap = clues->pcs_cap;
@@ -277,6 +282,7 @@ glance_at_one(uuid_t uuid, void *varg)
 	}
 
 	ds_pool_clue_init(uuid, arg->ga_dir, &clues->pcs_array[clues->pcs_len]);
+	clues->pcs_array[clues->pcs_len].pc_phase = phase;
 	clues->pcs_len++;
 
 out:

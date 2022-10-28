@@ -199,75 +199,26 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 }
 
 static uint32_t
-chk_engine_find_slowest(struct chk_instance *ins)
+chk_engine_find_slowest(struct chk_instance *ins, bool *done)
 {
 	struct chk_pool_rec	*cpr;
 	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
 
+	if (done != NULL)
+		*done = true;
+
 	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
-		if (cpr->cpr_skip)
+		if (cpr->cpr_skip || cpr->cpr_done)
 			continue;
+
+		if (done != NULL)
+			*done = false;
 
 		if (cpr->cpr_bk.cb_phase < phase)
 			phase = cpr->cpr_bk.cb_phase;
 	}
 
 	return phase;
-}
-
-static int
-chk_engine_setup_pools(struct chk_instance *ins)
-{
-	struct chk_property	*prop = &ins->ci_prop;
-	struct chk_bookmark	*eng_bk = &ins->ci_bk;
-	struct chk_bookmark	*pool_bk;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
-	uuid_t			 uuid;
-	char			 uuid_str[DAOS_UUID_STR_SIZE];
-	int			 rc = 0;
-	int			 rc1;
-
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-		if (cpr->cpr_started || cpr->cpr_stop)
-			continue;
-
-		pool_bk = &cpr->cpr_bk;
-		if (pool_bk->cb_phase < eng_bk->cb_phase) {
-			pool_bk->cb_phase = eng_bk->cb_phase;
-			/* QUEST: How to estimate the left time? */
-			pool_bk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
-							pool_bk->cb_phase;
-			uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-			rc1 = chk_bk_update_pool(pool_bk, uuid_str);
-			if (rc1 != 0)
-				D_WARN("Failed to update pool bookmark (1) for %s: "DF_RC"\n",
-				       uuid_str, DP_RC(rc1));
-		}
-
-		uuid_copy(uuid, cpr->cpr_uuid);
-		rc = ds_pool_start(uuid);
-		if (rc != 0) {
-			chk_ins_set_fail(ins, pool_bk->cb_phase);
-			chk_pool_stop_one(ins, uuid, CHK__CHECK_POOL_STATUS__CPS_FAILED,
-					  CHK_INVAL_PHASE, NULL);
-			D_ERROR(DF_ENGINE " on rank %u failed (%s) to start pool "
-				DF_UUIDF": "DF_RC"\n", DP_ENGINE(ins), dss_self_rank(),
-				prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT ? "out" : "cnt",
-				DP_UUID(uuid), DP_RC(rc));
-
-			if (prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT)
-				goto out;
-			rc = 0;
-		} else {
-			cpr->cpr_started = 1;
-			D_INFO(DF_ENGINE" on rank %u start pool "DF_UUIDF" at phase %u\n",
-			       DP_ENGINE(ins), dss_self_rank(), DP_UUID(uuid), pool_bk->cb_phase);
-		}
-	}
-
-out:
-	return rc;
 }
 
 static inline void
@@ -910,8 +861,7 @@ chk_engine_cont_list_reduce_internal(struct chk_cont_list_aggregator *aggregator
 }
 
 static int
-chk_engine_cont_list_remote_cb(void *args, uint32_t rank, uint32_t phase,
-			       int result, void *data, uint32_t nr)
+chk_engine_cont_list_remote_cb(void *args, uint32_t rank, int result, void *data, uint32_t nr)
 {
 	int	rc;
 
@@ -1609,15 +1559,10 @@ chk_engine_sched(void *args)
 	uint32_t		 pool_status;
 	d_rank_t		 myrank = dss_self_rank();
 	int			 rc = 0;
+	bool			 done = false;
 
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
-
-	if (cbk->cb_phase > CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST) {
-		rc = chk_engine_setup_pools(ins);
-		if (rc != 0)
-			goto out;
-	}
 
 	while (1) {
 		/* Someone wants to stop the check. */
@@ -1626,8 +1571,8 @@ chk_engine_sched(void *args)
 
 		dss_sleep(300);
 
-		phase = chk_engine_find_slowest(ins);
-		if (phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
+		phase = chk_engine_find_slowest(ins, &done);
+		if (done) {
 			D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
 			D_GOTO(out, rc = 1);
 		}
@@ -1684,166 +1629,233 @@ out:
 }
 
 static int
-chk_engine_start_prepare(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
-			 uint32_t policy_nr, struct chk_policy *policies,
-			 int pool_nr, uuid_t pools[], uint64_t gen, int phase,
-			 uint32_t flags, d_rank_t leader, d_rank_list_t **rlist)
+chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *ranks,
+		      uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
+		      uuid_t pools[], uint64_t gen, int phase, uint32_t api_flags,
+		      d_rank_t leader, uint32_t flags)
 {
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_property	*prop = &ins->ci_prop;
-	bool			 reset = (flags & CHK__CHECK_FLAG__CF_RESET) ? true : false;
-	int			 rc = 0;
-	int			 i;
-	int			 j;
+	struct chk_traverse_pools_args	 ctpa = { 0 };
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct chk_property		*prop = &ins->ci_prop;
+	d_rank_list_t			*rank_list = NULL;
+	int				 rc = 0;
 
-	/*
-	 * XXX: Currently we cannot distinguish whether it is caused by resent start request
-	 *	or not. That can be resolved via introducing new RPC sequence in the future.
-	 */
-	if (ins->ci_sched_running)
-		D_GOTO(out, rc = -DER_ALREADY);
+	/* Check leader has already verified related parameters, trust them. */
 
-	/* Corrupted bookmark or new created one. */
-	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE) {
-		if (!reset)
-			D_GOTO(out, rc = -DER_NOT_RESUME);
-
-		if (!chk_is_on_leader(gen, leader, true))
-			memset(prop, 0, sizeof(*prop));
-
-		memset(cbk, 0, sizeof(*cbk));
-		cbk->cb_magic = CHK_BK_MAGIC_ENGINE;
-		cbk->cb_version = DAOS_CHK_VERSION;
-		flags |= CHK__CHECK_FLAG__CF_RESET;
-		goto init;
-	}
-
-	if (cbk->cb_gen > gen)
-		D_GOTO(out, rc = -DER_EP_OLD);
-
-	/*
-	 * XXX: Leader wants to resume the check but with different generation, then this
-	 *	engine must be new joined one for current check instance. Under such case
-	 *	we have to restart the scan from scratch.
-	 */
-	if (cbk->cb_gen != gen && !reset)
-		D_GOTO(out, rc = -DER_NOT_RESUME);
-
-	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING)
-		D_GOTO(out, rc = -DER_ALREADY);
-
-	if (reset)
-		goto init;
-
-	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_COMPLETED)
-		D_GOTO(out, rc = 1);
-
-	/* For dryrun mode, restart from the beginning since we did not record former repairing. */
-	if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
-		if (!reset)
-			D_GOTO(out, rc = -DER_NOT_RESUME);
-
-		goto init;
-	}
-
-	/*
-	 * XXX: If current rank list does not matches the former list, the we need to
-	 *	reset the check from scratch. Currently, we do not strictly check that.
-	 *	It is control plane's duty to generate valid rank list.
-	 */
-
-	/* Add new rank(s), need to reset. */
-	if (rank_nr > prop->cp_rank_nr) {
-		if (!reset)
-			D_GOTO(out, rc = -DER_NOT_RESUME);
-
-		goto init;
-	}
-
-	if (prop->cp_pool_nr < 0)
-		goto init;
-
-	/* Want to check new pool(s), need to reset. */
-	if (pool_nr < 0) {
-		if (!reset)
-			D_GOTO(out, rc = -DER_NOT_RESUME);
-
-		goto init;
-	}
-
-	for (i = 0; i < pool_nr; i++) {
-		for (j = 0; j < prop->cp_pool_nr; j++) {
-			if (uuid_compare(pools[i], prop->cp_pools[j]) == 0)
-				break;
-		}
-
-		/* Want to check new pool(s), need to reset. */
-		if (j == prop->cp_pool_nr) {
-			if (!reset)
-				D_GOTO(out, rc = -DER_NOT_RESUME);
-
-			goto init;
-		}
-	}
-
-init:
-	if (reset) {
-		ins->ci_slowest_fail_phase = CHK_INVAL_PHASE;
-		cbk->cb_gen = gen;
-		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
-		memset(&cbk->cb_statistics, 0, sizeof(cbk->cb_statistics));
-	}
+	ins->ci_start_flags = flags;
 
 	if (chk_is_on_leader(gen, leader, true)) {
-		/* The check leader has already verified the rank list. */
-		if (rank_nr != 0)
-			*rlist = uint32_array_to_rank_list(ranks, rank_nr);
-		else
-			rc = chk_prop_fetch(prop, rlist);
+		d_rank_list_free(ins->ci_ranks);
+		ins->ci_ranks = NULL;
+		rc = chk_prop_fetch(prop, &ins->ci_ranks);
+		if (rc != 0)
+			goto out;
 	} else {
-		rc = chk_prop_prepare(rank_nr, ranks, policy_nr, policies, pool_nr,
-				      pools, flags, phase, leader, prop, rlist);
+		rank_list = uint32_array_to_rank_list(ranks, rank_nr);
+		if (rank_list == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		d_rank_list_sort(rank_list);
 	}
 
+	if (ins->ci_start_flags & CSF_RESET_ALL)
+		goto reset;
+
+	/* For dryrun mode, restart from the scratch since we did not record former repairing. */
+	if (ins->ci_start_flags & CSF_RESET_NONCOMP) {
+		ctpa.ctpa_ins = ins;
+		ctpa.ctpa_gen = gen;
+		rc = chk_traverse_pools(chk_pools_cleanup_cb, &ctpa);
+		if (rc != 0)
+			goto out;
+	}
+
+	if (pool_nr > 0) {
+		rc = chk_pools_load_list(ins, gen, api_flags, pool_nr, pools);
+		if (rc != 0)
+			goto out;
+	} else {
+		ctpa.ctpa_ins = ins;
+		rc = chk_traverse_pools(chk_pools_load_from_db, &ctpa);
+		if (rc != 0)
+			goto out;
+	}
+
+	if (d_list_empty(&ins->ci_pool_list) && !(flags & CHK__CHECK_FLAG__CF_ORPHAN_POOL))
+		D_GOTO(out, rc = 1);
+
+	goto init;
+
+reset:
+	ctpa.ctpa_ins = ins;
+	ctpa.ctpa_gen = gen;
+	rc = chk_traverse_pools(chk_pools_cleanup_cb, &ctpa);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_tgt_pool_iterate(chk_pools_add_from_dir, &ctpa);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_newborn_pool_iterate(chk_pools_add_from_dir, &ctpa);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_mgmt_zombie_pool_iterate(chk_pools_add_from_dir, &ctpa);
+	if (rc != 0)
+		goto out;
+
+	memset(cbk, 0, sizeof(*cbk));
+	cbk->cb_magic = CHK_BK_MAGIC_ENGINE;
+	cbk->cb_version = DAOS_CHK_VERSION;
+
+init:
+	if (!chk_is_on_leader(gen, leader, true)) {
+		rc = chk_prop_prepare(leader, api_flags | prop->cp_flags, phase,
+				      policy_nr, policies, rank_list, prop);
+		if (rc != 0)
+			goto out;
+
+		if (rank_list != NULL) {
+			d_rank_list_free(ins->ci_ranks);
+			ins->ci_ranks = rank_list;
+			rank_list = NULL;
+		}
+	}
+
+	cbk->cb_gen = gen;
+	if (api_flags & CHK__CHECK_FLAG__CF_RESET && !(ins->ci_start_flags & CSF_RESET_ALL)) {
+		memset(&cbk->cb_statistics, 0, sizeof(cbk->cb_statistics));
+		memset(&cbk->cb_time, 0, sizeof(cbk->cb_time));
+	}
+
+	ins->ci_slowest_fail_phase = CHK_INVAL_PHASE;
+
 out:
+	d_rank_list_free(rank_list);
+	if (rc < 0) {
+		/* Reset ci_ranks if hit failure, then we can reload when use it next time. */
+		d_rank_list_free(ins->ci_ranks);
+		ins->ci_ranks = NULL;
+	}
+
+	return rc;
+}
+
+static int
+chk_engine_start_post(struct chk_instance *ins)
+{
+	struct chk_pool_rec	*cpr;
+	struct chk_bookmark	*ins_cbk = &ins->ci_bk;
+	struct chk_bookmark	*pool_cbk;
+	char			 uuid_str[DAOS_UUID_STR_SIZE];
+	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+	int			 rc = 0;
+
+	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+		pool_cbk = &cpr->cpr_bk;
+
+		if (pool_cbk->cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE)
+			continue;
+
+		if (phase > pool_cbk->cb_phase)
+			phase = pool_cbk->cb_phase;
+
+		pool_cbk->cb_gen = ins_cbk->cb_gen;
+		pool_cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+		/* Always refresh the start time. */
+		pool_cbk->cb_time.ct_start_time = time(NULL);
+		/* QUEST: How to estimate the left time? */
+		pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+						 pool_cbk->cb_phase;
+
+		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
+		rc = chk_bk_update_pool(pool_cbk, uuid_str);
+		if (rc != 0)
+			break;
+	}
+
+	if (rc == 0) {
+		/*
+		 * The phase may be CHK__CHECK_SCAN_PHASE__DSP_DONE, it is fine.
+		 *
+		 * The phase in engine bookmark may be larger then the phase in
+		 * some pools that may be new added into current check instance.
+		 * So we allow the phase to backward.
+		 */
+		ins_cbk->cb_phase = phase;
+		ins_cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_RUNNING;
+		/* Always refresh the start time. */
+		ins_cbk->cb_time.ct_start_time = time(NULL);
+		/* QUEST: How to estimate the left time? */
+		ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+						ins_cbk->cb_phase;
+		rc = chk_bk_update_engine(ins_cbk);
+		if (rc == 0) {
+			d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+				/* Shutdown former instance left opened pool. */
+				chk_pool_shutdown(cpr);
+			}
+		}
+	}
+
+	return rc;
+}
+
+static int
+chk_engine_pool_filter(uuid_t uuid, void *arg, int *phase)
+{
+	struct chk_instance	*ins = arg;
+	struct chk_pool_rec	*cpr;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	int			 rc;
+
+	D_ASSERT(ins != NULL);
+
+	d_iov_set(&riov, NULL, 0);
+	d_iov_set(&kiov, uuid, sizeof(uuid_t));
+
+	rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+	if (rc == 0) {
+		cpr = (struct chk_pool_rec *)riov.iov_buf;
+		*phase = cpr->cpr_bk.cb_phase;
+		D_ASSERT(*phase >= 0);
+	} else if (rc == -DER_NONEXIST && ins->ci_start_flags & CSF_ORPHAN_POOL) {
+		*phase = CHK_INVAL_PHASE;
+		rc = 0;
+	}
+
 	return rc;
 }
 
 int
-chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
-		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		 uuid_t pools[], uint32_t flags, int exp_phase, d_rank_t leader,
-		 uint32_t *cur_phase, struct ds_pool_clues *clues)
+chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
+		 struct chk_policy *policies, int pool_nr, uuid_t pools[], uint32_t api_flags,
+		 int phase, d_rank_t leader, uint32_t flags, struct ds_pool_clues *clues)
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct chk_property		*prop = &ins->ci_prop;
-	d_rank_list_t			*rank_list = NULL;
 	struct chk_pool_rec		*cpr;
 	struct chk_pool_rec		*tmp;
-	struct chk_traverse_pools_args	 ctpa = { 0 };
-	struct chk_pool_filter_args	 cpfa = { 0 };
 	struct umem_attr		 uma = { 0 };
 	uuid_t				 dummy_pool;
 	d_rank_t			 myrank = dss_self_rank();
 	int				 rc;
-	int				 i;
+	int				 rc1;
 
-	if (ins->ci_starting)
-		D_GOTO(out_log, rc = -DER_INPROGRESS);
-
-	if (ins->ci_stopping)
-		D_GOTO(out_log, rc = -DER_BUSY);
-
-	ins->ci_starting = 1;
-
-	rc = chk_engine_start_prepare(ins, rank_nr, ranks, policy_nr, policies,
-				      pool_nr, pools, gen, exp_phase, flags, leader, &rank_list);
+	rc = chk_ins_can_start(ins);
 	if (rc != 0)
 		goto out_log;
 
-	D_ASSERT(rank_list != NULL);
+	ins->ci_starting = 1;
+	ins->ci_started = 0;
+	ins->ci_start_flags = 0;
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+
+	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
@@ -1851,21 +1863,40 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 
+	if (ins->ci_iv_group != NULL) {
+		crt_group_secondary_destroy(ins->ci_iv_group);
+		ins->ci_iv_group = NULL;
+	}
+
+	uma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
+				   &ins->ci_pool_btr, &ins->ci_pool_hdl);
+	if (rc != 0)
+		goto out_tree;
+
+	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_PA, 0, CHK_BTREE_ORDER, &uma,
+				   &ins->ci_pending_btr, &ins->ci_pending_hdl);
+	if (rc != 0)
+		goto out_tree;
+
+	rc = chk_engine_start_prep(ins, rank_nr, ranks, policy_nr, policies,
+				   pool_nr, pools, gen, phase, api_flags, leader, flags);
+	if (rc != 0)
+		goto out_tree;
+
 	if (chk_is_on_leader(gen, leader, true)) {
 		ins->ci_iv_ns = chk_leader_get_iv_ns();
 		if (unlikely(ins->ci_iv_ns == NULL))
-			goto out_log;
+			goto out_tree;
 	} else {
-		if (ins->ci_iv_group != NULL) {
-			crt_group_secondary_destroy(ins->ci_iv_group);
-			ins->ci_iv_group = NULL;
-		}
-
-		rc = crt_group_secondary_create(CHK_DUMMY_POOL, NULL, rank_list, &ins->ci_iv_group);
+		rc = crt_group_secondary_create(CHK_DUMMY_POOL, NULL, ins->ci_ranks,
+						&ins->ci_iv_group);
 		if (rc != 0)
-			goto out_log;
+			goto out_tree;
 
 		uuid_parse(CHK_DUMMY_POOL, dummy_pool);
+
 		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, dummy_pool, ins->ci_iv_group,
 				     &ins->ci_iv_id, &ins->ci_iv_ns);
 		if (rc != 0)
@@ -1874,85 +1905,13 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		ds_iv_ns_update(ins->ci_iv_ns, leader);
 	}
 
-	uma.uma_id = UMEM_CLASS_VMEM;
-
-	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
-				   &ins->ci_pool_btr, &ins->ci_pool_hdl);
+	rc = ds_pool_clues_init(chk_engine_pool_filter, ins, clues);
 	if (rc != 0)
 		goto out_iv;
 
-	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_PA, 0, CHK_BTREE_ORDER, &uma,
-				   &ins->ci_pending_btr, &ins->ci_pending_hdl);
+	rc = chk_engine_start_post(ins);
 	if (rc != 0)
-		goto out_tree;
-
-	if (prop->cp_pool_nr <= 0)
-		ins->ci_all_pools = 1;
-	else
-		ins->ci_all_pools = 0;
-
-	if (flags & CHK__CHECK_FLAG__CF_RESET) {
-		ctpa.ctpa_gen = cbk->cb_gen;
-		rc = chk_traverse_pools(chk_pools_cleanup_cb, &ctpa);
-		if (rc != 0)
-			goto out_tree;
-
-		ctpa.ctpa_gen = cbk->cb_gen;
-		ctpa.ctpa_ins = ins;
-
-		rc = ds_mgmt_tgt_pool_iterate(chk_pools_add_from_dir, &ctpa);
-		if (rc != 0)
-			goto out_pool;
-
-		rc = ds_mgmt_newborn_pool_iterate(chk_pools_add_from_dir, &ctpa);
-		if (rc != 0)
-			goto out_pool;
-
-		rc = ds_mgmt_zombie_pool_iterate(chk_pools_add_from_dir, &ctpa);
-		if (rc != 0)
-			goto out_pool;
-
-		*cur_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
-	} else {
-		if (ins->ci_all_pools) {
-			ctpa.ctpa_gen = cbk->cb_gen;
-			ctpa.ctpa_ins = ins;
-			rc = chk_traverse_pools(chk_pools_add_from_db, &ctpa);
-			if (rc != 0)
-				goto out_pool;
-		} else {
-			for (i = 0; i < pool_nr; i++) {
-				rc = ds_mgmt_pool_exist(pools[i]);
-				if (rc < 0)
-					goto out_pool;
-
-				if (rc > 0) {
-					rc = chk_pool_start_one(ins, pools[i], cbk->cb_gen);
-					if (rc != 0)
-						goto out_pool;
-				}
-			}
-		}
-
-		*cur_phase = chk_engine_find_slowest(ins);
-	}
-
-	cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_RUNNING;
-	cbk->cb_phase = *cur_phase;
-	/* Always refresh the start time. */
-	cbk->cb_time.ct_start_time = time(NULL);
-	/* XXX: How to estimate the left time? */
-	cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
-	rc = chk_bk_update_engine(cbk);
-	if (rc != 0)
-		goto out_pool;
-
-	if (cbk->cb_phase <= CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS) {
-		cpfa.cpfa_pool_hdl = ins->ci_pool_hdl;
-		rc = ds_pool_clues_init(chk_pool_filter, &cpfa, clues);
-		if (rc != 0)
-			goto out_bk;
-	}
+		goto out_stop;
 
 	ins->ci_sched_running = 1;
 
@@ -1960,24 +1919,23 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 			    &ins->ci_sched);
 	if (rc != 0) {
 		ins->ci_sched_running = 0;
-		goto out_bk;
+		goto out_stop;
 	}
 
 	goto out_log;
 
-out_bk:
-	if (rc != -DER_ALREADY && cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
-		cbk->cb_time.ct_stop_time = time(NULL);
-		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
-		chk_bk_update_engine(cbk);
-	}
-out_pool:
+out_stop:
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
 		chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
 				  CHK_INVAL_PHASE, NULL);
-out_tree:
-	chk_destroy_pending_tree(ins);
-	chk_destroy_pool_tree(ins);
+	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+		cbk->cb_time.ct_stop_time = time(NULL);
+		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
+		rc1 = chk_bk_update_engine(cbk);
+		if (rc1 != 0)
+			D_WARN(DF_ENGINE" failed to update engine bookmark: "DF_RC"\n",
+			       DP_ENGINE(ins), DP_RC(rc1));
+	}
 out_iv:
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 out_group:
@@ -1985,29 +1943,23 @@ out_group:
 		crt_group_secondary_destroy(ins->ci_iv_group);
 		ins->ci_iv_group = NULL;
 	}
+out_tree:
+	chk_destroy_pending_tree(ins);
+	chk_destroy_pool_tree(ins);
 out_log:
-	ins->ci_starting = 0;
+	if (rc >= 0) {
+		D_INFO(DF_ENGINE" started on rank %u with flags %x, phase %d, leader %u\n",
+		       DP_ENGINE(ins), myrank, flags, phase, leader);
 
-	if (rc == 0) {
-		D_INFO(DF_ENGINE" started on rank %u with %u ranks, %d pools, "
-		       "flags %x, phase %d, leader %u\n",
-		       DP_ENGINE(ins), myrank, rank_nr, pool_nr, flags, exp_phase, leader);
-
-		chk_ranks_dump(rank_list->rl_nr, rank_list->rl_ranks);
-
-		if (pool_nr > 0)
-			chk_pools_dump(pool_nr, pools);
-		else if (prop->cp_pool_nr > 0)
-			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
-	} else if (rc > 0) {
-		*cur_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+		chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
+		chk_pools_dump(&ins->ci_pool_list, pool_nr, pools);
 	} else if (rc != -DER_ALREADY) {
 		D_ERROR(DF_ENGINE" failed to start on rank %u with %u ranks, %d pools, flags %x, "
 			"phase %d, leader %u, gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), myrank,
-			rank_nr, pool_nr, flags, exp_phase, leader, gen, DP_RC(rc));
+			rank_nr, pool_nr, flags, phase, leader, gen, DP_RC(rc));
 	}
 
-	d_rank_list_free(rank_list);
+	ins->ci_starting = 0;
 
 	return rc;
 }
@@ -2016,7 +1968,6 @@ int
 chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_engine;
-	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
 	struct chk_pool_rec	*tmp;
@@ -2032,10 +1983,10 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 	if (ins->ci_stopping)
 		D_GOTO(out, rc = -DER_INPROGRESS);
 
-	ins->ci_stopping = 1;
-
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
 		D_GOTO(out, rc = -DER_ALREADY);
+
+	ins->ci_stopping = 1;
 
 	if (pool_nr == 0) {
 		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
@@ -2064,18 +2015,15 @@ out:
 
 	if (rc >= 0) {
 		D_INFO(DF_ENGINE" stopped on rank %u with %d pools: rc %d\n", DP_ENGINE(ins),
-		       dss_self_rank(), pool_nr > 0 ? pool_nr : prop->cp_pool_nr, rc);
+		       dss_self_rank(), pool_nr, rc);
 
-		if (pool_nr > 0)
-			chk_pools_dump(pool_nr, pools);
-		else if (prop->cp_pool_nr > 0)
-			chk_pools_dump(prop->cp_pool_nr, prop->cp_pools);
+		chk_pools_dump(NULL, pool_nr, pools);
 	} else if (rc == -DER_ALREADY) {
 		rc = 1;
 	} else if (rc < 0) {
 		D_ERROR(DF_ENGINE" failed to stop on rank %u with %d pools, "
 			"gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), dss_self_rank(),
-			pool_nr > 0 ? pool_nr : prop->cp_pool_nr, gen, DP_RC(rc));
+			pool_nr, gen, DP_RC(rc));
 	}
 
 	return rc;
@@ -2280,8 +2228,9 @@ chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 	 *	 sometime later as the DAOS check going.
 	 */
 
-	rc = crt_group_secondary_modify(ins->ci_iv_group, rank_list, rank_list,
-					CRT_GROUP_MOD_OP_REPLACE, version);
+	if (ins->ci_iv_group != NULL)
+		rc = crt_group_secondary_modify(ins->ci_iv_group, rank_list, rank_list,
+						CRT_GROUP_MOD_OP_REPLACE, version);
 
 out:
 	d_rank_list_free(rank_list);
@@ -2748,10 +2697,6 @@ chk_engine_notify(struct chk_iv *iv)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	d_iov_t			 riov;
-	d_iov_t			 kiov;
-	char			 uuid_str[DAOS_UUID_STR_SIZE];
 	int			 rc = 0;
 
 	if (cbk->cb_gen != iv->ci_gen)
@@ -2761,45 +2706,7 @@ chk_engine_notify(struct chk_iv *iv)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	if (!uuid_is_null(iv->ci_uuid)) {
-		switch (iv->ci_pool_status) {
-		case CHK__CHECK_POOL_STATUS__CPS_CHECKED:
-			if (iv->ci_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE)
-				D_GOTO(out, rc = -DER_INVAL);
-
-			chk_pool_stop_one(ins, iv->ci_uuid, CHK__CHECK_POOL_STATUS__CPS_CHECKED,
-					  CHK__CHECK_SCAN_PHASE__DSP_DONE, &rc);
-			break;
-		case CHK__CHECK_POOL_STATUS__CPS_FAILED:
-		case CHK__CHECK_POOL_STATUS__CPS_IMPLICATED:
-			chk_pool_stop_one(ins, iv->ci_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
-					  iv->ci_phase, &rc);
-			break;
-		case CHK__CHECK_POOL_STATUS__CPS_CHECKING:
-			d_iov_set(&riov, NULL, 0);
-			d_iov_set(&kiov, iv->ci_uuid, sizeof(uuid_t));
-			rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
-			if (rc != 0) {
-				if (rc == -DER_NONEXIST || rc == -DER_NO_HDL)
-					rc = -DER_NOTAPPLICABLE;
-				goto out;
-			}
-
-			cpr = (struct chk_pool_rec *)riov.iov_buf;
-			cbk = &cpr->cpr_bk;
-
-			if (cpr->cpr_stop || unlikely(iv->ci_phase < cbk->cb_phase))
-				D_GOTO(out, rc = -DER_NOTAPPLICABLE);
-
-			if (iv->ci_phase == cbk->cb_phase)
-				D_GOTO(out, rc = 0);
-
-			cbk->cb_phase = iv->ci_phase;
-			uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-			rc = chk_bk_update_pool(cbk, uuid_str);
-			break;
-		default:
-			D_GOTO(out, rc = -DER_NOTAPPLICABLE);
-		}
+		rc = chk_pool_handle_notify(ins, iv);
 		goto out;
 	}
 
@@ -2816,6 +2723,9 @@ chk_engine_notify(struct chk_iv *iv)
 			D_GOTO(out, rc = 0);
 
 		cbk->cb_phase = iv->ci_phase;
+		rc = chk_bk_update_engine(cbk);
+		if (rc == 0)
+			rc = chk_pools_update_bk(ins, iv->ci_phase);
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_FAILED:
 	case CHK__CHECK_INST_STATUS__CIS_IMPLICATED:
@@ -2981,7 +2891,7 @@ chk_engine_rejoin(void)
 	if (rc != 0)
 		goto out;
 
-	phase = chk_engine_find_slowest(ins);
+	phase = chk_engine_find_slowest(ins, NULL);
 	if (phase != cbk->cb_phase)
 		need_iv = true;
 

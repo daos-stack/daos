@@ -79,7 +79,7 @@ struct chk_pool_mbs {
 	((uint32_t)		(csi_flags)		CRT_VAR)		\
 	((int32_t)		(csi_phase)		CRT_VAR)		\
 	((d_rank_t)		(csi_leader_rank)	CRT_VAR)		\
-	((uint32_t)		(csi_padding)		CRT_VAR)		\
+	((uint32_t)		(csi_api_flags)		CRT_VAR)		\
 	((d_rank_t)		(csi_ranks)		CRT_ARRAY)		\
 	((struct chk_policy)	(csi_policies)		CRT_ARRAY)		\
 	((uuid_t)		(csi_uuids)		CRT_ARRAY)
@@ -87,8 +87,8 @@ struct chk_pool_mbs {
 #define DAOS_OSEQ_CHK_START							\
 	((int32_t)		(cso_status)		CRT_VAR)		\
 	((d_rank_t)		(cso_rank)		CRT_VAR)		\
-	((uint32_t)		(cso_phase)		CRT_VAR)		\
 	((int32_t)		(cso_child_status)	CRT_VAR)		\
+	((uint32_t)		(cso_padding)		CRT_VAR)		\
 	((struct ds_pool_clue)	(cso_clues)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);
@@ -287,16 +287,23 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
  *	to avoid hole is the struct chk_property.
  */
 #define CHK_POLICY_MAX		(CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN + 1)
-#define CHK_POOLS_MAX		(1 << 6)
 
-typedef int (*chk_co_rpc_cb_t)(void *args, uint32_t rank, uint32_t phase, int result,
-			       void *data, uint32_t nr);
+typedef int (*chk_co_rpc_cb_t)(void *args, uint32_t rank, int result, void *data, uint32_t nr);
 
 typedef void (*chk_pool_free_data_t)(void *data);
 
+enum chk_start_flags {
+	/* Reset all check bookmarks, for leader, engines and all pools. */
+	CSF_RESET_ALL		= 1,
+	/* Reset the pool which check is not completed. */
+	CSF_RESET_NONCOMP	= 2,
+	/* Handle orphan pools. */
+	CSF_ORPHAN_POOL	= 4,
+};
+
 enum chk_act_flags {
 	/* The action is applicable to the same kind of inconssitency. */
-	CAF_FOR_ALL	= 1,
+	CAF_FOR_ALL		= 1,
 };
 
 enum chk_mbs_flags {
@@ -336,20 +343,98 @@ struct chk_bookmark {
 	struct chk_time			cb_time;
 };
 
-/* On each engine (including the leader), there is a key "chk/property" under its local sys_db. */
+/*
+ * On each engine (including the leader), there is a key "chk/property" under its local sys_db.
+ * That is shared by all the pools for current check instance.
+ *
+ * DAOS check property is persistent. Unless you specify new property to overwrite the old one
+ * when check start, otherwise, it will reuse former property for current check instance.
+ *
+ *
+ * About the leader:
+ *
+ * The leader bookmark and global pools' traces are only stored on current check leader. So if
+ * we switch to new check leader for current check instance, we will lose those former traces.
+ * Then we will have to rescan the whole system from scratch when switch to new check leader.
+ *
+ *
+ * About some flags:
+ *
+ * - CHK__CHECK_FLAG__CF_RESET
+ *
+ *   If 'reset' flag is specified together with pool list when check start, then it only makes
+ *   the check against the specified pools to rescan from the beginning.
+ *
+ *   If 'reset' flag is specified without pool list when check start, then all pools in system
+ *   will be affected with rescanning from scratch.
+ *
+ *   The 'reset' flag is not stored in the check property persistently. It is per instance, and
+ *   only affects current check start. When you restart DAOS check next time without explicitly
+ *   specify 'reset' flag, you will reuse former check property and resume the scan from former
+ *   pause/stop phase.
+ *
+ *   The 'reset' flag does not affect check property. If want to change check property, need to
+ *   overwrite related property explicitly when check start.
+ *
+ *   NOTE: If a pool has been 'checked' (as CHK__CHECK_SCAN_PHASE__DSP_DONE) in former instance,
+ *	   then current check instance will skip it directly unless explicitly set 'reset' flag
+ *	   or reset is triggered for other reason, such as check ranks changes.
+ *
+ * - CHK__CHECK_FLAG__CF_DRYRUN
+ *
+ *   To simplify the logic, dryrun mode is per system, not per pool. Means that if dryrun flag is
+ *   specified when check start, then all non-completed pools' check will be dryrun mode in spite
+ *   of whether a pool is in current instance check list or not.
+ *
+ *   Under dryrun mode, we do not really repair the found inconsistency, then we will lose former
+ *   stable base if we want to resume DAOS check from former pause/stop point. So if former check
+ *   instance ran under dryrun mode, then current check start will be handled as 'reset' for all
+ *   pools in spite of current instance is dryrun mode or not.
+ *
+ *   NOTE: Consider above behavior, although the 'dryrun' flag is stored persistently, it is per
+ *	   instance, and only affects current check instance.
+ *
+ * - CHK__CHECK_FLAG__CF_ORPHAN_POOL
+ *
+ *   Handle orphan pool requires all check engines to report their known pools (shards), then
+ *   compare the list with the MS known ones. But for most of time, the check instance may only
+ *   drive the check against some specified pool(s). So we offer two ways to trigger the handle
+ *   of orphan pools:
+ *
+ *   1. Anytime when the check is (re)start from the scratch for all pools, in spite of whether
+ *      it is for 'reset' flag without pool list or other reason, such as check ranks changes.
+ *
+ *   2. Explicitly specify 'orphan' flag when check start, in spite of it is for all pools or
+ *      just against the specified pool list.
+ *
+ *   NOTE: Similar as 'reset' flag, the 'orphan' flag is also not stored persistently, instead,
+ *	   it only affects current check instance.
+ *
+ *
+ * About the policies:
+ *
+ * The repair policies are shared among all pools. For some specified inconsistency, its repair
+ * policy may be changed during the check scan via CHECK_ACT dRPC downcall with 'for_all' flag.
+ *
+ * When check start, if do not specify policies, the former policies will be reused. Currently,
+ * we do not support to set policy just for special inconsistency class, means that either all
+ * are specified (to overwrite) or none. That can be improved in the future.
+ *
+ *
+ * About the ranks:
+ *
+ * The changes for the ranks that take part in the check means the potential pools' membership
+ * changes. It will affect former non-completed pools' check. Currently, to simplify the logic,
+ * if current check ranks do not match former ones, then current check start will be handled as
+ * 'reset' for all pools.
+ */
 struct chk_property {
 	d_rank_t			cp_leader;
 	Chk__CheckFlag			cp_flags;
 	Chk__CheckInconsistAction	cp_policies[CHK_POLICY_MAX];
 	/*
-	 * How many pools will be handled by the check instance. -1 means to handle all pools.
-	 * If the specified pools count exceeds CHK_POOLS_MAX, then all pools will be handled.
-	 */
-	int32_t				cp_pool_nr;
-	uuid_t				cp_pools[CHK_POOLS_MAX];
-	/*
-	 * XXX: Preserve for supporting to continue the check until the specified phase in the
-	 *	future. -1 means to check all phases.
+	 * NOTE: Preserve for supporting to continue the check until the specified phase in the
+	 *	 future. -1 means to check all phases.
 	 */
 	int32_t				cp_phase;
 	/* How many ranks (ever or should) take part in the check instance. */
@@ -399,13 +484,13 @@ struct chk_instance {
 	/* Generator for report event, pending repair actions, and so on. Only for leader. */
 	uint64_t		 ci_seq;
 
-	uint32_t		 ci_all_pools:1, /* Check all pools or not. */
-				 ci_is_leader:1,
+	uint32_t		 ci_is_leader:1,
 				 ci_sched_running:1,
 				 ci_starting:1,
 				 ci_stopping:1,
 				 ci_started:1,
 				 ci_implicated:1;
+	uint32_t		 ci_start_flags;
 };
 
 struct chk_iv {
@@ -439,6 +524,7 @@ struct chk_pool_rec {
 				 cpr_stop:1,
 				 cpr_done:1,
 				 cpr_skip:1,
+				 cpr_for_orphan:1,
 				 cpr_destroyed:1,
 				 cpr_healthy:1,
 				 cpr_delay_label:1,
@@ -493,12 +579,6 @@ struct chk_report_unit {
 	uint32_t		 cru_result;
 };
 
-struct chk_pool_filter_args {
-	daos_handle_t		 cpfa_pool_hdl;
-	int32_t			 cpfa_pool_nr;
-	uuid_t			*cpfa_pools;
-};
-
 struct chk_traverse_pools_args {
 	uint64_t		 ctpa_gen;
 	struct chk_instance	*ctpa_ins;
@@ -524,9 +604,9 @@ extern btr_ops_t		chk_cont_ops;
 
 void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
 
-void chk_pools_dump(int pool_nr, uuid_t pools[]);
+void chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[]);
 
-int chk_pool_filter(uuid_t uuid, void *arg);
+void  chk_pool_remove_nowait(struct chk_pool_rec *cpr, bool destroy);
 
 void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret);
 
@@ -534,7 +614,14 @@ int chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *arg
 
 int chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen);
 
-int chk_pools_add_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args);
+int chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
+			int pool_nr, uuid_t pools[]);
+
+int chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args);
+
+int chk_pools_update_bk(struct chk_instance *ins, uint32_t phase);
+
+int chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
 		       struct chk_bookmark *bk, struct chk_instance *ins,
@@ -549,10 +636,9 @@ int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_r
 
 void chk_pending_destroy(struct chk_pending_rec *cpr);
 
-int chk_prop_prepare(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
-		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
-		     uint32_t flags, int phase, d_rank_t leader,
-		     struct chk_property *prop, d_rank_list_t **rlist);
+int chk_prop_prepare(d_rank_t leader, uint32_t flags, int phase,
+		     uint32_t policy_nr, struct chk_policy *policies,
+		     d_rank_list_t *ranks, struct chk_property *prop);
 
 int chk_ins_init(struct chk_instance **p_ins);
 
@@ -562,8 +648,8 @@ void chk_ins_fini(struct chk_instance **p_ins);
 
 int chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		     uuid_t pools[], uint32_t flags, int exp_phase, d_rank_t leader,
-		     uint32_t *cur_phase, struct ds_pool_clues *clues);
+		     uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader,
+		     uint32_t flags, struct ds_pool_clues *clues);
 
 int chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[]);
 
@@ -624,7 +710,7 @@ void chk_leader_fini(void);
 
 int chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		     uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
-		     uuid_t pools[], uint32_t flags, int phase, d_rank_t leader,
+		     uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
 		     chk_co_rpc_cb_t start_cb, void *args);
 
 int chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pools[],
@@ -874,12 +960,9 @@ chk_pool_shutdown(struct chk_pool_rec *cpr)
 
 	D_ASSERT(cpr->cpr_refs > 0);
 
-	if (cpr->cpr_started) {
-		d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
-		ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
-		ds_pool_stop(cpr->cpr_uuid);
-		cpr->cpr_started = 0;
-	}
+	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
+	ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
+	ds_pool_stop(cpr->cpr_uuid);
 }
 
 static inline void
@@ -970,6 +1053,32 @@ chk_stop_sched(struct chk_instance *ins)
 	} else {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 	}
+}
+
+static inline int
+chk_ins_can_start(struct chk_instance *ins)
+{
+	struct chk_bookmark	*cbk = &ins->ci_bk;
+
+	if (ins->ci_starting)
+		return -DER_INPROGRESS;
+
+	if (ins->ci_stopping)
+		return -DER_BUSY;
+
+	if (ins->ci_sched_running)
+		return -DER_ALREADY;
+
+	/*
+	 * If ci_sched_running is zero but check instance is still running,
+	 * then someone is trying to stop it.
+	 */
+	if (((ins->ci_is_leader && cbk->cb_magic == CHK_BK_MAGIC_LEADER) ||
+	     (!ins->ci_is_leader && cbk->cb_magic == CHK_BK_MAGIC_ENGINE)) &&
+	    cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING)
+		return -DER_BUSY;
+
+	return 0;
 }
 
 #endif /* __CHK_INTERNAL_H__ */

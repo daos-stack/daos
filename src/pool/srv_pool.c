@@ -1983,6 +1983,12 @@ pool_start_all(void *arg)
 			DP_RC(rc));
 }
 
+int
+ds_pool_start_with_svc(uuid_t uuid)
+{
+	return start_one(uuid, NULL);
+}
+
 /* Note that this function is currently called from the main xstream. */
 int
 ds_pool_start_all(void)

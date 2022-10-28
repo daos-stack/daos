@@ -20,17 +20,15 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	struct chk_start_in	*csi = crt_req_get(rpc);
 	struct chk_start_out	*cso = crt_reply_get(rpc);
 	struct ds_pool_clues	 clues = { 0 };
-	uint32_t		 phase = 0;
 	int			 rc;
 
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
-			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays,
-			      csi->csi_flags, csi->csi_phase, csi->csi_leader_rank, &phase, &clues);
+			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
+			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags, &clues);
 
 	cso->cso_status = rc;
 	cso->cso_rank = dss_self_rank();
-	cso->cso_phase = phase;
 	cso->cso_clues.ca_count = clues.pcs_len;
 	cso->cso_clues.ca_arrays = clues.pcs_array;
 	rc = crt_reply_send(rpc);
