@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -22,6 +21,7 @@ class NvmePoolExclude(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
@@ -123,6 +123,6 @@ class NvmePoolExclude(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=nvme,checksum,nvme_osa
-        :avocado: tags=nvme_pool_exclude
+        :avocado: tags=test_nvme_pool_exclude
         """
         self.run_nvme_pool_exclude(1)
