@@ -803,7 +803,7 @@ vos_self_init(const char *db_path)
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

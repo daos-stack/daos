@@ -93,7 +93,7 @@ enum {
 	RT_OVERLAP_PARTIAL	= (1 << 6),
 };
 
-static struct evt_policy_ops evt_ssof_pol_ops;
+static struct evt_policy_ops  evt_soff_pol_ops;
 static struct evt_policy_ops evt_sdist_pol_ops;
 static struct evt_policy_ops evt_sdist_even_pol_ops;
 /**
@@ -101,10 +101,10 @@ static struct evt_policy_ops evt_sdist_even_pol_ops;
  * - Sorted by Start Offset(SSOF): it is the only policy for now.
  */
 static struct evt_policy_ops *evt_policies[] = {
-	&evt_ssof_pol_ops,
-	&evt_sdist_pol_ops,
-	&evt_sdist_even_pol_ops,
-	NULL,
+    &evt_soff_pol_ops,
+    &evt_sdist_pol_ops,
+    &evt_sdist_even_pol_ops,
+    NULL,
 };
 
 static void
@@ -3282,32 +3282,30 @@ move:
 
 /** Rectangle comparison for sorting */
 static int
-evt_ssof_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
-		  const struct evt_rect *rt1, const struct evt_rect *rt2)
+evt_soff_cmp_rect(struct evt_context *tcx, const struct evt_node *nd, const struct evt_rect *rt1,
+		  const struct evt_rect *rt2)
 {
 	return evt_rect_cmp(rt1, rt2);
 }
 
 static int
-evt_ssof_insert(struct evt_context *tcx, struct evt_node *nd,
-		umem_off_t in_off, const struct evt_entry_in *ent,
-		bool *changed, uint8_t **csum_bufp)
+evt_soff_insert(struct evt_context *tcx, struct evt_node *nd, umem_off_t in_off,
+		const struct evt_entry_in *ent, bool *changed, uint8_t **csum_bufp)
 {
-	return evt_common_insert(tcx, nd, in_off, ent, changed,
-				 evt_ssof_cmp_rect, csum_bufp);
+	return evt_common_insert(tcx, nd, in_off, ent, changed, evt_soff_cmp_rect, csum_bufp);
 }
 
 static int
-evt_ssof_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
+evt_soff_adjust(struct evt_context *tcx, struct evt_node *nd, int at)
 {
-	return evt_common_adjust(tcx, nd, at, evt_ssof_cmp_rect);
+	return evt_common_adjust(tcx, nd, at, evt_soff_cmp_rect);
 }
 
-static struct evt_policy_ops evt_ssof_pol_ops = {
-	.po_insert		= evt_ssof_insert,
-	.po_adjust		= evt_ssof_adjust,
-	.po_split		= evt_even_split,
-	.po_rect_weight		= evt_common_rect_weight,
+static struct evt_policy_ops evt_soff_pol_ops = {
+    .po_insert      = evt_soff_insert,
+    .po_adjust      = evt_soff_adjust,
+    .po_split       = evt_even_split,
+    .po_rect_weight = evt_common_rect_weight,
 };
 
 /**
@@ -3341,7 +3339,7 @@ evt_sdist_cmp_rect(struct evt_context *tcx, const struct evt_node *nd,
 	if (dist1 > dist2)
 		return 1;
 
-	/* All else being equal, revert to ssof */
+	/* All else being equal, revert to soff */
 	return evt_rect_cmp(rt1, rt2);
 }
 
@@ -3356,6 +3354,9 @@ evt_sdist_split(struct evt_context *tcx, bool leaf, struct evt_node *nd_src,
 	int			 boundary;
 	bool			 cond;
 	int64_t			 dist;
+
+	if (unlikely(tcx->tc_depth > 6))
+		return evt_even_split(tcx, leaf, nd_src, nd_dst);
 
 	evt_mbr_read(&mbr, nd_src);
 

@@ -120,6 +120,11 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
+
+        run_test src/vos/tests/evt_stress.py
+        run_test src/vos/tests/evt_stress.py --algo dist_even
+        run_test src/vos/tests/evt_stress.py --algo soff
+
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
