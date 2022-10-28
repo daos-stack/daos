@@ -675,7 +675,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
 		if (attrp->da_hints[0] != 0)
-			strncpy(dfs_attr.da_hints, attrp->da_hints, DAOS_CONT_HINT_MAX_LEN);
+			memcpy(dfs_attr.da_hints, attrp->da_hints, DAOS_CONT_HINT_MAX_LEN);
 		if (create_with_label)
 			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
 							&attrp->da_cuuid, NULL, NULL);
