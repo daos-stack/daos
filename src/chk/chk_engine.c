@@ -25,7 +25,6 @@
 
 #define DF_ENGINE	"Check engine (gen: "DF_X64")"
 #define DP_ENGINE(ins)	(ins)->ci_bk.cb_gen
-#define CHK_MSG_BUFLEN	320
 
 static struct chk_instance	*chk_engine;
 
@@ -178,7 +177,10 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_ins_status = ins_status;
 		cbk->cb_time.ct_stop_time = time(NULL);
-		chk_bk_update_engine(cbk);
+		rc = chk_bk_update_engine(cbk);
+		if (rc != 0)
+			D_WARN(DF_ENGINE" failed to update engine bookmark: "DF_RC"\n",
+			       DP_ENGINE(ins), DP_RC(rc));
 	}
 
 	if (ins_status != CHK__CHECK_INST_STATUS__CIS_PAUSED &&
@@ -242,13 +244,12 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 		 * If the rank does not exists in the pool map, then destroy the orphan pool rank
 		 * to release space by default.
 		 *
-		 * XXX: Currently, we does not support to add the orphan pool rank into the pool
-		 *	map. If want to add them, it can be done via pool extend after DAOS check.
+		 * NOTE: Currently, we does not support to add the orphan pool rank into the pool
+		 *	 map. If want to add them, it can be done via pool extend after DAOS check.
 		 *
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
-		/* Fall through. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -575,7 +576,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 		switch (comp->co_status) {
 		case PO_COMP_ST_DOWN:
 			/*
-			 * XXX: In the future, we may support to add the target (if exist) back.
+			 * NOTE: In the future, we may support to add the target (if exist) back.
 			 *
 			 * Fall through.
 			 */
@@ -604,9 +605,7 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 			unknown = true;
 			/* Fall through. */
 		case PO_COMP_ST_UP:
-			/* Fall through. */
 		case PO_COMP_ST_UPIN:
-			/* Fall through. */
 		case PO_COMP_ST_DRAIN:
 			if (comp->co_index >= mbs->cpm_tgt_nr ||
 			    mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NONEXIST ||
@@ -619,9 +618,9 @@ chk_engine_pool_mbs_one(struct chk_pool_rec *cpr, struct pool_map *map, struct c
 			else if (mbs->cpm_tgt_status[comp->co_index] == DS_POOL_TGT_NORMAL &&
 				 unknown)
 				/*
-				 * XXX: The unknown status maybe because of downgraded from new
-				 *	layout? It is better to keep it there with reporting it
-				 *	to admin who can adjust the status via DAOS debug tool.
+				 * NOTE: The unknown status maybe because of downgraded from new
+				 *	 layout? It is better to keep it there with reporting it
+				 *	 to admin who can adjust the status via DAOS debug tool.
 				 */
 				rc = chk_engine_pm_unknown_target(cpr, comp);
 			break;
@@ -704,9 +703,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 				       t_comp->co_rank, t_comp->co_index, t_comp->co_id);
 				/* Fall through. */
 			case PO_COMP_ST_UP:
-				/* Fall through. */
 			case PO_COMP_ST_UPIN:
-				/* Fall through. */
 			case PO_COMP_ST_DRAIN:
 				down = true;
 				/*
@@ -723,6 +720,7 @@ chk_engine_find_dangling_pm(struct chk_pool_rec *cpr, struct pool_map *map)
 			t_comp->co_flags |= PO_COMPF_CHK_DONE;
 		}
 
+		/* dangling parent domain. */
 		rc = chk_engine_pm_dangling(cpr, map, r_comp,
 					    down ? PO_COMP_ST_DOWN : PO_COMP_ST_DOWNOUT);
 		if (rc != 0)
@@ -874,14 +872,13 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 		 * If the container is not registered to the container service, then destroy the
 		 * orphan container to release space by default.
 		 *
-		 * XXX: Currently, we do not support to add the orphan container back to the CS,
-		 *	that may be implemented in the future when we have enough information to
-		 *	recover necessary prop/attr for the orphan container.
+		 * NOTE: Currently, we do not support to add the orphan container back to the CS,
+		 *	 that may be implemented in the future when we have enough information to
+		 *	 recover necessary prop/attr for the orphan container.
 		 *
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
-		/* Fall through. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -981,7 +978,7 @@ report:
 	goto report;
 
 out:
-	/* XXX: For orphan container, mark it as 'skip' since we do not support to add it back. */
+	/* NOTE: For orphan container, mark it as 'skip' since we do not support to add it back. */
 	ccr->ccr_skip = 1;
 
 	chk_engine_post_repair(ins, &result);
@@ -1951,7 +1948,12 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 	int			 rc = 0;
 	int			 i;
 
-	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE || cbk->cb_gen != gen)
+	/*
+	 * We will support to check stop from new check leader under the case of old leader
+	 * crashed, that may have different check generation. So do not check "cb_gen" here.
+	 */
+
+	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
 	if (ins->ci_starting)
@@ -2119,13 +2121,14 @@ chk_engine_query(uint64_t gen, int pool_nr, uuid_t pools[],
 		 uint32_t *shard_nr, struct chk_query_pool_shard **shards)
 {
 	struct chk_instance		*ins = chk_engine;
-	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct chk_query_pool_args	 cqpa = { 0 };
 	int				 rc = 0;
 	int				 i;
 
-	if (cbk->cb_gen != gen)
-		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+	/*
+	 * We will support to check query from new check leader under the case of old leader
+	 * crashed, that may have different check generation. So do not check "cb_gen" here.
+	 */
 
 	cqpa.cqpa_ins = ins;
 	cqpa.cqpa_cap = 2;
@@ -2156,7 +2159,6 @@ log:
 		 DF_ENGINE" on rank %u handle query for %d pools: "DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), pool_nr, DP_RC(rc));
 
-out:
 	return rc;
 }
 
@@ -2250,9 +2252,9 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 
 		ABT_mutex_lock(cpr->cpr_mutex);
 		/*
-		 * XXX: It is the control plane's duty to guarantee that the decision is a valid
-		 *	action from the report options. Otherwise, related inconsistency will be
-		 *	ignored.
+		 * It is the control plane's duty to guarantee that the decision is a valid
+		 * action from the report options. Otherwise, related inconsistency will be
+		 * ignored.
 		 */
 		cpr->cpr_action = act;
 		ABT_cond_broadcast(cpr->cpr_cond);
@@ -2693,16 +2695,14 @@ chk_engine_notify(struct chk_iv *iv)
 
 	switch (iv->ci_ins_status) {
 	case CHK__CHECK_INST_STATUS__CIS_RUNNING:
-		if (unlikely(iv->ci_phase < cbk->cb_phase))
-			D_GOTO(out, rc = -DER_NOTAPPLICABLE);
-
-		if (iv->ci_phase == cbk->cb_phase)
-			D_GOTO(out, rc = 0);
-
-		cbk->cb_phase = iv->ci_phase;
-		rc = chk_bk_update_engine(cbk);
-		if (rc == 0)
-			rc = chk_pools_update_bk(ins, iv->ci_phase);
+		if (unlikely(iv->ci_phase < cbk->cb_phase)) {
+			rc = -DER_NOTAPPLICABLE;
+		} else if (iv->ci_phase != cbk->cb_phase) {
+			cbk->cb_phase = iv->ci_phase;
+			rc = chk_bk_update_engine(cbk);
+			if (rc == 0)
+				rc = chk_pools_update_bk(ins, iv->ci_phase);
+		}
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_FAILED:
 	case CHK__CHECK_INST_STATUS__CIS_IMPLICATED:
@@ -2888,10 +2888,10 @@ chk_engine_init(void)
 		goto fini;
 
 	/*
-	 * XXX: DAOS global consistency check depends on all related engines' local
-	 *	consistency. If hit some local data corruption, then it is possible
-	 *	that local consistency is not guaranteed. Need to break and resolve
-	 *	related local inconsistency firstly.
+	 * DAOS global consistency check depends on all related engines' local
+	 * consistency. If hit some local data corruption, then it is possible
+	 * that local consistency is not guaranteed. Need to break and resolve
+	 * related local inconsistency firstly.
 	 */
 
 	cbk = &chk_engine->ci_bk;

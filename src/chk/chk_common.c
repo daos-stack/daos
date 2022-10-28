@@ -6,16 +6,11 @@
 
 #define D_LOGFAC	DD_FAC(chk)
 
-#include <time.h>
 #include <abt.h>
 #include <cart/api.h>
-#include <daos/rpc.h>
 #include <daos/btree.h>
 #include <daos/btree_class.h>
-#include <daos_srv/daos_engine.h>
 #include <daos_srv/daos_chk.h>
-#include <daos_srv/pool.h>
-#include <daos_srv/vos.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/daos_mgmt_srv.h>
 
@@ -78,8 +73,6 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
-	cpr->cpr_shard_nr = 0;
-	cpr->cpr_started = 0;
 	cpr->cpr_refs = 1;
 	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
 	cpr->cpr_thread = ABT_THREAD_NULL;
@@ -153,6 +146,7 @@ chk_pool_update(struct btr_instance *tins, struct btr_record *rec,
 	int			 rc = 0;
 
 	D_ASSERT(cpb != NULL);
+	D_ASSERT(cpb->cpb_data != NULL);
 
 	D_ALLOC_PTR(cps);
 	if (cps == NULL)
@@ -712,63 +706,8 @@ chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank
 	d_iov_set(&kiov, uuid, sizeof(uuid_t));
 	rc = dbtree_upsert(hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, "Add pool shard "DF_UUIDF" for rank %u: "DF_RC"\n",
-		 DP_UUID(uuid), rank, DP_RC(rc));
-
-	return rc;
-}
-
-int
-chk_pool_del_shard(daos_handle_t hdl, uuid_t uuid, d_rank_t rank)
-{
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_shard	*cps;
-	d_iov_t			 kiov;
-	d_iov_t			 riov;
-	int			 rc;
-
-	d_iov_set(&riov, NULL, 0);
-	d_iov_set(&kiov, uuid, sizeof(uuid_t));
-	rc = dbtree_lookup(hdl, &kiov, &riov);
-	if (rc != 0)
-		goto out;
-
-	cpr = (struct chk_pool_rec *)riov.iov_buf;
-	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-		if (cps->cps_rank == rank) {
-			d_list_del(&cps->cps_link);
-			if (cps->cps_free_cb != NULL)
-				cps->cps_free_cb(cps->cps_data);
-			else
-				D_FREE(cps->cps_data);
-			D_FREE(cps);
-
-			cpr->cpr_shard_nr--;
-			if (d_list_empty(&cpr->cpr_shard_list)) {
-				D_ASSERTF(cpr->cpr_shard_nr == 0,
-					  "Invalid shard count %u for pool "DF_UUIDF"\n",
-					  cpr->cpr_shard_nr, DP_UUID(uuid));
-
-				d_iov_set(&riov, NULL, 0);
-				rc = dbtree_delete(hdl, BTR_PROBE_BYPASS, &kiov, &riov);
-				if (rc == 0) {
-					D_ASSERT(cpr == riov.iov_buf);
-
-					chk_pool_wait(cpr);
-					chk_pool_put(cpr);
-				} else {
-					D_ASSERT(rc != -DER_NONEXIST);
-				}
-			}
-
-			goto out;
-		}
-	}
-
-	rc = -DER_NONEXIST;
-
-out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, "Del pool shard "DF_UUIDF" for rank %u: "DF_RC"\n",
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
+		 "Add pool shard "DF_UUIDF" for rank %u: "DF_RC"\n",
 		 DP_UUID(uuid), rank, DP_RC(rc));
 
 	return rc;
@@ -804,8 +743,8 @@ chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
 	}
 	ABT_rwlock_unlock(ins->ci_abt_lock);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, "Add pending record with gen "DF_X64", seq "
-		 DF_X64", rank %u, class %u: "DF_RC"\n",
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
+		 "Add pending record with gen "DF_X64", seq "DF_X64", rank %u, class %u: "DF_RC"\n",
 		 ins->ci_bk.cb_gen, seq, rank, cla, DP_RC(rc));
 
 	return rc;
@@ -830,8 +769,9 @@ chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec *
 	else
 		*cpr = NULL;
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG, "Del pending record with gen "DF_X64", seq "
-		 DF_X64": "DF_RC"\n", ins->ci_bk.cb_gen, seq, DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
+		 "Del pending record with gen "DF_X64", seq "DF_X64": "DF_RC"\n",
+		 ins->ci_bk.cb_gen, seq, DP_RC(rc));
 
 	return rc;
 }

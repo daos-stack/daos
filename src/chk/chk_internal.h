@@ -144,14 +144,15 @@ CRT_RPC_DECLARE(chk_mark, DAOS_ISEQ_CHK_MARK, DAOS_OSEQ_CHK_MARK);
 /*
  * CHK_ACT:
  * From check leader to check engine to execute the admin specified repair action for former
- * reported inconsistency with interaction mode.
+ * reported inconsistency under interaction mode.
  */
 #define DAOS_ISEQ_CHK_ACT							\
 	((uint64_t)		(cai_gen)		CRT_VAR)		\
 	((uint64_t)		(cai_seq)		CRT_VAR)		\
 	((uint32_t)		(cai_cla)		CRT_VAR)		\
 	((uint32_t)		(cai_act)		CRT_VAR)		\
-	((uint32_t)		(cai_flags)		CRT_VAR)
+	((uint32_t)		(cai_flags)		CRT_VAR)		\
+	((uint32_t)		(cai_padding)		CRT_VAR)
 
 #define DAOS_OSEQ_CHK_ACT							\
 	((int32_t)		(cao_status)		CRT_VAR)		\
@@ -283,9 +284,11 @@ CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
 #define CHK_BTREE_ORDER		16
 
+#define CHK_MSG_BUFLEN		320
+
 /*
- * XXX: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
- *	to avoid hole is the struct chk_property.
+ * NOTE: Please be careful when change CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN
+ *	 to avoid hole is the struct chk_property.
  */
 #define CHK_POLICY_MAX		(CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN + 1)
 
@@ -334,11 +337,11 @@ struct chk_bookmark {
 	/*
 	 * For leader bookmark, it is the inconsistency statistics during the phases range
 	 * [CSP_PREPARE, CSP_POOL_LIST] for the whole system. The inconsistency and related
-	 * reparation during these phases may be in MS, not related with any engine.
+	 * reparation during these phases may be on MS leader, not related with any engine.
 	 *
 	 * For pool bookmark, it is the inconsistency statistics during the phases range
 	 * [CSP_POOL_MBS, CSP_CONT_CLEANUP] for the pool. The inconsistency and related
-	 * reparation during these phases is applied to the pool service leader.
+	 * reparation during these phases is applied to the PS leader.
 	 */
 	struct chk_statistics		cb_statistics;
 	struct chk_time			cb_time;
@@ -629,8 +632,6 @@ int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t 
 		       struct chk_bookmark *bk, struct chk_instance *ins,
 		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb);
 
-int chk_pool_del_shard(daos_handle_t hdl, uuid_t pool, d_rank_t rank);
-
 int chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
 		    uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
 
@@ -794,7 +795,7 @@ chk_rank_in_list(d_rank_list_t *rlist, d_rank_t rank)
 	int	i;
 	bool	found = false;
 
-	/* XXX: if the rank list is sorted, then we can search more efficiently. */
+	/* TBD: more efficiently search for the sorted ranks list. */
 
 	for (i = 0; i < rlist->rl_nr; i++) {
 		if (rlist->rl_ranks[i] == rank) {
@@ -812,7 +813,7 @@ chk_remove_rank_from_list(d_rank_list_t *rlist, d_rank_t rank)
 	int	i;
 	bool	found = false;
 
-	/* XXX: if the rank list is sorted, then we can search more efficiently. */
+	/* TBD: more efficiently search for the sorted ranks list. */
 
 	for (i = 0; i < rlist->rl_nr; i++) {
 		if (rlist->rl_ranks[i] == rank) {
@@ -886,12 +887,12 @@ chk_iv_ns_cleanup(struct ds_iv_ns **ns)
 }
 
 static inline void
-chk_fini_clues(struct ds_pool_clue *clue, int nr, d_rank_t rank)
+chk_fini_clues(struct ds_pool_clue *clue_array, int nr, d_rank_t rank)
 {
 	struct ds_pool_clues	clues;
 
 	if (rank == dss_self_rank()) {
-		clues.pcs_array = clue;
+		clues.pcs_array = clue_array;
 		clues.pcs_len = nr;
 		ds_pool_clues_fini(&clues);
 	}
@@ -960,11 +961,14 @@ static inline void
 chk_pool_shutdown(struct chk_pool_rec *cpr)
 {
 	d_iov_t		psid;
+	int		rc;
 
 	D_ASSERT(cpr->cpr_refs > 0);
 
 	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
-	ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
+	D_DEBUG(DB_MD, "Stop PS for "DF_UUIDF": "DF_RC"\n",
+		DP_UUID(cpr->cpr_uuid), DP_RC(rc));
 	ds_pool_stop(cpr->cpr_uuid);
 }
 

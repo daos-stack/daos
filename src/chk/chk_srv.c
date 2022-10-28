@@ -36,10 +36,10 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
 	/*
-	 * XXX: If the check engine and the leader are on the same rank, we will not go through
-	 *	CRT proc function that will copy the clues into related RPC reply buffer. Then
-	 *	has to keep the clues for a while until the check leader completed aggregating
-	 *	the result for this engine. And then the check leader will release the clues.
+	 * If the check engine and the leader are on the same rank, we will not go through
+	 * CRT proc function that will copy the clues into related RPC reply buffer. Then
+	 * has to keep the clues for a while until the check leader completed aggregating
+	 * the result for this local engine. And then the check leader will release it.
 	 */
 	if (cso->cso_status < 0 || !chk_is_on_leader(csi->csi_gen, csi->csi_leader_rank, true))
 		ds_pool_clues_fini(&clues);
@@ -72,7 +72,6 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 
 	rc = chk_engine_query(cqi->cqi_gen, cqi->cqi_uuids.ca_count, cqi->cqi_uuids.ca_arrays,
 			      &shard_nr, &shards);
-
 	if (rc != 0) {
 		cqo->cqo_status = rc;
 		cqo->cqo_shards.ca_count = 0;
@@ -88,10 +87,10 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
 	/*
-	 * XXX: If the check engine and the leader are on the same rank, we will not go through
-	 *	CRT proc function that will copy the shards into related RPC reply buffer. Then
-	 *	has to keep the shards for a while until the check leader completed aggregating
-	 *	the result for this engine. And then the check leader will release the shards.
+	 * If the check engine and the leader are on the same rank, we will not go through
+	 * CRT proc function that will copy the shards into related RPC reply buffer. Then
+	 * has to keep the shards for a while until the check leader completed aggregating
+	 * the result for this local engine. And then the check leader will release it.
 	 */
 	if (cqo->cqo_status < 0 || !chk_is_on_leader(cqi->cqi_gen, -1, false))
 		chk_query_free(shards, shard_nr);
@@ -148,11 +147,11 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
 
 	/*
-	 * XXX: If the check engine and the PS leader are on the same rank, we will not go
-	 *	through CRT proc function that will copy the containers' uuids into related
-	 *	RPC reply buffer. Then has to keep the containers' uuids for a while until
-	 *	the PS leader completed aggregating the result for this shard. And then the
-	 *	PS leader will release the buffer.
+	 * If the check engine and the PS leader are on the same rank, we will not go
+	 * through CRT proc function that will copy the containers' uuids into related
+	 * RPC reply buffer. Then has to keep the containers' uuids for a while until
+	 * the PS leader completed aggregating the result for the local shard. And then
+	 * the PS leader will release the buffer.
 	 */
 	if (cclo->cclo_status < 0 || !chk_is_on_leader(ccli->ccli_gen, -1, false))
 		D_FREE(conts);

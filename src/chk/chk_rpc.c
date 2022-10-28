@@ -40,9 +40,6 @@ struct chk_co_rpc_priv {
 	void		*args;
 };
 
-static daos_unit_oid_t		chk_dummy_obj = { 0 };
-static daos_key_t		chk_dummy_key = { 0 };
-
 static int
 chk_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
@@ -102,7 +99,7 @@ chk_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	int			 rc;
 
 	if (out_source->cqo_status != 0) {
-		D_ERROR("Failed to check query rank dead with gen "DF_X64": "DF_RC"\n",
+		D_ERROR("Failed to check query with gen "DF_X64": "DF_RC"\n",
 			in_source->cqi_gen, DP_RC(out_source->cqo_status));
 
 		if (out_result->cqo_child_status == 0)
@@ -265,6 +262,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	struct chk_start_in	*csi;
 	struct chk_start_out	*cso;
 	int			 rc;
+	int			 rc1;
 
 	ccrp.cb = start_cb;
 	ccrp.args = args;
@@ -294,8 +292,9 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		rc = cso->cso_child_status;
 
 		/*
-		 * XXX: The check engine and the check leader are on the same rank,
-		 *	release the buffer for clues. See ds_chk_start_hdlr for detail.
+		 * Some failure happened on remote check engine or during aggregation.
+		 * Then release the clues' buffer for the case of the check engine and
+		 * the check leader are on the same rank. See ds_chk_start_hdlr for detail.
 		 */
 		if (cso->cso_status >= 0)
 			chk_fini_clues(cso->cso_clues.ca_arrays, cso->cso_clues.ca_count,
@@ -304,9 +303,9 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 		rc = cso->cso_status;
 
 		/*
-		 * XXX: The aggregator only aggregates the results from other check
-		 *	engines, does not include the check engine on the same rank
-		 *	as the check leader resides. Let's aggregate it here.
+		 * The aggregator only aggregates the results from other check
+		 * engines, does not include the check engine on the same rank
+		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
 			rc = start_cb(args, cso->cso_rank, cso->cso_status,
@@ -315,13 +314,17 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 
 out:
 	if (req != NULL) {
-		if (rc < 0)
-			chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
+		if (rc < 0 && rc != -DER_ALREADY) {
+			rc1 = chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
+			if (rc1 < 0)
+				D_ERROR("Failed to cleanup DAOS check with gen "DF_X64": "DF_RC"\n",
+					gen, DP_RC(rc1));
+		}
 
 		crt_req_decref(req);
 	}
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u start DAOS check with gen "DF_X64", flags %x, phase %u: "DF_RC"\n",
 		 leader, gen, flags, phase, DP_RC(rc));
 
@@ -360,9 +363,9 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		rc = cso->cso_status;
 
 		/*
-		 * XXX: The aggregator only aggregates the results from other check
-		 *	engines, does not include the check engine on the same rank
-		 *	as the check leader resides. Let's aggregate it here.
+		 * The aggregator only aggregates the results from other check
+		 * engines, does not include the check engine on the same rank
+		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc > 0 && stop_cb != NULL)
 			rc = stop_cb(args, cso->cso_rank, cso->cso_status, NULL, 0);
@@ -372,7 +375,7 @@ out:
 	if (req != NULL)
 		crt_req_decref(req);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u stop DAOS check with gen "DF_X64", pool_nr %d: "DF_RC"\n",
 		 dss_self_rank(), gen, pool_nr, DP_RC(rc));
 
@@ -409,8 +412,9 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		rc = cqo->cqo_child_status;
 
 		/*
-		 * XXX: The check engine and the check leader are on the same rank,
-		 *	release the buffer for shards. See ds_chk_query_hdlr for detail.
+		 * Some failure happened on remote check engine or during aggregation.
+		 * Then release the shards' buffer for the case of the check engine and
+		 * the check leader are on the same rank. See ds_chk_query_hdlr for detail.
 		 */
 		if (cqo->cqo_status == 0)
 			chk_fini_shards(cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
@@ -418,9 +422,9 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 		rc = cqo->cqo_status;
 
 		/*
-		 * XXX: The aggregator only aggregates the results from other check
-		 *	engines, does not include the check engine on the same rank
-		 *	as the check leader resides. Let's aggregate it here.
+		 * The aggregator only aggregates the results from other check
+		 * engines, does not include the check engine on the same rank
+		 * as the check leader resides. Let's aggregate it here.
 		 */
 		if (rc == 0)
 			rc = query_cb(args, 0, cqo->cqo_status, cqo->cqo_shards.ca_arrays,
@@ -546,8 +550,9 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		rc = cclo->cclo_child_status;
 
 		/*
-		 * XXX: The check engine and PS leader are on the same rank,
-		 *	release the buffer for conts. See ds_chk_cont_list_hdlr for detail.
+		 * Some failure happened on remote check engine or during aggregation.
+		 * Then release the conts' buffer for the case of the check engine and
+		 * the check leader are on the same rank. See ds_chk_cont_list_hdlr for detail.
 		 */
 		if (cclo->cclo_status >= 0)
 			chk_fini_conts(cclo->cclo_conts.ca_arrays, cclo->cclo_rank);
@@ -555,9 +560,9 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		rc = cclo->cclo_status;
 
 		/*
-		 * XXX: The aggregator only aggregates the results from the pool shards,
-		 *	does not include the PS leader on the same rank as the PS leader
-		 *	resides. Let's aggregate it here.
+		 * The aggregator only aggregates the results from the pool shards,
+		 * does not include the PS leader on the same rank as the PS leader
+		 * resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
 			rc = list_cb(args, cclo->cclo_rank, 0,
@@ -689,17 +694,17 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 	if (obj != NULL)
 		cri->cri_obj = *obj;
 	else
-		cri->cri_obj = chk_dummy_obj;
+		memset(&cri->cri_obj, 0, sizeof(cri->cri_obj));
 
 	if (dkey != NULL)
 		cri->cri_dkey = *dkey;
 	else
-		cri->cri_dkey = chk_dummy_key;
+		memset(&cri->cri_dkey, 0, sizeof(cri->cri_dkey));
 
 	if (akey != NULL)
 		cri->cri_akey = *akey;
 	else
-		cri->cri_akey = chk_dummy_key;
+		memset(&cri->cri_akey, 0, sizeof(cri->cri_akey));
 
 	cri->cri_msg = msg;
 	cri->cri_options.ca_count = option_nr;
@@ -721,11 +726,9 @@ out:
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u report DAOS check to leader %u, gen "DF_X64", class %u, action %u, "
-		 "result %d, obj "DF_UOID", dkey "DF_KEY", akey "DF_KEY", msg %s, got seq "
-		 DF_X64": "DF_RC"\n", rank, leader, gen, cla, act, result,
-		 DP_UOID(obj != NULL ? *obj : chk_dummy_obj),
-		 DP_KEY(dkey != NULL ? dkey : &chk_dummy_key),
-		 DP_KEY(akey != NULL ? akey : &chk_dummy_key), msg, *seq, DP_RC(rc));
+		 "result %d, "DF_UUIDF"/"DF_UUIDF", msg %s, got seq "DF_X64": "DF_RC"\n",
+		 rank, leader, gen, cla, act, result, DP_UUID(pool), DP_UUID(cont),
+		 msg, *seq, DP_RC(rc));
 
 	return rc;
 }
@@ -942,11 +945,7 @@ crp_proc_struct_rdb_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct rdb_clue
 	if (unlikely(rc != 0))
 		return rc;
 
-	rc = crt_proc_uint64_t(proc, proc_op, &rdb->bcl_oid_next);
-	if (unlikely(rc != 0))
-		return rc;
-
-	return 0;
+	return crt_proc_uint64_t(proc, proc_op, &rdb->bcl_oid_next);
 }
 
 static int
@@ -959,11 +958,7 @@ crt_proc_struct_ds_pool_svc_clue(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc != 0))
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &psc->psc_map_version);
-	if (unlikely(rc != 0))
-		return rc;
-
-	return 0;
+	return crt_proc_uint32_t(proc, proc_op, &psc->psc_map_version);
 }
 
 static int
@@ -1100,11 +1095,7 @@ crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
-	if (rc != 0)
-		return -DER_HG;
-
-	return 0;
+	return crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
 }
 
 CRT_RPC_DEFINE(chk_start, DAOS_ISEQ_CHK_START, DAOS_OSEQ_CHK_START);

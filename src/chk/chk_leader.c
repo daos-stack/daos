@@ -103,8 +103,8 @@ chk_rank_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_iov_set(val_iov, crr, sizeof(*crr));
 	} else {
 		/*
-		 * XXX: This only happens when destroy the rank tree. At that time,
-		 *	the pending records tree has already been destroyed firstly.
+		 * This only happens when destroy the rank tree. At that time,
+		 * the pending records tree has already been destroyed.
 		 */
 		D_ASSERT(d_list_empty(&crr->crr_pending_list));
 		D_FREE(crr);
@@ -185,7 +185,7 @@ chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 	d_iov_set(&kiov, &rank, sizeof(rank));
 	rc = dbtree_delete(ins->ci_rank_hdl, BTR_PROBE_EQ, &kiov, &riov);
 	if (rc != 0)
-		D_GOTO(out, rc = ((rc == -DER_NONEXIST  || rc == -DER_NO_HDL) ? 0 : rc));
+		D_GOTO(out, rc = ((rc == -DER_NONEXIST || rc == -DER_NO_HDL) ? 0 : rc));
 
 	crr = (struct chk_rank_rec *)riov.iov_buf;
 	if (d_list_empty(&crr->crr_pending_list))
@@ -206,25 +206,22 @@ chk_rank_del(struct chk_instance *ins, d_rank_t rank)
 
 			if (rc == 0)
 				rc = rc1;
-
-			/* XXX: continue even if there is DRAM leak. */
-			continue;
-		}
-
-		D_ASSERT(cpr == riov.iov_buf);
-
-		ABT_mutex_lock(cpr->cpr_mutex);
-		if (cpr->cpr_busy) {
-			/*
-			 * Notify the owner who is blocked on the pending record
-			 * and will release the pending record after using it.
-			 */
-			cpr->cpr_exiting = 1;
-			ABT_cond_broadcast(cpr->cpr_cond);
-			ABT_mutex_unlock(cpr->cpr_mutex);
 		} else {
-			ABT_mutex_unlock(cpr->cpr_mutex);
-			chk_pending_destroy(cpr);
+			D_ASSERT(cpr == riov.iov_buf);
+
+			ABT_mutex_lock(cpr->cpr_mutex);
+			if (cpr->cpr_busy) {
+				/*
+				 * Notify the owner who is blocked on the pending record
+				 * and will release the pending record after using it.
+				 */
+				cpr->cpr_exiting = 1;
+				ABT_cond_broadcast(cpr->cpr_cond);
+				ABT_mutex_unlock(cpr->cpr_mutex);
+			} else {
+				ABT_mutex_unlock(cpr->cpr_mutex);
+				chk_pending_destroy(cpr);
+			}
 		}
 	}
 	ABT_rwlock_unlock(ins->ci_abt_lock);
@@ -237,7 +234,7 @@ static inline void
 chk_leader_destroy_trees(struct chk_instance *ins)
 {
 	/*
-	 * Because the pending reocrd is attached some rank record, then destroy
+	 * Because the pending reocrd is attached to some rank record, then destroy
 	 * the pending records tree before destroying the rank records tree.
 	 */
 	chk_destroy_pending_tree(ins);
@@ -341,8 +338,12 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 				cpr->cpr_notified_exit = 1;
 		}
 
-		if (update)
-			chk_bk_update_leader(cbk);
+		if (update) {
+			rc = chk_bk_update_leader(cbk);
+			if (rc != 0)
+				D_WARN("Cannot update leader bookmark after repair: "DF_RC"\n",
+				       DP_RC(rc));
+		}
 
 		*result = 0;
 	}
@@ -367,6 +368,10 @@ chk_leader_cpr2ranklist(struct chk_pool_rec *cpr, bool svc)
 			ranks->rl_ranks[i++] = cps->cps_rank;
 		}
 
+		/* There is at least one valid rank. */
+		D_ASSERT(i > 0);
+
+		/* Reset the rl_nr according to the valid ranks. */
 		ranks->rl_nr = i;
 	}
 
@@ -380,10 +385,10 @@ chk_leader_destroy_pool(struct chk_pool_rec *cpr, uint64_t seq, bool dereg)
 	int		 rc = 0;
 
 	/*
-	 * XXX: Firstly, deregister from MS. If it is successful but we failed to destroy
-	 *	related pool target(s) in subsequent steps, then the pool becomes orphan.
-	 *	It may cause some space leak, but will not cause correctness issue. That
-	 *	will be handled when run DAOS check next time.
+	 * Firstly, deregister from MS. If it is successful but we failed to destroy
+	 * related pool target(s) in subsequent steps, then the pool becomes orphan.
+	 * It may cause some space leak, but will not cause correctness issue. That
+	 * will be handled when run DAOS check next time.
 	 */
 	if (dereg) {
 		rc = ds_chk_deregpool_upcall(seq, cpr->cpr_uuid);
@@ -418,8 +423,8 @@ chk_leader_locate_pool_clue(struct chk_pool_rec *cpr)
 }
 
 /*
- * Initialize and construct clues_out from cpr. The caller is responsible for freeing
- * clues->pcs_array with D_FREE, but the borrowed clues->pcs_array->pc_svc_clue must not be freed.
+ * NOTE: Initialize and construct clues_out from cpr. The caller is responsible for freeing
+ *	 clues->pcs_array with D_FREE, but the borrowed clues->pcs_array->pc_svc_clue must be kept.
  */
 static int
 chk_leader_build_pool_clues(struct chk_pool_rec *cpr)
@@ -474,7 +479,7 @@ out:
 	return rc;
 }
 
-/* Only keep the chosen PS replica, and destroy all others. */
+/* Only keep the chosen PS replica, destroy all others. */
 static int
 chk_leader_reset_pool_svc(struct chk_pool_rec *cpr)
 {
@@ -833,6 +838,7 @@ ignore:
 		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_READD:
+		/* NOTE: currently, we do not support to register the in-destroying pool to MS. */
 		if (chk_pool_in_zombie(cpr))
 			goto ignore;
 
@@ -877,7 +883,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct ds_pool_clue		*clue;
 	char				*strs[3];
-	char				 suggested[128] = { 0 };
+	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
@@ -989,8 +995,8 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_skip = 1;
 			}
 			/*
-			 * XXX: For result == 0 case, it still cannot be regarded as repaired.
-			 *	We need to start the PS under DICTATE mode in subsequent step.
+			 * NOTE: For result == 0 case, it still cannot be regarded as repaired.
+			 *	 We need to start the PS under DICTATE mode in subsequent step.
 			 */
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			break;
@@ -1039,7 +1045,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			option_nr = 3;
 
 			clue = chk_leader_locate_pool_clue(cpr);
-			snprintf(suggested, 127,
+			snprintf(suggested, CHK_MSG_BUFLEN - 1,
 				 "Start pool service under DICTATE mode from rank %d [suggested]",
 				 clue->pc_rank);
 			strs[0] = suggested;
@@ -1156,8 +1162,8 @@ ignore:
 			cpr->cpr_skip = 1;
 		}
 		/*
-		 * XXX: For result == 0 case, it still cannot be regarded as repaired.
-		 *	We need to start the PS under DICTATE mode in subsequent step.
+		 * NOTE: For result == 0 case, it still cannot be regarded as repaired.
+		 *	 We need to start the PS under DICTATE mode in subsequent step.
 		 */
 		break;
 	}
@@ -1175,7 +1181,11 @@ out:
 	return result;
 }
 
-/* Collect pool svc clues, and try to choose the available replica. */
+/*
+ * Collect pool svc clues, and try to choose the available replica.
+ * After the process, if the pool has no PS replica available, then
+ * it is either destroyed or skipped for subsequent check.
+ */
 static int
 chk_leader_handle_pool_clues(struct chk_pool_rec *cpr)
 {
@@ -1196,6 +1206,7 @@ chk_leader_handle_pool_clues(struct chk_pool_rec *cpr)
 			goto out;
 		}
 	} else {
+		/* No pool service. */
 		cpr->cpr_advice = -1;
 	}
 
@@ -1271,7 +1282,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	char				*strs[3];
-	char				 suggested[128] = { 0 };
+	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
@@ -1345,14 +1356,14 @@ try_ps:
 		if (cpr->cpr_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
-			snprintf(suggested, 127,
+			snprintf(suggested, CHK_MSG_BUFLEN - 1,
 				 "Inconsistenct pool label: (null) (MS) vs %s (PS), "
 				 "Trust PS pool label [suggested]", clue->pc_label);
 			strs[1] = "Trust MS pool label.";
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			snprintf(suggested, 127,
+			snprintf(suggested, CHK_MSG_BUFLEN - 1,
 				 "Inconsistenct pool label: (%s) (MS) vs %s (PS), "
 				 "Trust MS pool label [suggested]", cpr->cpr_label,
 				 clue->pc_label != NULL ? clue->pc_label : "(null)");
@@ -1608,6 +1619,7 @@ chk_leader_pool_mbs_one(struct chk_pool_rec *cpr)
 	d_rank_list_t		*ps_ranks = NULL;
 	struct chk_pool_shard	*cps;
 	struct ds_pool_clue	*clue;
+	uint32_t		 interval;
 	int			 rc = 0;
 	int			 rc1;
 	int			 i = 0;
@@ -1638,6 +1650,13 @@ chk_leader_pool_mbs_one(struct chk_pool_rec *cpr)
 	if (ps_ranks == NULL)
 		D_GOTO(out_post, rc = -DER_NOMEM);
 
+	/*
+	 * The PS leader election needs some time, we do not need to retry chk_pool_mbs_remote()
+	 * too frequently. Here, for each PS leader candidate, we will try once per second. Then
+	 * if some one is elected as the PS leader, we will find it about one second later.
+	 */
+	interval = 1000 / ps_ranks->rl_nr;
+
 	rc = rsvc_client_init(&client, ps_ranks);
 	d_rank_list_free(ps_ranks);
 
@@ -1657,7 +1676,7 @@ again:
 	rc1 = rsvc_client_complete_rpc(&client, &ep, rc, rc, &hint);
 	if (rc1 == RSVC_CLIENT_RECHOOSE ||
 	    (rc1 == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc))) {
-		dss_sleep(RECHOOSE_SLEEP_MS);
+		dss_sleep(interval);
 		if (cpr->cpr_stop || !ins->ci_sched_running) {
 			notify = false;
 			D_GOTO(out_client, rc = 0);
@@ -2397,13 +2416,13 @@ chk_leader_start_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 
 out:
 	/*
-	 * XXX: The check engine and the check leader are on the same rank,
-	 *	release the buffer for clues. See ds_chk_start_hdlr for detail.
+	 * The check engine and the check leader are on the same rank,
+	 * release the buffer for clues. See ds_chk_start_hdlr for detail.
 	 */
 	chk_fini_clues(clues, nr, rank);
 
 	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to handle start CB with ranks %u, result %d: "
+		D_ERROR(DF_LEADER" failed to handle start CB with rank %u, result %d: "
 			DF_RC"\n", DP_LEADER(ins), rank, result, DP_RC(rc));
 
 	return rc;
@@ -2605,7 +2624,7 @@ chk_leader_stop_cb(void *args, uint32_t rank, int result, void *data, uint32_t n
 	/* The engine has stop on the rank, remove it from the rank list. */
 	rc = chk_rank_del(ins, rank);
 	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to handle stop CB with ranks %u: "DF_RC"\n",
+		D_ERROR(DF_LEADER" failed to handle stop CB with rank %u: "DF_RC"\n",
 			DP_LEADER(ins), rank, DP_RC(rc));
 
 	return rc;
@@ -2625,14 +2644,14 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 		D_GOTO(out, rc = -DER_INPROGRESS);
 
 	/*
-	 * XXX: It is possible that the check leader is dead. If we want to stop the stale
-	 *	check instance on other engines, then we may execute the CHK_STOP from new
-	 *	check leader. But if the old leader is still active, but the CHK_STOP dRPC
-	 *	is sent to non-leader (or new leader), then it will cause trouble.
+	 * NOTE: It is possible that the check leader is dead. If we want to stop the stale
+	 *	 check instance on other engine, then we may execute the CHK_STOP on new
+	 *	 check leader. But if the old leader is still active, and if the CHK_STOP
+	 *	 dRPC is sent to non-leader (or new leader), then it will cause trouble.
 	 *
-	 *	Here, it is not easy to know whether the old leader is still valid or not.
-	 *	We have to trust control plane. It is the control plane duty to guarantee
-	 *	that the CHK_STOP dRPC is sent to the right one.
+	 *	 Here, it is not easy to know whether the old leader is still valid or not.
+	 *	 We have to trust control plane. It is the control plane duty to guarantee
+	 *	 that the CHK_STOP dRPC is sent to the right one.
 	 */
 
 	ins->ci_stopping = 1;
@@ -2644,7 +2663,10 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 
 	if (ins->ci_ranks == NULL) {
 		rc = chk_prop_fetch(&ins->ci_prop, &ins->ci_ranks);
-		/* We do not know the rank list, the sponsor needs to choose another leader. */
+		/*
+		 * We do not know the rank list, the sponsor needs to choose another leader.
+		 * It may be that the DAOS check has never run on this engine.
+		 */
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = -DER_NOTLEADER);
 
@@ -2666,7 +2688,7 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 out:
 	ins->ci_stopping = 0;
 
-	if (rc == 0) {
+	if (rc >= 0) {
 		D_INFO("Leader stopped check with gen "DF_X64" for %d pools\n",
 		       cbk->cb_gen, pool_nr);
 
@@ -2750,13 +2772,13 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 
 out:
 	/*
-	 * XXX: The check engine and the check leader are on the same rank,
-	 *	release the buffer for shards. See ds_chk_query_hdlr for detail.
+	 * The check engine and the check leader are on the same rank,
+	 * release the buffer for shards. See ds_chk_query_hdlr for detail.
 	 */
 	chk_fini_shards(shards, nr);
 
 	if (rc != 0)
-		D_ERROR(DF_LEADER" failed to handle query CB with ranks %u, result %d: "
+		D_ERROR(DF_LEADER" failed to handle query CB with rank %u, result %d: "
 			DF_RC"\n", DP_LEADER(cqa->cqa_ins), rank, result, DP_RC(rc));
 
 	return rc;
@@ -2808,10 +2830,10 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int			 rc;
 
 	/*
-	 * XXX: Similar as stop case, we need the ability to query check information from
-	 *	new leader if the old one dead. But the information from new leader may be
-	 *	not very accurate. It is the control plane duty to send the CHK_QUERY dRPC
-	 *	to the right one.
+	 * NOTE: Similar as stop case, we need the ability to query check information from
+	 *	 new leader if the old one dead. But the information from new leader may be
+	 *	 not very accurate. It is the control plane duty to send the CHK_QUERY dRPC
+	 *	 to the right one.
 	 */
 
 	if (ins->ci_ranks == NULL) {
@@ -2855,6 +2877,7 @@ out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Leader query check with gen "DF_X64" for %d pools: "DF_RC"\n",
 		 cbk->cb_gen, pool_nr, DP_RC(rc));
+
 	return rc;
 }
 
@@ -2947,9 +2970,8 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 	if (cpr->cpr_on_leader) {
 		ABT_mutex_lock(cpr->cpr_mutex);
 		/*
-		 * XXX: It is the control plane's duty to guarantee that the decision is a valid
-		 *	action from the report options. Otherwise, related inconsistency will be
-		 *	ignored.
+		 * It is the control plane's duty to guarantee that the decision is a valid
+		 * action from the report options. Otherwise, related inconsistency will be ignored.
 		 */
 		cpr->cpr_action = act;
 		ABT_cond_broadcast(cpr->cpr_cond);
@@ -2972,7 +2994,6 @@ out:
 		 DF_RC"\n", DP_LEADER(ins), seq, act, for_all ? "all" : "once", DP_RC(rc));
 
 	return rc;
-
 }
 
 int
@@ -3088,19 +3109,17 @@ chk_leader_notify(struct chk_iv *iv)
 		/* Directly ignore above. */
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_RUNNING:
-		if (unlikely(iv->ci_phase < cbk->cb_phase))
-			D_GOTO(out, rc = -DER_NOTAPPLICABLE);
+		if (unlikely(iv->ci_phase < cbk->cb_phase)) {
+			rc = -DER_NOTAPPLICABLE;
+		} else if (iv->ci_phase != cbk->cb_phase) {
+			rbund.crb_rank = iv->ci_rank;
+			rbund.crb_phase = iv->ci_phase;
+			rbund.crb_ins = ins;
 
-		if (iv->ci_phase == cbk->cb_phase)
-			D_GOTO(out, rc = 0);
-
-		rbund.crb_rank = iv->ci_rank;
-		rbund.crb_phase = iv->ci_phase;
-		rbund.crb_ins = ins;
-
-		d_iov_set(&riov, &rbund, sizeof(rbund));
-		d_iov_set(&kiov, &iv->ci_rank, sizeof(iv->ci_rank));
-		rc = dbtree_update(ins->ci_rank_hdl, &kiov, &riov);
+			d_iov_set(&riov, &rbund, sizeof(rbund));
+			d_iov_set(&kiov, &iv->ci_rank, sizeof(iv->ci_rank));
+			rc = dbtree_update(ins->ci_rank_hdl, &kiov, &riov);
+		}
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_COMPLETED:
 		/*
@@ -3109,9 +3128,9 @@ chk_leader_notify(struct chk_iv *iv)
 		 */
 		if (unlikely(iv->ci_phase != CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP &&
 			     iv->ci_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE))
-			D_GOTO(out, rc = -DER_INVAL);
-
-		rc = chk_rank_del(ins, iv->ci_rank);
+			rc = -DER_INVAL;
+		else
+			rc = chk_rank_del(ins, iv->ci_rank);
 		break;
 	case CHK__CHECK_INST_STATUS__CIS_FAILED:
 		chk_ins_set_fail(ins, iv->ci_phase);
@@ -3134,7 +3153,7 @@ out:
 		 DP_LEADER(ins), iv->ci_rank, DP_UUID(iv->ci_uuid), iv->ci_phase,
 		 iv->ci_ins_status, iv->ci_pool_status, iv->ci_gen, DP_RC(rc));
 
-	return (rc == 0 || rc == -DER_NOTAPPLICABLE) ? 0 : rc;
+	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
 }
 
 int
@@ -3190,10 +3209,10 @@ chk_leader_init(void)
 	chk_leader->ci_is_leader = 1;
 
 	/*
-	 * XXX: DAOS global consistency check depends on all related engines' local
-	 *	consistency. If hit some local data corruption, then it is possible
-	 *	that local consistency is not guaranteed. Need to break and resolve
-	 *	related local inconsistency firstly.
+	 * DAOS global consistency check depends on all related engines' local
+	 * consistency. If hit some local data corruption, then it is possible
+	 * that local consistency is not guaranteed. Need to break and resolve
+	 * related local inconsistency firstly.
 	 */
 
 	cbk = &chk_leader->ci_bk;
@@ -3205,6 +3224,17 @@ chk_leader_init(void)
 	if (rc != 0)
 		goto fini;
 
+	/*
+	 * NOTE: The unknown magic may be caused by data corruption, also
+	 *	 may for downgrade case. If we downgraded from new layout,
+	 *	 we do not understand it. Under such case, reporting it as
+	 *	 -DER_IO may be not the best choice, but it is better than
+	 *	 damaging the system if we modify somehting with old logic.
+	 *
+	 *	 On the other hand, if we have to start old DAOS check on
+	 *	 new layout, then please manually remove chk bookmark and
+	 *	 property KVs from sys_db via DDB tools firstly.
+	 */
 	if (cbk->cb_magic != 0 && cbk->cb_magic != CHK_BK_MAGIC_LEADER) {
 		D_ERROR("Hit corrupted leader bookmark on rank %u: %u vs %u\n",
 			dss_self_rank(), cbk->cb_magic, CHK_BK_MAGIC_LEADER);

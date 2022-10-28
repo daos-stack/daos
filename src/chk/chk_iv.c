@@ -91,12 +91,12 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (src_iv->ci_rank == dss_self_rank()) {
 		if (src_iv->ci_to_leader) {
 			/*
-			 * XXX: The case of the check engine sending IV message to the check leader
-			 *	on the same rank has already been handled via chk_iv_update().
+			 * The case of the check engine sending IV message to the check leader
+			 * on the same rank has already been handled via chk_iv_update().
 			 */
 			D_ASSERT(!chk_is_on_leader(src_iv->ci_gen, -1, false));
 
-			/* Trigger RPC to the leader via returning -DER_IVCB_FORWARD. */
+			/* Trigger RPC to the leader (IV parent) via returning -DER_IVCB_FORWARD. */
 			rc = -DER_IVCB_FORWARD;
 		} else {
 			/*

@@ -506,7 +506,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 			db_clue->bcl_self, n_votes, db_clue->bcl_replicas->rl_nr);
 
 		if (n_votes > db_clue->bcl_replicas->rl_nr / 2) {
-			/* XXX: Replica @i can be as PS leader candidate. */
+			/* Replica @i can be as PS leader candidate. */
 			*advice_out = i;
 			return 0;
 		}
