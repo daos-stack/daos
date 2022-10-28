@@ -84,6 +84,29 @@ int
 crt_context_create(crt_context_t *crt_ctx);
 
 /**
+ * Create CRT transport context on one of secondary providers.
+ *
+ * \param[out] crt_ctx        created CRT transport context
+ * \param[in] idx             Currently unused. Specifies which
+ *                            of the secondary providers to use.
+ *
+ * \return                    DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_secondary(crt_context_t *crt_ctx, int idx);
+
+/**
+ * Check whether specified context is primary or secondary.
+ *
+ * \param[in] crt_ctx        CRT transport context
+ *
+ * \return                   true if primary, false otherwise
+ */
+bool
+crt_context_is_primary(crt_context_t crt_ctx);
+
+
+/**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
  * created rpcs.
@@ -173,6 +196,17 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx);
  */
 int
 crt_context_num(int *ctx_num);
+
+/**
+ * Return URI associated with the context.
+ *
+ * \param[in] crt_ctx         CRT transport context
+ * \param[out] uri            Returned uri.
+ *
+ * \return                    DER_SUCCESS on success, negative value in error.
+ */
+int
+crt_context_uri_get(crt_context_t crt_ctx, char **uri);
 
 /**
  * Finalize CRT transport layer. Must be called on both the server side and
@@ -393,6 +427,18 @@ crt_req_get(crt_rpc_t *rpc)
  */
 int
 crt_req_src_rank_get(crt_rpc_t *req, d_rank_t *rank);
+
+/**
+ * Return whether originator runs from a primary provider or not
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] result          Returned result
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_provider_is_primary(crt_rpc_t *req, bool *result);
 
 /**
  * Return destination rank
@@ -2045,6 +2091,30 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  */
 int crt_self_uri_get(int tag, char **uri);
 
+
+/**
+ * Retrieve a secondary uri of self for the specified tag.
+ * The uri must be freed by the user using D_FREE().
+ *
+ * \param[in] idx               Secondary provider index
+ * \param[out] uri              Returned uri string This is a NULL terminated
+ *                              string of size up to CRT_ADDR_STR_MAX_LEN
+ *                              (including the trailing NULL). Must be freed by
+ *                              the user.
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_self_uri_get_secondary(int idx, char **uri);
+
+/**
+ * Returns number of secondary providers initialized.
+ *
+ * \return                      Number of secondary providers.
+ */
+int
+crt_get_nr_secondary_providers(void);
+
 /**
  * Retrieve incarnation of self.
  *
@@ -2083,6 +2153,24 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
  *                              on failure.
  */
 int crt_group_info_set(d_iov_t *grp_info);
+
+/**
+ * Sets the number of the remote tags for the secondary provider.
+ *
+ * Each tag corresponds to a remote context or an endpoint.
+ * By default, CaRT assumes 1 remote tag for each secondary provider.
+ *
+ * When a number of tags is set to more than 1 for any secondary provider then
+ * CaRT will round-robin across all secondary provider tags instead of defaulting
+ * to endpoint0 for secondary provider communications.
+ *
+ * \param[in] idx               Secondary provider index. Currently only 0 is supported.
+ * \param[in] num_tags          Number of remote tags to set.
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_nr_secondary_remote_tags_set(int idx, int num_tags);
 
 /**
  * Retrieve list of ranks that belong to the specified group.

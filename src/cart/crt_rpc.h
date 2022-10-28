@@ -67,6 +67,10 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
+	/* flags */
+	/* indicates whether rpc originator intended to send on a primary ctx */
+	uint32_t	cch_src_is_primary : 1;
+
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -176,7 +180,10 @@ struct crt_rpc_priv {
 				/* 1 if RPC fails HLC epsilon check */
 				crp_fail_hlc:1,
 				/* RPC completed flag */
-				crp_completed:1;
+				crp_completed:1,
+				/* RPC originated from a primary provider */
+				crp_src_is_primary:1;
+
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
