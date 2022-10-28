@@ -499,13 +499,14 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 			 * rebuild/exclude process, so let's check pool_map_version
 			 * for now.
 			 */
-			pool = ds_pool_lookup(pool_uuid);
+			rc = ds_pool_lookup(pool_uuid, &pool);
 			if (pool == NULL || pool->sp_map_version < 2)
 				status->rs_state = DRS_NOT_STARTED;
 			else
 				status->rs_state = DRS_COMPLETED;
 			if (pool != NULL)
 				ds_pool_put(pool);
+			rc = 0;
 		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
@@ -1302,10 +1303,10 @@ rebuild_task_ult(void *arg)
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
 
-	pool = ds_pool_lookup(task->dst_pool_uuid);
+	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to look up pool\n",
-			DP_UUID(task->dst_pool_uuid));
+		D_ERROR(DF_UUID": failed to look up pool: %d\n",
+			DP_UUID(task->dst_pool_uuid), rc);
 		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
 
@@ -2196,10 +2197,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d\n",
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 
-	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
-	if (pool == NULL) {
-		D_ERROR("Can not find pool. "DF_UUID"\n", DP_UUID(rsi->rsi_pool_uuid));
-		return -DER_NONEXIST;
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc) {
+		D_ERROR("Can not find pool "DF_UUID": %d\n", DP_UUID(rsi->rsi_pool_uuid), rc);
+		return rc;
 	}
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {
