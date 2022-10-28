@@ -402,12 +402,6 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing down the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            self.fail(
-                "One or more servers crashed after bringing down the network interface!")
-
         # 5. Run IOR with oclass SX.
         ior_results = {}
         job_num = 1
