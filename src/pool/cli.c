@@ -2372,7 +2372,7 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 
 	if (arg->fca_cont_buf && (rc == -DER_TRUNC)) {
 		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
-				in->pfci_ncont, out->pfco_ncont);
+		       in->pfci_ncont, out->pfco_ncont);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
 		D_ERROR("failed to filter containers %d\n", rc);
@@ -2446,8 +2446,7 @@ dc_pool_filter_cont(tse_task_t *task)
 	in->pfci_cont_bulk = CRT_BULK_NULL;
 
 	D_DEBUG(DB_MD, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
-			 in->pfci_ncont, args->cont_buf,
-			 *args->ncont);
+		in->pfci_ncont, args->cont_buf, *args->ncont);
 
 	/** +1 for args */
 	crt_req_addref(rpc);

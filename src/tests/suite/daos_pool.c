@@ -1304,7 +1304,7 @@ filter_containers_test(void **state)
 
 	/* Test: 1-part filter (AND, mtime == 0) match none, NULL conts, check nconts=0 */
 	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
-				&part0, PCF_KEY_MD_MTIME, PCF_FUNC_EQ, 0);
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_EQ, 0);
 	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
 	daos_pool_cont_filter_fini(&filt);
 
@@ -1734,7 +1734,7 @@ filter_containers_test(void **state)
 
 	/***** Test: invalid nconts=NULL *****/
 	rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, NULL /* nconts */,
-				  conts, NULL /* ev */);
+				   conts, NULL /* ev */);
 	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
 

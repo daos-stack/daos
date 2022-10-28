@@ -3881,7 +3881,8 @@ filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	memset(pcinfo->pci_id.pci_label, 0, sizeof(pcinfo->pci_id.pci_label));
 	if (prop->dpp_entries[0].dpe_str) {
-		strncpy(pcinfo->pci_id.pci_label, prop->dpp_entries[0].dpe_str, DAOS_PROP_LABEL_MAX_LEN);
+		strncpy(pcinfo->pci_id.pci_label, prop->dpp_entries[0].dpe_str,
+			DAOS_PROP_LABEL_MAX_LEN);
 		pcinfo->pci_id.pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 	}
 
