@@ -4143,6 +4143,7 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
+        print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)

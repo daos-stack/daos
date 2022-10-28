@@ -57,6 +57,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		mock_read = true;
 	}
 
+	if (len > ev->de_iov.iov_buf_len) {
+		D_ERROR("Fuse read buffer not large enough %zx > %zx\n", len,
+			ev->de_iov.iov_buf_len);
+	}
+
 	ev->de_oh           = oh;
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;

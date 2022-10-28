@@ -1069,12 +1069,11 @@ dfuse_read_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, 1024 * 1024);
+		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
-		ev->de_iov.iov_len     = 1024 * 1024;
-		ev->de_iov.iov_buf_len = 1024 * 1024;
+		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
 		ev->de_sgl.sg_iovs     = &ev->de_iov;
 		ev->de_sgl.sg_nr       = 1;
 	}
@@ -1175,7 +1174,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	fs_handle->dpi_read_slab = d_slab_register(&fs_handle->dpi_slab, &slab_reg);
 	if (fs_handle->dpi_read_slab == NULL)
-		D_GOTO(err_ie_remove, rc - DER_IO);
+		D_GOTO(err_ie_remove, rc = -DER_IO);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);

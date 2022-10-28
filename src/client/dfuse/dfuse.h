@@ -52,8 +52,10 @@ struct dfuse_projection_info {
 
 	struct d_slab                    dpi_slab;
 	struct d_slab_type              *dpi_read_slab;
-	size_t                           dpi_max_read;
 };
+
+/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
+#define DFUSE_MAX_READ (1024 * 1024)
 
 /* Launch fuse, and do not return until complete */
 int
