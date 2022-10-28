@@ -564,7 +564,6 @@ struct oit_filter_arg {
 	daos_iod_t		*oa_fiods;
 	d_sg_list_t		*oa_fsgls;
 	d_iov_t			*oa_fiovs;
-	bool			 oa_fetched;
 };
 
 static int
@@ -623,8 +622,7 @@ static void
 oit_filter_arg_free(struct oit_filter_arg *oa)
 {
 	d_sgl_fini(&oa->oa_sgl, false);
-	if (oa->oa_kds)
-		D_FREE(oa->oa_kds);
+	D_FREE(oa->oa_kds);
 	oit_filter_fetch_fini(oa);
 	D_FREE(oa);
 }
@@ -637,50 +635,62 @@ oit_filter_cb(tse_task_t *task, void *args)
 	daos_obj_id_t		*oids = oa->oa_oids;
 	uint32_t		*oids_nr = oa->oa_oids_nr;
 	d_iov_t			*iov, *iovs = oa->oa_fiovs;
+	int			 i, j, iov_idx;
+	int			 rc = 0;
+
+	if (task->dt_result != 0) {
+		oit_filter_arg_free(oa);
+		return 0;
+	}
+
+	D_ASSERT(*oids_nr > 0);
+
+	for (i = 0, iov_idx = 0; i < *oids_nr; i++) {
+		iov = &iovs[iov_idx++];
+		D_ASSERTF(iov->iov_len >= DAOS_OIT_DEFAULT_VAL_LEN &&
+			  iov->iov_len <= DAOS_OIT_MARKER_MAX_LEN +
+					  DAOS_OIT_DEFAULT_VAL_LEN,
+			  "bad iov->iov_len %zu\n", iov->iov_len);
+		iov->iov_len -= DAOS_OIT_DEFAULT_VAL_LEN;
+		if (iov->iov_len > 0)
+			memmove(iov->iov_buf, iov->iov_buf + DAOS_OIT_DEFAULT_VAL_LEN,
+				iov->iov_len);
+		memset(iov->iov_buf + iov->iov_len, 0, DAOS_OIT_DEFAULT_VAL_LEN);
+		rc = filter(oids[i], iov);
+		if (unlikely(rc < 0)) {
+			break;
+		} else if (rc == 0) {
+			/* remove this oid from the oid array */
+			for (j = i; j < *oids_nr - 1; j++)
+				oids[j] = oids[j + 1];
+			D_ASSERT(*oids_nr >= 1);
+			oids[*oids_nr - 1].lo = 0;
+			oids[*oids_nr - 1].hi = 0;
+			*oids_nr = *oids_nr - 1;
+			i--;
+			continue;
+		} else {
+			rc = 0;
+			continue;
+		}
+	}
+	oit_filter_arg_free(oa);
+	return rc;
+}
+
+static int
+oit_filter_list_cb(tse_task_t *task, void *args)
+{
+	struct oit_filter_arg	*oa = *(struct oit_filter_arg **)args;
+	uint32_t		*oids_nr = oa->oa_oids_nr;
 	tse_task_t		*ftask = NULL;
 	struct daos_task_args	*task_args;
 	daos_obj_fetch_t	*fargs;
-	int			 i, j, iov_idx;
 	int			 rc = 0;
 
 	if (task->dt_result != 0 || *oids_nr == 0) {
 		oit_filter_arg_free(oa);
 		return 0;
-	}
-
-	if (oa->oa_fetched) {
-		for (i = 0, iov_idx = 0; i < *oids_nr; i++) {
-			iov = &iovs[iov_idx++];
-			D_ASSERTF(iov->iov_len >= DAOS_OIT_DEFAULT_VAL_LEN &&
-				  iov->iov_len <= DAOS_OIT_MARKER_MAX_LEN +
-						  DAOS_OIT_DEFAULT_VAL_LEN,
-				  "bad iov->iov_len %zu\n", iov->iov_len);
-			iov->iov_len -= DAOS_OIT_DEFAULT_VAL_LEN;
-			if (iov->iov_len > 0)
-				memmove(iov->iov_buf, iov->iov_buf + DAOS_OIT_DEFAULT_VAL_LEN,
-					iov->iov_len);
-			memset(iov->iov_buf + iov->iov_len, 0, DAOS_OIT_DEFAULT_VAL_LEN);
-			rc = filter(oids[i], iov);
-			if (unlikely(rc < 0)) {
-				break;
-			} else if (rc == 0) {
-				/* remove this oid from the oid array */
-				for (j = i; j < *oids_nr - 1; j++)
-					oids[j] = oids[j + 1];
-				D_ASSERT(*oids_nr >= 1);
-				oids[*oids_nr - 1].lo = 0;
-				oids[*oids_nr - 1].hi = 0;
-				*oids_nr = *oids_nr - 1;
-				i--;
-				continue;
-			} else {
-				D_ASSERTF(rc == 1, "bad rc %d\n", rc);
-				rc = 0;
-				continue;
-			}
-		}
-		oit_filter_arg_free(oa);
-		return rc;
 	}
 
 	rc = oit_filter_fetch_init(oa);
@@ -727,7 +737,6 @@ oit_filter_cb(tse_task_t *task, void *args)
 		return rc;
 	}
 
-	oa->oa_fetched = 1;
 	rc = tse_task_schedule(ftask, 0);
 	if (rc)
 		tse_task_complete(ftask, rc);
@@ -758,7 +767,6 @@ daos_oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	oa->oa_ev	= ev;
 	oa->oa_filter	= filter;
 	oa->oa_nr	= *oids_nr;
-	oa->oa_fetched	= false;
 	D_ALLOC_ARRAY(oa->oa_kds, oa->oa_nr);
 	if (!oa->oa_kds)
 		D_GOTO(failed, rc = -DER_NOMEM);
@@ -777,7 +785,7 @@ daos_oit_list_filter(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = tse_task_register_comp_cb(task, oit_filter_cb, &oa, sizeof(oa));
+	rc = tse_task_register_comp_cb(task, oit_filter_list_cb, &oa, sizeof(oa));
 	if (rc) {
 		tse_task_complete(task, rc);
 		D_GOTO(failed, rc);

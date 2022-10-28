@@ -1191,7 +1191,8 @@ daos_oit_list_unmarked(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
  * \param[in]	oid	the object ID.
  * \param[in]	marker	the data/status marked for the \a oid. NULL if the OID was not marked.
  *
- * \return		1		the OID will be in the listed result.
+ * \return		1 or other positive value
+ *					the OID will be in the listed result.
  *			0		the OID will be ignored.
  *			negative value	the enumerate will be stopped and error code will be
  *					returned.
