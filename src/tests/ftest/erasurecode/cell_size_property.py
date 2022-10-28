@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -53,6 +53,7 @@ class EcodCellSizeProperty(IorTestBase):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_ior
         :avocado: tags=ec_cell_property
+        :avocado: tags=test_ec_pool_property
         """
         ior_transfer_size = self.params.get("ior_transfer_size",
                                             '/run/ior/iorflags/*')

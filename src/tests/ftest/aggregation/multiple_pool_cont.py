@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -167,6 +167,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=hw,large
         :avocado: tags=aggregation
         :avocado: tags=aggregate_single_pool
+        :avocado: tags=test_aggregation_single_pool
         """
         self.longrun_aggregation(1, 2)
 
@@ -193,5 +194,6 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=hw,large
         :avocado: tags=aggregation
         :avocado: tags=aggregate_multiple_pools
+        :avocado: tags=test_aggregation_multiple_pools
         """
         self.longrun_aggregation(2, 3)

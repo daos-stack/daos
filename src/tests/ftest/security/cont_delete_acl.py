@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -75,6 +75,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_delete_acl
+        :avocado: tags=test_delete_valid_acl
         """
         for principal in self.principals_table:
             self.daos_cmd.container_delete_acl(
@@ -96,6 +97,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_delete_acl_noperms
+        :avocado: tags=test_no_user_permissions
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

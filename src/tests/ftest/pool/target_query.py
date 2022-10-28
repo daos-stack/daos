@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -52,6 +52,7 @@ class PoolTargetQueryTest(IorTestBase):
         :avocado: tags=hw,large
         :avocado: tags=pool
         :avocado: tags=pool_target_query
+        :avocado: tags=test_pool_target_query
         """
         self.update_ior_cmd_with_pool()
         # Check the initial size of all targets

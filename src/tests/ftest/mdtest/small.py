@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -28,6 +28,7 @@ class MdtestSmall(MdtestBase):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=mdtest,checksum,dfs,dfuse
         :avocado: tags=mdtest_small
+        :avocado: tags=test_mdtest_small
         """
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)

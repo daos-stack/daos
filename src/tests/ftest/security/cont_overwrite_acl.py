@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,6 +120,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_overwrite_acl_file
+        :avocado: tags=test_overwrite_valid_acl_file
         """
         valid_file_acl = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
@@ -147,6 +148,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_overwrite_acl_noperms
+        :avocado: tags=test_no_user_permissions
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

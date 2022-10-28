@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -32,6 +32,7 @@ class EcodOnlineRebuild(ErasureCodeIor):
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild
         :avocado: tags=test_ec_online_rebuild_array
+        :avocado: tags=test_ec_online_rebuild
         """
         # Kill last server rank
         self.rank_to_kill = [self.server_count - 1]

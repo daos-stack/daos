@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,6 +127,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_csum
+        :avocado: tags=test_osa_online_drain
         """
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
@@ -141,6 +142,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa
         :avocado: tags=osa_drain,online_drain,online_drain_without_csum
+        :avocado: tags=test_osa_online_drain_no_csum
         """
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -157,6 +159,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_oclass
+        :avocado: tags=test_osa_online_drain_oclass
         """
         self.log.info("Online Drain : Oclass")
         for oclass in self.test_oclass:
@@ -172,6 +175,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_aggregation
+        :avocado: tags=test_osa_online_drain_with_aggregation
         """
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -188,6 +192,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_mdtest
+        :avocado: tags=test_osa_online_drain_mdtest
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -37,6 +37,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
         :avocado: tags=medium,ib2
         :avocado: tags=pool,rebuild,ior
         :avocado: tags=pooldestroywithio
+        :avocado: tags=test_pool_destroy_with_io
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")

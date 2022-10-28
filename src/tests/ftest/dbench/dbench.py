@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,6 +33,7 @@ class DbenchTest(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=dbench,dfuse
+        :avocado: tags=test_dbench
         """
 
         self.add_pool(connect=False)

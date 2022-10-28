@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -28,6 +28,7 @@ class EcodMdtest(MdtestBase):
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_smoke,mdtest
         :avocado: tags=ec_mdtest_smoke
+        :avocado: tags=test_ec_mdtest_smoke
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

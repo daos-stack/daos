@@ -1,10 +1,11 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeFio, check_aggregation_status
+
 
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
@@ -83,6 +84,7 @@ class EcodFioRebuild(ErasureCodeFio):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,fio,ec_online_rebuild
         :avocado: tags=ec_online_rebuild_fio
+        :avocado: tags=test_ec_online_rebuild_fio
         """
         self.execution('on-line')
 
@@ -103,5 +105,6 @@ class EcodFioRebuild(ErasureCodeFio):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,fio,ec_offline_rebuild
         :avocado: tags=ec_offline_rebuild_fio
+        :avocado: tags=test_ec_offline_rebuild_fio
         """
         self.execution('off-line')

@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2022 Intel Corporation
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -26,15 +26,16 @@ void job_status_write() {
     }
     String jobName = env.JOB_NAME.replace('/', '_')
     jobName += '_' + env.BUILD_NUMBER
-    String fileName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName
+    String dirName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName + '/'
 
     String job_status_text = writeYaml data: job_status_internal,
                                        returnText: true
 
     // Need to use shell script for creating files that are not
     // in the workspace.
-    sh label: "Write jenkins_job_status ${fileName}",
-       script: "echo \"${job_status_text}\" >> ${fileName}"
+    sh label: "Write jenkins_job_status ${dirName}jenkins_result",
+       script: """mkdir -p ${dirName}
+                  echo "${job_status_text}" >> ${dirName}jenkins_result"""
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired

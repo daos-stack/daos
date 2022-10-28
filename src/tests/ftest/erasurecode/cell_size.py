@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,6 +30,7 @@ class EcodCellSize(IorTestBase):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_ior,ior
         :avocado: tags=ec_cell_size
+        :avocado: tags=test_ec_cell_size
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

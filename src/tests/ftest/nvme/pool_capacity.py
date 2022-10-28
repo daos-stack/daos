@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -226,6 +226,7 @@ class NvmePoolCapacity(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=ib2,nvme,nvme_pool_capacity
+        :avocado: tags=test_nvme_pool_capacity
         """
         # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")

@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -206,6 +206,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
+        :avocado: tags=test_enospace_lazy_with_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -230,6 +231,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
+        :avocado: tags=test_enospace_lazy_with_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -264,6 +266,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
+        :avocado: tags=test_enospace_time_with_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -291,6 +294,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
+        :avocado: tags=test_enospace_time_with_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -326,6 +330,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_performance
+        :avocado: tags=test_performance_storage_full
         """
         # Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
@@ -370,6 +375,7 @@ class NvmeEnospace(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=nvme,der_enospace,enospc_no_aggregation
+        :avocado: tags=test_enospace_no_aggregation
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -131,6 +131,7 @@ class OSADmgNegativeTest(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_dmg_negative_test,dmg_negative_test
+        :avocado: tags=test_osa_dmg_cmd_without_extend
         """
         # Perform testing with a single pool
         self.run_osa_dmg_test(1, False)
@@ -145,6 +146,7 @@ class OSADmgNegativeTest(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_dmg_negative_test,dmg_negative_test_extend
+        :avocado: tags=test_osa_dmg_cmd_with_extend
         """
         # Perform extend testing with 1 pool
         self.run_osa_dmg_test(1, True)

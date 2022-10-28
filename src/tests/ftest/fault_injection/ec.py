@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -30,6 +30,7 @@ class EcodFaultInjection(IorTestBase, FioBase):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_ior_fault,faults
         :avocado: tags=ec_fault
+        :avocado: tags=test_ec_ior_fault
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 
@@ -52,5 +53,6 @@ class EcodFaultInjection(IorTestBase, FioBase):
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_fio_fault,faults
         :avocado: tags=ec_fault
+        :avocado: tags=test_ec_fio_fault
         """
         self.execute_fio()

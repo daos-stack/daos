@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,7 +25,7 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=scrubber,faults
         :avocado: tags=test_scrubber_target_auto_eviction
-
+        :avocado: tags=test_scrubber_ssd_auto_eviction
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')

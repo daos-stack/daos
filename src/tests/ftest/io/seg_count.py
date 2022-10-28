@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,6 +30,7 @@ class SegCount(IorTestBase):
         :avocado: tags=hw,large
         :avocado: tags=mpiio
         :avocado: tags=ior_segcount
+        :avocado: tags=test_segcount
         """
         # Update the hostfile with the requested number of slots per host
         self.hostfile_clients = write_host_file(

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -124,5 +124,6 @@ class NvmePoolExclude(OSAUtils):
         :avocado: tags=hw,large
         :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_exclude
+        :avocado: tags=test_nvme_pool_excluded
         """
         self.run_nvme_pool_exclude(1)

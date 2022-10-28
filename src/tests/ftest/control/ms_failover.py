@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -130,6 +130,7 @@ class ManagementServiceFailover(TestWithServers):
         :avocado: tags=vm
         :avocado: tags=control
         :avocado: tags=ms_failover
+        :avocado: tags=test_ms_failover
         """
         replicas = self.launch_servers()
         leader = self.verify_leader(replicas)
