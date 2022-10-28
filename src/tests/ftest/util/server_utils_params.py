@@ -562,6 +562,7 @@ class EngineYamlParameters(YamlParameters):
         self.log.info("Overriding engine %s config with external data", self._index)
         self.storage.override_params(data, storage_class)
 
+
 class StorageYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for all of the storage tiers for an engine."""
 

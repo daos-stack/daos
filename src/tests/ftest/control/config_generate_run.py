@@ -68,7 +68,7 @@ class ConfigGenerateRun(TestWithServers):
         # Start server with the generated config.
         self.log.info("Restarting server with the generated config")
         try:
-            self.start_server_managers(force=True)
+            agent_force = self.start_server_managers(force=True)
         except ServerFailed as error:
             self.fail(f"Restarting server failed! {error}")
 

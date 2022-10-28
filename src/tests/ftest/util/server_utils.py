@@ -10,7 +10,6 @@ import math
 import os
 import time
 import random
-import yaml
 
 from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
@@ -19,15 +18,12 @@ from command_utils_base import CommonConfig, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd
+    convert_list, stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
 from run_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
-from server_utils_params import \
-    DaosServerTransportCredentials, DaosServerYamlParameters, EngineYamlParameters, \
-    StorageTierYamlParameters
+from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
 
 
