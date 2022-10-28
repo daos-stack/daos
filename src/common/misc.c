@@ -743,3 +743,28 @@ daos_recx_free(daos_recx_t *recx)
 {
 	D_FREE(recx);
 }
+
+int
+daos_hlc2timespec(uint64_t hlc, struct timespec *ts)
+{
+	return crt_hlc2timespec(hlc, ts);
+}
+
+int
+daos_hlc2timestamp(uint64_t hlc, time_t *ts)
+{
+	struct timespec		tspec;
+	int			rc;
+
+	if (ts == NULL)
+		return -DER_INVAL;
+
+	rc = crt_hlc2timespec(hlc, &tspec);
+	if (rc)
+		return rc;
+
+	D_INFO("hlc=0x"DF_X64", tspec.tv_sec=%ld, .tv_nsec=%ld\n",
+	       hlc, tspec.tv_sec, tspec.tv_nsec);
+	*ts = tspec.tv_sec;
+	return 0;
+}

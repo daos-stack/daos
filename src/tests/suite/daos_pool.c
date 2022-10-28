@@ -1536,11 +1536,11 @@ filter_containers_test(void **state)
 		assert_rc_equal(rc, 0);
 		rc = daos_cont_create_snap(clasth, &clast_epc, NULL /* name */, NULL /* ev */);
 		assert_rc_equal(rc, 0);
-		print_message("created snapshot on container %s, epoch %zu\n",
-			      clast.pci_id.pci_label, clast_epc);
+		print_message("created snapshot on container %s, epoch "DF_X64"(%zu)\n",
+			      clast.pci_id.pci_label, clast_epc, clast_epc);
 
 		/* Test: 1-part filter (AND, snaps < 1) match some, NULL conts arg */
-		exp_nconts = 15;
+		exp_nconts = lcarg->nconts - 1;
 		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
 				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
 		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
@@ -1548,7 +1548,6 @@ filter_containers_test(void **state)
 		daos_pool_cont_filter_fini(&filt);
 
 		/* Test: 1-part filter (OR, snaps < 1) match some, NULL conts arg, */
-		exp_nconts = 15;
 		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
 				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
 		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
@@ -1643,7 +1642,7 @@ filter_containers_test(void **state)
 			      clast.pci_id.pci_label, clast_epc);
 
 		/* Test: 1-part filter (AND, snaps < 1) match some, check nconts and conts */
-		exp_nconts = 15;
+		exp_nconts = lcarg->nconts - 1;
 		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
 				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
 		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
