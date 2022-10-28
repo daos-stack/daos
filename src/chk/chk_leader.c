@@ -1980,6 +1980,9 @@ chk_leader_pools2list(struct chk_instance *ins, int *pool_nr, uuid_t **p_pools)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+		if (cpr->cpr_skip || cpr->cpr_done || cpr->cpr_for_orphan)
+			continue;
+
 		if (idx >= cap) {
 			D_REALLOC_ARRAY(tmp, pools, cap, cap << 1);
 			if (tmp == NULL)
@@ -3135,7 +3138,7 @@ out:
 }
 
 int
-chk_leader_rejoin(uint64_t gen, d_rank_t rank, uint32_t phase)
+chk_leader_rejoin(uint64_t gen, d_rank_t rank, int *pool_nr, uuid_t **pools)
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
@@ -3154,10 +3157,12 @@ chk_leader_rejoin(uint64_t gen, d_rank_t rank, uint32_t phase)
 	if (!chk_rank_in_list(ins->ci_ranks, rank))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
+	rc = chk_leader_pools2list(ins, pool_nr, pools);
+
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_LEADER" %u handle rejoin from rank %u with gen "DF_X64", phase %u :"DF_RC"\n",
-		 DP_LEADER(ins), cbk->cb_ins_status, rank, gen, phase, DP_RC(rc));
+		 DF_LEADER" %u handle rejoin from rank %u with gen "DF_X64":"DF_RC"\n",
+		 DP_LEADER(ins), cbk->cb_ins_status, rank, gen, DP_RC(rc));
 
 	return rc;
 }

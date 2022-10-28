@@ -2724,226 +2724,147 @@ out:
 	return (rc == 0 || rc == -DER_NOTAPPLICABLE) ? 0 : rc;
 }
 
-static int
-chk_rejoin_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
-{
-	struct chk_traverse_pools_args	*ctpa = args;
-	struct chk_instance		*ins = ctpa->ctpa_ins;
-	char				*uuid_str = key->iov_buf;
-	uuid_t				 uuid;
-	struct chk_bookmark		 cbk;
-	int				 rc;
-
-	if (!daos_is_valid_uuid_string(uuid_str))
-		goto out;
-
-	rc = chk_bk_fetch_pool(&cbk, uuid_str);
-	if (rc != 0) {
-		ctpa->ctpa_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
-		goto out;
-	}
-
-	if (cbk.cb_gen != ctpa->ctpa_gen)
-		goto out;
-
-	if (cbk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED) {
-		chk_ins_set_fail(ins, cbk.cb_phase);
-		goto out;
-	}
-
-	if (cbk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKING &&
-	    cbk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_PAUSED &&
-	    cbk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_PENDING)
-		goto out;
-
-	uuid_parse(uuid_str, uuid);
-
-	/* Always refresh the start time. */
-	cbk.cb_time.ct_start_time = time(NULL);
-	/* QUEST: How to estimate the left time? */
-	cbk.cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk.cb_phase;
-	cbk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
-	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
-				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
-	if (rc != 0) {
-		ctpa->ctpa_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
-		goto out;
-	}
-
-	rc = chk_bk_update_pool(&cbk, uuid_str);
-	if (rc != 0)
-		chk_pool_del_shard(ins->ci_pool_hdl, uuid, dss_self_rank());
-
-out:
-	/* Ignore the failure to handle next one. */
-	return 0;
-}
-
 void
 chk_engine_rejoin(void)
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	d_rank_list_t			*rank_list = NULL;
-	struct chk_traverse_pools_args	 ctpa = { 0 };
+	struct chk_pool_rec		*cpr;
+	struct chk_pool_rec		*tmp;
+	uuid_t				*pools = NULL;
 	struct chk_iv			 iv = { 0 };
 	struct umem_attr		 uma = { 0 };
 	uuid_t				 dummy_pool;
 	d_rank_t			 myrank = dss_self_rank();
-	uint32_t			 phase;
+	uint32_t			 pool_nr = 0;
 	int				 rc = 0;
+	int				 rc1;
 	bool				 need_join = false;
-	bool				 need_iv = false;
-	bool				 joined = false;
-
-	/* NOTE: skip check engine rejoin temporarily, will enable it in later patch. */
-	return;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_ENGINE)
-		goto out;
+		goto out_log;
 
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING &&
 	    cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_PAUSED)
-		goto out;
+		goto out_log;
+
+	/* We do NOT support leader (and its associated engine ) to rejoin former check instance. */
+	if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true))
+		goto out_log;
+
+	if (ins->ci_ranks == NULL)
+		goto out_log;
 
 	D_ASSERT(ins->ci_starting == 0);
 	D_ASSERT(ins->ci_stopping == 0);
+	D_ASSERT(ins->ci_sched_running == 0);
 	D_ASSERT(ins->ci_iv_group == NULL);
 	D_ASSERT(ins->ci_iv_ns == NULL);
+	D_ASSERT(ins->ci_sched == ABT_THREAD_NULL);
+	D_ASSERT(daos_handle_is_inval(ins->ci_pool_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pool_list));
+	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pending_list));
 
 	ins->ci_starting = 1;
+	ins->ci_started = 0;
+	ins->ci_start_flags = 0;
 
-	if (chk_is_on_leader(cbk->cb_gen, prop->cp_leader, true)) {
-		ins->ci_iv_ns = chk_leader_get_iv_ns();
-		/* If is possible that the check leader is not running. */
-		if (ins->ci_iv_ns == NULL)
-			goto out;
-
-		need_join = true;
-	} else {
-		need_join = true;
-
-		rc = chk_prop_fetch(prop, &rank_list);
-		if (rc != 0)
-			goto out;
-
-		D_ASSERT(rank_list != NULL);
-
-		rc = crt_group_secondary_create(CHK_DUMMY_POOL, NULL, rank_list, &ins->ci_iv_group);
-		if (rc != 0)
-			goto out;
-
-		uuid_parse(CHK_DUMMY_POOL, dummy_pool);
-		rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, dummy_pool, ins->ci_iv_group,
-				     &ins->ci_iv_id, &ins->ci_iv_ns);
-		if (rc != 0)
-			goto out;
-
-		ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader);
-	}
-
+	need_join = true;
 	uma.uma_id = UMEM_CLASS_VMEM;
 
 	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_POOL, 0, CHK_BTREE_ORDER, &uma,
 				   &ins->ci_pool_btr, &ins->ci_pool_hdl);
 	if (rc != 0)
-		goto out;
+		goto out_tree;
 
 	rc = dbtree_create_inplace(DBTREE_CLASS_CHK_PA, 0, CHK_BTREE_ORDER, &uma,
 				   &ins->ci_pending_btr, &ins->ci_pending_hdl);
 	if (rc != 0)
-		goto out;
+		goto out_tree;
+
+	rc = crt_group_secondary_create(CHK_DUMMY_POOL, NULL, ins->ci_ranks, &ins->ci_iv_group);
+	if (rc != 0)
+		goto out_tree;
+
+	uuid_parse(CHK_DUMMY_POOL, dummy_pool);
+	rc = ds_iv_ns_create(dss_get_module_info()->dmi_ctx, dummy_pool, ins->ci_iv_group,
+			     &ins->ci_iv_id, &ins->ci_iv_ns);
+	if (rc != 0)
+		goto out_group;
+
+	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader);
 
 	/* Ask leader whether this engine can rejoin or not. */
-	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, cbk->cb_phase);
+	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, &pool_nr, &pools);
 	if (rc != 0)
-		goto out;
+		goto out_iv;
 
-	joined = true;
-
-	ctpa.ctpa_gen = cbk->cb_gen;
-	ctpa.ctpa_ins = ins;
-	rc = chk_traverse_pools(chk_rejoin_cb, &ctpa);
-	if (rc != 0)
-		goto out;
-
-	phase = chk_pools_find_slowest(ins, NULL);
-	if (phase != cbk->cb_phase)
-		need_iv = true;
-
-	cbk->cb_phase = phase;
-	if (unlikely(d_list_empty(&ins->ci_pool_list))) {
-		if (ctpa.ctpa_status == CHK__CHECK_INST_STATUS__CIS_FAILED)
-			cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
-		else
-			cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
-		cbk->cb_time.ct_stop_time = time(NULL);
-		need_iv = true;
-	} else {
-		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_RUNNING;
-		/* Always refresh the start time. */
-		cbk->cb_time.ct_start_time = time(NULL);
-		/* XXX: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+	if (pool_nr == 0) {
+		need_join = false;
+		D_GOTO(out_iv, rc = 1);
 	}
 
-	rc = chk_bk_update_engine(cbk);
-	if (rc != 0) {
-		need_iv = true;
-		goto out;
-	}
+	rc = chk_pools_load_list(ins, cbk->cb_gen, 0, pool_nr, pools);
+	if (rc != 0)
+		goto out_notify;
 
-	if (unlikely(d_list_empty(&ins->ci_pool_list)))
-		goto out;
+	rc = chk_engine_start_post(ins);
+	if (rc != 0)
+		goto out_stop;
 
 	ins->ci_sched_running = 1;
 
 	rc = dss_ult_create(chk_engine_sched, ins, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ,
 			    &ins->ci_sched);
-	if (rc != 0)
-		need_iv = true;
-	else
-		/* chk_engine_sched will do IV to leader. */
-		need_iv = false;
-
-out:
-	ins->ci_starting = 0;
-	d_rank_list_free(rank_list);
-
-	if (rc != 0 && joined) {
-		chk_engine_exit(ins, CHK__CHECK_INST_STATUS__CIS_FAILED,
-				CHK__CHECK_POOL_STATUS__CPS_IMPLICATED);
-	} else if (need_iv && cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_IMPLICATED &&
-		   ins->ci_iv_ns != NULL) {
-		iv.ci_gen = cbk->cb_gen;
-		iv.ci_phase = cbk->cb_phase;
-		iv.ci_ins_status = cbk->cb_ins_status;
-		iv.ci_to_leader = 1;
-
-		/* Notify the leader that check instance exit on the engine. */
-		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
-				   CRT_IV_SYNC_EAGER, true);
-		if (rc != 0)
-			D_ERROR(DF_ENGINE" on rank %u failed to notify leader "
-				"for its changes, status %u: "DF_RC"\n",
-				DP_ENGINE(ins), myrank, cbk->cb_ins_status, DP_RC(rc));
-	}
-
 	if (rc != 0) {
-		chk_destroy_pending_tree(ins);
-		chk_destroy_pool_tree(ins);
+		ins->ci_sched_running = 0;
+		goto out_stop;
 	}
 
-	/*
-	 * XXX: It is unnecessary to destroy the IV namespace that can be handled when next
-	 *	CHK_START or instance fini.
-	 */
+	goto out_log;
 
+out_stop:
+	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
+		chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
+				  CHK_INVAL_PHASE, NULL);
+	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
+		cbk->cb_time.ct_stop_time = time(NULL);
+		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
+		rc1 = chk_bk_update_engine(cbk);
+		if (rc1 != 0)
+			D_WARN(DF_ENGINE" failed to update engine bookmark: "DF_RC"\n",
+			       DP_ENGINE(ins), DP_RC(rc1));
+	}
+out_notify:
+	iv.ci_gen = cbk->cb_gen;
+	iv.ci_phase = cbk->cb_phase;
+	iv.ci_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
+	iv.ci_to_leader = 1;
+
+	/* Notify the leader that check instance exit on the engine. */
+	rc1 = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_TO_ROOT,
+			    CRT_IV_SYNC_EAGER, true);
+	if (rc1 != 0)
+		D_ERROR(DF_ENGINE" on rank %u failed to notify leader for its exit, status %u: "
+			DF_RC"\n", DP_ENGINE(ins), myrank, cbk->cb_ins_status, DP_RC(rc1));
+out_iv:
+	chk_iv_ns_cleanup(&ins->ci_iv_ns);
+out_group:
+	if (ins->ci_iv_group != NULL) {
+		crt_group_secondary_destroy(ins->ci_iv_group);
+		ins->ci_iv_group = NULL;
+	}
+out_tree:
+	chk_destroy_pending_tree(ins);
+	chk_destroy_pool_tree(ins);
+out_log:
 	if (need_join)
-		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" rejoin on rank %u: "DF_RC"\n",
 			 DP_ENGINE(ins), myrank, DP_RC(rc));
+	ins->ci_starting = 0;
 }
 
 void
@@ -3004,7 +2925,7 @@ chk_engine_init(void)
 	}
 
 prop:
-	rc = chk_prop_fetch(&chk_engine->ci_prop, NULL);
+	rc = chk_prop_fetch(&chk_engine->ci_prop, &chk_engine->ci_ranks);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 fini:

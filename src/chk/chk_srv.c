@@ -229,14 +229,23 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 {
 	struct chk_rejoin_in	*cri = crt_req_get(rpc);
 	struct chk_rejoin_out	*cro = crt_reply_get(rpc);
+	uuid_t			*pools = NULL;
+	int			 pool_nr = 0;
 	int			 rc;
 
-	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, cri->cri_phase);
+	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, &pool_nr, &pools);
 
 	cro->cro_status = rc;
+	if (rc == 0) {
+		cro->cro_pools.ca_count = pool_nr;
+		cro->cro_pools.ca_arrays = pools;
+	}
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check rejoin: "DF_RC"\n", DP_RC(rc));
+
+	D_FREE(pools);
 }
 
 static int

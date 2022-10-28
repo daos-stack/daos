@@ -249,11 +249,12 @@ CRT_RPC_DECLARE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 #define DAOS_ISEQ_CHK_REJOIN							\
 	((uint64_t)		(cri_gen)		CRT_VAR)		\
 	((d_rank_t)		(cri_rank)		CRT_VAR)		\
-	((d_rank_t)		(cri_phase)		CRT_VAR)
+	((d_rank_t)		(cri_padding)		CRT_VAR)
 
 #define DAOS_OSEQ_CHK_REJOIN							\
 	((int32_t)		(cro_status)		CRT_VAR)		\
-	((uint32_t)		(cro_padding)		CRT_VAR)
+	((uint32_t)		(cro_padding)		CRT_VAR)		\
+	((uuid_t)		(cro_pools)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(chk_rejoin, DAOS_ISEQ_CHK_REJOIN, DAOS_OSEQ_CHK_REJOIN);
 
@@ -699,7 +700,7 @@ int chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 
 int chk_leader_notify(struct chk_iv *iv);
 
-int chk_leader_rejoin(uint64_t gen, d_rank_t rank, uint32_t phase);
+int chk_leader_rejoin(uint64_t gen, d_rank_t rank, int *pool_nr, uuid_t **pools);
 
 void chk_leader_pause(void);
 
@@ -739,7 +740,8 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
 		      d_sg_list_t *details, uint64_t *seq);
 
-int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t phase);
+int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank,
+		      uint32_t *pool_nr, uuid_t **pools);
 
 /* chk_updcall.c */
 

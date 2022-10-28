@@ -731,11 +731,12 @@ out:
 }
 
 int
-chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t phase)
+chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t *pool_nr, uuid_t **pools)
 {
 	crt_rpc_t		*req;
 	struct chk_rejoin_in	*cri;
 	struct chk_rejoin_out	*cro;
+	uuid_t			*tmp;
 	int			 rc;
 
 	rc = chk_sg_rpc_prepare(leader, CHK_REJOIN, &req);
@@ -745,7 +746,6 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t phase)
 	cri = crt_req_get(req);
 	cri->cri_gen = gen;
 	cri->cri_rank = rank;
-	cri->cri_phase = phase;
 
 	rc = dss_rpc_send(req);
 	if (rc != 0)
@@ -753,6 +753,15 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t phase)
 
 	cro = crt_reply_get(req);
 	rc = cro->cro_status;
+	if (rc == 0 && cro->cro_pools.ca_count > 0) {
+		D_ALLOC(tmp, cro->cro_pools.ca_count);
+		if (tmp == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		memcpy(tmp, cro->cro_pools.ca_arrays, sizeof(*tmp) * cro->cro_pools.ca_count);
+		*pool_nr = cro->cro_pools.ca_count;
+		*pools = tmp;
+	}
 
 out:
 	if (req != NULL)
