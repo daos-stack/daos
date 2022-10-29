@@ -212,13 +212,13 @@ chk_prop_fetch(struct chk_property *cpp, d_rank_list_t **rank_list)
 		rc = chk_db_fetch(CHK_RANKS, strlen(CHK_RANKS), ranks->rl_ranks,
 				  sizeof(*ranks->rl_ranks) * ranks->rl_nr);
 		/*
-		 * CHK_PROPERTY and CHK_RANKS must be exist together.
+		 * CHK_PROPERTY and CHK_RANKS are bound together, either both exist or both not.
 		 * Otherwise there is local corruption.
 		 */
 		if (rc == -DER_NONEXIST) {
 			d_rank_list_free(ranks);
 			ranks = NULL;
-			D_GOTO(out, rc = -DER_IO);
+			rc = -DER_IO;
 		}
 
 		if (rc != 0)

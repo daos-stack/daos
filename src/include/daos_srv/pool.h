@@ -176,6 +176,7 @@ int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
+int ds_pool_start_with_svc(uuid_t uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
@@ -362,7 +363,11 @@ struct ds_pool_clue {
 	int				 pc_rc;
 	uint32_t			 pc_label_len;
 	uint32_t			 pc_tgt_nr;
-	uint32_t			 pc_padding;
+	/*
+	 * DAOS check phase for current pool shard. Different pool shards may claim different
+	 * check phase because some shards may has ever missed the RPC for check phase update.
+	 */
+	uint32_t			 pc_phase;
 	struct ds_pool_svc_clue		*pc_svc_clue;
 	char				*pc_label;
 	uint32_t			*pc_tgt_status;
@@ -382,7 +387,7 @@ struct ds_pool_clues {
  * If this callback returns 0, the pool with \a uuid will be glanced at;
  * otherwise, the pool with \a uuid will be skipped.
  */
-typedef int (*ds_pool_clues_init_filter_t)(uuid_t uuid, void *arg);
+typedef int (*ds_pool_clues_init_filter_t)(uuid_t uuid, void *arg, int *phase);
 
 int ds_pool_clues_init(ds_pool_clues_init_filter_t filter, void *filter_arg,
 		       struct ds_pool_clues *clues_out);
