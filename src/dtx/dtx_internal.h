@@ -110,7 +110,7 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_AGE_PRESERVE	3
 
 /* The threshold for yield CPU when handle DTX RPC. */
-#define DTX_RPC_YIELD_THD	32
+#define DTX_RPC_YIELD_THD	16
 
 /* The time threshold for triggering DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
