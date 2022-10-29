@@ -100,6 +100,13 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	D_ALIGNED_ALLOC(hdl, CACHELINE_SIZE, sizeof(dav_obj_t));
 	if (hdl == NULL) {
 		err = ENOMEM;
+		goto out0;
+	}
+
+	rc = umem_cache_alloc(store, &hdl->do_cache, 0);
+	if (rc != 0) {
+		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+		err = rc;
 		goto out1;
 	}
 
@@ -117,6 +124,13 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		hdl->do_store->stor_ops = &_store_ops;
 	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
+
+	rc = umem_cache_map_range(hdl->do_cache, 0, base, sz >> UMEM_CACHE_PAGE_SZ_SHIFT);
+	if (rc != 0) {
+		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+		err = rc;
+		goto out2;
+	}
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
@@ -207,8 +221,10 @@ out2:
 		D_FREE(hdl->do_utx);
 	}
 	D_FREE(hdl->do_path);
-	D_FREE(hdl);
+	umem_cache_free(hdl->do_cache);
 out1:
+	D_FREE(hdl);
+out0:
 	munmap(base, sz);
 	errno = err;
 	return NULL;
@@ -319,6 +335,7 @@ dav_obj_close(dav_obj_t *hdl)
 		dav_umem_wtx_cleanup(hdl->do_utx);
 		D_FREE(hdl->do_utx);
 	}
+	umem_cache_free(hdl->do_cache);
 	DAV_DBG("pool %s is closed", hdl->do_path);
 	D_FREE(hdl->do_path);
 	D_FREE(hdl);

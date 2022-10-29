@@ -62,6 +62,7 @@ typedef struct dav_obj {
 	int				 nested_tx;
 	struct umem_wal_tx		*do_utx;
 	struct umem_store		*do_store;
+	struct umem_cache               *do_cache;
 
 	struct dav_clogs		 clogs __attribute__ ((__aligned__(CACHELINE_SIZE)));
 } dav_obj_t;

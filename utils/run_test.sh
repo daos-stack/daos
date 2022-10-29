@@ -144,7 +144,7 @@ if [ -d "/mnt/daos" ]; then
         sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
 
         export VOS_BDEV_CLASS="AIO"
-        run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
+        #run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
         rm -f "${AIO_DEV}"
         dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20

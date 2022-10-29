@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -176,15 +176,15 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 }
 
 struct umem_store_ops vos_store_ops = {
-	.so_read	= vos_meta_readv,
-	.so_write	= vos_meta_writev,
-	.so_flush_prep	= vos_meta_flush_prep,
-	.so_flush_copy	= vos_meta_flush_copy,
-	.so_flush_post	= vos_meta_flush_post,
-	.so_wal_reserv	= vos_wal_reserve,
-	.so_wal_submit	= vos_wal_commit,
-	.so_wal_replay	= vos_wal_replay,
-	.so_wal_id_cmp	= vos_wal_id_cmp,
+    .so_read       = vos_meta_readv,
+    .so_write      = vos_meta_writev,
+    .so_flush_prep = vos_meta_flush_prep,
+    .so_flush_copy = vos_meta_flush_copy,
+    .so_flush_post = vos_meta_flush_post,
+    .so_wal_reserv = vos_wal_reserve,
+    .so_wal_submit = vos_wal_commit,
+    .so_wal_replay = vos_wal_replay,
+    .so_wal_id_cmp = vos_wal_id_cmp,
 };
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
