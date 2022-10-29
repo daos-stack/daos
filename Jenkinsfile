@@ -579,11 +579,11 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
-                                                                qb: quickBuild()) +
+                                                                qb: true) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8') + '"' +
+                                                quickBuildDeps('el8', true) + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -719,7 +719,6 @@ pipeline {
                     steps {
                         unitTest timeout_time: 60,
                                  unstash_opt: true,
-                                 unstash_tests: false,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
