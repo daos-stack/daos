@@ -9,12 +9,15 @@
 
 #define AD_MEM_DEBUG	0
 
-static struct ad_arena *alloc_arena(struct ad_blob *blob, bool force);
-static void free_arena(struct ad_arena *arena, bool force);
-static struct ad_group *alloc_group(struct ad_arena *arena, bool force);
-static void free_group(struct ad_group *grp, bool force);
+static struct ad_arena *arena_alloc(struct ad_blob *blob, bool force);
+static void arena_free(struct ad_arena *arena, bool force);
+static void arena_unbind(struct ad_arena *arena, bool reset);
 
-static int blob_fini(struct ad_blob *blob);
+static struct ad_group *alloc_group(struct ad_arena *arena, bool force);
+static void group_free(struct ad_group *grp, bool force);
+static void group_unbind(struct ad_group *grp, bool reset);
+
+static void blob_fini(struct ad_blob *blob);
 static int blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 			       struct ad_group_spec *specs, unsigned int specs_nr,
 			       struct ad_tx *tx);
@@ -103,7 +106,7 @@ group_decref(struct ad_group *grp)
 	D_ASSERT(grp->gp_ref > 0);
 	grp->gp_ref--;
 	if (grp->gp_ref == 0)
-		free_group(grp, false);
+		group_free(grp, false);
 }
 
 static void
@@ -118,7 +121,7 @@ arena_decref(struct ad_arena *arena)
 	D_ASSERT(arena->ar_ref > 0);
 	arena->ar_ref--;
 	if (arena->ar_ref == 0)
-		free_arena(arena, false);
+		arena_free(arena, false);
 }
 
 static inline int
@@ -139,19 +142,9 @@ blob_decref(struct ad_blob *blob)
 	D_ASSERT(blob->bb_ref > 0);
 	blob->bb_ref--;
 	if (blob->bb_ref == 0) {
-		if (blob->bb_dummy)
-			dummy_blob = NULL;
-
 		blob_fini(blob);
 		D_FREE(blob);
 	}
-}
-
-static void
-blob_handle_release(struct ad_blob_handle bh)
-{
-	if (bh.bh_blob)
-		blob_decref(bh.bh_blob);
 }
 
 static int
@@ -203,7 +196,6 @@ blob_init(struct ad_blob *blob)
 	 * so it does not require any special code to handle checkpoint of superblock.
 	 */
 	blob->bb_df = (struct ad_blob_df *)&blob->bb_pages[0].pa_rpg[ARENA_HDR_SIZE];
-	blob->bb_df->bd_incarnation = d_timeus_secdiff(0);
 
 	/* bitmap for reserving arena */
 	D_ALLOC(blob->bb_bmap_rsv, blob_bmap_size(blob));
@@ -211,12 +203,12 @@ blob_init(struct ad_blob *blob)
 		goto failed;
 
 	blob->bb_ars_lru_cap = min(blob->bb_pgs_nr, ARENA_LRU_MAX);
-	blob->bb_gps_lru_cap = min(blob->bb_pgs_nr * 8, GROUP_LRU_MAX);
+	blob->bb_gps_lru_cap = min(blob->bb_pgs_nr * 256, GROUP_LRU_MAX);
 
 	for (i = 0; i < blob->bb_ars_lru_cap; i++) {
 		struct ad_arena *arena;
 
-		arena = alloc_arena(NULL, true);
+		arena = arena_alloc(NULL, true);
 		if (!arena)
 			goto failed;
 
@@ -240,31 +232,27 @@ failed:
 	return -DER_NOMEM;
 }
 
-static int
+static void
 blob_fini(struct ad_blob *blob)
 {
 	struct ad_arena *arena;
 	struct ad_group *group;
 
 	D_DEBUG(DB_TRACE, "Finalizing blob\n");
-	while ((group = d_list_pop_entry(&blob->bb_gps_rsv, struct ad_group, gp_link))) {
-		D_ASSERT(group->gp_unpub);
-		group_decref(group);
-	}
-	while ((arena = d_list_pop_entry(&blob->bb_ars_rsv, struct ad_arena, ar_link))) {
-		D_ASSERT(arena->ar_unpub);
-		arena_decref(arena);
-	}
+	D_ASSERT(d_list_empty(&blob->bb_gps_rsv));
+	D_ASSERT(d_list_empty(&blob->bb_ars_rsv));
 
 	while ((group = d_list_pop_entry(&blob->bb_gps_lru, struct ad_group, gp_link)))
-		free_group(group, true);
+		group_free(group, true);
 	while ((arena = d_list_pop_entry(&blob->bb_ars_lru, struct ad_arena, ar_link)))
-		free_arena(arena, true);
+		arena_free(arena, true);
+
+	blob->bb_gps_lru_size = 0;
+	blob->bb_ars_lru_size = 0;
 
 	D_FREE(blob->bb_bmap_rsv);
 	D_FREE(blob->bb_pages);
 	D_FREE(blob->bb_mmap);
-	return 0;
 }
 
 static int
@@ -292,6 +280,8 @@ blob_load(struct ad_blob *blob)
 		}
 	}
 
+	/* overwrite the old incarnation */
+	bd->bd_incarnation = d_timeus_secdiff(0);
 	/* NB: @bd points to the first page, its content has been brought in by the above read.*/
 	for (i = 0; i < bd->bd_asp_nr; i++)
 		blob->bb_arena_last[i] = bd->bd_asp[i].as_last_used;
@@ -317,6 +307,43 @@ blob_set_opened(struct ad_blob *blob)
 		dummy_blob = blob;
 	}
 }
+
+static void
+blob_close(struct ad_blob *blob)
+{
+	struct ad_arena *arena;
+	struct ad_group *group;
+
+	D_ASSERT(blob->bb_opened > 0);
+	D_DEBUG(DB_TRACE, "Close blob, openers=%d\n", blob->bb_opened);
+	blob->bb_opened--;
+	if (blob->bb_opened > 0)
+		return;
+
+	D_DEBUG(DB_TRACE, "Evict unpublished groups and arenas\n");
+	while ((group = d_list_pop_entry(&blob->bb_gps_rsv, struct ad_group, gp_link))) {
+		D_ASSERT(group->gp_unpub);
+		group_decref(group);
+	}
+
+	while ((arena = d_list_pop_entry(&blob->bb_ars_rsv, struct ad_arena, ar_link))) {
+		D_ASSERT(arena->ar_unpub);
+		arena_decref(arena);
+	}
+
+	D_DEBUG(DB_TRACE, "Unbind groups and arenas in LRU\n");
+	d_list_for_each_entry(group, &blob->bb_gps_lru, gp_link)
+		group_unbind(group, false);
+
+	d_list_for_each_entry(arena, &blob->bb_ars_lru, ar_link)
+		arena_unbind(arena, false);
+
+	if (blob->bb_dummy) {
+		D_ASSERT(dummy_blob == blob);
+		dummy_blob = NULL;
+	}
+}
+
 
 /**
  * API design is a little bit confusing for now, the process is like:
@@ -379,6 +406,7 @@ ad_blob_post_create(struct ad_blob_handle bh)
 	bd->bd_addr		= store->stor_addr;
 	bd->bd_size		= blob_size(blob);
 	bd->bd_arena_size	= ARENA_SIZE;
+	bd->bd_incarnation	= d_timeus_secdiff(0);
 
 	/* register the default arena */
 	rc = blob_register_arena(blob, 0, grp_specs_def, ARRAY_SIZE(grp_specs_def), NULL);
@@ -418,7 +446,7 @@ ad_blob_post_create(struct ad_blob_handle bh)
 failed:
 	if (arena)
 		arena_decref(arena);
-	blob_handle_release(bh);
+	/* caller should call ad_blob_close() to actually free the handle */
 	return rc;
 }
 
@@ -437,6 +465,7 @@ ad_blob_prep_open(char *path, struct ad_blob_handle *bh)
 	} else {
 		if (dummy_blob) {
 			blob = dummy_blob;
+			D_DEBUG(DB_TRACE, "found dummy blob, refcount=%d\n", blob->bb_ref);
 			blob_addref(blob);
 		} else {
 			D_ALLOC_PTR(blob);
@@ -463,8 +492,10 @@ ad_blob_post_open(struct ad_blob_handle bh)
 	d_iov_t			 iov;
 	int			 rc;
 
-	if (blob->bb_opened)
+	if (blob->bb_opened) {
+		blob->bb_opened++;
 		return 0;
+	}
 
 	D_ALLOC_PTR(bd);
 	if (!bd)
@@ -501,10 +532,10 @@ ad_blob_post_open(struct ad_blob_handle bh)
 		goto failed;
 
 	blob_set_opened(blob);
-	D_FREE(bd);
+	D_FREE(bd); /* free the temporary buffer */
 	return 0;
 failed:
-	blob_handle_release(bh);
+	blob_decref(blob);
 	D_FREE(bd);
 	return rc;
 }
@@ -512,15 +543,26 @@ failed:
 int
 ad_blob_close(struct ad_blob_handle bh)
 {
-	blob_decref(bh.bh_blob);
+	struct ad_blob *blob = bh.bh_blob;
+
+	blob_close(blob);
+	blob_decref(blob);
 	return 0;
 }
 
 int
 ad_blob_destroy(struct ad_blob_handle bh)
 {
-	/* XXX: remove the file */
-	ad_blob_close(bh);
+	struct ad_blob *blob = bh.bh_blob;
+
+	if (blob->bb_opened > 1) {
+		D_ERROR("blob is still in use, opened=%d\n", blob->bb_opened);
+		return -DER_BUSY;
+	}
+
+	/* TODO: remove the file */
+	blob_close(blob);
+	blob_decref(blob);
 	return 0;
 }
 
@@ -684,7 +726,7 @@ arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 	}
 	/* no cached arena, allocate it now */
 
-	arena = alloc_arena(blob, false);
+	arena = arena_alloc(blob, false);
 	if (!arena)
 		return -DER_NOMEM;
 
@@ -1959,6 +2001,22 @@ ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 /****************************************************************************
  * A few helper functions:
  ****************************************************************************/
+static void
+group_unbind(struct ad_group *grp, bool reset)
+{
+	if (grp->gp_df && grp->gp_df->gd_back_ptr) {
+		D_ASSERT(grp == group_df2ptr(grp->gp_df));
+		grp->gp_df->gd_back_ptr = 0;
+		grp->gp_df = NULL;
+	}
+	if (grp->gp_arena) {
+		arena_decref(grp->gp_arena);
+		grp->gp_arena = NULL;
+	}
+
+	if (reset)
+		memset(grp, 0, sizeof(*grp));
+}
 
 static struct ad_group *
 alloc_group(struct ad_arena *arena, bool force)
@@ -1978,11 +2036,7 @@ alloc_group(struct ad_arena *arena, bool force)
 		if (!grp)
 			return NULL;
 	} else {
-		if (grp->gp_df && grp->gp_df->gd_back_ptr) {
-			D_ASSERT(grp == group_df2ptr(grp->gp_df));
-			grp->gp_df->gd_back_ptr = 0;
-		}
-		memset(grp, 0, sizeof(*grp));
+		group_unbind(grp, true);
 	}
 	D_INIT_LIST_HEAD(&grp->gp_link);
 	if (arena) {
@@ -1993,7 +2047,7 @@ alloc_group(struct ad_arena *arena, bool force)
 }
 
 static void
-free_group(struct ad_group *grp, bool force)
+group_free(struct ad_group *grp, bool force)
 {
 	D_ASSERT(grp->gp_ref == 0);
 	D_ASSERT(d_list_empty(&grp->gp_link));
@@ -2014,15 +2068,39 @@ free_group(struct ad_group *grp, bool force)
 		/* release an old one from the LRU */
 		grp = d_list_pop_entry(&blob->bb_gps_lru, struct ad_group, gp_link);
 	}
-	if (grp->gp_arena)
-		arena_decref(grp->gp_arena);
-	if (grp->gp_df)
-		grp->gp_df->gd_back_ptr = 0;
+	group_unbind(grp, false);
 	D_FREE(grp);
 }
 
+static void
+arena_unbind(struct ad_arena *arena, bool reset)
+{
+	if (arena->ar_blob) {
+		blob_decref(arena->ar_blob);
+		arena->ar_blob = NULL;
+	}
+
+	if (arena->ar_df && arena->ar_df->ad_back_ptr) {
+		D_ASSERT(arena_df2ptr(arena->ar_df) == arena);
+		arena->ar_df->ad_back_ptr = 0;
+		arena->ar_df = NULL;
+	}
+
+	if (reset) {
+		struct ad_group_df **p1;
+		struct ad_group_df **p2;
+
+		p1 = arena->ar_size_sorter;
+		p2 = arena->ar_addr_sorter;
+
+		memset(arena, 0, sizeof(*arena));
+		arena->ar_size_sorter = p1;
+		arena->ar_addr_sorter = p2;
+	}
+}
+
 static struct ad_arena *
-alloc_arena(struct ad_blob *blob, bool force)
+arena_alloc(struct ad_blob *blob, bool force)
 {
 	struct ad_arena *arena = NULL;
 
@@ -2033,7 +2111,9 @@ alloc_arena(struct ad_blob *blob, bool force)
 			blob->bb_ars_lru_size--;
 	}
 
-	if (!arena) {
+	if (arena) {
+		arena_unbind(arena, true);
+	} else {
 		D_ALLOC_PTR(arena);
 		if (!arena)
 			return NULL;
@@ -2045,22 +2125,8 @@ alloc_arena(struct ad_blob *blob, bool force)
 		D_ALLOC(arena->ar_addr_sorter, ARENA_GRP_MAX * sizeof(struct ad_group_df *));
 		if (!arena->ar_addr_sorter)
 			goto failed;
-
-	} else {
-		struct ad_group_df **p1;
-		struct ad_group_df **p2;
-
-		if (arena->ar_df && arena->ar_df->ad_back_ptr) {
-			D_ASSERT(arena_df2ptr(arena->ar_df) == arena);
-			arena->ar_df->ad_back_ptr = 0;
-		}
-		p1 = arena->ar_size_sorter;
-		p2 = arena->ar_addr_sorter;
-
-		memset(arena, 0, sizeof(*arena));
-		arena->ar_size_sorter = p1;
-		arena->ar_addr_sorter = p2;
 	}
+
 	D_INIT_LIST_HEAD(&arena->ar_link);
 	if (blob) {
 		blob_addref(blob);
@@ -2068,12 +2134,12 @@ alloc_arena(struct ad_blob *blob, bool force)
 	}
 	return arena;
 failed:
-	free_arena(arena, true);
+	arena_free(arena, true);
 	return NULL;
 }
 
 static void
-free_arena(struct ad_arena *arena, bool force)
+arena_free(struct ad_arena *arena, bool force)
 {
 	D_ASSERT(arena->ar_ref == 0);
 	D_ASSERT(d_list_empty(&arena->ar_link));
@@ -2093,10 +2159,7 @@ free_arena(struct ad_arena *arena, bool force)
 
 	D_FREE(arena->ar_addr_sorter);
 	D_FREE(arena->ar_size_sorter);
-	if (arena->ar_blob)
-		blob_decref(arena->ar_blob);
-	if (arena->ar_df)
-		arena->ar_df->ad_back_ptr = 0;
+	arena_unbind(arena, false);
 
 	D_FREE(arena);
 }

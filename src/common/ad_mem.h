@@ -156,7 +156,7 @@ struct ad_arena_df {
 	uint64_t		ad_addr;
 	/** for future use */
 	uint64_t		ad_reserved[2];
-	/** 128 bytes (1024 bits) for each, each bit represents 32K(minimum group size) */
+	/** 64 bytes (512 bits) for each, each bit represents 32K(minimum group size) */
 	uint64_t		ad_bmap[ARENA_GRP_BMSZ];
 	/** it is DRAM reference of arena (the DRAM arena is created on demand) */
 	uint64_t		ad_back_ptr;
@@ -275,8 +275,8 @@ struct ad_blob {
 	int			 bb_ref;
 	/** is dummy blob, for unit test */
 	bool			 bb_dummy;
-	/** opened blob */
-	bool			 bb_opened;
+	/** open refcount */
+	int			 bb_opened;
 	/** number of pages */
 	unsigned int		 bb_pgs_nr;
 	/**
