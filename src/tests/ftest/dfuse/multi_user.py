@@ -42,7 +42,7 @@ class MultiUser(DfuseTestBase):
         print(ret0)
         self.assertEqual(ret0['exit_status'], 0)
 
-        self.get_dmg_command().pool_update_acl(self.pool.label, entry="A::root@:rw")
+        self.get_dmg_command().pool_update_acl(self.pool.identifier, entry="A::root@:rw")
 
         ret = general_utils.run_pcmd(
             self.hostlist_clients,
