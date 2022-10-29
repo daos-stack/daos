@@ -756,4 +756,52 @@ struct umem_store {
 	struct umem_store_ops	*stor_ops;
 };
 
+/** 2 MB page */
+struct umem_page {
+	/** page ID */
+	unsigned int		 pg_id;
+	/** refcount */
+	int			 pg_ref;
+	/** last committed WAL transaction ID */
+	uint64_t		 pg_last_committed;
+	/** last inflight WAL trasaction ID */
+	uint64_t		 pg_last_inflight;
+	/** link chain on global dirty list */
+	d_list_t		 pg_link;
+	/** bitmap for each dirty 16K unit */
+	uint8_t			 pg_bmap[16];
+	/** page memory address */
+	void			*pg_addr;
+	/** copied page memory address, for checkpoint */
+	void			*pg_addr_ckpt;
+}
+
+/** Global cache status for each umem_store */
+struct umem_cache {
+	struct umem_store	*ca_store;
+	/** all the dirty pages */
+	d_list_t		 ca_pgs_dirty;
+	/** array of all umem pages, sorted by umem_page::pg_id */
+	struct umem_page	*ca_pages;
+	/** TODO: some other global status */
+};
+
+/**
+ * Touched the region identified by @addr and @size, it will mark pages in this region as
+ * dirty (also set bitmap within each page), and put it on dirty list
+ *
+ * This function is called by allocator(probably VOS as well) each time it creates memory
+ * snapshot (calls tx_snap).
+ */
+int
+umem_cache_touch(struct umem_cache *umem_cache *cache, daos_off_t addr, daos_size_t size);
+
+/** 
+ * Write all dirty pages before @wal_tx to MD blob.
+ *
+ * This function can yield internally, it is called by checkpoint service of upper level stack.
+ */
+int
+umem_cache_checkpoint(struct umem_cache *umem_cache *cache, uint64_t wal_tx);
+
 #endif /* __DAOS_MEM_H__ */
