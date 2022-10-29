@@ -561,7 +561,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/*
 	 * Note that req->svc_ranks in this dRPC indicates on which ranks we
 	 * shall attempt to destroy the pool, not the set of PS ranks, despite
-	 * the name. See the caller code in mgmt_svc.PoolDestroy.
+	 * the name. See the caller code in mgmtSvc.PoolDestroy.
 	 */
 	ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (ranks == NULL)

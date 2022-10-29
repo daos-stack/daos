@@ -598,12 +598,12 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-	// Note that we set req.SvcRanks to all ranks in the system, not the PS
-	// replicas, not the up ranks in the pool. Doing such a "blind" destroy
-	// avoids contacting the PS, who may have already been destroyed by a
-	// previous pool destroy attempt or otherwise unavailable at this point.
-	// Moreover, we will also clean up pool resources on ranks that are now
-	// available but have previously been excluded from the pool.
+	// Note that, here, we set req.SvcRanks to all ranks in the system, not
+	// the PS replicas, not the up ranks in the pool. Doing such a "blind"
+	// destroy avoids contacting the PS, who may have already been destroyed
+	// by a previous pool destroy attempt or otherwise unavailable at this
+	// point. Moreover, we will also clean up pool resources on ranks that
+	// are now available but have previously been excluded from the pool.
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return nil, err
