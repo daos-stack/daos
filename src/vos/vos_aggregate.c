@@ -1244,10 +1244,11 @@ out:
 }
 
 static int
-fill_segments(daos_handle_t ih, struct agg_merge_window *mw, struct umem_instance *umm,
-	      unsigned int *acts)
+fill_segments(daos_handle_t ih, struct vos_agg_param *agg_param, unsigned int *acts)
 {
+	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
+	struct umem_instance	*umm = agg_param->ap_umm;
 	struct agg_lgc_seg	*lgc_seg;
 	unsigned int		 i, scm_max;
 	int			 rc = 0;
@@ -1758,7 +1759,7 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	}
 
 	/* Transfer data from old logical records to reserved new segments */
-	rc = fill_segments(ih, mw, agg_param->ap_umm, acts);
+	rc = fill_segments(ih, agg_param, acts);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
 			"Fill segments "DF_EXT" error: "DF_RC"\n",

@@ -146,6 +146,8 @@ typedef enum {
 	UMEM_CLASS_PMEM,
 	/** persistent memory but ignore PMDK snapshot */
 	UMEM_CLASS_PMEM_NO_SNAP,
+	/** blob backed memory */
+	UMEM_CLASS_BMEM,
 	/** ad-hoc memory */
 	UMEM_CLASS_ADMEM,
 	/** unknown */
