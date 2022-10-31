@@ -97,9 +97,7 @@ restock(struct d_slab_type *type, int count)
 
 	if (type->st_reg.sr_max_free_desc != 0 &&
 	    type->st_free_count >= type->st_reg.sr_max_free_desc) {
-		D_TRACE_DEBUG(DB_ANY, type,
-			      "free_count %d, max_free_desc %d, "
-			      "cannot append.",
+		D_TRACE_DEBUG(DB_ANY, type, "free_count %d, max_free_desc %d, cannot append.",
 			      type->st_free_count, type->st_reg.sr_max_free_desc);
 		return 0;
 	}
