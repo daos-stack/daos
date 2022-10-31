@@ -796,7 +796,7 @@ struct umem_cache {
 int
 umem_cache_touch(struct umem_cache *cache, daos_off_t addr, daos_size_t size);
 
-/** 
+/**
  * Write all dirty pages before @wal_tx to MD blob.
  *
  * This function can yield internally, it is called by checkpoint service of upper level stack.
