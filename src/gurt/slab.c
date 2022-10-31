@@ -272,6 +272,7 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type 
 	type->st_reg   = *reg;
 
 	create_many(type);
+	create_many(type);
 
 	if (type->st_free_count == 0) {
 		/* If create_many() failed to create any descriptors then
