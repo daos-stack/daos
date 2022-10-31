@@ -1013,7 +1013,7 @@ int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_acti
 int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
 
 /*
- * Replay committed transactions in WAL on post-crash recovery
+ * Replay committed transactions in the WAL on post-crash recovery
  *
  * \param[in]	mc		BIO meta context
  * \param[in]	replay_cb	Replay callback for individual action
