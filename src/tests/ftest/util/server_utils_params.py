@@ -741,11 +741,12 @@ class StorageTierYamlParameters(YamlParameters):
 
         # Additional 'class: ram' options
         self.scm_size = BasicParameter(None, position=4)
+        self.scm_hugepages_disabled = BasicParameter(None, position=5)
 
         # Additional 'class: bdev' options
-        self.bdev_list = BasicParameter(None, position=5)
-        self.bdev_number = BasicParameter(None, position=6)
-        self.bdev_size = BasicParameter(None, position=7)
+        self.bdev_list = BasicParameter(None, position=6)
+        self.bdev_number = BasicParameter(None, position=7)
+        self.bdev_size = BasicParameter(None, position=8)
 
     @property
     def using_dcpm(self):
