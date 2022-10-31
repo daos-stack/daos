@@ -619,16 +619,9 @@ shard_task_abort(tse_task_t *task, void *arg)
 static inline void
 dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
-		epoch->oe_value = crt_hlc_get();
-		epoch->oe_first = epoch->oe_value;
-		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
-		epoch->oe_flags = 0;
-	} else {
-		epoch->oe_value = DAOS_EPOCH_MAX;
-		epoch->oe_first = epoch->oe_value;
-		epoch->oe_flags = 0;
-	}
+	epoch->oe_value = DAOS_EPOCH_MAX;
+	epoch->oe_first = epoch->oe_value;
+	epoch->oe_flags = 0;
 }
 
 static inline void
