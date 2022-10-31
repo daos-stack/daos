@@ -1174,11 +1174,11 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	rc = d_slab_register(&fs_handle->dpi_slab, &slab_reg, &fs_handle->dpi_read_slab);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(err_ie_remove, rc);
+		D_GOTO(err_slab, rc);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+		D_GOTO(err_slab, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
@@ -1187,6 +1187,8 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (rc == -DER_SUCCESS)
 		return rc;
 
+err_slab:
+	d_slab_destroy(&fs_handle->dpi_slab);
 err_ie_remove:
 	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
