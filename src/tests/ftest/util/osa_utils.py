@@ -544,7 +544,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
                                out_queue=self.out_queue)
-        if fail_on_warning is True and not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def run_mdtest_thread(self, oclass="RP_2G1"):
