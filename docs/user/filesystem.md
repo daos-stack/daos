@@ -121,7 +121,7 @@ support.  Additionally, DFuse provides an Interception Library `libioil` to
 transparently allow POSIX clients to talk directly to DAOS servers, providing
 OS-Bypass for I/O without modifying or recompiling of the application.
 
-DFuse is layered on to of DFS.  Data written via DFuse can be accessed by DFS and
+DFuse is layered on top of DFS.  Data written via DFuse can be accessed by DFS and
 vice versa, even simultaneously from different client applications.
 
 ### DFuse Daemon
@@ -131,7 +131,7 @@ to DAOS. It should be run with the credentials of the user, and typically will
 be started and stopped on each compute node as part of the prolog and epilog
 scripts of any resource manager or scheduler in use.
 
-### Core binding and threads.
+### Core binding and threads
 
 DFuse will launch one thread per available core by default, although this can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
@@ -139,14 +139,14 @@ use kernel level tasksets which will bind DFuse to a subset of cores. This can b
 done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
 will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
-number of cores then overcommiting via the `--thread-count` option is desirable.
+number of cores then overcommiting via the `--thread-count` option may be desirable.
 
 ### Restrictions
 
 DFuse by default is limited to a single user. Access to the filesystem from other users,
-including root, will not be honored. As a consequence of this, the `chown`
+including root, will not be honoured. As a consequence of this, the `chown`
 and `chgrp` calls are not supported.  Hard links and special device files,
-except symbolic links, are not supported, nor are any ACLs beyond standand
+except symbolic links, are not supported, nor are any ACLs beyond standard
 POSIX permissions.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
@@ -160,6 +160,22 @@ guaranteed to be consistent across restarts of DFuse or across nodes.
 
 It is not possible to see pool/container listings through DFuse.
 So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
+
+### Multi-user mode
+
+The `--multi-user` option will put DFuse into multi user mode where it will tell the kernel to
+make the filesystem available to all users on a node rather than only the user running the DFuse
+process.  This makes DFuse a appear like a generic multi-user filesystem and the standard `chown`
+and `chgrp` calls are enabled, all filesystem entries will be owned by the user that created them
+as is normal in a POSIX filesystem.
+
+Links to other containers can be created in this mode even if the new containers are not owned
+by the user running DFuse.  In this case the user running DFuse should be given 'r' access to the
+pool if required and the container create command will apply permissions required to the container
+at create time.
+
+It is anticipated that in this mode DFuse will be configured to start at boot time and run as a
+general purpose filesystem providing access to multiple users.
 
 ### Launching
 
@@ -185,19 +201,16 @@ Additionally, there are several optional command-line options:
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
 
-When DFuse starts, it will register a single mount with the kernel, at the
-location specified by the `--mountpoint` option. This mount will be
-visible in `/proc/mounts`, and possibly in the output of `df`.
-The contents of multiple pools/containers will be accessible via this
-single kernel mountpoint.
+When DFuse starts, it will register a single mount with the kernel, at the location specified.
+This mount will be visible in `/proc/mounts`, and possibly in the output of `df`. The contents of
+multiple pools/containers may be accessible via this single kernel mount.
 
-Below is an example of creating and mounting a POSIX container under
-the /tmp/dfuse mountpoint.
+Below is an example of creating and mounting a POSIX container under the /tmp/dfuse mountpoint.
 
 ```bash
 $ mkdir /tmp/dfuse
 
-$ dfuse -m /tmp/dfuse --pool tank --cont mycont
+$ dfuse /tmp/dfuse tank mycont
 
 $ touch /tmp/dfuse/foo
 
@@ -338,8 +351,7 @@ These are two command line options to control the DFuse process itself.
 | --disable-caching       | Disables all caching      |
 | --disable-wb-caching    | Disables write-back cache |
 
-These will affect all containers accessed via DFuse, regardless of any
-container attributes.
+These will affect all containers accessed via DFuse, regardless of any container attributes.
 
 ### Permissions
 
