@@ -864,7 +864,7 @@ class DaosServerManager(SubprocessManager):
         # disks, etc. This clearing step is built into the server start steps. It'll look at the
         # engine_params of the server_manager and clear the SCM set there, so we need to overwrite
         # it before starting to the values from the generated config.
-        self.manager.job.yaml.update_engine_storage_config(generated_yaml, storage_class)
+        self.manager.job.yaml.override_params(generated_yaml, storage_class)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
