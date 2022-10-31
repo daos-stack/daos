@@ -65,6 +65,7 @@ type propHdlr struct {
 // should only need to modify this map.
 //
 // The structure of an entry is as follows:
+//
 //	"key": {		           // used as the --property name
 //		C.DAOS_PROP_ENUM_VAL,      // identify the property type
 //		"short description",       // human-readable (short) description
@@ -74,7 +75,7 @@ type propHdlr struct {
 //		},
 //		closure of type entryStringer, // optional pretty-printer
 //		bool,			   // if true, property may not be set
-// 	},
+//	},
 var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_LABEL: {
 		C.DAOS_PROP_CO_LABEL,

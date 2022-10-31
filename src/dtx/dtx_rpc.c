@@ -822,7 +822,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 
 out:
 	rc2 = dtx_rpc_post(&head, tree_hdl, &dra, &helper, rc);
-	if (rc2 > 0 || rc2 == -DER_NONEXIST)
+	if (rc2 > 0 || rc2 == -DER_NONEXIST || rc2 == -DER_EXCLUDED)
 		rc2 = 0;
 
 	if (dtis != &dti)
@@ -833,16 +833,19 @@ out:
 
 log:
 	if (rc != 0 || rc1 != 0 || rc2 != 0) {
-		D_ERROR("Failed to commit DTXs "DF_DTI", count %d: rc %d %d %d, %s committed\n",
-			DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2,
+		D_ERROR("Some failure during commit DTX entries "DF_DTI", epoch "
+			DF_X64", count %d: rc %d %d %d, %s committed\n",
+			DP_DTI(&dtes[0]->dte_xid), epoch, count, rc, rc1, rc2,
 			committed > 0 ? "partial" : "nothing");
 
-		if (epoch != 0 && committed == 0) {
-			D_ASSERT(count == 1);
+		if (epoch != 0) {
+			if (committed == 0) {
+				D_ASSERT(count == 1);
 
-			dtx_abort(cont, dtes[0], epoch);
-		} else {
-			rc = rc1 = rc2 = 0;
+				dtx_abort(cont, dtes[0], epoch);
+			} else {
+				rc = rc1 = rc2 = 0;
+			}
 		}
 	} else {
 		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI", count %d\n",

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -133,6 +132,146 @@ class SimpleProfiler():
         avg_time = sum(data) / len(data) if data else 0
 
         return max_time, min_time, avg_time
+
+
+class RemoteCommandResult():
+    """Stores the command result from a Task object."""
+
+    class ResultData():
+        # pylint: disable=too-few-public-methods
+        """Command result data for the set of hosts."""
+
+        def __init__(self, command, returncode, hosts, stdout, timeout):
+            """Initialize a ResultData object.
+
+            Args:
+                command (str): the executed command
+                returncode (int): the return code of the executed command
+                hosts (NodeSet): the host(s) on which the executed command yielded this result
+                stdout (list): the result of the executed command split by newlines
+                timeout (bool): indicator for a command timeout
+            """
+            self.command = command
+            self.returncode = returncode
+            self.hosts = hosts
+            self.stdout = stdout
+            self.timeout = timeout
+
+    def __init__(self, command, task):
+        """Create a RemoteCommandResult object.
+
+        Args:
+            command (str): command executed
+            task (Task): object containing the results from an executed clush command
+        """
+        self.output = []
+        self._process_task(task, command)
+
+    @property
+    def homogeneous(self):
+        """Did all the hosts produce the same output.
+
+        Returns:
+            bool: if all the hosts produced the same output
+
+        """
+        return len(self.output) == 1
+
+    @property
+    def passed(self):
+        """Did the command pass on all the hosts.
+
+        Returns:
+            bool: if the command was successful on each host
+
+        """
+        all_zero = all(data.returncode == 0 for data in self.output)
+        return all_zero and not self.timeout
+
+    @property
+    def timeout(self):
+        """Did the command timeout on any hosts.
+
+        Returns:
+            bool: True if the command timed out on at least one set of hosts; False otherwise
+
+        """
+        return any(data.timeout for data in self.output)
+
+    def _process_task(self, task, command):
+        """Populate the output list and determine the passed result for the specified task.
+
+        Args:
+            task (Task): a ClusterShell.Task.Task object for the executed command
+            command (str): the executed command
+        """
+        # Get a dictionary of host list values for each unique return code key
+        results = dict(task.iter_retcodes())
+
+        # Get a list of any hosts that timed out
+        timed_out = [str(hosts) for hosts in task.iter_keys_timeout()]
+
+        # Populate the a list of unique output for each NodeSet
+        for code in sorted(results):
+            output_data = list(task.iter_buffers(results[code]))
+            if not output_data:
+                output_data = [["<NONE>", results[code]]]
+            for output, output_hosts in output_data:
+                # In run_remote(), task.run() is executed with the stderr=False default.
+                # As a result task.iter_buffers() will return combined stdout and stderr.
+                stdout = []
+                for line in output.splitlines():
+                    if isinstance(line, bytes):
+                        stdout.append(line.decode("utf-8"))
+                    else:
+                        stdout.append(line)
+                self.output.append(
+                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
+        if timed_out:
+            self.output.append(
+                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+
+    def log_output(self):
+        """Log the command result."""
+        log = getLogger()
+        for data in self.output:
+            if data.timeout:
+                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
+            elif len(data.stdout) == 1:
+                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
+            else:
+                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
+                for line in data.stdout:
+                    log.debug("    %s", line)
+
+
+def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False):
+    """Run the command on the remote hosts.
+
+    Args:
+        hosts (NodeSet): hosts on which to run the command
+        command (str): command from which to obtain the output
+        verbose (bool, optional): log the command output. Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to 120 seconds.
+        task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+
+    Returns:
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+
+    """
+    task = task_self()
+    if task_debug:
+        task.set_info('debug', True)
+    # Enable forwarding of the ssh authentication agent connection
+    task.set_info("ssh_options", "-oForwardAgent=yes")
+    getLogger().debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    task.run(command=command, nodes=hosts, timeout=timeout)
+    results = RemoteCommandResult(command, task)
+    if verbose:
+        results.log_output()
+    return results
 
 
 def human_to_bytes(size):
@@ -529,7 +668,7 @@ def colate_results(command, results):
     res += "Results:\n"
     for result in results:
         res += "  %s: exit_status=%s, interrupted=%s:" % (
-               result["hosts"], result["exit_status"], result["interrupted"])
+            result["hosts"], result["exit_status"], result["interrupted"])
         for line in result["stdout"]:
             res += "    %s\n" % line
 
@@ -1116,7 +1255,7 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     manager_class = get_module_class(name, "job_manager_utils")
     if name in ["Mpirun", "Orterun"]:
         manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
-    elif name == "Systemctl":
+    elif name in ["Systemctl", "Clush"]:
         manager = manager_class(job)
     else:
         manager = manager_class(job, subprocess=subprocess)
@@ -1525,3 +1664,19 @@ def set_avocado_config_value(section, key, value):
         settings.update_option(".".join([section, key]), value)
     else:
         settings.config.set(section, key, str(value))
+
+
+def nodeset_append_suffix(nodeset, suffix):
+    """Append a suffix to each element of a NodeSet/list.
+
+    Only appends if the element does not already end with the suffix.
+
+    Args:
+        nodeset (NodeSet/list): the NodeSet or list
+        suffix: the suffix to append
+
+    Returns:
+        NodeSet: a new NodeSet with the suffix
+    """
+    return NodeSet.fromlist(
+        map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))

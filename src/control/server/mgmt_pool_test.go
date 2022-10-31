@@ -384,6 +384,16 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			},
 			expErr: FaultPoolInvalidRanks([]system.Rank{11, 40}),
 		},
+		"failed creation invalid number of ranks": {
+			targetCount: 1,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:       test.MockUUID(0),
+				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				Numranks:   3,
+				Properties: testPoolLabelProp(),
+			},
+			expErr: FaultPoolInvalidNumRanks(3, 2),
+		},
 		"svc replicas > max": {
 			targetCount: 1,
 			memberCount: MaxPoolServiceReps + 2,

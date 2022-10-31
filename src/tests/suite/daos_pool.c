@@ -493,7 +493,7 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	char			*label = "test_pool_properties";
+	char			 label[] = "test_pool_properties";
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
@@ -515,9 +515,9 @@ pool_properties(void **state)
 	prop = daos_prop_alloc(1);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
-	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(arg->pool_label, label);
 	assert_ptr_not_equal(arg->pool_label, NULL);
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */

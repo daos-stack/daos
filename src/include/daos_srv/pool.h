@@ -65,6 +65,11 @@ struct ds_pool {
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
 
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
+
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
