@@ -774,7 +774,7 @@ struct umem_page {
 	void			*pg_addr;
 	/** copied page memory address, for checkpoint */
 	void			*pg_addr_ckpt;
-}
+};
 
 /** Global cache status for each umem_store */
 struct umem_cache {
@@ -794,7 +794,7 @@ struct umem_cache {
  * snapshot (calls tx_snap).
  */
 int
-umem_cache_touch(struct umem_cache *umem_cache *cache, daos_off_t addr, daos_size_t size);
+umem_cache_touch(struct umem_cache *cache, daos_off_t addr, daos_size_t size);
 
 /** 
  * Write all dirty pages before @wal_tx to MD blob.
@@ -802,6 +802,6 @@ umem_cache_touch(struct umem_cache *umem_cache *cache, daos_off_t addr, daos_siz
  * This function can yield internally, it is called by checkpoint service of upper level stack.
  */
 int
-umem_cache_checkpoint(struct umem_cache *umem_cache *cache, uint64_t wal_tx);
+umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx);
 
 #endif /* __DAOS_MEM_H__ */
