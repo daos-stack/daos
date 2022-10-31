@@ -301,9 +301,8 @@ ut_device(void **state)
 		rc = smd_dev_get_by_tgt(i, st, &dev_info);
 		assert_rc_equal(rc, 0);
 		verify_dev(dev_info, dev_id2, 2);
+		smd_dev_free_info(dev_info);
 	}
-
-	smd_dev_free_info(dev_info);
 
 	D_INIT_LIST_HEAD(&dev_list);
 	rc = smd_dev_list(&dev_list, &dev_cnt);
