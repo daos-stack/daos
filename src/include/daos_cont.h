@@ -24,7 +24,6 @@ extern "C" {
 #endif
 
 #include <daos_security.h>
-#include <daos_types.h>
 
 /** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
 #define DAOS_COO_RO		(1U << 0)

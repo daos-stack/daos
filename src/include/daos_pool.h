@@ -9,8 +9,6 @@
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
 
-#include <daos_types.h>
-
 #define daos_pool_connect daos_pool_connect2
 
 #if defined(__cplusplus)
