@@ -4028,8 +4028,7 @@ class AllocFailTestRun():
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 f"Incorrect stdout '{self.stdout}'",
-                                mtype='Out of memory caused zero exit '
-                                'code with incorrect output')
+                                mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("(-1009): Out of memory") and \
@@ -4278,7 +4277,7 @@ def test_alloc_cont_create(server, conf, wf):
     test_cmd.wf = wf
     test_cmd.check_post_stdout = False
     test_cmd.check_post_stdout = False
-    test_cmd.check_stderr = True
+    test_cmd.check_stderr = False
 
     return test_cmd.launch()
 
