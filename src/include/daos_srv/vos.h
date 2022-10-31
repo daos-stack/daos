@@ -42,9 +42,10 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth);
  *
  * \param dth		[IN]	The dtx handle
  * \param persistent	[IN]	Save the DTX entry in persistent storage if set.
+ * \param exist		[IN]	Related DTX entry exists or not.
  */
 int
-vos_dtx_attach(struct dtx_handle *dth, bool persistent);
+vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist);
 
 /**
  * Detach the DTX entry from the DTX handle.
@@ -291,13 +292,15 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh);
 
-/** Enable any version specific features on the pool
+/** Upgrade the vos pool version
  *
- * \param poh	[IN]	Container open handle
- * \param feats	[IN]	Features to enable
+ * \param poh		[IN]	Container open handle
+ * \param version	[IN]	pool version
+ *
+ * \return	0 on success, error otherwise
  */
-void
-vos_pool_features_set(daos_handle_t poh, uint64_t feats);
+int
+vos_pool_upgrade(daos_handle_t poh, uint32_t version);
 
 /**
  * Extended vos_pool_open() with an additional 'metrics' parameter to VOS telemetry.

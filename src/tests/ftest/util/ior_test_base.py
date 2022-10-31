@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2018-2022 Intel Corporation.
 
@@ -14,8 +13,6 @@ from ior_utils import IorCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from general_utils import pcmd, get_random_string
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 
 
 class IorTestBase(DfuseTestBase):
@@ -64,23 +61,25 @@ class IorTestBase(DfuseTestBase):
         Args:
             chunk_size (str, optional): container chunk size. Defaults to None.
             properties (str, optional): additional properties to append. Defaults to None.
+        Returns:
+            TestContainer: the created container.
 
         """
-        # Get container params
-        self.container = TestContainer(
-            self.pool, daos_command=DaosCommand(self.bin))
-        self.container.get_params(self)
+        params = {}
 
-        # update container oclass
+        # Set container oclass to match ior oclass
         if self.ior_cmd.dfs_oclass:
-            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+            params["oclass"] = self.ior_cmd.dfs_oclass.value
 
         # update container chunk size
-        if chunk_size:
-            self.container.chunk_size.update(chunk_size)
+        if chunk_size is not None:
+            params["chunk_size"] = chunk_size
+
+        # create container from params
+        self.container = self.get_container(self.pool, create=False, **params)
 
         # append container properties
-        if properties:
+        if properties is not None:
             current_properties = self.container.properties.value
             if current_properties:
                 new_properties = current_properties + "," + properties
@@ -90,6 +89,7 @@ class IorTestBase(DfuseTestBase):
 
         # create container
         self.container.create()
+        return self.container
 
     def display_pool_space(self, pool=None):
         """Display the current pool space.
@@ -161,8 +161,8 @@ class IorTestBase(DfuseTestBase):
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container, mount_dir)
+                params = {'mount_dir': mount_dir} if mount_dir else {}
+                self.start_dfuse(self.hostlist_clients, self.pool, self.container, **params)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -255,14 +255,8 @@ class IorTestBase(DfuseTestBase):
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
-            if 'D_LOG_MASK' not in env:
-                env['D_LOG_MASK'] = 'INFO'
             if 'D_IL_REPORT' not in env:
                 env['D_IL_REPORT'] = '1'
-
-            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-            #env['DD_MASK'] = 'all'
-            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -317,18 +311,21 @@ class IorTestBase(DfuseTestBase):
 
         Args:
             manager (str): mpi job manager command
+
+        Returns:
+            Object: result of job manager stop
         """
-        self.log.info("<IOR> Stopping in-progress IOR command: %s",
-                      str(self.job_manager))
+        self.log.info("<IOR> Stopping in-progress IOR command: %s", str(self.job_manager))
 
         try:
-            out = self.job_manager.stop()
-            return out
+            return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             self.display_pool_space()
+
+        return None
 
     def run_ior_threads_il(self, results, intercept, with_clients,
                            without_clients):

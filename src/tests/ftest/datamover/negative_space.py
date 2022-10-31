@@ -41,7 +41,7 @@ class DmvrNegativeSpaceTest(DataMoverTestBase):
 
         # Create destination test pool and container
         dst_pool = self.create_pool()
-        dst_cont = self.create_cont(dst_pool)
+        dst_cont = self.get_container(dst_pool)
         dst_daos_path = "/"
 
         # Try to copy, and expect a proper error message.

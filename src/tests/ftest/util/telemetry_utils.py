@@ -369,61 +369,61 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_<provider>_failed_addr",
-        "engine_net_<provider>_req_timeout",
-        "engine_net_<provider>_uri_lookup_timeout",
+        "engine_net_failed_addr",
+        "engine_net_req_timeout",
+        "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
-        "engine_nvme_<id>_commands_data_units_written",
-        "engine_nvme_<id>_commands_data_units_read",
-        "engine_nvme_<id>_commands_host_write_cmds",
-        "engine_nvme_<id>_commands_host_read_cmds",
-        "engine_nvme_<id>_commands_media_errs",
-        "engine_nvme_<id>_commands_read_errs",
-        "engine_nvme_<id>_commands_write_errs",
-        "engine_nvme_<id>_commands_unmap_errs",
-        "engine_nvme_<id>_commands_checksum_mismatch",
-        "engine_nvme_<id>_power_cycles",
-        "engine_nvme_<id>_commands_ctrl_busy_time",
-        "engine_nvme_<id>_power_on_hours",
-        "engine_nvme_<id>_unsafe_shutdowns"]
+        "engine_nvme_commands_data_units_written",
+        "engine_nvme_commands_data_units_read",
+        "engine_nvme_commands_host_write_cmds",
+        "engine_nvme_commands_host_read_cmds",
+        "engine_nvme_commands_media_errs",
+        "engine_nvme_commands_read_errs",
+        "engine_nvme_commands_write_errs",
+        "engine_nvme_commands_unmap_errs",
+        "engine_nvme_commands_checksum_mismatch",
+        "engine_nvme_power_cycles",
+        "engine_nvme_commands_ctrl_busy_time",
+        "engine_nvme_power_on_hours",
+        "engine_nvme_unsafe_shutdowns"]
     ENGINE_NVME_TEMP_METRICS = [
-        "engine_nvme_<id>_temp_current"]
+        "engine_nvme_temp_current"]
     ENGINE_NVME_TEMP_TIME_METRICS = [
-        "engine_nvme_<id>_temp_warn_time",
-        "engine_nvme_<id>_temp_crit_time"]
+        "engine_nvme_temp_warn_time",
+        "engine_nvme_temp_crit_time"]
     ENGINE_NVME_RELIABILITY_METRICS = [
-        "engine_nvme_<id>_reliability_avail_spare",
-        "engine_nvme_<id>_reliability_avail_spare_threshold"]
+        "engine_nvme_reliability_avail_spare",
+        "engine_nvme_reliability_avail_spare_threshold"]
     ENGINE_NVME_CRIT_WARN_METRICS = [
-        "engine_nvme_<id>_reliability_avail_spare_warn",
-        "engine_nvme_<id>_reliability_reliability_warn",
-        "engine_nvme_<id>_temp_warn",
-        "engine_nvme_<id>_read_only_warn",
-        "engine_nvme_<id>_volatile_mem_warn"]
+        "engine_nvme_reliability_avail_spare_warn",
+        "engine_nvme_reliability_reliability_warn",
+        "engine_nvme_temp_warn",
+        "engine_nvme_read_only_warn",
+        "engine_nvme_volatile_mem_warn"]
     ENGINE_NVME_INTEL_VENDOR_METRICS = [
-        "engine_nvme_<id>_vendor_program_fail_cnt_norm",
-        "engine_nvme_<id>_vendor_program_fail_cnt_raw",
-        "engine_nvme_<id>_vendor_erase_fail_cnt_norm",
-        "engine_nvme_<id>_vendor_erase_fail_cnt_raw",
-        "engine_nvme_<id>_vendor_wear_leveling_cnt_norm",
-        "engine_nvme_<id>_vendor_wear_leveling_cnt_min",
-        "engine_nvme_<id>_vendor_wear_leveling_cnt_max",
-        "engine_nvme_<id>_vendor_wear_leveling_cnt_avg",
-        "engine_nvme_<id>_vendor_endtoend_err_cnt_raw",
-        "engine_nvme_<id>_vendor_crc_err_cnt_raw",
-        "engine_nvme_<id>_vendor_media_wear_raw",
-        "engine_nvme_<id>_vendor_host_reads_raw",
-        "engine_nvme_<id>_vendor_crc_workload_timer_raw",
-        "engine_nvme_<id>_vendor_thermal_throttle_status_raw",
-        "engine_nvme_<id>_vendor_thermal_throttle_event_cnt",
-        "engine_nvme_<id>_vendor_retry_buffer_overflow_cnt",
-        "engine_nvme_<id>_vendor_pll_lock_loss_cnt",
-        "engine_nvme_<id>_vendor_nand_bytes_written",
-        "engine_nvme_<id>_vendor_host_bytes_written"]
+        "engine_nvme_vendor_program_fail_cnt_norm",
+        "engine_nvme_vendor_program_fail_cnt_raw",
+        "engine_nvme_vendor_erase_fail_cnt_norm",
+        "engine_nvme_vendor_erase_fail_cnt_raw",
+        "engine_nvme_vendor_wear_leveling_cnt_norm",
+        "engine_nvme_vendor_wear_leveling_cnt_min",
+        "engine_nvme_vendor_wear_leveling_cnt_max",
+        "engine_nvme_vendor_wear_leveling_cnt_avg",
+        "engine_nvme_vendor_endtoend_err_cnt_raw",
+        "engine_nvme_vendor_crc_err_cnt_raw",
+        "engine_nvme_vendor_media_wear_raw",
+        "engine_nvme_vendor_host_reads_raw",
+        "engine_nvme_vendor_crc_workload_timer_raw",
+        "engine_nvme_vendor_thermal_throttle_status_raw",
+        "engine_nvme_vendor_thermal_throttle_event_cnt",
+        "engine_nvme_vendor_retry_buffer_overflow_cnt",
+        "engine_nvme_vendor_pll_lock_loss_cnt",
+        "engine_nvme_vendor_nand_bytes_written",
+        "engine_nvme_vendor_host_bytes_written"]
     ENGINE_NVME_METRICS = ENGINE_NVME_HEALTH_METRICS +\
         ENGINE_NVME_TEMP_METRICS +\
         ENGINE_NVME_TEMP_TIME_METRICS +\
@@ -457,31 +457,18 @@ class TelemetryUtils():
         all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_SCHED_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
+        all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
 
-        # Add engine network metrics for the configured provider
-        try:
-            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
-            if provider == "ofi_tcp":
-                provider = "ofi_tcp_ofi_rxm"
-            elif provider == "ofi_verbs":
-                provider = "ofi_verbs_ofi_rxm"
-        except TypeError:
-            provider = "ofi_tcp_ofi_rxm"
-        net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
-        all_metrics_names.extend(net_metrics)
-
-        # Add NVMe metrics for any NVMe devices configured for this server
+        # Add the NVMe metrics if the test is run on a hardware cluster.
         for nvme_list in server.manager.job.get_engine_values("bdev_list"):
-            for nvme in nvme_list if nvme_list is not None else []:
-                # Replace the '<id>' placeholder with the actual NVMe ID
-                nvme_id = nvme.replace(":", "_").replace(".", "_")
-                nvme_metrics = [name.replace("<id>", nvme_id) for name in self.ENGINE_NVME_METRICS]
-                all_metrics_names.extend(nvme_metrics)
+            if nvme_list and len(nvme_list) > 0:
+                all_metrics_names.extend(self.ENGINE_NVME_METRICS)
+                break
 
         return all_metrics_names
 
@@ -736,15 +723,6 @@ class TelemetryUtils():
         data = {}
         if specific_metrics is None:
             specific_metrics = self.ENGINE_NVME_METRICS
-
-        # Add NVMe metrics for any NVMe devices configured for this server
-        for nvme_list in server.manager.job.get_engine_values("bdev_list"):
-            for nvme in nvme_list if nvme_list is not None else []:
-                # Replace the '<id>' placeholder with the actual NVMe ID
-                nvme_id = nvme.replace(":", "_").replace(".", "_")
-                specific_metrics = [
-                    name.replace("<id>", nvme_id)
-                    for name in specific_metrics]
 
         info = self.get_metrics(",".join(specific_metrics))
         self.log.info("NVMe Telemetry Information")

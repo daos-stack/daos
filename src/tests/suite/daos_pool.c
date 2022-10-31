@@ -493,7 +493,7 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	char			*label = "test_pool_properties";
+	char			 label[] = "test_pool_properties";
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
 #endif
@@ -515,9 +515,9 @@ pool_properties(void **state)
 	prop = daos_prop_alloc(1);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
-	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(arg->pool_label, label);
 	assert_ptr_not_equal(arg->pool_label, NULL);
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
@@ -1195,7 +1195,7 @@ label_strings_test(void **state)
 }
 
 static void
-pool_map_refreshes(void **state)
+pool_map_refreshes_common(void **state, bool fall_back)
 {
 	test_arg_t	*arg = *state;
 	d_rank_t	 rank = ranks_to_kill[0];
@@ -1219,6 +1219,7 @@ pool_map_refreshes(void **state)
 	rebuild_single_pool_target(arg, rank, tgt, false);
 
 	if (arg->myrank == 1) {
+		uint64_t	 fail_loc;
 		int		 n = 4;
 		daos_obj_id_t	 oids[n];
 		struct ioreq	 reqs[n];
@@ -1235,7 +1236,11 @@ pool_map_refreshes(void **state)
 		}
 
 		print_message("rank 1: setting fail_loc DAOS_POOL_FAIL_MAP_REFRESH\n");
-		daos_fail_loc_set(DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE);
+		if (fall_back)
+			fail_loc = DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY | DAOS_FAIL_ALWAYS;
+		else
+			fail_loc = DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE;
+		daos_fail_loc_set(fail_loc);
 
 		print_message("rank 1: invoking concurrent updates to trigger concurrent pool map "
 			      "refreshes\n");
@@ -1262,6 +1267,18 @@ pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
+}
+
+static void
+pool_map_refreshes(void **state)
+{
+	pool_map_refreshes_common(state, false /* fall_back */);
+}
+
+static void
+pool_map_refreshes_fallback(void **state)
+{
+	pool_map_refreshes_common(state, true /* fall_back */);
 }
 
 static const struct CMUnitTest pool_tests[] = {
@@ -1297,6 +1314,8 @@ static const struct CMUnitTest pool_tests[] = {
 	  label_strings_test, NULL, test_case_teardown},
 	{ "POOL16: pool map refreshes",
 	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
+	{ "POOL17: pool map refreshes (fallback)",
+	  pool_map_refreshes_fallback, pool_map_refreshes_setup, test_case_teardown},
 };
 
 int

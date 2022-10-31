@@ -258,11 +258,30 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
@@ -728,7 +747,7 @@ pipeline {
                         label params.CI_UNIT_VM1_LABEL
                     }
                     steps {
-                        unitTest timeout_time: 35,
+                        unitTest timeout_time: 60,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()

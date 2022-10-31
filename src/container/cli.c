@@ -469,6 +469,16 @@ err:
 }
 
 static void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
+}
+
+static void
 dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
@@ -498,16 +508,6 @@ void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
-}
-
-void
-dc_cont_free(struct dc_cont *dc)
-{
-	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
 }
 
 struct dc_cont *
@@ -653,7 +653,7 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_pool_create_map_refresh_task(pool, pm_ver, sched, &ptask);
+	rc = dc_pool_create_map_refresh_task(poh, pm_ver, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
@@ -1771,8 +1771,8 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		unsigned int map_version = out->coao_op.co_map_version;
 
 		/** pool map refresh task */
-		rc = dc_pool_create_map_refresh_task(pool, map_version, sched,
-						     &ptask);
+		rc = dc_pool_create_map_refresh_task(arg->coaa_cont->dc_pool_hdl, map_version,
+						     sched, &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -2086,11 +2086,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_slave = 1;
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	if (pool->dp_disconnecting) {
+	if (pool->dp_disconnecting || DAOS_FAIL_CHECK(DAOS_CONT_G2L_FAIL)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		dc_cont_free(cont);
 		D_ERROR("pool connection being invalidated\n");
-		D_GOTO(out_pool, rc = -DER_NO_HDL);
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);

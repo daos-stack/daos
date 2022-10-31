@@ -6,7 +6,7 @@
 # force bash (looking at you Ubuntu)
 SHELL=/bin/bash
 
-# Put site overrides (i.e. REPOSITORY_URL, DAOS_STACK_*_LOCAL_REPO) in here
+# Put site overrides (i.e. DAOS_STACK_*_LOCAL_REPO) in here
 -include Makefile.local
 
 # default to Leap 15 distro for chrootbuild
@@ -381,7 +381,6 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                \
 	DISTRO_REPOS='$(DISTRO_REPOS)'                          \
 	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
-	REPOSITORY_URL="$(REPOSITORY_URL)"                      \
 	DISTRO_VERSION="$(DISTRO_VERSION)"                      \
 	TARGET="$<"                                             \
 	packaging/rpm_chrootbuild

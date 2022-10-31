@@ -39,7 +39,6 @@ struct dtx_resync_args {
 	daos_epoch_t		 epoch;
 	uint32_t		 resync_version;
 	uint32_t		 discard_version;
-	uint32_t		 resync_all:1;
 };
 
 static inline void
@@ -407,9 +406,6 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
 
-		if (mbs->dm_dte_flags & DTE_LEADER)
-			goto commit;
-
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
@@ -522,22 +518,13 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_tgt_cnt == 0)
 		return 0;
 
-	if (ent->ie_dtx_flags & DTE_LEADER) {
-		/* Pool map refresh, non-discard case, I am still the leader, do nothing. */
-		if (!dra->resync_all)
-			return 0;
-
-		/*
-		 * Open container, old committable DTX entries are not in the CoS cache.
-		 * Then handle the DTX entries with old epoch (dtx_epoch < resync_epoch).
-		 */
-		if (ent->ie_epoch > dra->epoch)
-			return 0;
-	} else {
-		/* Leader switch only can happen for old DTX entries (dtx_ver < resync_ver). */
-		if (ent->ie_dtx_ver >= dra->resync_version)
-			return 0;
-	}
+	/*
+	 * Current DTX resync may be shared by pool map refresh and container open. If it is
+	 * sponsored by pool map refresh, then it is possible that resync version is smaller
+	 * than some DTX entries that also need to be resynced. So here, we only trust epoch.
+	 */
+	if (ent->ie_epoch > dra->epoch)
+		return 0;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
@@ -573,8 +560,7 @@ out:
 }
 
 int
-dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
-	   bool block, bool resync_all)
+dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block)
 {
 	struct ds_cont_child		*cont = NULL;
 	struct ds_pool			*pool;
@@ -644,10 +630,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	dra.cont = cont;
 	dra.resync_version = ver;
 	dra.epoch = crt_hlc_get();
-	if (resync_all)
-		dra.resync_all = 1;
-	else
-		dra.resync_all = 0;
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -717,8 +699,7 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	uuid_copy(scan_arg->co_uuid, entry->ie_couuid);
-	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid,
-			arg->version, true, false);
+	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid, arg->version, true);
 	if (rc)
 		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
 			DP_UUID(arg->pool_uuid), rc);

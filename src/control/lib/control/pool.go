@@ -24,6 +24,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/system"
@@ -205,6 +207,13 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		default:
 			return false
 		}
+	case *fault.Fault:
+		switch e.Code {
+		case code.ServerDataPlaneNotStarted:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
@@ -293,7 +302,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		})
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -303,7 +312,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 	if err != nil {
 		return errors.Wrap(err, "pool destroy failed")
 	}
-	rpcClient.Debugf("Destroy DAOS pool response: %s\n", msResp)
+	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
 
 	return nil
 }

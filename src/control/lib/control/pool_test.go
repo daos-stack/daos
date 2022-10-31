@@ -21,6 +21,8 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -81,6 +83,17 @@ func TestControl_PoolDestroy(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
 				},
 			},
@@ -385,6 +398,16 @@ func TestControl_PoolCreate(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
+		"create DataPlaneNotStarted error is retried": {
+			req: &PoolCreateReq{TotalBytes: 10},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},

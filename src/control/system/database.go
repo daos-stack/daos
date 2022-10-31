@@ -43,6 +43,7 @@ type (
 		Leader() raft.ServerAddress
 		LeaderCh() <-chan bool
 		LeadershipTransfer() raft.Future
+		Barrier(time.Duration) raft.Future
 		Shutdown() raft.Future
 		State() raft.RaftState
 	}
@@ -465,17 +466,28 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
+			barrierStart := time.Now()
+			if err := db.Barrier(); err != nil {
+				db.log.Errorf("raft Barrier() failed: %s", err)
+				if err = db.ResignLeadership(err); err != nil {
+					db.log.Errorf("raft ResignLeadership() failed: %s", err)
+				}
+				break
+			}
+			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
+
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
 			for _, fn := range db.onLeadershipGained {
 				if err := fn(gainedCtx); err != nil {
 					db.log.Errorf("failure in onLeadershipGained callback: %s", err)
 					cancelGainedCtx()
-					_ = db.ResignLeadership(err)
+					if err = db.ResignLeadership(err); err != nil {
+						db.log.Errorf("raft ResignLeadership() failed: %s", err)
+					}
 					break
 				}
 			}
-
 		}
 	}
 }

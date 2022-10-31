@@ -145,7 +145,7 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	}
 
 	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
-	if err != nil || other.Version.IsZero() {
+	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
 			Version:   build.MustNewVersion(otherVersion),

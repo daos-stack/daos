@@ -14,12 +14,12 @@
 %endif
 
 Name:          daos
-Version:       2.1.104
-Release:       2%{?relval}%{?dist}
+Version:       2.2.0
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
-URL:           https//github.com/daos-stack/daos
+URL:           https://github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
 Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel >= %{mercury_version}
+BuildRequires: mercury-devel = %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: libpsm2-devel
 %endif
@@ -59,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.11
+BuildRequires: libpmemobj-devel >= 1.12.1~rc1
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -144,7 +144,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 
 
 %description
@@ -166,14 +166,12 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj1 = 1.11.0-3.suse1500
+Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
 %else
 Requires: ipmctl > 02.00.00.3816
-# When 1.11.2 is released, we can change this to >= 1.11.2
-Requires: libpmemobj = 1.11.0-3%{?dist}
+Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 Requires: libfabric >= %{libfabric_version}
@@ -193,7 +191,7 @@ This package contains DAOS administrative tools (e.g. dmg).
 %package client
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: mercury >= %{mercury_version}
+Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
@@ -322,7 +320,7 @@ This is the package that bridges the difference between the MOFED openmpi
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
-%global _debuginfo_subpackages 0
+%global _debuginfo_subpackages 1
 %debug_package
 %endif
 
@@ -509,8 +507,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
+%{_bindir}/daos_debug_set_params
 %{_bindir}/drpc_engine_test
 %{_bindir}/drpc_test
+%{_bindir}/dfuse_test
 %{_bindir}/eq_tests
 %{_bindir}/job_tests
 %{_bindir}/security_test
@@ -571,6 +571,30 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.2.0-5
+- Set flag to build per-subpackage debuginfo packages for Leap 15
+
+* Wed Oct 5 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.2.0-4
+- Third release candidate for 2.2.0.
+
+* Tue Oct 4 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-3
+- Second release candidate for 2.2.0.
+
+* Tue Sep 20 2022 Joseph Moore <joseph.moore@intel.com> 2.2.0-2
+- Pin Mercury version to 2.2.0-1.
+
+* Fri Sep 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-1
+- First release candidate for 2.2.0.
+
+* Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
+- Add dfuse unit-test binary to call from ftest.
+
+* Tue Aug 16 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.1.104-4
+- Update PMDK to 1.12.1~rc1 to fix DAOS-11151
+
+* Thu Aug 11 2022 Wang Shilong <shilong.wang@intel.com> 2.1.104-3
+- Add daos_debug_set_params to daos-client-tests rpm for fault injection test.
+
 * Fri Aug 5 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.1.104-2
 - Update to mercury 2.2.0
 

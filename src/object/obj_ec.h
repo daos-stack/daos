@@ -716,12 +716,12 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 
 /* srv_ec.c */
 struct obj_rw_in;
+struct obj_pool_metrics;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
-			uint32_t iod_nr, uint32_t start_shard,
-			uint32_t max_shard, uint32_t leader_id,
-			void *tgt_map, uint32_t map_size, struct daos_oclass_attr *oca,
-			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
-			struct obj_ec_split_req **split_req);
+			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+			uint32_t leader_id, void *tgt_map, uint32_t map_size,
+			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+			struct obj_ec_split_req **split_req, struct obj_pool_metrics *opm);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);
 
 #endif /* __OBJ_EC_H__ */

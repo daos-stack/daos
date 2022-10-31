@@ -820,6 +820,7 @@ struct dss_enum_unpack_io {
 	/* punched epochs for dkey */
 	daos_epoch_t		ui_dkey_punch_eph;
 	d_sg_list_t		*ui_sgls;	/**< optional */
+	uint64_t		ui_dkey_hash;
 	uint32_t		ui_version;
 	uint32_t		ui_type;
 };
@@ -843,8 +844,8 @@ struct tree_cache_root {
 };
 
 int
-obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
-		d_iov_t *val_iov);
+obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, uint64_t tgt_id,
+		daos_unit_oid_t oid, d_iov_t *val_iov);
 int
 obj_tree_destroy(daos_handle_t btr_hdl);
 
