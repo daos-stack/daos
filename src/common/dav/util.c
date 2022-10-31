@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <endian.h>
-#include <gurt/common.h>
 
 #include "util.h"
 #include "valgrind_internal.h"
@@ -45,7 +44,54 @@ unsigned _On_pmemcheck;
 
 /* true if pmreorder instrumentation has to be enabled */
 int _Pmreorder_emit;
-#endif
+
+#define LIB_LOG_LEN 20
+#define FUNC_LOG_LEN 50
+#define SUFFIX_LEN 7
+/*
+ * util_emit_log -- emits lib and func name with appropriate suffix
+ * to pmemcheck store log file
+ */
+void
+util_emit_log(const char *lib, const char *func, int order)
+{
+	char lib_name[LIB_LOG_LEN];
+	char func_name[FUNC_LOG_LEN];
+	char suffix[SUFFIX_LEN];
+	size_t lib_len = strlen(lib);
+	size_t func_len = strlen(func);
+
+	if (order == 0)
+		strcpy(suffix, ".BEGIN");
+	else
+		strcpy(suffix, ".END");
+
+	size_t suffix_len = strlen(suffix);
+
+	if (lib_len + suffix_len + 1 > LIB_LOG_LEN) {
+		VALGRIND_EMIT_LOG("Library name is too long");
+		return;
+	}
+
+	if (func_len + suffix_len + 1 > FUNC_LOG_LEN) {
+		VALGRIND_EMIT_LOG("Function name is too long");
+		return;
+	}
+
+	strcpy(lib_name, lib);
+	strcat(lib_name, suffix);
+	strcpy(func_name, func);
+	strcat(func_name, suffix);
+
+	if (order == 0) {
+		VALGRIND_EMIT_LOG(func_name);
+		VALGRIND_EMIT_LOG(lib_name);
+	} else {
+		VALGRIND_EMIT_LOG(lib_name);
+		VALGRIND_EMIT_LOG(func_name);
+	}
+}
+#endif /* VG_PMEMCHECK_ENABLED */
 
 /*
  * util_is_zeroed -- check if given memory range is all zero
@@ -157,6 +203,15 @@ util_checksum_seq(const void *addr, size_t len, uint64_t csum)
  *
  * This is called from the library initialization code.
  */
+#if ANY_VG_TOOL_ENABLED
+__attribute__((constructor))
+static void
+_util_init(void)
+{
+	util_init();
+}
+#endif
+
 void
 util_init(void)
 {

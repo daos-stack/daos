@@ -2658,7 +2658,7 @@ vos_dedup_verify(daos_handle_t ioh)
 
 			umem_atomic_copy(vos_ioc2umm(ioc),
 					 biov->bi_buf, biov_dup->bi_buf,
-					 bio_iov2len(biov));
+					 bio_iov2len(biov), UMEM_COMMIT_IMMEDIATE);
 
 			/* For error cleanup */
 			biov_dup->bi_addr.ba_off = biov->bi_addr.ba_off;

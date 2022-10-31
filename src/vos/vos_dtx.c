@@ -2530,7 +2530,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 		obj->obj_sync_epoch = epoch;
 		umem_atomic_copy(vos_cont2umm(cont),
 				       &obj->obj_df->vo_sync, &epoch,
-				       sizeof(obj->obj_df->vo_sync));
+				       sizeof(obj->obj_df->vo_sync), UMEM_COMMIT_IMMEDIATE);
 	}
 
 	vos_obj_release(occ, obj, false);

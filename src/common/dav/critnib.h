@@ -5,14 +5,10 @@
  * critnib.h -- internal definitions for critnib tree
  */
 
-#ifndef LIBPMEMOBJ_CRITNIB_H
-#define LIBPMEMOBJ_CRITNIB_H 1
+#ifndef __DAOS_COMMON_CRITNIB_H
+#define __DAOS_COMMON_CRITNIB_H 1
 
 #include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct critnib;
 
@@ -24,8 +20,4 @@ void *critnib_remove(struct critnib *c, uint64_t key);
 void *critnib_get(struct critnib *c, uint64_t key);
 void *critnib_find_le(struct critnib *c, uint64_t key);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_CRITNIB_H */

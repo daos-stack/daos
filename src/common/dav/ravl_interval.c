@@ -7,7 +7,6 @@
 
 #include <stdbool.h>
 
-#include <gurt/common.h>
 #include "ravl_interval.h"
 #include "sys_util.h"
 #include "os_thread.h"

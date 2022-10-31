@@ -1083,7 +1083,8 @@ umo_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 }
 
 static void *
-umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len)
+umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t len,
+		enum acopy_hint hint)
 {
 	struct ad_tx	*tx;
 	int		 rc = 0;

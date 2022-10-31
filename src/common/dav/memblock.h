@@ -5,8 +5,8 @@
  * memblock.h -- internal definitions for memory block
  */
 
-#ifndef LIBPMEMOBJ_MEMBLOCK_H
-#define LIBPMEMOBJ_MEMBLOCK_H 1
+#ifndef __DAOS_COMMON_MEMBLOCK_H
+#define __DAOS_COMMON_MEMBLOCK_H 1
 
 #include <stddef.h>
 #include <stdint.h>
@@ -15,10 +15,6 @@
 #include "heap_layout.h"
 #include "memops.h"
 #include "palloc.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define MEMORY_BLOCK_NONE \
 (struct memory_block)\
@@ -299,8 +295,4 @@ void memblock_run_bitmap(uint32_t *size_idx, uint16_t flags,
 	uint64_t unit_size, uint64_t alignment, void *content,
 	struct run_bitmap *b);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_MEMBLOCK_H */

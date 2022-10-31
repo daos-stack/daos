@@ -115,7 +115,7 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		return umm_pool;
 	}
 
-	dav_hdl = dav_obj_create(path, 0, poolsize, mode);
+	dav_hdl = dav_obj_create(path, 0, poolsize, mode, store);
 	if (!dav_hdl) {
 		D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
 			path, poolsize, errno);
@@ -183,7 +183,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	/* TODO Load all meta pages from SSD */
 	/* TODO Replay WAL */
 
-	dav_hdl = dav_obj_open(path, 0);
+	dav_hdl = dav_obj_open(path, 0, store);
 	if (!dav_hdl) {
 		D_ERROR("Error in opening the pool %s: errno =%d\n",
 			path, errno);
@@ -660,7 +660,7 @@ pmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
@@ -957,11 +957,18 @@ bmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
-	return dav_memcpy_persist(pop, dest, src, len);
+	if (hint == UMEM_RESERVED_MEM) {
+		memcpy(dest, src, len);
+		return dest;
+	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+		return dav_memcpy_persist(pop, dest, src, len);
+	} else { /* UMEM_COMMIT_DEFER */
+		return dav_memcpy_persist_relaxed(pop, dest, src, len);
+	}
 }
 
 static umem_off_t
@@ -1035,7 +1042,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
 #endif
 
 /* volatile memory operations */

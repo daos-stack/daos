@@ -12,17 +12,35 @@
 #include <sys/mman.h>
 #include <uuid/uuid.h>
 
+#include <daos/mem.h>
 #include "dav_internal.h"
 #include "heap.h"
 #include "palloc.h"
-#include "pmemops.h"
+#include "mo_wal.h"
 #include "obj.h"
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
+static int _wal_reserv(struct umem_store *store, uint64_t *id)
+{
+	++*id;
+	return 0;
+}
+
+static int _wal_submit(struct umem_store *store, struct umem_wal_tx *wal_tx,
+		       void *data_iod)
+{
+	return 0;
+}
+
+struct umem_store_ops _store_ops = {
+	.so_wal_reserv = _wal_reserv,
+	.so_wal_submit = _wal_submit,
+};
+
 /*
- * pmemobj_get_uuid_lo -- (internal) evaluates XOR sum of least significant
+ * get_uuid_lo -- (internal) evaluates XOR sum of least significant
  * 8 bytes with most significant 8 bytes.
  */
 static inline uint64_t
@@ -57,18 +75,19 @@ setup_dav_phdr(dav_obj_t *hdl)
 static void
 persist_dav_phdr(dav_obj_t *hdl)
 {
-	pmemops_persist(&hdl->p_ops, hdl->do_phdr, offsetof(struct dav_phdr, dp_unused));
+	mo_wal_persist(&hdl->p_ops, hdl->do_phdr, offsetof(struct dav_phdr, dp_unused));
 }
 
 static dav_obj_t *
-dav_obj_open_internal(int fd, int flags, size_t sz)
+dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct umem_store *store)
 {
-	int rc;
 	dav_obj_t *hdl = NULL;
 	void *base;
 	char *heap_base;
 	uint64_t heap_size;
 	int persist_hdr = 0;
+	int err = 0;
+	int rc;
 
 	base = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (base == MAP_FAILED) {
@@ -76,23 +95,37 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 		return NULL;
 	}
 
-	D_ALIGNED_ALLOC(hdl, 64, sizeof(dav_obj_t));
+	D_ALIGNED_ALLOC(hdl, CACHELINE_SIZE, sizeof(dav_obj_t));
 	if (hdl == NULL) {
-		errno = ENOMEM;
+		err = ENOMEM;
 		goto out1;
 	}
 
+	/* REVISIT: In future pass the meta instance as argument instead of fd */
 	hdl->do_fd = fd;
 	hdl->do_base = base;
 	hdl->do_size = sz;
+	hdl->p_ops.base = hdl;
+
+	hdl->do_store = *store;
+	if (hdl->do_store.stor_ops == NULL)
+		hdl->do_store.stor_ops = &_store_ops;
+	D_STRNDUP(hdl->do_path, path, strlen(path));
+
+	rc = lw_tx_begin(hdl);
+	if (rc) {
+		err = ENOMEM;
+		goto out2;
+	}
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
 		heap_base = (char *)hdl->do_base + hdl->do_phdr->dp_heap_offset;
 		heap_size = hdl->do_phdr->dp_heap_size;
-		rc = heap_init(heap_base, heap_size, &hdl->do_phdr->dp_heap_size, NULL);
+		rc = heap_init(heap_base, heap_size, &hdl->do_phdr->dp_heap_size,
+			       &hdl->p_ops);
 		if (rc) {
-			errno = rc;
+			err = rc;
 			goto out2;
 		}
 		persist_hdr = 1;
@@ -108,30 +141,29 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 
 	D_ALLOC_PTR(hdl->do_heap);
 	if (hdl->do_heap == NULL) {
-		errno = ENOMEM;
+		err = ENOMEM;
 		goto out2;
 	}
 
-	hdl->p_ops.base = hdl;
-	/* REVISIT: code for stats
-	 */
 	rc = heap_boot(hdl->do_heap, heap_base, heap_size,
 		&hdl->do_phdr->dp_heap_size, hdl->do_base,
 		&hdl->p_ops, hdl->do_stats, NULL);
 
 	if (rc) {
-		errno = rc;
+		err = rc;
 		goto out2;
 	}
 
 	rc = heap_buckets_init(hdl->do_heap);
 	if (rc) {
+		err = rc;
 		heap_cleanup(hdl->do_heap);
 		goto out2;
 	}
 
 	rc = dav_create_clogs(hdl);
 	if (rc) {
+		err = rc;
 		heap_cleanup(hdl->do_heap);
 		goto out2;
 	}
@@ -139,6 +171,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 	if (persist_hdr)
 		persist_dav_phdr(hdl);
 
+	lw_tx_end(hdl);
 	return hdl;
 
 out2:
@@ -146,15 +179,21 @@ out2:
 		stats_delete(hdl, hdl->do_stats);
 	if (hdl->do_heap)
 		D_FREE(hdl->do_heap);
+	if (hdl->do_utx) {
+		dav_umem_wtx_cleanup(hdl->do_utx);
+		D_FREE(hdl->do_utx);
+	}
+	D_FREE(hdl->do_path);
 	D_FREE(hdl);
 out1:
 	munmap(base, sz);
+	errno = err;
 	return NULL;
 
 }
 
 dav_obj_t *
-dav_obj_create(const char *path, int flags, size_t sz, mode_t mode)
+dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_store *store)
 {
 	int fd;
 	dav_obj_t *hdl;
@@ -186,17 +225,17 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode)
 		}
 	}
 
-	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, sz);
+	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, sz, path, store);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
 	}
-	D_STRNDUP(hdl->do_path, path, strlen(path));
+	DAV_DBG("pool %s created, size="DF_U64"", hdl->do_path, sz);
 	return hdl;
 }
 
 dav_obj_t *
-dav_obj_open(const char *path, int flags)
+dav_obj_open(const char *path, int flags, struct umem_store *store)
 {
 	int fd;
 	dav_obj_t *hdl;
@@ -213,12 +252,12 @@ dav_obj_open(const char *path, int flags)
 		return NULL;
 	}
 
-	hdl = dav_obj_open_internal(fd, 0, (size_t)statbuf.st_size);
+	hdl = dav_obj_open_internal(fd, 0, (size_t)statbuf.st_size, path, store);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
 	}
-	D_STRNDUP(hdl->do_path, path, strlen(path));
+	DAV_DBG("pool %s is open, size="DF_U64"", hdl->do_path, (size_t)statbuf.st_size);
 	return hdl;
 }
 
@@ -227,18 +266,25 @@ dav_obj_close(dav_obj_t *hdl)
 {
 
 	if (hdl == NULL) {
-		D_ERROR("NULL handle\n");
+		ERR("NULL handle");
 		return;
 	}
 	dav_destroy_clogs(hdl);
-
-	stats_delete(hdl, hdl->do_stats);
 	heap_cleanup(hdl->do_heap);
 	D_FREE(hdl->do_heap);
+
+	lw_tx_begin(hdl);
+	stats_delete(hdl, hdl->do_stats);
+	lw_tx_end(hdl);
+
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);
-	if (hdl->do_path)
-		D_FREE(hdl->do_path);
+	if (hdl->do_utx) {
+		dav_umem_wtx_cleanup(hdl->do_utx);
+		D_FREE(hdl->do_utx);
+	}
+	DAV_DBG("pool %s is closed", hdl->do_path);
+	D_FREE(hdl->do_path);
 	D_FREE(hdl);
 }
 

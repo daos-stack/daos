@@ -5,14 +5,10 @@
  * ravl.h -- internal definitions for ravl tree
  */
 
-#ifndef LIBPMEMOBJ_RAVL_H
-#define LIBPMEMOBJ_RAVL_H 1
+#ifndef __DAOS_COMMON_RAVL_H
+#define __DAOS_COMMON_RAVL_H 1
 
 #include <stddef.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct ravl;
 struct ravl_node;
@@ -49,8 +45,4 @@ struct ravl_node *ravl_last(struct ravl *ravl);
 void *ravl_data(struct ravl_node *node);
 void ravl_remove(struct ravl *ravl, struct ravl_node *node);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* LIBPMEMOBJ_RAVL_H */
+#endif /* __DAOS_COMMON_RAVL_H */

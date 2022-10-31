@@ -5,18 +5,13 @@
  * vec.h -- vector interface
  */
 
-#ifndef PMDK_VEC_H
-#define PMDK_VEC_H 1
+#ifndef __DAOS_COMMON_VEC_H
+#define __DAOS_COMMON_VEC_H 1
 
-#include <gurt/common.h>
 #include <stddef.h>
 #include "valgrind_internal.h"
 #include "util.h"
 #include "out.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define VEC_INIT_SIZE (64)
 
@@ -147,8 +142,4 @@ for (size_t _vec_i = 0;\
 	(vec)->capacity = 0;\
 } while (0)
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* PMDK_VEC_H */
+#endif /* __DAOS_COMMON_VEC_H */
