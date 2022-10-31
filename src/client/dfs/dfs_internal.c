@@ -30,7 +30,7 @@ key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned 
 {
 	struct dfs_mnt_hdls *hdl = hdl_obj(rlink);
 
-	return (strcmp(hdl->value, key) == 0);
+	return (strncmp(hdl->value, key, ksize) == 0);
 }
 
 static void
@@ -189,15 +189,15 @@ dfs_hdl_lookup(const char *str, int type, const char *pool)
 	d_list_t	*rlink = NULL;
 
 	if (type == DFS_H_POOL) {
-		rlink = d_hash_rec_find(poh_hash, str, strlen(str));
+		rlink = d_hash_rec_find(poh_hash, str, strlen(str) + 1);
 	} else if (type == DFS_H_CONT) {
-		char		cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
+		char		cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 2];
 		daos_size_t	len;
 
 		D_ASSERT(pool);
 		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
-		D_ASSERT(len >= strlen(pool) + strlen(str) + 1);
-		rlink = d_hash_rec_find(coh_hash, cont_pool, strlen(str));
+		D_ASSERT(len == strlen(pool) + strlen(str) + 1);
+		rlink = d_hash_rec_find(coh_hash, cont_pool, len + 1);
 	} else {
 		D_ASSERT(0);
 	}
@@ -252,11 +252,9 @@ dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
 
 		D_ASSERT(pool);
 		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
-		D_ASSERT(len >= strlen(pool) + strlen(str) + 1);
-
-		strncpy(hdl->value, cont_pool, DAOS_PROP_LABEL_MAX_LEN * 2 + 1);
-		rlink = d_hash_rec_find_insert(coh_hash, hdl->value, strlen(hdl->value) + 1,
-					       &hdl->entry);
+		D_ASSERT(len == strlen(pool) + strlen(str) + 1);
+		strncpy(hdl->value, cont_pool, len + 1);
+		rlink = d_hash_rec_find_insert(coh_hash, hdl->value, len + 1, &hdl->entry);
 		if (rlink != &hdl->entry) {
 			/** handle EEXIST case */
 			rc = daos_cont_close(*oh, NULL);
@@ -293,11 +291,11 @@ dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force)
 		return 0;
 
 	if (force) {
-		if (!d_hash_rec_delete(coh_hash, cont_pool, strlen(cont_pool)))
+		if (!d_hash_rec_delete(coh_hash, cont_pool, len + 1))
 			return ENOENT;
 	}
 
-	rlink = d_hash_rec_find(coh_hash, cont_pool, strlen(cont_pool));
+	rlink = d_hash_rec_find(coh_hash, cont_pool, len + 1);
 	if (rlink == NULL)
 		return ENOENT;
 
