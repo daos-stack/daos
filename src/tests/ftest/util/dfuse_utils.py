@@ -401,7 +401,7 @@ class Dfuse(DfuseCommand):
             try:
                 self.remove_mount_point()
             except CommandFailure as error:
-                error_list.append(error)
+                error_list.append(str(error))
 
             # Report any errors
             if error_list:

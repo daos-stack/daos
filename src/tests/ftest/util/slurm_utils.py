@@ -36,7 +36,7 @@ def cancel_jobs(log, control, job_id):
         RemoteCommandResult: results from the scancel command
 
     """
-    command = ['scancel', job_id]
+    command = ['scancel', str(job_id)]
     return run_remote(log, control, ' '.join(command))
 
 
@@ -96,7 +96,7 @@ def show_partition(log, control, name):
         RemoteCommandResult: results from the scontrol command
 
     """
-    command = ['scontrol', 'show', 'partition', name]
+    command = ['scontrol', 'show', 'partition', str(name)]
     return run_remote(log, control, ' '.join(command))
 
 
@@ -112,7 +112,7 @@ def show_reservation(log, control, name):
         RemoteCommandResult: results from the scontrol command
 
     """
-    command = ['scontrol', 'show', 'reservation', name]
+    command = ['scontrol', 'show', 'reservation', str(name)]
     return run_remote(log, control, ' '.join(command))
 
 
@@ -145,7 +145,7 @@ def sbatch(log, control, script, log_file=None):
     """
     command = ['sbatch']
     if log_file:
-        command.extend(['-o', log_file])
+        command.extend(['-o', str(log_file)])
     command.append(script)
     return run_remote(log, control, ' '.join(command))
 
