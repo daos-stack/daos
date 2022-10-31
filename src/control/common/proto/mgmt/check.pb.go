@@ -898,7 +898,71 @@ func (x *CheckQueryResp) GetReports() []*chk.CheckReport {
 	return nil
 }
 
-// For 'dmg check prop'
+// For 'dmg check set-policy'
+type CheckSetPolicyReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys      string                  `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"`           // DAOS system identifier.
+	Flags    uint32                  `protobuf:"varint,2,opt,name=flags,proto3" json:"flags,omitempty"`      // The flags when start check - see CheckFlag.
+	Policies []*CheckInconsistPolicy `protobuf:"bytes,3,rep,name=policies,proto3" json:"policies,omitempty"` // Inconsistency policy array.
+}
+
+func (x *CheckSetPolicyReq) Reset() {
+	*x = CheckSetPolicyReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_check_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckSetPolicyReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckSetPolicyReq) ProtoMessage() {}
+
+func (x *CheckSetPolicyReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_check_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckSetPolicyReq.ProtoReflect.Descriptor instead.
+func (*CheckSetPolicyReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_check_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CheckSetPolicyReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *CheckSetPolicyReq) GetFlags() uint32 {
+	if x != nil {
+		return x.Flags
+	}
+	return 0
+}
+
+func (x *CheckSetPolicyReq) GetPolicies() []*CheckInconsistPolicy {
+	if x != nil {
+		return x.Policies
+	}
+	return nil
+}
+
+// To allow daos_server to query check leader properties
 type CheckPropReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -910,7 +974,7 @@ type CheckPropReq struct {
 func (x *CheckPropReq) Reset() {
 	*x = CheckPropReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_check_proto_msgTypes[13]
+		mi := &file_mgmt_check_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -923,7 +987,7 @@ func (x *CheckPropReq) String() string {
 func (*CheckPropReq) ProtoMessage() {}
 
 func (x *CheckPropReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_check_proto_msgTypes[13]
+	mi := &file_mgmt_check_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -936,7 +1000,7 @@ func (x *CheckPropReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPropReq.ProtoReflect.Descriptor instead.
 func (*CheckPropReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_check_proto_rawDescGZIP(), []int{13}
+	return file_mgmt_check_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CheckPropReq) GetSys() string {
@@ -960,7 +1024,7 @@ type CheckPropResp struct {
 func (x *CheckPropResp) Reset() {
 	*x = CheckPropResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_check_proto_msgTypes[14]
+		mi := &file_mgmt_check_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -973,7 +1037,7 @@ func (x *CheckPropResp) String() string {
 func (*CheckPropResp) ProtoMessage() {}
 
 func (x *CheckPropResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_check_proto_msgTypes[14]
+	mi := &file_mgmt_check_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -986,7 +1050,7 @@ func (x *CheckPropResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckPropResp.ProtoReflect.Descriptor instead.
 func (*CheckPropResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_check_proto_rawDescGZIP(), []int{14}
+	return file_mgmt_check_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CheckPropResp) GetStatus() int32 {
@@ -1010,6 +1074,127 @@ func (x *CheckPropResp) GetPolicies() []*CheckInconsistPolicy {
 	return nil
 }
 
+// For 'dmg check get-policy'
+type CheckGetPolicyReq struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Sys     string                    `protobuf:"bytes,1,opt,name=sys,proto3" json:"sys,omitempty"` // DAOS system identifier.
+	Classes []chk.CheckInconsistClass `protobuf:"varint,2,rep,packed,name=classes,proto3,enum=chk.CheckInconsistClass" json:"classes,omitempty"`
+}
+
+func (x *CheckGetPolicyReq) Reset() {
+	*x = CheckGetPolicyReq{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_check_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckGetPolicyReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckGetPolicyReq) ProtoMessage() {}
+
+func (x *CheckGetPolicyReq) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_check_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckGetPolicyReq.ProtoReflect.Descriptor instead.
+func (*CheckGetPolicyReq) Descriptor() ([]byte, []int) {
+	return file_mgmt_check_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CheckGetPolicyReq) GetSys() string {
+	if x != nil {
+		return x.Sys
+	}
+	return ""
+}
+
+func (x *CheckGetPolicyReq) GetClasses() []chk.CheckInconsistClass {
+	if x != nil {
+		return x.Classes
+	}
+	return nil
+}
+
+// CheckGetPolicyResp returns the result of check prop and the properties when start check.
+// NB: Dupe of CheckPropResp currently; may consolidate if they don't diverge.
+type CheckGetPolicyResp struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Status   int32                   `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`    // DAOS error code.
+	Flags    uint32                  `protobuf:"varint,2,opt,name=flags,proto3" json:"flags,omitempty"`      // The flags when start check - see CheckFlag.
+	Policies []*CheckInconsistPolicy `protobuf:"bytes,3,rep,name=policies,proto3" json:"policies,omitempty"` // Inconsistency policy array.
+}
+
+func (x *CheckGetPolicyResp) Reset() {
+	*x = CheckGetPolicyResp{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_mgmt_check_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *CheckGetPolicyResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckGetPolicyResp) ProtoMessage() {}
+
+func (x *CheckGetPolicyResp) ProtoReflect() protoreflect.Message {
+	mi := &file_mgmt_check_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckGetPolicyResp.ProtoReflect.Descriptor instead.
+func (*CheckGetPolicyResp) Descriptor() ([]byte, []int) {
+	return file_mgmt_check_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *CheckGetPolicyResp) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *CheckGetPolicyResp) GetFlags() uint32 {
+	if x != nil {
+		return x.Flags
+	}
+	return 0
+}
+
+func (x *CheckGetPolicyResp) GetPolicies() []*CheckInconsistPolicy {
+	if x != nil {
+		return x.Policies
+	}
+	return nil
+}
+
 // For the admin's decision from DAOS check interaction.
 type CheckActReq struct {
 	state         protoimpl.MessageState
@@ -1027,7 +1212,7 @@ type CheckActReq struct {
 func (x *CheckActReq) Reset() {
 	*x = CheckActReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_check_proto_msgTypes[15]
+		mi := &file_mgmt_check_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1040,7 +1225,7 @@ func (x *CheckActReq) String() string {
 func (*CheckActReq) ProtoMessage() {}
 
 func (x *CheckActReq) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_check_proto_msgTypes[15]
+	mi := &file_mgmt_check_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1053,7 +1238,7 @@ func (x *CheckActReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckActReq.ProtoReflect.Descriptor instead.
 func (*CheckActReq) Descriptor() ([]byte, []int) {
-	return file_mgmt_check_proto_rawDescGZIP(), []int{15}
+	return file_mgmt_check_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CheckActReq) GetSys() string {
@@ -1096,7 +1281,7 @@ type CheckActResp struct {
 func (x *CheckActResp) Reset() {
 	*x = CheckActResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_mgmt_check_proto_msgTypes[16]
+		mi := &file_mgmt_check_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1109,7 +1294,7 @@ func (x *CheckActResp) String() string {
 func (*CheckActResp) ProtoMessage() {}
 
 func (x *CheckActResp) ProtoReflect() protoreflect.Message {
-	mi := &file_mgmt_check_proto_msgTypes[16]
+	mi := &file_mgmt_check_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1122,7 +1307,7 @@ func (x *CheckActResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckActResp.ProtoReflect.Descriptor instead.
 func (*CheckActResp) Descriptor() ([]byte, []int) {
-	return file_mgmt_check_proto_rawDescGZIP(), []int{16}
+	return file_mgmt_check_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CheckActResp) GetStatus() int32 {
@@ -1239,31 +1424,51 @@ var file_mgmt_check_proto_rawDesc = []byte{
 	0x6f, 0x6f, 0x6c, 0x52, 0x05, 0x70, 0x6f, 0x6f, 0x6c, 0x73, 0x12, 0x2a, 0x0a, 0x07, 0x72, 0x65,
 	0x70, 0x6f, 0x72, 0x74, 0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x63, 0x68,
 	0x6b, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x52, 0x65, 0x70, 0x6f, 0x72, 0x74, 0x52, 0x07, 0x72,
-	0x65, 0x70, 0x6f, 0x72, 0x74, 0x73, 0x22, 0x20, 0x0a, 0x0c, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x50,
-	0x72, 0x6f, 0x70, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x22, 0x75, 0x0a, 0x0d, 0x43, 0x68, 0x65, 0x63,
-	0x6b, 0x50, 0x72, 0x6f, 0x70, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61,
-	0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75,
-	0x73, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d,
-	0x52, 0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x12, 0x36, 0x0a, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63,
-	0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x6d, 0x67, 0x6d, 0x74,
-	0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e, 0x73, 0x69, 0x73, 0x74, 0x50,
-	0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x22,
-	0x77, 0x0a, 0x0b, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x41, 0x63, 0x74, 0x52, 0x65, 0x71, 0x12, 0x10,
-	0x0a, 0x03, 0x73, 0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73,
-	0x12, 0x10, 0x0a, 0x03, 0x73, 0x65, 0x71, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x73,
-	0x65, 0x71, 0x12, 0x2b, 0x0a, 0x03, 0x61, 0x63, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32,
-	0x19, 0x2e, 0x63, 0x68, 0x6b, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e,
-	0x73, 0x69, 0x73, 0x74, 0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x03, 0x61, 0x63, 0x74, 0x12,
-	0x17, 0x0a, 0x07, 0x66, 0x6f, 0x72, 0x5f, 0x61, 0x6c, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08,
-	0x52, 0x06, 0x66, 0x6f, 0x72, 0x41, 0x6c, 0x6c, 0x22, 0x26, 0x0a, 0x0c, 0x43, 0x68, 0x65, 0x63,
-	0x6b, 0x41, 0x63, 0x74, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74,
-	0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73,
-	0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64,
-	0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73,
-	0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f,
-	0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x70, 0x6f, 0x72, 0x74, 0x73, 0x22, 0x73, 0x0a, 0x11, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x53,
+	0x65, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73,
+	0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x14, 0x0a,
+	0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x66, 0x6c,
+	0x61, 0x67, 0x73, 0x12, 0x36, 0x0a, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x18,
+	0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x43, 0x68, 0x65,
+	0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e, 0x73, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63,
+	0x79, 0x52, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x22, 0x20, 0x0a, 0x0c, 0x43,
+	0x68, 0x65, 0x63, 0x6b, 0x50, 0x72, 0x6f, 0x70, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73,
+	0x79, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x22, 0x75, 0x0a,
+	0x0d, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x50, 0x72, 0x6f, 0x70, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16,
+	0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06,
+	0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x12, 0x36, 0x0a, 0x08,
+	0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x18, 0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a,
+	0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e,
+	0x73, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x08, 0x70, 0x6f, 0x6c, 0x69,
+	0x63, 0x69, 0x65, 0x73, 0x22, 0x59, 0x0a, 0x11, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x47, 0x65, 0x74,
+	0x50, 0x6f, 0x6c, 0x69, 0x63, 0x79, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79, 0x73,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x32, 0x0a, 0x07, 0x63,
+	0x6c, 0x61, 0x73, 0x73, 0x65, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0e, 0x32, 0x18, 0x2e, 0x63,
+	0x68, 0x6b, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e, 0x73, 0x69, 0x73,
+	0x74, 0x43, 0x6c, 0x61, 0x73, 0x73, 0x52, 0x07, 0x63, 0x6c, 0x61, 0x73, 0x73, 0x65, 0x73, 0x22,
+	0x7a, 0x0a, 0x12, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x47, 0x65, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63,
+	0x79, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x12, 0x14, 0x0a,
+	0x05, 0x66, 0x6c, 0x61, 0x67, 0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x66, 0x6c,
+	0x61, 0x67, 0x73, 0x12, 0x36, 0x0a, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x18,
+	0x03, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x6d, 0x67, 0x6d, 0x74, 0x2e, 0x43, 0x68, 0x65,
+	0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e, 0x73, 0x69, 0x73, 0x74, 0x50, 0x6f, 0x6c, 0x69, 0x63,
+	0x79, 0x52, 0x08, 0x70, 0x6f, 0x6c, 0x69, 0x63, 0x69, 0x65, 0x73, 0x22, 0x77, 0x0a, 0x0b, 0x43,
+	0x68, 0x65, 0x63, 0x6b, 0x41, 0x63, 0x74, 0x52, 0x65, 0x71, 0x12, 0x10, 0x0a, 0x03, 0x73, 0x79,
+	0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x73, 0x79, 0x73, 0x12, 0x10, 0x0a, 0x03,
+	0x73, 0x65, 0x71, 0x18, 0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x73, 0x65, 0x71, 0x12, 0x2b,
+	0x0a, 0x03, 0x61, 0x63, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x19, 0x2e, 0x63, 0x68,
+	0x6b, 0x2e, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x49, 0x6e, 0x63, 0x6f, 0x6e, 0x73, 0x69, 0x73, 0x74,
+	0x41, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x03, 0x61, 0x63, 0x74, 0x12, 0x17, 0x0a, 0x07, 0x66,
+	0x6f, 0x72, 0x5f, 0x61, 0x6c, 0x6c, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x52, 0x06, 0x66, 0x6f,
+	0x72, 0x41, 0x6c, 0x6c, 0x22, 0x26, 0x0a, 0x0c, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x41, 0x63, 0x74,
+	0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x42, 0x3a, 0x5a, 0x38,
+	0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2d,
+	0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63, 0x2f, 0x63,
+	0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2f, 0x6d, 0x67, 0x6d, 0x74, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1278,7 +1483,7 @@ func file_mgmt_check_proto_rawDescGZIP() []byte {
 	return file_mgmt_check_proto_rawDescData
 }
 
-var file_mgmt_check_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_mgmt_check_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_mgmt_check_proto_goTypes = []interface{}{
 	(*CheckInconsistPolicy)(nil),  // 0: mgmt.CheckInconsistPolicy
 	(*CheckEnableReq)(nil),        // 1: mgmt.CheckEnableReq
@@ -1293,42 +1498,48 @@ var file_mgmt_check_proto_goTypes = []interface{}{
 	(*CheckQueryTarget)(nil),      // 10: mgmt.CheckQueryTarget
 	(*CheckQueryPool)(nil),        // 11: mgmt.CheckQueryPool
 	(*CheckQueryResp)(nil),        // 12: mgmt.CheckQueryResp
-	(*CheckPropReq)(nil),          // 13: mgmt.CheckPropReq
-	(*CheckPropResp)(nil),         // 14: mgmt.CheckPropResp
-	(*CheckActReq)(nil),           // 15: mgmt.CheckActReq
-	(*CheckActResp)(nil),          // 16: mgmt.CheckActResp
-	(chk.CheckInconsistClass)(0),  // 17: chk.CheckInconsistClass
-	(chk.CheckInconsistAction)(0), // 18: chk.CheckInconsistAction
-	(chk.CheckInstStatus)(0),      // 19: chk.CheckInstStatus
-	(chk.CheckPoolStatus)(0),      // 20: chk.CheckPoolStatus
-	(chk.CheckScanPhase)(0),       // 21: chk.CheckScanPhase
-	(*chk.CheckReport)(nil),       // 22: chk.CheckReport
+	(*CheckSetPolicyReq)(nil),     // 13: mgmt.CheckSetPolicyReq
+	(*CheckPropReq)(nil),          // 14: mgmt.CheckPropReq
+	(*CheckPropResp)(nil),         // 15: mgmt.CheckPropResp
+	(*CheckGetPolicyReq)(nil),     // 16: mgmt.CheckGetPolicyReq
+	(*CheckGetPolicyResp)(nil),    // 17: mgmt.CheckGetPolicyResp
+	(*CheckActReq)(nil),           // 18: mgmt.CheckActReq
+	(*CheckActResp)(nil),          // 19: mgmt.CheckActResp
+	(chk.CheckInconsistClass)(0),  // 20: chk.CheckInconsistClass
+	(chk.CheckInconsistAction)(0), // 21: chk.CheckInconsistAction
+	(chk.CheckInstStatus)(0),      // 22: chk.CheckInstStatus
+	(chk.CheckPoolStatus)(0),      // 23: chk.CheckPoolStatus
+	(chk.CheckScanPhase)(0),       // 24: chk.CheckScanPhase
+	(*chk.CheckReport)(nil),       // 25: chk.CheckReport
 }
 var file_mgmt_check_proto_depIdxs = []int32{
-	17, // 0: mgmt.CheckInconsistPolicy.inconsist_cas:type_name -> chk.CheckInconsistClass
-	18, // 1: mgmt.CheckInconsistPolicy.inconsist_act:type_name -> chk.CheckInconsistAction
+	20, // 0: mgmt.CheckInconsistPolicy.inconsist_cas:type_name -> chk.CheckInconsistClass
+	21, // 1: mgmt.CheckInconsistPolicy.inconsist_act:type_name -> chk.CheckInconsistAction
 	0,  // 2: mgmt.CheckStartReq.policies:type_name -> mgmt.CheckInconsistPolicy
-	19, // 3: mgmt.CheckQueryTarget.status:type_name -> chk.CheckInstStatus
+	22, // 3: mgmt.CheckQueryTarget.status:type_name -> chk.CheckInstStatus
 	9,  // 4: mgmt.CheckQueryTarget.inconsistency:type_name -> mgmt.CheckQueryInconsist
 	8,  // 5: mgmt.CheckQueryTarget.time:type_name -> mgmt.CheckQueryTime
-	20, // 6: mgmt.CheckQueryPool.status:type_name -> chk.CheckPoolStatus
-	21, // 7: mgmt.CheckQueryPool.phase:type_name -> chk.CheckScanPhase
+	23, // 6: mgmt.CheckQueryPool.status:type_name -> chk.CheckPoolStatus
+	24, // 7: mgmt.CheckQueryPool.phase:type_name -> chk.CheckScanPhase
 	9,  // 8: mgmt.CheckQueryPool.inconsistency:type_name -> mgmt.CheckQueryInconsist
 	8,  // 9: mgmt.CheckQueryPool.time:type_name -> mgmt.CheckQueryTime
 	10, // 10: mgmt.CheckQueryPool.targets:type_name -> mgmt.CheckQueryTarget
-	19, // 11: mgmt.CheckQueryResp.ins_status:type_name -> chk.CheckInstStatus
-	21, // 12: mgmt.CheckQueryResp.ins_phase:type_name -> chk.CheckScanPhase
+	22, // 11: mgmt.CheckQueryResp.ins_status:type_name -> chk.CheckInstStatus
+	24, // 12: mgmt.CheckQueryResp.ins_phase:type_name -> chk.CheckScanPhase
 	9,  // 13: mgmt.CheckQueryResp.inconsistency:type_name -> mgmt.CheckQueryInconsist
 	8,  // 14: mgmt.CheckQueryResp.time:type_name -> mgmt.CheckQueryTime
 	11, // 15: mgmt.CheckQueryResp.pools:type_name -> mgmt.CheckQueryPool
-	22, // 16: mgmt.CheckQueryResp.reports:type_name -> chk.CheckReport
-	0,  // 17: mgmt.CheckPropResp.policies:type_name -> mgmt.CheckInconsistPolicy
-	18, // 18: mgmt.CheckActReq.act:type_name -> chk.CheckInconsistAction
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	25, // 16: mgmt.CheckQueryResp.reports:type_name -> chk.CheckReport
+	0,  // 17: mgmt.CheckSetPolicyReq.policies:type_name -> mgmt.CheckInconsistPolicy
+	0,  // 18: mgmt.CheckPropResp.policies:type_name -> mgmt.CheckInconsistPolicy
+	20, // 19: mgmt.CheckGetPolicyReq.classes:type_name -> chk.CheckInconsistClass
+	0,  // 20: mgmt.CheckGetPolicyResp.policies:type_name -> mgmt.CheckInconsistPolicy
+	21, // 21: mgmt.CheckActReq.act:type_name -> chk.CheckInconsistAction
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_mgmt_check_proto_init() }
@@ -1494,7 +1705,7 @@ func file_mgmt_check_proto_init() {
 			}
 		}
 		file_mgmt_check_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CheckPropReq); i {
+			switch v := v.(*CheckSetPolicyReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1506,7 +1717,7 @@ func file_mgmt_check_proto_init() {
 			}
 		}
 		file_mgmt_check_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CheckPropResp); i {
+			switch v := v.(*CheckPropReq); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1518,7 +1729,7 @@ func file_mgmt_check_proto_init() {
 			}
 		}
 		file_mgmt_check_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CheckActReq); i {
+			switch v := v.(*CheckPropResp); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1530,6 +1741,42 @@ func file_mgmt_check_proto_init() {
 			}
 		}
 		file_mgmt_check_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckGetPolicyReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_check_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckGetPolicyResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_check_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*CheckActReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_mgmt_check_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*CheckActResp); i {
 			case 0:
 				return &v.state
@@ -1548,7 +1795,7 @@ func file_mgmt_check_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_mgmt_check_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

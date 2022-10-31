@@ -403,25 +403,29 @@ const ProtobufCEnumDescriptor chk__check_inconsist_action__descriptor =
   chk__check_inconsist_action__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };
-static const ProtobufCEnumValue chk__check_flag__enum_values_by_number[6] =
+static const ProtobufCEnumValue chk__check_flag__enum_values_by_number[8] =
 {
   { "CF_NONE", "CHK__CHECK_FLAG__CF_NONE", 0 },
   { "CF_DRYRUN", "CHK__CHECK_FLAG__CF_DRYRUN", 1 },
   { "CF_RESET", "CHK__CHECK_FLAG__CF_RESET", 2 },
   { "CF_FAILOUT", "CHK__CHECK_FLAG__CF_FAILOUT", 4 },
   { "CF_AUTO", "CHK__CHECK_FLAG__CF_AUTO", 8 },
-  { "CF_DANGLING_POOL", "CHK__CHECK_FLAG__CF_DANGLING_POOL", 16 },
+  { "CF_ORPHAN_POOL", "CHK__CHECK_FLAG__CF_ORPHAN_POOL", 16 },
+  { "CF_NO_FAILOUT", "CHK__CHECK_FLAG__CF_NO_FAILOUT", 32 },
+  { "CF_NO_AUTO", "CHK__CHECK_FLAG__CF_NO_AUTO", 64 },
 };
 static const ProtobufCIntRange chk__check_flag__value_ranges[] = {
-{0, 0},{4, 3},{8, 4},{16, 5},{0, 6}
+{0, 0},{4, 3},{8, 4},{16, 5},{32, 6},{64, 7},{0, 8}
 };
-static const ProtobufCEnumValueIndex chk__check_flag__enum_values_by_name[6] =
+static const ProtobufCEnumValueIndex chk__check_flag__enum_values_by_name[8] =
 {
   { "CF_AUTO", 4 },
-  { "CF_DANGLING_POOL", 5 },
   { "CF_DRYRUN", 1 },
   { "CF_FAILOUT", 3 },
   { "CF_NONE", 0 },
+  { "CF_NO_AUTO", 7 },
+  { "CF_NO_FAILOUT", 6 },
+  { "CF_ORPHAN_POOL", 5 },
   { "CF_RESET", 2 },
 };
 const ProtobufCEnumDescriptor chk__check_flag__descriptor =
@@ -431,11 +435,11 @@ const ProtobufCEnumDescriptor chk__check_flag__descriptor =
   "CheckFlag",
   "Chk__CheckFlag",
   "chk",
-  6,
+  8,
   chk__check_flag__enum_values_by_number,
-  6,
+  8,
   chk__check_flag__enum_values_by_name,
-  4,
+  6,
   chk__check_flag__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

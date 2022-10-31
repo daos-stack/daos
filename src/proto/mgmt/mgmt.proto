@@ -93,8 +93,10 @@ service MgmtSvc {
 	rpc SystemCheckStop(CheckStopReq) returns(CheckStopResp){}
 	// Query a system check
 	rpc SystemCheckQuery(CheckQueryReq) returns(CheckQueryResp){}
+	// Set system check properties
+	rpc SystemCheckSetPolicy(CheckSetPolicyReq) returns(DaosResp){}
 	// Query system check properties
-	rpc SystemCheckProp(CheckPropReq) returns(CheckPropResp){}
+	rpc SystemCheckGetPolicy(CheckGetPolicyReq) returns(CheckGetPolicyResp){}
 	// Send the desired action to repair an inconsistency.
 	rpc SystemCheckRepair(CheckActReq) returns(CheckActResp){}
 	// PoolUpgrade queries a DAOS pool.

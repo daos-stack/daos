@@ -115,6 +115,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "hostname")
 			case "check repair":
 				testArgs = append(testArgs, "1", "2")
+			case "check set-policy":
+				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
