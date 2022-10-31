@@ -48,8 +48,8 @@ struct dav_action_internal {
 	/* type of operation (alloc/free vs set) */
 	enum dav_action_type type;
 
-	/* not used */
-	uint32_t padding;
+	/* Is associated with dav_reserve? */
+	uint32_t is_reserve;
 
 	/*
 	 * Action-specific lock that needs to be taken for the duration of
@@ -137,7 +137,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 	int ret;
 
 	if (constructor != NULL) {
-		ret = constructor(heap->base, uptr, usize, arg);
+		ret = constructor(heap->p_ops.base, uptr, usize, arg);
 		if (ret  != 0) {
 			/*
 			 * If canceled, revert the block back to the free
@@ -251,6 +251,7 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size,
 
 	out->lock = new_block->m_ops->get_lock(new_block);
 	out->new_state = MEMBLOCK_ALLOCATED;
+	out->is_reserve = 0;
 
 out:
 	heap_bucket_release(b);
@@ -270,9 +271,6 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	const struct dav_action_internal *act,
 	struct operation_context *ctx)
 {
-	/* suppress unused-parameter errors */
-	SUPPRESS_UNUSED(heap);
-
 #ifdef DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
 		D_CRIT("invalid operation or heap corruption\n");
@@ -287,6 +285,12 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	 * changing a chunk type from free to used or vice versa.
 	 */
 	act->m.m_ops->prep_hdr(&act->m, act->new_state, ctx);
+	if (act->is_reserve) {
+		void	*addr = HEAP_OFF_TO_PTR(heap, act->offset);
+		size_t	 size = act->usable_size;
+
+		wal_tx_snap(heap->p_ops.base, addr, size, addr, 0);
+	}
 }
 
 /*
@@ -362,6 +366,7 @@ palloc_reservation_clear(struct palloc_heap *heap,
 	} else {
 		VALGRIND_ANNOTATE_HAPPENS_BEFORE(&mresv->nresv);
 	}
+	act->is_reserve = 0;
 }
 
 /*
@@ -604,6 +609,12 @@ palloc_reserve(struct palloc_heap *heap, size_t size,
 	return palloc_reservation_create(heap, size, constructor, arg,
 		extra_field, object_flags, class_id, arena_id,
 		(struct dav_action_internal *)act);
+}
+
+void
+palloc_mark_act_reserve(struct dav_action *act)
+{
+	((struct dav_action_internal *)act)->is_reserve = 1;
 }
 
 /*

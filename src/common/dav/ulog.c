@@ -13,7 +13,6 @@
 #include "ulog.h"
 #include "obj.h"
 #include "out.h"
-#include "util.h"
 #include "valgrind_internal.h"
 
 /*
@@ -65,8 +64,13 @@ ulog_entry_size(const struct ulog_entry_base *entry)
 	struct ulog_entry_buf *eb;
 
 	switch (ulog_entry_type(entry)) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 	case ULOG_OPERATION_AND:
 	case ULOG_OPERATION_OR:
+#else
+	case ULOG_OPERATION_CLR_BITS:
+	case ULOG_OPERATION_SET_BITS:
+#endif
 	case ULOG_OPERATION_SET:
 		return sizeof(struct ulog_entry_val);
 	case ULOG_OPERATION_BUF_SET:
@@ -242,79 +246,6 @@ ulog_checksum(struct ulog *ulog, size_t ulog_base_bytes, int insert)
 }
 
 /*
- * ulog_store -- stores the transient src ulog in the
- *	persistent dest ulog
- *
- * The source and destination ulogs must be cacheline aligned.
- */
-void
-ulog_store(struct ulog *dest, struct ulog *src, size_t nbytes,
-	size_t ulog_base_nbytes, size_t ulog_total_capacity,
-	struct ulog_next *next)
-{
-	/*
-	 * First, store all entries over the base capacity of the ulog in
-	 * the next logs.
-	 * Because the checksum is only in the first part, we don't have to
-	 * worry about failsafety here.
-	 */
-	struct ulog *ulog = dest;
-	size_t offset = ulog_base_nbytes;
-
-	/*
-	 * Copy at least 8 bytes more than needed. If the user always
-	 * properly uses entry creation functions, this will zero-out the
-	 * potential leftovers of the previous log. Since all we really need
-	 * to zero is the offset, sizeof(struct redo_log_entry_base) is enough.
-	 * If the nbytes is aligned, an entire cacheline needs to be
-	 * additionally zeroed.
-	 * But the checksum must be calculated based solely on actual data.
-	 * If the ulog total capacity is equal to the size of the
-	 * ulog being stored (nbytes == ulog_total_capacity), then there's
-	 * nothing to invalidate because the entire log data will
-	 * be overwritten.
-	 */
-	size_t checksum_nbytes = MIN(ulog_base_nbytes, nbytes);
-
-	if (nbytes != ulog_total_capacity)
-		nbytes = CACHELINE_ALIGN(nbytes +
-			sizeof(struct ulog_entry_base));
-	ASSERT(nbytes <= ulog_total_capacity);
-
-	size_t base_nbytes = MIN(ulog_base_nbytes, nbytes);
-	size_t next_nbytes = nbytes - base_nbytes;
-	size_t nlog = 0;
-
-	while (next_nbytes > 0) {
-		ulog = VEC_ARR(next)[nlog++];
-		ASSERTne(ulog, NULL);
-
-		size_t copy_nbytes = MIN(next_nbytes, ulog->capacity);
-
-		next_nbytes -= copy_nbytes;
-
-		ASSERT(IS_CACHELINE_ALIGNED(ulog->data));
-
-		memcpy(ulog->data, src->data + offset, copy_nbytes);
-		offset += copy_nbytes;
-	}
-
-	/*
-	 * Then, calculate the checksum and store the first part of the
-	 * ulog.
-	 */
-	size_t old_capacity = src->capacity;
-
-	src->capacity = base_nbytes;
-	src->next = VEC_SIZE(next) == 0 ? 0 : VEC_FRONT(next);
-	ulog_checksum(src, checksum_nbytes, 1);
-
-	memcpy(dest, src, SIZEOF_ULOG(base_nbytes));
-
-	src->capacity = old_capacity;
-}
-
-/*
  * ulog_entry_val_create -- creates a new log value entry in the ulog
  *
  * This function requires at least a cacheline of space to be available in the
@@ -390,9 +321,8 @@ ulog_entry_buf_create(struct ulog *ulog, size_t offset, uint64_t gen_num,
 
 	struct ulog_entry_buf *b = alloca(CACHELINE_SIZE);
 
-	b->base.offset = p_ops->base ?
-		(uint64_t)(dest) - (uint64_t)((dav_obj_t *)p_ops->base)->do_base :
-		(uint64_t)dest;
+	ASSERT(p_ops->base != NULL);
+	b->base.offset = (uint64_t)dest - (uint64_t)((dav_obj_t *)p_ops->base)->do_base;
 	b->base.offset |= ULOG_OPERATION(type);
 	b->size = size;
 	b->checksum = 0;
@@ -468,9 +398,14 @@ ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 	struct ulog_entry_val *ev;
 	struct ulog_entry_buf *eb;
 
+	uint16_t nbits;
+	uint32_t pos;
+	uint64_t bmask;
+
 	SUPPRESS_UNUSED(persist);
 
 	switch (t) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 	case ULOG_OPERATION_AND:
 		ev = (struct ulog_entry_val *)e;
 
@@ -483,6 +418,32 @@ ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 		VALGRIND_ADD_TO_TX(dst, dst_size);
 		*dst |= ev->value;
 		break;
+#else
+	case ULOG_OPERATION_CLR_BITS:
+		ev = (struct ulog_entry_val *)e;
+		pos = ULOG_ENTRY_VAL_TO_POS(ev->value);
+		nbits = ULOG_ENTRY_VAL_TO_BITS(ev->value);
+		if (nbits == RUN_BITS_PER_VALUE)
+			bmask = UINT64_MAX;
+		else
+			bmask = ((1ULL << nbits) - 1ULL) << pos;
+
+		VALGRIND_ADD_TO_TX(dst, dst_size);
+		*dst &= ~bmask;
+		break;
+	case ULOG_OPERATION_SET_BITS:
+		ev = (struct ulog_entry_val *)e;
+		pos = ULOG_ENTRY_VAL_TO_POS(ev->value);
+		nbits = ULOG_ENTRY_VAL_TO_BITS(ev->value);
+		if (nbits == RUN_BITS_PER_VALUE)
+			bmask = UINT64_MAX;
+		else
+			bmask = ((1ULL << nbits) - 1ULL) << pos;
+
+		VALGRIND_ADD_TO_TX(dst, dst_size);
+		*dst |= bmask;
+		break;
+#endif
 	case ULOG_OPERATION_SET:
 		ev = (struct ulog_entry_val *)e;
 
@@ -494,7 +455,9 @@ ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 
 		dst_size = eb->size;
 		VALGRIND_ADD_TO_TX(dst, dst_size);
+#if 0	/* REVISIT: ULOG_OPERATION_BUF_SET is never set by dav */
 		pmemops_memset(p_ops, dst, *eb->data, eb->size, 0);
+#endif
 		break;
 	case ULOG_OPERATION_BUF_CPY:
 		eb = (struct ulog_entry_buf *)e;
@@ -654,8 +617,6 @@ ulog_process(struct ulog *ulog, ulog_check_offset_fn check,
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(check);
 
-	DAV_DEBUG("ulog %p", ulog);
-
 #ifdef DEBUG
 	if (check)
 		ulog_check(ulog, check, p_ops);
@@ -701,23 +662,6 @@ ulog_recovery_needed(struct ulog *ulog, int verify_checksum)
 		return 0;
 
 	return 1;
-}
-
-/*
- * ulog_recover -- recovery of ulog
- *
- * The ulog_recover shall be preceded by ulog_check call.
- */
-void
-ulog_recover(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops)
-{
-	DAV_DEBUG("ulog %p", ulog);
-
-	if (ulog_recovery_needed(ulog, 1)) {
-		ulog_process(ulog, check, p_ops);
-		ulog_clobber(ulog, NULL);
-	}
 }
 
 /*

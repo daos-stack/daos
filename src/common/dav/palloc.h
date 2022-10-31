@@ -56,6 +56,8 @@ palloc_reserve(struct palloc_heap *heap, size_t size,
 	uint16_t class_id, uint16_t arena_id,
 	struct dav_action *act);
 
+void palloc_mark_act_reserve(struct dav_action *act);
+
 void
 palloc_defer_free(struct palloc_heap *heap, uint64_t off,
 	struct dav_action *act);

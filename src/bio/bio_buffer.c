@@ -1064,7 +1064,7 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 			umem_tx_xadd_ptr(umem, media_addr, n,
 					 UMEM_XADD_NO_SNAPSHOT);
 		}
-		umem_atomic_copy(umem, media_addr, addr, n);
+		umem_atomic_copy(umem, media_addr, addr, n, UMEM_RESERVED_MEM);
 	} else {
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
 			memcpy(media_addr, addr, n);

@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "util.h"
 #include "vec.h"
 #include "pmemops.h"
 
@@ -74,12 +75,33 @@ VEC(ulog_next, struct ulog *);
 typedef uint64_t ulog_operation_type;
 
 #define ULOG_OPERATION_SET		(0b000ULL << 61ULL)
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 #define ULOG_OPERATION_AND		(0b001ULL << 61ULL)
 #define ULOG_OPERATION_OR		(0b010ULL << 61ULL)
+#else
+#define ULOG_OPERATION_CLR_BITS		(0b001ULL << 61ULL)
+#define ULOG_OPERATION_SET_BITS		(0b010ULL << 61ULL)
+#endif
 #define ULOG_OPERATION_BUF_SET		(0b101ULL << 61ULL)
 #define ULOG_OPERATION_BUF_CPY		(0b110ULL << 61ULL)
 
-#define ULOG_BIT_OPERATIONS (ULOG_OPERATION_AND | ULOG_OPERATION_OR)
+#ifndef	WAL_SUPPORTS_AND_OR_OPS
+#endif
+
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
+#define	ULOG_ENTRY_IS_BIT_OP(opc)	((opc == ULOG_OPERATION_AND) || \
+					 (opc == ULOG_OPERATION_OR))
+#else
+#define	ULOG_ENTRY_IS_BIT_OP(opc)	((opc == ULOG_OPERATION_CLR_BITS) || \
+					 (opc == ULOG_OPERATION_SET_BITS))
+#define ULOG_ENTRY_OPS_POS		16 /* bits' pos at value:16 */
+#define ULOG_ENTRY_OPS_BITS_MAKS	((1ULL << ULOG_ENTRY_OPS_POS) - 1)
+#define ULOG_ENTRY_VAL_TO_BITS(val)	((val) & ULOG_ENTRY_OPS_BITS_MAKS)
+#define ULOG_ENTRY_VAL_TO_POS(val)	((val) >> ULOG_ENTRY_OPS_POS)
+#define ULOG_ENTRY_OPS_POS_MAKS		(RUN_BITS_PER_VALUE - 1ULL)
+#define ULOG_ENTRY_TO_VAL(pos, nbits)	(((uint64_t)(nbits) & ULOG_ENTRY_OPS_BITS_MAKS) | \
+					 ((pos) & ULOG_ENTRY_OPS_POS_MAKS) << ULOG_ENTRY_OPS_POS)
+#endif
 
 /* immediately frees all associated ulog structures */
 #define ULOG_FREE_AFTER_FIRST (1U << 0)
@@ -110,11 +132,6 @@ int ulog_reserve(struct ulog *ulog,
 	size_t ulog_base_nbytes, size_t gen_num,
 	int auto_reserve, size_t *new_capacity_bytes,
 	ulog_extend_fn extend, struct ulog_next *next);
-
-void ulog_store(struct ulog *dest,
-	struct ulog *src, size_t nbytes, size_t ulog_base_nbytes,
-	size_t ulog_total_capacity,
-	struct ulog_next *next);
 
 int ulog_free_next(struct ulog *u, ulog_free_fn ulog_free);
 void ulog_clobber(struct ulog *dest, struct ulog_next *next);
@@ -148,8 +165,6 @@ void ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 
 size_t ulog_entry_size(const struct ulog_entry_base *entry);
 
-void ulog_recover(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops);
 int ulog_check(struct ulog *ulog, ulog_check_offset_fn check,
 	const struct pmem_ops *p_ops);
 

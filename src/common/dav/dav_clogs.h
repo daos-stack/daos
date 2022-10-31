@@ -30,16 +30,10 @@
 
 #define LANE_TOTAL_SIZE (3072) /* 3 * 1024 (sum of 3 old lane sections) */
 /*
- * We have 3 kilobytes to distribute.
- * The smallest capacity is needed for the internal redo log for which we can
- * accurately calculate the maximum number of occupied space: 48 bytes,
- * 3 times sizeof(struct ulog_entry_val). One for bitmap OR, second for bitmap
- * AND, third for modification of the destination pointer. For future needs,
- * this has been bumped up to 12 ulog entries.
- *
- * The remaining part has to be split between transactional redo and undo logs,
- * and since by far the most space consuming operations are transactional
- * snapshots, most of the space, 2 kilobytes, is assigned to the undo log.
+ * We have 3 kilobytes to distribute be split between transactional redo
+ * and undo logs.
+ * Since by far the most space consuming operations are transactional
+ * snapshots, most of the space, 2304 bytes, is assigned to the undo log.
  * After that, the remainder, 640 bytes, or 40 ulog entries, is left for the
  * transactional redo logs.
  * Thanks to this distribution, all small and medium transactions should be
@@ -51,19 +45,11 @@
  */
 #define LANE_UNDO_SIZE (LANE_TOTAL_SIZE \
 			- LANE_REDO_EXTERNAL_SIZE \
-			- LANE_REDO_INTERNAL_SIZE \
-			- 3 * sizeof(struct ulog)) /* 2048 for 64B ulog */
+			- 2 * sizeof(struct ulog)) /* 2304 for 64B ulog */
 #define LANE_REDO_EXTERNAL_SIZE ALIGN_UP(704 - sizeof(struct ulog), \
 					CACHELINE_SIZE) /* 640 for 64B ulog */
-#define LANE_REDO_INTERNAL_SIZE ALIGN_UP(256 - sizeof(struct ulog), \
-					CACHELINE_SIZE) /* 192 for 64B ulog */
 
 struct dav_clogs {
-	/*
-	 * Redo log for self-contained and 'one-shot' allocator operations.
-	 * Cannot be extended.
-	 */
-	struct ULOG(LANE_REDO_INTERNAL_SIZE) internal;
 	/*
 	 * Redo log for large operations/transactions.
 	 * Can be extended by the use of internal ulog.

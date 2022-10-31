@@ -207,6 +207,13 @@ enum {
 	UMEM_TYPE_ANY,
 };
 
+/* Hints for umem atomic copy operation primarily for bmem implementation */
+enum acopy_hint {
+	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
+	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
+	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
+};
+
 typedef struct {
 	/** free umoff */
 	int		 (*mo_tx_free)(struct umem_instance *umm,
@@ -317,10 +324,11 @@ typedef struct {
 	 * \param dest	[IN]	destination address
 	 * \param src	[IN]	source address
 	 * \param len	[IN]	length of data to be copied.
+	 * \param hint	[IN]	hint on when to persist.
 	 */
 	 void *		(*mo_atomic_copy)(struct umem_instance *umem,
 					  void *dest, const void *src,
-					  size_t len);
+					  size_t len, enum acopy_hint hint);
 
 	/** free umoff atomically */
 	int		 (*mo_atomic_free)(struct umem_instance *umm,
@@ -669,10 +677,11 @@ int umem_tx_publish(struct umem_instance *umm,
 		    struct umem_rsrvd_act *rsrvd_act);
 
 static inline void *
-umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len)
+umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
+		 enum acopy_hint hint)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_copy != NULL);
-	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len);
+	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len, hint);
 }
 
 static inline umem_off_t
@@ -735,12 +744,16 @@ enum {
 	UMEM_ACT_COPY,
 	/** copy payload addressed by @ptr to specified storage address */
 	UMEM_ACT_COPY_PTR,
-	/** assign 8/16/32 bits integer to specified storage address */
+	/** assign 8/16/32/64 bits integer to specified storage address */
 	UMEM_ACT_ASSIGN,
 	/** move specified bytes from source address to destination address */
 	UMEM_ACT_MOVE,
 	/** memset a region with specified value */
 	UMEM_ACT_SET,
+	/** perform arith and-op on the target (8 byte) with specified value */
+	UMEM_ACT_AND8,
+	/** perform arith or-op on the target (8 byte) with specified value */
+	UMEM_ACT_OR8,
 	/** set the specified bit in bitmap */
 	UMEM_ACT_SET_BITS,
 	/** unset the specified bit in bitmap */
@@ -768,8 +781,8 @@ struct umem_action {
 			uint64_t		ptr;
 		} ac_copy_ptr;	/**< copy payload from @ptr to @addr */
 		struct {
-			uint16_t		size;
-			uint32_t		val;
+			uint64_t		size;
+			uint64_t		val;
 			uint64_t		addr;
 		} ac_assign;	/**< assign integer to @addr, int64 should use ac_copy */
 		struct {

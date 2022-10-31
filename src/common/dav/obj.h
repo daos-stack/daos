@@ -11,7 +11,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <gurt/common.h>
 #include "dav_internal.h"
 #include "stats.h"
 #include "page_size.h"

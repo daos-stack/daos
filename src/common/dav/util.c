@@ -8,7 +8,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <endian.h>
-#include <gurt/common.h>
 
 #include "util.h"
 #include "valgrind_internal.h"

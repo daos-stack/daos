@@ -44,6 +44,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <stdatomic.h>
 
 #include <sys/param.h>
 
@@ -95,20 +96,6 @@ util_div_ceil(unsigned a, unsigned b)
  * XXX assertions needed on (value != 0) in both versions of bitscans
  *
  */
-
-/*
- * ISO C11 -- 7.17.1.4
- * memory_order - an enumerated type whose enumerators identify memory ordering
- * constraints.
- */
-typedef enum {
-	memory_order_relaxed = __ATOMIC_RELAXED,
-	memory_order_consume = __ATOMIC_CONSUME,
-	memory_order_acquire = __ATOMIC_ACQUIRE,
-	memory_order_release = __ATOMIC_RELEASE,
-	memory_order_acq_rel = __ATOMIC_ACQ_REL,
-	memory_order_seq_cst = __ATOMIC_SEQ_CST
-} memory_order;
 
 /*
  * ISO C11 -- 7.17.7.2 The atomic_load generic functions

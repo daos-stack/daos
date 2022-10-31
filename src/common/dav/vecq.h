@@ -9,7 +9,7 @@
 #define PMDK_VECQ_H 1
 
 #include <stddef.h>
-#include <gurt/common.h>
+
 #include "util.h"
 #include "out.h"
 

@@ -619,7 +619,7 @@ pmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
 
@@ -916,11 +916,18 @@ bmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
 
-	return dav_memcpy_persist(pop, dest, src, len);
+	if (hint == UMEM_RESERVED_MEM) {
+		memcpy(dest, src, len);
+		return dest;
+	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+		return dav_memcpy_persist(pop, dest, src, len);
+	} else { /* UMEM_COMMIT_DEFER */
+		return dav_memcpy_persist_relaxed(pop, dest, src, len);
+	}
 }
 
 static umem_off_t

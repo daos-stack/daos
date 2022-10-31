@@ -8,7 +8,6 @@
 #ifndef PMDK_VEC_H
 #define PMDK_VEC_H 1
 
-#include <gurt/common.h>
 #include <stddef.h>
 #include "valgrind_internal.h"
 #include "util.h"

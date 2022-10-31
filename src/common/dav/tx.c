@@ -39,20 +39,64 @@ struct tx {
 	void *stage_callback_arg;
 
 	int first_snapshot;
-
 };
 
 /*
- * get_tx -- (internal) returns current transaction
+ * get_tx -- returns current transaction
  *
  * This function should be used only in high-level functions.
  */
 static struct tx *
-get_tx()
+get_tx_nochk(void)
 {
 	static __thread struct tx tx;
 
 	return &tx;
+}
+
+static struct tx *
+get_tx(dav_obj_t *pop)
+{
+	struct tx *tx = get_tx_nochk();
+
+	if (pop != NULL) {
+		if (tx->pop == NULL)
+			tx->pop = pop;
+		else {
+			if (tx->pop != pop) {
+				ERR("tx stage=%d pop:%p new:%p", tx->stage, tx->pop, pop);
+				dav_print_backtrace();
+			}
+			D_ASSERT(tx->pop == pop);
+		}
+	}
+	if (tx->pop == NULL)
+		dav_print_backtrace();
+	D_ASSERT(tx->pop != NULL);
+
+	return tx;
+}
+
+/* DI */
+#include <sys/syscall.h>
+void chk_tid(dav_obj_t *pop)
+{
+	if (pop == NULL)
+		dav_print_backtrace();
+	D_ASSERT(pop != NULL);
+	D_ASSERT(pop->tc < 10);
+	pid_t tid = syscall(SYS_gettid);
+	int i;
+
+	for (i = 0; i < pop->tc; i++) {
+		if (pop->ts[i] == tid)
+			break;
+	}
+	if (i == pop->tc) {
+		if (i > 0)
+			ERR("DAV tid[%d]:%ld", i, (long)tid);
+		pop->ts[pop->tc++] = tid;
+	}
 }
 
 struct tx_alloc_args {
@@ -172,9 +216,6 @@ tx_action_remove(struct tx *tx)
 static int
 constructor_tx_alloc(void *ctx, void *ptr, size_t usable_size, void *arg)
 {
-	/* suppress unused-parameter errors */
-	SUPPRESS_UNUSED(ctx);
-
 	ASSERTne(ptr, NULL);
 	ASSERTne(arg, NULL);
 
@@ -183,68 +224,34 @@ constructor_tx_alloc(void *ctx, void *ptr, size_t usable_size, void *arg)
 	/* do not report changes to the new object */
 	VALGRIND_ADD_TO_TX(ptr, usable_size);
 
-	if (args->flags & DAV_FLAG_ZERO)
+	if (args->flags & DAV_FLAG_ZERO) {
 		memset(ptr, 0, usable_size);
+		wal_tx_set(ctx, ptr, 0, usable_size);
+	}
 
-	if (args->copy_ptr && args->copy_size != 0)
+	if (args->copy_ptr && args->copy_size != 0) {
+		FATAL("dav xalloc does not support copy_ptr\n");
 		memcpy(ptr, args->copy_ptr, args->copy_size);
+	}
 
 	return 0;
 }
-
-struct tx_range_data {
-	void *begin;
-	void *end;
-
-	PMDK_SLIST_ENTRY(tx_range_data) tx_range;
-};
-
-PMDK_SLIST_HEAD(txr, tx_range_data);
 
 /*
  * tx_restore_range -- (internal) restore a single range from undo log
  */
 static void
-tx_restore_range(dav_obj_t *pop, struct tx *tx, struct ulog_entry_buf *range)
+tx_restore_range(dav_obj_t *pop, struct ulog_entry_buf *range)
 {
-	struct txr tx_ranges;
-	struct tx_range_data *txr;
-
-	PMDK_SLIST_INIT(&tx_ranges);
-
-	ASSERT(tx->pop == pop);
-
-	D_ALLOC_PTR_NZ(txr);
-	if (txr == NULL) {
-		/* we can't do it any other way */
-		FATAL("!Malloc");
-	}
-
+	void *begin, *end;
+	size_t size = range->size;
 	uint64_t range_offset = ulog_entry_offset(&range->base);
 
-	txr->begin = OBJ_OFF_TO_PTR(pop, range_offset);
-	txr->end = (char *)txr->begin + range->size;
-	PMDK_SLIST_INSERT_HEAD(&tx_ranges, txr, tx_range);
+	begin = OBJ_OFF_TO_PTR(pop, range_offset);
+	end = (char *)begin + size;
+	ASSERT((char *)end >= (char *)begin);
 
-
-	ASSERT(!PMDK_SLIST_EMPTY(&tx_ranges));
-
-	void *dst_ptr = OBJ_OFF_TO_PTR(pop, range_offset);
-
-	while (!PMDK_SLIST_EMPTY(&tx_ranges)) {
-		txr = PMDK_SLIST_FIRST(&tx_ranges);
-		PMDK_SLIST_REMOVE_HEAD(&tx_ranges, tx_range);
-		/* restore partial range data from snapshot */
-		ASSERT((char *)txr->begin >= (char *)dst_ptr);
-		uint8_t *src = &range->data[
-				(char *)txr->begin - (char *)dst_ptr];
-
-		ASSERT((char *)txr->end >= (char *)txr->begin);
-		size_t size = (size_t)((char *)txr->end - (char *)txr->begin);
-
-		pmemops_memcpy(&pop->p_ops, txr->begin, src, size, 0);
-		D_FREE(txr);
-	}
+	pmemops_memcpy(&pop->p_ops, begin, range->data, size, 0);
 }
 
 /*
@@ -263,10 +270,15 @@ tx_undo_entry_apply(struct ulog_entry_base *e, void *arg,
 	case ULOG_OPERATION_BUF_CPY:
 		eb = (struct ulog_entry_buf *)e;
 
-		tx_restore_range(p_ops->base, get_tx(), eb);
+		tx_restore_range(p_ops->base, eb);
 		break;
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 	case ULOG_OPERATION_AND:
 	case ULOG_OPERATION_OR:
+#else
+	case ULOG_OPERATION_CLR_BITS:
+	case ULOG_OPERATION_SET_BITS:
+#endif
 	case ULOG_OPERATION_SET:
 	case ULOG_OPERATION_BUF_SET:
 	default:
@@ -294,6 +306,7 @@ tx_abort_set(dav_obj_t *pop)
 static void
 tx_flush_range(void *data, void *ctx)
 {
+#if 0	/* REVISIT */
 	dav_obj_t *pop = ctx;
 	struct tx_range_def *range = data;
 
@@ -303,6 +316,7 @@ tx_flush_range(void *data, void *ctx)
 	}
 	VALGRIND_REMOVE_FROM_TX(OBJ_OFF_TO_PTR(pop, range->offset),
 		range->size);
+#endif
 }
 
 /*
@@ -336,7 +350,8 @@ tx_pre_commit(struct tx *tx)
 static void
 tx_abort(dav_obj_t *pop)
 {
-	struct tx *tx = get_tx();
+ /* DI */ chk_tid(pop);
+	struct tx *tx = get_tx(pop);
 
 	tx_abort_set(pop);
 
@@ -344,16 +359,6 @@ tx_abort(dav_obj_t *pop)
 	palloc_cancel(pop->do_heap,
 		VEC_ARR(&tx->actions), VEC_SIZE(&tx->actions));
 	tx->ranges = NULL;
-}
-
-/*
- * tx_get_pop -- returns the current transaction's pool handle, NULL if not
- * within a transaction.
- */
-dav_obj_t *
-tx_get_pop(void)
-{
-	return get_tx()->pop;
 }
 
 /*
@@ -420,15 +425,93 @@ err_oom:
 }
 
 /*
+ * tx_create_wal_entry -- convert to WAL a single ulog UNDO entry
+ */
+int
+tx_create_wal_entry(struct ulog_entry_base *e, void *arg,
+	const struct pmem_ops *p_ops)
+{
+	/* suppress unused-parameter errors */
+	SUPPRESS_UNUSED(arg);
+
+	int			 rc = 0;
+	uint64_t		 offset = ulog_entry_offset(e);
+	daos_size_t		 dst_size = sizeof(uint64_t);
+	struct ulog_entry_val	*ev;
+	struct ulog_entry_buf	*eb;
+	uint64_t		 v;
+	uint64_t		*dst;
+
+	D_ASSERT(p_ops->base != NULL);
+	dst = (uint64_t *)((uintptr_t)((dav_obj_t *)p_ops->base)->do_base + offset);
+
+	switch (ulog_entry_type(e)) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
+	case ULOG_OPERATION_AND:
+		ev = (struct ulog_entry_val *)e;
+		v = ev->value;
+
+		rc = wal_tx_and(p_ops->base, dst, v);
+		break;
+	case ULOG_OPERATION_OR:
+		ev = (struct ulog_entry_val *)e;
+		v = ev->value;
+
+		rc = wal_tx_or(p_ops->base, dst, v);
+		break;
+#else
+	case ULOG_OPERATION_CLR_BITS:
+		ev = (struct ulog_entry_val *)e;
+		v = ev->value;
+
+		rc = wal_tx_clr_bits(p_ops->base, dst, ULOG_ENTRY_VAL_TO_POS(v),
+				     ULOG_ENTRY_VAL_TO_BITS(v));
+		break;
+	case ULOG_OPERATION_SET_BITS:
+		ev = (struct ulog_entry_val *)e;
+		v = ev->value;
+
+		rc = wal_tx_set_bits(p_ops->base, dst, ULOG_ENTRY_VAL_TO_POS(v),
+				     ULOG_ENTRY_VAL_TO_BITS(v));
+		break;
+#endif
+	case ULOG_OPERATION_SET:
+		ev = (struct ulog_entry_val *)e;
+
+		rc = wal_tx_assign(p_ops->base, dst, ev->value);
+		break;
+	case ULOG_OPERATION_BUF_SET:
+		eb = (struct ulog_entry_buf *)e;
+
+		dst_size = eb->size;
+		rc = wal_tx_set(p_ops->base, dst, 0, dst_size);
+		break;
+	case ULOG_OPERATION_BUF_CPY:
+		eb = (struct ulog_entry_buf *)e;
+
+		dst_size = eb->size;
+		/* The only undo entry from dav that needs to be
+		 * transformed into redo
+		 */
+		rc = wal_tx_snap(p_ops->base, dst, dst_size, dst, 0);
+		break;
+	default:
+		ASSERT(0);
+	}
+
+	return rc;
+}
+
+/*
  * dav_tx_begin -- initializes new transaction
  */
 int
 dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 {
-	DAV_DEBUG("");
 
+ /* DI */ chk_tid(pop);
 	int err = 0;
-	struct tx *tx = get_tx();
+	struct tx *tx = get_tx(pop);
 
 	enum dav_tx_failure_behavior failure_behavior = DAV_TX_FAILURE_ABORT;
 
@@ -564,7 +647,12 @@ obj_tx_callback(struct tx *tx)
 enum dav_tx_stage
 dav_tx_stage(void)
 {
-	return get_tx()->stage;
+		struct tx *tx = get_tx_nochk();
+
+		if (tx->stage != DAV_TX_STAGE_NONE)
+	 /* DI */	chk_tid(tx->pop);
+	/* return get_tx(NULL)->stage; */
+	return tx->stage;
 }
 
 /*
@@ -573,7 +661,8 @@ dav_tx_stage(void)
 static void
 obj_tx_abort(int errnum, int user)
 {
-	struct tx *tx = get_tx();
+	struct tx *tx = get_tx(NULL);
+ /* DI */		 chk_tid(tx->pop);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -616,6 +705,7 @@ void
 dav_tx_abort(int errnum)
 {
 	PMEMOBJ_API_START();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
 	obj_tx_abort(errnum, 1);
 	PMEMOBJ_API_END();
 }
@@ -626,9 +716,10 @@ dav_tx_abort(int errnum)
 int
 dav_tx_errno(void)
 {
-	DAV_DEBUG("err:%d", get_tx()->last_errnum);
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	DAV_DEBUG("err:%d", get_tx(NULL)->last_errnum);
 
-	return get_tx()->last_errnum;
+	return get_tx(NULL)->last_errnum;
 }
 
 static void
@@ -644,32 +735,34 @@ void
 dav_tx_commit(void)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
+	ASSERT(tx->pop);
 
 	/* WORK */
 	obj_tx_callback(tx);
-
-	ASSERT(tx->pop != NULL);
+	dav_obj_t *pop = tx->pop;
 
 	struct tx_data *txd = PMDK_SLIST_FIRST(&tx->tx_entries);
 
 	if (PMDK_SLIST_NEXT(txd, tx_entry) == NULL) {
 		/* this is the outermost transaction */
 
-		dav_obj_t *pop = tx->pop;
-
 		/* pre-commit phase */
 		tx_pre_commit(tx);
 
+		/* undo log should be converted to wal redo log */
+		ulog_foreach_entry((struct ulog *)&pop->clogs.undo,
+				   tx_create_wal_entry, NULL, &pop->p_ops);
+
 		pmemops_drain(&pop->p_ops);
 
-		operation_start(tx->pop->external);
+		operation_start(pop->external);
 
 		palloc_publish(pop->do_heap, VEC_ARR(&tx->actions),
-			VEC_SIZE(&tx->actions), tx->pop->external);
+			VEC_SIZE(&tx->actions), pop->external);
 
 		tx_post_commit(tx);
 
@@ -689,7 +782,8 @@ dav_tx_commit(void)
 int
 dav_tx_end(void)
 {
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	if (tx->stage == DAV_TX_STAGE_WORK)
 		FATAL("dav_tx_end called without dav_tx_commit");
@@ -714,9 +808,25 @@ dav_tx_end(void)
 	int ret = tx->last_errnum;
 
 	if (PMDK_SLIST_EMPTY(&tx->tx_entries)) {
+		ASSERT(tx->pop);
+
+		/* commit to WAL */
+		if (ret == 0)
+			wal_tx_commit(tx->pop);
+
+		if (ret == 0) {
+			struct wal_tx *wal_tx = &tx->pop->do_wtx;
+
+			DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
+				  wal_tx->wt_id,
+				  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
+		}
+
 		tx->pop = NULL;
 		tx->stage = DAV_TX_STAGE_NONE;
 		VEC_DELETE(&tx->actions);
+
+		/* TODO DI re-initialize wal_tx structure */
 
 		if (tx->stage_callback) {
 			dav_tx_callback cb = tx->stage_callback;
@@ -739,38 +849,6 @@ dav_tx_end(void)
 
 	return ret;
 }
-
-#if	0	/* REVISIT */
-/*
- * dav_tx_process -- processes current transaction stage
- */
-void
-dav_tx_process(void)
-{
-	DAV_DEBUG("");
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-
-	switch (tx->stage) {
-	case DAV_TX_STAGE_NONE:
-		break;
-	case DAV_TX_STAGE_WORK:
-		dav_tx_commit();
-		break;
-	case DAV_TX_STAGE_ONABORT:
-	case DAV_TX_STAGE_ONCOMMIT:
-		tx->stage = DAV_TX_STAGE_FINALLY;
-		obj_tx_callback(tx);
-		break;
-	case DAV_TX_STAGE_FINALLY:
-		tx->stage = DAV_TX_STAGE_NONE;
-		break;
-	default:
-		ASSERT(0);
-	}
-}
-#endif
 
 /*
  * vg_verify_initialized -- when executed under Valgrind verifies that
@@ -876,8 +954,6 @@ dav_tx_merge_flags(struct tx_range_def *dest, struct tx_range_def *merged)
 static int
 dav_tx_add_common(struct tx *tx, struct tx_range_def *args)
 {
-	DAV_DEBUG("");
-
 	if (args->size > DAV_MAX_ALLOC_SIZE) {
 		ERR("snapshot size too large");
 		return obj_tx_fail_err(EINVAL, args->flags);
@@ -1045,10 +1121,9 @@ dav_tx_add_common(struct tx *tx, struct tx_range_def *args)
 int
 dav_tx_add_range_direct(const void *ptr, size_t size)
 {
-	DAV_DEBUG("");
-
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1085,7 +1160,8 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 {
 
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1130,7 +1206,8 @@ int
 dav_tx_add_range(uint64_t hoff, size_t size)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1160,7 +1237,8 @@ int
 dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1200,7 +1278,8 @@ dav_tx_alloc(size_t size, uint64_t type_num)
 	uint64_t off;
 
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1228,7 +1307,8 @@ uint64_t
 dav_tx_zalloc(size_t size, uint64_t type_num)
 {
 	uint64_t off;
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1259,7 +1339,8 @@ uint64_t
 dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 {
 	uint64_t off;
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1296,7 +1377,8 @@ dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 static int
 dav_tx_xfree(uint64_t off, uint64_t flags)
 {
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1380,7 +1462,7 @@ dav_tx_free(uint64_t off)
 void*
 dav_tx_off2ptr(uint64_t off)
 {
-	struct tx *tx = get_tx();
+	struct tx *tx = get_tx_nochk();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1402,11 +1484,13 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act,
 
 	PMEMOBJ_API_START();
 
+ /* DI */		 chk_tid(pop);
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
 		PMEMOBJ_API_END();
 		return 0;
 	}
+	palloc_mark_act_reserve(act);
 
 	PMEMOBJ_API_END();
 	return act->heap.offset;
@@ -1462,13 +1546,14 @@ dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 
 
 /*
- * dav_tx_xpublish -- publishes actions inside of a transaction,
+ * dav_tx_publish -- publishes actions inside of a transaction,
  * with no_abort option
  */
 int
 dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 {
-	struct tx *tx = get_tx();
+ /* DI */		 chk_tid(get_tx(NULL)->pop);
+	struct tx *tx = get_tx(NULL);
 	uint64_t flags = 0;
 
 	ASSERT_IN_TX(tx);
@@ -1580,6 +1665,15 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 			constructor_zrealloc_root, &carg,
 			0, 0, 0, 0, ctx); /* REVISIT: object_flags and type num ignored*/
 
+	if (ret == 0) {
+		struct wal_tx *wal_tx = &pop->do_wtx;
+
+		wal_tx_commit(pop);
+		DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
+			  wal_tx->wt_id,
+			  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
+	}
+
 	return ret;
 }
 
@@ -1674,10 +1768,24 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 
 	operation_start(ctx);
 
+	/* set pool for atomic pseudo tx */
+	(void)get_tx(pop);
+
 	int ret = palloc_operation(pop->do_heap, 0, offp, size,
 			constructor_alloc, &carg, type_num, 0,
 			CLASS_ID_FROM_FLAG(flags), ARENA_ID_FROM_FLAG(flags),
 			ctx);
+
+	if (ret == 0)
+		wal_tx_commit(pop);
+
+	if (ret == 0) {
+		struct wal_tx *wal_tx = &pop->do_wtx;
+
+		DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
+			  wal_tx->wt_id,
+			  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
+	}
 
 	return ret;
 }
@@ -1733,6 +1841,15 @@ dav_free(dav_obj_t *pop, uint64_t off)
 
 	palloc_operation(pop->do_heap, off, &off, 0, NULL, NULL,
 			0, 0, 0, 0, ctx);
+
+	wal_tx_commit(pop);
+
+	struct wal_tx *wal_tx = &pop->do_wtx;
+
+	DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
+		  wal_tx->wt_id,
+		  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
+
 	PMEMOBJ_API_END();
 }
 
@@ -1741,6 +1858,24 @@ dav_free(dav_obj_t *pop, uint64_t off)
  */
 void *
 dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src,
+	size_t len)
+{
+	DAV_DEBUG("pop %p dest %p src %p len %zu", pop, dest, src, len);
+	D_ASSERT((dav_tx_stage() == DAV_TX_STAGE_NONE));
+	PMEMOBJ_API_START();
+
+	void *ptr = pmemops_memcpy(&pop->p_ops, dest, src, len, 0);
+
+	wal_tx_commit(pop);
+	PMEMOBJ_API_END();
+	return ptr;
+}
+
+/*
+ * dav_memcpy_persist -- dav version of memcpy with deferrred commit to blob.
+ */
+void *
+dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
 	size_t len)
 {
 	DAV_DEBUG("pop %p dest %p src %p len %zu", pop, dest, src, len);

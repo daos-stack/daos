@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "out.h"
+#include "wal_tx.h"
 
 #define MEM_PAGESIZE (4*1024)
 
@@ -46,36 +47,16 @@ struct pmem_ops {
 	} remote;
 };
 
-static force_inline int
-pmemops_xpersist(const struct pmem_ops *p_ops, const void *d, size_t s,
-		unsigned flags)
+static force_inline void
+pmemops_persist(const struct pmem_ops *p_ops, void *d, size_t s)
 {
-	SUPPRESS_UNUSED(p_ops);
-	SUPPRESS_UNUSED(d);
-	SUPPRESS_UNUSED(s);
-	SUPPRESS_UNUSED(flags);
-	return 0;
+	wal_tx_snap(p_ops->base, d, s, d, 0);
 }
 
 static force_inline void
-pmemops_persist(const struct pmem_ops *p_ops, const void *d, size_t s)
+pmemops_flush(const struct pmem_ops *p_ops, void *d, size_t s)
 {
-	(void) pmemops_xpersist(p_ops, d, s, 0);
-}
-
-static force_inline int
-pmemops_xflush(const struct pmem_ops *p_ops, const void *d, size_t s,
-		unsigned flags)
-{
-	SUPPRESS_UNUSED(p_ops);
-	SUPPRESS_UNUSED(flags, s, d);
-	return 0;
-}
-
-static force_inline void
-pmemops_flush(const struct pmem_ops *p_ops, const void *d, size_t s)
-{
-	(void) pmemops_xflush(p_ops, d, s, 0);
+	wal_tx_snap(p_ops->base, d, s, d, 0);
 }
 
 static force_inline void
@@ -90,7 +71,7 @@ pmemops_memcpy(const struct pmem_ops *p_ops, void *dest,
 {
 	SUPPRESS_UNUSED(p_ops);
 	memcpy(dest, src, len);
-	pmemops_xflush(p_ops, dest, len, flags);
+	pmemops_flush(p_ops, dest, len);
 	return dest;
 }
 
@@ -100,7 +81,7 @@ pmemops_memmove(const struct pmem_ops *p_ops, void *dest,
 {
 	SUPPRESS_UNUSED(p_ops);
 	memmove(dest, src, len);
-	pmemops_xflush(p_ops, dest, len, flags);
+	pmemops_flush(p_ops, dest, len);
 	return dest;
 }
 
@@ -110,7 +91,7 @@ pmemops_memset(const struct pmem_ops *p_ops, void *dest, int c,
 {
 	SUPPRESS_UNUSED(p_ops);
 	memset(dest, c, len);
-	pmemops_xflush(p_ops, dest, len, flags);
+	wal_tx_set(p_ops->base, dest, c, len);
 	return dest;
 }
 

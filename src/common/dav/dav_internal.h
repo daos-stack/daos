@@ -7,10 +7,12 @@
 
 #ifndef LIBDAV_DAV_INTERNAL_H
 #define LIBDAV_DAV_INTERNAL_H 1
+
 #include "dav.h"
 #include "dav_clogs.h"
 #include "heap.h"
 #include "pmemops.h"
+#include "wal_tx.h"
 
 #define DAV_MAX_ALLOC_SIZE ((size_t)0x3FFDFFFC0)
 
@@ -45,6 +47,9 @@ struct dav_phdr {
 			sizeof(struct stats_persistent)];
 };
 
+/*REVISIT*/
+struct bio_meta_instance;
+
 /* DAV object handle */
 typedef struct dav_obj {
 	char				*do_path;
@@ -52,14 +57,21 @@ typedef struct dav_obj {
 	void				*do_base;
 	struct palloc_heap		*do_heap;
 	struct dav_phdr			*do_phdr;
-	struct operation_context	*internal;
 	struct operation_context	*external;
 	struct operation_context	*undo;
-	struct dav_clogs		 clogs;
 	struct pmem_ops			 p_ops;	/* REVISIT */
 	struct stats			*do_stats;
 	int				 do_fd;
 	int				 nested_tx;
+	struct bio_meta_instance	*do_mi;
+	struct wal_tx			 do_wtx;
+ /* DI */
+	int tc;
+	pid_t ts[10];
+
+	struct dav_clogs		 clogs __attribute__ ((aligned (CACHELINE_SIZE)));
 } dav_obj_t;
+
+void chk_tid(dav_obj_t *pop); /* DI */
 
 #endif /*LIBDAV_DAV_INTERNAL_H*/

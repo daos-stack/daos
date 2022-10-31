@@ -216,8 +216,8 @@ memblock_header_compact_write(const struct memory_block *m,
 
 	VALGRIND_ADD_TO_TX(hdrp, hdr_size);
 
-	pmemops_memcpy(&m->heap->p_ops, hdrp, &padded, hdr_size,
-		0);
+	memcpy(hdrp, &padded, hdr_size);
+	pmemops_flush(&m->heap->p_ops, hdrp, ALLOC_HDR_COMPACT_SIZE);
 	VALGRIND_DO_MAKE_MEM_UNDEFINED((char *)hdrp + ALLOC_HDR_COMPACT_SIZE,
 		hdr_size - ALLOC_HDR_COMPACT_SIZE);
 
@@ -698,6 +698,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	struct operation_context *ctx)
 {
 	ASSERT(m->size_idx <= RUN_BITS_PER_VALUE);
+	ASSERT(m->size_idx > 0);
 
 	/*
 	 * Free blocks are represented by clear bits and used blocks by set
@@ -710,6 +711,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	 */
 	uint64_t bmask;
 
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 	if (m->size_idx == RUN_BITS_PER_VALUE) {
 		ASSERTeq(m->block_off % RUN_BITS_PER_VALUE, 0);
 		bmask = UINT64_MAX;
@@ -717,6 +719,13 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 		bmask = ((1ULL << m->size_idx) - 1ULL) <<
 				(m->block_off % RUN_BITS_PER_VALUE);
 	}
+#else
+	uint16_t num = m->size_idx;
+	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
+
+	D_ASSERT(num < 16);
+	bmask = ULOG_ENTRY_TO_VAL(pos, num);
+#endif
 
 	/*
 	 * The run bitmap is composed of several 8 byte values, so a proper
@@ -729,11 +738,21 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 
 	/* the bit mask is applied immediately by the add entry operations */
 	if (op == MEMBLOCK_ALLOCATED) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 		operation_add_entry(ctx, &b.values[bpos],
 			bmask, ULOG_OPERATION_OR);
+#else
+		operation_add_entry(ctx, &b.values[bpos],
+			bmask, ULOG_OPERATION_SET_BITS);
+#endif
 	} else if (op == MEMBLOCK_FREE) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 		operation_add_entry(ctx, &b.values[bpos],
 			~bmask, ULOG_OPERATION_AND);
+#else
+		operation_add_entry(ctx, &b.values[bpos],
+			bmask, ULOG_OPERATION_CLR_BITS);
+#endif
 	} else {
 		ASSERT(0);
 	}

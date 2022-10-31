@@ -69,6 +69,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 	char *heap_base;
 	uint64_t heap_size;
 	int persist_hdr = 0;
+	int err = 0;
 
 	base = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	if (base == MAP_FAILED) {
@@ -76,24 +77,30 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 		return NULL;
 	}
 
-	D_ALIGNED_ALLOC(hdl, 64, sizeof(dav_obj_t));
+	D_ALIGNED_ALLOC(hdl, CACHELINE_SIZE, sizeof(dav_obj_t));
 	if (hdl == NULL) {
-		errno = ENOMEM;
+		err = ENOMEM;
 		goto out1;
 	}
 	memset(hdl, 0, sizeof(dav_obj_t));
 
+	/* REVISIT: In future pass the meta instance as argument instead of fd */
+	hdl->do_mi = NULL;
 	hdl->do_fd = fd;
 	hdl->do_base = base;
 	hdl->do_size = sz;
+	hdl->p_ops.base = hdl;
+
+	wal_tx_init(hdl);
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
 		heap_base = (char *)hdl->do_base + hdl->do_phdr->dp_heap_offset;
 		heap_size = hdl->do_phdr->dp_heap_size;
-		rc = heap_init(heap_base, heap_size, &hdl->do_phdr->dp_heap_size, NULL);
+		rc = heap_init(heap_base, heap_size, &hdl->do_phdr->dp_heap_size,
+				&hdl->p_ops);
 		if (rc) {
-			errno = rc;
+			err = rc;
 			goto out2;
 		}
 		persist_hdr = 1;
@@ -109,19 +116,16 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 
 	D_ALLOC_PTR(hdl->do_heap);
 	if (hdl->do_heap == NULL) {
-		errno = ENOMEM;
+		err = ENOMEM;
 		goto out2;
 	}
 
-	hdl->p_ops.base = hdl;
-	/* REVISIT: code for stats
-	 */
 	rc = heap_boot(hdl->do_heap, heap_base, heap_size,
 		&hdl->do_phdr->dp_heap_size, hdl->do_base,
 		&hdl->p_ops, hdl->do_stats, NULL);
 
 	if (rc) {
-		errno = rc;
+		err = rc;
 		goto out2;
 	}
 
@@ -140,6 +144,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 	if (persist_hdr)
 		persist_dav_phdr(hdl);
 
+	wal_tx_commit(hdl);
 	return hdl;
 
 out2:
@@ -150,6 +155,7 @@ out2:
 	D_FREE(hdl);
 out1:
 	munmap(base, sz);
+	errno = err;
 	return NULL;
 
 }
@@ -193,6 +199,7 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode)
 		return NULL;
 	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
+	DAV_DEBUG("pool %s created, size="DF_U64"", hdl->do_path, sz);
 	return hdl;
 }
 
@@ -220,6 +227,7 @@ dav_obj_open(const char *path, int flags)
 		return NULL;
 	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
+	DAV_DEBUG("pool %s is open, size="DF_U64"", hdl->do_path, (size_t)statbuf.st_size);
 	return hdl;
 }
 
@@ -228,7 +236,7 @@ dav_obj_close(dav_obj_t *hdl)
 {
 
 	if (hdl == NULL) {
-		D_ERROR("NULL handle\n");
+		ERR("NULL handle");
 		return;
 	}
 	dav_destroy_clogs(hdl);
@@ -238,6 +246,9 @@ dav_obj_close(dav_obj_t *hdl)
 	D_FREE(hdl->do_heap);
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);
+	DAV_DEBUG("pool %s is closed", hdl->do_path);
+	  chk_tid(hdl);
+ /* DI */ D_ASSERTF(hdl->tc == 1, "pool %s tc:%d obj:%p", hdl->do_path, hdl->tc, hdl);
 	if (hdl->do_path)
 		D_FREE(hdl->do_path);
 	D_FREE(hdl);
