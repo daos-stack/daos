@@ -3856,7 +3856,7 @@ class AllocFailTestRun():
         res = f"Fault injection test of '{cmd_text}'\n"
         res += f'Fault injection location {self.loc}\n'
         if self.valgrind_hdl:
-            res += 'Valgrind enabled for this test\n'
+            res += f'Valgrind enabled for this test, filename {self.valgrind_hdl._xml_file}\n'
         if self.returncode:
             res += f'Returncode was {self.returncode}'
         else:
@@ -4175,7 +4175,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf)
+            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 

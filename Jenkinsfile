@@ -922,6 +922,9 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
+                            stash name: 'fault-inject-valgrind',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                             job_status_update()
                         }
@@ -1064,7 +1067,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
-                                                     'el8-gcc-unit-memcheck']
+                                                     'el8-gcc-unit-memcheck',
+                                                     'fault-inject-valgrind']
             job_status_update('final_status')
             job_status_write()
         }
