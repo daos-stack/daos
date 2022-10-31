@@ -1404,7 +1404,9 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 
 	gd = &ad->ad_groups[arena->ar_grp_nr];
 
-	gd->gd_addr	   = ad->ad_addr + ARENA_HDR_SIZE + (bit_at << GRP_SIZE_SHIFT);
+	gd->gd_addr	   = ad->ad_addr + (bit_at << GRP_SIZE_SHIFT);
+	D_ASSERT(gd->gd_addr >= blob_addr(blob) + (ad->ad_id << ARENA_SIZE_BITS));
+	D_ASSERT(gd->gd_addr < blob_addr(blob) + ((ad->ad_id + 1) << ARENA_SIZE_BITS));
 	gd->gd_unit	   = gsp->gs_unit;
 	gd->gd_unit_nr	   = (bits << GRP_SIZE_SHIFT) / gd->gd_unit;
 	gd->gd_unit_free   = gd->gd_unit_nr;
@@ -1437,7 +1439,7 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	int			 bit_nr;
 	int			 rc;
 
-	bit_at = (gd->gd_addr - ad->ad_addr - ARENA_HDR_SIZE) >> GRP_SIZE_SHIFT;
+	bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
 	bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + gd->gd_unit - 1) >> GRP_SIZE_SHIFT;
 	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
 

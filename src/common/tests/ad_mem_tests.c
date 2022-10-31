@@ -751,6 +751,12 @@ adt_no_space_1(void **state)
 	int		     rc;
 	int		     i;
 	uint32_t	     arena = AD_ARENA_ANY;
+	daos_off_t	    *addr_array;
+	int		     array_size;
+
+	D_ALLOC(addr_array, (ADT_STORE_SIZE / alloc_size) * sizeof(daos_off_t));
+	if (addr_array == NULL)
+		return;
 
 	printf("Consume all space\n");
 	for (i = 0;; i++) {
@@ -758,9 +764,10 @@ adt_no_space_1(void **state)
 		if (addr == 0) {
 			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
 			       (int)((alloc_size * i) >> 20), arena);
-			return;
+			break;
 		}
 
+		addr_array[i] = addr;
 		rc = ad_tx_begin(adt_bh, &tx);
 		assert_rc_equal(rc, 0);
 
@@ -770,6 +777,38 @@ adt_no_space_1(void **state)
 		rc = ad_tx_end(&tx, 0);
 		assert_rc_equal(rc, 0);
 	}
+	array_size = i;
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	printf("Freeing all space: %d\n", array_size);
+	for (i = 0; i < array_size; i++) {
+		rc = ad_tx_free(&tx, addr_array[i]);
+		assert_rc_equal(rc, 0);
+	}
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+
+	printf("Consume all space again\n");
+	for (i = 0;; i++) {
+		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+		if (addr == 0) {
+			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
+			       (int)((alloc_size * i) >> 20), arena);
+			break;
+		}
+		rc = ad_tx_begin(adt_bh, &tx);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_publish(&tx, &act, 1);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_end(&tx, 0);
+		assert_rc_equal(rc, 0);
+	}
+	printf("array_size: %d, i: %d\n", array_size, i);
+	D_FREE(addr_array);
 }
 
 static int
