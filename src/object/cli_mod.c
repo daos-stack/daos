@@ -70,16 +70,6 @@ dc_obj_init(void)
 	int			num_ranks;
 	int			rc;
 
-	d_getenv_int("DAOS_IO_MODE", &srv_io_mode);
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
-		D_DEBUG(DB_IO, "Client dispatch.\n");
-	} else if (srv_io_mode == DIM_SERVER_DISPATCH) {
-		D_DEBUG(DB_IO, "Server dispatch but without dtx.\n");
-	} else {
-		srv_io_mode = DIM_DTX_FULL_ENABLED;
-		D_DEBUG(DB_IO, "Full dtx mode by default\n");
-	}
-
 	rc = obj_utils_init();
 	if (rc)
 		D_GOTO(out, rc);

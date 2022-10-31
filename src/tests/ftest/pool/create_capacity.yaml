@@ -2,7 +2,7 @@ hosts:
   test_servers: 7
   test_clients: 1
 timeouts:
-  test_create_pool_quantity: 900
+  test_create_pool_quantity: 1100
 server_config:
   name: daos_server
   engines_per_host: 1

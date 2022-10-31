@@ -1079,8 +1079,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
 	req_tgts->ort_start_shard = start_shard;
-	req_tgts->ort_srv_disp = (srv_io_mode != DIM_CLIENT_DISPATCH) &&
-				  !cli_disp && grp_size > 1;
+	req_tgts->ort_srv_disp = !cli_disp && grp_size > 1;
 
 	if (shard_cnt > OBJ_TGT_INLINE_NR) {
 		if (req_tgts->ort_shard_tgts != NULL &&
