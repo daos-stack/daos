@@ -32,10 +32,11 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         Test Description: Performs tests to generate large data sets over
                           various middleware, perform various system admin
                           operations, datamover operations.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=datamover,ior,mdtest
-        :avocado: tags=iosysadmin
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,datamover,ior,mdtest
+        :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
         new_test_user = self.params.get("new_user", "/run/container_acl/*")

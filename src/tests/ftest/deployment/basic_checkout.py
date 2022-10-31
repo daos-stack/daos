@@ -24,12 +24,12 @@ class BasicCheckout(PerformanceTestBase):
         Test Description: Bundles four tests into one and run in the
                           following sequence - ior_small, mdtest_small,
                           ec_smoke and autotest.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=dfuse,ior,mdtest
-        :avocado: tags=basiccheckout,basiccheckout_sanity
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,dfuse,ior,mdtest,basic_checkout
+        :avocado: tags=BasicCheckout,test_basiccheckout_sanity
+        """
         # ior easy
         self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
         if self.verify_oclass_engine_count('EC_16P2GX', fail=False):
@@ -58,12 +58,11 @@ class BasicCheckout(PerformanceTestBase):
         """
         Test Description: Run ior and mdtest small on random racks
 
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=ior,mdtest
-        :avocado: tags=basiccheckout,basiccheckout_ior_mdtest_small
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,ior,mdtest,basic_checkout
+        :avocado: tags=BasicCheckout,test_basiccheckout_ior_mdtest_small
         """
-
         # local param
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -111,10 +110,11 @@ class BasicCheckoutDm(DataMoverTestBase):
         Test Description: Datamover test to check connection and datamover
                           functionality with Lustre fs on newly installed
                           server nodes.
-        :avocado: tags=all,deployment,full_regression
+
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,fs_copy,ior
-        :avocado: tags=basiccheckout,basiccheckout_dm
+        :avocado: tags=deployment,datamover,fs_copy,ior,basic_checkout
+        :avocado: tags=BasicCheckoutDm,test_basic_checkout_dm
         """
         # load ior params for dm test
         self.ior_cmd.namespace = "/run/ior_dm/*"

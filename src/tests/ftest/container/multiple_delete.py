@@ -33,9 +33,9 @@ class MultipleContainerDelete(IorTestBase):
             Verify both the SCM and NVMe pool spaces are recovered
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=multi_container_delete,test_multiple_container_delete
+        :avocado: tags=MultipleContainerDelete,test_multiple_container_delete
         """
         self.add_pool(connect=False)
 

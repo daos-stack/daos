@@ -46,11 +46,12 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         Test Description: Verify password-less ssh amongst the server
                           server nodes available and verify all server
                           and client nodes have same daos versions.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,passwdlessssh_versioncheck
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithoutServers,test_passwdlessssh_versioncheck
+        """
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         libfabric_path = self.params.get("libfabric_path", "/run/*")
         daos_server_version_list = []
@@ -135,11 +136,12 @@ class CriticalIntegrationWithServers(TestWithServers):
         """
         Test Description: Verify RAS event on all server nodes from testrunner.
                           Verify network scan and storage scan for server nodes.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,ras
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithServers,test_ras
+        """
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)

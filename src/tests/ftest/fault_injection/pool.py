@@ -110,9 +110,9 @@ class PoolServicesFaultInjection(TestWithServers):
                 injected fault of real network issue.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=fault_injection,pool,faults
-        :avocado: tags=pool_with_faults,test_pool_services
+        :avocado: tags=PoolServicesFaultInjection,test_pool_services
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,8 @@ class DaosPerfLarge(DaosPerfBase):
           on four servers.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=daosperf,daosperflarge
+        :avocado: tags=daos_perf,DaosPerfLarge,test_large
         """
         self.run_daos_perf()

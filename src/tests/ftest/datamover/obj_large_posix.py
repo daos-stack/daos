@@ -57,23 +57,27 @@ class DmvrObjLargePosix(DataMoverTestBase):
 
     def test_dm_obj_large_posix_dcp(self):
         """Jira ID: DAOS-6892
+
         Test Description:
             Clone a large POSIX container to another POSIX container using dcp.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_dcp,mdtest
-        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_dcp
+        :avocado: tags=DmvrObjLargePosix,test_dm_obj_large_posix_dcp
         """
         self.run_dm_obj_large_posix("DCP")
 
     def test_dm_obj_large_posix_cont_clone(self):
         """Jira ID: DAOS-6892
+
         Test Description:
             Clone a large POSIX container to another POSIX container using
             daos cont clone.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,daos_cont_clone,mdtest
-        :avocado: tags=dm_obj_large_posix,test_dm_obj_large_posix_cont_clone
+        :avocado: tags=DmvrObjLargePosix,test_dm_obj_large_posix_cont_clone
         """
         self.run_dm_obj_large_posix("CONT_CLONE")
