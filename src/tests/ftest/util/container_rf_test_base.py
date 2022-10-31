@@ -169,14 +169,12 @@ class ContRedundancyFactor(RebuildTestBase):
             self.setup_test_container()
         oclass = self.inputs.object_class.value
         negative_test = True
-        rd_fac = ''.join(self.container.properties.value.split(":"))
-        rf_match = re.search(r"rd_fac([0-9]+)", rd_fac)
-        if rf_match is None:
-            self.fail("Redundancy factor is not available in container properties")
-        rf_num = int(rf_match.group(1))
-        if "OC_SX" in oclass and rf_num < 1:
+        rf_factor = self.container.redundancy_factor
+        if rf_factor is None:
+            self.fail("Error obtaining container redundancy factor")
+        if "OC_SX" in oclass and rf_factor < 1:
             negative_test = False
-        elif ("OC_RP_2" in oclass and rf_num < 2) or ("OC_RP_3" in oclass and rf_num < 3):
+        elif ("OC_RP_2" in oclass and rf_factor < 2) or ("OC_RP_3" in oclass and rf_factor < 3):
             negative_test = False
         # Create a pool and verify the pool information before rebuild
         self.create_test_pool()
@@ -184,7 +182,7 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_container_and_write_obj(negative_test)
         if self.mode == "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
-            if num_of_ranks > rf_num:
+            if num_of_ranks > rf_factor:
                 expect_cont_status = "UNCLEAN"
             else:
                 expect_cont_status = "HEALTHY"

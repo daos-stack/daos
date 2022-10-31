@@ -6,7 +6,6 @@
 import time
 import random
 import threading
-import re
 
 from test_utils_pool import add_pool
 from osa_utils import OSAUtils
@@ -68,9 +67,10 @@ class NvmePoolExclude(OSAUtils):
             self.pool = pool[val]
             self.add_container(self.pool)
             self.cont_list.append(self.container)
-            rf = ''.join(self.container.properties.value.split(":"))
-            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
-            for test in range(0, rf_num):
+            redundancy_factor = self.cont_list[-1].redundancy_factor
+            if redundancy_factor is None:
+                self.fail("Error obtaining container redundancy factor")
+            for test in range(0, redundancy_factor):
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",

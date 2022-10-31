@@ -6,6 +6,7 @@
 """
 import ctypes
 from logging import getLogger
+import re
 from time import time
 
 from test_utils_base import TestDaosApiBase
@@ -306,6 +307,38 @@ class TestContainer(TestDaosApiBase):
         super().get_params(test)
         if self.daos:
             self.daos.timeout = self.daos_timeout.value
+
+    @property
+    def redundancy_factor(self):
+        """Get the redundancy factor for this container.
+
+        Returns:
+            int: the redundancy factor for this container; None if not defined
+        """
+        try:
+            return int(re.findall(r'rd_fac:([0-9]+)', self.properties.value)[-1])
+        except (TypeError, IndexError):
+            self.log.debug(
+                "Redundancy factor (rd_fac) not found in container properties: %s",
+                self.properties.value)
+            pass
+        return None
+
+    @property
+    def redundancy_level(self):
+        """Get the redundancy level for this container.
+
+        Returns:
+            int: the redundancy level for this container; None if not defined
+        """
+        try:
+            return int(re.findall(r'rd_lvl:([0-9]+)', self.properties.value)[-1])
+        except (TypeError, IndexError):
+            self.log.debug(
+                "Redundancy level (rd_lvl) not found in container properties: %s",
+                self.properties.value)
+            pass
+        return None
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
