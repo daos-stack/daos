@@ -174,10 +174,10 @@ class MdtestMetrics():
         """Metrics for an individual operation. E.g. file_creation."""
         def __init__(self):
             """Initialize operations values."""
-            self.max = 0
-            self.min = 0
-            self.mean = 0
-            self.stddev = 0
+            self.max = 0.0
+            self.min = 0.0
+            self.mean = 0.0
+            self.stddev = 0.0
 
     class MdtestMetricsGroup():
         """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
@@ -249,9 +249,9 @@ class MdtestMetrics():
             operation_name = operation_name.lower().replace(" ", "_")
             try:
                 operation = getattr(group_obj, operation_name)
-                operation.max = metric_vals[2]
-                operation.min = metric_vals[3]
-                operation.mean = metric_vals[4]
-                operation.stddev = metric_vals[5]
+                operation.max = float(metric_vals[2])
+                operation.min = float(metric_vals[3])
+                operation.mean = float(metric_vals[4])
+                operation.stddev = float(metric_vals[5])
             except AttributeError:
                 pass

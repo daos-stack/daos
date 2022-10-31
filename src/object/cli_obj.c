@@ -473,12 +473,12 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 	 */
 	D_ASSERT(grp_size >= obj_get_replicas(obj));
 	grp_start = grp_idx * grp_size;
-	idx = grp_start + d_rand() % grp_size;
-	for (i = 0; i < obj_get_replicas(obj); i++, idx++) {
+	idx = d_rand() % obj_get_replicas(obj);
+	for (i = 0; i < obj_get_replicas(obj); i++) {
 		uint32_t tgt_id;
 		int index;
 
-		index = idx % grp_size + grp_start;
+		index = (idx + i) % obj_get_replicas(obj) + grp_start;
 		/* let's skip the rebuild shard */
 		if (obj->cob_shards->do_shards[index].do_rebuilding)
 			continue;
@@ -504,7 +504,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
 
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
-	if (i == grp_size)
+	if (i == obj_get_replicas(obj))
 		return -DER_NONEXIST;
 
 	return idx;
@@ -1663,12 +1663,27 @@ err:
 	return rc;
 }
 
+static void
+obj_task_complete(tse_task_t *task, int rc)
+{
+	/* in tse_task_complete only over-write task->dt_result if it is zero, but for some
+	 * cases need to overwrite task->dt_result's retry-able result if get new different
+	 * failure to avoid possible dead loop of retry or assertion.
+	 */
+	if (rc != 0 && task->dt_result != 0 &&
+	    (obj_retry_error(task->dt_result) || task->dt_result == -DER_FETCH_AGAIN ||
+	     task->dt_result == -DER_TGT_RETRY))
+		task->dt_result = rc;
+
+	tse_task_complete(task, rc);
+}
+
 static int
 recov_task_abort(tse_task_t *task, void *arg)
 {
 	int	rc = *((int *)arg);
 
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return 0;
 }
 
@@ -2131,6 +2146,10 @@ static int
 check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 		  daos_key_t *akey, daos_recx_t *recx)
 {
+	/** just query max epoch */
+	if (flags == 0)
+		return 0;
+
 	if (!(flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX))) {
 		D_ERROR("Key type or recx not specified in flags.\n");
 		return -DER_INVAL;
@@ -2611,7 +2630,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 
 out:
 	if (rc != 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -2681,7 +2700,7 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 	if (rc != 0) {
 		D_ERROR(DF_OID" shard %u open: %d\n",
 			DP_OID(obj->cob_md.omd_id), shard_auxi->shard, rc);
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 		return rc;
 	}
 
@@ -2729,7 +2748,7 @@ shard_io_task(tse_task_t *task)
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(&shard_auxi->epoch)) {
 		rc = dc_tx_get_epoch(task, th, &shard_auxi->epoch);
 		if (rc < 0) {
-			tse_task_complete(task, rc);
+			obj_task_complete(task, rc);
 			return rc;
 		} else if (rc == DC_TX_GE_REINITED) {
 			return 0;
@@ -2929,13 +2948,13 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		shard_auxi->shard_io_cb = io_cb;
 		rc = io_prep_cb(shard_auxi, obj, obj_auxi, shard_auxi->grp_idx);
 		if (rc) {
-			tse_task_complete(shard_task, rc);
+			obj_task_complete(shard_task, rc);
 			goto out_task;
 		}
 
 		rc = tse_task_register_deps(obj_task, 1, &shard_task);
 		if (rc != 0) {
-			tse_task_complete(shard_task, rc);
+			obj_task_complete(shard_task, rc);
 			goto out_task;
 		}
 		/* decref and delete from head at shard_task_remove */
@@ -2954,7 +2973,7 @@ task_sched:
 	if (!d_list_empty(&obj_auxi->shard_task_head))
 		obj_shard_task_sched(obj_auxi, epoch);
 	else
-		tse_task_complete(obj_task, rc);
+		obj_task_complete(obj_task, rc);
 
 	return 0;
 
@@ -2966,7 +2985,7 @@ out_task:
 		/* abort/complete sub-tasks will complete obj_task */
 		tse_task_list_traverse(task_list, shard_task_abort, &rc);
 	} else {
-		tse_task_complete(obj_task, rc);
+		obj_task_complete(obj_task, rc);
 	}
 
 	return rc;
@@ -5317,7 +5336,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -5446,6 +5465,16 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	}
 
+	/* The data might be needed to forwarded to other targets (or not forwarded anymore)
+	 * after pool map refreshed, especially during online extending or reintegration,
+	 * which needs to be binded or unbinded.
+	 * So let's free the existent bulk, and recreate the bulk later.
+	 */
+	if (obj_auxi->io_retry && obj_auxi->bulks != NULL) {
+		obj_bulk_fini(obj_auxi);
+		obj_io_set_new_shard_task(obj_auxi);
+	}
+
 	rc = obj_update_shards_get(obj, args, map_ver, obj_auxi, &shard, &shard_cnt);
 	if (rc != 0) {
 		D_ERROR(DF_OID" get update shards failure %d\n", DP_OID(obj->cob_md.omd_id), rc);
@@ -5493,7 +5522,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -5521,7 +5550,7 @@ dc_obj_update_task(tse_task_t *task)
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
 comp:
 	if (rc <= 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -6066,7 +6095,7 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6208,7 +6237,7 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	return rc;
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6233,7 +6262,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
 comp:
 	if (rc <= 0)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc > 0 ? 0 : rc;
 }
 
@@ -6299,7 +6328,7 @@ shard_query_key_task(tse_task_t *task)
 	if (daos_handle_is_valid(th) && !dtx_epoch_chosen(epoch)) {
 		rc = dc_tx_get_epoch(task, th, epoch);
 		if (rc < 0) {
-			tse_task_complete(task, rc);
+			obj_task_complete(task, rc);
 			return rc;
 		}
 
@@ -6313,7 +6342,7 @@ shard_query_key_task(tse_task_t *task)
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 		return rc;
 	}
 
@@ -6375,7 +6404,7 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 
 out_task:
 	if (rc)
-		tse_task_complete(task, rc);
+		obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6432,7 +6461,8 @@ dc_obj_query_key(tse_task_t *api_task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
+	if (api_args->flags)
+		D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		grp_idx = 0;
@@ -6533,7 +6563,7 @@ out_task:
 		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	} else {
-		tse_task_complete(api_task, rc);
+		obj_task_complete(api_task, rc);
 	}
 
 	return rc;
@@ -6628,7 +6658,7 @@ dc_obj_sync(tse_task_t *task)
 			      shard_sync_prep, dc_obj_shard_sync, task);
 
 out_task:
-	tse_task_complete(task, rc);
+	obj_task_complete(task, rc);
 	return rc;
 }
 
@@ -6828,9 +6858,9 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 	return rc;
 }
 
-daos_oclass_id_t
-daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-		    daos_oclass_hints_t hints, uint32_t args)
+int
+daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+		    uint32_t args, daos_oclass_id_t *cid)
 {
 	daos_handle_t		poh;
 	struct dc_pool		*pool;
@@ -6852,7 +6882,10 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	props = dc_cont_hdl2props(coh);
 	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
+	if (rc) {
+		D_ERROR("pl_map_query failed, "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
 	dc_pool_put(pool);
 
 	rc = dc_cont_hdl2redunfac(coh, &rf);
@@ -6862,7 +6895,8 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
 	}
 	rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord, &nr_grp);
 	if (rc)
-		return 0;
+		return rc;
 
-	return (ord << OC_REDUN_SHIFT) | nr_grp;
+	*cid = (ord << OC_REDUN_SHIFT) | nr_grp;
+	return 0;
 }

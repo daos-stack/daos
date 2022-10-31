@@ -202,7 +202,13 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	    DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
-	D_ALLOC(dsp, sizeof(*dsp) + ent->ie_dtx_mbs_dsize);
+	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
+
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+		D_ALLOC_PTR(dsp);
+	else
+		D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+
 	if (dsp == NULL)
 		return -DER_NOMEM;
 
@@ -210,13 +216,21 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	dsp->dsp_oid = ent->ie_dtx_oid;
 	dsp->dsp_epoch = ent->ie_epoch;
 
-	mbs = &dsp->dsp_mbs;
-	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-	mbs->dm_flags = ent->ie_dtx_mbs_flags;
-	mbs->dm_dte_flags = ent->ie_dtx_flags;
-	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
+		dsp->dsp_inline_mbs = 0;
+		dsp->dsp_mbs = NULL;
+	} else {
+		mbs = (struct dtx_memberships *)(dsp + 1);
+		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+		mbs->dm_flags = ent->ie_dtx_mbs_flags;
+		mbs->dm_dte_flags = ent->ie_dtx_flags;
+		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+		dsp->dsp_inline_mbs = 1;
+		dsp->dsp_mbs = mbs;
+	}
 
 	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
 	dcsca->dcsca_count++;
@@ -271,7 +285,7 @@ dtx_cleanup_stale(void *arg)
 	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	dbca->dbca_cleanup_done = 1;
 
@@ -690,22 +704,22 @@ dtx_shares_fini(struct dtx_handle *dth)
 	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	dth->dth_share_tbd_count = 0;
 }
