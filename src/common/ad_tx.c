@@ -649,18 +649,12 @@ tx_end(struct ad_tx *tx, int err)
 		return 0;
 
 	rc = ad_tx_end(tx, err);
-	if (err == 0) {
-		if (rc == 0) {
-			ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
-		} else {
-			D_ERROR("ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
-			tx->tx_last_errno = rc;
-			ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
-		}
+	if (rc == 0) {
+		ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
 	} else {
-		D_ASSERT(rc != 0);
-		D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_ONABORT,
-			  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+		D_ERROR("ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
+		tx->tx_last_errno = rc;
+		ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 	}
 
 	tx_callback(tx);
@@ -730,7 +724,10 @@ umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 		ad_tx_stage_set(tx, UMEM_STAGE_WORK);
 		tx_set(tx);
 		D_DEBUG(DB_TRACE, "TX "DF_U64" started\n", tx_id);
-	} else if (ad_tx_stage(tx) == UMEM_STAGE_WORK) {
+	} else {
+		D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
+			  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+
 		if (blob != tx->tx_blob) {
 			D_ERROR("Nested TX for different blob\n");
 			rc = -DER_INVAL;
@@ -743,10 +740,6 @@ umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 		}
 		tx->tx_layer++;
 		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
-	} else {
-		D_ERROR("Invalid stage %d to begin new tx\n", ad_tx_stage(tx));
-		rc = -DER_INVAL;
-		goto err_abort;
 	}
 
 	return 0;
