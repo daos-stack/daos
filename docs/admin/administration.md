@@ -874,13 +874,13 @@ the system (this can be checked with `dmg system query -v`).
 ## Software Upgrade
 
 The DAOS v2.0 wire protocol and persistent layout is not compatible with
-previous DAOS versions and would require a reformat and all client and server
-nodes to be upgraded to a 2.x version.
+previous DAOS versions. It requires a reformat, and all client and server
+nodes need to be updated to a 2.x version.
 
 !!! warning
     Attempts to start DAOS v2.0 over a system formatted with a previous DAOS
     version will trigger a RAS event and cause all the engines to abort.
-    Similarly, a 2.0 DAOS client or engine will refuse to communicate with a
+    Similarly, a DAOS v2.0 client or engine will refuse to communicate with a
     peer that runs an incompatible version.
 
 DAOS v2.0 will maintain interoperability for both the wire protocol and
@@ -888,4 +888,4 @@ persistent layout with any future v2.x versions. That being said, it is
 required that all engines in the same system run the same DAOS version.
 
 !!! warning
-    Rolling upgrade is not supporting at this time.
+    Rolling update is not supported at this time.
