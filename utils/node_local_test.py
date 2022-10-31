@@ -1426,6 +1426,7 @@ def run_daos_cmd(conf,
     return dcr
 
 
+# pylint: disable-next=too-many-arguments
 def create_cont(conf,
                 pool=None,
                 ctype=None,
@@ -3856,7 +3857,7 @@ class AllocFailTestRun():
         res = f"Fault injection test of '{cmd_text}'\n"
         res += f'Fault injection location {self.loc}\n'
         if self.valgrind_hdl:
-            res += f'Valgrind enabled for this test, filename {self.valgrind_hdl._xml_file}\n'
+            res += 'Valgrind enabled for this test\n'
         if self.returncode:
             res += f'Returncode was {self.returncode}'
         else:
@@ -4143,7 +4144,8 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
-        print(f'Number of indexes to re-run {len(to_rerun)}')
+        if to_rerun:
+            print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)

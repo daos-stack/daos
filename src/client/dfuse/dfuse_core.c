@@ -1172,9 +1172,9 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_ie_remove, rc);
 
-	fs_handle->dpi_read_slab = d_slab_register(&fs_handle->dpi_slab, &slab_reg);
-	if (fs_handle->dpi_read_slab == NULL)
-		D_GOTO(err_ie_remove, rc = -DER_IO);
+	rc = d_slab_register(&fs_handle->dpi_slab, &slab_reg, &fs_handle->dpi_read_slab);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_ie_remove, rc);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
 	if (rc != 0)

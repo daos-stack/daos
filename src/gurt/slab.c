@@ -243,23 +243,23 @@ create_many(struct d_slab_type *type)
 }
 
 /* Register a data type */
-struct d_slab_type *
-d_slab_register(struct d_slab *slab, struct d_slab_reg *reg)
+int
+d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type **_type)
 {
 	struct d_slab_type *type;
 	int                 rc;
 
 	if (!reg->sr_name)
-		return NULL;
+		return -DER_INVAL;
 
 	D_ALLOC_PTR(type);
 	if (!type)
-		return NULL;
+		return -DER_NOMEM;
 
 	rc = D_MUTEX_INIT(&type->st_lock, NULL);
 	if (rc != -DER_SUCCESS) {
 		D_FREE(type);
-		return NULL;
+		return rc;
 	}
 
 	D_TRACE_UP(DB_ANY, type, slab, reg->sr_name);
@@ -286,14 +286,15 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg)
 		 */
 		D_MUTEX_DESTROY(&type->st_lock);
 		D_FREE(type);
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	D_MUTEX_LOCK(&slab->slab_lock);
 	d_list_add_tail(&type->st_type_list, &slab->slab_list);
 	D_MUTEX_UNLOCK(&slab->slab_lock);
 
-	return type;
+	*_type = type;
+	return -DER_SUCCESS;
 }
 
 /* Acquire a new object.

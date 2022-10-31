@@ -15,15 +15,15 @@
 struct d_slab_reg {
 	/* Perform any one-time setup or assigning constants.
 	 */
-	void (*sr_init)(void *, void *);
+	void (*sr_init)(void *desc, void *handle);
 
 	/* Prepare an object for use by freeing any old data and allocating new data.
 	 * Returns true on success.
 	 */
-	bool (*sr_reset)(void *);
+	bool (*sr_reset)(void *desc);
 
 	/* Called once at teardown */
-	void (*sr_release)(void *);
+	void (*sr_release)(void *desc);
 	char *sr_name;
 	int   sr_size;
 	int   sr_offset;
@@ -85,23 +85,23 @@ struct d_slab {
  * Returns a CaRT error code.
  */
 int
-d_slab_init(struct d_slab *, void *arg) __attribute((warn_unused_result, nonnull(1)));
+d_slab_init(struct d_slab *slab, void *arg) __attribute((warn_unused_result, nonnull(1)));
 
 /* Destroy a data slab manager, called once at shutdown */
 void
-d_slab_destroy(struct d_slab *);
+d_slab_destroy(struct d_slab *slab);
 
 /* Register a new type to a manager, called multiple times after init */
-struct d_slab_type *
-d_slab_register(struct d_slab *, struct d_slab_reg *);
+int
+d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type **type);
 
 /* Allocate a data structure in performant way */
 void *
-d_slab_acquire(struct d_slab_type *);
+d_slab_acquire(struct d_slab_type *type);
 
 /* Release a data structure in a performant way */
 void
-d_slab_release(struct d_slab_type *, void *);
+d_slab_release(struct d_slab_type *type, void *desc);
 
 /* Pre-allocate data structures
  * This should be called off the critical path, after previous acquire/release
@@ -109,13 +109,13 @@ d_slab_release(struct d_slab_type *, void *);
  * transitions so it does not need calling in progress loops.
  */
 void
-d_slab_restock(struct d_slab_type *);
+d_slab_restock(struct d_slab_type *type);
 
 /* Reclaim any memory possible across all types
  *
  * Returns true of there are any descriptors in use.
  */
 bool
-d_slab_reclaim(struct d_slab *) __attribute((warn_unused_result, nonnull));
+d_slab_reclaim(struct d_slab *slab) __attribute((warn_unused_result, nonnull));
 
 #endif /*  __SLAB_H__ */
