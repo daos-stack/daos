@@ -1079,8 +1079,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
 	req_tgts->ort_start_shard = start_shard;
-	req_tgts->ort_srv_disp = (srv_io_mode != DIM_CLIENT_DISPATCH) &&
-				  !cli_disp && grp_size > 1;
+	req_tgts->ort_srv_disp = !cli_disp && grp_size > 1;
 
 	if (shard_cnt > OBJ_TGT_INLINE_NR) {
 		if (req_tgts->ort_shard_tgts != NULL &&
@@ -2146,6 +2145,10 @@ static int
 check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 		  daos_key_t *akey, daos_recx_t *recx)
 {
+	/** just query max epoch */
+	if (flags == 0)
+		return 0;
+
 	if (!(flags & (DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX))) {
 		D_ERROR("Key type or recx not specified in flags.\n");
 		return -DER_INVAL;
@@ -6426,7 +6429,8 @@ dc_obj_query_key(tse_task_t *api_task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
+	if (api_args->flags)
+		D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		grp_idx = 0;
