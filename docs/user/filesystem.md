@@ -165,7 +165,7 @@ So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 
 The `--multi-user` option will put DFuse into multi user mode where it will tell the kernel to
 make the filesystem available to all users on a node rather than only the user running the DFuse
-process.  This makes DFuse a appear like a generic multi-user filesystem and the standard `chown`
+process.  This makes DFuse appear like a generic multi-user filesystem and the standard `chown`
 and `chgrp` calls are enabled, all filesystem entries will be owned by the user that created them
 as is normal in a POSIX filesystem.
 

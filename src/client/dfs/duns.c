@@ -667,17 +667,17 @@ err:
  * Returns a system error code.
  */
 static int
-duns_set_fuse_acl(struct dfuse_user_reply *dur, daos_handle_t coh)
+duns_set_fuse_acl(uid_t uid, daos_handle_t coh)
 {
 	int              rc = 0;
 	struct daos_acl *acl;
 	struct daos_ace *ace;
 	char            *name;
 
-	if (geteuid() == dur->uid)
+	if (geteuid() == uid)
 		return 0;
 
-	rc = daos_acl_uid_to_principal(dur->uid, &name);
+	rc = daos_acl_uid_to_principal(uid, &name);
 	if (rc != 0)
 		return daos_der2errno(rc);
 
@@ -739,7 +739,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		if (rc == -DER_SUCCESS && dur) {
 			int rc2;
 
-			rc = duns_set_fuse_acl(dur, coh);
+			rc  = duns_set_fuse_acl(dur->uid, coh);
 			rc2 = daos_cont_close(coh, NULL);
 			if (rc2 != -DER_SUCCESS) {
 				D_ERROR("failed to close container: " DF_RC "\n", DP_RC(rc2));
@@ -928,9 +928,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 #endif
 
 		D_STRNDUP(dir, path, path_len);
-		if (dir == NULL) {
+		if (dir == NULL)
 			return ENOMEM;
-		}
 
 		dirp = dirname(dir);
 
@@ -992,9 +991,8 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		char            *dir, *dirp;
 
 		D_STRNDUP(dir, path, path_len);
-		if (dir == NULL) {
+		if (dir == NULL)
 			return ENOMEM;
-		}
 
 		dirp = dirname(dir);
 		rc = statfs(dirp, &fs);
