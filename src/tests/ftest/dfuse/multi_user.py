@@ -54,7 +54,7 @@ class MultiUser(DfuseTestBase):
 
         ret = general_utils.run_pcmd(
             self.hostlist_clients,
-            'daos container get-attr --path {}/new-cont'.format(root_dir),
+            'daos container get-prop --path {}/new-cont'.format(root_dir),
             expect_rc=0)
         ret0 = ret[0]
         print(ret0)
