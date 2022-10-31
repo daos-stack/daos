@@ -53,7 +53,7 @@ bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
 /* SPDK subsystem fini timeout */
-unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
+unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 
