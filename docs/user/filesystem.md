@@ -144,7 +144,7 @@ number of cores then overcommiting via the `--thread-count` option may be desira
 ### Restrictions
 
 DFuse by default is limited to a single user. Access to the filesystem from other users,
-including root, will not be honoured. As a consequence of this, the `chown`
+including root, will not be honored. As a consequence of this, the `chown`
 and `chgrp` calls are not supported.  Hard links and special device files,
 except symbolic links, are not supported, nor are any ACLs beyond standard
 POSIX permissions.
