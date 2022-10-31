@@ -2143,7 +2143,12 @@ obj_ec_recov_codec_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	D_ASSERT(fail_info != NULL);
 	k = obj_ec_data_tgt_nr(oca);
 	p = obj_ec_parity_tgt_nr(oca);
-	D_ASSERT(nerrs > 0 && nerrs <= p && err_list != NULL);
+	D_ASSERT(nerrs > 0 && err_list != NULL);
+	if (nerrs > p) {
+		rc = -DER_DATA_LOSS;
+		D_ERROR(DF_OID" nerrs %d > p %d, "DF_RC".\n", DP_OID(oid), nerrs, p, DP_RC(rc));
+		return rc;
+	}
 
 	if (fail_info->efi_recov_codec == NULL) {
 		fail_info->efi_recov_codec = obj_ec_recov_codec_alloc(oca);

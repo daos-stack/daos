@@ -1292,11 +1292,11 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 	struct ds_pool *pool;
 	int		rc;
 
-	pool = ds_pool_lookup(svc->ps_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(svc->ps_uuid));
-		return -DER_NONEXIST;
+	rc = ds_pool_lookup(svc->ps_uuid, &pool);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		return rc;
 	}
 	rc = ds_pool_tgt_map_update(pool, map_buf, map_version);
 	if (rc != 0) {
@@ -7033,10 +7033,10 @@ is_pool_from_srv(uuid_t pool_uuid, uuid_t poh_uuid)
 	struct ds_pool	*pool;
 	int		rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to get ds_pool\n",
-			DP_UUID(pool_uuid));
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return false;
 	}
 
