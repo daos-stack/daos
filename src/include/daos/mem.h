@@ -764,7 +764,7 @@ struct umem_page {
 	int			 pg_ref;
 	/** last committed WAL transaction ID */
 	uint64_t		 pg_last_committed;
-	/** last inflight WAL trasaction ID */
+	/** last inflight WAL transaction ID */
 	uint64_t		 pg_last_inflight;
 	/** link chain on global dirty list */
 	d_list_t		 pg_link;
