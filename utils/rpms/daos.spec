@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-1%{?dist}
+%global mercury_version 2.2.0-4%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -32,7 +32,7 @@ BuildRequires: python36-scons >= 2.4
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
-BuildRequires: mercury-devel = %{mercury_version}
+BuildRequires: mercury-devel >= %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: libpsm2-devel
 %endif
@@ -144,7 +144,7 @@ Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
 # suffice
-Requires: mercury = %{mercury_version}
+Requires: mercury >= %{mercury_version}
 
 
 %description
