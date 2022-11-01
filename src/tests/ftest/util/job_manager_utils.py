@@ -1165,7 +1165,7 @@ class Clush(JobManager):
         if append:
             self.env.update(env_vars)
         else:
-            self.set_environment(env_vars)
+            self.env = EnvironmentVariables(env_vars)
 
     def run(self):
         """Run the command.
