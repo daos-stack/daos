@@ -654,7 +654,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -710,7 +710,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -737,7 +737,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -849,14 +849,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'ci/docker/Dockerfile.maldet.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
-                        }
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         runTest script: 'export DAOS_PKG_VERSION=' +
@@ -881,14 +874,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        dockerfile {
-                            filename 'ci/docker/Dockerfile.maldet.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                                " -t ${sanitized_JOB_NAME}-leap15 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
-                        }
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         runTest script: 'export DAOS_PKG_VERSION=' +

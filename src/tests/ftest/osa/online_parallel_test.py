@@ -51,8 +51,6 @@ class OSAOnlineParallelTest(OSAUtils):
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
-        self.daos_racer.set_environment(
-            self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
         results.put("Daos Racer Started")
 
@@ -203,7 +201,7 @@ class OSAOnlineParallelTest(OSAUtils):
         Test Description: Runs multiple OSA commands/IO in parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_parallel,online_parallel
         """

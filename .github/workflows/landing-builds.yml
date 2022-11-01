@@ -42,8 +42,8 @@ jobs:
             base: ubuntu
             with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
             with: fedora:36
@@ -152,8 +152,8 @@ jobs:
             base: ubuntu
             with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
             with: fedora:36
@@ -222,7 +222,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9]
+        distro: [alma.8, alma.9, rocky.8]
         include:
           - distro: alma.8
             base: el.8
@@ -230,6 +230,9 @@ jobs:
           - distro: alma.9
             base: el.9
             with: almalinux:9
+          - distro: rocky.8
+            base: el.8
+            with: rockylinux/rockylinux:8
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
