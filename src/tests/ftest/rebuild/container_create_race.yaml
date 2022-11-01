@@ -42,7 +42,7 @@ ior:
   repetitions: 1
   api: DFS
   dfs_oclass: "RP_2G1"
-  flags: "-w -W -k -G 1"
+  flags: "-w -W -F -k -G 1"
   transfersize_blocksize:
     1M:
       transfer_size: '1M'
