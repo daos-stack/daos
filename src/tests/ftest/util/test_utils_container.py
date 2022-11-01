@@ -236,6 +236,7 @@ class TestContainerData():
 
 
 class TestContainer(TestDaosApiBase):
+    # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
     def __init__(self, pool, cb_handler=None, daos_command=None):
@@ -321,7 +322,6 @@ class TestContainer(TestDaosApiBase):
             self.log.debug(
                 "Redundancy factor (rd_fac) not found in container properties: %s",
                 self.properties.value)
-            pass
         return None
 
     @property
@@ -337,7 +337,6 @@ class TestContainer(TestDaosApiBase):
             self.log.debug(
                 "Redundancy level (rd_lvl) not found in container properties: %s",
                 self.properties.value)
-            pass
         return None
 
     @fail_on(DaosApiError)

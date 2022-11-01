@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import re
-
 from rebuild_test_base import RebuildTestBase
 from general_utils import DaosTestError
 from daos_utils import DaosCommand
@@ -161,7 +159,6 @@ class ContRedundancyFactor(RebuildTestBase):
             create_container (bool, optional): should the test create a
                 container. Defaults to True.
         """
-
         # Get the test params and var
         self.setup_test_pool()
         self.daos_cmd = DaosCommand(self.bin)
@@ -169,12 +166,12 @@ class ContRedundancyFactor(RebuildTestBase):
             self.setup_test_container()
         oclass = self.inputs.object_class.value
         negative_test = True
-        rf_factor = self.container.redundancy_factor
-        if rf_factor is None:
+        rd_factor = self.container.redundancy_factor
+        if rd_factor is None:
             self.fail("Error obtaining container redundancy factor")
-        if "OC_SX" in oclass and rf_factor < 1:
+        if "OC_SX" in oclass and rd_factor < 1:
             negative_test = False
-        elif ("OC_RP_2" in oclass and rf_factor < 2) or ("OC_RP_3" in oclass and rf_factor < 3):
+        elif ("OC_RP_2" in oclass and rd_factor < 2) or ("OC_RP_3" in oclass and rd_factor < 3):
             negative_test = False
         # Create a pool and verify the pool information before rebuild
         self.create_test_pool()
@@ -182,16 +179,16 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_container_and_write_obj(negative_test)
         if self.mode == "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
-            if num_of_ranks > rf_factor:
+            if num_of_ranks > rd_factor:
                 expect_cont_status = "UNCLEAN"
             else:
                 expect_cont_status = "HEALTHY"
             # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
             # Start the rebuild process
-            self.start_rebuild_cont_rf(rd_fac)
+            self.start_rebuild_cont_rf(rd_factor)
             # Execute the test steps during rebuild
-            self.execute_during_rebuild_cont_rf(rd_fac, expect_cont_status)
+            self.execute_during_rebuild_cont_rf(rd_factor, expect_cont_status)
             # Refresh local pool and container
             self.log.info(
                 "==>(6)Check for pool and container info after rebuild.")
