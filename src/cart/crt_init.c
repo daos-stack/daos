@@ -121,18 +121,19 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
 		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep)
+			if (opt->cio_use_sep) {
 				set_sep = true;
-			max_num_ctx = opt->cio_ctx_max_num;
+				max_num_ctx = opt->cio_ctx_max_num;
+			}
 		} else {
 			share_addr = false;
 			ctx_num = 0;
 
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr)
+			if (share_addr) {
 				set_sep = true;
-
-			d_getenv_int("CRT_CTX_NUM", &ctx_num);
+				d_getenv_int("CRT_CTX_NUM", &ctx_num);
+			}
 			max_num_ctx = ctx_num;
 		}
 	}
