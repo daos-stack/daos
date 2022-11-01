@@ -2337,6 +2337,16 @@ class Launch():
                 "depth": 1,
                 "timeout": 900,
             }
+            if jenkinslog:
+                remote_files["bullseye coverage log files"] = {
+                    "source": os.path.join(os.sep, "tmp"),
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", "bullseye_coverage_logs"),
+                    "pattern": "test.cov*",
+                    "hosts": test.hosts.servers | NodeSet(get_local_host()),
+                    "depth": 1,
+                    "timeout": 900,
+                }
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
@@ -2500,9 +2510,11 @@ class Launch():
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                "then daos_server storage prepare -n --reset && "
+                f"then COVFILE={os.environ['COVFILE']} && ",
+                "daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
+##DH++ test only
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
             result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
             if not result.passed:
