@@ -347,6 +347,16 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	c.log.Debugf("received StorageFormat RPC %v", req)
 
+	engineIdxs := make([]uint, len(instances))
+	for i, eng := range instances {
+		engineIdxs[i] = uint(eng.Index())
+	}
+
+	// Format control metadata first, if it exists
+	if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
+		return nil, errors.Wrap(err, "formatting control metadata storage")
+	}
+
 	// TODO: enable per-instance formatting
 	formatting := 0
 	for _, ei := range instances {

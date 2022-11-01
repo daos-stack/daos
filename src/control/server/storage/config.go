@@ -45,7 +45,34 @@ const (
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
+
+	ControlMetadataSubdir = "daos_control"
 )
+
+// ControlMetadata describes configuration options for control plane metadata storage on the
+// DAOS server.
+type ControlMetadata struct {
+	Path       string `yaml:"path,omitempty"`
+	DevicePath string `yaml:"device,omitempty"`
+}
+
+// Directory returns the full path to the directory where the control plane metadata is saved.
+func (cm ControlMetadata) Directory() string {
+	if cm.Path == "" {
+		return ""
+	}
+	return filepath.Join(cm.Path, ControlMetadataSubdir)
+}
+
+// EngineDirectory returns the full path to the directory where the per-engine metadata is saved.
+func (cm ControlMetadata) EngineDirectory(idx uint) string {
+	return ControlMetadataEngineDir(cm.Directory(), idx)
+}
+
+// HasPath returns true if the ControlMetadata path is set.
+func (cm ControlMetadata) HasPath() bool {
+	return cm.Path != ""
+}
 
 // Class indicates a specific type of storage.
 type Class string
@@ -919,13 +946,15 @@ type SpdkRpcServer struct {
 }
 
 type Config struct {
-	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool          `yaml:"-"`
-	NumaNodeIndex    uint          `yaml:"-"`
-	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
-	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
+	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
+	EngineIdx        uint            `yaml:"-"`
+	Tiers            TierConfigs     `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string          `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string          `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool            `yaml:"-"`
+	NumaNodeIndex    uint            `yaml:"-"`
+	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {
@@ -957,12 +986,12 @@ func (c *Config) Validate() error {
 	}
 	c.Tiers = pruned
 
+	if len(c.Tiers) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
 	scmCfgs := c.Tiers.ScmConfigs()
 	bdevCfgs := c.Tiers.BdevConfigs()
-
-	if len(scmCfgs) == 0 {
-		return errors.New("missing scm storage tier in config")
-	}
 
 	// set persistent location for engine bdev config file to be consumed by provider
 	// backend, set to empty when no devices specified
@@ -970,7 +999,16 @@ func (c *Config) Validate() error {
 		c.ConfigOutputPath = ""
 		return nil
 	}
-	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	var nvmeConfigRoot string
+	if c.ControlMetadata.HasPath() {
+		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
+	} else if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	} else {
+		nvmeConfigRoot = scmCfgs[0].Scm.MountPoint
+	}
+	c.ConfigOutputPath = filepath.Join(nvmeConfigRoot, BdevOutConfName)
 
 	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
 		return FaultBdevConfigTypeMismatch

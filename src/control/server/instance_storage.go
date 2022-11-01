@@ -9,7 +9,6 @@ package server
 import (
 	"context"
 	"os"
-	"path"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -23,6 +22,22 @@ import (
 // GetStorage retrieve the storage provider for an engine instance.
 func (ei *EngineInstance) GetStorage() *storage.Provider {
 	return ei.storage
+}
+
+// MountMetadata mounts the configured control metadata location.
+func (ei *EngineInstance) MountMetadata() error {
+	ei.log.Debug("checking if metadata is mounted")
+	isMounted, err := ei.storage.ControlMetadataIsMounted()
+	if err != nil {
+		return errors.Wrap(err, "checking if metadata is mounted")
+	}
+
+	ei.log.Debugf("IsMounted: %v", isMounted)
+	if isMounted {
+		return nil
+	}
+
+	return ei.storage.MountControlMetadata()
 }
 
 // MountScm mounts the configured SCM device (DCPM or ramdisk emulation)
@@ -70,13 +85,19 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 
 	ei.log.Infof("Checking %s instance %d storage ...", build.DataPlaneName, idx)
 
+	needsMetaFormat, err := ei.storage.ControlMetadataNeedsFormat()
+	if err != nil {
+		ei.log.Errorf("failed to check control metadata storage formatting: %s", err)
+		needsMetaFormat = true
+	}
+
 	needsScmFormat, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
 		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
 		needsScmFormat = true
 	}
 
-	if !needsScmFormat {
+	if !needsMetaFormat && !needsScmFormat {
 		if skipMissingSuperblock {
 			return nil
 		}
@@ -128,16 +149,6 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 }
 
 func (ei *EngineInstance) logScmStorage() error {
-	scmMount := path.Dir(ei.superblockPath())
-
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		return err
-	}
-	if scmMount != cfg.Scm.MountPoint {
-		return errors.New("superblock path doesn't match config mountpoint")
-	}
-
 	mp, err := ei.storage.GetScmUsage()
 	if err != nil {
 		return err

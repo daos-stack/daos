@@ -921,6 +921,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithHelperStreamCount(6),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
+					WithStorageIndex(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
@@ -1013,6 +1014,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithHelperStreamCount(0),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
+					WithStorageIndex(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).
@@ -1073,6 +1075,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithHelperStreamCount(1),
 				defaultEngineCfg(1).
 					WithPinnedNumaNode(1).
+					WithStorageIndex(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
 						int(defaultFiPort+defaultFiPortInterval)).

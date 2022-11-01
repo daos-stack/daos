@@ -176,7 +176,7 @@ func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
 
 	raftDir := cfgGetRaftDir(cfg)
 	if raftDir == "" {
-		return nil, errors.New("raft directory not available (missing SCM in config?)")
+		return nil, errors.New("raft directory not available (missing SCM or control metadata in config?)")
 	}
 
 	return &raft.DatabaseConfig{
