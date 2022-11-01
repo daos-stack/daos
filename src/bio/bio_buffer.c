@@ -253,12 +253,12 @@ bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 }
 
 struct bio_desc *
-bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
-	      unsigned int type)
+bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
+	      unsigned int sgl_cnt, unsigned int type)
 {
 	struct bio_desc	*biod;
 
-	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
+	D_ASSERT(ctxt != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
 	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
@@ -266,6 +266,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
 		return NULL;
 
 	D_ASSERT(type < BIO_IOD_TYPE_MAX);
+	biod->bd_umem = umem;
 	biod->bd_ctxt = ctxt;
 	biod->bd_type = type;
 	biod->bd_sgl_cnt = sgl_cnt;
@@ -821,10 +822,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	}
 
 	if (direct_scm_access(biod, biov)) {
-		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+		struct umem_instance *umem = biod->bd_umem;
 
-		bio_iov_set_raw_buf(biov,
-				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
+		D_ASSERT(umem != NULL);
+		bio_iov_set_raw_buf(biov, umem_off2ptr(umem, bio_iov2raw_off(biov)));
 		return 0;
 	}
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
@@ -1038,10 +1039,11 @@ void
 bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	   void *addr, ssize_t n)
 {
-	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
-
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	if (biod->bd_type == BIO_IOD_TYPE_UPDATE && media == DAOS_MEDIA_SCM) {
+		struct umem_instance *umem = biod->bd_umem;
+
+		D_ASSERT(umem != NULL);
 		/*
 		 * We could do no_drain copy and rely on the tx commit to
 		 * drain controller, however, test shows calling a persistent
@@ -1067,11 +1069,12 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 static void
 scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 {
-	struct umem_instance	*umem = biod->bd_ctxt->bic_umem;
+	struct umem_instance	*umem = biod->bd_umem;
 	void			*payload;
 
 	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(!bio_scm_rdma);
+	D_ASSERT(umem != NULL);
 
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
 	payload += rg->brr_chk_off;
@@ -1119,7 +1122,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 	while (pg_cnt > 0) {
 
-		drain_inflight_ios(xs_ctxt, bxb, biod->bd_ctxt->bic_umem);
+		drain_inflight_ios(xs_ctxt, bxb);
 
 		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
@@ -1473,10 +1476,11 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 static int
 flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 {
-	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+	struct umem_instance *umem = biod->bd_umem;
 
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov);
+	D_ASSERT(umem != NULL);
 
 	if (bio_iov2req_len(biov) == 0)
 		return 0;
@@ -1540,8 +1544,8 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	}
 
 	/* allocate blob I/O descriptor */
-	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */,
-			update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);
+	biod = bio_iod_alloc(ioctxt, NULL, 1 /* single bsgl */,
+			     update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);
 	if (biod == NULL)
 		return -DER_NOMEM;
 
@@ -1657,7 +1661,7 @@ bio_buf_alloc(struct bio_io_context *ioctxt, unsigned int len, void *bulk_ctxt,
 	unsigned int		 chk_type;
 	int			 rc;
 
-	biod = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_GETBUF);
+	biod = bio_iod_alloc(ioctxt, NULL, 1, BIO_IOD_TYPE_GETBUF);
 	if (biod == NULL)
 		return NULL;
 
@@ -1729,8 +1733,8 @@ free_copy_desc(struct bio_copy_desc *copy_desc)
 }
 
 static struct bio_copy_desc *
-alloc_copy_desc(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-		struct bio_sglist *bsgl_dst)
+alloc_copy_desc(struct bio_io_context *ioctxt, struct umem_instance *umem,
+		struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
 {
 	struct bio_copy_desc	*copy_desc;
 	struct bio_sglist	*bsgl_read, *bsgl_write;
@@ -1739,11 +1743,11 @@ alloc_copy_desc(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	if (copy_desc == NULL)
 		return NULL;
 
-	copy_desc->bcd_iod_src = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_FETCH);
+	copy_desc->bcd_iod_src = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_FETCH);
 	if (copy_desc->bcd_iod_src == NULL)
 		goto free;
 
-	copy_desc->bcd_iod_dst = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_UPDATE);
+	copy_desc->bcd_iod_dst = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_UPDATE);
 	if (copy_desc->bcd_iod_dst == NULL)
 		goto free;
 
@@ -1762,13 +1766,13 @@ free:
 }
 
 struct bio_copy_desc *
-bio_copy_prep(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	      struct bio_sglist *bsgl_dst)
+bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
 {
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	copy_desc = alloc_copy_desc(ioctxt, bsgl_src, bsgl_dst);
+	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
 	if (copy_desc == NULL)
 		return NULL;
 
@@ -1845,14 +1849,14 @@ bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src)
 }
 
 int
-bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	 struct bio_sglist *bsgl_dst, unsigned int copy_size,
-	 struct bio_csum_desc *csum_desc)
+bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	 struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	 unsigned int copy_size, struct bio_csum_desc *csum_desc)
 {
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	copy_desc = bio_copy_prep(ioctxt, bsgl_src, bsgl_dst);
+	copy_desc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst);
 	if (copy_desc == NULL)
 		return -DER_NOMEM;
 

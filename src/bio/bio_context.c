@@ -790,32 +790,9 @@ out_free:
 	return rc;
 }
 
-void
-bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem)
+int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt, uuid_t uuid)
 {
-	if (mc->mc_data != NULL)
-		mc->mc_data->bic_umem = umem;
-
-	if (mc->mc_meta != NULL)
-		mc->mc_meta->bic_umem = umem;
-
-	if (mc->mc_wal != NULL)
-		mc->mc_wal->bic_umem = umem;
-
-}
-
-int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid)
-{
-	int rc;
-
-	rc = __bio_ioctxt_open(pctxt, xs_ctxt, uuid, 0, SMD_DEV_TYPE_DATA, SPDK_BLOBID_INVALID);
-	if (rc)
-		return rc;
-
-	(*pctxt)->bic_umem = umem;
-
-	return rc;
+	return __bio_ioctxt_open(pctxt, xs_ctxt, uuid, 0, SMD_DEV_TYPE_DATA, SPDK_BLOBID_INVALID);
 }
 
 int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
@@ -1120,7 +1097,7 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		i++;
 		unmap_cnt--;
 
-		drain_inflight_ios(xs_ctxt, bxb, ioctxt->bic_umem);
+		drain_inflight_ios(xs_ctxt, bxb);
 
 		ba->bca_inflights++;
 		bxb->bxb_blob_rw++;

@@ -494,14 +494,12 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  *
  * \param[OUT] pctxt	I/O context to be returned
  * \param[IN] xs_ctxt	Per-xstream NVMe context
- * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
  *
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_open(struct bio_io_context **pctxt,
-		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid);
+		    struct bio_xs_context *xs_ctxt, uuid_t uuid);
 
 enum bio_mc_flags {
 	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
@@ -608,12 +606,13 @@ enum bio_iod_type {
  * Allocate & initialize an io descriptor
  *
  * \param ctxt       [IN]	I/O context
+ * \param umem       [IN]	umem instance
  * \param sgl_cnt    [IN]	SG list count
  * \param type       [IN]	IOD type
  *
  * \return			Opaque io descriptor or NULL on error
  */
-struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
+struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
 			       unsigned int sgl_cnt, unsigned int type);
 /**
  * Free an io descriptor
@@ -846,14 +845,14 @@ void *bio_buf_addr(struct bio_desc *biod);
  * SGLs. bio_copy_post() must be called after a success bio_copy_prep() call.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
  *
  * \return			BIO copy descriptor on success, NULL on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt,
-				    struct bio_sglist *bsgl_src,
-				    struct bio_sglist *bsgl_dst);
+struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+				    struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;
@@ -901,6 +900,7 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  * Copy data from source BIO SGL to target BIO SGL.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
  * \param copy_size	[IN]	Specified copy size, the size must be aligned
@@ -909,8 +909,8 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
+int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	     struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst, unsigned int copy_size,
 	     struct bio_csum_desc *csum_desc);
 
 /*
@@ -966,12 +966,6 @@ int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
 
 /* Function to return current data io context */
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
-
-/*
- * Init Metadata context umem instance
- */
-void
-bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem);
 
 /* Function to check if metadata on ssd enabled or not */
 bool bio_is_meta_on_ssd_configured(void);

@@ -98,7 +98,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 		 */
 		D_ASSERT(umem_tx_none(umem));
 
-		rc = cb(cb_data, umem);
+		rc = cb(cb_data);
 		if (rc != 0)
 			return rc;
 	}

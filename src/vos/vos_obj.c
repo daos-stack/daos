@@ -1552,6 +1552,7 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
+	struct umem_instance	*umem;
 	struct bio_iov		*biov = &it_entry->ie_biov;
 
 	D_ASSERT(bio_iov2buf(biov) == NULL);
@@ -1565,13 +1566,14 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
-	 * size in bio_read().
+	 * size in vos_media_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
 	bioc = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
 	D_ASSERT(bioc != NULL);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 
-	return bio_read(bioc, biov->bi_addr, iov_out);
+	return vos_media_read(bioc, umem, biov->bi_addr, iov_out);
 }
 
 static int

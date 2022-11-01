@@ -1514,4 +1514,17 @@ vos_anchor_is_zero(daos_anchor_t *anchor)
 	return anchor == NULL || daos_anchor_is_zero(anchor);
 }
 
+static inline int
+vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
+	       bio_addr_t addr, d_iov_t *iov_out)
+{
+	if (addr.ba_type == DAOS_MEDIA_NVME) {
+		D_ASSERT(ioc != NULL);
+		return bio_read(ioc, addr, iov_out);
+	}
+
+	D_ASSERT(umem != NULL);
+	memcpy(iov_out->iov_buf, umem_off2ptr(umem, addr.ba_off), iov_out->iov_len);
+	return 0;
+}
 #endif /* __VOS_INTERNAL_H__ */

@@ -386,7 +386,6 @@ struct bio_xs_context {
 /* Per VOS instance I/O context */
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
-	struct umem_instance	*bic_umem;
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
@@ -431,6 +430,7 @@ struct bio_rsrvd_dma {
 
 /* I/O descriptor */
 struct bio_desc {
+	struct umem_instance	*bd_umem;
 	struct bio_io_context	*bd_ctxt;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
@@ -547,8 +547,7 @@ void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
-void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs,
-			struct umem_instance *umm);
+void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
