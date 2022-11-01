@@ -111,6 +111,7 @@ fi
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
 if lspci | grep -i nvme; then
   COVFILE=\"/tmp/test.cov\"
+  export COVFILE
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
