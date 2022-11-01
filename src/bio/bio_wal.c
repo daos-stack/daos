@@ -1437,7 +1437,7 @@ load_wal:
 
 		if (tight_loop >= 20) {
 			tight_loop = 0;
-			bio_yield();
+			bio_yield(NULL);
 		}
 	}
 out:
