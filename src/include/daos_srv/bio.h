@@ -720,7 +720,7 @@ static inline void
 bio_yield(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
-	D_ASSERT(umem_tx_none(umm));
+	D_ASSERT(umm == NULL || umem_tx_none(umm));
 #endif
 	ABT_thread_yield();
 }
