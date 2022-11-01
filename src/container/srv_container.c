@@ -191,7 +191,12 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
-	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
+	rc = ds_pool_lookup(svc->cs_pool_uuid, &svc->cs_pool);
+	if (rc != 0)  {
+		D_ERROR(DF_UUID": pool lookup failed: "DF_RC"\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+		return rc;
+	}
 	D_ASSERT(svc->cs_pool != NULL);
 
 	rc = cont_svc_ec_agg_leader_start(svc);

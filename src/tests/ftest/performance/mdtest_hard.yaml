@@ -47,6 +47,8 @@ container:
 mdtest: &mdtest_base
   client_processes:
     ppn: 32
+  env_vars:
+    - D_LOG_MASK=ERR
   test_dir: "/"
   manager: "MPICH"
   flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -t -X -E"
@@ -67,8 +69,8 @@ mdtest_dfs_ec_16p2g1:
   dfs_oclass: EC_16P2G1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB
-performance:
-  env:
-    - D_LOG_MASK=ERR
+client:
+  env_vars:
+    - D_LOG_MASK=INFO
 mpirun:
   bind_to: socket

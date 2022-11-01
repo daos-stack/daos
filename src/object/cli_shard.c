@@ -1211,18 +1211,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					  DAOS_FAIL_ONCE);
 		}
 	}
-	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
-		if (srv_io_mode == DIM_CLIENT_DISPATCH) {
-			/* to trigger retry on all other shards */
-			if (auxi->shard != daos_fail_value_get()) {
-				D_INFO("complete shard %d update as "
-				       "-DER_TIMEDOUT.\n", auxi->shard);
-				D_GOTO(out, rc = -DER_TIMEDOUT);
-			}
-		} else {
-			flags = ORF_DTX_SYNC;
-		}
-	}
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE))
+		flags = ORF_DTX_SYNC;
 
 	if (auxi->epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
 		flags |= ORF_EPOCH_UNCERTAIN;
@@ -2154,6 +2144,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
 
+	if (flags == 0)
+		goto set_max_epoch;
+
 	bool check = true;
 	bool changed = false;
 	bool first = (cb_args->dkey->iov_len == 0);
@@ -2263,8 +2256,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n",
-		tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
