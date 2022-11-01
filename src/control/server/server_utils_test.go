@@ -937,6 +937,86 @@ func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
 	return m.replicaAddrResult, m.replicaAddrErr
 }
 
+func TestServerUtils_resolveFirstAddr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		host    string
+		lookup  ipLookupFn
+		expAddr *net.TCPAddr
+		expErr  error
+	}{
+		"host without port": {
+			host:   "localhost",
+			expErr: errors.New("missing port"),
+		},
+		"invalid port": {
+			host:   "localhost:daos",
+			expErr: errors.New("strconv.Atoi"),
+		},
+		"lookup failure": {
+			host:   "localhost:42",
+			lookup: func(string) ([]net.IP, error) { return nil, errors.New("lookup") },
+			expErr: errors.New("lookup"),
+		},
+		"no addresses": {
+			host:   "localhost:42",
+			lookup: func(string) ([]net.IP, error) { return nil, nil },
+			expErr: errors.New("no addresses"),
+		},
+		"localhost resolves to ipv6 & ipv4; prefer ipv4": {
+			host: "localhost:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("::1"),
+					net.ParseIP("127.0.0.1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"localhost resolves to ipv4 & ipv6; prefer ipv4": {
+			host: "localhost:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("127.0.0.1"),
+					net.ParseIP("::1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"host resolves to 2 ipv4; prefer lower": {
+			host: "host:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("127.0.0.2"),
+					net.ParseIP("127.0.0.1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"host resolves to 2 ipv6; prefer lower": {
+			host: "host:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("::2"),
+					net.ParseIP("::1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("::1"), Port: 10001},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddr, gotErr := resolveFirstAddr(tc.host, tc.lookup)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if !common.CmpTCPAddr(tc.expAddr, gotAddr) {
+				t.Fatalf("unexpected address: want %s, got %s", tc.expAddr, gotAddr)
+			}
+		})
+	}
+}
+
 func TestServerUtils_getControlAddr(t *testing.T) {
 	testTCPAddr := &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
@@ -954,10 +1034,9 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 				replicaAddrSrc: &mockReplicaAddrSrc{
 					replicaAddrErr: errors.New("not a replica"),
 				},
-				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
-					test.AssertEqual(t, "tcp", net, "")
-					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
-					return testTCPAddr, nil
+				lookupHost: func(addr string) ([]net.IP, error) {
+					test.AssertEqual(t, "0.0.0.0", addr, "")
+					return []net.IP{testTCPAddr.IP}, nil
 				},
 			},
 			expAddr: testTCPAddr,
@@ -968,17 +1047,31 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 				replicaAddrSrc: &mockReplicaAddrSrc{
 					replicaAddrResult: testTCPAddr,
 				},
-				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
-					test.AssertEqual(t, "tcp", net, "")
-					test.AssertEqual(t, "[127.0.0.1]:1234", addr, "")
-					return testTCPAddr, nil
+				lookupHost: func(addr string) ([]net.IP, error) {
+					test.AssertEqual(t, "127.0.0.1", addr, "")
+					return []net.IP{testTCPAddr.IP}, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"hostname with multiple IPs resolves to single replica address": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				lookupHost: func(addr string) ([]net.IP, error) {
+					return []net.IP{
+						{testTCPAddr.IP[0], testTCPAddr.IP[1], testTCPAddr.IP[2], testTCPAddr.IP[3] + 1},
+						testTCPAddr.IP,
+					}, nil
 				},
 			},
 			expAddr: testTCPAddr,
 		},
 		"resolve fails": {
 			params: ctlAddrParams{
-				resolveAddr: func(_, _ string) (*net.TCPAddr, error) {
+				lookupHost: func(addr string) ([]net.IP, error) {
 					return nil, errors.New("mock resolve")
 				},
 			},
@@ -986,9 +1079,9 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.params.resolveAddr == nil {
-				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
-					return testTCPAddr, nil
+			if tc.params.lookupHost == nil {
+				tc.params.lookupHost = func(_ string) ([]net.IP, error) {
+					return []net.IP{testTCPAddr.IP}, nil
 				}
 			}
 

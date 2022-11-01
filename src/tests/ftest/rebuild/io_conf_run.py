@@ -28,6 +28,9 @@ class RbldRunIoConf(IoConfTestBase):
         Use Cases:
             Verify rebuild with data verification.
 
-        :avocado: tags=all,full_regression,hw,large,rebuild,iorebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=rebuild,iorebuild
+        :avocado: tags=test_daos_run_io_conf
         """
         self.execute_io_conf_run_test()

@@ -19,7 +19,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import \
     BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
 from exception_utils import CommandFailure
-from general_utils import check_file_exists, get_log_file, \
+from general_utils import check_file_exists, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
     get_subprocess_stdout
@@ -59,12 +59,6 @@ class ExecutableCommand(CommandWithParameters):
         self.verbose = True
         self.env = EnvironmentVariables()
         self.sudo = False
-
-        # A list of environment variable names to set and export prior to
-        # running the command.  Values can be set via the get_environment()
-        # method and included in the command string by the set_environment()
-        # method.
-        self._env_names = []
 
         # Define a list of executable names associated with the command. This
         # list is used to generate the 'command_regex' property, which can be
@@ -396,52 +390,6 @@ class ExecutableCommand(CommandWithParameters):
         for namespace in ['/run/client/*', self.namespace]:
             if namespace is not None:
                 self.env.update_from_list(test.params.get("env_vars", namespace, []))
-
-    def update_env_names(self, new_names):
-        """Update environment variable names to export for the command.
-
-        Args:
-            env_names (list): list of environment variable names to add to
-                existing self._env_names variable.
-        """
-        self._env_names.extend(new_names)
-
-    def get_environment(self, manager, log_file=None):
-        """Get the environment variables to export for the command.
-
-        Args:
-            manager (DaosServerManager): the job manager used to start
-                daos_server from which the server config values can be obtained
-                to set the required environment variables.
-            log_file (str, optional): when specified overrides the default
-                D_LOG_FILE value. Defaults to None.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names and
-                values to export.
-
-        """
-        env = self.env.copy()
-        # Update with variables from the server manager
-        for name in self._env_names:
-            if name == "D_LOG_FILE":
-                if not log_file:
-                    log_file = "{}_daos.log".format(self.command)
-                value = get_log_file(log_file)
-            else:
-                value = manager.get_environment_value(name)
-            env[name] = value
-
-        return env
-
-    def set_environment(self, env):
-        """Set the environment variables to export in the command string.
-
-        Args:
-            env (EnvironmentVariables): a dictionary of environment variable
-                names and values to export prior to running the command
-        """
-        self.env = EnvironmentVariables(env.copy())
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -819,13 +767,17 @@ class YamlCommand(SubProcessCommand):
         if self.yaml is not None and hasattr(self.yaml, "get_params"):
             self.yaml.get_params(test)
 
-    def create_yaml_file(self):
+    def create_yaml_file(self, yaml_data=None):
         """Create the yaml file with the current yaml file parameters.
 
         This should be called before running the daos command and after all the
         yaml file parameters have been defined.  Any updates to the yaml file
         parameter definitions would require calling this method before calling
         the daos command in order for them to have any effect.
+
+        Args:
+            yaml_data (object, optional): data to use in place of information
+                stored in self.yaml to create the yaml file. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error copying the configuration file.
@@ -834,7 +786,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
-            if self.yaml.create_yaml(self.temporary_file):
+            if self.yaml.create_yaml(self.temporary_file, yaml_data):
                 self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):

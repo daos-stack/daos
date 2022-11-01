@@ -27,8 +27,8 @@ class EcodRunIoConf(IoConfTestBase):
             Verify EC with data verification when target or ranks being excluded and added back.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_fault
-        :avocado: tags=ec_io_conf_run
+        :avocado: tags=ec_io_conf_run,test_daos_run_io_conf
         """
         self.execute_io_conf_run_test()
