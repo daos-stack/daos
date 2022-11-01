@@ -263,7 +263,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 					)
 			}
 			svc := newTestMgmtSvc(t, log)
-			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil)
+			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil, nil)
 			svc.harness.instances[0] = newTestEngine(log, false, sp, engineCfg)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
@@ -468,7 +468,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				}
 
 				mp := storage.NewProvider(log, 0, &engineCfg.Storage,
-					nil, nil, nil)
+					nil, nil, nil, nil)
 				srv := NewEngineInstance(log, mp, nil, r)
 				srv.ready.SetTrue()
 
@@ -539,7 +539,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 				WithStorageClass("nvme").
 				WithBdevDeviceList("foo", "bar"),
 		)
-	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)
+	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
 	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
 
 	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})

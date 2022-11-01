@@ -197,7 +197,7 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
 	srv := newTestEngine(log, true, provider)
 
@@ -216,7 +216,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
-	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil, nil)
 
 	for i := 0; i < count; i++ {
 		srv := newTestEngine(log, i == 0 && isAP, provider)

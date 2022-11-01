@@ -53,16 +53,7 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 }
 
 func (ei *EngineInstance) superblockPath() string {
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		ei.log.Errorf("unable to get SCM config: %s", err)
-		return defaultStoragePath
-	}
-
-	storagePath := cfg.Scm.MountPoint
-	if storagePath == "" {
-		storagePath = defaultStoragePath
-	}
+	storagePath := ei.storage.ControlMetadataEnginePath()
 	return filepath.Join(ei.fsRoot, storagePath, "superblock")
 }
 
@@ -129,7 +120,7 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		return err
 	}
 
-	if err := ei.MountScm(); err != nil {
+	if err := ei.MountMetadata(); err != nil {
 		return err
 	}
 
@@ -176,8 +167,8 @@ func (ei *EngineInstance) WriteSuperblock() error {
 // ReadSuperblock reads the instance's superblock
 // from storage.
 func (ei *EngineInstance) ReadSuperblock() error {
-	if err := ei.MountScm(); err != nil {
-		return errors.Wrap(err, "failed to mount SCM device")
+	if err := ei.MountMetadata(); err != nil {
+		return errors.Wrap(err, "failed to mount control metadata device")
 	}
 
 	sb, err := ReadSuperblock(ei.superblockPath())

@@ -1170,7 +1170,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				sp := storage.MockProvider(log, idx, &ec.Storage,
 					cs.storage.Sys, // share system provider cfo
 					scm.NewMockProvider(log, tc.smbc, nil),
-					bdev.NewMockProvider(log, ebmbc))
+					bdev.NewMockProvider(log, ebmbc), nil)
 				ne := newTestEngine(log, false, sp, ec)
 
 				// mock drpc responses
@@ -1241,6 +1241,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		bDevs            [][]string
 		bSize            int
 		bmbc             *bdev.MockBackendConfig
+		metaProv         *storage.MockMetadataProvider
 		awaitTimeout     time.Duration
 		expAwaitExit     bool
 		expAwaitErr      error

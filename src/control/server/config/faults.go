@@ -100,6 +100,11 @@ var (
 		"enable_vmd and disable_vmd parameters both specified in config",
 		"remove legacy enable_vmd parameter from config",
 	)
+	FaultConfigControlMetadataNoPath = serverConfigFault(
+		code.ServerConfigControlMetadataNoPath,
+		"using a control_metadata device requires a path to use as the mount point",
+		"add a valid 'path' to the 'control_metadata' section of the config",
+	)
 )
 
 func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {

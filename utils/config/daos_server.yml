@@ -27,6 +27,22 @@
 #access_points: ['hostname1']
 #
 #
+## Control plane metadata
+## Immutable after running "dmg storage format".
+#
+## Optional. Define a directory or partition/mountpoint to be used as the
+## storage location for control plane metadata. If this section is not defined,
+## control plane metadata is stored on the SCM associated with the first engine.
+#
+#control_metadata:
+#  # Directory to store control plane metadata.
+#  # If device is also defined, this path will be used as the mountpoint.
+#  path: /home/daos_server/control_meta
+#  # Storage partition to be formatted with an ext4 filesystem and mounted for
+#  # control plane metadata storage.
+#  device: /dev/sdb1
+#
+#
 ## Default control plane port
 #
 ## Port number to bind daos_server to. This will also be used when connecting

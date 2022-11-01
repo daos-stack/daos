@@ -21,10 +21,14 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
+const defaultMetadataPath = "/mnt/daos"
+
 // SystemProvider provides operating system capabilities.
 type SystemProvider interface {
 	system.IsMountedProvider
+	system.MountProvider
 	GetfsUsage(string) (uint64, uint64, error)
+	Mkfs(system.MkfsReq) error
 }
 
 // Provider provides storage specific capabilities.
@@ -34,6 +38,7 @@ type Provider struct {
 	engineIndex   int
 	engineStorage *Config
 	Sys           SystemProvider
+	metadata      MetadataProvider
 	scm           ScmProvider
 	bdev          BdevProvider
 	bdevCache     BdevScanResponse
@@ -46,7 +51,135 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 		engineStorage = new(Config)
 	}
 	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
-		NewScmForwarder(log), NewBdevForwarder(log))
+		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
+}
+
+// FormatControlMetadata formats the storage used for control metadata.
+func (p *Provider) FormatControlMetadata(engineIdxs []uint) error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// Nothing to do
+		p.log.Debug("no control metadata path")
+		return nil
+	}
+
+	req := MetadataFormatRequest{
+		RootPath:   p.engineStorage.ControlMetadata.Path,
+		Device:     p.engineStorage.ControlMetadata.DevicePath,
+		DataPath:   p.engineStorage.ControlMetadata.Directory(),
+		OwnerUID:   os.Geteuid(),
+		OwnerGID:   os.Getegid(),
+		EngineIdxs: engineIdxs,
+	}
+	p.log.Debugf("calling metadata storage provider format: %+v", req)
+	return p.metadata.Format(req)
+}
+
+// ControlMetadataNeedsFormat checks whether we need to format the control metadata storage before
+// using it.
+func (p *Provider) ControlMetadataNeedsFormat() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// No metadata section defined, so we fall back to using SCM
+		return false, nil
+	}
+
+	req := MetadataFormatRequest{
+		RootPath: p.engineStorage.ControlMetadata.Path,
+		Device:   p.engineStorage.ControlMetadata.DevicePath,
+		DataPath: p.engineStorage.ControlMetadata.Directory(),
+	}
+	p.log.Debugf("checking metadata storage provider format: %+v", req)
+	return p.metadata.NeedsFormat(req)
+}
+
+// ControlMetadataPath returns the path where control plane metadata is stored.
+func (p *Provider) ControlMetadataPath() string {
+	if p == nil {
+		return defaultMetadataPath
+	}
+
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return p.engineStorage.ControlMetadata.Directory()
+	}
+
+	return p.scmMetadataPath()
+}
+
+func (p *Provider) scmMetadataPath() string {
+	cfg, err := p.GetScmConfig()
+	if err != nil {
+		p.log.Errorf("unable to get SCM config: %s", err)
+		return defaultMetadataPath
+	}
+
+	storagePath := cfg.Scm.MountPoint
+	if storagePath == "" {
+		storagePath = defaultMetadataPath
+	}
+
+	return storagePath
+}
+
+// ControlMetadataEnginePath returns the path where control plane metadata for the engine is stored.
+func (p *Provider) ControlMetadataEnginePath() string {
+	if p == nil {
+		return defaultMetadataPath
+	}
+
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return p.engineStorage.ControlMetadata.EngineDirectory(uint(p.engineIndex))
+	}
+
+	return p.scmMetadataPath()
+}
+
+// MountControlMetadata mounts the storage for control metadata, if it is on a separate device.
+func (p *Provider) MountControlMetadata() error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// If there's no control metadata path, we use SCM for control metadata
+		return p.MountScm()
+	}
+
+	req := MetadataMountRequest{
+		RootPath: p.engineStorage.ControlMetadata.Path,
+		Device:   p.engineStorage.ControlMetadata.DevicePath,
+	}
+
+	p.log.Debugf("calling metadata storage provider mount: %+v", req)
+	_, err := p.metadata.Mount(req)
+
+	return err
+}
+
+// ControlMetadataIsMounted determines whether the control metadata storage is a;ready mounted.
+func (p *Provider) ControlMetadataIsMounted() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// If there's no control metadata path, we use SCM for control metadata
+		return p.ScmIsMounted()
+	}
+
+	if p.engineStorage.ControlMetadata.DevicePath == "" {
+		p.log.Debug("no metadata device defined")
+		return false, nil
+	}
+
+	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
 }
 
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
@@ -564,7 +697,7 @@ func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmw
 }
 
 // NewProvider returns an initialized storage provider.
-func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider, meta MetadataProvider) *Provider {
 	return &Provider{
 		log:           log,
 		engineIndex:   idx,
@@ -572,5 +705,6 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		Sys:           sys,
 		scm:           scm,
 		bdev:          bdev,
+		metadata:      meta,
 	}
 }
