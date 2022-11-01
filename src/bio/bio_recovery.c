@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -416,16 +416,10 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_FAULTY) {
-			struct spdk_bs_type	bstype;
-			uuid_t			dev_id;
-
-			bstype = spdk_bs_get_bstype(bbs->bb_bs);
-			memcpy(dev_id, bstype.bstype, sizeof(dev_id));
-
-			rc = smd_dev_set_state(dev_id, SMD_DEV_FAULTY);
+			D_ASSERT(bbs->bb_dev != NULL);
+			rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
 			if (rc)
-				D_ERROR("Set device state failed. "DF_RC"\n",
-					DP_RC(rc));
+				D_ERROR("Set device state failed. "DF_RC"\n", DP_RC(rc));
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
