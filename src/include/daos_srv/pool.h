@@ -64,6 +64,7 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1,
+				sp_disable_rebuild:1,
 				sp_need_discard:1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
@@ -88,7 +89,7 @@ struct ds_pool {
 	uint64_t		sp_scrub_thresh;
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 

@@ -28,7 +28,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
@@ -78,8 +78,8 @@ jobs:
         compiler: [clang, gcc]
         include:
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
             with: fedora:36
@@ -93,7 +93,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500

@@ -158,9 +158,11 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	dfuse_open_handle_init(oh, ie);
 
-	rc = _dfuse_mode_update(req, parent, &mode);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	if (!fs_handle->dpi_info->di_multi_user) {
+		rc = _dfuse_mode_update(req, parent, &mode);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
 

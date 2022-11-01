@@ -117,6 +117,11 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
+
+        run_test src/vos/tests/evt_stress.py
+        run_test src/vos/tests/evt_stress.py --algo dist_even
+        run_test src/vos/tests/evt_stress.py --algo soff
+
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -243,7 +248,9 @@ if [ -d "/mnt/daos" ]; then
         for ((i = 0; i < ${#failures[@]}; i++)); do
             echo "    ${failures[$i]}"
         done
-        exit 1
+        if ! ${IS_CI:-false}; then
+            exit 1
+        fi
     fi
 else
     echo "/mnt/daos isn't present for unit tests"
