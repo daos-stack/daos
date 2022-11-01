@@ -1023,6 +1023,7 @@ CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
+CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
 
 /* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -1078,6 +1079,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_ENUMERATE:
 		((struct obj_key_enum_out *)reply)->oeo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		((struct obj_key2anchor_out *)reply)->oko_ret = status;
+		break;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1121,6 +1125,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_ret;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		return ((struct obj_key2anchor_out *)reply)->oko_ret;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1159,8 +1165,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
-		((struct obj_key_enum_out *)reply)->oeo_map_version =
-								map_version;
+		((struct obj_key_enum_out *)reply)->oeo_map_version = map_version;
+		break;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		((struct obj_key2anchor_out *)reply)->oko_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
@@ -1171,8 +1179,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
-		((struct obj_query_key_0_out *)reply)->okqo_map_version =
-			map_version;
+		((struct obj_query_key_0_out *)reply)->okqo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_map_version = map_version;
@@ -1206,6 +1213,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_map_version;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		return ((struct obj_key2anchor_out *)reply)->oko_map_version;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:

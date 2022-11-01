@@ -196,6 +196,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_update_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);
+void ds_obj_key2anchor_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler_0(crt_rpc_t *rpc);

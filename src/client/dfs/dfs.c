@@ -6358,17 +6358,41 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 int
 dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
 {
+	int rc;
+
 	if (obj == NULL || nr == NULL || !S_ISDIR(obj->mode))
 		return EINVAL;
 
-	return daos_obj_anchor_split(obj->oh, nr, anchors);
+	rc = daos_obj_anchor_split(obj->oh, nr, anchors);
+	return daos_der2errno(rc);
 }
 
 int
 dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 {
+	int rc;
+
 	if (obj == NULL || !S_ISDIR(obj->mode))
 		return EINVAL;
 
-	return daos_obj_anchor_set(obj->oh, index, anchor);
+	rc = daos_obj_anchor_set(obj->oh, index, anchor);
+	return daos_der2errno(rc);
+}
+
+int
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
+{
+	daos_key_t	dkey;
+	size_t		len;
+	int		rc;
+
+	if (obj == NULL || !S_ISDIR(obj->mode))
+		return EINVAL;
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	d_iov_set(&dkey, (void *)name, len);
+	rc = daos_obj_key2anchor(obj->oh, DAOS_TX_NONE, &dkey, NULL, anchor, NULL);
+	return daos_der2errno(rc);
 }

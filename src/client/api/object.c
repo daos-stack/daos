@@ -233,6 +233,20 @@ daos_obj_list_recx(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
 	return dc_task_schedule(task, true);
 }
 
+int
+daos_obj_key2anchor(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, daos_key_t *akey,
+		    daos_anchor_t *anchor, daos_event_t *ev)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	rc = dc_obj_key2anchor_task_create(oh, th, dkey, akey, anchor, ev, NULL, &task);
+	if (rc)
+		return rc;
+
+	return dc_task_schedule(task, true);
+}
+
 /* Use to query the object layout */
 int
 daos_obj_layout_get(daos_handle_t coh, daos_obj_id_t oid,

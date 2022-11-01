@@ -118,6 +118,7 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
+	DAOS_OPC_OBJ_KEY2ANCHOR,
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -798,6 +799,20 @@ typedef daos_obj_list_t		daos_obj_list_recx_t;
  * bool			incr_order;
 */
 typedef daos_obj_list_t		daos_obj_list_obj_t;
+
+/** daos_obj_key2anchor args */
+typedef struct {
+	/** Object open handle */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+	/** Distribution key. */
+	daos_key_t		*dkey;
+	/** Attribute key. */
+	daos_key_t		*akey;
+	/** Anchor to set */
+	daos_anchor_t		*anchor;
+} daos_obj_key2anchor_t;
 
 /** Array create args */
 typedef struct {

@@ -379,3 +379,26 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 
 	return 0;
 }
+
+int
+dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
+			      daos_key_t *akey, daos_anchor_t *anchor, daos_event_t *ev,
+			      tse_sched_t *tse, tse_task_t **task)
+{
+	daos_obj_key2anchor_t	*args;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_KEY2ANCHOR);
+	rc = dc_task_create(dc_obj_key2anchor, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->th        = th;
+	args->dkey	= dkey;
+	args->akey	= akey;
+	args->anchor	= anchor;
+
+	return 0;
+}

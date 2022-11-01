@@ -2472,6 +2472,26 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		oh = s_args->oh;
 		break;
 	}
+	case DAOS_OBJ_RPC_KEY2ANCHOR: {
+		daos_obj_key2anchor_t *k_args = args;
+
+		obj = obj_hdl2ptr(k_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
+		if (k_args->dkey == NULL ||
+		    !obj_key_valid(obj->cob_md.omd_id, k_args->dkey, true)) {
+			D_ERROR("invalid key2anchor dkey parameter.\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		if (k_args->akey &&
+		    !obj_key_valid(obj->cob_md.omd_id, k_args->akey, false)) {
+			D_ERROR("invalid key2anchor akey parameter.\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+		break;
+	}
 	default:
 		D_ERROR("bad opc %d.\n", opc);
 		D_GOTO(out, rc = -DER_INVAL);
@@ -2638,6 +2658,8 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		return &obj_auxi->l_args.la_auxi;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		return &obj_auxi->k_args.ka_auxi;
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
 	case DAOS_OBJ_RPC_QUERY_KEY:
@@ -2799,6 +2821,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		case DAOS_OBJ_RPC_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH_DKEYS:
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		case DAOS_OBJ_RPC_KEY2ANCHOR:
 			/* For distributed transaction, check whether TX pool
 			 * map is stale or not, if stale, restart the TX.
 			 */
@@ -4496,6 +4519,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+		case DAOS_OBJ_RPC_KEY2ANCHOR:
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    (task->dt_result == 0 ||
 			     task->dt_result == -DER_NONEXIST)) {
@@ -6110,6 +6134,101 @@ dc_obj_list_rec(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return obj_list_common(task, DAOS_OBJ_RECX_RPC_ENUMERATE, args);
+}
+
+static int
+shard_k2a_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
+	       struct obj_auxi_args *obj_auxi, uint32_t grp_idx)
+{
+	daos_obj_key2anchor_t	*obj_args;
+	struct shard_k2a_args	*shard_arg;
+
+	obj_args = dc_task_get_args(obj_auxi->obj_task);
+	shard_arg = container_of(shard_auxi, struct shard_k2a_args, ka_auxi);
+	shard_arg->ka_anchor = obj_args->anchor;
+
+	return 0;
+}
+
+int
+dc_obj_key2anchor(tse_task_t *task)
+{
+	daos_obj_key2anchor_t	*args;
+	struct obj_auxi_args	*obj_auxi;
+	struct dc_object	*obj;
+	unsigned int		map_ver = 0;
+	struct dtx_epoch	epoch;
+	uint32_t		shard;
+	uint32_t		shard_cnt;
+	int			grp_idx = 0;
+	int			rc = 0;
+
+	args = dc_task_get_args(task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->anchor == NULL) {
+		D_ERROR("Invalid anchor to daos_obj_key2anchor\n");
+		D_GOTO(err_task, rc);
+	}
+
+	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_KEY2ANCHOR, &epoch, &map_ver, &obj);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = obj_task_init(task, DAOS_OBJ_RPC_KEY2ANCHOR, map_ver, args->th, &obj_auxi, obj);
+	if (rc != 0)
+		D_GOTO(err_obj, rc);
+
+	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
+	grp_idx = obj_dkey2grpidx(obj, obj_auxi->dkey_hash, map_ver);
+	if (grp_idx < 0) {
+		D_ERROR(DF_OID" can not find grp %d\n", DP_OID(obj->cob_md.omd_id), grp_idx);
+		D_GOTO(err_obj, rc = grp_idx);
+	}
+
+	if (obj_auxi->is_ec_obj) {
+		rc = obj_ec_get_parity_or_alldata_shard(obj_auxi, map_ver, grp_idx, args->dkey,
+							&shard_cnt);
+	} else {
+		shard_cnt = 1;
+		if (obj_auxi->to_leader) {
+			rc = obj_replica_leader_select(obj, grp_idx, map_ver);
+		} else {
+			rc = obj_grp_valid_shard_get(obj, grp_idx, map_ver,
+						     obj_auxi->failed_tgt_list);
+			if (rc == -DER_NONEXIST) {
+				D_ERROR(DF_OID" can not find any shard %d\n",
+					DP_OID(obj->cob_md.omd_id), -DER_DATA_LOSS);
+				D_GOTO(err_obj, rc = -DER_DATA_LOSS);
+			}
+		}
+	}
+	if (rc < 0) {
+		D_ERROR(DF_OID" Can not find shard grp %d: "DF_RC"\n",
+			DP_OID(obj->cob_md.omd_id), grp_idx, DP_RC(rc));
+		D_GOTO(err_obj, rc);
+	}
+	shard = rc;
+
+	rc = obj_shards_2_fwtgts(obj, map_ver, NIL_BITMAP, shard, shard_cnt,
+				 1, OBJ_TGT_FLAG_CLI_DISPATCH, obj_auxi);
+	if (rc != 0)
+		D_GOTO(err_obj, rc);
+
+	if (daos_handle_is_valid(args->th)) {
+		rc = dc_tx_get_dti(args->th, &obj_auxi->k_args.ka_dti);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	} else {
+		daos_dti_gen(&obj_auxi->k_args.ka_dti, true);
+	}
+
+	return obj_req_fanout(obj, obj_auxi, map_ver, &epoch, shard_k2a_prep,
+			      dc_obj_shard_key2anchor, task);
+err_obj:
+	obj_decref(obj);
+err_task:
+	obj_task_complete(task, rc);
+	return rc;
 }
 
 static int

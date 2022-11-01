@@ -304,6 +304,12 @@ struct shard_sync_args {
 	daos_epoch_t		*sa_epoch;
 };
 
+struct shard_k2a_args {
+	struct shard_auxi_args	 ka_auxi;
+	struct dtx_id		 ka_dti;
+	daos_anchor_t		*ka_anchor;
+};
+
 #define OBJ_TGT_INLINE_NR	9
 #define OBJ_INLINE_BTIMAP	4
 
@@ -398,10 +404,11 @@ struct obj_auxi_args {
 	 * request only targets for one shard.
 	 */
 	union {
-		struct shard_rw_args	 rw_args;
-		struct shard_punch_args	 p_args;
-		struct shard_list_args	 l_args;
-		struct shard_sync_args	 s_args;
+		struct shard_rw_args		rw_args;
+		struct shard_punch_args		p_args;
+		struct shard_list_args		l_args;
+		struct shard_k2a_args		k_args;
+		struct shard_sync_args		s_args;
 	};
 };
 
@@ -532,6 +539,10 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
+
+int dc_obj_shard_key2anchor(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+			    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+			    uint32_t fw_cnt, tse_task_t *task);
 
 int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
 			   uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,

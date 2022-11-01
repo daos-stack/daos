@@ -2415,3 +2415,155 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct obj_k2a_args {
+	crt_rpc_t		*rpc;
+	daos_handle_t		*hdlp;
+	struct dc_obj_shard	*eaa_obj;
+	unsigned int		*eaa_map_ver;
+	struct dtx_epoch	*epoch;
+	daos_handle_t		*th;
+	daos_anchor_t		*anchor;
+	uint32_t		shard;
+};
+
+static int
+dc_k2a_cb(tse_task_t *task, void *arg)
+{
+	struct obj_k2a_args		*k2a_args = (struct obj_k2a_args *)arg;
+	struct obj_key2anchor_in	*oki;
+	struct obj_key2anchor_out	*oko;
+	int				ret = task->dt_result;
+	int				rc = 0;
+
+	oki = crt_req_get(k2a_args->rpc);
+	D_ASSERT(oki != NULL);
+
+	if (ret != 0) {
+		D_ERROR("RPC %d failed: "DF_RC"\n", DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(ret));
+		D_GOTO(out, ret);
+	}
+
+	oko = crt_reply_get(k2a_args->rpc);
+
+	rc = obj_reply_get_status(k2a_args->rpc);
+
+	/* See the similar dc_rw_cb. */
+	if (daos_handle_is_valid(*k2a_args->th)) {
+		int rc_tmp;
+
+		rc_tmp = dc_tx_op_end(task, *k2a_args->th, k2a_args->epoch,
+				      rc, oko->oko_epoch);
+		if (rc_tmp != 0) {
+			D_ERROR("failed to end transaction operation (rc=%d "
+				"epoch="DF_U64": "DF_RC"\n", rc,
+				oko->oko_epoch, DP_RC(rc_tmp));
+			goto out;
+		}
+	}
+
+	if (rc != 0) {
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
+				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+		} else if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: "DF_RC"\n",
+				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+		} else {
+			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n", k2a_args->rpc,
+				DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+		}
+		D_GOTO(out, rc);
+	}
+
+	*k2a_args->eaa_map_ver = obj_reply_map_version_get(k2a_args->rpc);
+	enum_anchor_copy(k2a_args->anchor, &oko->oko_anchor);
+	dc_obj_shard2anchor(k2a_args->anchor, k2a_args->shard);
+out:
+	if (k2a_args->eaa_obj != NULL)
+		obj_shard_decref(k2a_args->eaa_obj);
+	crt_req_decref(k2a_args->rpc);
+	if (ret == 0 || obj_retry_error(rc))
+		ret = rc;
+	return ret;
+}
+
+int
+dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
+			void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+			uint32_t fw_cnt, tse_task_t *task)
+{
+	struct shard_k2a_args		*args = shard_args;
+	daos_obj_key2anchor_t		*obj_args =
+		dc_task_get_args(args->ka_auxi.obj_auxi->obj_task);
+	struct dc_pool			*pool = NULL;
+	crt_endpoint_t			tgt_ep;
+	crt_rpc_t			*req;
+	uuid_t				cont_hdl_uuid;
+	uuid_t				cont_uuid;
+	struct obj_key2anchor_in	*oki;
+	struct obj_k2a_args		cb_args;
+	int				rc;
+
+	D_ASSERT(obj_shard != NULL);
+	obj_shard_addref(obj_shard);
+
+	pool = obj_shard_ptr2pool(obj_shard);
+	if (pool == NULL)
+		D_GOTO(out_put, rc = -DER_NO_HDL);
+
+	rc = dc_cont2uuid(obj_shard->do_co, &cont_hdl_uuid, &cont_uuid);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
+	tgt_ep.ep_tag = obj_shard->do_target_idx;
+	tgt_ep.ep_rank = obj_shard->do_target_rank;
+	if ((int)tgt_ep.ep_rank < 0)
+		D_GOTO(out_put, rc = (int)tgt_ep.ep_rank);
+
+	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
+		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	oki = crt_req_get(req);
+	D_ASSERT(oki != NULL);
+
+	oki->oki_dkey = *obj_args->dkey;
+	if (obj_args->akey != NULL)
+		oki->oki_akey = *obj_args->akey;
+	oki->oki_oid		= obj_shard->do_id;
+	oki->oki_map_ver	= args->ka_auxi.map_ver;
+	uuid_copy(oki->oki_pool_uuid, pool->dp_pool);
+	uuid_copy(oki->oki_co_hdl, cont_hdl_uuid);
+	uuid_copy(oki->oki_co_uuid, cont_uuid);
+	daos_dti_copy(&oki->oki_dti, &args->ka_dti);
+	if (args->ka_auxi.epoch.oe_flags & DTX_EPOCH_UNCERTAIN)
+		oki->oki_flags |= ORF_EPOCH_UNCERTAIN;
+
+	crt_req_addref(req);
+	cb_args.rpc = req;
+	cb_args.hdlp = (daos_handle_t *)pool;
+	cb_args.eaa_obj = obj_shard;
+	cb_args.eaa_map_ver = &args->ka_auxi.map_ver;
+	cb_args.epoch = &args->ka_auxi.epoch;
+	cb_args.th = &obj_args->th;
+	cb_args.anchor = obj_args->anchor;
+	cb_args.shard = obj_shard->do_shard_idx;
+	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_eaa, rc);
+
+	return daos_rpc_send(req, task);
+
+out_eaa:
+	crt_req_decref(req);
+	crt_req_decref(req);
+out_put:
+	obj_shard_decref(obj_shard);
+	tse_task_complete(task, rc);
+	return rc;
+}

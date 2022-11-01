@@ -4769,3 +4769,49 @@ reply:
 	obj_cpd_reply(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }
+
+void
+ds_obj_key2anchor_handler(crt_rpc_t *rpc)
+{
+	struct obj_key2anchor_in	*oki;
+	struct obj_key2anchor_out	*oko;
+	struct obj_io_context		ioc;
+	daos_key_t			*akey = NULL;
+	int				rc = 0;
+
+	oki = crt_req_get(rpc);
+	D_ASSERT(oki != NULL);
+	oko = crt_reply_get(rpc);
+	D_ASSERT(oko != NULL);
+
+	rc = obj_ioc_begin(oki->oki_oid.id_pub, oki->oki_map_ver,
+			   oki->oki_pool_uuid, oki->oki_co_hdl,
+			   oki->oki_co_uuid, opc_get(rpc->cr_opc),
+			   oki->oki_flags, &ioc);
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
+		DF_X64", pmv %u/%u dti "DF_DTI".\n",
+		rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_UOID(oki->oki_oid), DP_KEY(&oki->oki_dkey),
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
+		oki->oki_map_ver, ioc.ioc_map_ver, DP_DTI(&oki->oki_dti));
+
+	rc = process_epoch(&oki->oki_epoch, NULL, &oki->oki_flags);
+	if (rc == PE_OK_LOCAL)
+		oki->oki_flags &= ~ORF_EPOCH_UNCERTAIN;
+
+	if (oki->oki_akey.iov_len > 0)
+		akey = &oki->oki_akey;
+	rc = vos_obj_key2anchor(ioc.ioc_vos_coh, oki->oki_oid, &oki->oki_dkey, akey,
+				&oko->oko_anchor);
+
+out:
+	obj_reply_set_status(rpc, rc);
+	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
+	obj_ioc_end(&ioc, rc);
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+}
