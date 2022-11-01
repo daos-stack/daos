@@ -32,6 +32,7 @@ class DfuseCommand(ExecutableCommand):
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
+        self.multi_user = FormattedParameter("--multi-user", False)
 
         # Environment variable names to export when running dfuse
         self.update_env_names(["D_LOG_FILE"])
@@ -52,7 +53,7 @@ class DfuseCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.puuid.update(pool.uuid, "puuid" if display else None)
+        self.puuid.update(pool.identifier, "puuid" if display else None)
 
     def set_dfuse_cont_param(self, cont, display=True):
         """Set dfuse cont param from Container object.
