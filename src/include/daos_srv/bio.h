@@ -717,10 +717,10 @@ void *bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
  * Wrapper of ABT_thread_yield()
  */
 static inline void
-bio_yield(void)
+bio_yield(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
-	D_ASSERT(umem_tx_none());
+	D_ASSERT(umem_tx_none(umm));
 #endif
 	ABT_thread_yield();
 }
@@ -990,14 +990,12 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  * Submit WAL I/O and wait for completion
  *
  * \param[in]	mc		BIO meta context
- * \param[in]	tx_id		WAL transaction ID
- * \param[in]	actv		Actions involved in this transaction
+ * \param[in]	tx		umem_tx pointer
  * \param[in]	biod_data	BIO descriptor for data update (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
-		   struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance

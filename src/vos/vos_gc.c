@@ -1098,9 +1098,10 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 }
 
 struct vos_gc_param {
-	int		(*vgc_yield_func)(void *arg);
-	void		*vgc_yield_arg;
-	uint32_t	 vgc_credits;
+	struct umem_instance	*vgc_umm;
+	int			(*vgc_yield_func)(void *arg);
+	void			*vgc_yield_arg;
+	uint32_t		 vgc_credits;
 };
 
 static inline bool
@@ -1114,7 +1115,7 @@ vos_gc_yield(void *arg)
 
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;
-		bio_yield();
+		bio_yield(param->vgc_umm);
 		return false;
 	}
 
@@ -1141,6 +1142,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 
 	D_ASSERT(daos_handle_is_valid(poh));
 
+	param.vgc_umm		= &pool->vp_umm;
 	param.vgc_yield_func	= yield_func;
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;

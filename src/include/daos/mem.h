@@ -139,13 +139,6 @@ enum umem_pobj_tx_stage {
 	MAX_UMEM_TX_STAGE
 };
 
-#ifdef DAOS_PMEM_BUILD
-bool umem_tx_inprogress(void);
-bool umem_tx_none(void);
-
-int umem_tx_errno(int err);
-#endif
-
 typedef enum {
 	/** volatile memory */
 	UMEM_CLASS_VMEM,
@@ -155,9 +148,22 @@ typedef enum {
 	UMEM_CLASS_PMEM_NO_SNAP,
 	/** blob backed memory */
 	UMEM_CLASS_BMEM,
+	/** ad-hoc memory */
+	UMEM_CLASS_ADMEM,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
+
+#define UTX_PRIV_SIZE	(256)
+struct umem_tx {
+	struct umem_instance	*utx_umm;
+	int			 utx_stage;	/* enum umem_pobj_tx_stage */
+	uint64_t		 utx_id;
+	/* umem class specific TX data */
+	struct {
+		char		 utx_space[UTX_PRIV_SIZE];
+	}			 utx_private;
+};
 
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
@@ -190,7 +196,6 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
 struct umem_instance;
-struct pobj_action;
 
 /* Flags associated with various umem ops */
 #define UMEM_FLAG_ZERO		(((uint64_t)1) << 0)
@@ -263,6 +268,9 @@ typedef struct {
 	int		 (*mo_tx_commit)(struct umem_instance *umm);
 
 #ifdef DAOS_PMEM_BUILD
+	/** get TX stage */
+	int		 (*mo_tx_stage)(void);
+
 	/**
 	 * Reserve space with specified size.
 	 *
@@ -271,8 +279,7 @@ typedef struct {
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm,
-				       struct pobj_action *act, size_t size,
+	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
 				       unsigned int type_num);
 
 	/**
@@ -283,9 +290,7 @@ typedef struct {
 	 * \param off	[IN]		offset of allocation
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 */
-	void		 (*mo_defer_free)(struct umem_instance *umm,
-					  umem_off_t off,
-					  struct pobj_action *act);
+	void		 (*mo_defer_free)(struct umem_instance *umm, umem_off_t off, void *act);
 
 	/**
 	 * Cancel the reservation.
@@ -294,8 +299,7 @@ typedef struct {
 	 * \param actv	[IN]	action array to be canceled.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	void		 (*mo_cancel)(struct umem_instance *umm,
-				      struct pobj_action *act, int actv_cnt);
+	void		 (*mo_cancel)(struct umem_instance *umm, void *act, int actv_cnt);
 
 	/**
 	 * Publish the reservation (make it persistent).
@@ -304,9 +308,7 @@ typedef struct {
 	 * \param actv	[IN]	action array to be published.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	int		 (*mo_tx_publish)(struct umem_instance *umm,
-					  struct pobj_action *act,
-					  int actv_cnt);
+	int		 (*mo_tx_publish)(struct umem_instance *umm, void *act, int actv_cnt);
 
 	/**
 	 * Atomically copy the contents from src to the destination address.
@@ -344,6 +346,34 @@ typedef struct {
 	 */
 	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
 					   size_t size);
+
+	/**
+	 * Get number of umem_actions in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	uint32_t	(*mo_tx_act_nr)(struct umem_tx *tx);
+
+	/**
+	 * Get payload size of umem_actions in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	uint32_t	(*mo_tx_payload_sz)(struct umem_tx *tx);
+
+	/**
+	 * Get the first umem_action in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	struct umem_action *	(*mo_tx_act_first)(struct umem_tx *tx);
+
+	/**
+	 * Get the next umem_action in TX redo list.
+	 *
+	 * \param tx	[IN]	umem_rx pointer
+	 */
+	struct umem_action *	(*mo_tx_act_next)(struct umem_tx *tx);
 #endif
 	/**
 	 * Add one commit or abort callback to current transaction.
@@ -393,6 +423,8 @@ struct umem_instance {
 };
 
 #ifdef DAOS_PMEM_BUILD
+void umem_stage_callback(int stage, void *data);
+
 static inline bool
 umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
 {
@@ -578,14 +610,53 @@ umem_tx_end(struct umem_instance *umm, int err)
 }
 
 #ifdef DAOS_PMEM_BUILD
+bool umem_tx_inprogress(struct umem_instance *umm);
+bool umem_tx_none(struct umem_instance *umm);
+
+int umem_tx_errno(int err);
+
+static inline int
+umem_tx_stage(struct umem_instance *umm)
+{
+	return umm->umm_ops->mo_tx_stage();
+}
+
+/* Get number of umem_actions in TX redo list */
+static inline uint32_t
+umem_tx_act_nr(struct umem_tx *tx)
+{
+	return tx->utx_umm->umm_ops->mo_tx_act_nr(tx);
+}
+
+/* Get payload size of umem_actions in TX redo list */
+static inline uint32_t
+umem_tx_act_payload_sz(struct umem_tx *tx)
+{
+	return tx->utx_umm->umm_ops->mo_tx_payload_sz(tx);
+}
+
+/* Get the first umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_first(struct umem_tx *tx)
+{
+	return tx->utx_umm->umm_ops->mo_tx_act_first(tx);
+}
+
+/* Get the next umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_next(struct umem_tx *tx)
+{
+	return tx->utx_umm->umm_ops->mo_tx_act_next(tx);
+}
+
 struct umem_rsrvd_act;
 
 /* Get the active reserved actions cnt pending for publications */
 int umem_rsrvd_act_cnt(struct umem_rsrvd_act *act);
 /* Allocate array of structures for reserved actions */
-int umem_rsrvd_act_alloc(struct umem_rsrvd_act **act, int cnt);
+int umem_rsrvd_act_alloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int cnt);
 /* Extend the array of structures for reserved actions to max_cnt */
-int umem_rsrvd_act_realloc(struct umem_rsrvd_act **act, int max_cnt);
+int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int max_cnt);
 /* Free up the array of reserved actions */
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
@@ -625,6 +696,9 @@ umem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 		umm->umm_ops->mo_atomic_flush(umm, addr, len);
 	return;
 }
+
+int umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
+		   int stage, umem_tx_cb_t cb, void *data);
 #endif
 
 static inline int
