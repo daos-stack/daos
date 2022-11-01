@@ -3170,3 +3170,31 @@ int dc_pool_get_redunc(daos_handle_t poh)
 
 	return rf;
 }
+
+/**
+ * Get pool_target by dc pool and target index.
+ *
+ * \param pool [IN]	dc pool
+ * \param tgt_idx [IN]	target index.
+ * \param tgt [OUT]	pool target pointer.
+ *
+ * \return		0 if get the pool_target.
+ * \return		errno if it does not get the pool_target.
+ */
+int
+dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
+		    struct pool_target **tgt)
+{
+	int		 n;
+
+	/* Get map_tgt so that we can have the rank of the target. */
+	D_ASSERT(pool != NULL);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	if (n != 1) {
+		D_ERROR("failed to find target %u\n", tgt_idx);
+		return -DER_INVAL;
+	}
+	return 0;
+}

@@ -46,12 +46,6 @@ class DaosRacerCommand(ExecutableCommand):
         # of None will result in no timeout being used.
         self.clush_timeout = BasicParameter(None)
 
-        # Environment variable names required to be set when running the
-        # daos_racer command.  The values for these names are populated by the
-        # get_environment() method and added to command line by the
-        # set_environment() method.
-        self._env_names = ["D_LOG_FILE"]
-
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
 
@@ -65,42 +59,35 @@ class DaosRacerCommand(ExecutableCommand):
         """
         return self.get_attribute_names(FormattedParameter)
 
-    def get_environment(self, manager, log_file=None):
-        """Get the environment variables to export for the daos_racer command.
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Also sets default daos_racer environment.
 
         Args:
-            manager (DaosServerManager): the job manager used to start
-                daos_server from which the server config values can be obtained
-                to set the required environment variables.
-
-        Returns:
-            EnvironmentVariables: a dictionary of environment variable names and
-                values to export prior to running daos_racer
+            test (Test): avocado Test object
 
         """
-        env = super().get_environment(manager, log_file)
-        env["OMPI_MCA_btl_openib_warn_default_gid_prefix"] = "0"
-        env["OMPI_MCA_btl"] = "tcp,self"
-        env["OMPI_MCA_oob"] = "tcp"
-        env["OMPI_MCA_pml"] = "ob1"
-        env["D_LOG_MASK"] = "ERR"
+        super().get_params(test)
+        default_env = {
+            "D_LOG_FILE": get_log_file("{}_daos.log".format(self.command)),
+            "OMPI_MCA_btl_openib_warn_default_gid_prefix": "0",
+            "OMPI_MCA_btl": "tcp,self",
+            "OMPI_MCA_oob": "tcp",
+            "OMPI_MCA_pml": "ob1",
+            "D_LOG_MASK": "ERR"
+        }
+        for key, val in default_env.items():
+            if key not in self.env:
+                self.env[key] = val
 
         if not load_mpi("openmpi"):
             raise MPILoadError("openmpi")
 
-        env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
+        self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
-        return env
-
-    def set_environment(self, env):
-        """Set the environment variables to export prior to running daos_racer.
-
-        Args:
-            env (EnvironmentVariables): a dictionary of environment variable
-                names and values to export prior to running daos_racer
-        """
         # Include exports prior to the daos_racer command
-        self._pre_command = env.to_export_str()
+        self._pre_command = self.env.to_export_str()
 
     def run(self):
         """Run the daos_racer command remotely.
