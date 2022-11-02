@@ -875,7 +875,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                         display_space=(bool(pool)), pool=pool)
 
     def run_diff(self, src, dst, deref=False):
-        """Run linux diff command.
+        """Run Linux diff command.
 
         Args:
             src (str): the source path
