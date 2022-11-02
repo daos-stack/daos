@@ -124,8 +124,9 @@ def main():
         server = jira.JIRA({'server': 'https://daosio.atlassian.net/'})
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
-        output = [f"Unable to load ticket data for '{ticket_number}'"]
-        output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
+        errors.append('Unable to load ticket data')
+        output = [f'Errors are {",".join(errors)}',
+                  f'https://daosio.atlassian.net/browse/{ticket_number}']
         set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
