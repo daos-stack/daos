@@ -40,6 +40,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+COVFILE = os.path.join(os.sep, "tmp", "test.cov")
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -915,6 +916,8 @@ class Launch():
 
         Args:
             args (argparse.Namespace): command line arguments for this program
+            code_coverage_hosts (NodeSet): set of hosts from which to collect the code coverage
+                files after all tests have completed.
 
         Returns:
             int: exit status for the steps executed
@@ -1022,10 +1025,12 @@ class Launch():
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
-        # Execute the tests
-        status = self.run_tests(
-            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold)
+        # Execute the tests
+        # pylint: disable=unsupported-binary-operation
+        code_coverage_hosts = args.test_servers | get_local_host()
+        status = self.run_tests(
+            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
+            args.rename, args.jenkinslog, core_files, args.logs_threshold, code_coverage_hosts)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1126,6 +1131,7 @@ class Launch():
         # /usr/sbin directory.
         usr_sbin = os.path.sep + os.path.join("usr", "sbin")
         path = os.environ.get("PATH")
+        os.environ["COVFILE"] = COVFILE
 
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
@@ -2088,6 +2094,19 @@ class Launch():
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
 
+        # Collect code coverage files after all test have completed
+        if jenkinslog:
+            covfile_path, covfile_file = os.path.split(COVFILE)
+            return_code |= self._archive_files(
+                "bullseye coverage log files",
+                code_coverage_hosts,
+                covfile_path,
+                "".join([covfile_file, "*"]),
+                os.path.join(self.job_results_dir, "bullseye_coverage_logs"),
+                1,
+                threshold,
+                900)
+
         # Summarize the run
         return self._summarize_run(return_code)
 
@@ -2337,16 +2356,6 @@ class Launch():
                 "depth": 1,
                 "timeout": 900,
             }
-            if jenkinslog:
-                remote_files["bullseye coverage log files"] = {
-                    "source": os.path.join(os.sep, "tmp"),
-                    "destination": os.path.join(
-                        self.job_results_dir, "latest", "bullseye_coverage_logs"),
-                    "pattern": "test.cov*",
-                    "hosts": test.hosts.servers | NodeSet(get_local_host()),
-                    "depth": 1,
-                    "timeout": 900,
-                }
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
@@ -2508,13 +2517,11 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Resetting server storage after running %s", test)
         if hosts:
-            commands = [
-                "if lspci | grep -i nvme",
-                f"then COVFILE={os.environ['COVFILE']} && ",
-                "daos_server storage prepare -n --reset && "
-                "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
-                "fi"]
-##DH++ test only
+            commands = [
+                "if lspci | grep -i nvme",
+                f"then export COVFILE={COVFILE} && daos_server storage prepare -n --reset && "
+                "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
+                "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
             result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
             if not result.passed:
