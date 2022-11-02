@@ -26,4 +26,7 @@ arts="$arts$(ls -d \
 if [ -n "$arts" ]; then
     # shellcheck disable=SC2046,SC2086
     mv $(echo $arts | tr '\n' ' ') "${STAGE_NAME}/"
+    hostname
+    pwd
+    find "${STAGE_NAME}/" -type f
 fi
