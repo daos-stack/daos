@@ -916,8 +916,6 @@ class Launch():
 
         Args:
             args (argparse.Namespace): command line arguments for this program
-            code_coverage_hosts (NodeSet): set of hosts from which to collect the code coverage
-                files after all tests have completed.
 
         Returns:
             int: exit status for the steps executed
@@ -1026,10 +1024,10 @@ class Launch():
         setup_result.end()
 
         # Execute the tests
-        code_coverage_hosts = args.test_servers | get_local_host()
-        status = self.run_tests(
-            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold, code_coverage_hosts)
+        code_coverage_hosts = args.test_servers | get_local_host()
+        status = self.run_tests(
+            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
+            args.rename, args.jenkinslog, core_files, args.logs_threshold, code_coverage_hosts)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -2020,7 +2018,7 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold):
+                  core_files, threshold, code_coverage_hosts):
         """Run all the tests.
 
         Args:
@@ -2033,6 +2031,8 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            code_coverage_hosts (NodeSet): set of hosts from which to collect the code coverage
+                files after all tests have completed.
 
         Returns:
             int: status code to use when exiting launch.py
