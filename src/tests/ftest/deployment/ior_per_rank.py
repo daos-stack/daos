@@ -13,6 +13,7 @@ from general_utils import percent_change
 
 
 class IorPerRank(IorTestBase):
+    # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to run ior per rank basis and
@@ -78,7 +79,6 @@ class IorPerRank(IorTestBase):
         self.pool.destroy()
         self.pool = None
 
-
     def test_iorperrank(self):
         """
         Test Description: Test to check node health using ior with daos.
@@ -95,7 +95,7 @@ class IorPerRank(IorTestBase):
         """
 
         # test params
-        self.failed_nodes = dict()
+        self.failed_nodes = {}
         self.good_nodes = []
         self.transfer_sizes = self.params.get("transfer_sizes", self.ior_cmd.namespace)
 
