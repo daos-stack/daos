@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -72,6 +73,7 @@ type (
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
 		System        *SystemDatabase
+		Requests      *RequestDatabase
 		SchemaVersion uint
 	}
 
@@ -98,12 +100,13 @@ type (
 
 	// DatabaseConfig defines the configuration for the system database.
 	DatabaseConfig struct {
-		Replicas              []*net.TCPAddr
-		RaftDir               string
-		RaftSnapshotThreshold uint64
-		RaftSnapshotInterval  time.Duration
-		SystemName            string
-		ReadOnly              bool
+		Replicas               []*net.TCPAddr
+		RaftDir                string
+		RaftSnapshotThreshold  uint64
+		RaftSnapshotInterval   time.Duration
+		SystemName             string
+		ReadOnly               bool
+		RequestRetentionPeriod time.Duration
 	}
 
 	// GroupMap represents a version of the system membership map.
@@ -257,6 +260,7 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 			System: &SystemDatabase{
 				Attributes: make(map[string]string),
 			},
+			Requests:      newRequestDatabase(cfg),
 			SchemaVersion: CurrentSchemaVersion,
 		},
 	}
@@ -1058,4 +1062,57 @@ func (db *Database) GetSystemAttrs(keys []string, filterFn func(string) bool) (m
 		return nil, system.ErrSystemAttrNotFound(k)
 	}
 	return out, nil
+}
+
+type IDRequest interface {
+	proto.Message
+	GetIdemKey() uint64
+}
+
+var (
+	ErrRequestInProgress = errors.New("request already in progress")
+	ErrRequestIncomplete = errors.New("request not completed")
+)
+
+func (db *Database) CheckRecordedRequest(req IDRequest, resp proto.Message, retry bool) (bool, error) {
+	if req.GetIdemKey() == 0 {
+		return false, nil
+	}
+
+	if err := db.CheckLeader(); err != nil {
+		return false, err
+	}
+	db.Lock()
+	defer db.Unlock()
+
+	// FIXME: Quick and dirty to prove concept.
+	if entry, found := db.data.Requests.Requests[req.GetIdemKey()]; found {
+		switch {
+		case entry.CompletionError != nil:
+			return false, entry.CompletionError
+		case !retry && entry.RequestLeader != db.leaderHint():
+			return false, ErrRequestIncomplete
+		case entry.Response != nil:
+			return true, entry.UnmarshalResponse(resp)
+		default:
+			return false, ErrRequestInProgress
+		}
+	}
+
+	return false, db.submitRecordedRequest(req)
+}
+
+func (db *Database) CompleteRecordedRequest(req IDRequest, resp proto.Message, err error) error {
+	if req.GetIdemKey() == 0 {
+		return nil
+	}
+
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+	db.Lock()
+	defer db.Unlock()
+
+	// TODO: Verify that the request is still in progress?
+	return db.submitRecordedRequestCompletion(req.GetIdemKey(), resp, err)
 }

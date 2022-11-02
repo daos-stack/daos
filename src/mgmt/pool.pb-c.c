@@ -1504,7 +1504,7 @@ void   mgmt__pool_query_target_resp__free_unpacked
   assert(message->base.descriptor == &mgmt__pool_query_target_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[13] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[14] =
 {
   {
     "uuid",
@@ -1662,10 +1662,23 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_req__field_descriptors[1
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "idem_key",
+    14,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolCreateReq, idem_key),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
   4,   /* field[4] = acl */
   6,   /* field[6] = faultDomains */
+  13,   /* field[13] = idem_key */
   10,   /* field[10] = numranks */
   7,   /* field[7] = numsvcreps */
   5,   /* field[5] = properties */
@@ -1681,7 +1694,7 @@ static const unsigned mgmt__pool_create_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_create_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 13 }
+  { 0, 14 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
 {
@@ -1691,14 +1704,14 @@ const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
   "Mgmt__PoolCreateReq",
   "mgmt",
   sizeof(Mgmt__PoolCreateReq),
-  13,
+  14,
   mgmt__pool_create_req__field_descriptors,
   mgmt__pool_create_req__field_indices_by_name,
   1,  mgmt__pool_create_req__number_ranges,
   (ProtobufCMessageInit) mgmt__pool_create_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[5] =
 {
   {
     "status",
@@ -1748,17 +1761,30 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "uuid",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolCreateResp, uuid),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_create_resp__field_indices_by_name[] = {
   0,   /* field[0] = status */
   1,   /* field[1] = svc_reps */
   2,   /* field[2] = tgt_ranks */
   3,   /* field[3] = tier_bytes */
+  4,   /* field[4] = uuid */
 };
 static const ProtobufCIntRange mgmt__pool_create_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
 {
@@ -1768,7 +1794,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
   "Mgmt__PoolCreateResp",
   "mgmt",
   sizeof(Mgmt__PoolCreateResp),
-  4,
+  5,
   mgmt__pool_create_resp__field_descriptors,
   mgmt__pool_create_resp__field_indices_by_name,
   1,  mgmt__pool_create_resp__number_ranges,
