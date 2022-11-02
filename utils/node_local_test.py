@@ -1128,8 +1128,6 @@ class DFuse():
 
         my_env = get_base_env()
 
-        my_env['MALLOC_CHECK_'] = '3'
-
         if self.conf.args.dfuse_debug:
             my_env['D_LOG_MASK'] = self.conf.args.dfuse_debug
 
@@ -3519,7 +3517,7 @@ def run_in_fg(server, conf, args):
             break
 
     if not container:
-        container = create_cont(conf, pool.label, label=label, ctype="POSIX")
+        container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
@@ -3537,7 +3535,7 @@ def run_in_fg(server, conf, args):
 
     dfuse = DFuse(server,
                   conf,
-                  pool=pool.label,
+                  pool=pool.uuid,
                   caching=True,
                   wbcache=False,
                   multi_user=args.multi_user)
@@ -3563,10 +3561,10 @@ def run_in_fg(server, conf, args):
             start = time.time()
             rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
             elapsed = time.time() - start
-            (minutes, seconds) = divmod(elapsed, 60)
-            print(f'Launch command completed in {int(minutes):d}:{int(seconds):02d}')
-            print(rc)
             dfuse.stop()
+            (minutes, seconds) = divmod(elapsed, 60)
+            print(f'Completed in {int(minutes):d}:{int(seconds):02d}')
+            print(rc)
         else:
             dfuse.wait_for_exit()
     except KeyboardInterrupt:

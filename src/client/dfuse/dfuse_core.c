@@ -1032,7 +1032,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 err_eq:
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
-		int rc2;
+		int              rc2;
 
 		if (daos_handle_is_inval(eqt->de_eq))
 			continue;
@@ -1188,7 +1188,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 		rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
 		if (rc != 0)
-			D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+			D_GOTO(err_threads, rc = daos_errno2der(rc));
 
 		pthread_setname_np(eqt->de_thread, "dfuse_progress");
 	}
@@ -1198,7 +1198,18 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (rc == -DER_SUCCESS)
 		return rc;
 
-err_ie_remove:
+err_threads:
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
+
+		if (!eqt->de_thread)
+			continue;
+
+		sem_post(&eqt->de_sem);
+		pthread_join(eqt->de_thread, NULL);
+		sem_destroy(&eqt->de_sem);
+	}
+
 	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
