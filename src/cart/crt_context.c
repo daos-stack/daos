@@ -227,8 +227,8 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	max_ctx_num = crt_provider_get_max_ctx_num(primary, provider);
 
 	if (cur_ctx_num >= max_ctx_num) {
-		D_WARN("Number of active contexts (%d) reached limit (%d).\n",
-			cur_ctx_num, max_ctx_num);
+		D_WARN("Provider: %d; Number of active contexts (%d) reached limit (%d).\n",
+			provider, cur_ctx_num, max_ctx_num);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}

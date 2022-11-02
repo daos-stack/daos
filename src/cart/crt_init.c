@@ -158,8 +158,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d)\n",
-		provider, primary, set_sep, max_expect_size, max_unexpect_size);
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d  max_ctx: %d\n",
+		provider, primary, set_sep, max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 
