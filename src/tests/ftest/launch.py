@@ -1024,7 +1024,7 @@ class Launch():
         setup_result.end()
 
         # Execute the tests
-        code_coverage_hosts = args.test_servers | get_local_host()
+        code_coverage_hosts = args.test_servers | NodeSet(get_local_host())
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
             args.rename, args.jenkinslog, core_files, args.logs_threshold, code_coverage_hosts)
