@@ -1051,7 +1051,10 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
 	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
-	/* in OSA case, possibly obj_get_grp_size > daos_oclass_grp_size */
+	/* start_shard is the shard index, but ort_start_shard is the start shard ID.
+	 * in OSA case, possibly obj_get_grp_size > daos_oclass_grp_size so the start_shard
+	 * is different with ort_start_shard.
+	 */
 	req_tgts->ort_start_shard = (start_shard / obj_get_grp_size(obj)) *
 				    daos_oclass_grp_size(oca);
 	req_tgts->ort_srv_disp = !cli_disp && grp_size > 1;
