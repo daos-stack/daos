@@ -33,7 +33,7 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_wb_cache;
 
-	bool di_multi_user;
+	bool                 di_multi_user;
 
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table  dpi_iet;
