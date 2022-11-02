@@ -314,8 +314,8 @@ Now the dynamically Striped Object is not implemented yet.
 ## Object Index Table (OIT)
 
 OIT is a table to store the object ID list for a container. It is only valid
-for a specific container snapshot, can be generated when creating a container
-snaphost with DAOS_SNAP_OPT_OIT flag.
+for a specific container snapshot and can be generated when creating a container
+snapshot with DAOS_SNAP_OPT_OIT flag.
 
 OIT is implemented as a special object with oid.lo as container snapshot epoch,
 each object ID is stored as an akey as the oid, with a default 8 bytes length
