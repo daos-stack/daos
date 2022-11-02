@@ -1,0 +1,14 @@
+name: 'Import Commit Pragmas'
+description: 'Import Commit Pragmas'
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - run: . ci/gha_functions.sh;
+           git show -s --format=%B | sed -e "s/'/'\"'\"'/g" |
+             get_commit_pragmas |
+             sed -e 's/^/CP_/' >> $GITHUB_ENV
+      shell: bash
