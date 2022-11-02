@@ -39,7 +39,6 @@ class DmgStorageScanSCMTest(ControlTestBase):
 
         """
         errors = []
-        RC_SUCCESS = 0
 
         for scm_namespace in storage_dict["scm_namespaces"]:
             # Verify that all namespaces exist under /dev.
@@ -48,7 +47,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
             # rc is a dictionary where return code is the key.
             rc = pcmd(hosts=self.hostlist_servers, command=lscmd)
 
-            if RC_SUCCESS not in rc:
+            if 0 not in rc:
                 errors.append("{} didn't exist under /dev!".format(pmem_name))
 
             # Verify the Socket ID.

@@ -3,8 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import avocado
 import re
+
+import avocado
+
 from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -21,7 +23,7 @@ class DmgStorageQuery(ControlTestBase):
     """
 
     def setUp(self):
-        "Set up for dmg storage query."
+        """Set up for dmg storage query."""
         super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
