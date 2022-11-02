@@ -52,4 +52,4 @@ ior:
     write_x: 0.1 # Max 10% performance difference.
     read_x: 0.15  # Max 15% performance difference.
     expected_bw: 22500    # For transfer size 1M
-    expected_iops: 600000       # For transfer size 256B 
+    expected_iops: 600000       # For transfer size 256B
