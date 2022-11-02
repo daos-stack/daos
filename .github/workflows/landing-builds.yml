@@ -31,7 +31,7 @@ jobs:
   # for distros where we only want to build on master and not PRs see the Build-branch job below.
   Prepare:
     name: Create Docker images
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, docker]
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -62,12 +62,6 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - name: Setup docker cache
-        uses: jpribyl/action-docker-layer-caching@v0.1.1
-        with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: ${{ steps.commit-hash.outputs.restore }}
-          concurrency: 1
       - name: Prepare base image in Docker
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_DEPS_BUILD=no
@@ -78,13 +72,11 @@ jobs:
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
-      - name: Prune images not required for build.
-        run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
 
   Build-and-test:
     name: Run DAOS/NLT tests
     needs: Prepare
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, docker]
     strategy:
       matrix:
         distro: [ubuntu]
@@ -97,7 +89,10 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: clang
+      TAG: ${{ github.job }}-${{ matrix.distro }}-${{ github.sha }}
     steps:
+      - name: Lowercase TAG variable
+        run: echo "TAG=${TAG,,}" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -106,28 +101,23 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: jpribyl/action-docker-layer-caching@v0.1.1
-        continue-on-error: true
-        with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: |
-            ${{ steps.commit-hash.outputs.restore }}
-            ${{ steps.commit-hash.outputs.restore_prev }}
-          skip-save: true
       - name: Update dependencies in image.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DAOS_BUILD=no
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
+                            --tag build-image-$TAG
       - name: Build and Test
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image
+        run: docker run --name build-post-${{ github.run_id }}
+                        --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+                        --env COMPILER --env DEPS_JOBS --user root:root
+                        build-image-$TAG
               ./daos/utils/ci/run_in_gha.sh
       - name: Fetch results
         if: always()
-        run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
+        run: docker cp
+             build-post-${{ github.run_id }}:/home/daos/daos/nlt-junit.xml ./
       - name: Publish NLT test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v1.17
@@ -140,7 +130,7 @@ jobs:
   Build:
     name: Build DAOS in image
     needs: Prepare
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, docker]
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -165,7 +155,10 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      TAG: ${{ github.job }}-${{ matrix.distro }}-${{ github.sha }}
     steps:
+      - name: Lowercase TAG variable
+        run: echo "TAG=${TAG,,}" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -174,22 +167,14 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: jpribyl/action-docker-layer-caching@v0.1.1
-        continue-on-error: true
-        with:
-          key: ${{ steps.commit-hash.outputs.key }}
-          restore-keys: |
-            ${{ steps.commit-hash.outputs.restore }}
-            ${{ steps.commit-hash.outputs.restore_prev }}
-          skip-save: true
       - name: Build in docker.
-        run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
+        run: echo "$TAG"; docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
                             --build-arg BASE_DISTRO
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER
                             --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
+                            --tag build-image-$TAG
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -213,12 +198,12 @@ jobs:
         # Fails with Ubuntu still for the spdk issue.
         # - name: Run NLT
         # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-        #        --user root:root build-image ./daos/utils/node_local_test.py --no-root
-        #        --memcheck no --test cont_copy
+        #        --user root:root build-image-$TAG
+        #        ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy
 
   Build-branch:
     name: Build DAOS
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, docker]
     strategy:
       fail-fast: false
       matrix:
@@ -236,7 +221,10 @@ jobs:
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
+      TAG: ${{ github.job }}-${{ matrix.distro }}-${{ github.sha }}
     steps:
+      - name: Lowercase TAG variable
+        run: echo "TAG=${TAG,,}" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -253,7 +241,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
+                            --tag build-image-$TAG
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -296,7 +284,7 @@ jobs:
                             --build-arg COMPILER=gcc
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
+                 build-image-$TAG ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
@@ -322,7 +310,10 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
       DOCKER_BASE: ${{ matrix.base }}
       COMPILER: ${{ matrix.compiler }}
+      TAG: ${{ github.job }}-${{ matrix.distro }}-${{ github.sha }}
     steps:
+      - name: Lowercase TAG variable
+        run: echo "TAG=${TAG,,}" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -339,7 +330,7 @@ jobs:
                             --build-arg DAOS_JAVA_BUILD=no
                             --build-arg COMPILER=clang
                             --build-arg DAOS_KEEP_SRC=yes
-                            --tag build-image
+                            --tag build-image-$TAG
       - name: Build Java in docker.
         run: docker build . --file utils/docker/Dockerfile.${{ matrix.base }}
                             --build-arg DEPS_JOBS
@@ -382,5 +373,5 @@ jobs:
                             --build-arg COMPILER=gcc
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
+                 build-image-$TAG ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy --system-ram-reserved 6

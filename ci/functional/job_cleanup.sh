@@ -2,7 +2,7 @@
 
 # Common cleanup for running after a functional test
 
-set -ex
+set -eux
 
 if $TEST_RPMS; then
     # now collect up the logs and store them like non-RPM test does
@@ -19,7 +19,7 @@ rm -rf install/lib/daos/TESTING/ftest/avocado/job-results/*/*/html/
 # jenkins build artifacts
 rm -f install/lib/daos/TESTING/ftest/avocado/job-results/latest
 
-arts="$arts$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
+arts="${arts:-}$(ls ./*daos{,_agent}.log* 2>/dev/null)" && arts="$arts"$'\n'
 arts="$arts$(ls -d \
    install/lib/daos/TESTING/ftest/avocado/job-results/* 2>/dev/null)" && \
   arts="$arts"$'\n'

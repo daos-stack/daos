@@ -4,7 +4,7 @@ SOURCE   = $(NAME)-$(VERSION).tar.$(SRC_EXT)
 TOPDIR  := $(abspath $(dir $(firstword $(MAKEFILE_LIST)))/../..)
 
 #https://github.com/rpm-software-management/mock/issues/384
-MOCK_OPTIONS := --disablerepo=sclo*
+MOCK_OPTIONS += --disablerepo=sclo*
 
 GIT_SHORT       := $(shell git rev-parse --short=8 HEAD)
 GIT_NUM_COMMITS := $(shell git rev-list HEAD --count)

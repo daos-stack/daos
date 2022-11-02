@@ -46,13 +46,13 @@ RUN dnf -y upgrade && \
 # But make sure to patch after dnf upgrade so that an upgraded rpmlint
 # RPM doesn't wipe out our patch
 COPY packaging/rpmlint--ignore-unused-rpmlintrc.patch .
-RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                      \
-     if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then                               \
-         if ! patch -p1; then                                                                  \
-             exit 1;                                                                           \
-         fi;                                                                                   \
-         rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                                           \
-     fi) < rpmlint--ignore-unused-rpmlintrc.patch;                                             \
+RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') && \
+     if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then          \
+         if ! patch -p1; then                                             \
+             exit 1;                                                      \
+         fi;                                                              \
+         rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                      \
+     fi) < rpmlint--ignore-unused-rpmlintrc.patch;                        \
     rm -f  rpmlint--ignore-unused-rpmlintrc.patch
 
 # Prime the mock build environment to save time on each build

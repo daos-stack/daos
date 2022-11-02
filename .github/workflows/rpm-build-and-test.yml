@@ -1,0 +1,455 @@
+name: RPM Build and Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-repos:
+        description: 'Any PR-repos that you want included in this build'
+        required: false
+  pull_request:
+
+concurrency:
+  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -ueo pipefail {0}
+
+jobs:
+
+  # it's a real shame that this step is even needed.  push events have the commit message # in
+  # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
+  Import-commit-message:
+    name: Get commit message
+    runs-on: [self-hosted, light]
+    # Map a step output to a job output
+    outputs:
+      message: ${{ steps.commit_message.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import Commit Message
+        id: commit_message
+        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+             git show -s --format=%B >> $GITHUB_OUTPUT;
+             echo "EOF" >> $GITHUB_OUTPUT;
+
+  Import-commit-pragmas:
+    name: Save commit pragmas
+    runs-on: [self-hosted, light]
+    needs: [Import-commit-message]
+    # Map a step output to a job output
+    outputs:
+      pragmas: ${{ steps.commit_pragmas.outputs.text }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import Commit Pragmas
+        id: commit_pragmas
+        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+             echo '${{ needs.Import-commit-message.outputs.message }}' |
+               ci/get_commit_pragmas.sh >> $GITHUB_OUTPUT;
+             echo "EOF" >> $GITHUB_OUTPUT;
+
+  Import-commit-pragmas2:
+    name: Make commit pragma variables
+    runs-on: [self-hosted, light]
+    needs: [Import-commit-pragmas]
+    # can't use matrixes for matrixed output yet
+    # https://github.com/actions/runner/pull/2477
+    # strategy:
+    #  matrix:
+    #    distro: [el8, leap15]
+    #    include:
+    #      - distro: el8
+    #        UC_DISTRO: EL8
+    #      - distro: leap15
+    #        UC_DISTRO: LEAP15
+    # Map a step output to a job output
+    outputs:
+      skip-build-el8-rpm: ${{ steps.skip-build-el8-rpm.outputs.text }}
+      skip-build-leap15-rpm: ${{ steps.skip-build-leap15-rpm.outputs.text }}
+      skip-func-test-el8: ${{ steps.skip-func-test-el8.outputs.text }}
+      skip-func-test-leap15: ${{ steps.skip-func-test-leap15.outputs.text }}
+      rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
+      pr-repos: ${{ steps.pr-repos.outputs.text }}
+    steps:
+      - name: Set skip-build-el8-rpm variable
+        id: skip-build-el8-rpm
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${SKIP_BUILD_EL8_RPM:-false}" >> $GITHUB_OUTPUT
+      - name: Set skip-func-test-el8 variable
+        id: skip-func-test-el8
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${SKIP_FUNC_TEST_EL8:-true}" >> $GITHUB_OUTPUT
+      - name: Set skip-build-leap15-rpm variable
+        id: skip-build-leap15-rpm
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${SKIP_BUILD_LEAP15_RPM:-false}" >> $GITHUB_OUTPUT
+      - name: Set skip-func-test-leap15 variable
+        id: skip-func-test-leap15
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${SKIP_FUNC_TEST_LEAP15:-true}" >> $GITHUB_OUTPUT
+      - name: Set rpm-test-version variable
+        id: rpm-test-version
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${RPM_TEST_VERSION:-}" >> $GITHUB_OUTPUT
+      - name: Set pr-repos variable
+        id: pr-repos
+        run: |  # do not use the non-| format for this script
+             ${{ needs.Import-commit-pragmas.outputs.pragmas }}
+             echo "text=${PR_REPOS:-}" >> $GITHUB_OUTPUT
+
+  Calc-rpm-build-matrix:
+    name: Calculate RPM Build Matrix
+    runs-on: [self-hosted, wolf]
+    needs: [Import-commit-pragmas2]
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Calculate RPM Build Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+             l=()
+             if ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-el8-rpm }}; then
+                 l+=('el8')
+             fi
+             if ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm }}; then
+                 l+=('leap15')
+             fi
+             s=''
+             for li in "${l[@]}"; do
+                 s+=", \"$li\""
+             done
+             s=${s:2}
+             echo "text=[$s]" >> $GITHUB_OUTPUT
+
+  Build-RPM:
+    name: Build RPM
+    runs-on: [self-hosted, docker]
+    needs: [Import-commit-pragmas, Import-commit-pragmas2, Calc-rpm-build-matrix]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
+    if: needs.Import-commit-pragmas2.outputs.rpm-test-version == '' &&
+        !contains(needs.Import-commit-pragmas2.outputs.pr-repos, 'daos@')
+    env:
+      ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
+      DAOS_EMAIL: brian.murrell@intel.com
+      DAOS_FULLNAME: daos-stack
+      DISTRO: ${{ matrix.distro }}
+      DISTRO_REPOS: disabled
+      JENKINS_URL: https://build.hpdd.intel.com/
+      ARTEFACTS_URL: file:///scratch/job_repos/
+      MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
+      PR_NUM: ${{ github.event.pull_request.number }}
+      # DO NOT LAND -- this should be on stable, backedup storage, not /scratch
+      # yamllint disable-line rule:line-length
+      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+      RUN_ID: ${{ github.run_id }}
+      TARGET: ${{ matrix.distro }}
+    steps:
+      - name: Set variables
+        run: |
+            case ${{ matrix.distro }} in
+                'el8')
+                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="8"
+                    ;;
+                'leap15')
+                    CHROOT_NAME="opensuse-leap-15.4-x86_64"
+                    DISTRO_NAME="Leap"
+                    DISTRO_VERSION="15.4"
+                    ;;
+            esac
+            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+      - name: Import commit pragmas
+        run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
+             sed -e 's/^/cp_/' >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Create lastBuild and lastSuccessfulBuild symlinks
+        run: . ci/gha_functions.sh;
+             mkdir -p ${REPO_PATH};
+             rm -f ${REPO_PATH}last{,Successful}Build;
+             ln -s ${{ github.run_number }} ${REPO_PATH}lastBuild;
+             ln -s ${{ github.run_number }} ${REPO_PATH}lastSuccessfulBuild
+      - name: Build RPM Docker image
+        id: build-rpm-docker-image
+        continue-on-error: true
+        run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
+                          --build-arg CACHEBUST=$(date +%s%3N)
+                          --build-arg CB0=$(date +%V)
+                          --build-arg REPO_FILE_URL=$REPO_FILE_URL
+                          --build-arg UID=$(id -u)
+                          --tag mock-build
+                          utils/rpms
+      - name: Build RPM
+        id: build-rpm
+        continue-on-error: true
+        run: rm -rf mock_result;
+             mkdir -p mock_result;
+             docker run --name mock-build-${{ github.run_id }}-${{ matrix.distro }}
+                        --user build
+                        -v "$PWD":"$PWD" -w "$PWD"
+                        -v "$PWD"/mock_result:/var/lib/mock/$CHROOT_NAME/result
+                        --privileged=true
+                        -e DAOS_FULLNAME="$DAOS_FULLNAME"
+                        -e DAOS_EMAIL="$DAOS_EMAIL"
+                        -e DISTRO_VERSION="$DISTRO_VERSION"
+                        -e STAGE_NAME="$STAGE_NAME"
+                        -e CHROOT_NAME="$CHROOT_NAME"
+                        -e ARTIFACTORY_URL="$ARTIFACTORY_URL"
+                        -e REPO_FILE_URL="$REPO_FILE_URL"
+                        -e JENKINS_URL="$JENKINS_URL"
+                        -e TARGET="$TARGET"
+                        mock-build ci/rpm/build.sh
+      - name: Save root.log
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.STAGE_NAME }} root.log
+          path: mock_result/root.log
+      - name: Save build.log
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.STAGE_NAME }} build.log
+          path: mock_result/build.log
+      - name: Create repo
+        id: create-repo
+        if: steps.build-rpm.outcome == 'success'
+        continue-on-error: true
+        run: CHROOT_NAME=$CHROOT_NAME ci/rpm/create_repo.sh
+      - name: Test repo
+        id: test-repo
+        if: steps.create-repo.outcome == 'success'
+        continue-on-error: true
+        run: . ci/gha_functions.sh;
+             dnf --disablerepo=\* --repofrompath
+                 testrepo,file://${REPO_PATH}${{ github.run_number }}/artifact/artifacts/$TARGET
+                 repoquery -a
+      - name: Remove lastSuccessfulBuild link and exit failure
+        if: steps.test-repo.outcome != 'success'
+        run: rm -f ${REPO_PATH}lastSuccessfulBuild;
+             exit 1
+
+  Calc-functional-matrix:
+    name: Calculate Functional Testing Matrix
+    runs-on: [self-hosted, wolf]
+    needs: [Import-commit-pragmas2]
+    outputs:
+      matrix: ${{ steps.matrix.outputs.text }}
+    steps:
+      - name: Calculate Functional Testing Matrix
+        id: matrix
+        run: |  # do not use the non-| format for this script
+             l=()
+             if ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-el8-rpm &&
+                      needs.Import-commit-pragmas2.outputs.skip-func-test-el8 }}; then
+                 l+=('el8')
+             fi
+             echo ${{ needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm }}
+             echo ${{ needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 }}
+             if ${{ github.event_name == 'push' }} ||
+                (${{ github.event_name == 'pull_request' }} &&
+                 ! ${{ needs.Import-commit-pragmas2.outputs.skip-build-leap15-rpm &&
+                      needs.Import-commit-pragmas2.outputs.skip-func-test-leap15 }}); then
+                 l+=('leap15')
+             fi
+             s=''
+             for li in "${l[@]}"; do
+                 s+=", \"$li\""
+             done
+             s=${s:2}
+             echo "text=[$s]" >> $GITHUB_OUTPUT
+
+  Show-matrix:
+    name: Show Matrix
+    runs-on: [self-hosted, wolf]
+    needs: [Get-functional-matrix]
+    steps:
+      - name: Show  Matrix
+        run: echo '${{ needs.Get-functional-matrix.outputs.matrix }}';
+             echo '${{ fromJSON(needs.Get-functional-matrix.outputs.matrix) }}'
+>>>>>>> 219090e51c (Build array manually)
+
+  Functional:
+    name: Functional Testing
+    runs-on: [self-hosted, wolf]
+    needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas,
+            Import-commit-pragmas2]
+    strategy:
+      matrix:
+        distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
+    # https://github.com/actions/runner/issues/491#issuecomment-926924523
+    if: |
+      always() &&
+      (needs.Build-RPM.result == 'success' ||
+       needs.Build-RPM.result == 'skipped') &&
+      needs.Import-commit-pragmas2.outputs.skip-func-test != 'true'
+    env:
+      TEST_TAG: pr,-hw
+      CONFIG_POWER_ONLY: false
+      PRAGMA_SUFFIX: -vm
+      OPERATIONS_EMAIL: brian.murrell@intel.com
+      TEST_RPMS: true
+      COMMIT_MESSAGE: ${{ needs.Import-commit-message.outputs.message }}
+      JENKINS_URL: https://build.hpdd.intel.com/
+      REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
+      REMOVE_EXISTING_RPMS: false
+      # DO NOT LAND -- this should be on stable, backedup storage
+      ARTEFACTS_URL: file:///scratch/job_repos/
+      REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
+    steps:
+      - name: Set variables
+        run: |
+            case ${{ matrix.distro }} in
+                'el8')
+                    CHROOT_NAME="rocky+epel-8-x86_64"
+                    DISTRO_NAME="EL"
+                    DISTRO_NAME_UPPER="EL"
+                    DISTRO_NAME_LOWER="el"
+                    DISTRO_VERSION="8"
+                    DISTRO_VERSION_MAJOR="8"
+                    OPENMPI="openmpi"
+                    ;;
+                'leap15')
+                    CHROOT_NAME="opensuse-leap-15.4-x86_64"
+                    DISTRO_NAME="Leap"
+                    DISTRO_NAME_UPPER="LEAP"
+                    DISTRO_NAME_LOWER="leap"
+                    DISTRO_VERSION="15.4"
+                    DISTRO_VERSION_MAJOR="15"
+                    OPENMPI="openmpi3"
+                    ;;
+            esac
+            echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
+            echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
+            echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "STAGE_NAME=Functional on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+            echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
+            echo "DAOS_STACK_${DISTRO_NAME_UPPER}_${DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
+                 $GITHUB_ENV
+            echo -n "INST_RPMS=daos-client daos-tests daos-server daos-serialize" >> $GITHUB_ENV
+            echo -n " daos-client-tests-openmpi ndctl fio patchutils ior romio-tests" >> $GITHUB_ENV
+            echo -n " testmpio python3-mpi4py-tests hdf5-mpich-tests" >> $GITHUB_ENV
+            echo -n " hdf5-$OPENMPI-tests hdf5-vol-daos-$OPENMPI-tests" >> $GITHUB_ENV
+            echo -n " hdf5-vol-daos-mpich-tests simul-mpich simul-$OPENMPI" >> $GITHUB_ENV
+            echo -n " MACSio-mpich MACSio-$OPENMPI mpifileutils-mpich" >> $GITHUB_ENV
+      - name: Import commit pragmas
+        run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
+             sed -e 's/^/cp_/' >> $GITHUB_ENV
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
+      - name: Request and Provision a Cluster
+        run: uuid=$(uuidgen);
+             echo "CLUSTER_REQUEST_UUID=$uuid" >> $GITHUB_ENV;
+             url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"UUID=$uuid";
+             curl -v -X POST --user ${{ secrets.JENKINS_TOKEN }} "$url";
+             while [ ! -f /scratch/Get\ a\ cluster/"$uuid" ]; do
+                 echo "Waiting for a cluster";
+                 sleep 1;
+             done;
+             NODESTRING=$(cat /scratch/Get\ a\ cluster/$uuid);
+             echo "NODESTRING=$NODESTRING" >> $GITHUB_ENV;
+             echo "NODELIST=$NODESTRING" >> $GITHUB_ENV;
+             echo "NODE_COUNT=$(echo "$NODESTRING" | tr ',' ' ' | wc -w)" >> $GITHUB_ENV;
+             cat $GITHUB_ENV;
+             ssh -oPasswordAuthentication=false root@${NODESTRING%%vm*} \
+                 "POOL=${{ env.cp_PROVISIONING_POOL }}
+                  NODESTRING=$NODESTRING
+                  NODELIST=$NODESTRING
+                  DISTRO="$DISTRO_WITH_VERSION"
+                  $(cat ci/provisioning/provision_cluster.sh)"
+      - name: Wait for nodes to be ready
+        run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x;
+                  waited=0;
+                  while [ \$waited -lt 420 ]; do
+                      if [ -d /var/chef/reports ]; then
+                          exit 0;
+                      fi;
+                      sleep 10;
+                      (( \$waited +=10 )) || true;
+                  done;
+                  exit 1"
+      - name: Post-provision cluster
+        run: |
+          . ci/gha_functions.sh
+          inst_repos="${{ env.cp_PR_REPOS }} ${{ github.event.inputs.pr-repos }}"
+          if [[ $inst_repos != *daos@* ]]; then
+              inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
+              inst_repos+=":${{ github.run_number }}"
+          fi
+          ARTEFACTS_URL=$ARTEFACTS_URL \
+          INST_REPOS="$inst_repos" ci/provisioning/post_provision_config.sh
+      - name: Run Test
+        run: |
+          . ci/gha_functions.sh
+          test_tags=()
+          # the $(echo ...) here is to unquote the GH substituted value
+          for tag in $(echo ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}); do
+              test_tags+=($tag,-hw)
+          done
+          NODE_COUNT="$NODE_COUNT" TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
+      - name: Job cleanup
+        if: always()
+        run: . ci/gha_functions.sh;
+             rm -f /scratch/Get\ a\ cluster/${{ env.CLUSTER_REQUEST_UUID }};
+             ci/functional/job_cleanup.sh
+      - name: Publish test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: ${{ env.STAGE_NAME }} Test Results (old)
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          junit_files: ${{ env.STAGE_NAME }}/**/results.xml
+      - name: Test Report
+        uses: phoenix-actions/test-reporting@v10
+        id: test-report
+        if: always()
+        with:
+          name: ${{ env.STAGE_NAME }} Test Results (new)
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+          reporter: java-junit        # Format of test results
+          fail-on-error: false
+
+      - name: Publish artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ env.STAGE_NAME }} artifacts
+          path: ${{ env.STAGE_NAME }}/**
