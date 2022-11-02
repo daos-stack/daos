@@ -23,7 +23,10 @@ import (
 
 const cliPCIAddrSep = ","
 
-type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+type (
+	nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+	nvmeScanFn         func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
+)
 
 type nvmeCmd struct {
 	Prepare prepareNVMeCmd `command:"prepare" description:"Prepare NVMe SSDs for use by DAOS"`
@@ -57,6 +60,25 @@ func validateVFIOSetting(targetUser string, reqDisableVFIO bool, iommuEnabled bo
 	return nil
 }
 
+func nvmeBdevsFromCfg(cfg *config.Server) *storage.BdevDeviceList {
+	if cfg == nil {
+		return nil
+	}
+
+	// Combine engine bdev_lists to create total device list.
+	var bdevCfgs storage.TierConfigs
+	for _, ec := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
+	}
+
+	bds := bdevCfgs.NVMeBdevs()
+	if bds.Len() == 0 {
+		return nil
+	}
+
+	return bds
+}
+
 func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
 		log.Debugf("nil input server config so skip updating request from config")
@@ -78,13 +100,7 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 	}
 
 	if req.PCIAllowList == "" {
-		// Combine engine bdev_lists to use as allow list.
-		var bdevCfgs storage.TierConfigs
-		for _, ec := range cfg.Engines {
-			bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
-		}
-
-		allowed := bdevCfgs.NVMeBdevs()
+		allowed := nvmeBdevsFromCfg(cfg)
 		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", allowed)
 		if allowed.Len() != 0 {
 			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
@@ -318,34 +334,54 @@ func (cmd *resetNVMeCmd) Execute(args []string) error {
 type scanNVMeCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	cfgCmd         `json:"-"`
 
 	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
-func (cmd *scanNVMeCmd) Execute(args []string) error {
+func (cmd *scanNVMeCmd) getVMDState() bool {
+	cfgDisableVMD := false
+	if !cmd.IgnoreConfig && cmd.config != nil && cmd.config.DisableVMD != nil {
+		cfgDisableVMD = *cmd.config.DisableVMD
+	}
+	return !cmd.DisableVMD && !cfgDisableVMD
+}
+
+func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn) error {
 	var bld strings.Builder
+	req := storage.BdevScanRequest{}
 
-	if err := cmd.setHelperLogFile(); err != nil {
-		return err
+	cmd.Info("Scan locally-attached NVMe storage...")
+
+	if !cmd.IgnoreConfig && cmd.config != nil {
+		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
+		cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
 	}
 
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-	if !cmd.DisableVMD {
-		svc.WithVMDEnabled()
-	}
-
-	cmd.Info("Scanning locally-attached NVMe storage...\n")
-
-	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
+	resp, err := scanBackend(req)
 	if err != nil {
 		return err
 	}
 
-	if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
 		return err
 	}
 
 	cmd.Info(bld.String())
 
 	return nil
+}
+
+func (cmd *scanNVMeCmd) Execute(args []string) error {
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
+	}
+
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+	if cmd.getVMDState() {
+		svc.WithVMDEnabled()
+	}
+
+	cmd.Debugf("executing scan nvme command: %+v", cmd)
+	return cmd.scanNVMe(svc.NvmeScan)
 }
