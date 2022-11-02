@@ -37,8 +37,6 @@ class HarnessAdvancedTest(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        This test can be run in any CI stage: vm, small, medium, large
-
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,harness_advanced_test,core_files
@@ -87,8 +85,6 @@ class HarnessAdvancedTest(TestWithServers):
         This test will send a signal 6 to a random daos_engine process so
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large

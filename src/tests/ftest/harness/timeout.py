@@ -31,8 +31,6 @@ class HarnessTimeoutTest(Test):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        This test can be run in any CI stage: vm, small, medium, large
-
         :avocado: tags=manual
         :avocado: tags=vm
         :avocado: tags=harness,harness_timeout_test
@@ -55,8 +53,6 @@ class HarnessTimeoutTest(Test):
         This test will send a signal 6 to a random daos_engine process so
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=manual
         :avocado: tags=hw,medium,ib2,large

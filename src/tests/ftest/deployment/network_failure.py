@@ -402,12 +402,6 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing down the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            self.fail(
-                "One or more servers crashed after bringing down the network interface!")
-
         # 5. Run IOR with oclass SX.
         ior_results = {}
         job_num = 1
@@ -447,11 +441,33 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing up the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            msg = "One or more servers crashed after bringing up the network interface!"
-            errors.append(msg)
+        # Some ranks may be excluded after bringing up the network interface. Check if
+        # all ranks are joined. If not, restart the servers and check again.
+        dmg_command = self.get_dmg_command()
+
+        # First, wait up to 60 sec for server(s) to crash. Whether a rank is marked as
+        # dead is determined by SWIM, so we need to give some time for the protocol to
+        # make the decision.
+        count = 0
+        server_crashed = False
+        while count < 60:
+            if not check_system_query_status(dmg_command.system_query()):
+                server_crashed = True
+                break
+            count += 1
+            time.sleep(1)
+
+        # If server crash was detected, restart.
+        if server_crashed:
+            self.log.info("Not all ranks are joined. Restart the servers.")
+            dmg_command.system_stop()
+            dmg_command.system_start()
+
+            # Now all ranks should be joined.
+            if not self.wait_for_ranks_to_join():
+                msg = ("One or more servers crashed after bringing up the network "
+                       "interface!")
+                errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)

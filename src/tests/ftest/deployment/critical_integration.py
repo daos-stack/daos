@@ -48,7 +48,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                           and client nodes have same daos versions.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,critical_integration
         :avocado: tags=CriticalIntegrationWithoutServers,test_passwdlessssh_versioncheck
         """
