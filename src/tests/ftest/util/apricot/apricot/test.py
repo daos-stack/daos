@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -16,6 +15,7 @@ from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
 from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
@@ -28,9 +28,8 @@ from fault_config_utils import FaultInjection
 from general_utils import \
     get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, get_avocado_config_value, set_avocado_config_value, \
-    dump_engines_stacks
+    dump_engines_stacks, nodeset_append_suffix
 from logger_utils import TestLogger
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -679,6 +678,8 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
+        self.slurm_exclude_servers = False
+        self.slurm_exclude_nodes = NodeSet()
         self.hostlist_servers = NodeSet()
         self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
@@ -705,6 +706,9 @@ class TestWithServers(TestWithoutServers):
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
 
+        # Suffix to append to each access point name
+        self.access_points_suffix = None
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -728,6 +732,10 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = self.params.get(
             "start_agents", "/run/setup/*", self.setup_start_agents)
 
+        # Support removing any servers from the client list
+        self.slurm_exclude_servers = self.params.get(
+            "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
         self.server_group = self.params.get(
@@ -741,6 +749,16 @@ class TestWithServers(TestWithoutServers):
             "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
         self.hostlist_clients = self.get_hosts_from_yaml(
             "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+
+        # Optionally remove any servers that may have ended up in the client list.  This can occur
+        # with tests using slurm partitions as they are setup with all hosts.
+        if self.slurm_exclude_servers:
+            self.log.debug(
+                "Excluding any %s servers from the current client list: %s",
+                self.hostlist_servers, self.hostlist_clients)
+            new_client_list = self.hostlist_clients.difference(self.hostlist_servers)
+            self.slurm_exclude_nodes = self.hostlist_clients.difference(new_client_list)
+            self.hostlist_clients = new_client_list
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -763,6 +781,11 @@ class TestWithServers(TestWithoutServers):
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
+        self.access_points_suffix = self.params.get(
+            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
+        if self.access_points_suffix:
+            self.access_points = nodeset_append_suffix(
+                self.access_points, self.access_points_suffix)
 
         # Display host information
         self.log.info("-" * 100)
@@ -1159,7 +1182,7 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class)
+                self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
 
     def configure_manager(self, name, manager, hosts, slots, access_points=None):
@@ -1360,15 +1383,15 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, message=None):
+    def fail(self, msg=None):
         """Dump engines ULT stacks upon test failure."""
         self.dump_engines_stacks("Test has failed")
-        super().fail(message)
+        super().fail(msg)
 
-    def error(self, message=None):
+    def error(self, msg=None):
         """Dump engines ULT stacks upon test error."""
         self.dump_engines_stacks("Test has errored")
-        super().error(message)
+        super().error(msg)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -1692,7 +1715,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp)
+            dmg_config_temp, self.access_points_suffix)
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 
@@ -1778,26 +1801,38 @@ class TestWithServers(TestWithoutServers):
         for _ in range(quantity):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
-    def get_container(self, pool, namespace=None, create=True):
-        """Get a test container object.
+    @fail_on(AttributeError)
+    def get_container(self, pool, namespace=None, create=True, **kwargs):
+        """Create a TestContainer object.
 
         Args:
             pool (TestPool): pool in which to create the container.
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
-            create (bool, optional): should the container be created. Defaults
-                to True.
+            create (bool, optional): should the container be created. Defaults to True.
+            kwargs (dict): name/value of attributes for which to call update(value, name).
+                See TestContainer for available attributes.
 
         Returns:
-            TestContainer: the created test container object.
+            TestContainer: the created container.
+
+        Raises:
+            AttributeError: if an attribute does not exist or does not have an update() method.
 
         """
+        # Create a container with params from the config
         container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
+
+        # Set passed params
+        for name, value in kwargs.items():
+            getattr(container, name).update(value, name=name)
+
         if create:
             container.create()
+
         return container
 
     def add_container(self, pool, namespace=None, create=True):
@@ -1812,7 +1847,7 @@ class TestWithServers(TestWithoutServers):
             create (bool, optional): should the container be created. Defaults
                 to True.
         """
-        self.container = self.get_container(pool, namespace, create)
+        self.container = self.get_container(pool=pool, namespace=namespace, create=create)
 
     def add_container_qty(self, quantity, pool, namespace=None, create=True):
         """Add multiple containers to the test case.
@@ -1839,7 +1874,8 @@ class TestWithServers(TestWithoutServers):
                 "add_container_qty(): self.container must be a list: {}".format(
                     type(self.container)))
         for _ in range(quantity):
-            self.container.append(self.get_container(pool, namespace, create))
+            self.container.append(
+                self.get_container(pool=pool, namespace=namespace, create=create))
 
     def start_additional_servers(self, additional_servers, index=0, access_points=None):
         """Start additional servers.

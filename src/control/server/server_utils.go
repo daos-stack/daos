@@ -7,11 +7,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,8 +37,45 @@ import (
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// ipLookupFn defines the function signature for a helper that can
+// be used to resolve a host address to a list of IP addresses.
+type ipLookupFn func(string) ([]net.IP, error)
+
+// resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
+// If the hostname resolves to multiple addresses, the first one is returned.
+func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to split %q", addr)
+	}
+	iPort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to convert %q to int", port)
+	}
+	addrs, err := lookup(host)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to resolve %q", host)
+	}
+
+	if len(addrs) == 0 {
+		return nil, errors.Errorf("no addresses found for %q", host)
+	}
+
+	isIPv4 := func(ip net.IP) bool {
+		return ip.To4() != nil
+	}
+	// Ensure stable ordering of addresses.
+	sort.Slice(addrs, func(i, j int) bool {
+		if !isIPv4(addrs[i]) && isIPv4(addrs[j]) {
+			return false
+		} else if isIPv4(addrs[i]) && !isIPv4(addrs[j]) {
+			return true
+		}
+		return bytes.Compare(addrs[i], addrs[j]) < 0
+	})
+
+	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
+}
 
 const scanMinHugePageCount = 128
 
@@ -58,10 +97,10 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	return bdevCfgs
 }
 
-func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolve("tcp", ap)
+		apAddr, err := resolveFirstAddr(ap, lookup)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -106,7 +145,7 @@ type replicaAddrGetter interface {
 type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
-	resolveAddr    resolveTCPFn
+	lookupHost     ipLookupFn
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
@@ -116,7 +155,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 		ipStr = repAddr.IP.String()
 	}
 
-	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	ctlAddr, err := resolveFirstAddr(fmt.Sprintf("[%s]:%d", ipStr, params.port), params.lookupHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving control address")
 	}
@@ -351,12 +390,12 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	memSizeFreeMb := hpi.Free * pageSizeMb
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
+		pageSizeMb, *hpi)
 	if memSizeFreeMb < memSizeReqMb {
-		srv.log.Errorf("huge page info: %+v", *hpi)
 		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
 	engine.setMemSize(memSizeReqMb)
@@ -365,19 +404,19 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	return nil
 }
 
-func cleanEngineHugePages(srv *server, engineIdx uint32) error {
-	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
-
+func cleanEngineHugePages(srv *server) error {
 	req := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,
 	}
+
+	msg := "cleanup hugepages via bdev backend"
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
 
 	return nil
 }
@@ -399,14 +438,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		return nil
 	})
 
-	engine.RLock()
-	engineIdx := engine.runner.GetConfig().Index
-	engine.RUnlock()
-
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
+		srv.log.Debugf("engine %d: storage ready", engine.Index())
+
 		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugePages(srv, engineIdx); err != nil {
+		if err := cleanEngineHugePages(srv); err != nil {
 			srv.log.Errorf(err.Error())
 		}
 

@@ -33,10 +33,7 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         Args:
             posix (bool): Whether or not to create a posix container
         """
-        self.container.append(self.get_container(self.pool, create=False))
-        self.container[-1].type.update(
-            "POSIX" if posix else None, "container.type")
-        self.container[-1].create()
+        self.container.append(self.get_container(self.pool, type=("POSIX" if posix else None)))
         self.metrics["create_count"][self.pool_leader_host] += 1
         self.metrics["open_count"][self.pool_leader_host] += 1
         self.metrics["close_count"][self.pool_leader_host] += 1

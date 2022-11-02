@@ -188,10 +188,8 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] &&
-       [ -z "$(rpm_test_version)" ] &&
-       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != weekly-testing* ]] &&
-       [[ ${CHANGE_TARGET:-$BRANCH_NAME} != provider-testing* ]]; then
+    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
+       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
@@ -295,7 +293,7 @@ post_provision_config_nodes() {
         # shellcheck disable=SC2086
         if [ -n "$INST_RPMS" ]; then
             # shellcheck disable=SC2154
-            if ! retry_dnf 360 install $INST_RPMS; then
+            if ! retry_dnf 360 --setopt=best=0 install $INST_RPMS; then
                 rc=${PIPESTATUS[0]}
                 dump_repos
                 return "$rc"

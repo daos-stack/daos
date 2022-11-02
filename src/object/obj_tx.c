@@ -277,7 +277,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 {
 	daos_handle_t	 ph;
 	struct dc_tx	*tx;
-	int		 rc;
+	int		 rc = 0;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_NO_HDL;
@@ -749,7 +749,7 @@ int
 dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 {
 	struct dc_tx	*tx;
-	int		 rc;
+	int		 rc = 0;
 
 	tx = dc_tx_hdl2ptr(th);
 	if (tx == NULL) {
@@ -962,7 +962,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
 		tx->tx_set_resend = 1;
 		tx->tx_status = TX_FAILED;
 
@@ -1817,7 +1817,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	struct obj_cpd_in		*oci;
 	struct tx_commit_cb_args	 tcca;
 	crt_endpoint_t			 tgt_ep;
-	int				 rc;
+	int				 rc = 0;
 
 	if (tx->tx_pm_ver != 0 && tx->tx_pm_ver != dc_pool_get_version(tx->tx_pool) &&
 	    (tx->tx_retry || tx->tx_read_cnt > 0))
@@ -1994,7 +1994,7 @@ dc_tx_open_snap(tse_task_t *task)
 {
 	daos_tx_open_snap_t	*args;
 	struct dc_tx		*tx = NULL;
-	int			 rc;
+	int			 rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL,
@@ -2720,9 +2720,7 @@ out:
 
 	/* Drop the reference that is held via dc_tx_attach(). */
 	dc_tx_decref(tx);
-
-	if (obj != NULL)
-		obj_decref(obj);
+	obj_decref(obj);
 
 	return 0;
 }
@@ -2737,7 +2735,7 @@ dc_tx_per_akey_existence_task(enum obj_rpc_opc opc, daos_handle_t oh, struct dc_
 	daos_iod_t				*iods = NULL;
 	tse_task_t				*task = NULL;
 	d_list_t				 task_list;
-	int					 rc;
+	int					 rc = 0;
 	int					 i;
 
 	D_INIT_LIST_HEAD(&task_list);
@@ -2808,7 +2806,7 @@ out:
 		if (unlikely(d_list_empty(&task_list))) {
 			struct dc_object	*obj;
 
-			obj_hdl2ptr(oh);
+			obj = obj_hdl2ptr(oh);
 			D_MUTEX_LOCK(&tx->tx_lock);
 			rc = dc_tx_add_update(tx, &obj, flags, dkey, nr, iods_or_akeys, sgls);
 			D_MUTEX_UNLOCK(&tx->tx_lock);
@@ -2864,7 +2862,7 @@ dc_tx_check_existence_task(enum obj_rpc_opc opc, daos_handle_t oh,
 	daos_iod_t				*iods = NULL;
 	tse_task_t				*task = NULL;
 	uint64_t				 api_flags;
-	int					 rc;
+	int					 rc = 0;
 	int					 i;
 
 	cb_args.opc		= opc;
@@ -2984,9 +2982,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 				 DAOS_COND_AKEY_UPDATE)) {
 			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-
-			if (obj != NULL)
-				obj_decref(obj);
+			obj_decref(obj);
 
 			return dc_tx_check_existence_task(opc, up->oh, tx,
 						up->flags, up->dkey, up->nr,
@@ -2996,9 +2992,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		if (up->flags & DAOS_COND_PER_AKEY) {
 			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-
-			if (obj != NULL)
-				obj_decref(obj);
+			obj_decref(obj);
 
 			return dc_tx_per_akey_existence_task(opc, up->oh, tx, up->flags, up->dkey,
 							     up->nr, up->iods, up->sgls, task);
@@ -3024,9 +3018,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		if (pu->flags & DAOS_COND_PUNCH) {
 			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-
-			if (obj != NULL)
-				obj_decref(obj);
+			obj_decref(obj);
 
 			return dc_tx_check_existence_task(opc, pu->oh, tx,
 							  pu->flags, pu->dkey,
@@ -3042,9 +3034,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 		if (pu->flags & DAOS_COND_PUNCH) {
 			tx->tx_has_cond = 1;
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-
-			if (obj != NULL)
-				obj_decref(obj);
+			obj_decref(obj);
 
 			return dc_tx_check_existence_task(opc, pu->oh, tx,
 					pu->flags, pu->dkey, pu->akey_nr,
@@ -3109,8 +3099,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 	dc_tx_decref(tx);
 
 out_obj:
-	if (obj != NULL)
-		obj_decref(obj);
+	obj_decref(obj);
 
 	return rc;
 }
@@ -3208,9 +3197,7 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 
 out:
 	dc_tx_close_internal(tx);
-
-	if (obj != NULL)
-		obj_decref(obj);
+	obj_decref(obj);
 
 	return rc;
 }
@@ -3270,6 +3257,10 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	int		 rc = 0;
 
 	D_ASSERT(obj != NULL);
+
+	if (task->dt_result == -DER_NEED_TX)
+		task->dt_result = 0;
+
 	D_ASSERTF(task->dt_result == 0, "Unexpected initial task result %d\n", task->dt_result);
 
 	rc = dc_tx_alloc(obj->cob_coh, 0, DAOS_TF_ZERO_COPY, &tx);

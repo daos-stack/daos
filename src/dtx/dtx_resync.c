@@ -39,7 +39,6 @@ struct dtx_resync_args {
 	daos_epoch_t		 epoch;
 	uint32_t		 resync_version;
 	uint32_t		 discard_version;
-	uint32_t		 resync_all:1;
 };
 
 static inline void
@@ -561,8 +560,7 @@ out:
 }
 
 int
-dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
-	   bool block, bool resync_all)
+dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, bool block)
 {
 	struct ds_cont_child		*cont = NULL;
 	struct ds_pool			*pool;
@@ -632,10 +630,6 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver,
 	dra.cont = cont;
 	dra.resync_version = ver;
 	dra.epoch = crt_hlc_get();
-	if (resync_all)
-		dra.resync_all = 1;
-	else
-		dra.resync_all = 0;
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -705,8 +699,7 @@ container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	uuid_copy(scan_arg->co_uuid, entry->ie_couuid);
-	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid,
-			arg->version, true, false);
+	rc = dtx_resync(iter_param->ip_hdl, arg->pool_uuid, entry->ie_couuid, arg->version, true);
 	if (rc)
 		D_ERROR(DF_UUID" dtx resync failed: rc %d\n",
 			DP_UUID(arg->pool_uuid), rc);

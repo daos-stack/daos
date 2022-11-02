@@ -535,12 +535,11 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-			   uint32_t flags, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, struct dtx_id *dti,
-			   unsigned int *map_ver, unsigned int req_map_ver,
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			   uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+			   struct dtx_id *dti, uint32_t *map_ver,
 			   daos_handle_t th, tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -585,6 +584,8 @@ obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 		       uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
+int
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
@@ -602,7 +603,7 @@ obj_retry_error(int err)
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       daos_crt_network_error(err);
+	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t

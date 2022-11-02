@@ -371,6 +371,8 @@ rebuild_destroy_pool_cb(void *data)
 
 	rebuild_pool_disconnect_internal(data);
 
+	print_message("sleep 20 seconds to make rebuild ready\n");
+	sleep(20);
 	if (arg->myrank == 0) {
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -385,8 +387,7 @@ rebuild_destroy_pool_cb(void *data)
 	}
 
 	arg->pool.destroyed = true;
-	print_message("pool destroyed "DF_UUIDF"\n",
-		      DP_UUID(arg->pool.pool_uuid));
+	print_message("pool destroyed "DF_UUIDF"\n", DP_UUID(arg->pool.pool_uuid));
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1330,6 +1331,13 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	rebuild_single_pool_rank(arg, leader, true);
 }
 
+static void
+rebuild_pool_destroy_during_rebuild_failure(void **state)
+{
+	return rebuild_destroy_pool_internal(state, DAOS_REBUILD_UPDATE_FAIL |
+						    DAOS_FAIL_ALWAYS);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1405,6 +1413,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_sub_teardown},
 	{"REBUILD29: rebuild kill PS leader during rebuild",
 	 rebuild_kill_PS_leader_during_rebuild, rebuild_sub_setup,
+	 rebuild_sub_teardown},
+	{"REBUILD30: destroy pool during rebuild failure and retry",
+	  rebuild_pool_destroy_during_rebuild_failure, rebuild_sub_setup,
 	 rebuild_sub_teardown},
 };
 

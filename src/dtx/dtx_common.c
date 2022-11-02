@@ -705,8 +705,10 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
-	D_ASSERT(dth->dth_ent == NULL);
-	D_ASSERT(dth->dth_pinned == 0);
+	if (dth->dth_modification_cnt > 0) {
+		D_ASSERT(dth->dth_ent != NULL);
+		D_ASSERT(dth->dth_pinned != 0);
+	}
 	D_ASSERT(dth->dth_already == 0);
 
 	dth->dth_modify_shared = 0;
@@ -770,6 +772,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
+	dth->dth_need_validation = 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1020,6 +1023,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1092,7 +1097,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_pinned || dth->dth_prepared) {
+	if (dth->dth_need_validation) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
 		 * by race. Let's check it.
@@ -1257,7 +1262,7 @@ abort:
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
 		/* Drop partial modification for distributed transaction. */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
@@ -1265,7 +1270,7 @@ abort:
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		if (result < 0 && !aborted)
-			vos_dtx_cleanup(dth);
+			vos_dtx_cleanup(dth, true);
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
@@ -1338,6 +1343,8 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
 			     (flags & DTX_RESEND) ? true : false, false, dth);
+	if (rc == 0 && sub_modification_cnt > 0)
+		rc = vos_dtx_attach(dth, false, false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1387,7 +1394,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		/* 1. Drop partial modification for distributed transaction.
 		 * 2. Remove the pinned DTX entry.
 		 */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 	}
 
 	D_DEBUG(DB_IO,
