@@ -36,8 +36,8 @@ class MacsioTestBase(TestWithServers):
         path = self.params.get("macsio_path", "/run/job_manager/*", default="")
         macsio = MacsioCommand(path)
         macsio.get_params(self)
-        # Create all the macsio output files in the same directory as the other
-        # test log files
+
+        # Create all the macsio output files in the same directory as the other test log files
         macsio.set_output_file_path()
 
         return macsio
@@ -82,9 +82,12 @@ class MacsioTestBase(TestWithServers):
         self.job_manager.assign_environment(env)
 
         # Run MACSio
+        result = None
         try:
-            return self.job_manager.run()
+            result = self.job_manager.run()
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
             self.fail("MACSio Failed.\n")
+
+        return result
