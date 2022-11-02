@@ -7,11 +7,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,8 +39,45 @@ import (
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// ipLookupFn defines the function signature for a helper that can
+// be used to resolve a host address to a list of IP addresses.
+type ipLookupFn func(string) ([]net.IP, error)
+
+// resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
+// If the hostname resolves to multiple addresses, the first one is returned.
+func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to split %q", addr)
+	}
+	iPort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to convert %q to int", port)
+	}
+	addrs, err := lookup(host)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to resolve %q", host)
+	}
+
+	if len(addrs) == 0 {
+		return nil, errors.Errorf("no addresses found for %q", host)
+	}
+
+	isIPv4 := func(ip net.IP) bool {
+		return ip.To4() != nil
+	}
+	// Ensure stable ordering of addresses.
+	sort.Slice(addrs, func(i, j int) bool {
+		if !isIPv4(addrs[i]) && isIPv4(addrs[j]) {
+			return false
+		} else if isIPv4(addrs[i]) && !isIPv4(addrs[j]) {
+			return true
+		}
+		return bytes.Compare(addrs[i], addrs[j]) < 0
+	})
+
+	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
+}
 
 const scanMinHugePageCount = 128
 
@@ -51,10 +90,10 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	return bdevCfgs
 }
 
-func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolve("tcp", ap)
+		apAddr, err := resolveFirstAddr(ap, lookup)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -99,7 +138,7 @@ type replicaAddrGetter interface {
 type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
-	resolveAddr    resolveTCPFn
+	lookupHost     ipLookupFn
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
@@ -109,7 +148,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 		ipStr = repAddr.IP.String()
 	}
 
-	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	ctlAddr, err := resolveFirstAddr(fmt.Sprintf("[%s]:%d", ipStr, params.port), params.lookupHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving control address")
 	}

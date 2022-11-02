@@ -117,7 +117,13 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	switch {
 	case allFlagPattern.MatchString(cmd.Size):
 		if cmd.NumRanks > 0 {
-			return errIncompatFlags("size", "num-ranks")
+			return errIncompatFlags("size", "nranks")
+		}
+
+		// If the user use a tier-ratio equal to the default value, the error will not be
+		// raised.
+		if cmd.TierRatio != `6,94` {
+			return errIncompatFlags("size", "tier-ratio")
 		}
 
 		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
@@ -161,7 +167,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 
 		if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
-			return errIncompatFlags("num-ranks", "ranks")
+			return errIncompatFlags("nranks", "ranks")
 		}
 		req.NumRanks = cmd.NumRanks
 
