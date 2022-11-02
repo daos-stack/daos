@@ -19,6 +19,25 @@ class HarnessBasicTest(TestWithoutServers):
     :avocado: recursive
     """
 
+    def test_always_fails(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=harness,harness_basic_test,test_always_fails
+        :avocado: tags=always_fails
+        """
+        self.fail("NOOP test to do nothing but fail")
+
+    def test_always_fails_hw(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=hw,large,medium,ib2,small
+        :avocado: tags=harness,harness_basic_test,test_always_fails_hw
+        :avocado: tags=always_fails
+        """
+        self.test_always_fails()
+
     def test_always_passes(self):
         """Simple test of apricot test code.
 
