@@ -111,7 +111,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
-	uint32_t	max_num_ctx = 256;
+	uint32_t	max_num_ctx = CRT_SRV_CONTEXT_NUM;
 	int		rc;
 
 	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
@@ -127,14 +127,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 			}
 		} else {
 			share_addr = false;
-			ctx_num = 0;
 
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 			if (share_addr) {
 				set_sep = true;
+				ctx_num = 0;
 				d_getenv_int("CRT_CTX_NUM", &ctx_num);
+				max_num_ctx = ctx_num;
 			}
-			max_num_ctx = ctx_num;
 		}
 	}
 
@@ -158,7 +158,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d  max_ctx: %d\n",
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d) max_ctx: %d\n",
 		provider, primary, set_sep, max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
