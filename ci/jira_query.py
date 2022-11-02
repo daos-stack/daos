@@ -26,7 +26,8 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test', 'md', 'agent')
+VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury', 'swim',
+                    'test', 'tools')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -53,45 +54,53 @@ def set_output(key, value):
         file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
+def valid_comp_from_dir(component):
+    """ Checks is a component is valid based on src tree"""
+    return os.path.isdir(os.path.join('src', component)) \
+        or os.path.isdir(os.path.join('src', 'client', component)) \
+        or os.path.isdir(os.path.join('utils', component))
+
+
 # pylint: disable=too-many-branches
 def main():
     """Run the script"""
 
+    if len(sys.argv) == 2:
+        try:
+            pr_number = int(sys.argv[1])
+        except ValueError:
+            print('argument must be a value')
+            sys.exit(1)
+
+        github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
+        gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+
+        with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+            pr_data = json.loads(raw_pr_data.read())
+    else:
+        print('Pass PR number on command line')
+        sys.exit(1)
+
     priority = None
     errors = []
     gh_label = []
+    pr_title = pr_data['title']
 
-    options = {'server': 'https://daosio.atlassian.net/'}
-
-    server = jira.JIRA(options)
-
-    # Find the ticket number, either from the environment if possible or the command line.
-    pr_title = os.getenv('PR_TITLE')
-    if pr_title:
-        # GitHub actions (or similar), perform some checks on the title of the PR.
-        parts = pr_title.split(' ')
-        ticket_number = parts[0]
-        component = parts[1]
-        if component.endswith(':'):
-            component = component[:-1]
-            col = component.lower()
-            if col != component:
-                errors.append('Component should be lower-case')
-            if col not in VALID_COMPONENTS and not os.path.isdir(os.path.join('src', col)) \
-               and not os.path.isdir(os.path.join('src', 'client', col)) \
-               and not os.path.isdir(os.path.join('utils', col)):
-
-                errors.append('Unknown component')
-        else:
-            errors.append('component not formatted correctly')
-        if len(pr_title) > 80:
-            errors.append('Title of PR is too long')
+    parts = pr_title.split(' ')
+    ticket_number = parts[0]
+    component = parts[1]
+    if component.endswith(':'):
+        component = component[:-1]
+        col = component.lower()
+        if col != component:
+            errors.append('Component should be lower-case')
+        if col not in VALID_COMPONENTS and not valid_comp_from_dir(col):
+            errors.append('Unknown component')
+            print('Either amend PR title or add to ci/jira_query.py')
     else:
-        if len(sys.argv) > 1:
-            ticket_number = sys.argv[1]
-        else:
-            print('Set PR_TITLE or pass on command line')
-            return
+        errors.append('component not formatted correctly')
+    if len(pr_title) > 80:
+        errors.append('Title of PR is too long')
 
     # Check format of ticket_number.
     parts = ticket_number.split('-', maxsplit=1)
@@ -104,6 +113,10 @@ def main():
         errors.append(f'Ticket number suffix is not a number. See {link}')
     except IndexError:
         errors.append(f'PR title is malformatted. See {link}')
+
+    options = {'server': 'https://daosio.atlassian.net/'}
+
+    server = jira.JIRA(options)
 
     try:
         ticket = server.issue(ticket_number, fields=FIELDS)
@@ -172,28 +185,14 @@ def main():
     if gh_label:
         set_output('label', '\n'.join(gh_label))
 
-    github_repo = os.getenv('GITHUB_REPOSITORY')
-
-    if github_repo:
-
-        pr_number = os.getenv('PR_NUMBER')
-
-        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
-        print(gh_url)
-        with urllib.request.urlopen(gh_url) as gh_label_data:  # nosec
-            gh_labels = json.loads(gh_label_data.read())
-
-        # Remove all managed labels which are not to be set.
-        to_remove = []
-        for label in gh_labels:
-            name = label['name']
-            if name in MANAGED_LABELS and name not in gh_label:
-                to_remove.append(name)
-        if to_remove:
-            set_output('label-clear', '\n'.join(to_remove))
-
-        # Could possibly query/verify more data using this URL however no use-case for this yet.
-        # gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+    # Remove all managed labels which are not to be set.
+    to_remove = []
+    for label in pr_data['labels']:
+        name = label['name']
+        if name in MANAGED_LABELS and name not in gh_label:
+            to_remove.append(name)
+    if to_remove:
+        set_output('label-clear', '\n'.join(to_remove))
 
     if errors:
         sys.exit(1)
