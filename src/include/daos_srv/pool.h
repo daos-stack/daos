@@ -89,7 +89,7 @@ struct ds_pool {
 	uint64_t		sp_scrub_thresh;
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 
@@ -274,9 +274,6 @@ void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
-
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

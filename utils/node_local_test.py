@@ -1086,7 +1086,7 @@ class DFuse():
     instance_num = 0
 
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True):
+                 caching=True, wbcache=True, multi_user=False,):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1095,6 +1095,7 @@ class DFuse():
         self.uns_path = uns_path
         self.container = container
         self.conf = conf
+        self.multi_user = multi_user
         self.cores = daos.dfuse_cores
         self._daos = daos
         self.caching = caching
@@ -1160,6 +1161,9 @@ class DFuse():
         cmd.extend(self.valgrind.get_cmd_prefix())
 
         cmd.extend([dfuse_bin, '--mountpoint', self.dir, '--foreground'])
+
+        if self.multi_user:
+            cmd.append('--multi-user')
 
         if single_threaded:
             cmd.append('--singlethread')
@@ -1243,7 +1247,7 @@ class DFuse():
             time.sleep(2)
             umount(self.dir)
 
-        run_log_test = True
+        run_leak_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print(f'rc from dfuse {ret}')
@@ -1256,10 +1260,9 @@ class DFuse():
             print('Timeout stopping dfuse')
             self._sp.send_signal(signal.SIGTERM)
             fatal_errors = True
-            run_log_test = False
+            run_leak_test = False
         self._sp = None
-        if run_log_test:
-            log_test(self.conf, self.log_file)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1426,11 +1429,15 @@ def run_daos_cmd(conf,
     return dcr
 
 
+# pylint: disable-next=too-many-arguments
 def create_cont(conf,
                 pool=None,
                 ctype=None,
                 label=None,
                 path=None,
+                oclass=None,
+                dir_oclass=None,
+                hints=None,
                 valgrind=False,
                 log_check=True,
                 cwd=None):
@@ -1450,6 +1457,15 @@ def create_cont(conf,
 
     if ctype:
         cmd.extend(['--type', ctype])
+
+    if oclass:
+        cmd.extend(['--oclass', oclass])
+
+    if dir_oclass:
+        cmd.extend(['--dir_oclass', dir_oclass])
+
+    if hints:
+        cmd.extend(['--hints', hints])
 
     def _create_cont():
         """Helper function for create_cont"""
@@ -1672,6 +1688,48 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, ['container', 'list', self.pool.id()], use_json=True)
         print(rc)
         assert rc.returncode == 0, rc
+
+    @needs_dfuse_with_opt(caching=False)
+    def test_oclass(self):
+        """Test container object class options"""
+
+        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='oclass_test',
+                                oclass='S1', dir_oclass='S2')
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      self.pool.id(), container],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server, self.conf, self.pool.id(), container=container)
+        dfuse.use_valgrind = False
+        dfuse.start()
+
+        dir1 = join(dfuse.dir, 'd1')
+        os.mkdir(dir1)
+        file1 = join(dir1, 'f1')
+        with open(file1, 'w') as ofd:
+            ofd.write('hello')
+
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of ' + dir1)
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(rc)
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S2', '1048576')
+
+        cmd = ['fs', 'get-attr', '--path', file1]
+        print('get-attr of ' + file1)
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        print(rc)
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        destroy_container(self.conf, self.pool.id(), container)
 
     def test_cache(self):
         """Test with caching enabled"""
@@ -3475,7 +3533,13 @@ def run_in_fg(server, conf, args):
                                 '--attr', key, '--value', str(value)],
                          show_stdout=True)
 
-    dfuse = DFuse(server, conf, pool=pool.uuid, caching=True, wbcache=False)
+    dfuse = DFuse(server,
+                  conf,
+                  pool=pool.uuid,
+                  caching=True,
+                  wbcache=False,
+                  multi_user=args.multi_user)
+
     dfuse.log_flush = True
     dfuse.start()
 
@@ -3486,9 +3550,12 @@ def run_in_fg(server, conf, args):
     print(f'export LD_PRELOAD={join(conf["PREFIX"], "lib64", "libioil.so")}')
     print(f'export DAOS_AGENT_DRPC_DIR={conf.agent_dir}')
     print('export D_IL_REPORT=-1')
-    print(f'daos container create --type POSIX {pool.id()} --path {t_dir}/uns-link')
+    if args.multi_user:
+        print(f'dmg pool --insecure update-acl -e A::root@:rw {pool.id()}')
+    print(f'daos container create --type POSIX --path {t_dir}/uns-link')
     print(f'daos container destroy --path {t_dir}/uns-link')
     print(f'daos cont list {pool.label}')
+
     try:
         if args.launch_cmd:
             start = time.time()
@@ -3502,7 +3569,6 @@ def run_in_fg(server, conf, args):
             dfuse.wait_for_exit()
     except KeyboardInterrupt:
         pass
-    dfuse = None
 
 
 def check_readdir_perf(server, conf):
@@ -3973,8 +4039,7 @@ class AllocFailTestRun():
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 f"Incorrect stdout '{self.stdout}'",
-                                mtype='Out of memory caused zero exit '
-                                'code with incorrect output')
+                                mtype='Out of memory caused zero exit code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
         if not stderr.endswith("(-1009): Out of memory") and \
@@ -4200,6 +4265,34 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
+    return rc
+
+
+def test_alloc_fail_cont_create(server, conf):
+    """Run container create --path under fault injection."""
+
+    pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='parent_cont')
+
+    dfuse = DFuse(server, conf, pool=pool, container=container)
+    dfuse.use_valgrind = False
+    dfuse.start()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                '--type',
+                'POSIX',
+                '--path',
+                join(dfuse.dir, f'container_{cont_id}')]
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = False
+
+    rc = test_cmd.launch()
+    dfuse.stop()
     return rc
 
 
@@ -4537,6 +4630,8 @@ def run(wf, args):
                 # aren't well handled so continue to run the dfuse fault injection test on real
                 # hardware.
 
+                fatal_errors.add_result(test_alloc_fail_cont_create(server, conf))
+
                 # Read-via-IL test, requires dfuse.
                 fatal_errors.add_result(test_alloc_fail_cat(server, conf))
 
@@ -4575,6 +4670,7 @@ def main():
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
     parser.add_argument('--server-valgrind', action='store_true')
+    parser.add_argument('--multi-user', action='store_true')
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')

@@ -135,7 +135,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
-			D_FREE(dsp);
+			dtx_dsp_free(dsp);
 		dth->dth_share_tbd_count = 0;
 		goto out;
 	}
@@ -151,7 +151,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	if (dth->dth_share_tbd_count >= DTX_REFRESH_MAX)
 		goto out;
 
-	D_ALLOC(dsp, sizeof(*dsp) + DAE_MBS_DSIZE(dae));
+	D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
 		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
 			"but fail to alloc DRAM.\n",
@@ -164,7 +164,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	dsp->dsp_epoch = DAE_EPOCH(dae);
 	dsp->dsp_dkey_hash = DAE_DKEY_HASH(dae);
 
-	mbs = &dsp->dsp_mbs;
+	mbs = (struct dtx_memberships *)(dsp + 1);
 	mbs->dm_tgt_cnt = DAE_TGT_CNT(dae);
 	mbs->dm_grp_cnt = DAE_GRP_CNT(dae);
 	mbs->dm_data_size = DAE_MBS_DSIZE(dae);
@@ -179,6 +179,9 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 		memcpy(mbs->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
 		       DAE_MBS_DSIZE(dae));
 	}
+
+	dsp->dsp_inline_mbs = 1;
+	dsp->dsp_mbs = mbs;
 
 	d_list_add_tail(&dsp->dsp_link, &dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count++;
@@ -1588,6 +1591,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_blob_df		*dbd;
+	d_iov_t				 kiov;
 	umem_off_t			 rec_off;
 	size_t				 size;
 	int				 count;
@@ -1602,8 +1606,32 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	dae = dth->dth_ent;
 
 	if (dth->dth_solo) {
-		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
-					     dth->dth_epoch, NULL, NULL, dce_p);
+		if (dth->dth_drop_cmt) {
+			if (unlikely(dae == NULL))
+				D_GOTO(done, rc = 0);
+
+			d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
+			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov, NULL);
+			if (rc == 0 || rc == -DER_NONEXIST) {
+				dtx_evict_lid(cont, dae);
+				D_GOTO(done, rc = 0);
+			}
+
+			/*
+			 * We cannot remove the DTX entry from the active table, mark it
+			 * as 'committed'. That will consume some DRAM until server restart.
+			 */
+			D_WARN("Cannot remove DTX "DF_DTI" from active table: "DF_RC"\n",
+			       DP_DTI(&dth->dth_xid), DP_RC(rc));
+
+			dae->dae_committed = 1;
+			dtx_act_ent_cleanup(cont, dae, dth, false);
+		} else {
+			rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
+						     dth->dth_epoch, NULL, NULL, dce_p);
+		}
+
+done:
 		dth->dth_active = 0;
 		dth->dth_pinned = 0;
 		if (rc >= 0) {
@@ -1846,6 +1874,35 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 	if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
 		rc = -DER_INPROGRESS;
+
+	return rc;
+}
+
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs)
+{
+	struct vos_container	*cont;
+	struct dtx_memberships	*tmp;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	int			 rc;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc == 0) {
+		tmp = vos_dtx_pack_mbs(vos_cont2umm(cont), riov.iov_buf);
+		if (tmp == NULL)
+			rc = -DER_NOMEM;
+		else
+			*mbs = tmp;
+	}
+
+	if (rc != 0)
+		D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
 
 	return rc;
 }
@@ -2153,8 +2210,11 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 
 			dae->dae_dth = NULL;
 			dth->dth_aborted = 1;
-			dtx_act_ent_cleanup(cont, dae, dth, true);
 			dth->dth_ent = NULL;
+			/*
+			 * dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
+			 * when remove the DTX entry from active DTX table.
+			 */
 		}
 	}
 
@@ -2713,6 +2773,9 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+			if (dth->dth_ent != NULL)
+				D_ASSERT(dth->dth_ent == dae);
+
 			/* Cannot cleanup 'committed' DTX entry. */
 			if (dae->dae_committable || dae->dae_committed)
 				goto out;
@@ -2737,7 +2800,7 @@ out:
 }
 
 void
-vos_dtx_cleanup(struct dtx_handle *dth)
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 {
 	struct vos_dtx_act_ent	*dae;
 	struct vos_container	*cont;
@@ -2757,7 +2820,9 @@ vos_dtx_cleanup(struct dtx_handle *dth)
 			return;
 	}
 
-	dth->dth_pinned = 0;
+	if (unpin)
+		dth->dth_pinned = 0;
+
 	cont = vos_hdl2cont(dth->dth_coh);
 	/** This will abort the transaction and callback to
 	 *  vos_dtx_cleanup_internal
