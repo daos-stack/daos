@@ -94,7 +94,7 @@ for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     repo_adds+=("--enablerepo $repo:${branch//[@\/]/_}:$build_number")
     echo -e "[$repo:${branch//[@\/]/_}:$build_number]\n\
 name=$repo:${branch//[@\/]/_}:$build_number\n\
-baseurl=${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
+baseurl=${ARTEFACTS_URL:-${JENKINS_URL:-https://build.hpdd.intel.com/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
 enabled=1\n\
 gpgcheck=False\n" >> "$cfg_file"
 done
@@ -118,6 +118,7 @@ if [ -n "$DISTRO_VERSION" ]; then
     releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
 fi
 
-# shellcheck disable=SC2086,SC2048,SC2294
-eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}" ${repo_dels[*]} ${repo_adds[*]}       \
-    --disablerepo=\*-debug* "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
+# shellcheck disable=SC2086,SC2048
+eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}" ${repo_dels[*]} ${repo_adds[*]}   \
+    --no-clean --disablerepo=\*-debug* "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS \
+    "$TARGET"
