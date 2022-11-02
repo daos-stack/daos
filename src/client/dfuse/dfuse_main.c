@@ -189,7 +189,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 	rc = fuse_session_mount(dfuse_info->di_session,	dfuse_info->di_mountpoint);
 	if (rc != 0) {
-		DFUSE_TRA_ERROR("Could not mount fuse");
+		DFUSE_TRA_ERROR(dfuse_info, "Could not mount fuse");
 		return -DER_INVAL;
 	}
 
@@ -325,6 +325,7 @@ main(int argc, char **argv)
 	int                           pos_index         = 0;
 
 	struct option                 long_options[] = {{"mountpoint", required_argument, 0, 'm'},
+							{"multi-user", no_argument, 0, 'M'},
 							{"path", required_argument, 0, 'P'},
 							{"pool", required_argument, 0, 'p'},
 							{"container", required_argument, 0, 'c'},
@@ -354,7 +355,7 @@ main(int argc, char **argv)
 	dfuse_info->di_wb_cache = true;
 
 	while (1) {
-		c = getopt_long(argc, argv, "m:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -385,6 +386,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'M':
+			dfuse_info->di_multi_user = true;
 			break;
 		case 'P':
 			path = optarg;
