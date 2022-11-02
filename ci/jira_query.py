@@ -41,7 +41,7 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 
 
 def set_output(key, value):
-    """ Set a key-value pair in GitHub actions metadata"""
+    """Set a key-value pair in GitHub actions metadata"""
 
     env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
@@ -55,16 +55,14 @@ def set_output(key, value):
 
 
 def valid_comp_from_dir(component):
-    """ Checks is a component is valid based on src tree"""
+    """Checks is a component is valid based on src tree"""
     return os.path.isdir(os.path.join('src', component)) \
         or os.path.isdir(os.path.join('src', 'client', component)) \
         or os.path.isdir(os.path.join('utils', component))
 
 
-# pylint: disable=too-many-branches
-def main():
-    """Run the script"""
-
+def fetch_pr_data():
+    """Query GibHub API and return PR metadata"""
     if len(sys.argv) == 2:
         try:
             pr_number = int(sys.argv[1])
@@ -80,6 +78,14 @@ def main():
     else:
         print('Pass PR number on command line')
         sys.exit(1)
+
+    return pr_data
+
+
+def main():
+    """Run the script"""
+
+    pr_data = fetch_pr_data()
 
     priority = None
     errors = []
@@ -114,11 +120,8 @@ def main():
     except IndexError:
         errors.append(f'PR title is malformatted. See {link}')
 
-    options = {'server': 'https://daosio.atlassian.net/'}
-
-    server = jira.JIRA(options)
-
     try:
+        server = jira.JIRA({'server': 'https://daosio.atlassian.net/'})
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
         output = [f"Unable to load ticket data for '{ticket_number}'"]
@@ -139,19 +142,13 @@ def main():
         # Check the target branch here.  Can not be done from a ticket number alone, so only perform
         # this check if we can.
 
-        set_rv_priority = True
-        target_branch = os.getenv('GITHUB_BASE_REF')
-        if target_branch:
-            if target_branch.startswith('release/'):
-                set_rv_priority = False
-
         rv_priority = None
 
         for version in ticket.fields.customfield_10045:
             if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
                                 '2.2 Community Release'):
                 rv_priority = 2
-            if rv_priority is None and str(version) in ('2.4 Community Release'):
+            elif str(version) in ('2.4 Community Release'):
                 rv_priority = 3
 
             if str(version) in ('2.2 Community Release'):
@@ -159,7 +156,8 @@ def main():
             if str(version) in ('2.4 Community Release'):
                 gh_label.append('release-2.4')
 
-        if set_rv_priority and priority is None:
+        # If a PR does not otherwise have priority then use custom values from above.
+        if priority is None and not pr_data['base']['ref'].startswith('release'):
             priority = rv_priority
 
     output = []
