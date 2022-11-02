@@ -303,12 +303,13 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 type policyMap map[chkpb.CheckInconsistClass]*mgmtpb.CheckInconsistPolicy
 
 func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
+	pm := make(policyMap)
 	polStr, err := system.GetMgmtProperty(svc.sysdb, checkerPoliciesKey)
 	if err != nil {
 		if !system.IsErrSystemAttrNotFound(err) {
 			return nil, errors.Wrap(err, "failed to get checker policies map")
 		}
-		return nil, nil
+		return pm, nil
 	}
 
 	var polList []*mgmtpb.CheckInconsistPolicy
@@ -316,7 +317,6 @@ func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
 		return nil, errors.Wrap(err, "failed to unmarshal checker policies map")
 	}
 
-	pm := make(policyMap)
 	for _, pol := range polList {
 		pm[pol.InconsistCas] = pol
 	}
