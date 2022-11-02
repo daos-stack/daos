@@ -1025,8 +1025,7 @@ class Launch():
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
-        # Execute the tests
-        # pylint: disable=unsupported-binary-operation
+        # Execute the tests
         code_coverage_hosts = args.test_servers | get_local_host()
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
