@@ -322,39 +322,42 @@ def check_slurm_job(log, control, handle):
     return state
 
 
-def register_for_job_results(handle, test, maxwait=3600):
-    """
-    Register a callback for a slurm soak test job.
+def register_for_job_results(handle, test, max_wait=3600):
+    """Register a callback for a slurm soak test job.
 
-    handle   --slurm job id
-    test     --object with a job_done callback function
-    maxwait  --maximum time to wait in seconds, defaults to 1 hour
-    returns  --None
-
+    Args:
+        handle (str): slurm job id
+        test (Test): object with a job_done callback function
+        max_wait (int, optional): maximum time to wait in seconds. Defaults to 3600 (1 hour).
     """
-    params = {"handle": handle, "maxwait": maxwait, "test_obj": test}
-    athread = threading.Thread(target=watch_job,
-                               kwargs=params)
+    params = {
+        "log": test.log,
+        "control": test.control,
+        "handle": handle,
+        "max_wait": max_wait,
+        "test_obj": test
+    }
+    athread = threading.Thread(target=watch_job, kwargs=params)
     athread.start()
 
 
-def watch_job(log, control, handle, maxwait, test_obj):
+def watch_job(log, control, handle, max_wait, test_obj):
     """Watch for a slurm job to finish use callback function with the result.
 
     Args:
         log (logger): logger for the messages produced by this method
         control (NodeSet): slurm control host
         handle (str): the slurm job handle
-        maxwait (int): max time in seconds to wait
-        test_obj (_type_): whom to notify when its done
+        max_wait (int): max time in seconds to wait
+        test_obj (Test): whom to notify when its done
     """
     wait_time = 0
     while True:
         state = check_slurm_job(log, control, handle)
         if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
-            if wait_time > maxwait:
+            if wait_time > max_wait:
                 state = "MAXWAITREACHED"
-                log.error("Job %s has timed out after %s secs", handle, maxwait)
+                log.error("Job %s has timed out after %s secs", handle, max_wait)
                 break
             wait_time += 5
             time.sleep(5)

@@ -40,6 +40,7 @@ from run_utils import run_local, run_remote, RunException                       
 from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
 from user_utils import get_chown_command                                        # noqa: E402
 
+COVFILE = os.path.join(os.sep, "tmp", "test.cov")
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
@@ -1142,7 +1143,7 @@ class Launch():
 
         # Update PATH
         os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-        os.environ["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+        os.environ["COVFILE"] = COVFILE
 
         # Python paths required for functional testing
         self._set_python_environment()
@@ -2383,6 +2384,17 @@ class Launch():
                 "depth": 1,
                 "timeout": 900,
             }
+            if jenkinslog:
+                covfile_path, covfile_file = os.path.split(COVFILE)
+                remote_files["bullseye coverage log files"] = {
+                    "source": covfile_path,
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", "bullseye_coverage_logs"),
+                    "pattern": "".join([covfile_file, "*"]),
+                    "hosts": test.hosts.servers | NodeSet(get_local_host()),
+                    "depth": 1,
+                    "timeout": 900,
+                }
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
@@ -2547,7 +2559,7 @@ class Launch():
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                "then daos_server storage prepare -n --reset && "
+                f"then export COVFILE={COVFILE} && daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)

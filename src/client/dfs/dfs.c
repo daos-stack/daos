@@ -5355,6 +5355,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recxs[i].rx_nr = sizeof(uid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_UID;
+		rstat.st_uid = stbuf->st_uid;
 	}
 	if (flags & DFS_SET_ATTR_GID) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
@@ -5362,6 +5363,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recxs[i].rx_nr = sizeof(gid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_GID;
+		rstat.st_gid = stbuf->st_gid;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
 		/* It shouldn't be possible to set the size of something which isn't a file but

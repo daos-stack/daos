@@ -341,12 +341,12 @@ class SoakTestBase(TestWithServers):
 
         Args:
             job_cmdlist (list): list of jobs to execute
+
         Returns:
             job_id_list: IDs of each job submitted to slurm.
 
         """
-        self.log.info(
-            "<<Job Startup - %s >> at %s", self.test_name, time.ctime())
+        self.log.info("<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
         # before submitting the jobs to the queue, check the job timeout;
         if time.time() > self.end_time:
@@ -365,16 +365,14 @@ class SoakTestBase(TestWithServers):
                 self.log.info(
                     "<<Job %s started with %s >> at %s",
                     job_id, script, time.ctime())
-                slurm_utils.register_for_job_results(
-                    job_id, self, maxwait=self.test_timeout)
+                slurm_utils.register_for_job_results(job_id, self, max_wait=self.test_timeout)
                 # keep a list of the job_id's
                 job_id_list.append(int(job_id))
             else:
                 # one of the jobs failed to queue; exit on first fail for now.
                 err_msg = "Slurm failed to submit job for {}".format(script)
                 job_id_list = []
-                raise SoakTestError(
-                    "<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
+                raise SoakTestError("<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
         return job_id_list
 
     def job_completion(self, job_id_list):
