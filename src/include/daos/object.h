@@ -108,8 +108,6 @@ daos_rp_pda_valid(uint32_t rp_pda)
 
 enum daos_io_mode {
 	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
-	DIM_SERVER_DISPATCH	= 1,
-	DIM_CLIENT_DISPATCH	= 2,
 };
 
 #define DAOS_OBJ_GRP_MAX	MAX_NUM_GROUPS

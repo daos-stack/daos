@@ -138,6 +138,20 @@ daos_obj_query_key(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 }
 
 int
+daos_obj_query_max_epoch(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch, daos_event_t *ev)
+{
+	tse_task_t	*task;
+	int		rc;
+
+	*epoch = 0;
+	rc = dc_obj_query_max_epoch_task_create(oh, th, epoch, ev, NULL, &task);
+	if (rc)
+		return rc;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 	       daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 	       d_sg_list_t *sgls, daos_iom_t *maps, daos_event_t *ev)
