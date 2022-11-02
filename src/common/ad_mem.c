@@ -1727,7 +1727,7 @@ tx_complete(struct ad_tx *tx, int err)
 	int		    rc;
 
 	if (!err)
-		rc = store->stor_ops->so_wal_submit(store, ad_tx_id(tx), &tx->tx_redo);
+		rc = store->stor_ops->so_wal_submit(store, ad_tx2umem_tx(tx));
 	else
 		rc = err;
 
