@@ -2516,11 +2516,11 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Resetting server storage after running %s", test)
         if hosts:
-            commands = [
-                "if lspci | grep -i nvme",
-                f"then export COVFILE={COVFILE} && daos_server storage prepare -n --reset && "
-                "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
-                "fi"]
+            commands = [
+                "if lspci | grep -i nvme",
+                f"then export COVFILE={COVFILE} && daos_server storage prepare -n --reset && "
+                "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
+                "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
             result = run_remote(logger, hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
             if not result.passed:
