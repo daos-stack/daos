@@ -231,6 +231,22 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
+	if cmd.Args.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't supply label arg and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
+			return err
+		}
+		cmd.contLabel = cmd.Args.Label
+	}
+
+	if cmd.Properties.props != nil {
+		ap.props = cmd.Properties.props
+	}
+
 	if cmd.PoolID().Empty() {
 		if cmd.Path == "" {
 			return errors.New("no pool ID or dfs path supplied")
@@ -269,22 +285,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if cmd.ACLFile != "" {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
-	}
-
-	if cmd.Args.Label != "" {
-		for key := range cmd.Properties.ParsedProps {
-			if key == "label" {
-				return errors.New("can't supply label arg and --properties label:")
-			}
-		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
-			return err
-		}
-		cmd.contLabel = cmd.Args.Label
-	}
-
-	if cmd.Properties.props != nil {
-		ap.props = cmd.Properties.props
 	}
 
 	ap._type = cmd.Type.Type
@@ -1157,13 +1157,13 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
+	ap.props = cmd.Properties.props
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
-	ap.props = cmd.Properties.props
 
 	rc := C.cont_set_prop_hdlr(ap)
 	if err := daosError(rc); err != nil {
