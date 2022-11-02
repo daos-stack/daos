@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -52,9 +51,9 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             write verify for 30 minutes
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=daosio,dfuse,il,ior_intercept
-        :avocado: tags=ior_intercept_verify_data
+        :avocado: tags=hw,medium
+        :avocado: tags=ior,daosio,dfuse,il,ior_intercept
+        :avocado: tags=IorInterceptVerifyDataIntegrity,test_ior_intercept_verify_data
         """
         self.add_pool()
         self.add_container(self.pool)

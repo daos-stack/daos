@@ -68,8 +68,7 @@ class DfuseSpaceCheck(IorTestBase):
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
             file_path = os.path.join(self.dfuse.mount_dir.value, "file{}.txt".format(file_count))
-            write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(
-                file_path, self.block_size)
+            write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
             if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=False):
                 file_count += 1
 
@@ -82,6 +81,7 @@ class DfuseSpaceCheck(IorTestBase):
             Purpose of this test is to mount dfuse and verify aggregation
             to return space when pool is filled with once large file and
             once with small files.
+
         Use cases:
             Create a pool.
             Create a POSIX container.
@@ -95,10 +95,11 @@ class DfuseSpaceCheck(IorTestBase):
             Disable aggregation.
             Create small files until the pool is out of space.
             Verify the same number of files were written.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=aggregation,daosio,dfuse
-        :avocado: tags=dfusespacecheck,test_dfusespacecheck
+        :avocado: tags=DfuseSpaceCheck,test_dfusespacecheck
         """
         # get test params for cont and pool count
         self.block_size = self.params.get('block_size', '/run/dfusespacecheck/*')

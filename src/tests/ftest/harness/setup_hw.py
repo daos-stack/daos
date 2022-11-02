@@ -18,8 +18,9 @@ class HarnessSetupTest(TestWithServers):
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_setup_test,test_setup_hw
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,harness_setup_test,
+        :avocado: tags=HarnessSetupTest,test_setup_hw
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,
                          "FAILED: storage prepare was not set correctly from the yaml")

@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 3
-  test_clients: 5
+  test_servers: 2
+  test_clients: 2
 timeout: 360  # Additional 180s timeout for each rank stopped
 timeouts:
   test_performance_mdtest_easy_dfs_rp_2gx_stop: 480

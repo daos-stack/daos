@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -20,14 +19,12 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
     """
 
     def verify_io_test_metrics(self, io_test_metrics, metrics_data, threshold):
-        """ Verify telemetry io metrics from metrics_data.
+        """Verify telemetry io metrics from metrics_data.
 
         Args:
             io_test_metrics (list): list of telemetry io metrics.
-            metrics_data (dict): a dictionary of host keys linked to a
-                                 list of io metric names.
+            metrics_data (dict): a dictionary of host keys linked to a list of io metric names.
             threshold (int): test io metrics threshold.
-
         """
         status = True
         for name in sorted(io_test_metrics):
@@ -70,11 +67,10 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             self.fail("##Telemetry test io metrics verification failed.")
 
     def display_io_test_metrics(self, metrics_data):
-        """ Display metrics_data.
+        """Display metrics_data.
 
         Args:
-            metrics_data (dict): a dictionary of host keys linked to a
-                                 list of io metric names.
+            metrics_data (dict): a dictionary of host keys linked to a list of io metric names.
         """
         for key in sorted(metrics_data):
             self.log.info(
@@ -89,11 +85,9 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
             DAOS engine IO telemetry basic metrics infrastructure.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=control,telemetry
-        :avocado: tags=test_with_telemetry_basic,test_io_telemetry
-        :avocado: tags=test_io_telemetry_basic,test_io_telmetry_metrics_basic
-
+        :avocado: tags=TestWithTelemetryIOBasic,test_io_telmetry_metrics_basic
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")

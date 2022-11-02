@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -19,8 +18,10 @@ class CPUUsage(IorTestBase):
 
     This test uses "top" command. It aggregates the CPU usage of every core.
     e.g., If engine is using 50% per core for 8 cores, top shows 400%.
+
     :avocado: recursive
     """
+
     def get_cpu_usage(self, pid, usage_limit):
         """Monitor CPU usage and return if it gets below usage_limit.
 
@@ -58,11 +59,9 @@ class CPUUsage(IorTestBase):
             usage (str): daos_engine CPU usage.
             usage_limit (int): Limit that we want daos_engine to use.
         """
+        self.assertTrue(usage != -1, "daos_engine CPU usage couldn't be obtained!")
         self.assertTrue(
-            usage != -1, "daos_engine CPU usage couldn't be obtained!")
-        self.assertTrue(
-            float(usage) < usage_limit,
-            "CPU usage is above {}%: {}%".format(usage, usage_limit))
+            float(usage) < usage_limit, "CPU usage is above {}%: {}%".format(usage, usage_limit))
 
     def test_cpu_usage(self):
         """
@@ -71,8 +70,9 @@ class CPUUsage(IorTestBase):
         Test Description: Test CPU usage of formatted and idle engine.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=server,cpu_usage
+        :avocado: tags=hw,medium
+        :avocado: tags=server
+        :avocado: tags=CPUUsage,test_cpu_usage
         """
         # Get PID of daos_engine with ps.
         ps_engine = r"ps -C daos_engine -o %\p"

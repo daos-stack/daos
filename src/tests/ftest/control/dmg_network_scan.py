@@ -55,9 +55,9 @@ class DmgNetworkScanTest(TestWithServers):
         devices on the system.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=dmg,control
-        :avocado: tags=network_scan,basic,test_dmg_network_scan_basic
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,control,basic
+        :avocado: tags=DmgNetworkScanTest,test_dmg_network_scan_basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(

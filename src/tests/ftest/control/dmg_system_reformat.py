@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -28,8 +27,9 @@ class DmgSystemReformatTest(PoolTestBase):
         Test Description: Test dmg system reformat functionality.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,dmg_system_reformat,dmg
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg
+        :avocado: tags=DmgSystemReformatTest,test_dmg_system_reformat
         """
         # Create pool using 90% of the available NVMe capacity
         self.add_pool_qty(1)
@@ -77,8 +77,7 @@ class DmgSystemReformatTest(PoolTestBase):
                             self.get_dmg_command().result.stderr_text))
                 break
             except CommandFailure as error:
-                self.log.info(
-                    "Storage format failed. Wait 10 sec and retry. %s", error)
+                self.log.info("Storage format failed. Wait 10 sec and retry. %s", error)
                 count += 1
                 time.sleep(10)
 

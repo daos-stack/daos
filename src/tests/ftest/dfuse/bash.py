@@ -49,9 +49,9 @@ class Cmd(DfuseTestBase):
               Remove a directory
 
         :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=bashcmd
+        :avocado: tags=Cmd,test_bashcmd
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')

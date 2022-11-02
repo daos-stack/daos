@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -29,7 +28,7 @@ class DaosRunIoConf(IoConfTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=io,daosio,unaligned_io
+        :avocado: tags=io
         :avocado: tags=DaosRunIoConf,test_unaligned_io
         """
         self.unaligned_io()

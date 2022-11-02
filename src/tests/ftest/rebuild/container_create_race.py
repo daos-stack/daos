@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -12,19 +11,21 @@ from avocado.core.exceptions import TestFail
 class RbldContainerCreate(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Rebuild with container creation test cases.
+
     Test Class Description:
         These rebuild tests verify the ability to create additional containers
         while rebuild is ongoing.
+
     :avocado: recursive
     """
 
     def add_containers_during_rebuild(self, qty=10, index=-1):
         """Add containers to a pool while rebuild is still in progress.
+
         Args:
             qty (int, optional): the number of containers to create
             index (int, optional): the container index to perform write
                 during rebuild
-
         """
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         object_qty = self.params.get("object_qty", "/run/io/*")
@@ -36,17 +37,14 @@ class RbldContainerCreate(IorTestBase):
         count = 0
         self.container = []
         rebuild_done = False
-        self.log.info("..Create %s containers and write data during rebuild.",
-                      qty)
+        self.log.info("..Create %s containers and write data during rebuild.", qty)
         while not rebuild_done and count < qty:
             count += 1
             self.log.info(
-                "..Creating container %s/%s in pool %s during rebuild",
-                count, qty, self.pool.uuid)
+                "..Creating container %s/%s in pool %s during rebuild", count, qty, self.pool.uuid)
             self.container.append(self.get_container(self.pool))
             rebuild_done = self.pool.rebuild_complete()
-            self.log.info(
-                "..Rebuild status, rebuild_done= %s", rebuild_done)
+            self.log.info("..Rebuild status, rebuild_done= %s", rebuild_done)
 
         self.container[index].object_qty.value = object_qty
         self.container[index].record_qty.value = record_qty
@@ -58,27 +56,28 @@ class RbldContainerCreate(IorTestBase):
 
     def access_container(self, index=-1):
         """Open and close the specified container.
+
         Args:
             index (int): index of the daos container object to open/close
+
         Returns:
             bool: was the opening and closing of the container successful
 
         """
         status = True
         container = self.container[index]
-        self.log.info(
-            "..Verifying the container %s created during rebuild", container)
+        self.log.info("..Verifying the container %s created during rebuild", container)
         try:
             container.read_objects()
             container.close()
         except TestFail as error:
-            self.log.error(
-                "##Container %s read failed:", container, exc_info=error)
+            self.log.error("##Container %s read failed:", container, exc_info=error)
             status = False
         return status
 
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
+
         Test Description:
             Configure 4 servers and 1 client.
             Test steps:
@@ -89,14 +88,15 @@ class RbldContainerCreate(IorTestBase):
                rebuild.
             (5)Wait for rebuild to finish.
             (6)Check for pool and rebuild info after rebuild.
+
         Use Cases:
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=rebuild
-        :avocado: tags=rebuild_cont_create
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=rebuild
+        :avocado: tags=RbldContainerCreate,test_rebuild_container_create
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")
@@ -154,8 +154,7 @@ class RbldContainerCreate(IorTestBase):
 
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
-        self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
-                      rebuild_status)
+        self.log.info("Pool %s rebuild status:%s", self.pool.uuid, rebuild_status)
 
         # Check for pool and rebuild info after rebuild
         self.log.info("..(6)Check for pool and rebuild info after rebuild")

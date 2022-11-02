@@ -42,10 +42,11 @@ class SparseFile(IorTestBase):
             Verify, the bytes between 1st byte and 1024th byte are empty.
             Now try to read the file from it's last 512 bytes till EOF.
             This should return EOF, otherwise fail the test.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusesparsefile
+        :avocado: tags=hw,medium
+        :avocado: tags=dfuse,daosio
+        :avocado: tags=SparseFile,test_sparsefile
         """
         # Create a pool, container and start dfuse.
         self.create_pool()
@@ -60,8 +61,7 @@ class SparseFile(IorTestBase):
         sparse_file = os.path.join(self.dfuse.mount_dir.value, 'sparsefile.txt')
         self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
-                      get_remote_file_size(
-                          self.hostlist_clients[0], sparse_file))
+                      get_remote_file_size(self.hostlist_clients[0], sparse_file))
 
         # create and open a connection on remote node to open file on that
         # remote node
@@ -84,14 +84,13 @@ class SparseFile(IorTestBase):
         dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_first_byte)
         fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0], sparse_file)
-        self.log.info("File size (in bytes) after writing first byte: %s",
-                      fsize_write_1stbyte)
+        self.log.info("File size (in bytes) after writing first byte: %s", fsize_write_1stbyte)
         # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file
-        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
-                       bs=1 count=1".format(sparse_file)
+        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 bs=1 count=1".format(
+            sparse_file)
         self.execute_cmd(dd_1024_byte)
         fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0], sparse_file)
         self.log.info("File size (in bytes) after writing 1024th byte: %s",
@@ -107,17 +106,15 @@ class SparseFile(IorTestBase):
         self.assertTrue(check_first_byte == check_1024th_byte)
 
         # check the middle 1022 bytes if they are filled with zeros
-        middle_1022_bytes = \
-            "cmp --ignore-initial=1 --bytes=1022 {} {}".format(
-                sparse_file, "/dev/zero")
+        middle_1022_bytes = "cmp --ignore-initial=1 --bytes=1022 {} {}".format(
+            sparse_file, "/dev/zero")
         self.execute_cmd(middle_1022_bytes)
 
         # read last 512 bytes which should be zeros till end of file.
         ignore_bytes = self.space_before - 512
         read_till_eof = "cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
-#        self.execute_cmd(read_till_eof, False)
+        # self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.
         if 0 in self.execute_cmd(read_till_eof, False):
-            self.fail("read_till_eof command was supposed to fail. "
-                      "But it completed successfully.")
+            self.fail("read_till_eof command was supposed to fail. But it completed successfully.")

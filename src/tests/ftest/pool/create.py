@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -26,9 +25,9 @@ class PoolCreateTests(PoolTestBase):
             1 minute.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_max_pool_scm_only
+        :avocado: tags=PoolCreateTests,test_create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         self.add_pool_qty(1, namespace="/run/pool_1/*", create=False)
@@ -43,9 +42,9 @@ class PoolCreateTests(PoolTestBase):
             takes less than 2 minutes.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_max_pool
+        :avocado: tags=PoolCreateTests,test_create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
         self.add_pool_qty(1, namespace="/run/pool_2/*", create=False)
@@ -64,9 +63,9 @@ class PoolCreateTests(PoolTestBase):
             any subtle/low capacity space being lost with each failed create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_no_space_loop
+        :avocado: tags=PoolCreateTests,test_create_no_space_loop
         """
         # Define three pools to create:
         #   - one pool using 90% of the available capacity of one server

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2018-2022 Intel Corporation.
 
@@ -29,9 +28,9 @@ class IorSmall(IorTestBase):
             Run ior with Read, Write, CheckWrite, CheckRead in FPP mode.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
-        :avocado: tags=ior_small
+        :avocado: tags=IorSmall,test_ior_small
         """
         cncl_tickets = []
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')

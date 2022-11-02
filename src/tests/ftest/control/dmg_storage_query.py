@@ -1,11 +1,8 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import avocado
 import re
 from exception_utils import CommandFailure
@@ -49,8 +46,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
@@ -74,8 +73,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
@@ -111,22 +112,24 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_health
         """
         dmg_info = self.get_device_info(health=True)
 
         # Cleanup output
         if dmg_info:
-            for idx, info in enumerate(dmg_info):
-                dmg_info[idx] = [i for i in info if i]
-        parsed = [dmg_info[i:(i + 19)] for i in range(0, len(dmg_info), 19)]
+            for index, info in enumerate(dmg_info):
+                dmg_info[index] = [entry for entry in info if entry]
+        parsed = [dmg_info[index:(index + 19)] for index in range(0, len(dmg_info), 19)]
         _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
         health_info = []
-        for i in parsed:
-            h = [elem[0] for elem in i]
-            health_info.append(h)
+        for index in parsed:
+            health_info.append([elem[0] for elem in index])
 
         self.log.info("Found health info: %s", str(health_info))
 
@@ -148,7 +151,10 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()

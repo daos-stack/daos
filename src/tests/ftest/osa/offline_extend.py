@@ -17,22 +17,21 @@ class OSAOfflineExtend(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = DaosCommand(self.bin)
         # Start an additional server.
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
-        self.rank = self.params.get("rank_list", '/run/test_ranks/*')
+        self.rank = self.params.get("rank_list", "/run/test_ranks/*")
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_extend_test(self, num_pool, data=False,
-                                oclass=None):
+    def run_offline_extend_test(self, num_pool, data=False, oclass=None):
         """Run the offline extend without data.
 
         Args:
@@ -68,8 +67,7 @@ class OSAOfflineExtend(OSAUtils):
                     # Create a snapshot of the container
                     # after IOR job completes.
                     self.container.create_snap()
-                    self.log.info("Created container snapshot: %s",
-                                  self.container.epoch)
+                    self.log.info("Created container snapshot: %s", self.container.epoch)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
@@ -102,8 +100,7 @@ class OSAOfflineExtend(OSAUtils):
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
-            self.assertTrue(pver_extend > pver_begin,
-                            "Pool Version Error:  After extend")
+            self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
 
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
@@ -130,9 +127,9 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline Extend
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend
         """
         self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
@@ -143,9 +140,9 @@ class OSAOfflineExtend(OSAUtils):
         Checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_without_checksum
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_without_checksum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -158,9 +155,9 @@ class OSAOfflineExtend(OSAUtils):
         Checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_multiple_pools
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_multiple_pools
         """
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
@@ -171,9 +168,9 @@ class OSAOfflineExtend(OSAUtils):
         Checksum.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_oclass
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_oclass
         """
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
@@ -186,9 +183,9 @@ class OSAOfflineExtend(OSAUtils):
         is happening in parallel
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_during_aggregation
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -202,9 +199,9 @@ class OSAOfflineExtend(OSAUtils):
         taking snapshot.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_after_snapshot
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_after_snapshot
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot",
                                                   '/run/snapshot/*')

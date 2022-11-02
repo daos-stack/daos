@@ -90,9 +90,9 @@ class BoundaryPoolContainerSpace(TestWithServers):
             (7)Display and verify free space after container delete.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=container,pool
-        :avocado: tags=fill_cont_pool_stress,test_fill_destroy_cont_loop
+        :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
         testloop = self.params.get("testloop", "/run/pool/*")
         # create pool and enable the aggregation

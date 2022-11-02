@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -25,11 +24,10 @@ class DaosVol(VolTestBase):
 
               h5_partest_t_bigio
 
-
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volbigio
-        :avocado: tags=DAOS_5610
+        :avocado: tags=hw,medium
+        :avocado: tags=hdf5,vol
+        :avocado: tags=DaosVol,test_daos_vol_bigio
         """
         manager = get_job_manager(self, mpi_type="mpich")
         self.run_test(manager, "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")

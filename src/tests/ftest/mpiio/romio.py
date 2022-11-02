@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -12,6 +11,7 @@ from mpiio_test_base import MpiioTests
 class Romio(MpiioTests):
     """
     Runs Romio test.
+
     :avocado: recursive
     """
 
@@ -20,9 +20,11 @@ class Romio(MpiioTests):
         Test ID: DAOS-1994
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
+
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=mpiio,mpich,romio
+        :avocado: tags=Romio,test_romio
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')

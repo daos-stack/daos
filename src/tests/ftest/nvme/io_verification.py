@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -57,8 +56,9 @@ class NvmeIoVerification(IorTestBase):
             created.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=daosio,nvme_io_verification
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,daosio
+        :avocado: tags=NvmeIoVerification,test_nvme_io_verification
         """
         # Loop for every pool size
         for index in range(self.ior_seq_pool_qty):
@@ -111,7 +111,11 @@ class NvmeIoVerification(IorTestBase):
             servers are restarted.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,daosio
+        :avocado: tags=NvmeIoVerification,test_nvme_server_restart
         """
         # Loop for every pool size
         for index in range(self.ior_seq_pool_qty):

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -107,8 +106,7 @@ class ConfigGenerateOutput(TestWithServers):
             errors (list): List of errors.
         """
         if errors:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(errors)))
+            self.fail("\n----- Errors detected! -----\n{}".format("\n".join(errors)))
 
     def verify_access_point(self, host_port_input, failure_expected=None):
         """Run with given AP and verify the AP in the output.
@@ -128,8 +126,7 @@ class ConfigGenerateOutput(TestWithServers):
         check["expected"] = host_port_input.split(",")
         if ":" not in host_port_input:
             # dmg automatically sets 10001 if it's not given in the input.
-            check["expected"] = [
-                "{}:10001".format(host) for host in check["expected"]]
+            check["expected"] = ["{}:10001".format(host) for host in check["expected"]]
 
         # Create a new DmgCommand and set its exit_status_exception to False to
         # make it not raise a TestFailure when the command failed. Then we'll be
@@ -154,16 +151,13 @@ class ConfigGenerateOutput(TestWithServers):
                 errors.append(
                     "Error loading dmg generated config!: {}".format(error))
         elif result.exit_status == 0 and failure_expected is not None:
-            errors.append(
-                "dmg command passed when expected to fail!: {}".format(result))
+            errors.append("dmg command passed when expected to fail!: {}".format(result))
         elif result.exit_status != 0 and failure_expected is not None:
             if failure_expected not in result.stderr_text:
                 errors.append(
-                    "Missing expected error message in failed dmg command!: " +
-                    "{}".format(result))
+                    "Missing expected error message in failed dmg command!: {}".format(result))
         else:
-            errors.append(
-                "dmg command failed when expected to pass!: {}".format(result))
+            errors.append("dmg command failed when expected to pass!: {}".format(result))
 
         return errors
 
@@ -181,8 +175,9 @@ class ConfigGenerateOutput(TestWithServers):
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,basic_config
+        :avocado: tags=hw,medium
+        :avocado: tags=control
+        :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
@@ -240,8 +235,9 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with single AP with and without port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,access_points,ap_single
+        :avocado: tags=hw,medium
+        :avocado: tags=control,access_points
+        :avocado: tags=ConfigGenerateOutput,test_access_points_single
         """
         errors = []
 
@@ -257,8 +253,9 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with odd number of APs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,access_points,ap_odd
+        :avocado: tags=hw,medium
+        :avocado: tags=control,access_points
+        :avocado: tags=ConfigGenerateOutput,test_access_points_odd
         """
         errors = []
 
@@ -266,9 +263,7 @@ class ConfigGenerateOutput(TestWithServers):
         errors.extend(self.verify_access_point("wolf-a,wolf-b,wolf-c"))
 
         # Odd AP with port.
-        errors.extend(
-            self.verify_access_point(
-                "wolf-a:12345,wolf-b:12345,wolf-c:12345"))
+        errors.extend(self.verify_access_point("wolf-a:12345,wolf-b:12345,wolf-c:12345"))
 
         self.check_errors(errors)
 
@@ -276,8 +271,9 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with invalid port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,access_points,ap_invalid
+        :avocado: tags=hw,medium
+        :avocado: tags=control,access_points
+        :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
         """
         errors = []
 
@@ -285,15 +281,12 @@ class ConfigGenerateOutput(TestWithServers):
         errors.extend(self.verify_access_point("wolf-a,wolf-b", "non-odd"))
 
         # Single AP with an invalid port.
-        errors.extend(
-            self.verify_access_point(
-                "wolf-a:abcd", "invalid access point port"))
+        errors.extend(self.verify_access_point("wolf-a:abcd", "invalid access point port"))
 
         # Odd AP with both valid and invalid port.
         errors.extend(
             self.verify_access_point(
-                "wolf-a:12345,wolf-b:12345,wolf-c:abcd",
-                "invalid access point port"))
+                "wolf-a:12345,wolf-b:12345,wolf-c:abcd", "invalid access point port"))
 
         self.check_errors(errors)
 
@@ -301,14 +294,13 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with the same APs repeated.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,access_points,ap_repeated
+        :avocado: tags=hw,medium
+        :avocado: tags=control,access_points
+        :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
         """
         errors = []
 
-        errors.extend(
-            self.verify_access_point(
-                "wolf-a,wolf-a,wolf-a", "duplicate access points"))
+        errors.extend(self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
 
         self.check_errors(errors)
 
@@ -322,8 +314,9 @@ class ConfigGenerateOutput(TestWithServers):
         3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,num_engines
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
@@ -341,24 +334,21 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --num-engines=<1 to max_engine>
         for num_engines in range(1, max_engine + 1):
-            result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines)
+            result = dmg.config_generate(access_points="wolf-a", num_engines=num_engines)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
             # Verify the number of engine field.
             if actual_num_engines != num_engines:
-                msg = "Unexpected number of engine field! Expected = {}; "\
-                    "Actual = {}".format(num_engines, actual_num_engines)
+                msg = "Unexpected number of engine field! Expected = {}; Actual = {}".format(
+                    num_engines, actual_num_engines)
                 errors.append(msg)
 
         # Verify that max_engine + 1 fails.
         result = dmg.config_generate(
             access_points="wolf-a", num_engines=max_engine + 1)
         if result.exit_status == 0:
-            errors.append(
-                "Host + invalid num engines succeeded with {}!".format(
-                    max_engine + 1))
+            errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
         self.check_errors(errors)
 
@@ -373,8 +363,9 @@ class ConfigGenerateOutput(TestWithServers):
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,min_ssds
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateOutput,test_min_ssds
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
@@ -399,19 +390,15 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --min-ssds=<1 to min_ssd>. Should pass.
         for num_ssd in range(1, min_ssd + 1):
-            result = dmg.config_generate(
-                access_points="wolf-a", min_ssds=num_ssd)
+            result = dmg.config_generate(access_points="wolf-a", min_ssds=num_ssd)
             if result.exit_status != 0:
-                errors.append(
-                    "config generate failed with min_ssd = {}!".format(num_ssd))
+                errors.append("config generate failed with min_ssd = {}!".format(num_ssd))
 
         # Call dmg config generate --min_ssds=<min_ssd + 1>. Should fail.
         result = dmg.config_generate(
             access_points="wolf-a", min_ssds=min_ssd + 1)
         if result.exit_status == 0:
-            errors.append(
-                "config generate succeeded with min_ssd + 1 = {}!".format(
-                    min_ssd + 1))
+            errors.append("config generate succeeded with min_ssd + 1 = {}!".format(min_ssd + 1))
 
         # Call dmg config generate --min-ssds=0
         result = dmg.config_generate(access_points="wolf-a", min_ssds=0)
@@ -443,8 +430,9 @@ class ConfigGenerateOutput(TestWithServers):
         "fabric_iface".
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,net_class
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateOutput,test_net_class
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
@@ -465,8 +453,7 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines,
-                net_class="infiniband")
+                access_points="wolf-a", num_engines=num_engines, net_class="infiniband")
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=infiniband "\
@@ -480,14 +467,12 @@ class ConfigGenerateOutput(TestWithServers):
                     # Verify fabric_iface field, e.g., ib0 by checking the
                     # dictionary keys.
                     if not self.interface_to_providers[fabric_iface]:
-                        errors.append(
-                            "Unexpected fabric_iface! {}".format(fabric_iface))
+                        errors.append("Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
-                            " {}; fabric_iface = {}".format(
-                                provider, fabric_iface)
+                            " {}; fabric_iface = {}".format(provider, fabric_iface)
                         errors.append(msg)
 
         # Call dmg config generate --num-engines=<ib_count + 1>
@@ -496,8 +481,8 @@ class ConfigGenerateOutput(TestWithServers):
             access_points="wolf-a", num_engines=ib_count + 1,
             net_class="infiniband")
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=infiniband "\
-                "num_engines = {}!".format(ib_count + 1)
+            msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
+                ib_count + 1)
             errors.append(msg)
 
         # Get eth_count threshold.
@@ -512,12 +497,11 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines,
-                net_class="ethernet")
+                access_points="wolf-a", num_engines=num_engines, net_class="ethernet")
 
             if result.exit_status != 0:
-                msg = "config generate failed with --net-class=ethernet "\
-                    "--num-engines = {}!".format(num_engines)
+                msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
+                    num_engines)
                 errors.append(msg)
             else:
                 generated_config = yaml.safe_load(result.stdout)
@@ -527,14 +511,12 @@ class ConfigGenerateOutput(TestWithServers):
                     # Verify fabric_iface field, e.g., eth0 by checking the
                     # dictionary keys.
                     if not self.interface_to_providers[fabric_iface]:
-                        errors.append(
-                            "Unexpected fabric_iface! {}".format(fabric_iface))
+                        errors.append("Unexpected fabric_iface! {}".format(fabric_iface))
                     elif provider not in self.interface_to_providers[fabric_iface]:
                         # Now check the provider field, e.g., ofi+tcp by
                         # checking the corresponding list in the dictionary.
                         msg = "Unexpected provider in fabric_iface! provider ="\
-                            " {}; fabric_iface = {}".format(
-                                provider, fabric_iface)
+                            " {}; fabric_iface = {}".format(provider, fabric_iface)
                         errors.append(msg)
 
         # Call dmg config generate --num-engines=<eth_count + 1>
@@ -543,8 +525,8 @@ class ConfigGenerateOutput(TestWithServers):
             access_points="wolf-a", num_engines=eth_count + 1,
             net_class="ethernet")
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=ethernet, "\
-                "num_engines = {}!".format(eth_count + 1)
+            msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
+                eth_count + 1)
             errors.append(msg)
 
         self.check_errors(errors)

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -26,19 +25,18 @@ class ConfigGenerateRun(TestWithServers):
         1. Start daos_server.
         2. Call dmg config generate with different parameters.
         3. Store the generated output to a temporary directory - self.test_dir
-        4. Copy the generated output from the temp dir to /etc/daos of the
-        server node.
+        4. Copy the generated output from the temp dir to /etc/daos of the server node.
         5. Stop daos_server.
         6. Restart daos_server.
 
         See yaml for the test cases.
 
-        Note: When running locally, use 50 sec timeout in
-        DaosServerCommand.__init__()
+        Note: When running locally, use 50 sec timeout in DaosServerCommand.__init__()
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,config_generate_run
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
         num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")
         min_ssds = self.params.get("min_ssds", "/run/config_generate_params/*/")
@@ -65,8 +63,7 @@ class ConfigGenerateRun(TestWithServers):
         # data in engine_params so that the cleanup before the server start
         # works.
         self.log.info("Copy config to /etc/daos and update engine_params")
-        self.server_managers[0].update_config_file_from_file(
-            self.hostlist_servers, self.test_dir, generated_yaml)
+        self.server_managers[0].update_config_file_from_file(generated_yaml)
 
         # Start server with the generated config.
         self.log.info("Restarting server with the generated config")

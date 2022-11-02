@@ -20,15 +20,17 @@ class DaosBuild(DfuseTestBase):
 
     def test_dfuse_daos_build_wb(self):
         """ This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wb
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")
 
@@ -40,9 +42,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
         self.run_build_test("writethrough")
 
@@ -55,8 +57,8 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_wt_il
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
 
@@ -68,9 +70,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_metadata
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
         self.run_build_test("metadata")
 
@@ -82,9 +84,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_data
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
         self.run_build_test("data")
 
@@ -96,9 +98,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild,test_dfuse_daos_build_nocache
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         self.run_build_test("nocache")
 

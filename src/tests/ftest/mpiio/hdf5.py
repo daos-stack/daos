@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -63,8 +62,9 @@ class Hdf5(MpiioTests):
                 test_partial_no_selection_coll_md_read
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=mpiio,mpich,llnlmpi4pyhdf5,hdf5,hdf5testsuite
+        :avocado: tags=Hdf5,test_hdf5
         """
         test_repo = self.params.get("hdf5", '/run/test_repo/')
         self.run_test(test_repo, "hdf5")

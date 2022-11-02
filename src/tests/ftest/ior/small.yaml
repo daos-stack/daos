@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 4
-  test_clients: 4
+  test_servers: 2
+  test_clients: 2
 timeout: 700
 server_config:
   name: daos_server
@@ -53,7 +53,7 @@ container:
 ior:
   ior_timeout: 60
   client_processes:
-    np: 128
+    ppn: 32
   test_file: daos:/testFile
   repetitions: 2
   dfs_destroy: False

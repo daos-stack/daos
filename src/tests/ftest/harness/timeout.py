@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
@@ -35,7 +34,9 @@ class HarnessTimeoutTest(Test):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=manual
-        :avocado: tags=harness,harness_timeout_test,test_timeout
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_timeout_test
+        :avocado: tags=HarnessTimeoutTest,test_timeout
         """
         sleep_timeout = self.timeout + 1
         self.log.info(
@@ -58,7 +59,8 @@ class HarnessTimeoutTest(Test):
         This test can be run in any CI stage: vm, small, medium, large
 
         :avocado: tags=manual
-        :avocado: tags=hw,small,medium,ib2,large
-        :avocado: tags=harness,harness_timeout_test,test_timeout_hw
+        :avocado: tags=hw,medium,ib2,large
+        :avocado: tags=harness,harness_timeout_test,
+        :avocado: tags=HarnessTimeoutTest,test_timeout_hw
         """
         self.test_timeout()

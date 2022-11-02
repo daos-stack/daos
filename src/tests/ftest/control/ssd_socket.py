@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -116,7 +115,8 @@ class SSDSocketTest(ControlTestBase):
         Test Description: Verify NVMe NUMA socket values.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=control,ssd_socket
+        :avocado: tags=SSDSocketTest,test_scan_ssd
         """
         self.verify_dmg_storage_scan(self.verify_ssd_sockets)

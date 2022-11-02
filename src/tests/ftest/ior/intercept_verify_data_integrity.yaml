@@ -1,6 +1,6 @@
 hosts:
   test_servers: 2
-  test_clients: 6
+  test_clients: 2
 timeout: 7200
 server_config:
   name: daos_server
@@ -27,7 +27,7 @@ container:
 ior:
   env_vars:
     - D_LOG_MASK=INFO
-  np: 24
+  np: 32
   test_file: testFile
   repetitions: 1
   # Remove the below line once DAOS-3143 is resolved
