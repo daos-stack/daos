@@ -285,12 +285,6 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	 * changing a chunk type from free to used or vice versa.
 	 */
 	act->m.m_ops->prep_hdr(&act->m, act->new_state, ctx);
-	if (act->is_reserve) {
-		void	*addr = HEAP_OFF_TO_PTR(heap, act->offset);
-		size_t	 size = act->usable_size;
-
-		wal_tx_snap(heap->p_ops.base, addr, size, addr, 0);
-	}
 }
 
 /*
@@ -615,6 +609,19 @@ void
 palloc_mark_act_reserve(struct dav_action *act)
 {
 	((struct dav_action_internal *)act)->is_reserve = 1;
+}
+
+int
+palloc_is_reserve(struct dav_action *act, uint64_t *off, uint64_t *size)
+{
+	struct dav_action_internal *act_in = (struct dav_action_internal *)act;
+
+	if (act_in->is_reserve == 1) {
+		*off = act->heap.offset;
+		*size = act->heap.usable_size;
+		return 1;
+	}
+	return 0;
 }
 
 /*

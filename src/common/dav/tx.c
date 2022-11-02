@@ -226,7 +226,9 @@ constructor_tx_alloc(void *ctx, void *ptr, size_t usable_size, void *arg)
 
 	if (args->flags & DAV_FLAG_ZERO) {
 		memset(ptr, 0, usable_size);
+#if 0	/* Not required as the entire memory range will be copied */
 		wal_tx_set(ctx, ptr, 0, usable_size);
+#endif
 	}
 
 	if (args->copy_ptr && args->copy_size != 0) {
@@ -306,17 +308,15 @@ tx_abort_set(dav_obj_t *pop)
 static void
 tx_flush_range(void *data, void *ctx)
 {
-#if 0	/* REVISIT */
 	dav_obj_t *pop = ctx;
 	struct tx_range_def *range = data;
 
 	if (!(range->flags & DAV_FLAG_NO_FLUSH)) {
-		pmemops_xflush(&pop->p_ops, OBJ_OFF_TO_PTR(pop, range->offset),
-				range->size, 0);
+		pmemops_flush(&pop->p_ops, OBJ_OFF_TO_PTR(pop, range->offset),
+				range->size);
 	}
 	VALGRIND_REMOVE_FROM_TX(OBJ_OFF_TO_PTR(pop, range->offset),
 		range->size);
-#endif
 }
 
 /*
@@ -753,9 +753,14 @@ dav_tx_commit(void)
 		/* pre-commit phase */
 		tx_pre_commit(tx);
 
+		/* Below code is no longer required since tx_flush_range
+		 * called in tx_pre_commit will take care of it.
+		 */
+#if 0
 		/* undo log should be converted to wal redo log */
 		ulog_foreach_entry((struct ulog *)&pop->clogs.undo,
 				   tx_create_wal_entry, NULL, &pop->p_ops);
+#endif
 
 		pmemops_drain(&pop->p_ops);
 
@@ -1555,6 +1560,8 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
  /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 	uint64_t flags = 0;
+	uint64_t off, size;
+	int ret;
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1564,14 +1571,20 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 	PMEMOBJ_API_START();
 
 	if (tx_action_reserve(tx, actvcnt) != 0) {
-		int ret = obj_tx_fail_err(ENOMEM, flags);
+		ret = obj_tx_fail_err(ENOMEM, flags);
 
 		PMEMOBJ_API_END();
 		return ret;
 	}
 
-	for (size_t i = 0; i < actvcnt; ++i)
+	for (size_t i = 0; i < actvcnt; ++i) {
 		VEC_PUSH_BACK(&tx->actions, actv[i]);
+		if (palloc_is_reserve(&actv[i], &off, &size)) {
+			struct tx_range_def r = {off, size, DAV_XADD_NO_SNAPSHOT};
+			ret = dav_tx_add_common(tx, &r);
+			D_ASSERT(ret == 0);
+		}
+	}
 
 	PMEMOBJ_API_END();
 	return 0;

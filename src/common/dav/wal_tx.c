@@ -94,39 +94,45 @@ wal_tx_act_cleanup(d_list_t *list)
 }
 
 static int
-wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list)
+wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 {
-#if 0
 	struct umem_act_item    *it, *next;
+	char *pathname;
 
 	d_list_for_each_entry_safe(it, next, redo_list, it_link) {
+		if (dav_hdl->do_path != NULL)
+			pathname = basename(dav_hdl->do_path);
+		else
+			pathname = "null";
 		switch (it->it_act.ac_opc) {
 		case UMEM_ACT_COPY:
-			D_ERROR("%s: UMEM_ACT_COPY off = %lu p = %lu size = %lu\n",
-				dav_hdl->do_path, it->it_act.ac_copy.addr,
-				it->it_act.ac_copy.addr/4096, it->it_act.ac_copy.size);
+			D_ERROR("%s: UMEM_ACT_COPY     txid=%lu, (p,o)=%lu,%lu size=%lu\n",
+				pathname, id,
+				it->it_act.ac_copy.addr/4096, it->it_act.ac_copy.addr%4096,
+				it->it_act.ac_copy.size);
 			break;
 		case UMEM_ACT_ASSIGN:
-			D_ERROR("%s: UMEM_ACT_ASSIGN off = %lu p = %lu size = %lu\n",
-				dav_hdl->do_path, it->it_act.ac_assign.addr,
-				it->it_act.ac_assign.addr/4096, it->it_act.ac_assign.size);
+			D_ERROR("%s: UMEM_ACT_ASSIGN   txid=%lu, (p,o)=%lu,%lu size=%lu\n",
+				pathname, id,
+				it->it_act.ac_assign.addr/4096, it->it_act.ac_assign.addr%4096,
+				it->it_act.ac_assign.size);
 			break;
 		case UMEM_ACT_SET:
-			D_ERROR("%s: UMEM_ACT_SET off = %lu p = %lu size = %u val = %u\n",
-				dav_hdl->do_path, it->it_act.ac_set.addr,
-				it->it_act.ac_set.addr/4096,
+			D_ERROR("%s: UMEM_ACT_SET      txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
+				pathname, id,
+				it->it_act.ac_set.addr/4096, it->it_act.ac_set.addr%4096,
 				it->it_act.ac_set.size, it->it_act.ac_set.val);
 			break;
 		case UMEM_ACT_SET_BITS:
-			D_ERROR("%s: UMEM_ACT_SET_BITS off = %lu p = %lu pos = %u num = %u\n",
-				dav_hdl->do_path, it->it_act.ac_op_bits.addr,
-				it->it_act.ac_op_bits.addr/4096,
+			D_ERROR("%s: UMEM_ACT_SET_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
+				pathname, id,
+				it->it_act.ac_op_bits.addr/4096, it->it_act.ac_op_bits.addr%4096,
 				it->it_act.ac_op_bits.pos, it->it_act.ac_op_bits.num);
 			break;
 		case UMEM_ACT_CLR_BITS:
-			D_ERROR("%s: UMEM_ACT_CLR_BITS off = %lu p = %lu pos = %u num = %u\n",
-				dav_hdl->do_path, it->it_act.ac_op_bits.addr,
-				it->it_act.ac_op_bits.addr/4096,
+			D_ERROR("%s: UMEM_ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
+				pathname, id, 
+				it->it_act.ac_op_bits.addr/4096, it->it_act.ac_op_bits.addr%4096,
 				it->it_act.ac_op_bits.pos, it->it_act.ac_op_bits.num);
 			break;
 		default:
@@ -134,7 +140,6 @@ wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list)
 			ASSERT(0);
 		}
 	}
-#endif
 	return 0;
 }
 
@@ -154,7 +159,7 @@ wal_tx_commit(void *hdl)
 	wal_tx_reinit(hdl);
 
 	/* write actions in redo list to WAL */
-	rc = wal_tx_push(dav_hdl, &wt_redo);
+	rc = wal_tx_push(dav_hdl, &wt_redo, tx->wt_id);
 	/* FAIL the engine if commit fails */
 	D_ASSERT(rc == 0);
 	wal_tx_act_cleanup(&wt_redo);
