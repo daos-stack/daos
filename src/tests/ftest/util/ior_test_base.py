@@ -49,10 +49,14 @@ class IorTestBase(DfuseTestBase):
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
         self.ior_timeout = self.params.get("ior_timeout", '/run/ior/*', None)
 
-    def create_pool(self):
-        """Create a TestPool object to use with ior."""
+    def create_pool(self, ranks=None):
+        """Create a TestPool object to use with ior.
+
+           Args:
+               ranks (str): Ranks on which to create the pool
+        """
         # Get the pool params and create a pool
-        self.add_pool(connect=False)
+        self.add_pool(connect=False, target_list=ranks)
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container.
