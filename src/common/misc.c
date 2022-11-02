@@ -763,8 +763,6 @@ daos_hlc2timestamp(uint64_t hlc, time_t *ts)
 	if (rc)
 		return rc;
 
-	D_INFO("hlc=0x"DF_X64", tspec.tv_sec=%ld, .tv_nsec=%ld\n",
-	       hlc, tspec.tv_sec, tspec.tv_nsec);
 	*ts = tspec.tv_sec;
 	return 0;
 }

@@ -572,7 +572,10 @@ typedef struct daos_pool_cont_filter {
 int
 daos_pool_cont_filter_init(daos_pool_cont_filter_t *filt, uint32_t combine_func);
 
-/** Dynamically add a part to an existing pool container filter. */
+/**
+ * Dynamically add a part to an existing pool container filter.
+ * Note: this function takes ownership of \a part (it is referenced within \a filt).
+ */
 int
 daos_pool_cont_filter_add(daos_pool_cont_filter_t *filt, daos_pool_cont_filter_part_t *part);
 
