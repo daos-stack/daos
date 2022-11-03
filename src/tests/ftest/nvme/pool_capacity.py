@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,6 +7,7 @@ import time
 import threading
 import uuid
 from itertools import product
+import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
@@ -15,7 +15,6 @@ from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from exception_utils import CommandFailure
-import queue
 
 
 class NvmePoolCapacity(TestWithServers):
@@ -76,7 +75,7 @@ class NvmePoolCapacity(TestWithServers):
                                test[2])] = str(uuid.uuid4())
 
         # Define the job manager for the IOR command
-        job_manager = get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich")
+        job_manager = get_job_manager(self, job=ior_cmd)
         key = "{}{}{}".format(oclass, api, test[2])
         job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(job_manager))
@@ -87,7 +86,7 @@ class NvmePoolCapacity(TestWithServers):
         # run IOR Command
         try:
             job_manager.run()
-        except CommandFailure as _error:
+        except CommandFailure:
             results.put("FAIL")
 
     def test_create_delete(self, num_pool=2, num_cont=5, total_count=100,
