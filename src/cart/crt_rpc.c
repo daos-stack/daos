@@ -1721,10 +1721,6 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			skip_check = true;
 	}
 
-	/* Skip check for secondary provider clients */
-	if (!rpc_priv->crp_req_hdr.cch_src_is_primary)
-		skip_check = true;
-
 	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
 	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
 		if (!skip_check) {
@@ -1838,28 +1834,6 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	*rank = rpc_priv->crp_req_hdr.cch_src_rank;
 
-out:
-	return rc;
-}
-
-int
-crt_req_src_provider_is_primary(crt_rpc_t *req, bool *result)
-{
-	struct crt_rpc_priv	*rpc_priv = NULL;
-	int			rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("req is NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (result == NULL) {
-		D_ERROR("result is NULL\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	*result = rpc_priv->crp_req_hdr.cch_src_is_primary;
 out:
 	return rc;
 }
