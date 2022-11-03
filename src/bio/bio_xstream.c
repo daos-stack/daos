@@ -53,7 +53,7 @@ bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
 /* SPDK subsystem fini timeout */
-unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
+unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 
@@ -157,6 +157,25 @@ bool
 bypass_health_collect()
 {
 	return nvme_glb.bd_bypass_health_collect;
+}
+
+struct bio_faulty_criteria	glb_criteria;
+
+/* TODO: Make it configurable through control plane */
+static inline void
+set_faulty_criteria(void)
+{
+	glb_criteria.fc_enabled = false;
+	glb_criteria.fc_max_io_errs = 5;
+	glb_criteria.fc_max_csum_errs = 5;
+
+	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
+
+	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
+	       glb_criteria.fc_enabled ? "enabled" : "disabled",
+	       glb_criteria.fc_max_io_errs, glb_criteria.fc_max_csum_errs);
 }
 
 int
@@ -277,6 +296,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		goto fini_smd;
 	}
 	bio_spdk_inited = true;
+	set_faulty_criteria();
 
 	return 0;
 
@@ -1569,14 +1589,16 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev         *d_bdev;
+	struct bio_bdev		*d_bdev;
+	unsigned int		 led_state;
+	int			 rc;
 
 	/*
-	 * Check VMD_LED_PERIOD environment variable, if not set use default
-	 * NVME_MONITOR_PERIOD of 60 seconds.
+	 * Check VMD_LED_PERIOD environment variable, if not set use double
+	 * NVME_MONITOR_PERIOD of 60 seconds (2min total) as default value.
 	 */
 	if (vmd_led_period == 0)
-		vmd_led_period = NVME_MONITOR_PERIOD;
+		vmd_led_period = NVME_MONITOR_PERIOD * 2;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
@@ -1584,9 +1606,12 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
-			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
-					      true/*reset*/) != 0)
-				D_ERROR("Failed resetting LED state\n");
+			/* LED will be reset to either faulty or normal state */
+			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+					    (unsigned int)CTL__LED_ACTION__RESET, &led_state);
+			if (rc != 0)
+				D_ERROR("Reset LED state after timeout failed on device:"
+					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
 }

@@ -12,6 +12,7 @@ C_HEADER_FILES = include/daos/drpc.pb-c.h\
 		 mgmt/cont.pb-c.h\
 		 mgmt/pool.pb-c.h\
 		 mgmt/smd.pb-c.h\
+		 bio/smd.pb-c.h\
 		 mgmt/server.pb-c.h\
 		 mgmt/svc.pb-c.h\
 		 mgmt/check.pb-c.h\
@@ -25,6 +26,7 @@ C_SOURCE_FILES = common/drpc.pb-c.c\
 		 mgmt/cont.pb-c.c\
 		 mgmt/pool.pb-c.c\
 		 mgmt/smd.pb-c.c\
+		 bio/smd.pb-c.c\
 		 mgmt/server.pb-c.c\
 		 mgmt/svc.pb-c.c\
 		 mgmt/check.pb-c.c\
@@ -159,6 +161,12 @@ $(DAOS_ROOT)/src/%.pb-c.h: $(PROTO_SOURCE_DIR)/%.proto
 
 $(DAOS_ROOT)/src/%.pb-c.c: $(PROTO_SOURCE_DIR)/%.proto
 	protoc -I $(dir $<) -I $(PROTO_SOURCE_DIR) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/bio/smd.pb-c.h: $(PROTO_SOURCE_DIR)/ctl/smd.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
+
+$(DAOS_ROOT)/src/bio/smd.pb-c.c: $(PROTO_SOURCE_DIR)/ctl/smd.proto
+	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)
 
 $(DAOS_ROOT)/src/engine/event.pb-c.h: $(PROTO_SOURCE_DIR)/shared/event.proto
 	protoc -I $(dir $<) --c_out=$(dir $@) $(notdir $<)

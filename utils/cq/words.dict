@@ -73,6 +73,7 @@ arg
 argobots
 argparse
 args
+ascii
 async
 attachinfo
 attr
@@ -337,6 +338,7 @@ proc
 procs
 protoc
 ps
+puuid
 py
 pydaos
 ramdisk

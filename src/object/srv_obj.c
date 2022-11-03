@@ -2621,8 +2621,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	version = orw->orw_map_ver;
 
-	if (tgt_cnt == 0)
+	if (tgt_cnt == 0) {
+		if (!(orw->orw_api_flags & DAOS_COND_MASK))
+			dtx_flags |= DTX_DROP_CMT;
 		dtx_flags |= DTX_SOLO;
+	}
+
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
@@ -3497,8 +3501,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 	}
 
-	if (tgt_cnt == 0)
+	if (tgt_cnt == 0) {
+		if (!(opi->opi_api_flags & DAOS_COND_MASK))
+			dtx_flags |= DTX_DROP_CMT;
 		dtx_flags |= DTX_SOLO;
+	}
 	if (opi->opi_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
@@ -3815,9 +3822,8 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 					DP_OID(oid), rc);
 			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID ", extent: "DF_RECX"): %d\n",
-					DP_OID(oid), DP_RECX(iod->iod_recxs[i]),
-					rc);
+					DF_OID", extent: "DF_RECX"): %d\n",
+					DP_OID(oid), DP_RECX(iod->iod_recxs[i]), rc);
 			}
 			break;
 		}
