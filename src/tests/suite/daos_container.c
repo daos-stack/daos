@@ -2842,8 +2842,9 @@ static void
 co_mdtimes(void **state)
 {
 	test_arg_t	       *arg = *state;
+	daos_prop_t	       *prop = NULL;
+	d_string_t		label;
 	daos_event_t		ev;
-	char			str[37];
 	uint64_t		prev_otime;
 	uint64_t		prev_mtime;
 	daos_handle_t		coh;
@@ -2860,9 +2861,9 @@ co_mdtimes(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	print_message("open container (RO_MDSTATS flag)\n");
-	uuid_unparse(arg->co_uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+	D_ASSERT(arg->co_str != NULL);
+	print_message("open container %s (RO_MDSTATS flag)\n", arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -2878,7 +2879,7 @@ co_mdtimes(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("open container again (RO_MDSTATS), verify metadata times unchanged\n");
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -2886,11 +2887,16 @@ co_mdtimes(void **state)
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
 
 	print_message("query container, verify metadata times unchanged\n");
-	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	/* Query for the container label, then open by label from this point */
+	prop = daos_prop_alloc(1);
+	assert_ptr_not_equal(prop, NULL);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	rc = daos_cont_query(coh, &cinfo, prop, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	label = prop->dpp_entries[0].dpe_str;
 
 	print_message("close container\n");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
@@ -2898,8 +2904,10 @@ co_mdtimes(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 
 	/* open updates the otime, visible upon subsequent query */
-	print_message("open container again (no special flags), query to see updated otime\n");
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh, &cinfo, arg->async ? &ev : NULL);
+	print_message("open container %s (%s) again (no special flags), query for updated otime\n",
+		      label, arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh, &cinfo,
+			    arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_true(cinfo.ci_md_otime == prev_otime);
@@ -2918,9 +2926,10 @@ co_mdtimes(void **state)
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	print_message("open container again (RW), verify mtime updated (from close)\n");
+	print_message("open container %s (%s) again (RW), verify mtime updated (from close)\n",
+		      label, arg->co_str);
 	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -2972,6 +2981,8 @@ co_mdtimes(void **state)
 	/* TODO: perform other metadata RW operations, verify mtime updated.
 	 * (attr-set/del, set-prop, update/overwrite/delete-acl)
 	 */
+
+	daos_prop_free(prop);
 }
 
 static int
