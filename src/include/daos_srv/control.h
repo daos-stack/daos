@@ -25,16 +25,9 @@ extern const char *
 dpdk_cli_override_opts;
 
 /** Device state flags */
-#define NVME_DEV_FL_PLUGGED	(1 << 0)
-#define NVME_DEV_FL_INUSE	(1 << 1) /* Used by DAOS (present in SMD) */
-#define NVME_DEV_FL_FAULTY	(1 << 2)
-#define NVME_DEV_FL_IDENTIFY	(1 << 3) /* SSD being identified by LED activity */
-
-/** Device state combinations */
-#define NVME_DEV_STATE_NORMAL	(NVME_DEV_FL_PLUGGED | NVME_DEV_FL_INUSE)
-#define NVME_DEV_STATE_FAULTY	(NVME_DEV_STATE_NORMAL | NVME_DEV_FL_FAULTY)
-#define NVME_DEV_STATE_NEW	NVME_DEV_FL_PLUGGED
-#define NVME_DEV_STATE_INVALID	(1 << 4)
+#define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
+#define NVME_DEV_FL_INUSE	(1 << 1)	/* Used by DAOS (present in SMD) */
+#define NVME_DEV_FL_FAULTY	(1 << 2)	/* Faulty state has been assigned */
 
 /** Env defining the size of a metadata pmem pool/file in MiBs */
 #define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
@@ -68,56 +61,6 @@ dpdk_cli_override_opts;
 #define NVME_ROLE_WAL		(1 << 2)
 
 #define NVME_ROLE_ALL		(NVME_ROLE_DATA | NVME_ROLE_META | NVME_ROLE_WAL)
-
-static inline char *
-nvme_state2str(int state)
-{
-	if (state == NVME_DEV_STATE_INVALID)
-		return "UNKNOWN";
-
-	/** Otherwise, if unplugged, return early */
-	if (!CHK_FLAG(state, NVME_DEV_FL_PLUGGED))
-		return "UNPLUGGED";
-
-	/** If identify is set, return combination with faulty taking precedence over new */
-	if (CHK_FLAG(state, NVME_DEV_FL_IDENTIFY)) {
-		if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
-			return "EVICTED|IDENTIFY";
-		if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
-			return "NEW|IDENTIFY";
-		return "NORMAL|IDENTIFY";
-	}
-
-	/** Otherwise, return single state with faulty taking precedence over new */
-	if CHK_FLAG(state, NVME_DEV_FL_FAULTY)
-		return "EVICTED";
-	if (!CHK_FLAG(state, NVME_DEV_FL_INUSE))
-		return "NEW";
-
-	return "NORMAL";
-}
-
-static inline int
-nvme_str2state(char *state)
-{
-	if STR_EQ(state, "NORMAL")
-		return NVME_DEV_STATE_NORMAL;
-	if STR_EQ(state, "NEW")
-		return NVME_DEV_STATE_NEW;
-	if STR_EQ(state, "EVICTED")
-		return NVME_DEV_STATE_FAULTY;
-	if STR_EQ(state, "NORMAL|IDENTIFY")
-		return (NVME_DEV_STATE_NORMAL | NVME_DEV_FL_IDENTIFY);
-	if STR_EQ(state, "NEW|IDENTIFY")
-		return (NVME_DEV_STATE_NEW | NVME_DEV_FL_IDENTIFY);
-	if STR_EQ(state, "EVICTED|IDENTIFY")
-		return (NVME_DEV_STATE_FAULTY | NVME_DEV_FL_IDENTIFY);
-	if STR_EQ(state, "UNPLUGGED")
-		return 0;
-
-	/** not a valid state */
-	return NVME_DEV_STATE_INVALID;
-}
 
 /**
  * Current device health state (health statistics). Periodically updated in
