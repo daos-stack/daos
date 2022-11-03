@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <uuid/uuid.h>
 
+#include <daos/mem.h>
 #include "dav_internal.h"
 #include "heap.h"
 #include "palloc.h"
@@ -61,10 +62,11 @@ persist_dav_phdr(dav_obj_t *hdl)
 }
 
 static dav_obj_t *
-dav_obj_open_internal(int fd, int flags, size_t sz)
+dav_obj_open_internal(int fd, int flags, size_t sz, const char *path)
 {
 	int rc;
 	dav_obj_t *hdl = NULL;
+	struct umem_tx *utx = NULL;
 	void *base;
 	char *heap_base;
 	uint64_t heap_size;
@@ -91,7 +93,16 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 	hdl->do_size = sz;
 	hdl->p_ops.base = hdl;
 
+	D_ALLOC_PTR(utx);
+	if (utx == NULL) {
+		err = ENOMEM;
+		D_FREE(hdl);
+		goto out1;
+	}
 	wal_tx_init(hdl);
+	*(void **)&utx->utx_private = &hdl->do_wtx;
+	hdl->utx = utx;
+	D_STRNDUP(hdl->do_path, path, strlen(path));
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
@@ -152,6 +163,8 @@ out2:
 		stats_delete(hdl, hdl->do_stats);
 	if (hdl->do_heap)
 		D_FREE(hdl->do_heap);
+	D_FREE(hdl->do_path);
+	D_FREE(hdl->utx);
 	D_FREE(hdl);
 out1:
 	munmap(base, sz);
@@ -193,12 +206,11 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode)
 		}
 	}
 
-	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, sz);
+	hdl = dav_obj_open_internal(fd, DAV_HEAP_INIT, sz, path);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
 	}
-	D_STRNDUP(hdl->do_path, path, strlen(path));
 	DAV_DEBUG("pool %s created, size="DF_U64"", hdl->do_path, sz);
 	return hdl;
 }
@@ -221,12 +233,11 @@ dav_obj_open(const char *path, int flags)
 		return NULL;
 	}
 
-	hdl = dav_obj_open_internal(fd, 0, (size_t)statbuf.st_size);
+	hdl = dav_obj_open_internal(fd, 0, (size_t)statbuf.st_size, path);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
 	}
-	D_STRNDUP(hdl->do_path, path, strlen(path));
 	DAV_DEBUG("pool %s is open, size="DF_U64"", hdl->do_path, (size_t)statbuf.st_size);
 	return hdl;
 }
@@ -249,8 +260,8 @@ dav_obj_close(dav_obj_t *hdl)
 	DAV_DEBUG("pool %s is closed", hdl->do_path);
 	  chk_tid(hdl);
  /* DI */ D_ASSERTF(hdl->tc == 1, "pool %s tc:%d obj:%p", hdl->do_path, hdl->tc, hdl);
-	if (hdl->do_path)
-		D_FREE(hdl->do_path);
+	D_FREE(hdl->do_path);
+	D_FREE(hdl->utx);
 	D_FREE(hdl);
 }
 

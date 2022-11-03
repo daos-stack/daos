@@ -64,6 +64,7 @@ typedef struct dav_obj {
 	int				 do_fd;
 	int				 nested_tx;
 	struct bio_meta_instance	*do_mi;
+	struct umem_tx			*utx;
 	struct wal_tx			 do_wtx;
  /* DI */
 	int tc;

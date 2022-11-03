@@ -69,6 +69,7 @@ wal_tx_reinit(struct dav_obj *dav_hdl)
 	D_INIT_LIST_HEAD(&tx->wt_redo);
 	tx->wt_redo_cnt = 0;
 	tx->wt_redo_payload_len = 0;
+	tx->wt_redo_act_pos = NULL;
 	tx->wt_dav_hdl = dav_hdl;
 
 	return rc;
@@ -93,46 +94,43 @@ wal_tx_act_cleanup(d_list_t *list)
 	}
 }
 
+#define WAL_PRT_PG_OFF(p) ((p)/4096), ((p)%4096)
 static int
 wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 {
 	struct umem_act_item    *it, *next;
-	char *pathname;
+	char *pathname = basename(dav_hdl->do_path);
 
 	d_list_for_each_entry_safe(it, next, redo_list, it_link) {
-		if (dav_hdl->do_path != NULL)
-			pathname = basename(dav_hdl->do_path);
-		else
-			pathname = "null";
 		switch (it->it_act.ac_opc) {
 		case UMEM_ACT_COPY:
 			D_ERROR("%s: UMEM_ACT_COPY     txid=%lu, (p,o)=%lu,%lu size=%lu\n",
 				pathname, id,
-				it->it_act.ac_copy.addr/4096, it->it_act.ac_copy.addr%4096,
+				WAL_PRT_PG_OFF(it->it_act.ac_copy.addr),
 				it->it_act.ac_copy.size);
 			break;
 		case UMEM_ACT_ASSIGN:
 			D_ERROR("%s: UMEM_ACT_ASSIGN   txid=%lu, (p,o)=%lu,%lu size=%lu\n",
 				pathname, id,
-				it->it_act.ac_assign.addr/4096, it->it_act.ac_assign.addr%4096,
+				WAL_PRT_PG_OFF(it->it_act.ac_assign.addr),
 				it->it_act.ac_assign.size);
 			break;
 		case UMEM_ACT_SET:
 			D_ERROR("%s: UMEM_ACT_SET      txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
 				pathname, id,
-				it->it_act.ac_set.addr/4096, it->it_act.ac_set.addr%4096,
+				WAL_PRT_PG_OFF(it->it_act.ac_set.addr),
 				it->it_act.ac_set.size, it->it_act.ac_set.val);
 			break;
 		case UMEM_ACT_SET_BITS:
 			D_ERROR("%s: UMEM_ACT_SET_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
 				pathname, id,
-				it->it_act.ac_op_bits.addr/4096, it->it_act.ac_op_bits.addr%4096,
+				WAL_PRT_PG_OFF(it->it_act.ac_op_bits.addr),
 				it->it_act.ac_op_bits.pos, it->it_act.ac_op_bits.num);
 			break;
 		case UMEM_ACT_CLR_BITS:
 			D_ERROR("%s: UMEM_ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
 				pathname, id, 
-				it->it_act.ac_op_bits.addr/4096, it->it_act.ac_op_bits.addr%4096,
+				WAL_PRT_PG_OFF(it->it_act.ac_op_bits.addr),
 				it->it_act.ac_op_bits.pos, it->it_act.ac_op_bits.num);
 			break;
 		default:
@@ -142,6 +140,7 @@ wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 	}
 	return 0;
 }
+#undef WAL_PRT_PG_OFF
 
 /** complete the wl transaction */
 int
@@ -292,7 +291,7 @@ wal_tx_set(void *hdl, void *addr, char c, daos_size_t size)
  * query action number in redo list.
  */
 uint32_t
-wal_tx_redo_act_nr(struct wal_tx *tx)
+wal_tx_act_nr(struct wal_tx *tx)
 {
 	return tx->wt_redo_cnt;
 }
@@ -301,7 +300,46 @@ wal_tx_redo_act_nr(struct wal_tx *tx)
  * query payload length in redo list.
  */
 uint32_t
-wal_tx_redo_payload_len(struct wal_tx *tx)
+wal_tx_payload_len(struct wal_tx *tx)
 {
 	return tx->wt_redo_payload_len;
+}
+
+/**
+ * get first action pointer, NULL for list empty.
+ */
+struct umem_action *
+wal_tx_act_first(struct wal_tx *tx)
+{
+	if (d_list_empty(&tx->wt_redo)) {
+		tx->wt_redo_act_pos = NULL;
+		return NULL;
+	}
+
+	tx->wt_redo_act_pos = d_list_entry(&tx->wt_redo.next, struct umem_act_item, it_link);
+	return &tx->wt_redo_act_pos->it_act;
+}
+
+/**
+ * get next action pointer, NULL for done or list empty.
+ */
+struct umem_action *
+wal_tx_act_next(struct wal_tx *tx)
+{
+	if (tx->wt_redo_act_pos == NULL) {
+		if (d_list_empty(&tx->wt_redo))
+			return NULL;
+		tx->wt_redo_act_pos = d_list_entry(&tx->wt_redo.next, struct umem_act_item,
+						   it_link);
+		return &tx->wt_redo_act_pos->it_act;
+	}
+
+	D_ASSERT(!d_list_empty(&tx->wt_redo));
+	tx->wt_redo_act_pos = d_list_entry(&tx->wt_redo_act_pos->it_link.next,
+					   struct umem_act_item, it_link);
+	if (&tx->wt_redo_act_pos->it_link == &tx->wt_redo) {
+		tx->wt_redo_act_pos = NULL;
+		return NULL;
+	}
+	return &tx->wt_redo_act_pos->it_act;
 }

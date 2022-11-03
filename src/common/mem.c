@@ -18,6 +18,7 @@
 #include <libpmemobj.h>
 #include <daos_srv/ad_mem.h>
 #include "dav/dav.h"
+#include "dav/wal_tx.h"
 #endif
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
@@ -964,6 +965,38 @@ bmem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 	 */
 }
 
+struct wal_tx;
+
+static inline struct wal_tx *
+umem_tx2wal_tx(struct umem_tx *utx)
+{
+	return (struct wal_tx *)&utx->utx_private;
+}
+
+static uint32_t
+bmem_tx_act_nr(struct umem_tx *utx)
+{
+	return wal_tx_act_nr(umem_tx2wal_tx(utx));
+}
+
+static uint32_t
+bmem_tx_payload_sz(struct umem_tx *utx)
+{
+	return wal_tx_payload_len(umem_tx2wal_tx(utx));
+}
+
+static struct umem_action *
+bmem_tx_act_first(struct umem_tx *utx)
+{
+	return wal_tx_act_first(umem_tx2wal_tx(utx));
+}
+
+static struct umem_action *
+bmem_tx_act_next(struct umem_tx *utx)
+{
+	return wal_tx_act_next(umem_tx2wal_tx(utx));
+}
+
 static umem_ops_t	bmem_ops = {
 	.mo_tx_free		= bmem_tx_free,
 	.mo_tx_alloc		= bmem_tx_alloc,
@@ -982,6 +1015,10 @@ static umem_ops_t	bmem_ops = {
 	.mo_atomic_alloc	= bmem_atomic_alloc,
 	.mo_atomic_free		= bmem_atomic_free,
 	.mo_atomic_flush	= bmem_atomic_flush,
+	.mo_tx_act_nr		= bmem_tx_act_nr,
+	.mo_tx_payload_sz	= bmem_tx_payload_sz,
+	.mo_tx_act_first	= bmem_tx_act_first,
+	.mo_tx_act_next		= bmem_tx_act_next,
 	.mo_tx_add_callback	= umem_tx_add_cb,
 };
 
@@ -1001,7 +1038,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
 #endif
 
 /* volatile memory operations */
