@@ -34,13 +34,14 @@ from util.results_utils import create_html, create_xml, Job, Results, TestResult
 from util.run_utils import get_local_host, run_local, run_remote, RunException
 from util.user_utils import get_chown_command
 
+BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
-COVFILE = os.path.join(os.sep, "tmp", "test.cov")
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -771,6 +772,9 @@ class Launch():
         self.job = None
         self.result = None
 
+        # Options for bullseye code coverage
+        self.bullseye_hosts = NodeSet()
+
         # Details about the run
         self.details = OrderedDict()
 
@@ -1023,6 +1027,18 @@ class Launch():
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
+        # Determine if bullseye code coverage collection is enabled
+        logger.debug("Checking for bullseye code coverage configuration")
+        # pylint: disable=unsupported-binary-operation
+        self.bullseye_hosts = args.test_servers | NodeSet(get_local_host())
+        result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
+        if not result.passed:
+            logger.info(
+                "Bullseye code coverage collection not configured on %s", result.failed_hosts)
+            self.bullseye_hosts = NodeSet()
+        else:
+            logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+
         # Execute the tests
         code_coverage_hosts = args.test_servers | NodeSet(get_local_host())
         status = self.run_tests(
@@ -1128,7 +1144,7 @@ class Launch():
         # /usr/sbin directory.
         usr_sbin = os.path.sep + os.path.join("usr", "sbin")
         path = os.environ.get("PATH")
-        os.environ["COVFILE"] = COVFILE
+        os.environ["COVFILE"] = BULLSEYE_FILE
 
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
@@ -2043,6 +2059,9 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure hosts to collect code coverage
+        self.setup_bullseye()
+
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
             logger.info("-" * 80)
@@ -2094,20 +2113,63 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        if jenkinslog:
-            covfile_path, covfile_file = os.path.split(COVFILE)
-            return_code |= self._archive_files(
-                "bullseye coverage log files",
-                code_coverage_hosts,
-                covfile_path,
-                "".join([covfile_file, "*"]),
-                os.path.join(self.job_results_dir, "bullseye_coverage_logs"),
-                1,
-                threshold,
-                900)
+        self.finalize_bullseye()
 
         # Summarize the run
         return self._summarize_run(return_code)
+
+    def setup_bullseye(self):
+        """Set up the hosts for bullseye code coverage collection.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        if self.bullseye_hosts:
+            logger.debug("-" * 80)
+            logger.info("Setting up bullseye code coverage on %s:", self.bullseye_hosts)
+
+            logger.debug("Removing any existing %s file", BULLSEYE_FILE)
+            command = ["rm", "-fr", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error removing bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
+            command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error copying bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
+            command = ["chmod", "777", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error updating bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+        return 0
+
+    def finalize_bullseye(self):
+        """Retrieve the bullseye code coverage collection information from the hosts.
+
+        Returns:
+            int: status code: 0 = success, 16 = failure
+
+        """
+        if self.bullseye_hosts:
+            bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
+            return self._archive_files(
+                "bullseye coverage log files",
+                self.bullseye_hosts,
+                bullseye_path,
+                "".join([bullseye_file, "*"]),
+                os.path.join(self.job_results_dir, "bullseye_coverage_logs"),
+                1,
+                None,
+                900)
+        return 0
 
     @staticmethod
     def display_disk_space(path):
@@ -2518,7 +2580,7 @@ class Launch():
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                f"then export COVFILE={COVFILE} && daos_server storage prepare -n --reset && "
+                f"then export COVFILE={BULLSEYE_FILE} && daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)

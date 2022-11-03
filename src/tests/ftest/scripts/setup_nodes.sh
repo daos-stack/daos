@@ -67,12 +67,6 @@ EOF
     sudo mount /mnt/daos
 fi
 
-rm -f /tmp/test.cov
-if [ -f /usr/lib/daos/TESTING/ftest/test.cov ]; then
-    cp /usr/lib/daos/TESTING/ftest/test.cov /tmp
-    chmod 777 /tmp/test.cov
-fi
-
 echo Setting up fuse.conf
 ls -l /etc/fuse.conf || true
 if [ -e /etc/fuse.conf ]
