@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -256,4 +257,120 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 				),
 		},
 	}, nil
+}
+
+type (
+	// MockMountProviderConfig is a configuration for a mock MountProvider.
+	MockMountProviderConfig struct {
+		MountErr           error
+		UnmountErr         error
+		IsMountedRes       bool
+		IsMountedErr       error
+		IsMountedCount     int
+		ClearMountpointErr error
+		MakeMountPathErr   error
+	}
+
+	mountMap struct {
+		sync.RWMutex
+		mounts map[string]string
+	}
+
+	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
+	MockMountProvider struct {
+		cfg    *MockMountProviderConfig
+		mounts mountMap
+	}
+)
+
+func (mm *mountMap) Add(target, opts string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	if mm.mounts == nil {
+		mm.mounts = make(map[string]string)
+	}
+	mm.mounts[target] = opts
+}
+
+func (mm *mountMap) Remove(target string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	delete(mm.mounts, target)
+}
+
+func (mm *mountMap) Get(target string) (string, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	opts, ok := mm.mounts[target]
+	return opts, ok
+}
+
+// Mount is a mock implementation.
+func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.MountErr == nil {
+		m.mounts.Add(req.Target, req.Options)
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: true,
+		}, nil
+	}
+	return nil, m.cfg.MountErr
+}
+
+// Unmount is a mock implementation.
+func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		m.mounts.Remove(req.Target)
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: false,
+		}, nil
+	}
+	return nil, m.cfg.UnmountErr
+}
+
+// GetMountOpts returns the mount options for the given target.
+func (m *MockMountProvider) GetMountOpts(target string) (string, bool) {
+	opts, exists := m.mounts.Get(target)
+	return opts, exists
+}
+
+// IsMounted is a mock implementation.
+func (m *MockMountProvider) IsMounted(target string) (bool, error) {
+	if m.cfg == nil {
+		opts, exists := m.mounts.Get(target)
+		return exists && opts != "", nil
+	}
+	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
+}
+
+// ClearMountpoint is a mock implementation.
+func (m *MockMountProvider) ClearMountpoint(_ string) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.ClearMountpointErr
+}
+
+// MakeMountPath is a mock implementation.
+func (m *MockMountProvider) MakeMountPath(_ string, _, _ int) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.MakeMountPathErr
+}
+
+// NewMockMountProvider creates a new MockProvider.
+func NewMockMountProvider(cfg *MockMountProviderConfig) *MockMountProvider {
+	return &MockMountProvider{
+		cfg: cfg,
+	}
+}
+
+// DefaultMockMountProvider creates a mock provider in which all requests succeed.
+func DefaultMockMountProvider() *MockMountProvider {
+	return NewMockMountProvider(nil)
 }

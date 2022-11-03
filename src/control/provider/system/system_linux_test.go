@@ -111,3 +111,49 @@ func TestIsMounted(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFsType(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expFsType string
+		expError  error
+	}{
+		"not formatted": {
+			input:     "/dev/pmem1: data\n",
+			expFsType: FsTypeNone,
+		},
+		"formatted": {
+			input:     "/dev/pmem0: Linux rev 1.0 ext4 filesystem data, UUID=09619a0d-0c9e-46b4-add5-faf575dd293d\n",
+			expFsType: FsTypeExt4,
+		},
+		"empty input": {
+			expFsType: FsTypeUnknown,
+		},
+		"mangled short": {
+			input:     "/dev/pmem0",
+			expFsType: FsTypeUnknown,
+		},
+		"mangled medium": {
+			input:     "/dev/pmem0: Linux",
+			expFsType: FsTypeUnknown,
+		},
+		"mangled long": {
+			input:     "/dev/pmem0: Linux quack bark",
+			expFsType: FsTypeUnknown,
+		},
+		"formatted; ext2": {
+			input:     "/dev/pmem0: Linux rev 1.0 ext2 filesystem data, UUID=0ce47201-6f25-4569-9e82-34c9d91173bb (large files)\n",
+			expFsType: "ext2",
+		},
+		"garbage in header": {
+			input:     "/dev/pmem1: COM executable for DOS",
+			expFsType: "DOS",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.expFsType, parseFsType(tc.input)); diff != "" {
+				t.Fatalf("unexpected fsType (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
