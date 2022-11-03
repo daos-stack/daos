@@ -257,3 +257,79 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 		},
 	}, nil
 }
+
+type (
+	// MockMountProviderConfig is a configuration for a mock MountProvider.
+	MockMountProviderConfig struct {
+		MountErr           error
+		UnmountErr         error
+		IsMountedRes       bool
+		IsMountedErr       error
+		IsMountedCount     int
+		ClearMountpointErr error
+		MakeMountPathErr   error
+	}
+
+	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
+	MockMountProvider struct {
+		cfg *MockMountProviderConfig
+	}
+)
+
+// Mount is a mock implementation.
+func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.MountErr == nil {
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: true,
+		}, nil
+	}
+	return nil, m.cfg.MountErr
+}
+
+// Unmount is a mock implementation.
+func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: false,
+		}, nil
+	}
+	return nil, m.cfg.UnmountErr
+}
+
+// IsMounted is a mock implementation.
+func (m *MockMountProvider) IsMounted(_ string) (bool, error) {
+	if m.cfg == nil {
+		return true, nil
+	}
+	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
+}
+
+// ClearMountpoint is a mock implementation.
+func (m *MockMountProvider) ClearMountpoint(_ string) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.ClearMountpointErr
+}
+
+// MakeMountPath is a mock implementation.
+func (m *MockMountProvider) MakeMountPath(_ string, _, _ int) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.MakeMountPathErr
+}
+
+// NewMockMountProvider creates a new MockProvider.
+func NewMockMountProvider(cfg *MockMountProviderConfig) *MockMountProvider {
+	return &MockMountProvider{
+		cfg: cfg,
+	}
+}
+
+// DefaultMockMountProvider creates a mock provider in which all requests succeed.
+func DefaultMockMountProvider() *MockMountProvider {
+	return NewMockMountProvider(nil)
+}

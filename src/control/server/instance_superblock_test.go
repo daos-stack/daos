@@ -14,6 +14,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -42,11 +43,11 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 					WithScmMountPoint(mnt),
 			)
 		r := engine.NewRunner(log, cfg)
-		msc := &scm.MockSysConfig{
+		msc := &sysprov.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
+		mp := storage.NewProvider(log, 0, &cfg.Storage, sysprov.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
 		ei := NewEngineInstance(log, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
