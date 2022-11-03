@@ -75,6 +75,7 @@ struct bio_nvme_data {
 	const char		*bd_nvme_conf;
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
+	unsigned int		 bd_nvme_roles;
 	bool			 bd_started;
 	bool			 bd_bypass_health_collect;
 };
@@ -103,7 +104,7 @@ bio_spdk_env_init(void)
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 
-	if (bio_nvme_configured()) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
 		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
@@ -121,7 +122,7 @@ bio_spdk_env_init(void)
 
 	opts.env_context = (char *)dpdk_cli_override_opts;
 
-	if (bio_nvme_configured()) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
@@ -154,12 +155,6 @@ out:
 	if (opts.pci_allowed != NULL)
 		D_FREE(opts.pci_allowed);
 	return rc;
-}
-
-bool
-bio_nvme_configured(void)
-{
-	return nvme_glb.bd_nvme_conf != NULL;
 }
 
 bool
@@ -357,7 +352,7 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 		bxb = bio_xs_context2xs_blobstore(ctxt, st);
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
-		if (!bio_is_meta_on_ssd_configured())
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			return false;
 	}
 
@@ -789,9 +784,13 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 	rc = bdev_name2roles(bdev_name);
-	if (rc < 0)
+	if (rc < 0) {
+		D_ERROR("Failed to get role from bdev name, "DF_RC"\n", DP_RC(rc));
 		goto error;
+	}
 
+	/* Update roles in global NVMe config */
+	nvme_glb.bd_nvme_roles |= rc;
 	d_bdev->bb_roles = rc;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
@@ -882,8 +881,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		return 0;
 	}
 
-	D_DEBUG(DB_MGMT, "Initial target count for "DF_UUID" set at %d\n",
-		DP_UUID(bs_uuid), d_bdev->bb_tgt_cnt);
+	D_DEBUG(DB_MGMT, "Create DAOS bdev "DF_UUID", role:%u\n",
+		DP_UUID(bs_uuid), d_bdev->bb_roles);
 
 	d_list_add_tail(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
@@ -1041,8 +1040,8 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	return bb;
 }
 
-unsigned int
-smd_dev_type2bdev_role(enum smd_dev_type st)
+static inline unsigned int
+dev_type2role(enum smd_dev_type st)
 {
 	switch (st) {
 	case SMD_DEV_TYPE_DATA:
@@ -1057,27 +1056,34 @@ smd_dev_type2bdev_role(enum smd_dev_type st)
 	}
 }
 
-static bool
-is_bdev_match(struct bio_bdev *d_bdev, unsigned int bdev_roles)
+static inline bool
+is_role_match(unsigned int roles, unsigned int req_role)
 {
-	if (d_bdev->bb_roles == 0)
-		return NVME_ROLE_DATA & bdev_roles;
+	if (roles == 0)
+		return NVME_ROLE_DATA & req_role;
 
-	return d_bdev->bb_roles & bdev_roles;
+	return roles & req_role;
 }
 
-/**
- * Assign a device for target->device mapping. Device chosen will be the device
- * with the least amount of mapped targets(VOS xstreams).
- */
-static int
-assign_device(int tgt_id, enum smd_dev_type st)
+bool
+bio_nvme_configured(enum smd_dev_type type)
+{
+	if (nvme_glb.bd_nvme_conf == NULL)
+		return false;
+
+	if (type >= SMD_DEV_TYPE_MAX)
+		return true;
+
+	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+}
+
+static struct bio_bdev *
+choose_device(int tgt_id, enum smd_dev_type st)
 {
 	struct bio_bdev		*d_bdev;
 	struct bio_bdev		*chosen_bdev = NULL;
 	int			 lowest_tgt_cnt = 1 << 30, rc;
 	struct smd_dev_info	*dev_info;
-	unsigned int		 bdev_roles = smd_dev_type2bdev_role(st);
 
 	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
 	/*
@@ -1092,52 +1098,25 @@ assign_device(int tgt_id, enum smd_dev_type st)
 				D_ASSERT(dev_info->sdi_tgt_cnt != 0);
 				d_bdev->bb_tgt_cnt = dev_info->sdi_tgt_cnt;
 				smd_dev_free_info(dev_info);
-				/*
-				 * Something went wrong in hotplug case: device ID is in SMD
-				 * but bio_bdev wasn't created on server start.
-				 */
-				if (is_server_started()) {
-					D_ERROR("bio_bdev for "DF_UUID" wasn't created?\n",
-						DP_UUID(d_bdev->bb_uuid));
-					rc = -DER_INVAL;
-					goto out;
-				}
 			} else if (rc == -DER_NONEXIST) {
 				/* Device isn't in SMD, not used by DAOS yet */
 				d_bdev->bb_tgt_cnt = 0;
 			} else {
 				D_ERROR("Unable to get dev info for "DF_UUID"\n",
 					DP_UUID(d_bdev->bb_uuid));
-				goto out;
+				return NULL;
 			}
 			d_bdev->bb_tgt_cnt_init = 1;
 		}
-		if (is_bdev_match(d_bdev, bdev_roles) && d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
+		/* Choose the least used one */
+		if (is_role_match(d_bdev->bb_roles, dev_type2role(st)) &&
+		    d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
 			lowest_tgt_cnt = d_bdev->bb_tgt_cnt;
 			chosen_bdev = d_bdev;
 		}
 	}
 
-	if (chosen_bdev == NULL) {
-		D_ERROR("Failed to find type %d to tgt %d\n", st, tgt_id);
-		return -DER_NONEXIST;
-	}
-
-	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id, st);
-	if (rc) {
-		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
-			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
-		goto out;
-	}
-
-	chosen_bdev->bb_tgt_cnt++;
-
-	D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d to tgt %d\n",
-		DP_UUID(chosen_bdev->bb_uuid), chosen_bdev->bb_tgt_cnt, tgt_id);
-
-out:
-	return rc;
+	return chosen_bdev;
 }
 
 struct bio_xs_blobstore *
@@ -1154,67 +1133,104 @@ alloc_xs_blobstore(void)
 	return bxb;
 }
 
-static inline struct bio_bdev *bio_sys_bdev(unsigned int role)
+static inline struct bio_bdev *
+find_sys_bdev(unsigned int role)
 {
-	struct bio_bdev		*d_bdev;
-	bool			 found = false;
+	struct bio_bdev	*d_bdev;
 
 	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
-	/* firstly found meta device is for sys device */
+	D_ASSERT(role != SMD_DEV_TYPE_DATA);
+	/*
+	 * Temporarily use the first meta/WAL device, needs be improved when we support
+	 * meta/WAL device hotplug.
+	 */
 	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (is_bdev_match(d_bdev, role)) {
-			found = true;
-			break;
-		}
+		if (is_role_match(d_bdev->bb_roles, role))
+			return d_bdev;
 	}
 
-	if (found)
-		return d_bdev;
 	return NULL;
 }
 
-int
-find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
-		struct bio_bdev **ret_d_bdev, struct smd_dev_info **ret_dev_info)
+static int
+assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
-	bool			 assigned = false;
+	enum smd_dev_type	st, failed_st;
+	bool			assigned = false;
+	int			rc;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+			continue;
+
+		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
+		if (rc) {
+			D_ERROR("Failed to map dev "DF_UUID" type:%u to tgt %d. "DF_RC"\n",
+				DP_UUID(d_bdev->bb_uuid), st, tgt_id, DP_RC(rc));
+			failed_st = st;
+			goto error;
+		}
+
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+			break;
+	}
+
+	return assigned ? 0 : -DER_INVAL;
+error:
+	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
+		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+			continue;
+		/* TODO Error cleanup by smd_dev_del_tgt() */
+	}
+	return rc;
+}
+
+static struct bio_bdev *
+assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
+	       unsigned int *dev_state)
+{
 	struct bio_bdev		*d_bdev;
 	struct smd_dev_info	*dev_info = NULL;
 	int			 rc;
 
-	/*
-	 * Lookup device mapped to @tgt_id and @st in the per-server
-	 * metadata, if found, create blobstore on the mapped device.
-	 */
-	if (tgt_id != BIO_SYS_TGT_ID && tgt_id != BIO_STANDALONE_TGT_ID) {
-retry:
-		rc = smd_dev_get_by_tgt(tgt_id, st, &dev_info);
-		if (rc == -DER_NONEXIST && !assigned) {
-			rc = assign_device(tgt_id, st);
-			if (rc)
-				return rc;
-			assigned = true;
-			goto retry;
-		} else if (rc) {
-			D_ERROR("Failed to get dev for tgt %d type %d "DF_RC"\n",
-				tgt_id, st, DP_RC(rc));
-			return rc;
+	*dev_state = SMD_DEV_NORMAL;
+	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
+		d_bdev = find_sys_bdev(dev_type2role(st));
+		if (d_bdev == NULL) {
+			D_ERROR("Failed to find sys bdev\n");
+			return NULL;
 		}
-	} else {
-		D_ALLOC_PTR(dev_info);
-		if (dev_info == NULL)
-			return -DER_NOMEM;
-
-		d_bdev = bio_sys_bdev(smd_dev_type2bdev_role(st));
-		D_ASSERT(d_bdev);
-		uuid_copy(dev_info->sdi_id, d_bdev->bb_uuid);
-		dev_info->sdi_state = SMD_DEV_NORMAL;
-		goto alloc_bbs;
+		/* Assume the sys device in NORMAL state for this moment */
+		return d_bdev;
 	}
 
-	D_DEBUG(DB_MGMT, "Get dev "DF_UUID" mapped to tgt %d type %d\n",
-		DP_UUID(dev_info->sdi_id), tgt_id, st);
+	rc = smd_dev_get_by_tgt(tgt_id, st, &dev_info);
+	if (rc == -DER_NONEXIST) {
+		d_bdev = choose_device(tgt_id, st);
+		if (d_bdev == NULL) {
+			D_ERROR("Failed to choose bdev for tgt:%u type:%u\n", tgt_id, st);
+			return NULL;
+		}
 
+		rc = assign_roles(d_bdev, tgt_id);
+		if (rc) {
+			D_ERROR("Failed to assign roles. "DF_RC"\n", DP_RC(rc));
+			return NULL;
+		}
+
+		d_bdev->bb_tgt_cnt++;
+		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d to tgt %d\n",
+			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, tgt_id);
+
+		return d_bdev;
+	} else if (rc) {
+		D_ERROR("Failed to get device info for tgt:%u type:%u, "DF_RC"\n",
+			tgt_id, st, DP_RC(rc));
+		return NULL;
+	}
+
+	D_ASSERT(dev_info != NULL);
+	*dev_state = dev_info->sdi_state;
 	/*
 	 * Two cases leading to the inconsistency between SMD information and
 	 * in-memory bio_bdev list:
@@ -1226,37 +1242,13 @@ retry:
 	 * starting and ask admin to plug the device or fix the SMD manually.
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
-	if (d_bdev == NULL) {
+	if (d_bdev == NULL)
 		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
 			"SMD table is stale/corrupted.\n",
 			DP_UUID(dev_info->sdi_id), tgt_id, st);
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-alloc_bbs:
-	D_ASSERT(d_bdev->bb_name != NULL);
-	/*
-	 * If no bbs (BIO blobstore) is attached to the device, attach one and
-	 * set current xstream as bbs owner.
-	 */
-	if (d_bdev->bb_blobstore == NULL) {
-		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt, d_bdev);
-		if (d_bdev->bb_blobstore == NULL) {
-			rc = -DER_NOMEM;
-			goto out;
-		}
-	}
-
-	*ret_d_bdev = d_bdev;
-	*ret_dev_info = dev_info;
-
-	return 0;
-out:
-	D_ASSERT(dev_info != NULL);
 	smd_dev_free_info(dev_info);
 
-	return rc;
+	return d_bdev;
 }
 
 static int
@@ -1266,7 +1258,7 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	struct bio_blobstore	*bbs;
 	struct spdk_blob_store	*bs;
 	struct bio_xs_blobstore	*bxb;
-	struct smd_dev_info	*dev_info = NULL;
+	unsigned int		 dev_state;
 	int			 rc;
 
 	D_ASSERT(!ctxt->bxc_ready);
@@ -1284,17 +1276,27 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 		return -DER_NOMEM;
 	}
 
-	rc = find_xs_bio_dev(ctxt, tgt_id, st, &d_bdev, &dev_info);
-	if (rc)
-		return rc;
+	d_bdev = assign_xs_bdev(ctxt, tgt_id, st, &dev_state);
+	if (d_bdev == NULL)
+		return -DER_NONEXIST;
+
+	D_ASSERT(d_bdev->bb_name != NULL);
+	/*
+	 * If no bbs (BIO blobstore) is attached to the device, attach one and
+	 * set current xstream as bbs owner.
+	 */
+	if (d_bdev->bb_blobstore == NULL) {
+		d_bdev->bb_blobstore = alloc_bio_blobstore(ctxt, d_bdev);
+		if (d_bdev->bb_blobstore == NULL)
+			return -DER_NOMEM;
+	}
 
 	bxb = ctxt->bxc_xs_blobstores[st];
 	/* Hold bbs refcount for current xstream */
 	bxb->bxb_blobstore = get_bio_blobstore(d_bdev->bb_blobstore, ctxt);
-	if (bxb->bxb_blobstore == NULL) {
-		rc = -DER_NOMEM;
-		goto free_dev;
-	}
+	if (bxb->bxb_blobstore == NULL)
+		return -DER_NOMEM;
+
 	bbs = bxb->bxb_blobstore;
 
 	/*
@@ -1303,14 +1305,13 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	 */
 	if (is_bbs_owner(ctxt, bbs)) {
 		/* Initialize BS state according to SMD state */
-		if (dev_info->sdi_state == SMD_DEV_NORMAL) {
+		if (dev_state == SMD_DEV_NORMAL) {
 			bbs->bb_state = BIO_BS_STATE_NORMAL;
-		} else if (dev_info->sdi_state == SMD_DEV_FAULTY) {
+		} else if (dev_state == SMD_DEV_FAULTY) {
 			bbs->bb_state = BIO_BS_STATE_OUT;
 		} else {
-			D_ERROR("Invalid SMD state:%d\n", dev_info->sdi_state);
-			rc = -DER_INVAL;
-			goto free_dev;
+			D_ERROR("Invalid SMD state:%d\n", dev_state);
+			return -DER_INVAL;
 		}
 
 		/* Initialize health monitor */
@@ -1318,28 +1319,25 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 		if (rc != 0) {
 			D_ERROR("BIO health monitor init failed. "DF_RC"\n",
 				DP_RC(rc));
-			goto free_dev;
+			return rc;
 		}
 
 		if (bbs->bb_state == BIO_BS_STATE_OUT)
-			goto free_dev;
+			return 0;
 
 		/* Load blobstore with bstype specified for sanity check */
 		bs = load_blobstore(ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
 				    false, false, NULL, NULL);
-		if (bs == NULL) {
-			rc = -DER_INVAL;
-			goto free_dev;
-		}
+		if (bs == NULL)
+			return -DER_INVAL;
 		bbs->bb_bs = bs;
 
 		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s\n",
 			tgt_id, ctxt, d_bdev->bb_name);
-
 	}
 
 	if (bbs->bb_state == BIO_BS_STATE_OUT)
-		goto free_dev;
+		return 0;
 
 	/* Open IO channel for current xstream */
 	bs = bbs->bb_bs;
@@ -1348,17 +1346,11 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	bxb->bxb_io_channel = spdk_bs_alloc_io_channel(bs);
 	if (bxb->bxb_io_channel == NULL) {
 		D_ERROR("Failed to create io channel\n");
-		rc = -DER_NOMEM;
-		goto free_dev;
+		return -DER_NOMEM;
 	}
 
-free_dev:
-	D_ASSERT(dev_info != NULL);
-	smd_dev_free_info(dev_info);
-
-	return rc;
+	return 0;
 }
-
 
 static void
 bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
@@ -1483,6 +1475,9 @@ int
 bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 {
 	struct bio_xs_context	*ctxt;
+	struct bio_xs_blobstore	*bxb;
+	struct bio_blobstore	*bbs;
+	struct bio_bdev		*d_bdev;
 	char			 th_name[32];
 	int			 rc = 0;
 	enum smd_dev_type	 st;
@@ -1495,7 +1490,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	ctxt->bxc_self_polling = self_polling;
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
-	if (!bio_nvme_configured()) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
 		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
@@ -1566,18 +1561,30 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		}
 	}
 
+	d_bdev = NULL;
 	/* Initialize per-xstream blobstore context */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		/* No Data blobstore for sys xstream */
 		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
-		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
-		if (st != SMD_DEV_TYPE_DATA && !bio_is_meta_on_ssd_configured())
-			break;
+		/* Share the same device/blobstore used by previous type */
+		if (d_bdev && is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+			continue;
 
 		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
 		if (rc)
 			goto out;
+
+		bxb = ctxt->bxc_xs_blobstores[st];
+		D_ASSERT(bxb != NULL);
+		bbs = bxb->bxb_blobstore;
+		D_ASSERT(bbs != NULL);
+		d_bdev = bbs->bb_dev;
+		D_ASSERT(d_bdev != NULL);
+
+		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+			break;
 	}
 
 	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
@@ -1799,7 +1806,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	struct bio_xs_blobstore	*bxb;
 
 	/* NVMe context setup was skipped */
-	if (!bio_nvme_configured())
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX))
 		return 0;
 
 	D_ASSERT(ctxt != NULL && ctxt->bxc_thread != NULL);

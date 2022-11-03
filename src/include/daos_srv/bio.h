@@ -14,6 +14,7 @@
 
 #include <daos/mem.h>
 #include <daos_srv/control.h>
+#include <daos_srv/smd.h>
 #include <abt.h>
 
 #define BIO_ADDR_IS_HOLE(addr) ((addr)->ba_flags & BIO_FLAG_HOLE)
@@ -439,9 +440,10 @@ int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 void bio_nvme_fini(void);
 
 /**
- * Check if NVMe is configured
+ * Check if the specified type of NVMe device is configured, when SMD_DEV_TYPE_MAX
+ * is specified, return true if any type of device is configured.
  */
-bool bio_nvme_configured(void);
+bool bio_nvme_configured(enum smd_dev_type type);
 
 enum {
 	/* Notify BIO that all xsxtream contexts created */
@@ -724,9 +726,6 @@ bio_yield(struct umem_instance *umm)
 	ABT_thread_yield();
 }
 
-/* Opaque smd dev type */
-enum smd_dev_type;
-
 /*
  * Helper function to get the device health state for a given xstream.
  * Used for querying the BIO health information from the control plane command.
@@ -966,9 +965,6 @@ int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
 
 /* Function to return current data io context */
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
-
-/* Function to check if metadata on ssd enabled or not */
-bool bio_is_meta_on_ssd_configured(void);
 
 /*
  * Reserve WAL log space for current transaction
