@@ -163,7 +163,7 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 		if len(scmCfg.DeviceList) != 1 {
 			return nil, ErrInvalidDcpmCount
 		}
-		req.Dcpm = &DcpmParams{
+		req.Dcpm = &DeviceParams{
 			Device: scmCfg.DeviceList[0],
 		}
 	default:
