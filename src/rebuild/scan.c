@@ -603,7 +603,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				DP_UOID(oid), DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM) {
+	} else if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+		   rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		struct pl_obj_layout *layout = NULL;
 		bool still_needed;
 		uint32_t mytarget = dss_get_module_info()->dmi_tgt_id;
@@ -673,7 +674,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			 rpt->rt_rebuild_op == RB_OP_DRAIN ||
 			 rpt->rt_rebuild_op == RB_OP_REINT ||
 			 rpt->rt_rebuild_op == RB_OP_EXTEND ||
-			 rpt->rt_rebuild_op == RB_OP_RECLAIM);
+			 rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+			 rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM);
 	}
 	if (rebuild_nr <= 0) /* No need rebuild */
 		D_GOTO(out, rc = rebuild_nr);
@@ -851,7 +853,7 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op != RB_OP_RECLAIM) {
+	if (rpt->rt_rebuild_op != RB_OP_RECLAIM && rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		rpt_get(rpt);
 		rc = dss_ult_create(rebuild_objects_send_ult, rpt, DSS_XS_SELF,
 				    0, 0, &ult_send);
@@ -1043,7 +1045,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);

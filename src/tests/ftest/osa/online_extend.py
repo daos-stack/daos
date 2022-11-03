@@ -46,8 +46,6 @@ class OSAOnlineExtend(OSAUtils):
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
-        self.daos_racer.set_environment(
-            self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
     def run_online_extend_test(self, num_pool, racer=False,
@@ -142,7 +140,10 @@ class OSAOnlineExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            self.run_ior_thread("Read", oclass, test_seq)
+            if app_name == "ior":
+                self.run_ior_thread("Read", oclass, test_seq)
+            else:
+                break
             self.container = self.pool_cont_dict[self.pool][0]
             kwargs = {"pool": self.pool.uuid,
                       "cont": self.container.uuid}
