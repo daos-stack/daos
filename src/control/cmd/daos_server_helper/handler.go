@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -49,7 +49,7 @@ func (h *scmMountUnmountHandler) Handle(log logging.Logger, req *pbin.Request) *
 
 	h.setupProvider(log)
 
-	var mRes *storage.ScmMountResponse
+	var mRes *storage.MountResponse
 	var err error
 	switch req.Method {
 	case "ScmMount":
