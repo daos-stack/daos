@@ -111,17 +111,11 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SMD_LIST_POOLS:
 		ds_mgmt_drpc_smd_list_pools(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_DEV_STATE_QUERY:
-		ds_mgmt_drpc_dev_state_query(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_DEV_REPLACE:
 		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_DEV_IDENTIFY:
-		ds_mgmt_drpc_dev_identify(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
@@ -155,6 +149,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_GROUP_UPDATE:
 		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_LED_MANAGE:
+		ds_mgmt_drpc_dev_manage_led(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_CHK_START:
 		ds_mgmt_drpc_check_start(drpc_req, drpc_resp);

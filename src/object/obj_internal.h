@@ -21,6 +21,7 @@
 #include <daos/btree_class.h>
 #include <daos/object.h>
 #include <daos/cont_props.h>
+#include <daos/container.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -48,8 +49,8 @@ struct dc_obj_shard {
 	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
-	/** container handler of the object */
-	daos_handle_t		do_co_hdl;
+	/** container ptr */
+	struct dc_cont		*do_co;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
@@ -82,8 +83,10 @@ struct dc_object {
 	struct daos_obj_md	 cob_md;
 	/** object class attribute */
 	struct daos_oclass_attr	 cob_oca;
-	/** container open handle */
-	daos_handle_t		 cob_coh;
+	/** container ptr */
+	struct dc_cont		*cob_co;
+	/** pool ptr */
+	struct dc_pool		*cob_pool;
 	/** cob_spin protects obj_shards' do_ref */
 	pthread_spinlock_t	 cob_spin;
 
@@ -362,6 +365,7 @@ struct obj_auxi_args {
 					 csum_retry:1,
 					 csum_report:1,
 					 tx_uncertain:1,
+					 nvme_io_err:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
 					 ec_in_recov:1,
@@ -492,6 +496,19 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
+static inline int
+dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	if (!dc_cont)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dc_cont->dc_cont_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dc_cont->dc_uuid);
+	return 0;
+}
+
 int dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
 		  daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr);
 
@@ -592,7 +609,8 @@ obj_retry_error(int err)
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
+	       err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
+	       daos_crt_network_error(err);
 }
 
 static inline daos_handle_t
@@ -619,16 +637,9 @@ shard_task_abort(tse_task_t *task, void *arg)
 static inline void
 dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
-		epoch->oe_value = crt_hlc_get();
-		epoch->oe_first = epoch->oe_value;
-		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
-		epoch->oe_flags = 0;
-	} else {
-		epoch->oe_value = DAOS_EPOCH_MAX;
-		epoch->oe_first = epoch->oe_value;
-		epoch->oe_flags = 0;
-	}
+	epoch->oe_value = DAOS_EPOCH_MAX;
+	epoch->oe_first = epoch->oe_value;
+	epoch->oe_flags = 0;
 }
 
 static inline void

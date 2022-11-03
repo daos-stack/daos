@@ -10,6 +10,7 @@ from enum import IntEnum
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
+from general_utils import get_log_file
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
@@ -73,7 +74,7 @@ class IorCommand(SubProcessCommand):
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
         >>> server_manager = self.server_manager[0]
-        >>> env = self.ior_cmd.get_environment(server_manager, self.client_log)
+        >>> env = self.ior_cmd.get_default_env(server_manager, self.client_log)
         >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
         >>> mpirun.assign_processes(len(self.hostlist_clients))
         >>> mpirun.assign_environment(env)
@@ -162,9 +163,6 @@ class IorCommand(SubProcessCommand):
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
-
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
@@ -276,8 +274,9 @@ class IorCommand(SubProcessCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
         env["FI_PSM2_DISCONNECT"] = "1"
 
         # ior POSIX api does not require the below options.
@@ -289,8 +288,7 @@ class IorCommand(SubProcessCommand):
                 env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
                                                                 self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
-                    env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                        self.dfs_oclass.value
+                    env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
         return env
 
     @staticmethod

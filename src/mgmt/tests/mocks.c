@@ -537,31 +537,6 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 	return 0;
 }
 
-int
-ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-		    Ctl__DevReplaceResp *resp)
-{
-	return 0;
-}
-
-int
-ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp)
-{
-	return 0;
-}
-
 int	ds_mgmt_pool_upgrade_return;
 uuid_t  ds_mgmt_pool_upgrade_uuid;
 
@@ -577,6 +552,62 @@ mock_ds_mgmt_pool_upgrade_setup(void)
 {
 	ds_mgmt_pool_upgrade_return = 0;
 	uuid_clear(ds_mgmt_pool_upgrade_uuid);
+}
+
+int	ds_mgmt_dev_manage_led_return;
+uuid_t  ds_mgmt_dev_manage_led_uuid;
+
+void
+mock_ds_mgmt_dev_manage_led_setup(void)
+{
+	ds_mgmt_dev_manage_led_return = 0;
+	uuid_clear(ds_mgmt_dev_manage_led_uuid);
+}
+
+int
+ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
+{
+	if (uuid_parse(req->ids, ds_mgmt_dev_manage_led_uuid) != 0)
+		return -DER_INVAL;
+
+	return ds_mgmt_dev_manage_led_return;
+}
+
+int	ds_mgmt_dev_replace_return;
+uuid_t  ds_mgmt_dev_replace_old_uuid;
+uuid_t  ds_mgmt_dev_replace_new_uuid;
+
+int
+ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevManageResp *resp)
+{
+	uuid_copy(ds_mgmt_dev_replace_old_uuid, old_uuid);
+	uuid_copy(ds_mgmt_dev_replace_new_uuid, new_uuid);
+	return ds_mgmt_dev_replace_return;
+}
+
+void
+mock_ds_mgmt_dev_replace_setup(void)
+{
+	ds_mgmt_dev_replace_return = 0;
+	uuid_clear(ds_mgmt_dev_replace_old_uuid);
+	uuid_clear(ds_mgmt_dev_replace_new_uuid);
+}
+
+int	ds_mgmt_dev_set_faulty_return;
+uuid_t  ds_mgmt_dev_set_faulty_uuid;
+
+int
+ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp)
+{
+	uuid_copy(ds_mgmt_dev_set_faulty_uuid, uuid);
+	return ds_mgmt_dev_set_faulty_return;
+}
+
+void
+mock_ds_mgmt_dev_set_faulty_setup(void)
+{
+	ds_mgmt_dev_set_faulty_return = 0;
+	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
 
 int

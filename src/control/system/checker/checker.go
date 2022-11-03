@@ -9,7 +9,9 @@ package checker
 type (
 	FindingStore interface {
 		AddCheckerFinding(finding *Finding) error
-		GetCheckerFindings() ([]*Finding, error)
+		UpdateCheckerFinding(finding *Finding) error
+		AddOrUpdateCheckerFinding(finding *Finding) error
+		GetCheckerFindings(seqs ...uint64) ([]*Finding, error)
 		GetCheckerFinding(seq uint64) (*Finding, error)
 		SetCheckerFindingAction(seq uint64, action int32) error
 	}

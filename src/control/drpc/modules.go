@@ -127,9 +127,6 @@ func (m MgmtMethod) String() string {
 		MethodPingRank:             "PingRank",
 		MethodSetRank:              "SetRank",
 		MethodSetLogMasks:          "SetLogMasks",
-		MethodCreateMS:             "CreateMS",
-		MethodStartMS:              "StartMS",
-		MethodJoin:                 "Join",
 		MethodGetAttachInfo:        "GetAttachInfo",
 		MethodPoolCreate:           "PoolCreate",
 		MethodPoolDestroy:          "PoolDestroy",
@@ -143,11 +140,9 @@ func (m MgmtMethod) String() string {
 		MethodSmdDevs:              "SmdDevs",
 		MethodSmdPools:             "SmdPools",
 		MethodPoolGetACL:           "PoolGetACL",
-		MethodListPools:            "ListPools",
 		MethodPoolOverwriteACL:     "PoolOverwriteACL",
 		MethodPoolUpdateACL:        "PoolUpdateACL",
 		MethodPoolDeleteACL:        "PoolDeleteACL",
-		MethodDevStateQuery:        "DevStateQuery",
 		MethodSetFaultyState:       "SetFaultyState",
 		MethodReplaceStorage:       "ReplaceStorage",
 		MethodListContainers:       "ListContainers",
@@ -159,9 +154,9 @@ func (m MgmtMethod) String() string {
 		MethodNotifyPoolConnect:    "NotifyPoolConnect",
 		MethodNotifyPoolDisconnect: "NotifyPoolDisconnect",
 		MethodNotifyExit:           "NotifyExit",
-		MethodIdentifyStorage:      "IdentifyStorage",
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
+		MethodLedManage:            "LedManage",
 	}[m]; ok {
 		return s
 	}
@@ -189,12 +184,6 @@ const (
 	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
 	// MethodSetLogMasks is a ModuleMgmt method
 	MethodSetLogMasks MgmtMethod = C.DRPC_METHOD_MGMT_SET_LOG_MASKS
-	// MethodCreateMS is a ModuleMgmt method
-	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
-	// MethodStartMS is a ModuleMgmt method
-	MethodStartMS MgmtMethod = C.DRPC_METHOD_MGMT_START_MS
-	// MethodJoin is a ModuleMgmt method
-	MethodJoin MgmtMethod = C.DRPC_METHOD_MGMT_JOIN
 	// MethodGetAttachInfo is a ModuleMgmt method
 	MethodGetAttachInfo MgmtMethod = C.DRPC_METHOD_MGMT_GET_ATTACH_INFO
 	// MethodPoolCreate is a ModuleMgmt method
@@ -221,16 +210,12 @@ const (
 	MethodSmdPools MgmtMethod = C.DRPC_METHOD_MGMT_SMD_LIST_POOLS
 	// MethodPoolGetACL is a ModuleMgmt method
 	MethodPoolGetACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_ACL
-	// MethodListPools is a ModuleMgmt method
-	MethodListPools MgmtMethod = C.DRPC_METHOD_MGMT_LIST_POOLS
 	// MethodPoolOverwriteACL is a ModuleMgmt method
 	MethodPoolOverwriteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL
 	// MethodPoolUpdateACL is a ModuleMgmt method
 	MethodPoolUpdateACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPDATE_ACL
 	// MethodPoolDeleteACL is a ModuleMgmt method
 	MethodPoolDeleteACL MgmtMethod = C.DRPC_METHOD_MGMT_POOL_DELETE_ACL
-	// MethodDevStateQuery is a ModuleMgmt method
-	MethodDevStateQuery MgmtMethod = C.DRPC_METHOD_MGMT_DEV_STATE_QUERY
 	// MethodSetFaultyState is a ModuleMgmt method
 	MethodSetFaultyState MgmtMethod = C.DRPC_METHOD_MGMT_DEV_SET_FAULTY
 	// MethodReplaceStorage is a ModuleMgmt method
@@ -253,8 +238,6 @@ const (
 	MethodNotifyPoolDisconnect MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT
 	// MethodNotifyExit defines a method for signaling a clean client shutdown
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
-	// MethodIdentifyStorage is a ModuleMgmt method
-	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
 	// MethodPoolGetProp defines a method for getting pool properties
 	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
 	// MethodCheckerStart defines a method for starting the checker
@@ -269,6 +252,8 @@ const (
 	MethodCheckerAction MgmtMethod = C.DRPC_METHOD_MGMT_CHK_ACT
 	// MethodPoolUpgrade defines a method for upgrade pool
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
+	// MethodLedManage defines a method to manage a VMD device LED state
+	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
 )
 
 type srvMethod int32

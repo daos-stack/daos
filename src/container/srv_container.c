@@ -4542,12 +4542,10 @@ ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop)
 		D_GOTO(out_cont, rc = (rc == -DER_NONEXIST ? 0 : rc));
 
 	if (strncmp(DAOS_PROP_NO_CO_LABEL, tmp->dpp_entries[0].dpe_str,
-		    DAOS_PROP_LABEL_MAX_LEN) == 0) {
+		    DAOS_PROP_LABEL_MAX_LEN) == 0)
 		daos_prop_free(tmp);
-		goto out_cont;
-	}
-
-	*prop = tmp;
+	else
+		*prop = tmp;
 
 out_cont:
 	cont_put(cont);
@@ -4585,10 +4583,8 @@ ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid)
 		D_GOTO(out, rc = -DER_BUSY);
 
 	rc = cont_destroy_bcast(dss_get_module_info()->dmi_ctx, svc, uuid);
-	if (rc != 0)
-		goto out;
-
-	cont_ec_agg_delete(svc, uuid);
+	if (rc == 0)
+		cont_ec_agg_delete(svc, uuid);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,

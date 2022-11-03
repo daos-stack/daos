@@ -27,6 +27,9 @@
 #include <cart/iv.h>
 #include <daos/checksum.h>
 
+/* Standard max length of addresses e.g. URI, PCI */
+#define ADDR_STR_MAX_LEN 128
+
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 

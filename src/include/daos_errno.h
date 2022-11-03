@@ -284,8 +284,10 @@ extern "C" {
 	/** Re-update again */						\
 	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
 	       update again)						\
+	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
+	       NVMe I/O error)						\
 	/** Cannot resume former DAOS check instance. */		\
-	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 42),	\
+	ACTION(DER_NOT_RESUME,		(DER_ERR_DAOS_BASE + 43),	\
 	       Cannot resume former DAOS check instance)
 
 /** Defines the gurt error codes */

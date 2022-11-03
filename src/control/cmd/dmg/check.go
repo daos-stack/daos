@@ -19,7 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
@@ -189,36 +188,6 @@ type checkQueryCmd struct {
 	checkPoolCmdBase
 }
 
-func (cmd *checkPoolCmdBase) printQueryResp(resp *control.SystemCheckQueryResp) {
-	cmd.Infof("Current phase: %s", resp.InsPhase)
-
-	if len(resp.Reports) == 0 {
-		cmd.Infof("No reports to display")
-		return
-	}
-
-	var buf bytes.Buffer
-	iw := txtfmt.NewIndentWriter(&buf)
-	cmd.Info("Inconsistency Reports:")
-	for _, report := range resp.Reports {
-		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, report.Class, report.Msg)
-		if len(report.ActChoices) > 0 {
-			fmt.Fprintf(iw, "Potential resolution actions:\n")
-			iw2 := txtfmt.NewIndentWriter(iw)
-			for i, action := range report.ActChoices {
-				fmt.Fprintf(iw2, "%d: %s\n", action, report.ActMsgs[i])
-			}
-			fmt.Fprintln(&buf)
-		} else if len(report.ActMsgs) == 1 {
-			fmt.Fprintf(iw, "Resolution: %s (%s)\n", report.Action, report.ActMsgs[0])
-		} else {
-			fmt.Fprintln(iw, "No resolutions available")
-			continue
-		}
-	}
-	cmd.Info(buf.String())
-}
-
 func (cmd *checkQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
@@ -233,7 +202,9 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.printQueryResp(resp)
+	var buf bytes.Buffer
+	pretty.PrintCheckQueryResp(&buf, resp)
+	cmd.Info(buf.String())
 
 	return nil
 }
@@ -363,17 +334,37 @@ type checkRepairCmd struct {
 
 	Args struct {
 		SeqNum         repairSeqNum `positional-arg-name:"[seq-num]" required:"1"`
-		SelectedAction int32        `positional-arg-name:"[action]" required:"1"`
+		SelectedAction int          `positional-arg-name:"[action]" required:"1"`
 	} `positional-args:"yes"`
 }
 
 func (cmd *checkRepairCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
+	qReq := new(control.SystemCheckQueryReq)
+	qReq.Seqs = []uint64{uint64(cmd.Args.SeqNum)}
+	qResp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, qReq)
+	if err != nil {
+		return err
+	}
+
+	if len(qResp.Reports) == 0 {
+		return errors.Errorf("no report found for seq %s", cmd.Args.SeqNum)
+	}
+
+	report := qResp.Reports[0]
+	if !report.IsInteractive() {
+		return errors.Errorf("finding %s is already resolved: %s", cmd.Args.SeqNum, report.Resolution())
+	}
+	choices := report.RepairChoices()
+	if cmd.Args.SelectedAction < 0 || cmd.Args.SelectedAction >= len(choices) {
+		return errors.Errorf("invalid action %d for seq %s", cmd.Args.SelectedAction, cmd.Args.SeqNum)
+	}
+
 	req := new(control.SystemCheckRepairReq)
 	req.Seq = uint64(cmd.Args.SeqNum)
 	req.ForAll = cmd.ForAll
-	if err := req.SetAction(cmd.Args.SelectedAction); err != nil {
+	if err := req.SetAction(int32(choices[cmd.Args.SelectedAction].Action)); err != nil {
 		return err
 	}
 

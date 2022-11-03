@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop":
+				"manpage", "system set-prop", "check repair":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -84,8 +84,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage replace nvme":
 				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
 					"--new-uuid", test.MockUUID())
-			case "storage identify vmd":
-				testArgs = append(testArgs, "--uuid", test.MockUUID())
+			case "storage led identify", "storage led check", "storage led clear":
+				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
@@ -113,8 +113,6 @@ func TestDmg_JsonOutput(t *testing.T) {
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
-			case "check repair":
-				testArgs = append(testArgs, "1", "2")
 			case "check set-policy":
 				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":

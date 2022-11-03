@@ -71,12 +71,11 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 		if (strncmp(DAOS_PROP_NO_PO_LABEL, value.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0) {
 			clue_out->pc_label_len = 0;
 		} else {
-			D_ALLOC(clue_out->pc_label, value.iov_len + 1);
+			D_STRNDUP(clue_out->pc_label, value.iov_buf, value.iov_len);
 			if (clue_out->pc_label == NULL)
 				D_GOTO(out_root, rc = -DER_NOMEM);
 
 			clue_out->pc_label_len = value.iov_len;
-			memcpy(clue_out->pc_label, value.iov_buf, value.iov_len);
 		}
 	} else if (rc == -DER_NONEXIST) {
 		clue_out->pc_label_len = 0;
@@ -255,9 +254,14 @@ glance_at_one(uuid_t uuid, void *varg)
 {
 	struct glance_arg      *arg = varg;
 	struct ds_pool_clues   *clues = &arg->ga_clues;
+	int			phase = 0;
+	int			rc;
 
-	if (arg->ga_filter != NULL && arg->ga_filter(uuid, arg->ga_filter_arg) != 0)
-		goto out;
+	if (arg->ga_filter != NULL) {
+		rc = arg->ga_filter(uuid, arg->ga_filter_arg, &phase);
+		if (rc != 0)
+			goto out;
+	}
 
 	if (clues->pcs_cap < clues->pcs_len + 1) {
 		int			new_cap = clues->pcs_cap;
@@ -278,6 +282,7 @@ glance_at_one(uuid_t uuid, void *varg)
 	}
 
 	ds_pool_clue_init(uuid, arg->ga_dir, &clues->pcs_array[clues->pcs_len]);
+	clues->pcs_array[clues->pcs_len].pc_phase = phase;
 	clues->pcs_len++;
 
 out:
@@ -501,7 +506,7 @@ ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out)
 			db_clue->bcl_self, n_votes, db_clue->bcl_replicas->rl_nr);
 
 		if (n_votes > db_clue->bcl_replicas->rl_nr / 2) {
-			/* XXX: Replica @i can be as PS leader candidate. */
+			/* Replica @i can be as PS leader candidate. */
 			*advice_out = i;
 			return 0;
 		}

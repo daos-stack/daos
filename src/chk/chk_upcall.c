@@ -16,16 +16,9 @@
 #include "chk.pb-c.h"
 #include "chk_internal.h"
 
-#define OBJID_STR_SIZE	32
-#define TIME_STR_SIZE	128
-
-#ifndef DF_KEY_STR_SIZE
-#define DF_KEY_STR_SIZE	64
-#endif
-
 #define CHK_ACTION_MAX	CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_DATA
 
-/* XXX: Must be strictly matches the order in Chk__CheckInconsistAction. */
+/* NOTE: the act string array must strictly matches the order in Chk__CheckInconsistAction. */
 static char *chk_act_strings[CHK_ACTION_MAX + 1] = {
 	/* CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT = 0 */
 	"Default action, depends on the detailed inconsistency class.",
@@ -86,9 +79,7 @@ chk_sg_list2string_array(d_sg_list_t *sgls, uint32_t sgl_nr, char ***array)
 	if (buf == NULL)
 		D_GOTO(out, cnt = -DER_NOMEM);
 
-	/*
-	 * XXX: How to transfer all the data into d_sg_list_t array? Some may be not string.
-	 */
+	/* QUEST: How to transfer all the data into d_sg_list_t array? Some may be not string. */
 
 	for (i = 0, k = 0; i < sgl_nr; i++) {
 		for (j = 0; j < sgls[i].sg_nr; j++)
@@ -208,6 +199,7 @@ out:
 	D_FREE(report.dkey);
 	D_FREE(report.akey);
 	D_FREE(report.timestamp);
+	D_FREE(report.act_details);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Check leader upcall for instance "DF_X64" for seq "DF_X64": "DF_RC"\n",

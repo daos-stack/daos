@@ -40,10 +40,8 @@ type faultCmd struct {
 	PoolSvcFault     poolSvcFaultCmd     `command:"pool-svc" alias:"ps" description:"Inject pool service fault"`
 }
 
-type chkRptCls string
-
-func (c chkRptCls) String() string {
-	return string(c)
+type chkRptCls struct {
+	class control.SystemCheckFindingClass
 }
 
 func (c chkRptCls) Complete(match string) (comps []flags.Completion) {
@@ -56,18 +54,11 @@ func (c chkRptCls) Complete(match string) (comps []flags.Completion) {
 }
 
 func (c *chkRptCls) UnmarshalFlag(value string) error {
-	if _, ok := chkpb.CheckInconsistClass_value[value]; ok {
-		*c = chkRptCls(value)
-		return nil
-	}
-	return errors.Errorf("invalid class %q", value)
+	return c.class.FromString(value)
 }
 
-func (c chkRptCls) Class() chkpb.CheckInconsistClass {
-	if cls, ok := chkpb.CheckInconsistClass_value[c.String()]; ok {
-		return chkpb.CheckInconsistClass(cls)
-	}
-	return chkpb.CheckInconsistClass_CIC_UNKNOWN
+func (c chkRptCls) ToProto() chkpb.CheckInconsistClass {
+	return chkpb.CheckInconsistClass(c.class)
 }
 
 type addCheckerReportCmd struct {
@@ -97,7 +88,7 @@ func (cmd *addCheckerReportCmd) Execute(_ []string) (errOut error) {
 	} else {
 		rand.Seed(time.Now().UnixNano())
 
-		cls := cmd.Class.Class()
+		cls := cmd.Class.ToProto()
 		// Define some canned reports based on class. These can be used
 		// for prototyping and testing. For more control, define a report
 		// in JSON format and load it with the --file option.
@@ -190,7 +181,7 @@ func (cmd *mgmtSvcPoolFaultCmd) Execute([]string) (errOut error) {
 		func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 			return mgmtpb.NewMgmtSvcClient(conn).FaultInjectMgmtPoolFault(ctx,
 				&chkpb.Fault{
-					Class:   cmd.Args.Class.Class(),
+					Class:   cmd.Args.Class.ToProto(),
 					Strings: []string{cmd.PoolID().String(), cmd.Label.Label},
 					Uints:   ranklist.RanksToUint32(cmd.SvcList.Ranks()),
 				},
@@ -220,7 +211,7 @@ func (cmd *poolSvcFaultCmd) Execute([]string) (errOut error) {
 		func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 			return mgmtpb.NewMgmtSvcClient(conn).FaultInjectPoolFault(ctx,
 				&chkpb.Fault{
-					Class:   cmd.Args.Class.Class(),
+					Class:   cmd.Args.Class.ToProto(),
 					Strings: []string{cmd.PoolID().String(), cmd.Label.Label},
 					Uints:   ranklist.RanksToUint32(cmd.SvcList.Ranks()),
 				},

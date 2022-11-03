@@ -59,6 +59,7 @@ const (
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+	StoragePathAccessDenied
 )
 
 // SCM fault codes
