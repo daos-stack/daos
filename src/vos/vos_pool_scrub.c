@@ -447,6 +447,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	daos_iod_t		*iod = &ctx->sc_iod;
 	uint64_t		 data_len;
 	struct bio_io_context	*bio_ctx;
+	struct umem_instance	*umem;
 	struct vos_iterator	*iter;
 	struct vos_obj_iter	*oiter;
 	int			 rc;
@@ -472,9 +473,10 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	iter = vos_hdl2iter(ih);
 	oiter = vos_iter2oiter(iter);
 	bio_ctx = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
-	rc = bio_read(bio_ctx, biov->bi_addr, &data);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
+	rc = vos_media_read(bio_ctx, umem, biov->bi_addr, &data);
 
-	/* if bio_read of NVME then it might have yielded */
+	/* if vos_media_read of NVME then it might have yielded */
 	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
 		ctx->sc_did_yield = true;
 

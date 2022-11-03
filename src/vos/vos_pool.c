@@ -216,7 +216,7 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 }
 
 static int
-vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
+vos_blob_format_cb(void *cb_data)
 {
 	struct bio_blob_hdr	*blob_hdr = cb_data;
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
@@ -224,7 +224,7 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 	int			 rc;
 
 	/* Create a bio_io_context to get the blob */
-	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, blob_hdr->bbh_pool);
 	if (rc) {
 		D_ERROR("Failed to create an I/O context for writing blob "
 			"header: "DF_RC"\n", DP_RC(rc));
@@ -715,7 +715,6 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 			goto failed;
 		}
 	}
-	bio_mc_init_umem(pool->vp_meta_context, &pool->vp_umm);
 
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);

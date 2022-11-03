@@ -781,7 +781,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc 
 		return -DER_INVAL;
 	}
 
-	biod = bio_iod_alloc(mc->mc_wal, 1, BIO_IOD_TYPE_UPDATE);
+	biod = bio_iod_alloc(mc->mc_wal, NULL, 1, BIO_IOD_TYPE_UPDATE);
 	if (biod == NULL)
 		return -DER_NOMEM;
 
