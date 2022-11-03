@@ -668,7 +668,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	int			 rc;
 
 	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
-			  DAOS_INTENT_KILL, &obj, NULL);
+			  DAOS_INTENT_PUNCH, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
 
