@@ -494,14 +494,12 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  *
  * \param[OUT] pctxt	I/O context to be returned
  * \param[IN] xs_ctxt	Per-xstream NVMe context
- * \param[IN] umem	umem instance
  * \param[IN] uuid	Pool UUID
  *
  * \returns		Zero on success, negative value on error
  */
 int bio_ioctxt_open(struct bio_io_context **pctxt,
-		    struct bio_xs_context *xs_ctxt,
-		    struct umem_instance *umem, uuid_t uuid);
+		    struct bio_xs_context *xs_ctxt, uuid_t uuid);
 
 enum bio_mc_flags {
 	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
@@ -608,12 +606,13 @@ enum bio_iod_type {
  * Allocate & initialize an io descriptor
  *
  * \param ctxt       [IN]	I/O context
+ * \param umem       [IN]	umem instance
  * \param sgl_cnt    [IN]	SG list count
  * \param type       [IN]	IOD type
  *
  * \return			Opaque io descriptor or NULL on error
  */
-struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
+struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
 			       unsigned int sgl_cnt, unsigned int type);
 /**
  * Free an io descriptor
@@ -717,10 +716,10 @@ void *bio_iod_bulk(struct bio_desc *biod, int sgl_idx, int iov_idx,
  * Wrapper of ABT_thread_yield()
  */
 static inline void
-bio_yield(void)
+bio_yield(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
-	D_ASSERT(umem_tx_none());
+	D_ASSERT(umm == NULL || umem_tx_none(umm));
 #endif
 	ABT_thread_yield();
 }
@@ -846,14 +845,14 @@ void *bio_buf_addr(struct bio_desc *biod);
  * SGLs. bio_copy_post() must be called after a success bio_copy_prep() call.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
  *
  * \return			BIO copy descriptor on success, NULL on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt,
-				    struct bio_sglist *bsgl_src,
-				    struct bio_sglist *bsgl_dst);
+struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+				    struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;
@@ -901,6 +900,7 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  * Copy data from source BIO SGL to target BIO SGL.
  *
  * \param ioctxt	[IN]	BIO io context
+ * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
  * \param copy_size	[IN]	Specified copy size, the size must be aligned
@@ -909,8 +909,8 @@ struct bio_sglist *bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src);
  *
  * \return			0 on success, negative value on error
  */
-int bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	     struct bio_sglist *bsgl_dst, unsigned int copy_size,
+int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	     struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst, unsigned int copy_size,
 	     struct bio_csum_desc *csum_desc);
 
 /*
@@ -967,12 +967,6 @@ int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
 /* Function to return current data io context */
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
 
-/*
- * Init Metadata context umem instance
- */
-void
-bio_mc_init_umem(struct bio_meta_context *mc, struct umem_instance *umem);
-
 /* Function to check if metadata on ssd enabled or not */
 bool bio_is_meta_on_ssd_configured(void);
 
@@ -990,14 +984,12 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  * Submit WAL I/O and wait for completion
  *
  * \param[in]	mc		BIO meta context
- * \param[in]	tx_id		WAL transaction ID
- * \param[in]	actv		Actions involved in this transaction
+ * \param[in]	tx		umem_tx pointer
  * \param[in]	biod_data	BIO descriptor for data update (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
-		   struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance
@@ -1011,5 +1003,68 @@ int bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_acti
  *				+1	: ID1 > ID2
  */
 int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
+
+/*
+ * Replay committed transactions in the WAL on post-crash recovery
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	replay_cb	Replay callback for individual action
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action *act));
+
+/*
+ * Flush back WAL header
+ *
+ * \param[in]	mc		BIO meta context
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_flush_header(struct bio_meta_context *mc);
+
+/*
+ * Acquire highest committed transaction ID before checkpointing
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[out]	tx_id		Highest committed transaction ID
+ *
+ * \return			Zero:		Success;
+ *				-DER_ALREADY:	Nothing to be checkpointed;
+ *				Negative value:	Error;
+ */
+int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
+
+/*
+ * After checkpointing, set highest checkpointed transaction ID, reclaim WAL space
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	tx_id		The highest checkpointed transaction ID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
+
+/*
+ * Read meta blob
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	bsgl		BIO SGL describing the IOVs to be read
+ * \param[out]	sgl		SGL for the read buffer
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
+
+/*
+ * Read meta blob
+ *
+ * \param[in]	mc		BIO meta context
+ * \param[in]	bsgl		BIO SGL describing the IOVs to be written
+ * \param[in]	sgl		SGL for the data to be written
+ *
+ * \return			Zero on success, negative value on error
+ */
+int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 #endif /* __BIO_API_H__ */

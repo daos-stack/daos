@@ -386,7 +386,6 @@ struct bio_xs_context {
 /* Per VOS instance I/O context */
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
-	struct umem_instance	*bic_umem;
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
@@ -431,6 +430,7 @@ struct bio_rsrvd_dma {
 
 /* I/O descriptor */
 struct bio_desc {
+	struct umem_instance	*bd_umem;
 	struct bio_io_context	*bd_ctxt;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
@@ -606,7 +606,8 @@ void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
-int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id open_blobid);
+int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys,
+		  enum smd_dev_type st, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 

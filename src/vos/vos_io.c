@@ -549,7 +549,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	if (vos_ioc2umm(ioc)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	umem_rsrvd_act_alloc(&ioc->ic_rsrvd_scm, total_acts);
+	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, total_acts);
 	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
@@ -557,7 +557,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 		return 0;
 
 	/** Reserve enough space for any deferred actions */
-	umem_rsrvd_act_alloc(&scm, total_acts);
+	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &scm, total_acts);
 	if (scm == NULL) {
 		D_FREE(ioc->ic_rsrvd_scm);
 		return -DER_NOMEM;
@@ -683,7 +683,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	cont = vos_hdl2cont(coh);
 	bioc = bio_mc2data(cont->vc_pool->vp_meta_context);
 	D_ASSERT(bioc != NULL);
-	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr,
+	ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), iod_nr,
 			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
 	if (ioc->ic_biod == NULL) {
 		rc = -DER_NOMEM;

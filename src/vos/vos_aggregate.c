@@ -323,7 +323,7 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 	D_ASSERT(vos_dth_get() == NULL);
 
 	if (agg_param->ap_yield_func == NULL) {
-		bio_yield();
+		bio_yield(agg_param->ap_umm);
 		credits_set(&agg_param->ap_credits, true);
 		return false;
 	}
@@ -1104,6 +1104,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	daos_off_t		 phy_lo = 0;
 	unsigned int		 i, seg_count, biov_idx = 0;
 	struct bio_copy_desc	*copy_desc;
+	struct umem_instance	*umem;
 	int			 rc;
 
 	D_ASSERT(obj != NULL);
@@ -1121,6 +1122,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	bio_ctxt = bio_mc2data(obj->obj_cont->vc_pool->vp_meta_context);
 	D_ASSERT(bio_ctxt != NULL);
+	umem = &obj->obj_cont->vc_pool->vp_umm;
 
 	seg_count = lgc_seg->ls_idx_end - lgc_seg->ls_idx_start + 1;
 	rc = bio_sgl_init(&bsgl, seg_count);
@@ -1202,7 +1204,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
 	bio_iov_set(&bsgl_dst.bs_iovs[0], ent_in->ei_addr, seg_size);
 
-	copy_desc = bio_copy_prep(bio_ctxt, &bsgl, &bsgl_dst);
+	copy_desc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst);
 	if (copy_desc == NULL) {
 		D_ERROR("Failed to Prepare source & target SGLs for copy.\n");
 		goto out;
@@ -1244,10 +1246,11 @@ out:
 }
 
 static int
-fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
-	      unsigned int *acts)
+fill_segments(daos_handle_t ih, struct vos_agg_param *agg_param, unsigned int *acts)
 {
+	struct agg_merge_window	*mw = &agg_param->ap_window;
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
+	struct umem_instance	*umm = agg_param->ap_umm;
 	struct agg_lgc_seg	*lgc_seg;
 	unsigned int		 i, scm_max;
 	int			 rc = 0;
@@ -1258,7 +1261,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	scm_max = MAX(io->ic_seg_cnt, 200);
-	rc = umem_rsrvd_act_realloc(&io->ic_rsrvd_scm, scm_max);
+	rc = umem_rsrvd_act_realloc(umm, &io->ic_rsrvd_scm, scm_max);
 	if (rc)
 		return rc;
 	D_ASSERT(umem_rsrvd_act_cnt(io->ic_rsrvd_scm) == 0);
@@ -1758,7 +1761,7 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	}
 
 	/* Transfer data from old logical records to reserved new segments */
-	rc = fill_segments(ih, mw, acts);
+	rc = fill_segments(ih, agg_param, acts);
 	if (rc) {
 		D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
 			"Fill segments "DF_EXT" error: "DF_RC"\n",

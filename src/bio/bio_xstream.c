@@ -53,7 +53,7 @@ bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
 /* SPDK subsystem fini timeout */
-unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
+unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 
@@ -375,7 +375,7 @@ drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bxb)
 		if (ctxt->bxc_self_polling)
 			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
 		else
-			bio_yield();
+			bio_yield(NULL);
 	} while (bxb->bxb_blob_rw >= BIO_BS_STOP_WATERMARK);
 }
 
@@ -1124,7 +1124,7 @@ assign_device(int tgt_id, enum smd_dev_type st)
 	}
 
 	/* Update mapping for this target in NVMe device table */
-	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id);
+	rc = smd_dev_add_tgt(chosen_bdev->bb_uuid, tgt_id, st);
 	if (rc) {
 		D_ERROR("Failed to map dev "DF_UUID" to tgt %d. "DF_RC"\n",
 			DP_UUID(chosen_bdev->bb_uuid), tgt_id, DP_RC(rc));
@@ -1188,7 +1188,7 @@ find_xs_bio_dev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 */
 	if (tgt_id != BIO_SYS_TGT_ID && tgt_id != BIO_STANDALONE_TGT_ID) {
 retry:
-		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
+		rc = smd_dev_get_by_tgt(tgt_id, st, &dev_info);
 		if (rc == -DER_NONEXIST && !assigned) {
 			rc = assign_device(tgt_id, st);
 			if (rc)
