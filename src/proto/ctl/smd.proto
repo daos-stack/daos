@@ -72,24 +72,42 @@ message BioHealthResp {
 	uint64 cluster_size = 46; // blobstore cluster size in bytes
 }
 
-message SmdDevReq {
+enum NvmeDevState {
+	NORMAL = 0;	// Device is in a normal operational state
+	NEW = 1;	// Device is new and is not yet in-use
+	EVICTED = 2;	// Device is faulty and has been evicted
 }
+
+enum LedState {
+	OFF = 0;		// Equivalent to SPDK_VMD_LED_STATE_OFF
+	QUICK_BLINK = 1;	// Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
+	ON = 2;			// Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
+	SLOW_BLINK = 3;		// Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
+	NA = 4;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
+}
+
+// SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
+// SPDK blobstore created on a NVMe namespace. Multiple SmdDevices may exist per NVMe controller.
+message SmdDevice {
+	string uuid = 1;		// UUID of blobstore
+	repeated int32 tgt_ids = 2;	// VOS target IDs
+	string tr_addr = 3;		// Transport address of blobstore
+	NvmeDevState dev_state = 4;	// NVMe device state
+	LedState led_state = 5;		// LED state
+	uint64 total_bytes = 6;		// blobstore clusters total bytes
+	uint64 avail_bytes = 7;		// blobstore clusters available bytes
+	uint64 cluster_size = 8;	// blobstore cluster size in bytes
+	uint32 rank = 9;		// DAOS I/O Engine using controller
+}
+
+message SmdDevReq {}
 
 message SmdDevResp {
-	message Device {
-		reserved 3;
-		reserved "state";
-		string uuid = 1; // UUID of blobstore
-		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		string dev_state = 5; // NVMe device state
-	}
 	int32 status = 1;
-	repeated Device devices = 2;
+	repeated SmdDevice devices = 2;
 }
 
-message SmdPoolReq {
-}
+message SmdPoolReq {}
 
 message SmdPoolResp {
 	message Pool {
@@ -101,67 +119,19 @@ message SmdPoolResp {
 	repeated Pool pools = 2;
 }
 
-message DevStateReq {
-	string dev_uuid = 1; // UUID of blobstore
-}
-
-message DevStateResp {
-	reserved 3;
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of blobstore
-	string dev_state = 4; // NVMe device state
-}
-
-message DevReplaceReq {
-	string old_dev_uuid = 1; // UUID of old (hot-removed) blobstore/device
-	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	bool   noReint      = 3; // Skip device reintegration if set
-}
-
-message DevReplaceResp {
-	reserved 3;
-	int32 status = 1; // DAOS error code
-	string new_dev_uuid = 2; // UUID of new (hot-plugged) blobstore/device
-	string dev_state = 4; // NVMe device state
-}
-
-message DevIdentifyReq {
-	string dev_uuid = 1; // UUID of VMD uuid
-}
-
-message DevIdentifyResp {
-	reserved 3;
-	reserved "led_state";
-	int32 status = 1; // DAOS error code
-	string dev_uuid = 2; // UUID of VMD uuid
-	string dev_state = 4; // NVMe device state
-}
-
 message SmdQueryReq {
-	reserved 8;
-	reserved "replaceUUID";
-	bool omit_devices = 1; // query should omit devices
-	bool omit_pools = 2; // query should omit pools
-	bool include_bio_health = 3; // query should include BIO health for devices
-	bool set_faulty = 4; // set the specified device to FAULTY
-	string uuid = 5; // constrain query to this UUID (pool or device)
-	uint32 rank = 6; // response should only include information about this rank
-	string target = 7; // response should only include information about this VOS target
-	bool no_reint = 9; // specify if device reint is needed (used for replace cmd)
-	bool identify = 10; // set the VMD LED state to quickly blink
-	uint32 state_mask = 11; // show only devices with state matching bit-mask
-	string replace_uuid = 12; // UUID of new device to replace storage with
+	bool omit_devices = 1;		// Indicate query should omit devices
+	bool omit_pools = 2;		// Indicate query should omit pools
+	bool include_bio_health = 3;	// Indicate query should include BIO health for devices
+	string uuid = 4;		// Constrain query to this UUID (pool or device)
+	uint32 rank = 5;		// Restrict response to only include info about this rank
+	string target = 6;		// Restrict response to only include info about this VOS target
 }
 
 message SmdQueryResp {
-	message Device {
-		reserved 3;
-		reserved "state";
-		string uuid = 1; // UUID of blobstore
-		repeated int32 tgt_ids = 2; // VOS target IDs
-		string tr_addr = 4; // Transport address of blobstore
-		BioHealthResp health = 5; // optional BIO health
-		string dev_state = 6; // NVMe device state
+	message SmdDeviceWithHealth {
+		SmdDevice details = 1;
+		BioHealthResp health = 2; // optional BIO health
 	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
@@ -170,9 +140,56 @@ message SmdQueryResp {
 	}
 	message RankResp {
 		uint32 rank = 1; // rank to which this response corresponds
-		repeated Device devices = 2; // List of devices on the rank
+		repeated SmdDeviceWithHealth devices = 2; // List of devices on the rank
 		repeated Pool pools = 3; // List of pools on the rank
 	}
 	int32 status = 1; // DAOS error code
 	repeated RankResp ranks = 2; // List of per-rank responses
+}
+
+enum LedAction {
+	GET = 0;
+	SET = 1;
+	RESET = 2;
+}
+
+message LedManageReq {
+	string ids = 1;			// List of Device-UUIDs and/or PCI-addresses
+	LedAction led_action = 3;	// LED action to perform
+	LedState led_state = 4;		// LED control case
+}
+
+message DevReplaceReq {
+	string old_dev_uuid = 1;	// UUID of old (hot-removed) blobstore/device
+	string new_dev_uuid = 2;	// UUID of new (hot-plugged) blobstore/device
+	bool no_reint = 3;		// Skip device reintegration if set
+}
+
+message SetFaultyReq {
+	string uuid = 1;	// Device-UUID (as recorded in SMD)
+}
+
+message DevManageResp {
+	int32 status = 1;	// DAOS error code
+	SmdDevice device = 2;	// Details of device that has been managed
+}
+
+message SmdManageReq {
+	oneof op{
+		LedManageReq led = 1;		// Request to manage LED state
+		DevReplaceReq replace = 2;	// Request to replace SMD device
+		SetFaultyReq faulty = 3;	// Request to set SMD device faulty
+	}
+}
+
+message SmdManageResp {
+	message Result {
+		int32 status = 1;		// DAOS error code
+		SmdDevice device = 2;
+	}
+	message RankResp {
+		uint32 rank = 1;		// Rank to which this response corresponds
+		repeated Result results = 2;	// List of device results on the rank
+	}
+	repeated RankResp ranks = 1;		// List of per-rank responses
 }
