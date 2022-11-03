@@ -1251,7 +1251,7 @@ const ProtobufCMessageDescriptor mgmt__check_stop_resp__descriptor =
   (ProtobufCMessageInit) mgmt__check_stop_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__check_query_req__field_descriptors[2] =
+static const ProtobufCFieldDescriptor mgmt__check_query_req__field_descriptors[4] =
 {
   {
     "sys",
@@ -1277,15 +1277,41 @@ static const ProtobufCFieldDescriptor mgmt__check_query_req__field_descriptors[2
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "shallow",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckQueryReq, shallow),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "seqs",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT64,
+    offsetof(Mgmt__CheckQueryReq, n_seqs),
+    offsetof(Mgmt__CheckQueryReq, seqs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__check_query_req__field_indices_by_name[] = {
+  3,   /* field[3] = seqs */
+  2,   /* field[2] = shallow */
   0,   /* field[0] = sys */
   1,   /* field[1] = uuids */
 };
 static const ProtobufCIntRange mgmt__check_query_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 2 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__check_query_req__descriptor =
 {
@@ -1295,7 +1321,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_req__descriptor =
   "Mgmt__CheckQueryReq",
   "mgmt",
   sizeof(Mgmt__CheckQueryReq),
-  2,
+  4,
   mgmt__check_query_req__field_descriptors,
   mgmt__check_query_req__field_indices_by_name,
   1,  mgmt__check_query_req__number_ranges,

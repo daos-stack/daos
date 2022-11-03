@@ -278,17 +278,24 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 	}()
 	svc.log.Debugf("Received SystemCheckQuery RPC: %+v", req)
 
-	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
-	if err != nil {
-		return nil, err
-	}
-
 	resp = new(mgmtpb.CheckQueryResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckQuery response")
+
+	if len(req.GetSeqs()) > 0 {
+		req.Shallow = true
 	}
 
-	cfList, err := svc.sysdb.GetCheckerFindings()
+	if !req.Shallow {
+		dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerQuery, req)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal CheckQuery response")
+		}
+	}
+
+	cfList, err := svc.sysdb.GetCheckerFindings(req.GetSeqs()...)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +426,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 	}
 
 	if !f.HasChoice(req.Act) {
-		return nil, errors.Errorf("invalid action %d (must be one of %s)", req.Act, f.ValidChoicesString())
+		return nil, errors.Errorf("invalid action %s (must be one of %s)", req.Act, f.ValidChoicesString())
 	}
 
 	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerAction, req)
@@ -430,6 +437,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 	if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
 		return nil, err
 	}
+	svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 
 	resp = new(mgmtpb.CheckActResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {

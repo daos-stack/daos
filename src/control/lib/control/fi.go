@@ -17,7 +17,6 @@ import (
 type faultInjectionReq struct {
 	msRequest
 	unaryRequest
-	retryableRequest
 }
 
 // InvokeFaultRPC is meant to be used during fault injection tests. It

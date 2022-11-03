@@ -81,24 +81,48 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 		resp.Status = int32(daos.InvalidInput)
 		return
 	}
-	if _, err := mod.poolDB.FindPoolServiceByUUID(uuid); err == nil {
-		mod.log.Errorf("pool with uuid %q already exists", req.Uuid)
-		resp.Status = int32(daos.Exists)
+
+	ps, err := mod.poolDB.FindPoolServiceByUUID(uuid)
+	if err == nil {
+		// We're updating an existing pool service.
+		if ps.PoolLabel != req.Label {
+			if _, err := mod.poolDB.FindPoolServiceByLabel(req.Label); err == nil {
+				mod.log.Errorf("pool with label %q already exists", req.Label)
+				resp.Status = int32(daos.Exists)
+				return
+			}
+		}
+		ps.PoolLabel = req.Label
+		ps.Replicas = ranklist.RanksFromUint32(req.Svcreps)
+
+		mod.log.Debugf("updating pool service from req: %+v", req)
+		if err := mod.poolDB.UpdatePoolService(ps); err != nil {
+			mod.log.Errorf("failed to update pool: %s", err)
+			resp.Status = int32(daos.MiscError)
+			return
+		}
+
+		return
+	} else if !system.IsPoolNotFound(err) {
+		mod.log.Errorf("failed to find pool: %s", err)
+		resp.Status = int32(daos.MiscError)
 		return
 	}
+
 	if _, err := mod.poolDB.FindPoolServiceByLabel(req.Label); err == nil {
 		mod.log.Errorf("pool with label %q already exists", req.Label)
 		resp.Status = int32(daos.Exists)
 		return
 	}
 
-	ps := &system.PoolService{
+	ps = &system.PoolService{
 		PoolUUID:  uuid,
 		PoolLabel: req.Label,
 		State:     system.PoolServiceStateReady,
 		Replicas:  ranklist.RanksFromUint32(req.Svcreps),
 	}
 
+	mod.log.Debugf("adding pool service from req: %+v", req)
 	if err := mod.poolDB.AddPoolService(ps); err != nil {
 		mod.log.Errorf("failed to register pool: %s", err)
 		resp.Status = int32(daos.MiscError)
@@ -163,7 +187,7 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 
 	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
 	mod.log.Debugf("annotated finding: %+v", finding)
-	if err := mod.checkerDB.AddCheckerFinding(finding); err != nil {
+	if err := mod.checkerDB.AddOrUpdateCheckerFinding(finding); err != nil {
 		mod.log.Errorf("failed to add checker finding %+v: %s", finding, err)
 		resp.Status = int32(daos.MiscError)
 		return
