@@ -255,7 +255,7 @@ struct ad_maxheap_node {
 	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
 	 * set arenea as full only if it encounters multiple failures.
 	 */
-				mh_full:1;
+				mh_active:1;
 };
 
 /** DRAM blob open handle */
@@ -284,8 +284,6 @@ struct ad_blob {
 	int			 bb_ref;
 	/** is dummy blob, for unit test */
 	bool			 bb_dummy;
-	/** free bitmap exist or not */
-	bool			 bb_bmap_free_exist;
 	/** open refcount */
 	int			 bb_opened;
 	/** number of pages */

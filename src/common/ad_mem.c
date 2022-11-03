@@ -50,15 +50,15 @@ static struct ad_group_spec grp_specs_def[] = {
 	{
 		.gs_unit	= 1024,
 		.gs_count	= 256,
-	},	/* group size = 512K */
+	},	/* group size = 256K */
 	{
 		.gs_unit	= 2048,
 		.gs_count	= 128,
-	},	/* group size = 1M */
+	},	/* group size = 256K */
 	{
 		.gs_unit	= 4096,
 		.gs_count	= 64,
-	},	/* group size = 2M */
+	},	/* group size = 256K */
 };
 
 static struct ad_blob	*dummy_blob;
@@ -171,9 +171,37 @@ heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 	return nodea->mh_weight > nodeb->mh_weight;
 }
 
+static int
+heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct ad_maxheap_node *node;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	node = container_of(e, struct ad_maxheap_node, mh_node);
+	node->mh_in_tree = 1;
+
+	return 0;
+}
+
+static int
+heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct ad_maxheap_node *node;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	node = container_of(e, struct ad_maxheap_node, mh_node);
+	node->mh_in_tree = 0;
+
+	return 0;
+}
+
 struct d_binheap_ops heap_ops = {
-	.hop_enter	= NULL,
-	.hop_exit	= NULL,
+	.hop_enter	= heap_node_enter,
+	.hop_exit	= heap_node_exit,
 	.hop_compare	= heap_node_cmp,
 };
 
@@ -193,12 +221,19 @@ blob_init(struct ad_blob *blob)
 	D_INIT_LIST_HEAD(&blob->bb_pgs_ckpt);
 	D_INIT_LIST_HEAD(&blob->bb_pgs_extern);
 
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &heap_ops,
+				      &blob->bb_arena_free_heap);
+	if (rc != 0)
+		return rc;
+
 	D_ALLOC(blob->bb_pages, blob->bb_pgs_nr * sizeof(*blob->bb_pages));
 	if (!blob->bb_pages)
 		goto failed;
 	D_ALLOC(blob->bb_mh_nodes, blob->bb_pgs_nr * sizeof(struct ad_maxheap_node));
 	if (!blob->bb_mh_nodes)
 		goto failed;
+	for (i = 0; i < blob->bb_pgs_nr; i++)
+		blob->bb_mh_nodes[i].mh_active = 1;
 
 	if (blob->bb_fd < 0) { /* Test only */
 		/* NB: buffer must align with arena size, because ptr2addr() depends on
@@ -252,11 +287,6 @@ blob_init(struct ad_blob *blob)
 		d_list_add(&group->gp_link, &blob->bb_gps_lru);
 	}
 
-	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &heap_ops,
-				      &blob->bb_arena_free_heap);
-	if (rc != 0)
-		goto failed;
-
 	return 0;
 failed:
 	blob_fini(blob);
@@ -281,7 +311,7 @@ blob_fini(struct ad_blob *blob)
 	blob->bb_gps_lru_size = 0;
 	blob->bb_ars_lru_size = 0;
 
-	d_binheap_destroy(&blob->bb_arena_free_heap);
+	d_binheap_destroy_inplace(&blob->bb_arena_free_heap);
 	D_FREE(blob->bb_mh_nodes);
 	D_FREE(blob->bb_bmap_rsv);
 	D_FREE(blob->bb_pages);
@@ -292,26 +322,26 @@ static uint32_t
 arena_free_size(struct ad_arena_df *ad)
 {
 	int		    grp_idx;
-	uint32_t	    weight = 0;
+	uint32_t	    free_size = 0;
 	struct ad_group_df  *gd;
 	uint32_t	    grp_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
 
 	for (grp_idx = 0; grp_idx < grp_max; grp_idx++) {
 		if (!isset64(ad->ad_bmap, grp_idx)) {
-			weight += (1 << GRP_SIZE_SHIFT);
+			free_size += (1 << GRP_SIZE_SHIFT);
 			continue;
 		}
 	}
 
 	for (grp_idx = 0; grp_idx < ad->ad_grp_nr; grp_idx++) {
 		gd = &ad->ad_groups[grp_idx];
-		weight += gd->gd_unit_free * gd->gd_unit;
+		free_size += gd->gd_unit_free * gd->gd_unit;
 	}
 
-	return weight;
+	return free_size;
 }
 
-#define ARENA_WEIGHT_BITS 12
+#define ARENA_WEIGHT_BITS 14
 
 /* Avoid to change weight of an arena on every alloc/free (reorder arena) */
 static inline uint32_t
@@ -330,9 +360,9 @@ arena_insert_free_entry(struct ad_blob *blob, uint32_t arena_id, int free_size)
 	mh_node = &blob->bb_mh_nodes[arena_id];
 
 	mh_node->mh_free_size = free_size;
+	mh_node->mh_active = 1;
 	mh_node->mh_weight = arena_weight(free_size);
 	mh_node->mh_arena_id = arena_id;
-	mh_node->mh_in_tree = 1;
 	rc = d_binheap_insert(&blob->bb_arena_free_heap, &mh_node->mh_node);
 	D_ASSERT(rc == 0);
 
@@ -346,7 +376,6 @@ arena_remove_free_entry(struct ad_blob *blob, uint32_t arena_id)
 
 	D_ASSERT(arena_id < blob->bb_pgs_nr);
 	mh_node = &blob->bb_mh_nodes[arena_id];
-	mh_node->mh_in_tree = 0;
 	d_binheap_remove(&blob->bb_arena_free_heap, &mh_node->mh_node);
 }
 
@@ -357,7 +386,6 @@ blob_load(struct ad_blob *blob)
 	int		   i;
 	int		   rc = 0;
 	struct ad_arena_df *ad;
-	bool		   free_bitmap_exist = false;
 
 	for (i = 0; i < blob->bb_pgs_nr; i++) {
 		struct ad_page		*page;
@@ -383,13 +411,8 @@ blob_load(struct ad_blob *blob)
 				D_ERROR("Failed to insert arena free memory entry: %d\n", rc);
 				goto out;
 			}
-		} else {
-			free_bitmap_exist = true;
 		}
 	}
-
-	if (free_bitmap_exist)
-		blob->bb_bmap_free_exist = true;
 
 	/* overwrite the old incarnation */
 	bd->bd_incarnation = d_timeus_secdiff(0);
@@ -553,7 +576,6 @@ ad_blob_post_create(struct ad_blob_handle bh)
 	}
 	arena_decref(arena);
 	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
-	blob->bb_bmap_free_exist = true;
 	blob_set_opened(blob);
 	return 0;
 failed:
@@ -801,6 +823,15 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 	return 0;
 }
 
+static inline struct ad_maxheap_node *
+arena2heap_node(struct ad_arena *arena)
+{
+	D_ASSERT(arena->ar_blob);
+	D_ASSERT(arena->ar_df);
+
+	return &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+}
+
 static int
 arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 {
@@ -866,7 +897,7 @@ arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 		qsort(arena->ar_size_sorter, ad->ad_grp_nr, sizeof(gd), group_size_cmp);
 		qsort(arena->ar_addr_sorter, ad->ad_grp_nr, sizeof(gd), group_addr_cmp);
 	}
-	node = &arena->ar_blob->bb_mh_nodes[arena_id];
+	node = arena2heap_node(arena);
 	if (!node->mh_in_tree) {
 		node->mh_free_size = arena_free_size(ad);
 		node->mh_weight = arena_weight(node->mh_free_size);
@@ -1685,27 +1716,25 @@ failed:
 static void
 arena_reorder_if_needed(struct ad_arena *arena)
 {
-	uint32_t		 arena_id = arena->ar_df->ad_id;
 	struct ad_blob		*blob = arena->ar_blob;
-	struct ad_maxheap_node	*node = &blob->bb_mh_nodes[arena_id];
+	struct ad_maxheap_node	*node = arena2heap_node(arena);
 	int			 new_weight = arena_weight(node->mh_free_size);
 
 	/* NB, handle this once */
-	if (node->mh_in_tree && new_weight != node->mh_weight) {
+	if (node->mh_in_tree) {
+		if (new_weight == node->mh_weight)
+			return;
 		d_binheap_remove(&blob->bb_arena_free_heap, &node->mh_node);
 		node->mh_weight = new_weight;
 		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
-		return;
-	}
-
-	/* bring arena back if free space more than 1/4 of total size */
-	if (!node->mh_in_tree && node->mh_full && node->mh_free_size > ARENA_SIZE / 4) {
+	} else {
+		if (node->mh_active || node->mh_free_size < ARENA_SIZE >> 2)
+			return;
+		/* bring arena back if free space more than 1/4 of total size */
 		node->mh_weight = new_weight;
-		node->mh_in_tree = 1;
-		node->mh_full = 0;
+		node->mh_active = 1;
 		node->mh_arena_id = arena->ar_df->ad_id;
 		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
-		return;
 	}
 }
 
@@ -1737,12 +1766,12 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 				"No group(size=%d) found in arena=%d, reserve a new one\n",
 				(int)size, arena2id(arena));
 
-			node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+			node = arena2heap_node(arena);
 			rc = arena_reserve_grp(arena, size, &grp_at, &grp);
 			if (rc == -DER_NOSPACE) { /* cannot create a new group, full arena */
 				/* XXX: other sized groups may have space. */
 				D_DEBUG(DB_TRACE, "Full arena=%d\n", arena->ar_df->ad_id);
-				node->mh_full = 1;
+				node->mh_active = 0;
 				return rc;
 			}
 			if (rc != 0) {
@@ -1766,7 +1795,7 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	}
 	/* NB: reorder only does minimum amount of works most of the time */
 	arena_reorder_grp(arena, grp, grp_at, true);
-	node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+	node = arena2heap_node(arena);
 	D_ASSERT(node->mh_free_size >= grp->gp_df->gd_unit);
 	node->mh_free_size -= grp->gp_df->gd_unit;
 	arena_reorder_if_needed(arena);
@@ -1808,7 +1837,8 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 	uint32_t		 id;
 	bool			 tried;
 	int			 rc;
-	struct ad_maxheap_node	*ad_node;
+	struct d_binheap_node	*node;
+	struct ad_maxheap_node  *ad_node;
 
 	if (arena_id && *arena_id != AD_ARENA_ANY)
 		id = *arena_id;
@@ -1822,8 +1852,7 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
 			/* fall through and create a new one */
 		} {
-			ad_node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
-			if (ad_node->mh_full) {
+			if (!arena2heap_node(arena)->mh_active) {
 				D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
 				arena_decref(arena);
 				arena = NULL;
@@ -1834,19 +1863,15 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 	tried = false;
 	while (1) {
 		if (arena == NULL) {
-			if (blob->bb_bmap_free_exist) {
-				rc = arena_reserve(blob, type, NULL, &arena);
-				if (rc)
-					blob->bb_bmap_free_exist = false;
-			}
-			if (blob->bb_bmap_free_exist == false) {
-				struct d_binheap_node	*node;
 again:
-				node = d_binheap_remove_root(&blob->bb_arena_free_heap);
-				if (node == NULL) {
+			node = d_binheap_remove_root(&blob->bb_arena_free_heap);
+			if (node == NULL) {
+				rc = arena_reserve(blob, type, NULL, &arena);
+				if (rc) {
 					D_ERROR("Failed to reserve new arena.\n");
 					return 0;
 				}
+			} else {
 				ad_node = container_of(node, struct ad_maxheap_node, mh_node);
 				ad_node->mh_in_tree = 0;
 				rc = arena_load(blob, ad_node->mh_arena_id, &arena);
@@ -1951,7 +1976,7 @@ tx_complete(struct ad_tx *tx, int err)
 			/* NB: reorder only does minimum amount of works most of the time */
 			arena = group->gp_arena;
 			arena_reorder_grp(group->gp_arena, group, pos, false);
-			node = &arena->ar_blob->bb_mh_nodes[arena->ar_df->ad_id];
+			node = arena2heap_node(arena);
 			node->mh_free_size += group->gp_df->gd_unit;
 			if (arena != arena_last) {
 				if (arena_last != NULL) {

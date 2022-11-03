@@ -701,7 +701,7 @@ adt_tx_perf_1(void **state)
 	/* XXX alloc_size=64/128 overflows arena, will fix in follow-on patch */
 	const int	     alloc_size = 256;
 	const int	     op_per_tx = 2;
-	const int	     loop = 400000; /* 50MB */
+	const int	     loop = 200000; /* 50MB */
 	struct ad_tx	     tx;
 	struct ad_reserv_act acts[op_per_tx];
 	struct timespec	     now;
