@@ -39,7 +39,7 @@ enum ad_tx_copy_flags {
  * for TX redo and undo.
  */
 int
-ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, void *ptr, uint32_t flags);
+ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint32_t flags);
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
 int
@@ -147,7 +147,7 @@ struct ad_group_spec {
 };
 
 int ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
-		      struct ad_group_spec *specs, unsigned int specs_nr, struct ad_tx *tx);
+		      struct ad_group_spec *specs, unsigned int specs_nr);
 daos_off_t ad_reserve(struct ad_blob_handle bh, int type, daos_size_t size, uint32_t *arena_id,
 		      struct ad_reserv_act *act);
 int ad_tx_free(struct ad_tx *tx, daos_off_t addr);
@@ -158,5 +158,16 @@ daos_off_t ad_alloc(struct ad_blob_handle bh, int type, daos_size_t size, uint32
 
 void *ad_addr2ptr(struct ad_blob_handle bh, daos_off_t addr);
 daos_off_t ad_ptr2addr(struct ad_blob_handle bh, void *ptr);
+
+static inline struct ad_blob_handle
+umm2ad_blob_hdl(struct umem_instance *umm)
+{
+	struct ad_blob_handle	hdl;
+
+	hdl.bh_blob = (struct ad_blob *)umm->umm_pool; /* FIXME */
+	return hdl;
+}
+
+extern umem_ops_t ad_mem_ops;
 
 #endif /* __DAOS_AD_HOC_MEM_H__ */

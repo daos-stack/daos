@@ -1047,7 +1047,7 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		 * drain controller, however, test shows calling a persistent
 		 * copy and drain controller here is faster.
 		 */
-		if (DAOS_ON_VALGRIND && umem_tx_inprogress()) {
+		if (DAOS_ON_VALGRIND && umem_tx_inprogress(umem)) {
 			/** Ignore the update to what is reserved block.
 			 *  Ordinarily, this wouldn't be inside a transaction
 			 *  but in MVCC tests, it can happen.
@@ -1119,7 +1119,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 	while (pg_cnt > 0) {
 
-		drain_inflight_ios(xs_ctxt, bxb);
+		drain_inflight_ios(xs_ctxt, bxb, biod->bd_ctxt->bic_umem);
 
 		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;

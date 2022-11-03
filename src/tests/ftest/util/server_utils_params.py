@@ -314,6 +314,25 @@ class DaosServerYamlParameters(YamlParameters):
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
 
+    def override_params(self, data, storage_class=None):
+        """Override the values of the daos server yaml config file with the external data.
+
+        Args:
+            data (dict): external server configuration data.
+            storage_class (list, optional): if set only include storage classes identified in the
+                list. Defaults to None.
+        """
+        self.log.info("Overriding server config with external data")
+        self.engine_params = []
+        if "engines" in data:
+            self.engines_per_host.update(len(data["engines"]), "engines_per_host")
+            for engine, engine_data in enumerate(data["engines"]):
+                self.engine_params.append(
+                    EngineYamlParameters(engine, data["provider"], self.max_storage_tiers))
+                self.engine_params[-1].override_params(engine_data, storage_class)
+        else:
+            self.engines_per_host.update(0, "engines_per_host")
+
 
 class EngineYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for a single server engine."""
@@ -532,6 +551,17 @@ class EngineYamlParameters(YamlParameters):
 
         return value
 
+    def override_params(self, data, storage_class=None):
+        """Override the values of the daos server yaml config file with the external data.
+
+        Args:
+            data (dict): external engine configuration data.
+            storage_class (list, optional): if set only include storage classes identified in the
+                list. Defaults to None.
+        """
+        self.log.info("Overriding engine %s config with external data", self._index)
+        self.storage.override_params(data, storage_class)
+
 
 class StorageYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for all of the storage tiers for an engine."""
@@ -694,6 +724,27 @@ class StorageYamlParameters(YamlParameters):
 
         return value
 
+    def override_params(self, data, storage_class=None):
+        """Override the values of the daos server yaml config file with the external data.
+
+        Args:
+            data (dict): external server configuration data.
+            storage_class (list, optional): if set only include storage classes identified in the
+                list. Defaults to None.
+        """
+        self.log.info("Overriding engine %s storage config with external data", self._engine_index)
+        self.storage_tiers = []
+        if "storage" in data:
+            for tier, storage_data in enumerate(data["storage"]):
+                if "class" in storage_data:
+                    if storage_class and storage_data["class"] not in storage_class:
+                        self.log.info(
+                            "  Skipping storage with class %s - class not in %s",
+                            storage_data["class"], storage_class)
+                        continue
+                    self.storage_tiers.append(StorageTierYamlParameters(self._engine_index, tier))
+                    self.storage_tiers[-1].override_params(storage_data)
+
 
 class StorageTierYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for each storage tier for an engine."""
@@ -741,11 +792,12 @@ class StorageTierYamlParameters(YamlParameters):
 
         # Additional 'class: ram' options
         self.scm_size = BasicParameter(None, position=4)
+        self.scm_hugepages_disabled = BasicParameter(None, position=5)
 
         # Additional 'class: bdev' options
-        self.bdev_list = BasicParameter(None, position=5)
-        self.bdev_number = BasicParameter(None, position=6)
-        self.bdev_size = BasicParameter(None, position=7)
+        self.bdev_list = BasicParameter(None, position=6)
+        self.bdev_number = BasicParameter(None, position=7)
+        self.bdev_size = BasicParameter(None, position=8)
 
         # Explicit storage tier roles for metadata on SSD; implicit roles used if not specified
         # Options are:
@@ -773,3 +825,16 @@ class StorageTierYamlParameters(YamlParameters):
 
         """
         return self.storage_class.value == "nvme"
+
+    def override_params(self, data):
+        """Override the values of the daos server yaml config file with the external data.
+
+        Args:
+            data (dict): external server configuration data.
+        """
+        self.log.info("Overriding storage tier %s config with external data", self._tier)
+        for name in self.get_param_names():
+            param = getattr(self, name)
+            name = param.yaml_key or name
+            if name in data:
+                param.update(data[name], name)

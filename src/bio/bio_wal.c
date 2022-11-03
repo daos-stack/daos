@@ -298,31 +298,6 @@ done:
 	return rc;
 }
 
-/* TODO following four umem_xxx functions will be replaced real umem functions */
-static struct umem_action *
-umem_act_first(struct umem_action *actv)
-{
-	return NULL;
-}
-
-static struct umem_action *
-umem_act_next(struct umem_action *actv)
-{
-	return NULL;
-}
-
-static unsigned int
-umem_act_nr(struct umem_action *actv)
-{
-	return 0;
-}
-
-static uint32_t
-umem_act_payload_sz(struct umem_action *actv)
-{
-	return 0;
-}
-
 struct wal_blks_desc {
 	unsigned int	bd_blks;	/* Total blocks for this transaction */
 	unsigned int	bd_payload_idx;	/* Start block index for payload */
@@ -533,8 +508,8 @@ place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks
 }
 
 static void
-fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_action *actv,
-		uint64_t tx_id, unsigned int blk_sz, struct wal_blks_desc *bd)
+fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_tx *tx,
+		unsigned int blk_sz, struct wal_blks_desc *bd)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct umem_action	*act;
@@ -546,9 +521,9 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
-	blk_hdr.th_id = tx_id;
-	blk_hdr.th_tot_ents = umem_act_nr(actv);
-	blk_hdr.th_tot_payload = umem_act_payload_sz(actv);
+	blk_hdr.th_id = tx->utx_id;
+	blk_hdr.th_tot_ents = umem_tx_act_nr(tx);
+	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(tx);
 
 	/* Initialize first entry block */
 	get_trans_blk(bsgl, 0, blk_sz, &entry_blk);
@@ -567,7 +542,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	else
 		payload_blk.tb_off = bd->bd_payload_off;
 
-	act = umem_act_first(actv);
+	act = umem_tx_act_first(tx);
 	D_ASSERT(act != NULL);
 
 	while (act != NULL) {
@@ -631,7 +606,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			break;
 		case UMEM_ACT_CSUM:
 			entry.te_off = act->ac_csum.addr;
-			entry.te_len = WAL_CSUM_LEN;
+			entry.te_len = act->ac_csum.size;
 			entry.te_data = act->ac_csum.csum;
 			break;
 		default:
@@ -639,7 +614,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			break;
 		}
 
-		act = umem_act_next(actv);
+		act = umem_tx_act_next(tx);
 	}
 
 	place_tail(mc, bsgl, bd, &payload_blk);
@@ -784,8 +759,7 @@ data_completion(void *arg, int err)
 }
 
 int
-bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *actv,
-	       struct bio_desc *biod_data)
+bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct bio_desc		*biod;
@@ -796,10 +770,11 @@ bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *
 	unsigned int		 blks, unused_off;
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	uint64_t		 tx_id = tx->utx_id;
 	int			 iov_nr, rc;
 
 	/* Calculate the required log blocks for this transaction */
-	calc_trans_blks(umem_act_nr(actv), umem_act_payload_sz(actv), blk_bytes, &blk_desc);
+	calc_trans_blks(umem_tx_act_nr(tx), umem_tx_act_payload_sz(tx), blk_bytes, &blk_desc);
 
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
 		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
@@ -860,7 +835,7 @@ bio_wal_commit(struct bio_meta_context *mc, uint64_t tx_id, struct umem_action *
 	}
 
 	/* Fill DMA buffer with transaction entries */
-	fill_trans_blks(mc, bsgl, actv, tx_id, blk_bytes, &blk_desc);
+	fill_trans_blks(mc, bsgl, tx, blk_bytes, &blk_desc);
 
 	/* Set proper completion callbacks for data I/O & WAL I/O */
 	if (biod_data != NULL) {
@@ -960,8 +935,8 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 	return 0;
 }
 
-static int
-flush_wal_header(struct bio_meta_context *mc)
+int
+bio_wal_flush_header(struct bio_meta_context *mc)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_header	*hdr = &si->si_header;
@@ -979,27 +954,628 @@ flush_wal_header(struct bio_meta_context *mc)
 	return write_header(mc, mc->mc_wal, hdr, sizeof(*hdr), &hdr->wh_csum);
 }
 
-int
-bio_wal_replay(struct bio_meta_context *mc,
-	       int (*replay_cb)(struct umem_action *actv, unsigned int act_nr),
-	       unsigned int max_replay_nr)
+static int
+load_wal(struct bio_meta_context *mc, char *buf, unsigned int max_blks, uint64_t tx_id)
 {
-	/* TODO */
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
+	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	struct bio_sglist	 bsgl;
+	struct bio_iov		*biov;
+	d_sg_list_t		 sgl;
+	d_iov_t			 iov;
+	unsigned int		 nr_blks, blks, off;
+	bio_addr_t		 addr = { 0 };
+	int			 iov_nr, rc;
+
+	d_iov_set(&iov, buf, max_blks * blk_bytes);
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+
+	/* Read in 1MB sized IOVs */
+	nr_blks = (1UL << 20) / blk_bytes;
+	D_ASSERT(nr_blks > 0);
+	iov_nr = (max_blks + nr_blks - 1) / nr_blks + 1;
+	rc = bio_sgl_init(&bsgl, iov_nr);
+	if (rc)
+		return rc;
+
+	off = id2off(tx_id);
+	while (max_blks > 0) {
+		biov = &bsgl.bs_iovs[bsgl.bs_nr_out];
+
+		bio_addr_set(&addr, DAOS_MEDIA_NVME, off2lba(si, off));
+		blks = min(max_blks, nr_blks);
+		if (off + blks > tot_blks)
+			blks = tot_blks - off;
+		bio_iov_set(biov, addr, blks * blk_bytes);
+
+		bsgl.bs_nr_out++;
+		max_blks -= blks;
+		off += blks;
+		if (off == tot_blks)
+			off = 0;
+		D_ASSERT(bsgl.bs_nr_out <= iov_nr);
+	}
+	/* Adjust the bs_nr for following bio_readv() */
+	bsgl.bs_nr = bsgl.bs_nr_out;
+
+	rc = bio_readv(mc->mc_wal, &bsgl, &sgl);
+	bio_sgl_fini(&bsgl);
+
+	return rc;
+}
+
+static int
+verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx_id)
+{
+	bool	committed = false;
+
+	if (wal_id_cmp(si, tx_id, si->si_commit_id) <= 0)
+		committed = true;
+
+	if (hdr->th_magic != WAL_HDR_MAGIC) {
+		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL head magic, %x != %x\n",
+			 hdr->th_magic, WAL_HDR_MAGIC);
+		return committed ? -DER_INVAL : 1;
+	}
+
+	if (hdr->th_gen != si->si_header.wh_gen) {
+		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched WAL generation, %u != %u\n",
+			 hdr->th_gen, si->si_header.wh_gen);
+		return committed ? -DER_INVAL : 1;
+	}
+
+	if (id2seq(hdr->th_id) < id2seq(tx_id)) {
+		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Stale sequence number detected, %u < %u\n",
+			 id2seq(hdr->th_id), id2seq(tx_id));
+		return committed ? -DER_INVAL : 1;
+	} else if (id2seq(hdr->th_id) > id2seq(tx_id)) {
+		D_ERROR("Invalid sequence number detected, %u > %u\n",
+			id2seq(hdr->th_id), id2seq(tx_id));
+		return -DER_INVAL;
+	}
+
+	if (hdr->th_id != tx_id) {
+		D_ERROR("Mismatched transaction ID. "DF_U64" != "DF_U64"\n", hdr->th_id, tx_id);
+		return -DER_INVAL;
+	}
+
+	if (hdr->th_tot_ents == 0) {
+		D_ERROR("Invalid entry number\n");
+		return -DER_INVAL;
+	}
+
 	return 0;
+}
+
+static int
+verify_data(struct bio_meta_context *mc, uint64_t off, uint32_t len, uint32_t expected_csum,
+	    char **dbuf, unsigned int *dbuf_len)
+{
+	struct bio_sglist	 bsgl;
+	struct bio_iov		*biov;
+	d_sg_list_t		 sgl;
+	d_iov_t			 iov;
+	char			*buf;
+	unsigned int		 iov_sz = (1UL << 20);	/* 1MB */
+	unsigned int		 read_sz, tot_read = len;
+	bio_addr_t		 addr = { 0 };
+	uint32_t		 csum;
+	int			 iov_nr, csum_len, rc;
+
+	D_ASSERT(len > 0);
+	if (*dbuf_len < len) {
+		D_FREE(*dbuf);
+		*dbuf = NULL;
+		*dbuf_len = 0;
+
+		D_ALLOC(buf, max(iov_sz, len));
+		if (buf == NULL)
+			return -DER_NOMEM;
+		*dbuf = buf;
+		*dbuf_len = max(iov_sz, len);
+	} else {
+		buf = *dbuf;
+	}
+
+	d_iov_set(&iov, buf, len);
+	sgl.sg_iovs = &iov;
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+
+	/* Read in 1MB sized IOVs */
+	iov_nr = (len + iov_sz - 1) / iov_sz;
+	rc = bio_sgl_init(&bsgl, iov_nr);
+	if (rc)
+		return rc;
+
+	while (tot_read > 0) {
+		biov = &bsgl.bs_iovs[bsgl.bs_nr_out];
+
+		bio_addr_set(&addr, DAOS_MEDIA_NVME, off);
+		read_sz = min(tot_read, iov_sz);
+		bio_iov_set(biov, addr, read_sz);
+
+		bsgl.bs_nr_out++;
+		tot_read -= read_sz;
+		off += read_sz;
+		D_ASSERT(bsgl.bs_nr_out <= iov_nr);
+	}
+
+	rc = bio_readv(mc->mc_data, &bsgl, &sgl);
+	bio_sgl_fini(&bsgl);
+	if (rc) {
+		D_ERROR("Read data from data blob failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	csum_len = meta_csum_len(mc);
+	rc = meta_csum_calc(mc, buf, len, &csum, csum_len);
+	if (rc) {
+		D_ERROR("Calculate data csum failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (csum != expected_csum) {
+		D_DEBUG(DB_IO, "Mismatched data csum, %u != %u\n", csum, expected_csum);
+		return 1;
+	}
+
+	return 0;
+}
+
+static inline void
+init_entry_blk(struct wal_trans_blk *entry_blk, struct wal_trans_head *hdr, char *buf,
+	       unsigned int blk_sz)
+{
+	D_ASSERT(hdr->th_tot_ents > 0);
+	entry_blk->tb_hdr = hdr;
+	entry_blk->tb_buf = buf;
+	entry_blk->tb_idx = 0;
+	entry_blk->tb_off = sizeof(*hdr);
+	entry_blk->tb_blk_sz = blk_sz;
+}
+
+static inline void
+next_wal_blk(struct wal_trans_blk *tb)
+{
+	tb->tb_idx++;
+	tb->tb_buf += tb->tb_blk_sz;
+	tb->tb_off = sizeof(*tb->tb_hdr);
+}
+
+static inline void
+entry_move_next(struct wal_trans_blk *entry_blk, struct wal_blks_desc *bd)
+{
+	unsigned int	entry_sz = sizeof(struct wal_trans_entry);
+
+	if ((entry_blk->tb_off + entry_sz) > entry_blk->tb_blk_sz)
+		next_wal_blk(entry_blk);
+	else
+		entry_blk->tb_off += entry_sz;
+
+	if (entry_blk->tb_idx < bd->bd_payload_idx)
+		D_ASSERT((entry_blk->tb_off + entry_sz) <= entry_blk->tb_blk_sz);
+	else if (entry_blk->tb_idx == bd->bd_payload_idx)
+		D_ASSERT((entry_blk->tb_off + entry_sz) <= bd->bd_payload_off);
+	else
+		D_ASSERTF(0, "Entry blk idx:%u > Payload blk idx:%u\n",
+			  entry_blk->tb_idx, bd->bd_payload_idx);
+}
+
+static int
+verify_tx_data(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *bd,
+	       char **dbuf, unsigned int *dbuf_len)
+{
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
+	struct wal_trans_entry	*entry;
+	unsigned int		 blk_sz = si->si_header.wh_blk_bytes, nr = 0;
+	struct wal_trans_blk	 entry_blk;
+	int			 rc = 0;
+
+	init_entry_blk(&entry_blk, hdr, buf, blk_sz);
+	while (1) {
+		entry = (struct wal_trans_entry *)(entry_blk.tb_buf + entry_blk.tb_off);
+
+		switch (entry->te_type) {
+		case UMEM_ACT_COPY:
+		case UMEM_ACT_COPY_PTR:
+		case UMEM_ACT_ASSIGN:
+		case UMEM_ACT_MOVE:
+		case UMEM_ACT_SET:
+		case UMEM_ACT_SET_BITS:
+		case UMEM_ACT_CLR_BITS:
+			break;
+		case UMEM_ACT_CSUM:
+			rc = verify_data(mc, entry->te_off, entry->te_len, entry->te_data,
+					 dbuf, dbuf_len);
+			break;
+		default:
+			D_ASSERTF(0, "Invalid opc %u\n", entry->te_type);
+			break;
+		}
+
+		nr++;
+		if (rc != 0 || nr == hdr->th_tot_ents)
+			break;
+
+		entry_move_next(&entry_blk, bd);
+	}
+
+	return rc;
+}
+
+static int
+verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc,
+	  char **dbuf, unsigned int *dbuf_len)
+{
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
+	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	uint32_t		 csum, expected_csum;
+	unsigned int		 csum_len, buf_len;
+	bool			 committed = false;
+	int			 rc;
+
+	if (wal_id_cmp(si, hdr->th_id, si->si_commit_id) <= 0)
+		committed = true;
+
+	csum_len = meta_csum_len(mc);
+	/* Total tx length excluding tail */
+	D_ASSERT(blk_desc->bd_blks > 0);
+	buf_len = (blk_desc->bd_blks - 1) * blk_bytes + blk_desc->bd_tail_off;
+
+	rc = meta_csum_calc(mc, buf, buf_len, &csum, csum_len);
+	if (rc) {
+		D_ERROR("Calculate WAL tx csum failed. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	memcpy(&expected_csum, buf + buf_len, csum_len);
+	if (csum != expected_csum) {
+		D_CDEBUG(committed, DLOG_ERR, DB_IO, "Mismatched tx csum, %u != %u\n",
+			 csum, expected_csum);
+		return committed ? -DER_INVAL : 1;
+	}
+
+	/*
+	 * Don't verify data csum when the transaction ID is known to be committed.
+	 *
+	 * VOS aggregation is responsible to bump the persistent last committed ID before
+	 * each round of aggregation, so that here we can avoid verifying the data which
+	 * might have been changed by aggregation.
+	 */
+	if (committed)
+		return 0;
+
+	return verify_tx_data(mc, buf, blk_desc, dbuf, dbuf_len);
+}
+
+static void
+copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uint16_t len)
+{
+	unsigned int	left, copy_sz;
+
+	D_ASSERT(len > 0);
+	while (len > 0) {
+		D_ASSERT(tb->tb_idx >= bd->bd_payload_idx && tb->tb_idx < bd->bd_blks);
+		D_ASSERT(tb->tb_off >= sizeof(*tb->tb_hdr) && tb->tb_off <= tb->tb_blk_sz);
+
+		left = tb->tb_blk_sz - tb->tb_off;
+		/* Current payload block is done, move to next */
+		if (left == 0) {
+			next_wal_blk(tb);
+			continue;
+		}
+
+		copy_sz = (left >= len) ? len : left;
+		memcpy(addr, tb->tb_buf + tb->tb_off, copy_sz);
+
+		tb->tb_off += copy_sz;
+		addr += copy_sz;
+		len -= copy_sz;
+	}
+}
+
+static int
+replay_tx(struct wal_super_info *si, char *buf, int (*replay_cb)(struct umem_action *act),
+	  struct wal_blks_desc *bd, struct umem_action *act)
+{
+	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
+	struct wal_trans_entry	*entry;
+	struct wal_trans_blk	 entry_blk, payload_blk;
+	unsigned int		 blk_sz = si->si_header.wh_blk_bytes;
+	int			 nr = 0, rc = 0;
+
+	/* Init entry block */
+	init_entry_blk(&entry_blk, hdr, buf, blk_sz);
+
+	/* Init payload block */
+	payload_blk.tb_hdr = hdr;
+	payload_blk.tb_buf = buf + bd->bd_payload_idx * blk_sz;
+	payload_blk.tb_idx = bd->bd_payload_idx;
+	payload_blk.tb_off = bd->bd_payload_off;
+	payload_blk.tb_blk_sz = blk_sz;
+
+	while (1) {
+		entry = (struct wal_trans_entry *)(entry_blk.tb_buf + entry_blk.tb_off);
+
+		act->ac_opc = entry->te_type;
+		switch (entry->te_type) {
+		case UMEM_ACT_COPY:
+		case UMEM_ACT_COPY_PTR:
+			act->ac_opc = UMEM_ACT_COPY;
+			act->ac_copy.addr = entry->te_off;
+			act->ac_copy.size = entry->te_len;
+			D_ASSERT(entry->te_len <= UMEM_ACT_PAYLOAD_MAX_LEN);
+			copy_payload(bd, &payload_blk, &act->ac_copy.payload, entry->te_len);
+			break;
+		case UMEM_ACT_ASSIGN:
+			act->ac_assign.addr = entry->te_off;
+			act->ac_assign.size = entry->te_len;
+			act->ac_assign.val = entry->te_data;
+			break;
+		case UMEM_ACT_MOVE:
+			act->ac_move.dst = entry->te_off;
+			act->ac_move.size = entry->te_len;
+			copy_payload(bd, &payload_blk, &act->ac_move.src, sizeof(uint64_t));
+			break;
+		case UMEM_ACT_SET:
+			act->ac_set.addr = entry->te_off;
+			act->ac_set.size = entry->te_len;
+			act->ac_set.val = entry->te_data;
+			break;
+		case UMEM_ACT_SET_BITS:
+		case UMEM_ACT_CLR_BITS:
+			act->ac_op_bits.addr = entry->te_off;
+			act->ac_op_bits.num = entry->te_len;
+			act->ac_op_bits.pos = entry->te_data;
+			break;
+		case UMEM_ACT_CSUM:
+			break;
+		default:
+			D_ASSERTF(0, "Invalid opc %u\n", act->ac_opc);
+			break;
+		}
+
+		if (act->ac_opc != UMEM_ACT_CSUM) {
+			rc = replay_cb(act);
+			if (rc)
+				D_ERROR("Replay CB on action %u failed. "DF_RC"\n",
+					act->ac_opc, DP_RC(rc));
+		}
+
+		nr++;
+		if (rc != 0 || nr == hdr->th_tot_ents)
+			break;
+
+		entry_move_next(&entry_blk, bd);
+	}
+
+	return rc;
+}
+
+int
+bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action *act))
+{
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	struct wal_trans_head	*hdr;
+	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	struct wal_blks_desc	 blk_desc = { 0 };
+	char			*buf, *dbuf = NULL;
+	struct umem_action	*act;
+	unsigned int		 max_blks = WAL_MAX_TRANS_BLKS, blk_off;
+	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
+	uint64_t		 tx_id;
+	int			 rc;
+
+	D_ALLOC(buf, max_blks * blk_bytes);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC(act, sizeof(*act) + UMEM_ACT_PAYLOAD_MAX_LEN);
+	if (act == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	tx_id = wal_next_id(si, si->si_ckp_id, si->si_ckp_blks);
+
+load_wal:
+	tight_loop = 0;
+	blk_off = 0;
+	rc = load_wal(mc, buf, max_blks, tx_id);
+	if (rc) {
+		D_ERROR("Failed to load WAL. "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	while (1) {
+		hdr = (struct wal_trans_head *)(buf + blk_off * blk_bytes);
+		rc = verify_tx_hdr(si, hdr, tx_id);
+		if (rc)
+			break;
+
+		calc_trans_blks(hdr->th_tot_ents, hdr->th_tot_payload, blk_bytes, &blk_desc);
+
+		if (blk_off + blk_desc.bd_blks > max_blks) {
+			if (blk_off == 0) {
+				D_ERROR("Too large tx, the WAL is corrupted\n");
+				rc = -DER_INVAL;
+				break;
+			}
+			memset(buf, 0, max_blks * blk_bytes);
+			goto load_wal;
+		}
+
+		rc = verify_tx(mc, (char *)hdr, &blk_desc, &dbuf, &dbuf_len);
+		if (rc)
+			break;
+
+		rc = replay_tx(si, (char *)hdr, replay_cb, &blk_desc, act);
+		if (rc)
+			break;
+
+		tight_loop++;
+		nr_replayed++;
+		blk_off += blk_desc.bd_blks;
+
+		/* Bump last committed tx ID in WAL super info */
+		if (wal_id_cmp(si, tx_id, si->si_commit_id) > 0) {
+			si->si_commit_id = tx_id;
+			si->si_commit_blks = blk_desc.bd_blks;
+		}
+		tx_id = wal_next_id(si, tx_id, blk_desc.bd_blks);
+
+		if (blk_off == max_blks) {
+			memset(buf, 0, max_blks * blk_bytes);
+			goto load_wal;
+		}
+
+		if (tight_loop >= 20) {
+			tight_loop = 0;
+			bio_yield(NULL);
+		}
+	}
+out:
+	if (rc >= 0) {
+		D_DEBUG(DB_IO, "Replayed %u WAL transactions\n", nr_replayed);
+		D_ASSERT(wal_id_cmp(si, tx_id, si->si_commit_id) > 0);
+		si->si_unused_id = wal_next_id(si, si->si_commit_id, si->si_commit_blks);
+		rc = 0;
+	} else {
+		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
+	}
+
+	D_FREE(dbuf);
+	D_FREE(act);
+	D_FREE(buf);
+	return rc;
 }
 
 int
 bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id)
 {
-	/* TODO */
+	struct wal_super_info	*si = &mc->mc_wal_info;
+
+	D_ASSERT(wal_id_cmp(si, si->si_ckp_id, si->si_commit_id) <= 0);
+	if (wal_id_cmp(si, si->si_ckp_id, si->si_commit_id) == 0)
+		return -DER_ALREADY;
+
+	/*
+	 * Caller doesn't have to checkpoint to this highest committed ID, instead,
+	 * it could pick reasonable amount of pages for checkpointing in the committed
+	 * ID order, so that the WAL space will be gradually reclaimed in a more
+	 * prompt way.
+	 */
+	*tx_id = si->si_commit_id;
 	return 0;
+}
+
+static inline uint64_t
+off2lba_blk(uint64_t off)
+{
+	return off + WAL_HDR_BLKS;
 }
 
 int
 bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id)
 {
-	/* TODO */
-	return 0;
+	struct wal_super_info	*si = &mc->mc_wal_info;
+	struct wal_trans_head	*hdr;
+	struct wal_blks_desc	 blk_desc = { 0 };
+	char			*buf;
+	unsigned int		 blk_sz = si->si_header.wh_blk_bytes;
+	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
+	uint64_t		 unmap_start, unmap_end;
+	d_sg_list_t		 unmap_sgl;
+	d_iov_t			*unmap_iov;
+	int			 rc;
+
+	D_ASSERT(wal_id_cmp(si, si->si_ckp_id, tx_id) < 0);
+	D_ASSERT(wal_id_cmp(si, tx_id, si->si_commit_id) <= 0);
+
+	D_ALLOC(buf, blk_sz);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	/* Load single WAL block to get the block nr used by the transaction */
+	rc = load_wal(mc, buf, 1, tx_id);
+	if (rc) {
+		D_ERROR("Failed to load WAL. "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	hdr = (struct wal_trans_head *)buf;
+	rc = verify_tx_hdr(si, hdr, tx_id);
+	if (rc) {
+		D_ERROR("Corrupted WAL transaction head\n");
+		goto out;
+	}
+
+	calc_trans_blks(hdr->th_tot_ents, hdr->th_tot_payload, blk_sz, &blk_desc);
+
+	unmap_start = id2off(wal_next_id(si, si->si_ckp_id, si->si_ckp_blks));
+	unmap_end = id2off(wal_next_id(si, tx_id, blk_desc.bd_blks));
+
+	/* Unmap the checkpointed regions */
+	rc = d_sgl_init(&unmap_sgl, 2);
+	if (rc)
+		goto out;
+
+	unmap_sgl.sg_nr_out = 1;
+	unmap_iov = &unmap_sgl.sg_iovs[0];
+
+	if (unmap_end == unmap_start) {
+		unmap_iov->iov_buf = (void *)off2lba_blk(0);
+		unmap_iov->iov_len = tot_blks;
+	} else if (unmap_end > unmap_start) {
+		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
+		unmap_iov->iov_len = unmap_end - unmap_start;
+	} else {
+		unmap_iov->iov_buf = (void *)off2lba_blk(unmap_start);
+		unmap_iov->iov_len = tot_blks - unmap_start;
+
+		if (unmap_end > 0) {
+			unmap_sgl.sg_nr_out = 2;
+			unmap_iov = &unmap_sgl.sg_iovs[1];
+
+			unmap_iov->iov_buf = (void *)off2lba_blk(0);
+			unmap_iov->iov_len = unmap_end;
+		}
+	}
+
+	rc = bio_blob_unmap_sgl(mc->mc_wal, &unmap_sgl, blk_sz);
+	d_sgl_fini(&unmap_sgl, false);
+	if (rc)	/* Flush the WAL header anyway */
+		D_ERROR("Unmap checkpointed region failed. "DF_RC"\n", DP_RC(rc));
+
+	/* Flush the WAL header */
+	si->si_ckp_id = tx_id;
+	si->si_ckp_blks = blk_desc.bd_blks;
+	rc = bio_wal_flush_header(mc);
+	if (rc)
+		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
+out:
+	D_FREE(buf);
+	return rc;
+}
+
+int
+bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
+{
+	D_ASSERT(mc->mc_meta != NULL);
+	return bio_readv(mc->mc_meta, bsgl, sgl);
+}
+
+int
+bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
+{
+	D_ASSERT(mc->mc_meta != NULL);
+	return bio_writev(mc->mc_meta, bsgl, sgl);
 }
 
 void
@@ -1013,7 +1589,7 @@ wal_close(struct bio_meta_context *mc)
 	if (si->si_rsrv_waiters > 0)
 		wakeup_reserve_waiters(si, true);
 
-	rc = flush_wal_header(mc);
+	rc = bio_wal_flush_header(mc);
 	if (rc)
 		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
 

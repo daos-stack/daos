@@ -12,10 +12,11 @@
 #include <daos/common.h>
 #include <daos_srv/ad_mem.h>
 
+typedef void (*ad_tx_cb_t)(int stage, void *data);
+
 /** ad-hoc allocator transaction handle */
 struct ad_tx {
 	struct ad_blob		*tx_blob;
-	uint64_t		 tx_id;
 	d_list_t		 tx_undo;
 	d_list_t		 tx_redo;
 	d_list_t		 tx_ar_pub;
@@ -24,6 +25,11 @@ struct ad_tx {
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct umem_act_item	*tx_redo_act_pos;
+	/* the number of layer of nested TX, outermost layer is 1, +1 for inner TX */
+	int			 tx_layer;
+	int			 tx_last_errno;
+	ad_tx_cb_t		 tx_stage_cb;
+	void			*tx_stage_cb_arg;
 };
 
 /** action parameters for free() */
@@ -37,7 +43,7 @@ struct ad_free_act {
 #define GRP_UNIT_BMSZ		8
 /** 32K is the minimum size of a group */
 #define GRP_SIZE_SHIFT		(15)
-#define GRP_SIZE_MIN		(1 << GRP_SIZE_SHIFT)
+#define GRP_SIZE_MASK		((1 << GRP_SIZE_SHIFT) - 1)
 
 /** durable format of group (128 bytes) */
 struct ad_group_df {
@@ -90,7 +96,7 @@ struct ad_group_metrics {
 };
 
 #define ARENA_GRP_SPEC_MAX	24
-#define ARENA_GRP_BMSZ		16
+#define ARENA_GRP_BMSZ		8
 
 /** Customized specs for arena. */
 struct ad_arena_spec {
@@ -99,7 +105,7 @@ struct ad_arena_spec {
 	/** arena unit size, reserved for future use */
 	uint32_t		as_unit;
 	/* last active arena of this type, this is not really part of spec... */
-	uint32_t		as_arena_last;
+	uint32_t		as_last_used;
 	/** number of group specs (valid members of as_specs) */
 	uint32_t		as_specs_nr;
 	/** group sizes and number of units within each group */
@@ -150,7 +156,7 @@ struct ad_arena_df {
 	uint64_t		ad_addr;
 	/** for future use */
 	uint64_t		ad_reserved[2];
-	/** 128 bytes (1024 bits) for each, each bit represents 32K(minimum group size) */
+	/** 64 bytes (512 bits) for each, each bit represents 32K(minimum group size) */
 	uint64_t		ad_bmap[ARENA_GRP_BMSZ];
 	/** it is DRAM reference of arena (the DRAM arena is created on demand) */
 	uint64_t		ad_back_ptr;
@@ -269,14 +275,14 @@ struct ad_blob {
 	int			 bb_ref;
 	/** is dummy blob, for unit test */
 	bool			 bb_dummy;
-	/** opened blob */
-	bool			 bb_opened;
+	/** open refcount */
+	int			 bb_opened;
 	/** number of pages */
 	unsigned int		 bb_pgs_nr;
 	/**
-	 * XXX: last used arena ID, the current implementation chooses arena ID incrementally,
-	 * because freeing arena is not supported yet. In the future, it should scan bitmap to
-	 * choose ID for arena allocation.
+	 * last used arena ID.
+	 * TODO: instead of choosing the last used, select arena based on their "weight",
+	 * which is computed out from free space of arena.
 	 */
 	uint32_t		 bb_arena_last[ARENA_SPEC_MAX];
 	/** NB: either initialize @bb_mmap or @bb_pages, only support @bb_map in phase-1 */
@@ -319,11 +325,53 @@ blob_addr(struct ad_blob *blob)
 	return blob->bb_store.stor_addr;
 }
 
+static inline int
+blob_arena_max(struct ad_blob *blob)
+{
+	return blob->bb_pgs_nr;
+}
+
 void blob_addref(struct ad_blob *blob);
 void blob_decref(struct ad_blob *blob);
 void *blob_addr2ptr(struct ad_blob *blob, daos_off_t addr);
 daos_off_t blob_ptr2addr(struct ad_blob *blob, void *ptr);
 
 int tx_complete(struct ad_tx *tx, int err);
+
+static inline struct ad_tx *
+umem_tx2ad_tx(struct umem_tx *utx)
+{
+	return (struct ad_tx *)&utx->utx_private;
+}
+
+static inline struct umem_tx *
+ad_tx2umem_tx(struct ad_tx *atx)
+{
+	return container_of(atx, struct umem_tx, utx_private);
+}
+
+static inline uint64_t
+ad_tx_id(struct ad_tx *atx)
+{
+	return ad_tx2umem_tx(atx)->utx_id;
+}
+
+static inline void
+ad_tx_id_set(struct ad_tx *atx, uint64_t id)
+{
+	ad_tx2umem_tx(atx)->utx_id = id;
+}
+
+static inline int
+ad_tx_stage(struct ad_tx *atx)
+{
+	return ad_tx2umem_tx(atx)->utx_stage;
+}
+
+static inline void
+ad_tx_stage_set(struct ad_tx *atx, int stage)
+{
+	ad_tx2umem_tx(atx)->utx_stage = stage;
+}
 
 #endif /* __AD_MEM_H__ */
