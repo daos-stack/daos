@@ -60,6 +60,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_solo = 0;
+	dth->dth_drop_cmt = 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_dist = 0;

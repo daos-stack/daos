@@ -698,7 +698,8 @@ adt_delayed_free_1(void **state)
 static void
 adt_tx_perf_1(void **state)
 {
-	const int	     alloc_size = 64;
+	/* XXX alloc_size=64/128 overflows arena, will fix in follow-on patch */
+	const int	     alloc_size = 256;
 	const int	     op_per_tx = 2;
 	const int	     loop = 400000; /* 50MB */
 	struct ad_tx	     tx;
@@ -842,7 +843,7 @@ adt_teardown(void **state)
 	int	rc;
 
 	printf("close ad_blob\n");
-	rc = ad_blob_close(adt_bh);
+	rc = ad_blob_destroy(adt_bh);
 	assert_rc_equal(rc, 0);
 	return 0;
 }

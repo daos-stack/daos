@@ -186,7 +186,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		tgt_id = dev_info->sdi_tgts[0];
 	} else {
 		tgt_id = atoi(tgt);
-		rc = smd_dev_get_by_tgt(tgt_id, &dev_info);
+		rc = smd_dev_get_by_tgt(tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
 		if (rc != 0) {
 			D_ERROR("Tgt_id:%d not found\n", tgt_id);
 			return rc;
@@ -415,25 +415,25 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 		}
 		uuid_unparse_lower(pool_info->spi_id, resp->pools[i]->uuid);
 
-		resp->pools[i]->n_tgt_ids = pool_info->spi_tgt_cnt;
+		resp->pools[i]->n_tgt_ids = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA];
 		D_ALLOC(resp->pools[i]->tgt_ids,
-			sizeof(int) * pool_info->spi_tgt_cnt);
+			sizeof(int) * pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]);
 		if (resp->pools[i]->tgt_ids == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
-			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[j];
+		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
+			resp->pools[i]->tgt_ids[j] = pool_info->spi_tgts[SMD_DEV_TYPE_DATA][j];
 
-		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt;
+		resp->pools[i]->n_blobs = pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA];
 		D_ALLOC(resp->pools[i]->blobs,
-			sizeof(uint64_t) * pool_info->spi_tgt_cnt);
+			sizeof(uint64_t) * pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]);
 		if (resp->pools[i]->blobs == NULL) {
 			rc = -DER_NOMEM;
 			break;
 		}
-		for (j = 0; j < pool_info->spi_tgt_cnt; j++)
-			resp->pools[i]->blobs[j] = pool_info->spi_blobs[j];
+		for (j = 0; j < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; j++)
+			resp->pools[i]->blobs[j] = pool_info->spi_blobs[SMD_DEV_TYPE_DATA][j];
 
 
 		d_list_del(&pool_info->spi_link);

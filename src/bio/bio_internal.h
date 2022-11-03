@@ -547,7 +547,8 @@ void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
-void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
+void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs,
+			struct umem_instance *umm);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -606,7 +607,8 @@ void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
-int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, spdk_blob_id open_blobid);
+int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys,
+		  enum smd_dev_type st, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 

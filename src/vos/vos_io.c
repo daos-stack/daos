@@ -549,7 +549,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	if (vos_ioc2umm(ioc)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	umem_rsrvd_act_alloc(&ioc->ic_rsrvd_scm, total_acts);
+	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, total_acts);
 	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
@@ -557,7 +557,7 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 		return 0;
 
 	/** Reserve enough space for any deferred actions */
-	umem_rsrvd_act_alloc(&scm, total_acts);
+	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &scm, total_acts);
 	if (scm == NULL) {
 		D_FREE(ioc->ic_rsrvd_scm);
 		return -DER_NOMEM;
