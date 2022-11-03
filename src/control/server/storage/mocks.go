@@ -6,12 +6,6 @@
 
 package storage
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"context"
 	"fmt"
@@ -24,14 +18,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-// NvmeDevState constant definitions to represent mock bitset flag combinations.
-const (
-	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
-	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
-	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -115,7 +101,8 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: MockNvmeStateIdentify,
+		NvmeState: NvmeStateNormal,
+		LedState:  LedStateNormal,
 		TrAddr:    parentTrAddr,
 	}
 }
@@ -256,4 +243,80 @@ func MockGetTopology(context.Context) (*hardware.Topology, error) {
 				),
 		},
 	}, nil
+}
+
+type (
+	// MockMountProviderConfig is a configuration for a mock MountProvider.
+	MockMountProviderConfig struct {
+		MountErr           error
+		UnmountErr         error
+		IsMountedRes       bool
+		IsMountedErr       error
+		IsMountedCount     int
+		ClearMountpointErr error
+		MakeMountPathErr   error
+	}
+
+	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
+	MockMountProvider struct {
+		cfg *MockMountProviderConfig
+	}
+)
+
+// Mount is a mock implementation.
+func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.MountErr == nil {
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: true,
+		}, nil
+	}
+	return nil, m.cfg.MountErr
+}
+
+// Unmount is a mock implementation.
+func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
+	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		return &MountResponse{
+			Target:  req.Target,
+			Mounted: false,
+		}, nil
+	}
+	return nil, m.cfg.UnmountErr
+}
+
+// IsMounted is a mock implementation.
+func (m *MockMountProvider) IsMounted(_ string) (bool, error) {
+	if m.cfg == nil {
+		return true, nil
+	}
+	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
+}
+
+// ClearMountpoint is a mock implementation.
+func (m *MockMountProvider) ClearMountpoint(_ string) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.ClearMountpointErr
+}
+
+// MakeMountPath is a mock implementation.
+func (m *MockMountProvider) MakeMountPath(_ string, _, _ int) error {
+	if m.cfg == nil {
+		return nil
+	}
+	return m.cfg.MakeMountPathErr
+}
+
+// NewMockMountProvider creates a new MockProvider.
+func NewMockMountProvider(cfg *MockMountProviderConfig) *MockMountProvider {
+	return &MockMountProvider{
+		cfg: cfg,
+	}
+}
+
+// DefaultMockMountProvider creates a mock provider in which all requests succeed.
+func DefaultMockMountProvider() *MockMountProvider {
+	return NewMockMountProvider(nil)
 }

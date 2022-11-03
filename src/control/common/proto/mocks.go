@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,7 @@ func MockNvmeNamespace(varIdx ...int32) *ctlpb.NvmeController_Namespace {
 
 // MockSmdDevice is a mock protobuf SmdDevice message used in tests for
 // multiple packages.
-func MockSmdDevice(parentTrAddr string, varIdx ...int32) *ctlpb.NvmeController_SmdDevice {
+func MockSmdDevice(parentTrAddr string, varIdx ...int32) *ctlpb.SmdDevice {
 	native := storage.MockSmdDevice(parentTrAddr, varIdx...)
 	pb := new(SmdDevice)
 
@@ -40,7 +40,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *ctlpb.NvmeController_S
 
 // MockNvmeHealth is a mock protobuf Health message used in tests for
 // multiple packages.
-func MockNvmeHealth(varIdx ...int32) *ctlpb.NvmeController_Health {
+func MockNvmeHealth(varIdx ...int32) *ctlpb.BioHealthResp {
 	native := storage.MockNvmeHealth(varIdx...)
 	pb := new(NvmeHealth)
 

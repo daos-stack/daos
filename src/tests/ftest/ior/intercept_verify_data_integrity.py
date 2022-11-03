@@ -74,7 +74,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             # Add a job manager for each ior command. Use a timeout for the ior command that leaves
             # enough time to report the summary of all the threads
             job_manager = get_job_manager(
-                self, "Mpirun", None, False, "mpich", self.get_remaining_time() - 30)
+                self, subprocess=False, timeout=self.get_remaining_time() - 30)
 
             # Define the parameters that will be used to run an ior command in this thread
             thread_manager.add(
