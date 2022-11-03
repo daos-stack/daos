@@ -1594,7 +1594,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	int			 rc;
 
 	/*
-	 * Check VMD_LED_PERIOD environment variable, if not set use double
+	 * Check if a LED timeout period has been set, if not set use double
 	 * NVME_MONITOR_PERIOD of 60 seconds (2min total) as default value.
 	 */
 	if (vmd_led_period == 0)
@@ -1606,11 +1606,17 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
-			/* LED will be reset to either faulty or normal state */
+			/* Time period has expired so reset start time to zero */
+			d_bdev->bb_led_start_time = 0;
+
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID" after %ld\n",
+				DP_UUID(d_bdev->bb_uuid), vmd_led_period);
+
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, &led_state);
 			if (rc != 0)
-				D_ERROR("Reset LED state after timeout failed on device:"
+				D_ERROR("Reset LED identify state after timeout failed on device:"
 					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
