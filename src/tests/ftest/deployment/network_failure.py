@@ -67,8 +67,7 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
 
