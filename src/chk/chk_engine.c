@@ -256,6 +256,7 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -272,7 +273,6 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -291,6 +291,8 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
 		} else {
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -462,6 +464,8 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 			cbk->cb_statistics.cs_ignored++;
 			cpr->cpr_skip = 1;
 		} else {
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -946,6 +950,7 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -955,7 +960,6 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -974,6 +978,8 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
 		} else {
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -1126,6 +1132,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 				cbk->cb_statistics.cs_repaired++;
 			} else {
@@ -1139,7 +1146,6 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 				else
 					cbk->cb_statistics.cs_repaired++;
 			}
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 			/* Report the inconsistency without repair. */
@@ -1159,6 +1165,8 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 				cbk->cb_statistics.cs_ignored++;
 				break;
 			}
+
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1190,6 +1198,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 			 * Fall through.
 			 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 				cbk->cb_statistics.cs_repaired++;
 			} else {
@@ -1200,7 +1209,6 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 				else
 					cbk->cb_statistics.cs_repaired++;
 			}
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 			/* Report the inconsistency without repair. */
@@ -1220,6 +1228,8 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 				cbk->cb_statistics.cs_ignored++;
 				break;
 			}
+
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
