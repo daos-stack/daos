@@ -4861,6 +4861,9 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		return rc;
 
 	*shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) % grp_size + start_shard;
+	while (*shard != obj_auxi->initial_shard &&
+	       obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH))
+		*shard = (*shard + 1) % grp_size + start_shard;
 	if (*shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
 		return retry_errcode(obj_auxi, 0);
