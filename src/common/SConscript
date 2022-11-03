@@ -24,10 +24,11 @@ def build_daos_common(denv, client, prereqs):
         libname = 'daos_common'
     else:
         dav_src = ['dav/alloc_class.c', 'dav/bucket.c', 'dav/container_ravl.c',
-               'dav/container_seglists.c', 'dav/critnib.c', 'dav/dav_clogs.c', 'dav/dav_iface.c',
-               'dav/fs_posix.c', 'dav/heap.c', 'dav/memblock.c', 'dav/memops.c',
-               'dav/os_thread_posix.c', 'dav/palloc.c', 'dav/ravl.c', 'dav/ravl_interval.c',
-               'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c', 'dav/util.c']
+                   'dav/container_seglists.c', 'dav/critnib.c', 'dav/dav_clogs.c',
+                   'dav/dav_iface.c', 'dav/fs_posix.c', 'dav/heap.c', 'dav/memblock.c',
+                   'dav/memops.c', 'dav/os_thread_posix.c', 'dav/palloc.c', 'dav/ravl.c',
+                   'dav/ravl_interval.c', 'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c',
+                   'dav/util.c']
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
         common_libs.extend(['pmemobj'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -42,8 +43,9 @@ def build_daos_common(denv, client, prereqs):
         prereqs.require(benv, 'argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    common = daos_build.library(benv, libname, COMMON_FILES + dav_src + ad_mem_files +
-                                stack_mmap_files, LIBS=common_libs)
+    common = daos_build.library(benv, libname,
+                                COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files,
+                                LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 
