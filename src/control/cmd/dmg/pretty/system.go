@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -58,7 +59,7 @@ func printAbsentHosts(out io.Writer, absentHosts *hostlist.HostSet) {
 	}
 }
 
-func printAbsentRanks(out io.Writer, absentRanks *system.RankSet) {
+func printAbsentRanks(out io.Writer, absentRanks *ranklist.RankSet) {
 	if absentRanks.Count() > 0 {
 		fmt.Fprintf(out, "Unknown %s: %s\n",
 			english.Plural(absentRanks.Count(), "rank", "ranks"),
@@ -66,7 +67,7 @@ func printAbsentRanks(out io.Writer, absentRanks *system.RankSet) {
 	}
 }
 
-func printSystemQuery(out io.Writer, members system.Members, absentRanks *system.RankSet) error {
+func printSystemQuery(out io.Writer, members system.Members, absentRanks *ranklist.RankSet) error {
 	groups := make(system.RankGroups)
 	if err := groups.FromMembers(members); err != nil {
 		return err
@@ -135,7 +136,7 @@ func PrintSystemQueryResponse(out, outErr io.Writer, resp *control.SystemQueryRe
 	return nil
 }
 
-func printSystemResultTable(out io.Writer, results system.MemberResults, absentRanks *system.RankSet) error {
+func printSystemResultTable(out io.Writer, results system.MemberResults, absentRanks *ranklist.RankSet) error {
 	groups := make(system.RankGroups)
 	if err := groups.FromMemberResults(results, rowFieldSep); err != nil {
 		return err
@@ -152,7 +153,7 @@ func printSystemResultTable(out io.Writer, results system.MemberResults, absentR
 	return nil
 }
 
-func printSystemResults(out, outErr io.Writer, results system.MemberResults, absentHosts *hostlist.HostSet, absentRanks *system.RankSet) error {
+func printSystemResults(out, outErr io.Writer, results system.MemberResults, absentHosts *hostlist.HostSet, absentRanks *ranklist.RankSet) error {
 	if len(results) == 0 {
 		fmt.Fprintln(out, "No results returned")
 		printAbsentHosts(outErr, absentHosts)

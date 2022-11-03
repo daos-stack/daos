@@ -23,7 +23,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -82,9 +85,9 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 	return usr, grp, nil
 }
 
-func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
+func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
 	out := make([]*mgmtpb.PoolProperty, len(in))
-	allProps := PoolProperties()
+	allProps := daos.PoolProperties()
 
 	for i, prop := range in {
 		if prop == nil {
@@ -110,15 +113,13 @@ func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty,
 			}
 		}
 
-		switch val := prop.Value.data.(type) {
-		case string:
-			out[i].SetValueString(val)
-		case uint64:
-			out[i].SetValueNumber(val)
-		case nil:
+		if num, err := prop.Value.GetNumber(); err == nil {
+			out[i].SetValueNumber(num)
+		} else if prop.Value.IsSet() {
+			out[i].SetValueString(prop.Value.String())
+		} else {
+			// not set; just skip it
 			continue
-		default:
-			return nil, errors.Errorf("unhandled property value: %+v", prop.Value.data)
 		}
 	}
 
@@ -206,6 +207,13 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		default:
 			return false
 		}
+	case *fault.Fault:
+		switch e.Code {
+		case code.ServerDataPlaneNotStarted:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
@@ -219,13 +227,13 @@ type (
 		UserGroup  string
 		ACL        *AccessControlList
 		NumSvcReps uint32
-		Properties []*PoolProperty `json:"-"`
+		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
 		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
-		Ranks     []system.Rank
+		Ranks     []ranklist.Rank
 		TierBytes []uint64
 	}
 
@@ -413,8 +421,8 @@ type (
 		Leader           uint32               `json:"leader"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks     *system.RankSet      `json:"-"`
-		DisabledRanks    *system.RankSet      `json:"-"`
+		EnabledRanks     *ranklist.RankSet    `json:"-"`
+		DisabledRanks    *ranklist.RankSet    `json:"-"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
@@ -430,7 +438,7 @@ type (
 	PoolQueryTargetReq struct {
 		poolRequest
 		ID      string
-		Rank    system.Rank
+		Rank    ranklist.Rank
 		Targets []uint32
 	}
 
@@ -474,8 +482,8 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 
 	type Alias PoolQueryResp
 	aux := &struct {
-		EnabledRanks  *[]system.Rank `json:"enabled_ranks"`
-		DisabledRanks *[]system.Rank `json:"disabled_ranks"`
+		EnabledRanks  *[]ranklist.Rank `json:"enabled_ranks"`
+		DisabledRanks *[]ranklist.Rank `json:"disabled_ranks"`
 		*Alias
 	}{
 		Alias: (*Alias)(pqr),
@@ -494,14 +502,14 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&aux)
 }
 
-func unmarshallRankSet(ranks string) (*system.RankSet, error) {
+func unmarshallRankSet(ranks string) (*ranklist.RankSet, error) {
 	switch ranks {
 	case "":
 		return nil, nil
 	case "[]":
-		return &system.RankSet{}, nil
+		return &ranklist.RankSet{}, nil
 	default:
-		return system.CreateRankSet(ranks)
+		return ranklist.CreateRankSet(ranks)
 	}
 }
 
@@ -733,7 +741,7 @@ type PoolSetPropReq struct {
 	poolRequest
 	// ID identifies the pool for which this property should be set.
 	ID         string
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolSetProp sends a pool set-prop request to the pool service leader.
@@ -786,15 +794,15 @@ type PoolGetPropReq struct {
 	Name string
 	// Properties is the list of properties to be retrieved. If empty,
 	// all properties will be retrieved.
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
-func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*PoolProperty, error) {
+func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
 	// Get all by default.
 	if len(req.Properties) == 0 {
-		allProps := PoolProperties()
-		req.Properties = make([]*PoolProperty, 0, len(allProps))
+		allProps := daos.PoolProperties()
+		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
@@ -842,6 +850,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
+			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -863,7 +872,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 type PoolExcludeReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -902,7 +911,7 @@ func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeRe
 type PoolDrainReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -950,7 +959,7 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 type PoolExtendReq struct {
 	poolRequest
 	ID    string
-	Ranks []system.Rank
+	Ranks []ranklist.Rank
 }
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
@@ -986,7 +995,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -1044,7 +1053,7 @@ type (
 		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_reps"`
+		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
 		// State is the current state of the pool.
 		State string `json:"state"`
 
@@ -1229,12 +1238,12 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
-type rankFreeSpaceMap map[system.Rank]uint64
+type rankFreeSpaceMap map[ranklist.Rank]uint64
 
-type filterRankFn func(rank system.Rank) bool
+type filterRankFn func(rank ranklist.Rank) bool
 
-func newFilterRankFunc(ranks system.RankList) filterRankFn {
-	return func(rank system.Rank) bool {
+func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
+	return func(rank ranklist.Rank) bool {
 		return len(ranks) == 0 || rank.InList(ranks)
 	}
 }
@@ -1307,7 +1316,7 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 }
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks system.RankList) (uint64, uint64, error) {
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
 	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err

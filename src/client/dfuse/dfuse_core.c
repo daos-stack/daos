@@ -916,13 +916,23 @@ dfuse_cache_set_time(struct dfuse_inode_entry *ie)
 	ie->ie_cache_last_update = now;
 }
 
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie)
+{
+	ie->ie_cache_last_update.tv_sec  = 0;
+	ie->ie_cache_last_update.tv_nsec = 0;
+}
+
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
 {
 	bool            use = false;
 	struct timespec now;
 	struct timespec left;
-	double          timeout;
+	double          time_left;
+
+	if (ie->ie_cache_last_update.tv_sec == 0)
+		return false;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
@@ -932,11 +942,14 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
 		left.tv_sec--;
 		left.tv_nsec += 1000000000;
 	}
-	timeout = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
-	if (timeout > 0) {
-		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", timeout);
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0) {
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
 		use = true;
 	}
+
+	if (use && timeout)
+		*timeout = time_left;
 
 	return use;
 }
@@ -998,6 +1011,8 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 {
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie  = ie;
+	atomic_store_relaxed(&oh->doh_il_calls, 0);
+	atomic_store_relaxed(&oh->doh_write_count, 0);
 }
 
 void
@@ -1049,6 +1064,9 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argc = 5;
 
+	if (fs_handle->dpi_info->di_multi_user)
+		args.argc++;
+
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
 	 */
@@ -1077,6 +1095,12 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
 
+	if (fs_handle->dpi_info->di_multi_user) {
+		args.argv[5] = strdup("-oallow_other");
+		if (!args.argv[5])
+			D_GOTO(err, rc = -DER_NOMEM);
+	}
+
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -1088,19 +1112,20 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_root = true;
 	ie->ie_parent = 1;
 	atomic_store_relaxed(&ie->ie_ref, 1);
-	ie->ie_stat.st_ino = 1;
-	ie->ie_stat.st_uid = geteuid();
-	ie->ie_stat.st_gid = getegid();
-	ie->ie_stat.st_mode = 0700 | S_IFDIR;
-	dfs->dfs_ino = ie->ie_stat.st_ino;
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
+	} else {
+		ie->ie_stat.st_uid  = geteuid();
+		ie->ie_stat.st_gid  = getegid();
+		ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	}
+	ie->ie_stat.st_ino = 1;
+	dfs->dfs_ino       = ie->ie_stat.st_ino;
 
 	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
@@ -1122,10 +1147,10 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		return rc;
 
 err_ie_remove:
+	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
-	fuse_opt_free_args(&args);
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	D_FREE(ie);
 	return rc;
 }
@@ -1257,6 +1282,9 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 		ref = atomic_load_relaxed(&ie->ie_ref);
+
+		atomic_store_relaxed(&ie->ie_il_count, 0);
+		atomic_store_relaxed(&ie->ie_open_count, 0);
 
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 

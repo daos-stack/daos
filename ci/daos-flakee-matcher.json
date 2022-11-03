@@ -1,7 +1,7 @@
 {
   "problemMatcher": [
     {
-      "owner": "flake8-error",
+      "owner": "flake8-error-e",
       "severity": "error",
       "pattern": [
         {

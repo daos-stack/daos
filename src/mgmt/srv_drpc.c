@@ -533,7 +533,7 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Mgmt__PoolDestroyReq	*req = NULL;
 	Mgmt__PoolDestroyResp	 resp = MGMT__POOL_DESTROY_RESP__INIT;
 	uuid_t			 uuid;
-	d_rank_list_t		*svc_ranks = NULL;
+	d_rank_list_t		*ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -558,17 +558,22 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
-	if (svc_ranks == NULL)
+	/*
+	 * Note that req->svc_ranks in this dRPC indicates on which ranks we
+	 * shall attempt to destroy the pool, not the set of PS ranks, despite
+	 * the name. See the caller code in mgmtSvc.PoolDestroy.
+	 */
+	ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_destroy_pool(uuid, svc_ranks);
+	rc = ds_mgmt_destroy_pool(uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Failed to destroy pool %s: "DF_RC"\n", req->id,
 			DP_RC(rc));
 	}
 
-	d_rank_list_free(svc_ranks);
+	d_rank_list_free(ranks);
 
 out:
 	resp.status = rc;
@@ -1119,9 +1124,8 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 		return 0;
 
 	D_ALLOC_ARRAY(resp_props, valid_prop_nr);
-	if (resp_props == NULL) {
+	if (resp_props == NULL)
 		return -DER_NOMEM;
-	}
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
@@ -1147,8 +1151,23 @@ add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
 			if (resp_props[j]->strval == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		} else if (daos_prop_has_ptr(entry)) {
-			D_ERROR("pointer-value props not supported\n");
-			D_GOTO(out, rc = -DER_INVAL);
+			switch (entry->dpe_type) {
+			case DAOS_PROP_PO_SVC_LIST:
+				if (entry->dpe_val_ptr == NULL) {
+					D_ERROR("svc rank list unset\n");
+					D_GOTO(out, rc = -DER_INVAL);
+				}
+				resp_props[j]->strval = d_rank_list_to_str(
+					(d_rank_list_t *)entry->dpe_val_ptr);
+				if (resp_props[j]->strval == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+				resp_props[j]->value_case =
+					MGMT__POOL_PROPERTY__VALUE_STRVAL;
+				break;
+			default:
+				D_ERROR("pointer-value props not supported\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
 		} else {
 			resp_props[j]->numval = entry->dpe_val;
 			resp_props[j]->value_case =

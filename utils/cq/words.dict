@@ -7,6 +7,7 @@ BW
 Broadwell
 CGO
 Cilk
+CompletedProcess
 DArray
 DDict
 DFS
@@ -15,6 +16,7 @@ EL
 EOF
 FPP
 FS
+FileHandler
 GHA
 Gopath
 Haswell
@@ -22,6 +24,7 @@ IOF
 IOR
 ISA
 KVM
+Launchable
 Lustre
 MPI
 Makefile
@@ -58,16 +61,19 @@ UCX
 UNS
 Uncomment
 VMD
+XUnitResult
 acl
 akey
 akeys
 allocator
+allowlist
 amongst
 api
 arg
 argobots
 argparse
 args
+ascii
 async
 attachinfo
 attr
@@ -95,6 +101,7 @@ chdir
 checksum
 chgrp
 chmod
+chown
 chowned
 clush
 cmd
@@ -170,6 +177,7 @@ findcmd
 fini
 fio
 fnctl
+formattable
 fpp
 fs
 fstab
@@ -183,6 +191,7 @@ getattr
 getfattr
 getxattr
 gid
+groupname
 grp
 hackery
 hfi
@@ -190,6 +199,7 @@ hostfile
 hostlist
 hostname
 hostnames
+hugepage
 hugepages
 hwloc
 ib
@@ -235,11 +245,13 @@ localhost
 logdir
 logfile
 logfiles
+logmasks
 lseek
 lspci
 lua
 lustre
 macsio
+makecache
 malloc
 mca
 mdtest
@@ -286,6 +298,7 @@ opcode
 openmpi
 orterun
 os
+oStrictHostKeyChecking
 outdata
 outputdir
 params
@@ -321,6 +334,7 @@ proc
 procs
 protoc
 ps
+puuid
 py
 pydaos
 ramdisk
@@ -336,6 +350,7 @@ recurse
 redistributions
 refactor
 repo
+returncode
 rf
 rmdir
 romio
@@ -365,6 +380,7 @@ src
 srun
 ssd
 ssds
+stacktrace
 statfs
 statvfs
 stddev
@@ -425,6 +441,7 @@ unittest
 unlink
 unlinked
 unlinking
+unmangle
 unmount
 unwritable
 uri
@@ -449,5 +466,6 @@ xattrs
 xfer
 xfersize
 xml
+xunit
 yaml
 yamllint

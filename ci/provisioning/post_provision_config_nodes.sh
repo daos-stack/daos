@@ -31,8 +31,8 @@ add_repo() {
         local repo_url="${REPOSITORY_URL}${add_repo}"
         local repo_name
         repo_name=$(url_to_repo "$repo_url")
-        if ! dnf repolist | grep "$repo_name"; then
-            dnf config-manager --add-repo="${repo_url}" >&2
+        if ! dnf -y repolist | grep "$repo_name"; then
+            dnf -y config-manager --add-repo="${repo_url}" >&2
             if ! $gpg_check; then
                 disable_gpg_check "$add_repo" >&2
             fi
@@ -57,8 +57,8 @@ disable_gpg_check() {
 
     repo="$(url_to_repo "$url")"
     # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf config-manager --save --setopt="$repo".gpgcheck=1
-    dnf config-manager --save --setopt="$repo".gpgcheck=0
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
     # but even that seems to be not enough, so just brute-force it
     if [ -d /etc/yum.repos.d ] &&
        ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
@@ -97,11 +97,6 @@ chmod 700 "${jenkins_ssh}"
 chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
-
-# remove any defined releasever
-# any deviation from the default releasever for a distro should be
-# handled on a per-test-run, or even per-dnf command basis
-rm -f  /etc/yum/vars/releasever
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script

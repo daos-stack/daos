@@ -320,22 +320,22 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.set_cont_class_properties(oclass)
             if self.test_with_checksum is False:
                 tmp = self.get_object_replica_value(oclass)
-                rf_value = "rf:{}".format(tmp - 1)
+                rf_value = "rd_fac:{}".format(tmp - 1)
                 self.update_cont_properties(rf_value)
             self.container.create()
             self.pool_cont_dict[self.pool][0] = self.container
             self.pool_cont_dict[self.pool][1] = "Updated"
         else:
-            if ((self.test_during_aggregation is True) and
-               (self.pool_cont_dict[self.pool][1] == "Updated") and
-               (self.pool_cont_dict[self.pool][3] is None) and
-               ("-w" in flags)):
+            if ((self.test_during_aggregation is True)
+                    and (self.pool_cont_dict[self.pool][1] == "Updated")
+                    and (self.pool_cont_dict[self.pool][3] is None)
+                    and ("-w" in flags)):
                 # Write to the second container
                 self.add_container(self.pool, create=False)
                 self.set_cont_class_properties(oclass)
                 if self.test_with_checksum is False:
                     tmp = self.get_object_replica_value(oclass)
-                    rf_value = "rf:{}".format(tmp - 1)
+                    rf_value = "rd_fac:{}".format(tmp - 1)
                     self.update_cont_properties(rf_value)
                 self.container.create()
                 self.pool_cont_dict[self.pool][2] = self.container
@@ -393,14 +393,14 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.container.oclass.value = oclass
         # Set the container properties properly for S!, S2 class.
         # rf should not be set to 1 for S type object class.
-        x = re.search("^S\\d$", oclass)
+        match = re.search("^S\\d$", oclass)
         prop = self.container.properties.value
-        if x is not None:
-            prop = prop.replace("rf:1", "rf:0")
+        if match is not None:
+            prop = prop.replace("rd_fac:1", "rd_fac:0")
         else:
             tmp = self.get_object_replica_value(oclass)
-            rf_value = "rf:{}".format(tmp - 1)
-            prop = prop.replace("rf:1", rf_value)
+            rf_value = "rd_fac:{}".format(tmp - 1)
+            prop = prop.replace("rd_fac:1", rf_value)
         self.container.properties.value = prop
         # Over-write oclass settings if using redundancy factor
         # and self.test_with_rf is True.
@@ -487,7 +487,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         process.start()
         # Wait for the thread to finish
         process.join()
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
@@ -544,7 +544,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
                                out_queue=self.out_queue)
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def run_mdtest_thread(self, oclass="RP_2G1"):
@@ -562,7 +562,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.set_cont_class_properties(oclass)
         if self.test_with_checksum is False:
             tmp = self.get_object_replica_value(oclass)
-            rf_value = "rf:{}".format(tmp - 1)
+            rf_value = "rd_fac:{}".format(tmp - 1)
             self.update_cont_properties(rf_value)
         if create_container == 1:
             self.container.create()

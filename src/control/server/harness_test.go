@@ -26,7 +26,9 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -56,15 +58,17 @@ func TestServer_Harness_Start(t *testing.T) {
 		expStartCount    uint32                   // number of instance.runner.Start() calls
 		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string      // string repr of call for each instance.Index()
-		expRanks         map[uint32]system.Rank   // ranks to have been set during Start()
+		expRanks         map[uint32]ranklist.Rank // ranks to have been set during Start()
 		expMembers       system.Members           // members to have been registered during Start()
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(testLongTimeout)
-					return errors.New("ending")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("ending"),
+					}
 				},
 			},
 			instanceUuids: map[int]string{
@@ -83,19 +87,21 @@ func TestServer_Harness_Start(t *testing.T) {
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
-				0: {fmt.Sprintf("Join %d", system.NilRank)},
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
+				0: {fmt.Sprintf("Join %d", ranklist.NilRank)},
+				1: {fmt.Sprintf("Join %d", ranklist.NilRank)},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(0),
+				1: ranklist.Rank(1),
 			},
 		},
 		"startup/shutdown with preset ranks": {
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(testLongTimeout)
-					return errors.New("ending")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("ending"),
+					}
 				},
 			},
 			rankInSuperblock: true,
@@ -114,9 +120,9 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: {"Join 1"}, // rank == instance.Index() + 1
 				1: {"Join 2"},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(1),
-				1: system.Rank(2),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(1),
+				1: ranklist.Rank(2),
 			},
 		},
 		"fails to start": {
@@ -130,15 +136,17 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(delayedFailTimeout)
-					return errors.New("oops")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("oops"),
+					}
 				},
 			},
 			expStartCount: maxEngines,
-			expRanks: map[uint32]system.Rank{
-				0: system.NilRank,
-				1: system.NilRank,
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.NilRank,
+				1: ranklist.NilRank,
 			},
 			expIoErrs: map[uint32]error{
 				0: errors.New("oops"),
@@ -149,9 +157,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				ErrChanCb: func() error {
+				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
 					time.Sleep(delayedFailTimeout)
-					return errors.New("oops")
+					return &engine.RunnerExitInfo{
+						Error: errors.New("oops"),
+					}
 				},
 			},
 			instanceUuids: map[int]string{
@@ -170,12 +180,12 @@ func TestServer_Harness_Start(t *testing.T) {
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
-				0: {fmt.Sprintf("Join %d", system.NilRank)},
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
+				0: {fmt.Sprintf("Join %d", ranklist.NilRank)},
+				1: {fmt.Sprintf("Join %d", ranklist.NilRank)},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(0),
+				1: ranklist.Rank(1),
 			},
 			expIoErrs: map[uint32]error{
 				0: errors.New("oops"),
@@ -225,12 +235,12 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
 
-				msc := scm.MockSysConfig{IsMountedBool: true}
-				sysp := scm.NewMockSysProvider(log, &msc)
+				msc := &sysprov.MockSysConfig{IsMountedBool: true}
+				sysp := sysprov.NewMockSysProvider(log, msc)
 				provider := storage.MockProvider(
 					log, 0, &engineCfg.Storage,
 					sysp,
-					scm.NewMockProvider(log, nil, &msc),
+					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
 				)
 
@@ -241,7 +251,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					defer joinMu.Unlock()
 					joinRequests[idx] = []string{fmt.Sprintf("Join %d", req.Rank)}
 					return &control.SystemJoinResp{
-						Rank: system.Rank(idx),
+						Rank: ranklist.Rank(idx),
 					}, nil
 				}
 
@@ -254,13 +264,13 @@ func TestServer_Harness_Start(t *testing.T) {
 				if UUID, exists := tc.instanceUuids[i]; exists {
 					uuid = UUID
 				}
-				var rank *system.Rank
+				var rank *ranklist.Rank
 				var isValid bool
 				if tc.rankInSuperblock {
-					rank = system.NewRankPtr(uint32(i + 1))
+					rank = ranklist.NewRankPtr(uint32(i + 1))
 					isValid = true
 				} else if isAP { // bootstrap will assume rank 0
-					rank = new(system.Rank)
+					rank = new(ranklist.Rank)
 				}
 				ei.setSuperblock(&Superblock{
 					UUID: uuid, Rank: rank, ValidRank: isValid,
@@ -461,16 +471,22 @@ func (db *mockdb) ShutdownRaft() error {
 	return db.shutdownErr
 }
 
+func (db *mockdb) ResignLeadership(error) error {
+	db.isLeader = false
+	return nil
+}
+
 func TestServer_Harness_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mics        []*MockInstanceConfig
-		method      drpc.Method
-		body        proto.Message
-		notStarted  bool
-		notLeader   bool
-		resignCause error
-		expShutdown bool
-		expErr      error
+		mics         []*MockInstanceConfig
+		method       drpc.Method
+		body         proto.Message
+		notStarted   bool
+		notLeader    bool
+		resignCause  error
+		expShutdown  bool
+		expNotLeader bool
+		expErr       error
 	}{
 		"success": {
 			mics: []*MockInstanceConfig{
@@ -539,8 +555,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: FaultDataPlaneNotStarted,
 				},
 			},
-			expShutdown: true,
-			expErr:      FaultDataPlaneNotStarted,
+			expNotLeader: true,
+			expErr:       FaultDataPlaneNotStarted,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -587,6 +603,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			_, gotErr := h.CallDrpc(ctx, tc.method, tc.body)
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
+			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
 		})
 	}
 }

@@ -7,8 +7,9 @@
 
 from ior_test_base import IorTestBase
 
-# pylint: disable=too-few-public-methods,too-many-ancestors
+
 class RbldWithIOR(IorTestBase):
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -34,7 +35,7 @@ class RbldWithIOR(IorTestBase):
 
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.server_managers[0].get_config_value("targets")
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
         iorflags_read = self.params.get("read_flg", '/run/ior/iorflags/')
