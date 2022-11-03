@@ -637,35 +637,35 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
 		if (rc != 0)
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
-			D_GOTO(cleanup, rc = -DER_NONEXIST);
+			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
 
 		rc = __split_arg(interface_env, &iface0, &iface1);
 		if (rc != 0)
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 		rc = __split_arg(domain_env, &domain0, &domain1);
 		if (rc != 0)
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
-			D_GOTO(cleanup, rc = -DER_INVAL);
+			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 
 		rc = prov_data_init(&crt_gdata.cg_prov_gdata_primary,
 				    primary_provider, true, opt);
 		if (rc != 0)
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 
 		prov_settings_apply(true, primary_provider, opt);
 		crt_gdata.cg_primary_prov = primary_provider;
@@ -673,7 +673,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
-			D_GOTO(cleanup, rc);
+			D_GOTO(unlock, rc);
 		}
 
 		if (secondary_provider != CRT_PROV_UNKNOWN) {
