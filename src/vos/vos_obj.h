@@ -60,6 +60,8 @@ enum {
 	VOS_OBJ_CREATE		= (1 << 1),
 	/** Hold for object specific discard */
 	VOS_OBJ_DISCARD		= (1 << 2),
+	/** Hold the object for delete dkey */
+	VOS_OBJ_KILL_DKEY	= (1 << 3),
 };
 
 /**

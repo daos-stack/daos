@@ -275,7 +275,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	csi->csi_flags = flags;
 	csi->csi_phase = phase;
 	csi->csi_leader_rank = leader;
-	csi->csi_api_flags = flags;
+	csi->csi_api_flags = api_flags;
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
 	csi->csi_policies.ca_count = policy_nr;

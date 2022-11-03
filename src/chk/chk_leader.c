@@ -564,6 +564,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		/* Fall through. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		seq = ++(ins->ci_seq);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -574,7 +575,6 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -593,6 +593,8 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
 		} else {
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
@@ -728,6 +730,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 		if (chk_pool_in_zombie(cpr))
 			goto interact;
 
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		seq = ++(ins->ci_seq);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -745,11 +748,11 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_exist_on_ms = 1;
 			}
 		}
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 		/* Fall through. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		seq = ++(ins->ci_seq);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -765,7 +768,6 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 		 * whether it is destroyed successfully or not.
 		 */
 		cpr->cpr_skip = 1;
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		/* Report the inconsistency without repair. */
@@ -789,6 +791,8 @@ interact:
 			cbk->cb_statistics.cs_ignored++;
 			cpr->cpr_skip = 1;
 		} else {
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_READD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -963,6 +967,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 		 * Fall through.
 		 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			seq = ++(ins->ci_seq);
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 				cbk->cb_statistics.cs_repaired++;
@@ -978,7 +983,6 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * whether it is destroyed successfully or not.
 			 */
 			cpr->cpr_skip = 1;
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 			/* Report the inconsistency without repair. */
@@ -1001,6 +1005,8 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_skip = 1;
 				break;
 			}
+
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1029,6 +1035,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 		 * Fall through.
 		 */
 		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			seq = ++(ins->ci_seq);
 			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 				cbk->cb_statistics.cs_repaired++;
@@ -1056,7 +1063,6 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			 * NOTE: For result == 0 case, it still cannot be regarded as repaired.
 			 *	 We need to start the PS under DICTATE mode in subsequent step.
 			 */
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			break;
 		case CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD:
 			seq = ++(ins->ci_seq);
@@ -1096,6 +1102,8 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 				cpr->cpr_skip = 1;
 				break;
 			}
+
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
@@ -1379,6 +1387,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 
 try_ps:
 		cbk->cb_statistics.cs_total++;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		seq = ++(ins->ci_seq);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -1390,7 +1399,6 @@ try_ps:
 			else
 				cbk->cb_statistics.cs_repaired++;
 		}
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
 		cbk->cb_statistics.cs_total++;
@@ -1411,6 +1419,8 @@ try_ps:
 			cbk->cb_statistics.cs_ignored++;
 			break;
 		}
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 		if (cpr->cpr_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
