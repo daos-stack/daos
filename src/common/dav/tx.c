@@ -77,28 +77,6 @@ get_tx(dav_obj_t *pop)
 	return tx;
 }
 
-/* DI */
-#include <sys/syscall.h>
-void chk_tid(dav_obj_t *pop)
-{
-	if (pop == NULL)
-		dav_print_backtrace();
-	D_ASSERT(pop != NULL);
-	D_ASSERT(pop->tc < 10);
-	pid_t tid = syscall(SYS_gettid);
-	int i;
-
-	for (i = 0; i < pop->tc; i++) {
-		if (pop->ts[i] == tid)
-			break;
-	}
-	if (i == pop->tc) {
-		if (i > 0)
-			ERR("DAV tid[%d]:%ld", i, (long)tid);
-		pop->ts[pop->tc++] = tid;
-	}
-}
-
 struct tx_alloc_args {
 	uint64_t flags;
 	const void *copy_ptr;
@@ -346,7 +324,6 @@ tx_pre_commit(struct tx *tx)
 static void
 tx_abort(dav_obj_t *pop)
 {
- /* DI */ chk_tid(pop);
 	struct tx *tx = get_tx(pop);
 
 	tx_abort_set(pop);
@@ -505,7 +482,6 @@ int
 dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 {
 
- /* DI */ chk_tid(pop);
 	int err = 0;
 	struct tx *tx = get_tx(pop);
 
@@ -643,12 +619,7 @@ obj_tx_callback(struct tx *tx)
 enum dav_tx_stage
 dav_tx_stage(void)
 {
-		struct tx *tx = get_tx_nochk();
-
-		if (tx->stage != DAV_TX_STAGE_NONE)
-	 /* DI */	chk_tid(tx->pop);
-	/* return get_tx(NULL)->stage; */
-	return tx->stage;
+	return get_tx_nochk()->stage;
 }
 
 /*
@@ -658,7 +629,6 @@ static void
 obj_tx_abort(int errnum, int user)
 {
 	struct tx *tx = get_tx(NULL);
- /* DI */		 chk_tid(tx->pop);
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -701,7 +671,6 @@ void
 dav_tx_abort(int errnum)
 {
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	obj_tx_abort(errnum, 1);
 	PMEMOBJ_API_END();
 }
@@ -712,7 +681,6 @@ dav_tx_abort(int errnum)
 int
 dav_tx_errno(void)
 {
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	DAV_DEBUG("err:%d", get_tx(NULL)->last_errnum);
 
 	return get_tx(NULL)->last_errnum;
@@ -774,7 +742,6 @@ dav_tx_commit(void)
 int
 dav_tx_end(void)
 {
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	if (tx->stage == DAV_TX_STAGE_WORK)
@@ -1110,7 +1077,6 @@ int
 dav_tx_add_range_direct(const void *ptr, size_t size)
 {
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1148,7 +1114,6 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 {
 
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1194,7 +1159,6 @@ int
 dav_tx_add_range(uint64_t hoff, size_t size)
 {
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1225,7 +1189,6 @@ int
 dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 {
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1266,7 +1229,6 @@ dav_tx_alloc(size_t size, uint64_t type_num)
 	uint64_t off;
 
 	PMEMOBJ_API_START();
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1295,7 +1257,6 @@ uint64_t
 dav_tx_zalloc(size_t size, uint64_t type_num)
 {
 	uint64_t off;
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1327,7 +1288,6 @@ uint64_t
 dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 {
 	uint64_t off;
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1365,7 +1325,6 @@ dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 static int
 dav_tx_xfree(uint64_t off, uint64_t flags)
 {
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 
 	ASSERT_IN_TX(tx);
@@ -1471,7 +1430,6 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act,
 
 	PMEMOBJ_API_START();
 
- /* DI */		 chk_tid(pop);
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
 		PMEMOBJ_API_END();
@@ -1539,7 +1497,6 @@ dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 int
 dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 {
- /* DI */		 chk_tid(get_tx(NULL)->pop);
 	struct tx *tx = get_tx(NULL);
 	uint64_t flags = 0;
 	uint64_t off, size;

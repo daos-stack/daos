@@ -66,13 +66,8 @@ typedef struct dav_obj {
 	struct bio_meta_instance	*do_mi;
 	struct umem_tx			*utx;
 	struct wal_tx			 do_wtx;
- /* DI */
-	int tc;
-	pid_t ts[10];
 
 	struct dav_clogs		 clogs __attribute__ ((aligned (CACHELINE_SIZE)));
 } dav_obj_t;
-
-void chk_tid(dav_obj_t *pop); /* DI */
 
 #endif /* __DAOS_COMMON_DAV_INTERNAL_H */

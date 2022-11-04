@@ -258,8 +258,6 @@ dav_obj_close(dav_obj_t *hdl)
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);
 	DAV_DEBUG("pool %s is closed", hdl->do_path);
-	  chk_tid(hdl);
- /* DI */ D_ASSERTF(hdl->tc == 1, "pool %s tc:%d obj:%p", hdl->do_path, hdl->tc, hdl);
 	D_FREE(hdl->do_path);
 	D_FREE(hdl->utx);
 	D_FREE(hdl);
