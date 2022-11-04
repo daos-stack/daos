@@ -893,7 +893,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true)
-                            args '--tmpfs /mnt/daos_0'
+                            args '--tmpfs /mnt/daos_0 --tmpfs /mnt/daos_1'
                         }
                     }
                     steps {
