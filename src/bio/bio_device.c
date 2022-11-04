@@ -777,14 +777,16 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 static int
-check_faulty_devs_cancel_timer(struct bio_xs_context *xs_ctxt, bool *is_faulty,
-			       struct spdk_pci_addr pci_addr)
+set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
+			   uint64_t *start_time, bool *is_faulty)
 {
 	struct bio_dev_info	*dev_info = NULL, *tmp;
 	struct bio_bdev		*d_bdev = NULL;
 	d_list_t		 dev_list;
 	int			 dev_list_cnt, rc;
 	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
+
+	D_ASSERT((start_time != NULL) || (is_faulty != NULL));
 
 	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
 	if (rc != 0) {
@@ -800,7 +802,8 @@ check_faulty_devs_cancel_timer(struct bio_xs_context *xs_ctxt, bool *is_faulty,
 		return rc;
 	}
 
-	*is_faulty = false;
+	if (is_faulty != NULL)
+		*is_faulty = false;
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		if (dev_info->bdi_traddr == NULL) {
@@ -811,18 +814,20 @@ check_faulty_devs_cancel_timer(struct bio_xs_context *xs_ctxt, bool *is_faulty,
 		}
 
 		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
-			if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
+			if ((is_faulty != NULL) && (dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 				*is_faulty = true;
 
-			d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
-			if (d_bdev == NULL) {
-				D_ERROR("Failed to find dev "DF_UUID"\n",
-					DP_UUID(dev_info->bdi_dev_id));
-				rc = -DER_NONEXIST;
-				goto out;
-			}
+			if (start_time != NULL) {
+				d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
+				if (d_bdev == NULL) {
+					D_ERROR("Failed to find dev "DF_UUID"\n",
+						DP_UUID(dev_info->bdi_dev_id));
+					rc = -DER_NONEXIST;
+					goto out;
+				}
 
-			d_bdev->bb_led_start_time = 0;
+				d_bdev->bb_led_start_time = *start_time;
+			}
 		}
 	}
 
@@ -835,60 +840,14 @@ out:
 	return rc;
 }
 
-/* TODO: consolidate into a function takes a function pointer to DRYup */
+static int
+set_timer(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, uint64_t start_time) {
+	return set_timer_and_check_faulty(xs_ctxt, pci_addr, &start_time, NULL);
+}
 
 static int
-record_led_start_time(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr)
-{
-	struct bio_dev_info	*dev_info = NULL, *tmp;
-	struct bio_bdev		*d_bdev = NULL;
-	d_list_t		 dev_list;
-	int			 dev_list_cnt, rc;
-	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
-	uint64_t		 now = d_timeus_secdiff(0);
-
-	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
-	if (rc != 0) {
-		D_ERROR("Failed to format PCI address (%s)\n", spdk_strerror(-rc));
-		return -DER_INVAL;
-	}
-
-	D_INIT_LIST_HEAD(&dev_list);
-
-	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
-	if (rc != 0) {
-		D_ERROR("Error getting BIO device list\n");
-		return rc;
-	}
-
-	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
-		if (dev_info->bdi_traddr == NULL) {
-			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
-				DP_UUID(dev_info->bdi_dev_id));
-			rc = -DER_INVAL;
-			goto out;
-		}
-
-		if (strcmp(dev_info->bdi_traddr, tr_addr) == 0) {
-			d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
-			if (d_bdev == NULL) {
-				D_ERROR("Failed to find dev "DF_UUID"\n",
-					DP_UUID(dev_info->bdi_dev_id));
-				rc = -DER_NONEXIST;
-				goto out;
-			}
-
-			d_bdev->bb_led_start_time = now;
-		}
-	}
-
-out:
-	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
-		d_list_del(&dev_info->bdi_link);
-		bio_free_dev_info(dev_info);
-	}
-
-	return rc;
+check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, bool *is_faulty) {
+	return set_timer_and_check_faulty(xs_ctxt, pci_addr, NULL, is_faulty);
 }
 
 static int
@@ -912,7 +871,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	opts.status = 0;
 	opts.pci_addr = pci_addr;
 
-	/* Validate action value. */
+	/* Validate LED action value. */
 	switch (action) {
 	case CTL__LED_ACTION__GET:
 		opts.action = action;
@@ -920,19 +879,12 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	case CTL__LED_ACTION__SET:
 		opts.action = action;
 		opts.led_state = *state;
-		if (opts.led_state != CTL__LED_STATE__QUICK_BLINK)
-			break;
-		/* If setting identify state, record start time on bb(s) */
-		rc = record_led_start_time(xs_ctxt, pci_addr);
-		if (rc != 0) {
-			D_ERROR("Recording LED start time failed (%d)\n", rc);
-			return rc;
-		}
 		break;
 	case CTL__LED_ACTION__RESET:
 		opts.action = CTL__LED_ACTION__SET;
-		/* Check if any relevant bbs are faulty, if yes set faulty, if no set normal */
-		rc = check_faulty_devs_cancel_timer(xs_ctxt, &is_faulty, pci_addr);
+		/* Check if any relevant bdevs are faulty, if yes set faulty, if no set normal */
+		is_faulty = false;
+		rc = check_faulty(xs_ctxt, pci_addr, &is_faulty);
 		if (rc != 0) {
 			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
 			return rc;
@@ -957,6 +909,30 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device could not be found\n");
 		return -DER_NONEXIST;
+	}
+
+	/* Update timer values after action on LED state */
+	switch (action) {
+	case CTL__LED_ACTION__SET:
+		if (*state == CTL__LED_STATE__QUICK_BLINK) {
+			/* If identify state has been set, record LED start time on bdevs */
+			rc = set_timer(xs_ctxt, pci_addr, d_timeus_secdiff(0));
+			if (rc != 0) {
+				D_ERROR("Recording LED start time failed (%d)\n", rc);
+				return rc;
+			}
+		}
+		break;
+	case CTL__LED_ACTION__RESET:
+		/* Clear LED start time on bdevs as identify state has been reset */
+		rc = set_timer(xs_ctxt, pci_addr, 0);
+		if (rc != 0) {
+			D_ERROR("Clearing LED start time failed (%d)\n", rc);
+			return rc;
+		}
+		break;
+	default:
+		break;
 	}
 
 	*state = opts.led_state;
