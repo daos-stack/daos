@@ -352,7 +352,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			}
 		}
 		D_FREE(resp->devices);
-		resp->devices = NULL;
+		resp->devices   = NULL;
 		resp->n_devices = 0;
 		goto out;
 	}
