@@ -438,8 +438,8 @@ do_init:
 		d_getenv_int("CRT_CTX_NUM", &ctx_num);
 		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
 
-		if (max_num_ctx > CRT_MAX_CTX_NUM)
-			max_num_ctx = CRT_MAX_CTX_NUM;
+		if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
+			max_num_ctx = CRT_SRV_CONTEXT_NUM;
 
 		D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
