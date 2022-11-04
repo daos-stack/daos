@@ -200,15 +200,6 @@ def get_clush_command(hosts, args=None, sudo=False):
     return " ".join(get_clush_command_list(hosts, args, sudo))
 
 
-def get_local_host():
-    """Get the local host name.
-
-    Returns:
-        str: name of the local host
-    """
-    return gethostname().split(".")[0]
-
-
 def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
     """Run the command locally.
 

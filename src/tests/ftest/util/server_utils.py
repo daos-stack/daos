@@ -20,7 +20,7 @@ from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, stop_processes, get_display_size, run_pcmd
-from run_utils import get_local_host
+from host_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
