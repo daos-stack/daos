@@ -139,8 +139,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n", start_rpcid,
+		crt_gdata.cg_num_cores);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
@@ -430,6 +432,16 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		}
 do_init:
 		prov = crt_gdata.cg_init_prov;
+
+		/* Set max number of contexts. Defaults to the number of cores */
+		ctx_num = 0;
+		d_getenv_int("CRT_CTX_NUM", &ctx_num);
+		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+
+		if (max_num_ctx > CRT_MAX_CTX_NUM)
+			max_num_ctx = CRT_MAX_CTX_NUM;
+
+		D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
 		if (opt && opt->cio_sep_override) {
 			if (opt->cio_use_sep) {

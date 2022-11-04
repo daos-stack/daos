@@ -113,6 +113,8 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
+	/** Number of cores on a system */
+	long			 cg_num_cores;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -129,7 +131,7 @@ struct crt_event_cb_priv {
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(256)
+# define CRT_SRV_CONTEXT_NUM (64)
 #endif
 
 #ifndef CRT_PROGRESS_NUM
