@@ -1985,7 +1985,6 @@ tx_complete(struct ad_tx *tx, int err)
 				}
 				arena_last = arena;
 				arena_addref(arena_last);
-				arena = NULL;
 			}
 		} else {
 			/* cancel the delayed free, no reorder */
@@ -1995,9 +1994,9 @@ tx_complete(struct ad_tx *tx, int err)
 		D_FREE(fac);
 	}
 
-	if (arena != NULL) {
+	if (arena_last != NULL) {
 		arena_reorder_if_needed(arena);
-		arena_decref(arena);
+		arena_decref(arena_last);
 	}
 	/* TODO: if rc != 0, run all undo operations */
 	return rc;
@@ -2123,12 +2122,11 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		}
 		acts[i].ra_arena = NULL;
 		acts[i].ra_group = NULL;
-		arena = NULL;
 	}
 
-	if (arena != NULL) {
-		arena_reorder_if_needed(arena);
-		arena_decref(arena);
+	if (arena_last != NULL) {
+		arena_reorder_if_needed(arena_last);
+		arena_decref(arena_last);
 	}
 }
 
