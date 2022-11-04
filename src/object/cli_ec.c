@@ -1329,7 +1329,7 @@ obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 		return 0;
 
 	nerrs = fail_info->efi_ntgts;
-	for (i = k; i < k + p; i++) {
+	for (i = k + p - 1; i >= k; i--) {
 		if (!obj_ec_tgt_in_err(err_list, nerrs, i)) {
 			*parity_tgt_idx = i;
 			with_parity = true;
