@@ -86,8 +86,7 @@ def scons():
     denv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
-    # These two are exported below by the SConscript() call but that isn't detected by pylint
-    # so disable the warning here.
+    # These two are exported below but that isn't detected by pylint so disable the warning here.
     # pylint: disable-next=unused-variable
     daos_epoch_io = denv.SharedObject(['daos_epoch_io.c'])
     # pylint: disable-next=unused-variable

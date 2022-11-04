@@ -1,15 +1,5 @@
 """Build security library"""
 
-SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
-
-
-def get_objects(cache, *args):
-    """Retrieve built objects from the object cache"""
-    built = []
-    for arg in args:
-        built.append(cache[arg])
-    return built
-
 
 def scons():
     """Execute build"""
@@ -20,29 +10,29 @@ def scons():
 
     prereqs.require(denv, 'protobufc', 'argobots', 'hwloc')
 
-    # Populate the object cache
-    cache = {}
-    for src_file in SRC_FILES:
-        cache[src_file] = denv.SharedObject(src_file)
+    sec_obj = denv.SharedObject('cli_security.c')
+    auth_obj = denv.SharedObject('auth.pb-c.c')
+    acl_obj = denv.SharedObject('srv_acl.c')
 
     # dc_security: Security Client
-    dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
+    dc_security_tgts = [sec_obj, auth_obj]
     libdaos_tgts.extend(dc_security_tgts)
+
+    # pylint: disable-next=unused-variable
+    acl_tgts = [auth_obj, acl_obj]
 
     if not prereqs.server_requested():
         return
 
     denv.AppendUnique(LIBS=['gurt'])
-    ds_sec = denv.d_library('security',
-                            get_objects(cache, 'srv.c', 'srv_acl.c'),
-                            install_off="../..")
+    ds_sec = denv.d_library('security', ['srv.c', acl_obj], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
-    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c', 'auth.pb-c.c')
+    dc_sectest_tgts = [acl_obj, sec_obj, auth_obj]
     Export('dc_sectest_tgts')
 
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports=['denv', 'dc_security_tgts'])
+        SConscript('tests/SConscript', exports=['denv', 'dc_security_tgts', 'acl_tgts'])
 
 
 if __name__ == "SCons.Script":

@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'dc_security_tgts')
+    Import('denv', 'dc_security_tgts', 'acl_tgts')
 
     mocks = denv.Object('drpc_mocks.c')
     # Isolated unit tests
@@ -12,7 +12,7 @@ def scons():
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
     denv.d_test_program('srv_acl_tests',
-                        source=['srv_acl_tests.c', '../srv_acl.c', '../auth.pb-c.c', mocks],
+                        source=['srv_acl_tests.c', acl_tgts, mocks],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
 
