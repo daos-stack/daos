@@ -2172,7 +2172,7 @@ class Launch():
             # Rename bullseye_coverage_logs.host/test.cov.* to
             # bullseye_coverage_logs/test.host.cov.*
             for item in os.listdir(self.job_results_dir):
-                item_full =  os.path.join(self.job_results_dir, item)
+                item_full = os.path.join(self.job_results_dir, item)
                 if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
                     host_ext = os.path.splitext(item)
                     if len(host_ext) > 1:
