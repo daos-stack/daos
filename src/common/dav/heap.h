@@ -5,8 +5,8 @@
  * heap.h -- internal definitions for heap
  */
 
-#ifndef LIBPMEMOBJ_HEAP_H
-#define LIBPMEMOBJ_HEAP_H 1
+#ifndef __DAOS_COMMON_HEAP_H
+#define __DAOS_COMMON_HEAP_H 1
 
 #include <stddef.h>
 #include <stdint.h>
@@ -17,10 +17,6 @@
 #include "palloc.h"
 #include "os_thread.h"
 #include "dav_internal.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 extern enum dav_arenas_assignment_type Default_arenas_assignment_type;
 extern size_t Default_arenas_max;
@@ -34,10 +30,10 @@ extern size_t Default_arenas_max;
 
 int heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 		uint64_t *sizep,
-		void *base, struct pmem_ops *p_ops,
+		void *base, struct mo_ops *p_ops,
 		struct stats *stats, struct pool_set *set);
 int heap_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
-	struct pmem_ops *p_ops);
+	struct mo_ops *p_ops);
 void heap_cleanup(struct palloc_heap *heap);
 int heap_check(void *heap_start, uint64_t heap_size);
 int heap_check_remote(void *heap_start, uint64_t heap_size,
@@ -129,8 +125,4 @@ heap_get_chunk_run(struct palloc_heap *heap, const struct memory_block *m)
 	return GET_CHUNK_RUN(heap->layout, m->zone_id, m->chunk_id);
 }
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_HEAP_H */

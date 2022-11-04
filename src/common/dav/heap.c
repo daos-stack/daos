@@ -20,8 +20,7 @@
 #include "sys_util.h"
 #include "valgrind_internal.h"
 #include "recycler.h"
-#include "container_ravl.h"
-#include "container_seglists.h"
+#include "container.h"
 #include "alloc_class.h"
 #include "os_thread.h"
 
@@ -580,7 +579,7 @@ heap_zone_init(struct palloc_heap *heap, uint32_t zone_id,
 	};
 
 	z->header = nhdr; /* write the entire header (8 bytes) at once */
-	pmemops_persist(&heap->p_ops, &z->header, sizeof(z->header));
+	mo_wal_persist(&heap->p_ops, &z->header, sizeof(z->header));
 }
 
 /*
@@ -1531,13 +1530,13 @@ heap_zone_update_if_needed(struct palloc_heap *heap)
 }
 
 /*
- * heap_boot -- opens the heap region of the pmemobj pool
+ * heap_boot -- opens the heap region of the dav_obj pool
  *
  * If successful function returns zero. Otherwise an error number is returned.
  */
 int
 heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
-		uint64_t *sizep, void *base, struct pmem_ops *p_ops,
+		uint64_t *sizep, void *base, struct mo_ops *p_ops,
 		struct stats *stats, struct pool_set *set)
 {
 	struct heap_rt *h;
@@ -1550,7 +1549,7 @@ heap_boot(struct palloc_heap *heap, void *heap_start, uint64_t heap_size,
 	if (*sizep == 0) {
 		*sizep = heap_size;
 
-		pmemops_persist(p_ops, sizep, sizeof(*sizep));
+		mo_wal_persist(p_ops, sizep, sizeof(*sizep));
 	}
 
 	if (heap_size < *sizep) {
@@ -1657,7 +1656,7 @@ heap_write_header(struct heap_header *hdr)
  */
 int
 heap_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
-	struct pmem_ops *p_ops)
+	struct mo_ops *p_ops)
 {
 	if (heap_size < HEAP_MIN_SIZE)
 		return EINVAL;
@@ -1667,16 +1666,16 @@ heap_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
 	struct heap_layout *layout = heap_start;
 
 	heap_write_header(&layout->header);
-	pmemops_persist(p_ops, &layout->header, sizeof(struct heap_header));
+	mo_wal_persist(p_ops, &layout->header, sizeof(struct heap_header));
 
 	unsigned zones = heap_max_zone(heap_size);
 
 	for (unsigned i = 0; i < zones; ++i) {
 		struct zone *zone = ZID_TO_ZONE(layout, i);
 
-		pmemops_memset(p_ops, &zone->header, 0,
+		mo_wal_memset(p_ops, &zone->header, 0,
 				sizeof(struct zone_header), 0);
-		pmemops_memset(p_ops, &zone->chunk_headers, 0,
+		mo_wal_memset(p_ops, &zone->chunk_headers, 0,
 				sizeof(struct chunk_header), 0);
 
 		/* only explicitly allocated chunks should be accessible */
@@ -1684,7 +1683,7 @@ heap_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
 			sizeof(struct chunk_header));
 	}
 	*sizep = heap_size;
-	pmemops_persist(p_ops, sizep, sizeof(*sizep));
+	mo_wal_persist(p_ops, sizep, sizeof(*sizep));
 
 	return 0;
 }

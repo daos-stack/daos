@@ -44,7 +44,7 @@ error_transient_alloc:
 void
 stats_delete(dav_obj_t *pop, struct stats *s)
 {
-	pmemops_persist(&pop->p_ops, s->persistent,
+	mo_wal_persist(&pop->p_ops, s->persistent,
 	sizeof(struct stats_persistent));
 	D_FREE(s->transient);
 	D_FREE(s);

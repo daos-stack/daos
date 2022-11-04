@@ -16,14 +16,14 @@
 #include "dav_internal.h"
 #include "heap.h"
 #include "palloc.h"
-#include "pmemops.h"
+#include "mo_wal.h"
 #include "obj.h"
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
 /*
- * pmemobj_get_uuid_lo -- (internal) evaluates XOR sum of least significant
+ * get_uuid_lo -- (internal) evaluates XOR sum of least significant
  * 8 bytes with most significant 8 bytes.
  */
 static inline uint64_t
@@ -58,7 +58,7 @@ setup_dav_phdr(dav_obj_t *hdl)
 static void
 persist_dav_phdr(dav_obj_t *hdl)
 {
-	pmemops_persist(&hdl->p_ops, hdl->do_phdr, offsetof(struct dav_phdr, dp_unused));
+	mo_wal_persist(&hdl->p_ops, hdl->do_phdr, offsetof(struct dav_phdr, dp_unused));
 }
 
 static dav_obj_t *

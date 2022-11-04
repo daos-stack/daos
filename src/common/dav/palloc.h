@@ -5,8 +5,8 @@
  * palloc.h -- internal definitions for persistent allocator
  */
 
-#ifndef LIBPMEMOBJ_PALLOC_H
-#define LIBPMEMOBJ_PALLOC_H 1
+#ifndef __DAOS_COMMON_PALLOC_H
+#define __DAOS_COMMON_PALLOC_H 1
 
 #include <stddef.h>
 #include <stdint.h>
@@ -17,14 +17,10 @@
 #include "stats.h"
 #include "dav.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define PALLOC_CTL_DEBUG_NO_PATTERN (-1)
 
 struct palloc_heap {
-	struct pmem_ops p_ops;
+	struct mo_ops p_ops;
 	struct heap_layout *layout;
 	struct heap_rt *rt;
 	uint64_t *sizep;
@@ -85,13 +81,13 @@ uint16_t palloc_flags(struct palloc_heap *heap, uint64_t off);
 
 int palloc_boot(struct palloc_heap *heap, void *heap_start,
 		uint64_t heap_size, uint64_t *sizep,
-		void *base, struct pmem_ops *p_ops,
+		void *base, struct mo_ops *p_ops,
 		struct stats *stats, struct pool_set *set);
 
 int palloc_buckets_init(struct palloc_heap *heap);
 
 int palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
-	struct pmem_ops *p_ops);
+	struct mo_ops *p_ops);
 void *palloc_heap_end(struct palloc_heap *h);
 int palloc_heap_check(void *heap_start, uint64_t heap_size);
 int palloc_heap_check_remote(void *heap_start, uint64_t heap_size,
@@ -106,8 +102,4 @@ typedef int (*object_callback)(const struct memory_block *m, void *arg);
 void palloc_heap_vg_open(struct palloc_heap *heap, int objects);
 #endif
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_PALLOC_H */

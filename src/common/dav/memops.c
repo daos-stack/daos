@@ -57,9 +57,9 @@ struct operation_context {
 	ulog_extend_fn extend; /* function to allocate next ulog */
 	ulog_free_fn ulog_free; /* function to free next ulogs */
 
-	const struct pmem_ops *p_ops;
-	struct pmem_ops t_ops; /* used for transient data processing */
-	struct pmem_ops s_ops; /* used for shadow copy data processing */
+	const struct mo_ops *p_ops;
+	struct mo_ops t_ops; /* used for transient data processing */
+	struct mo_ops s_ops; /* used for shadow copy data processing */
 
 	size_t ulog_curr_offset; /* offset in the log for buffer stores */
 	size_t ulog_curr_capacity; /* capacity of the current log */
@@ -181,7 +181,7 @@ operation_transient_memcpy(void *base, void *dest, const void *src, size_t len,
 struct operation_context *
 operation_new(struct ulog *ulog, size_t ulog_base_nbytes,
 	ulog_extend_fn extend, ulog_free_fn ulog_free,
-	const struct pmem_ops *p_ops, enum log_type type)
+	const struct mo_ops *p_ops, enum log_type type)
 {
 
 	SUPPRESS_UNUSED(p_ops);
@@ -420,7 +420,7 @@ int
 operation_add_entry(struct operation_context *ctx, void *ptr, uint64_t value,
 	ulog_operation_type type)
 {
-	const struct pmem_ops *p_ops = ctx->p_ops;
+	const struct mo_ops *p_ops = ctx->p_ops;
 	dav_obj_t *pop = (dav_obj_t *)p_ops->base;
 
 	int from_pool = OBJ_PTR_IS_VALID(pop, ptr);
@@ -497,24 +497,6 @@ operation_add_buffer(struct operation_context *ctx,
 			(char *)dest + data_size,
 			(char *)src + data_size,
 			size - data_size, type);
-}
-
-/*
- * operation_user_buffer_range_cmp -- compares addresses of
- * user buffers
- */
-int
-operation_user_buffer_range_cmp(const void *lhs, const void *rhs)
-{
-	const struct user_buffer_def *l = lhs;
-	const struct user_buffer_def *r = rhs;
-
-	if (l->addr > r->addr)
-		return 1;
-	else if (l->addr < r->addr)
-		return -1;
-
-	return 0;
 }
 
 /*
@@ -604,13 +586,6 @@ operation_start(struct operation_context *ctx)
 	operation_init(ctx);
 	ASSERTeq(ctx->state, OPERATION_IDLE);
 	ctx->state = OPERATION_IN_PROGRESS;
-}
-
-void
-operation_resume(struct operation_context *ctx)
-{
-	operation_start(ctx);
-	ctx->total_logged = ulog_base_nbytes(ctx->ulog);
 }
 
 /*

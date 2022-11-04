@@ -13,11 +13,11 @@
 #define TX_DEFAULT_RANGE_CACHE_SIZE (1 << 15)
 
 struct ulog_entry_base;
-struct pmem_ops;
+struct mo_ops;
 /*
  * tx_create_wal_entry -- convert to WAL a single ulog UNDO entry
  */
 int tx_create_wal_entry(struct ulog_entry_base *e, void *arg,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 
 #endif

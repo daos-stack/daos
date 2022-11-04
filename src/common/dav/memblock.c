@@ -173,7 +173,7 @@ memblock_header_legacy_write(const struct memory_block *m,
 	VALGRIND_DO_MAKE_MEM_UNDEFINED(hdrp, sizeof(*hdrp));
 
 	VALGRIND_ADD_TO_TX(hdrp, sizeof(*hdrp));
-	pmemops_memcpy(&m->heap->p_ops, hdrp, &hdr,
+	mo_wal_memcpy(&m->heap->p_ops, hdrp, &hdr,
 		sizeof(hdr), /* legacy header is 64 bytes in size */
 		0);
 	VALGRIND_REMOVE_FROM_TX(hdrp, sizeof(*hdrp));
@@ -217,7 +217,7 @@ memblock_header_compact_write(const struct memory_block *m,
 	VALGRIND_ADD_TO_TX(hdrp, hdr_size);
 
 	memcpy(hdrp, &padded, hdr_size);
-	pmemops_flush(&m->heap->p_ops, hdrp, ALLOC_HDR_COMPACT_SIZE);
+	mo_wal_flush(&m->heap->p_ops, hdrp, ALLOC_HDR_COMPACT_SIZE);
 	VALGRIND_DO_MAKE_MEM_UNDEFINED((char *)hdrp + ALLOC_HDR_COMPACT_SIZE,
 		hdr_size - ALLOC_HDR_COMPACT_SIZE);
 
@@ -645,7 +645,7 @@ huge_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	if (ctx == NULL) {
 		util_atomic_store_explicit64((uint64_t *)hdr, val,
 			memory_order_relaxed);
-		pmemops_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
+		mo_wal_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
 	} else {
 		operation_add_entry(ctx, hdr, val, ULOG_OPERATION_SET);
 	}
@@ -843,7 +843,7 @@ huge_ensure_header_type(const struct memory_block *m,
 			hdr->flags | f, hdr->size_idx);
 		util_atomic_store_explicit64((uint64_t *)hdr,
 			nhdr, memory_order_relaxed);
-		pmemops_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
+		mo_wal_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
 		VALGRIND_REMOVE_FROM_TX(hdr, sizeof(*hdr));
 	}
 }
@@ -1395,7 +1395,7 @@ memblock_huge_init(struct palloc_heap *heap,
 	util_atomic_store_explicit64((uint64_t *)hdr,
 		nhdr, memory_order_relaxed);
 
-	pmemops_persist(&heap->p_ops, hdr, sizeof(*hdr));
+	mo_wal_persist(&heap->p_ops, hdr, sizeof(*hdr));
 
 	huge_write_footer(hdr, size_idx);
 
@@ -1452,7 +1452,7 @@ memblock_run_init(struct palloc_heap *heap,
 
 	VALGRIND_REMOVE_FROM_TX(run, runsize);
 
-	pmemops_flush(&heap->p_ops, run,
+	mo_wal_flush(&heap->p_ops, run,
 		sizeof(struct chunk_run_header) +
 		bitmap_size);
 
@@ -1473,7 +1473,7 @@ memblock_run_init(struct palloc_heap *heap,
 		run_data_hdr.size_idx = i;
 		*data_hdr = run_data_hdr;
 	}
-	pmemops_persist(&heap->p_ops,
+	mo_wal_persist(&heap->p_ops,
 		&z->chunk_headers[chunk_id + 1],
 		sizeof(struct chunk_header) * (size_idx - 1));
 
@@ -1487,7 +1487,7 @@ memblock_run_init(struct palloc_heap *heap,
 		rdsc->flags, hdr->size_idx);
 	util_atomic_store_explicit64((uint64_t *)hdr,
 		run_hdr, memory_order_relaxed);
-	pmemops_persist(&heap->p_ops, hdr, sizeof(*hdr));
+	mo_wal_persist(&heap->p_ops, hdr, sizeof(*hdr));
 
 	VALGRIND_REMOVE_FROM_TX(&z->chunk_headers[chunk_id],
 		sizeof(struct chunk_header) * size_idx);

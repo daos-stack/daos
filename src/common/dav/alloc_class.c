@@ -81,7 +81,7 @@ static const struct {
 
 /*
  * Every allocation has to be a multiple of at least 8 because we need to
- * ensure proper alignment of every pmem structure.
+ * ensure proper alignment of every persistent structure.
  */
 #define ALLOC_BLOCK_SIZE 16
 

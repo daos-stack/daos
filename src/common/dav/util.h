@@ -36,8 +36,8 @@
  * util.h -- internal definitions for util module
  */
 
-#ifndef DAV_UTIL_H
-#define DAV_UTIL_H 1
+#ifndef __DAOS_COMMON_UTIL_H
+#define __DAOS_COMMON_UTIL_H 1
 
 #include <string.h>
 #include <stddef.h>
@@ -45,9 +45,16 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <stdatomic.h>
-
 #include <sys/param.h>
 
+#if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || \
+	defined(__riscv)
+#define PAGESIZE 4096
+#elif defined(__PPC64__)
+#define PAGESIZE 65536
+#else
+#error unable to recognize ISA at compile time
+#endif
 
 #if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || \
 	defined(__riscv)
@@ -151,16 +158,6 @@ util_div_ceil(unsigned a, unsigned b)
 #define util_atomic_load64(object, dest)\
 	util_atomic_load_explicit64(object, dest, memory_order_seq_cst)
 
-#if !defined(likely)
-#if defined(__GNUC__)
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x) (!!(x))
-#define unlikely(x) (!!(x))
-#endif
-#endif
-
 #define COMPILE_ERROR_ON(cond) ((void)sizeof(char[(cond) ? -1 : 1]))
 
 /* macro for counting the number of varargs (up to 9) */
@@ -201,4 +198,4 @@ util_div_ceil(unsigned a, unsigned b)
 	SUPPRESS_ARG_1(X); SUPPRESS_ARG_8(__VA_ARGS__);\
 } while (0)
 
-#endif /* util.h */
+#endif /* __DAOS_COMMON_UTIL_H */

@@ -5,8 +5,8 @@
  * valgrind_internal.h -- internal definitions for valgrind macros
  */
 
-#ifndef PMDK_VALGRIND_INTERNAL_H
-#define PMDK_VALGRIND_INTERNAL_H 1
+#ifndef __DAOS_COMMON_VALGRIND_INTERNAL_H
+#define __DAOS_COMMON_VALGRIND_INTERNAL_H 1
 
 /* REVISIT: VALGRIND support not enabled for now. */
 #if 0
@@ -436,7 +436,7 @@ extern unsigned _On_memcheck;
 		VALGRIND_CHECK_MEM_IS_ADDRESSABLE(addr, len);\
 } while (0)
 
-#else
+#else /* VG_MEMCHECK_ENABLED */
 
 #define On_memcheck (0)
 
@@ -472,6 +472,6 @@ extern unsigned _On_memcheck;
 #define VALGRIND_DO_CHECK_MEM_IS_ADDRESSABLE(addr, len)\
 	do { (void) (addr); (void) (len); } while (0)
 
-#endif
+#endif /* VG_MEMCHECK_ENABLED */
 
-#endif
+#endif /* __DAOS_COMMON_VALGRIND_INTERNAL_H */

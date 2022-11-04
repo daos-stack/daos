@@ -5,13 +5,13 @@
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
  */
 
-#ifndef LIBDAV_DAV_INTERNAL_H
-#define LIBDAV_DAV_INTERNAL_H 1
+#ifndef __DAOS_COMMON_DAV_INTERNAL_H
+#define __DAOS_COMMON_DAV_INTERNAL_H 1
 
 #include "dav.h"
 #include "dav_clogs.h"
 #include "heap.h"
-#include "pmemops.h"
+#include "mo_wal.h"
 #include "wal_tx.h"
 
 #define DAV_MAX_ALLOC_SIZE ((size_t)0x3FFDFFFC0)
@@ -59,7 +59,7 @@ typedef struct dav_obj {
 	struct dav_phdr			*do_phdr;
 	struct operation_context	*external;
 	struct operation_context	*undo;
-	struct pmem_ops			 p_ops;	/* REVISIT */
+	struct mo_ops			 p_ops;	/* REVISIT */
 	struct stats			*do_stats;
 	int				 do_fd;
 	int				 nested_tx;
@@ -75,4 +75,4 @@ typedef struct dav_obj {
 
 void chk_tid(dav_obj_t *pop); /* DI */
 
-#endif /*LIBDAV_DAV_INTERNAL_H*/
+#endif /* __DAOS_COMMON_DAV_INTERNAL_H */

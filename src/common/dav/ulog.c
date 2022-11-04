@@ -9,7 +9,7 @@
 #include <string.h>
 
 #include "dav_internal.h"
-#include "pmemops.h"
+#include "mo_wal.h"
 #include "ulog.h"
 #include "obj.h"
 #include "out.h"
@@ -148,7 +148,7 @@ ulog_construct_new(struct ulog *ulog, size_t capacity, uint64_t gen_num, uint64_
  */
 int
 ulog_foreach_entry(struct ulog *ulog,
-	ulog_entry_cb cb, void *arg, const struct pmem_ops *ops)
+	ulog_entry_cb cb, void *arg, const struct mo_ops *ops)
 {
 	struct ulog_entry_base *e;
 	int ret = 0;
@@ -253,7 +253,7 @@ ulog_checksum(struct ulog *ulog, size_t ulog_base_bytes, int insert)
  */
 struct ulog_entry_val *
 ulog_entry_val_create(struct ulog *ulog, size_t offset, uint64_t *dest,
-	uint64_t value, ulog_operation_type type, const struct pmem_ops *p_ops)
+	uint64_t value, ulog_operation_type type, const struct mo_ops *p_ops)
 {
 	struct ulog_entry_val *e =
 		(struct ulog_entry_val *)(ulog->data + offset);
@@ -299,7 +299,7 @@ ulog_clobber_entry(const struct ulog_entry_base *e)
 struct ulog_entry_buf *
 ulog_entry_buf_create(struct ulog *ulog, size_t offset, uint64_t gen_num,
 		uint64_t *dest, const void *src, uint64_t size,
-		ulog_operation_type type, const struct pmem_ops *p_ops)
+		ulog_operation_type type, const struct mo_ops *p_ops)
 {
 	struct ulog_entry_buf *e =
 		(struct ulog_entry_buf *)(ulog->data + offset);
@@ -385,7 +385,7 @@ ulog_entry_buf_create(struct ulog *ulog, size_t offset, uint64_t gen_num,
  */
 void
 ulog_entry_apply(const struct ulog_entry_base *e, int persist,
-	const struct pmem_ops *p_ops)
+	const struct mo_ops *p_ops)
 {
 	ulog_operation_type t = ulog_entry_type(e);
 	uint64_t offset = ulog_entry_offset(e);
@@ -450,22 +450,14 @@ ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 		VALGRIND_ADD_TO_TX(dst, dst_size);
 		*dst = ev->value;
 		break;
-	case ULOG_OPERATION_BUF_SET:
-		eb = (struct ulog_entry_buf *)e;
-
-		dst_size = eb->size;
-		VALGRIND_ADD_TO_TX(dst, dst_size);
-#if 0	/* REVISIT: ULOG_OPERATION_BUF_SET is never set by dav */
-		pmemops_memset(p_ops, dst, *eb->data, eb->size, 0);
-#endif
-		break;
 	case ULOG_OPERATION_BUF_CPY:
 		eb = (struct ulog_entry_buf *)e;
 
 		dst_size = eb->size;
 		VALGRIND_ADD_TO_TX(dst, dst_size);
-		pmemops_memcpy(p_ops, dst, eb->data, eb->size, 0);
+		mo_wal_memcpy(p_ops, dst, eb->data, eb->size, 0);
 		break;
+	case ULOG_OPERATION_BUF_SET:
 	default:
 		ASSERT(0);
 	}
@@ -477,7 +469,7 @@ ulog_entry_apply(const struct ulog_entry_base *e, int persist,
  */
 static int
 ulog_process_entry(struct ulog_entry_base *e, void *arg,
-	const struct pmem_ops *p_ops)
+	const struct mo_ops *p_ops)
 {
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(arg);
@@ -496,7 +488,7 @@ ulog_inc_gen_num(struct ulog *ulog)
 }
 
 /*
- * ulog_free_by_ptr_next -- free all ulogs starting from the indicated one.
+ * ulog_free_next -- free all ulogs starting from the indicated one.
  * Function returns 1 if any ulog have been freed or unpinned, 0 otherwise.
  */
 int
@@ -513,7 +505,7 @@ ulog_free_next(struct ulog *u, ulog_free_fn ulog_free)
 	while (u->next != 0) {
 		if (VEC_PUSH_BACK(&ulogs_internal_except_first,
 			&u->next) != 0) {
-			/* this is fine, it will just use more pmem */
+			/* this is fine, it will just use more memory */
 			DAV_DEBUG("unable to free transaction logs memory");
 			goto out;
 		}
@@ -612,7 +604,7 @@ ulog_clobber_data(struct ulog *ulog_first,
  */
 void
 ulog_process(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops)
+	const struct mo_ops *p_ops)
 {
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(check);
@@ -623,7 +615,7 @@ ulog_process(struct ulog *ulog, ulog_check_offset_fn check,
 #endif
 
 	ulog_foreach_entry(ulog, ulog_process_entry, NULL, p_ops);
-	pmemops_drain(p_ops);
+	mo_wal_drain(p_ops);
 }
 
 /*
@@ -670,7 +662,7 @@ ulog_recovery_needed(struct ulog *ulog, int verify_checksum)
  */
 static int
 ulog_check_entry(struct ulog_entry_base *e,
-	void *arg, const struct pmem_ops *p_ops)
+	void *arg, const struct mo_ops *p_ops)
 {
 	uint64_t offset = ulog_entry_offset(e);
 	ulog_check_offset_fn check = arg;
@@ -689,7 +681,7 @@ ulog_check_entry(struct ulog_entry_base *e,
  */
 int
 ulog_check(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops)
+	const struct mo_ops *p_ops)
 {
 	DAV_DEBUG("ulog %p", ulog);
 

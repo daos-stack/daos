@@ -5,15 +5,11 @@
  * heap_layout.h -- internal definitions for heap layout
  */
 
-#ifndef LIBPMEMOBJ_HEAP_LAYOUT_H
-#define LIBPMEMOBJ_HEAP_LAYOUT_H 1
+#ifndef __DAOS_COMMON_HEAP_LAYOUT_H
+#define __DAOS_COMMON_HEAP_LAYOUT_H 1
 
 #include <stddef.h>
 #include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define HEAP_MAJOR 1
 #define HEAP_MINOR 0
@@ -199,8 +195,4 @@ GET_CHUNK_RUN(struct heap_layout *layout, size_t zone_id, unsigned chunk_id)
 	return (struct chunk_run *)GET_CHUNK(layout, zone_id, chunk_id);
 }
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_HEAP_LAYOUT_H */ 

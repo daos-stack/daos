@@ -8,6 +8,7 @@
 #include "common.h"
 #include "dav_internal.h"
 #include "wal_tx.h"
+#include "util.h"
 
 static inline uint64_t
 mdblob_addr2offset(struct dav_obj *hdl, void *addr)
@@ -94,7 +95,7 @@ wal_tx_act_cleanup(d_list_t *list)
 	}
 }
 
-#define WAL_PRT_PG_OFF(p) ((p)/4096), ((p)%4096)
+#define WAL_PRT_PG_OFF(p) ((p) / PAGESIZE), ((p) % PAGESIZE)
 static int
 wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 {

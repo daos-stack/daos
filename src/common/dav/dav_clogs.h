@@ -5,28 +5,12 @@
  * dav_iface.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
  */
 
-#ifndef LIBDAV_DAV_CLOGS_H
-#define LIBDAV_DAV_CLOGS_H 1
+#ifndef __DAOS_COMMON_DAV_CLOGS_H
+#define __DAOS_COMMON_CLOGS_H 1
 
 #include <stdint.h>
 #include <sys/types.h>
 #include "ulog.h"
-
-/*
- * Distance between lanes used by threads required to prevent threads from
- * false sharing part of lanes array. Used if properly spread lanes are
- * available. Otherwise less spread out lanes would be used.
- */
-#define LANE_JUMP (64 / sizeof(uint64_t))
-
-/*
- * Number of times the algorithm will try to reacquire the primary lane for the
- * thread. If this threshold is exceeded, a new primary lane is selected for the
- * thread.
- */
-#define LANE_PRIMARY_ATTEMPTS 128
-
-#define RLANE_DEFAULT 0
 
 #define LANE_TOTAL_SIZE (3072) /* 3 * 1024 (sum of 3 old lane sections) */
 /*
@@ -69,4 +53,4 @@ void dav_destroy_clogs(dav_obj_t *hdl);
 int dav_hold_clogs(dav_obj_t *hdl);
 int dav_release_clogs(dav_obj_t *hdl);
 
-#endif /*LIBDAV_DAV_CLOGS_H*/
+#endif /* __DAOS_COMMON_DAV_CLOGS_H */

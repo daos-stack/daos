@@ -5,15 +5,15 @@
  * ulog.h -- unified log public interface
  */
 
-#ifndef LIBPMEMOBJ_ULOG_H
-#define LIBPMEMOBJ_ULOG_H 1
+#ifndef __DAOS_COMMON_ULOG_H
+#define __DAOS_COMMON_ULOG_H 1
 
 #include <stddef.h>
 #include <stdint.h>
 
 #include "util.h"
 #include "vec.h"
-#include "pmemops.h"
+#include "mo_wal.h"
 
 struct ulog_entry_base {
 	uint64_t offset; /* offset with operation type flag */
@@ -111,14 +111,13 @@ typedef uint64_t ulog_operation_type;
 typedef int (*ulog_check_offset_fn)(void *ctx, uint64_t offset);
 typedef int (*ulog_extend_fn)(struct ulog **, uint64_t);
 typedef int (*ulog_entry_cb)(struct ulog_entry_base *e, void *arg,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 typedef void (*ulog_free_fn)(struct ulog *ptr);
-typedef int (*ulog_rm_user_buffer_fn)(void *, void *addr);
 
 struct ulog *ulog_next(struct ulog *ulog);
 
 void ulog_construct(uint64_t offset, size_t capacity, uint64_t gen_num,
-		int flush, uint64_t flags, const struct pmem_ops *p_ops);
+		int flush, uint64_t flags, const struct mo_ops *p_ops);
 void ulog_construct_new(struct ulog *ulog, size_t capacity, uint64_t gen_num,
 		 uint64_t flags);
 
@@ -126,7 +125,7 @@ size_t ulog_capacity(struct ulog *ulog, size_t ulog_base_bytes);
 void ulog_rebuild_next_vec(struct ulog *ulog, struct ulog_next *next);
 
 int ulog_foreach_entry(struct ulog *ulog,
-	ulog_entry_cb cb, void *arg, const struct pmem_ops *ops);
+	ulog_entry_cb cb, void *arg, const struct mo_ops *ops);
 
 int ulog_reserve(struct ulog *ulog,
 	size_t ulog_base_nbytes, size_t gen_num,
@@ -141,7 +140,7 @@ int ulog_clobber_data(struct ulog *dest,
 void ulog_clobber_entry(const struct ulog_entry_base *e);
 
 void ulog_process(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 
 size_t ulog_base_nbytes(struct ulog *ulog);
 int ulog_recovery_needed(struct ulog *ulog, int verify_checksum);
@@ -153,19 +152,19 @@ ulog_operation_type ulog_entry_type(
 struct ulog_entry_val *ulog_entry_val_create(struct ulog *ulog,
 	size_t offset, uint64_t *dest, uint64_t value,
 	ulog_operation_type type,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 
 struct ulog_entry_buf *
 ulog_entry_buf_create(struct ulog *ulog, size_t offset,
 	uint64_t gen_num, uint64_t *dest, const void *src, uint64_t size,
-	ulog_operation_type type, const struct pmem_ops *p_ops);
+	ulog_operation_type type, const struct mo_ops *p_ops);
 
 void ulog_entry_apply(const struct ulog_entry_base *e, int persist,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 
 size_t ulog_entry_size(const struct ulog_entry_base *entry);
 
 int ulog_check(struct ulog *ulog, ulog_check_offset_fn check,
-	const struct pmem_ops *p_ops);
+	const struct mo_ops *p_ops);
 
-#endif
+#endif /* __DAOS_COMMON_ULOG_H */

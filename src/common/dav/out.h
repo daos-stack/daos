@@ -5,8 +5,8 @@
  * out.h -- definitions for "out" module
  */
 
-#ifndef PMDK_OUT_H
-#define PMDK_OUT_H 1
+#ifndef __DAOS_COMMON_OUT_H
+#define __DAOS_COMMON_OUT_H 1
 
 #include <daos/debug.h>
 
@@ -110,4 +110,4 @@ static inline void dav_print_backtrace(void)
 #define ERR(fmt, ...)\
 	D_ERROR(fmt "\n", ## __VA_ARGS__)
 
-#endif
+#endif /* __DAOS_COMMON_OUT_H */

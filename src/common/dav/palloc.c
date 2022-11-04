@@ -129,7 +129,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 	 * parameter had been set.
 	 */
 	if (unlikely(heap->alloc_pattern > PALLOC_CTL_DEBUG_NO_PATTERN)) {
-		pmemops_memset(&heap->p_ops, uptr, heap->alloc_pattern,
+		mo_wal_memset(&heap->p_ops, uptr, heap->alloc_pattern,
 			usize, 0);
 		VALGRIND_DO_MAKE_MEM_UNDEFINED(uptr, usize);
 	}
@@ -562,7 +562,7 @@ palloc_exec_actions(struct palloc_heap *heap,
 	}
 
 	/* wait for all allocated object headers to be persistent */
-	pmemops_drain(&heap->p_ops);
+	mo_wal_drain(&heap->p_ops);
 
 	/* perform all persistent memory operations */
 	operation_process(ctx);
@@ -772,7 +772,7 @@ palloc_operation(struct palloc_heap *heap,
 		VALGRIND_ADD_TO_TX(
 			HEAP_OFF_TO_PTR(heap, alloc->offset),
 			to_cpy);
-		pmemops_memcpy(&heap->p_ops,
+		mo_wal_memcpy(&heap->p_ops,
 			HEAP_OFF_TO_PTR(heap, alloc->offset),
 			HEAP_OFF_TO_PTR(heap, off),
 			to_cpy,
@@ -892,7 +892,7 @@ palloc_next(struct palloc_heap *heap, uint64_t off)
 int
 palloc_boot(struct palloc_heap *heap, void *heap_start,
 		uint64_t heap_size, uint64_t *sizep,
-		void *base, struct pmem_ops *p_ops, struct stats *stats,
+		void *base, struct mo_ops *p_ops, struct stats *stats,
 		struct pool_set *set)
 {
 	return heap_boot(heap, heap_start, heap_size, sizep,
@@ -913,7 +913,7 @@ palloc_buckets_init(struct palloc_heap *heap)
  */
 int
 palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
-	struct pmem_ops *p_ops)
+	struct mo_ops *p_ops)
 {
 	return heap_init(heap_start, heap_size, sizep, p_ops);
 }
