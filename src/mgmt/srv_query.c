@@ -259,6 +259,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 	D_ALLOC_ARRAY(resp->devices, list_devs_info.dev_list_cnt);
 	if (resp->devices == NULL) {
+		D_ERROR("Failed to allocate devices for resp\n");
 		return -DER_NOMEM;
 	}
 
@@ -292,6 +293,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		buflen = strlen(state_str) + 1;
 		D_ALLOC(resp->devices[i]->dev_state, buflen);
 		if (resp->devices[i]->dev_state == NULL) {
+			D_ERROR("Failed to allocate device state");
 			rc = -DER_NOMEM;
 			break;
 		}
@@ -299,9 +301,9 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			/* TODO: Use D_STRNDUP */
 			D_ALLOC(resp->devices[i]->tr_addr, buflen);
 			if (resp->devices[i]->tr_addr == NULL) {
+				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
@@ -350,6 +352,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			}
 		}
 		D_FREE(resp->devices);
+		resp->devices = NULL;
 		resp->n_devices = 0;
 		goto out;
 	}
@@ -380,6 +383,7 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 
 	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
 	if (resp->pools == NULL) {
+		D_ERROR("Failed to allocate pools for resp\n");
 		return -DER_NOMEM;
 	}
 
@@ -492,13 +496,17 @@ ds_mgmt_dev_state_query(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	buflen = strlen(state_str) + 1;
 	D_ALLOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
@@ -507,8 +515,10 @@ out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
-		D_FREE(resp->dev_state);
-		D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
 	}
 
 	return rc;
@@ -609,7 +619,9 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
@@ -641,7 +653,9 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 	buflen = strlen(state_str) + 1;
 	D_ALLOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
@@ -649,8 +663,10 @@ out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {
-		D_FREE(resp->dev_state);
-		D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
 	}
 
 	return rc;
@@ -707,7 +723,9 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 
 	D_ALLOC(resp->new_dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->new_dev_uuid == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate new device uuid");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	uuid_unparse_lower(new_dev_uuid, resp->new_dev_uuid);
 
@@ -725,15 +743,19 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid,
 	buflen = strlen(state_str) + 1;
 	D_ALLOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
 out:
 
 	if (rc != 0) {
-		D_FREE(resp->dev_state);
-		D_FREE(resp->new_dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->new_dev_uuid != NULL)
+			D_FREE(resp->new_dev_uuid);
 	}
 
 	return rc;
@@ -787,7 +809,9 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 
 	D_ALLOC(resp->dev_uuid, DAOS_UUID_STR_SIZE);
 	if (resp->dev_uuid == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device uuid");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	uuid_unparse_lower(dev_uuid, resp->dev_uuid);
 
@@ -805,15 +829,19 @@ ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)
 	buflen = strlen(state_str) + 1;
 	D_ALLOC(resp->dev_state, buflen);
 	if (resp->dev_state == NULL) {
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_ERROR("Failed to allocate device state");
+		rc = -DER_NOMEM;
+		goto out;
 	}
 	strncpy(resp->dev_state, state_str, buflen);
 
 out:
 
 	if (rc != 0) {
-		D_FREE(resp->dev_state);
-		D_FREE(resp->dev_uuid);
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
 	}
 
 	return rc;
