@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -60,12 +60,5 @@ func ContSetOwner(ctx context.Context, rpcClient UnaryInvoker, req *ContSetOwner
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "container set-owner failed")
-	}
-
-	rpcClient.Debugf("Set DAOS container owner response: %+v\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "container set-owner failed")
 }
