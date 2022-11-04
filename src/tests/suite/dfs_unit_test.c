@@ -1276,6 +1276,8 @@ run_chown_tests(dfs_obj_t *obj, char *name, int mode)
 	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);

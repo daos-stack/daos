@@ -425,7 +425,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		if (!provider_found) {
 			D_ERROR("Requested provider %s not found\n", addr_env);
-			D_GOTO(out, rc = -DER_NONEXIST);
+			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
 do_init:
 		prov = crt_gdata.cg_init_prov;
@@ -492,7 +492,7 @@ do_init:
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
 					DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(unlock, rc);
 			}
 		}
 
