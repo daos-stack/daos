@@ -308,11 +308,10 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	/*
-	 * If a VMD LED event takes place, the start time will be saved in order to restore the LED
-	 * to its prior state after allotted duration.
+	 * If a VMD LED identify event takes place with a prescribed duration, the end time will be
+	 * saved and when it is reached the prior LED state will be restored.
 	 */
-	uint64_t		 bb_led_duration;
-	uint64_t		 bb_led_start_time;
+	uint64_t		 bb_led_expiry_time;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;

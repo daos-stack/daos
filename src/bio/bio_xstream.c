@@ -80,7 +80,6 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t vmd_led_period;
 
 static int
 bio_spdk_env_init(void)
@@ -279,10 +278,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
-
-	env = getenv("VMD_LED_PERIOD");
-	vmd_led_period = env ? atoi(env) : 0;
-	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	if (numa_node > 0)
 		bio_numa_node = (unsigned int)numa_node;
@@ -1593,28 +1588,15 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	unsigned int		 led_state;
 	int			 rc;
 
-	/*
-	 * Check if a LED timeout period has been set, if not set use double
-	 * NVME_MONITOR_PERIOD of 60 seconds (2min total) as default value.
-	 */
-	if (vmd_led_period == 0)
-		vmd_led_period = NVME_MONITOR_PERIOD * 2;
-
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		if (d_bdev->bb_led_start_time != 0) {
-			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
-				continue;
-
-			/* Time period has expired so reset start time to zero */
-			d_bdev->bb_led_start_time = 0;
-
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID" after %ld\n",
-				DP_UUID(d_bdev->bb_uuid), vmd_led_period);
+		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
+				DP_UUID(d_bdev->bb_uuid));
 
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
-					    (unsigned int)CTL__LED_ACTION__RESET, &led_state);
+					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
 			if (rc != 0)
 				D_ERROR("Reset LED identify state after timeout failed on device:"
 					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));

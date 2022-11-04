@@ -791,7 +791,7 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  * \return				Zero on success, negative value on error
  */
 int bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid,
-		   unsigned int action, unsigned int *state);
+		   unsigned int action, unsigned int *state, uint64_t duration);
 
 /*
  * Allocate DMA buffer, the buffer could be from bulk cache if bulk context
