@@ -939,6 +939,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = errno;
 
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
+			D_FREE(dir);
 			return rc;
 		}
 

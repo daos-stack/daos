@@ -146,6 +146,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -402,6 +403,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
