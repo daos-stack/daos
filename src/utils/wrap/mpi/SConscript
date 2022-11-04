@@ -1,5 +1,4 @@
 """Build mpi abstraction libraries"""
-import daos_build
 
 
 def build_dpar(env, mpi_env):
@@ -8,7 +7,7 @@ def build_dpar(env, mpi_env):
     senv = env.Clone()
     senv.compiler_setup()
 
-    serial_lib = daos_build.library(senv, 'dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
+    serial_lib = senv.d_library('dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
     senv.Install('$PREFIX/lib64/', serial_lib)
 
     if not mpi_env:
@@ -16,7 +15,7 @@ def build_dpar(env, mpi_env):
 
     denv = mpi_env.Clone()
 
-    mpi_lib = daos_build.library(denv, 'dpar_mpi', ['dpar_mpi.c'])
+    mpi_lib = denv.d_library('dpar_mpi', ['dpar_mpi.c'])
     denv.Install('$PREFIX/lib64/', mpi_lib)
     return
 

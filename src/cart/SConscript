@@ -4,7 +4,6 @@
 #
 """Build CaRT components"""
 from datetime import date
-import daos_build
 import SCons.Action
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',
@@ -85,8 +84,8 @@ def scons():
 
         Depends(cart_targets, header)
 
-    cart_lib = daos_build.library(denv, 'cart', [cart_targets, swim_targets],
-                                  SHLIBVERSION=CART_VERSION)
+    cart_lib = denv.d_library('cart', [cart_targets, swim_targets],
+                              SHLIBVERSION=CART_VERSION)
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
                              SHLIBVERSION=CART_VERSION)
 

@@ -1,7 +1,6 @@
 """Build test suite"""
 import sys
 import subprocess
-import daos_build
 
 TEST_CMOCKA_SKIP = """
 #include <stdarg.h>
@@ -79,7 +78,7 @@ def scons():
 
     dfuse_env = base_env.Clone()
     dfuse_env.compiler_setup()
-    dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
+    dfusetest = dfuse_env.d_program(File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
@@ -96,9 +95,9 @@ def scons():
     Export('daos_test_obj')
 
     c_files = ['daos_debug_set_params.c']
-    daosdebug = daos_build.program(denv, 'daos_debug_set_params',
-                                   c_files + daos_test_tgt,
-                                   LIBS=['daos_common'] + libraries)
+    daosdebug = denv.d_program('daos_debug_set_params',
+                               c_files + daos_test_tgt,
+                               LIBS=['daos_common'] + libraries)
 
     newenv = configure_cmocka(denv.Clone())
 
@@ -113,14 +112,14 @@ def scons():
                     daos_aggregate_ec.c daos_degrade_ec.c
                     daos_extend_simple.c daos_obj_ec.c""")
 
-    daostest = daos_build.program(newenv, 'daos_test', c_files + daos_test_tgt,
-                                  LIBS=['daos_common'] + libraries)
+    daostest = newenv.d_program('daos_test', c_files + daos_test_tgt,
+                                LIBS=['daos_common'] + libraries)
 
     c_files = Split("""dfs_unit_test.c dfs_par_test.c dfs_test.c """
                     """dfs_sys_unit_test.c""")
     newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
-    dfstest = daos_build.program(newenv, 'dfs_test', c_files + daos_test_tgt,
-                                 LIBS=['daos_common'] + libraries)
+    dfstest = newenv.d_program('dfs_test', c_files + daos_test_tgt,
+                               LIBS=['daos_common'] + libraries)
 
     denv.Install('$PREFIX/bin/', daostest)
     denv.Install('$PREFIX/bin/', dfstest)

@@ -1,5 +1,4 @@
 """Build security library"""
-import daos_build
 
 SRC_FILES = ['srv.c', 'cli_security.c', 'srv_acl.c', 'auth.pb-c.c']
 
@@ -35,9 +34,9 @@ def scons():
         return
 
     denv.AppendUnique(LIBS=['gurt'])
-    ds_sec = daos_build.library(denv, 'security',
-                                get_objects(cache, 'srv.c', 'srv_acl.c'),
-                                install_off="../..")
+    ds_sec = denv.d_library('security',
+                            get_objects(cache, 'srv.c', 'srv_acl.c'),
+                            install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
     dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',

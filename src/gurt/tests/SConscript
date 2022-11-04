@@ -5,10 +5,8 @@
 """Unit tests"""
 
 import os
-import daos_build
 
-TEST_SRC = ['test_gurt.c',
-            'test_gurt_telem_producer.c']
+TEST_SRC = ['test_gurt.c', 'test_gurt_telem_producer.c']
 
 
 def scons():
@@ -44,10 +42,10 @@ def scons():
         flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
-        testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + gurt_targets,
-                                   LIBS=test_env["LIBS"] + ['yaml'],
-                                   LINKFLAGS=flags)
+        testprog = test_env.d_test_program(target=testname,
+                                           source=testobj + gurt_targets,
+                                           LIBS=test_env["LIBS"] + ['yaml'],
+                                           LINKFLAGS=flags)
         tests.append(testprog)
 
     Default(tests)

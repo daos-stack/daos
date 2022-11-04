@@ -289,6 +289,24 @@ class DefaultEnvironment():
         """Fake d_configure_mpi"""
         return DefaultEnvironment()
 
+    def d_program(self, *_args, **_kw):
+        """Fake d_program"""
+
+        return self.Program(*_args, **_kw)
+
+    def d_test_program(self, *_args, **_kw):
+        """Fake d_test_program"""
+
+        return self.d_program(*_args, **_kw)
+
+    def d_static_library(self, *_args, **_kw):
+        """Fake d_static_library"""
+        return self.StaticLibrary(*_args, **_kw)
+
+    def d_library(self, *_args, **_kw):
+        """Fake d_library"""
+        return self.Library(*_args, **_kw)
+
     def compiler_setup(self):
         """Fake compiler_setup"""
         return

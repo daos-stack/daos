@@ -1,5 +1,4 @@
 """Build management server module"""
-import daos_build
 
 
 def scons():
@@ -31,12 +30,13 @@ def scons():
     prereqs.require(senv, 'argobots', 'pmdk', headers_only=True)
     # Management server module
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    mgmt_srv = daos_build.library(senv, 'mgmt',
-                                  [common, 'srv.c', 'srv_layout.c',
-                                   'srv_pool.c', 'srv_system.c',
-                                   'srv_target.c', 'srv_query.c',
-                                   'srv_drpc.c', 'srv_util.c',
-                                   'srv_container.c'], install_off='../..')
+    mgmt_srv = senv.d_library('mgmt',
+                              [common, 'srv.c', 'srv_layout.c',
+                               'srv_pool.c', 'srv_system.c',
+                               'srv_target.c', 'srv_query.c',
+                               'srv_drpc.c', 'srv_util.c',
+                               'srv_container.c'],
+                              install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     denv = senv

@@ -1,4 +1,3 @@
-#!python
 # (C) Copyright 2016-2021 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -6,7 +5,6 @@
 """Unit tests"""
 
 import os
-import daos_build
 
 TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
             'utest_portnumber.c']
@@ -43,20 +41,17 @@ def scons():
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
-    tests = []
 
     for test in TEST_SRC:
         flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
-        testprog = daos_build.test(test_env, target=testname,
-                                   source=testobj + cart_targets
-                                   + swim_targets + gurt_targets,
-                                   LIBS=test_env["LIBS"] + ['yaml'],
-                                   LINKFLAGS=flags)
-        tests.append(testprog)
-
-    Default(tests)
+        testprog = test_env.d_test_program(target=testname,
+                                           source=[testobj, cart_targets, swim_targets,
+                                                   gurt_targets],
+                                           LIBS=test_env["LIBS"] + ['yaml'],
+                                           LINKFLAGS=flags)
+        Default(testprog)
 
 
 if __name__ == "SCons.Script":

@@ -1,7 +1,5 @@
 """Build DAOS utilities"""
 
-import daos_build
-
 
 def scons():
     """Execute build"""
@@ -37,7 +35,7 @@ def scons():
     SConscript('ctl/SConscript')
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
-    daos_hdlrs_lib = daos_build.library(denv, 'daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
+    daos_hdlrs_lib = denv.d_library('daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
     libs += ['daos_cmd_hdlrs']
 

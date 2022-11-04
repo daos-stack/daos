@@ -124,9 +124,22 @@ def _run_command(env, target, sources, daos_libs, command):
     return result
 
 
-def static_library(env, *args, **kwargs):
+def _static_library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
+    libname = _get_libname(*args, **kwargs)
+    if 'hide_syms' in kwargs:
+        # Allow for auto-hiding of symbols, used for the Interception library.  There are multiple
+        # ways to do this but for simplicity if hide_syms is used force the use of target,source
+        # kwargs rather than args.
+        assert not args
+        del kwargs['hide_syms']
+        real_target = kwargs['target']
+        kwargs['target'] = f"{real_target}_source"
+    else:
+        real_target = None
     lib = env.StaticLibrary(*args, **kwargs)
+    if real_target:
+        lib = env.Command(real_target, lib, 'objcopy --localize-hidden $SOURCE $TARGET')
     libname = _get_libname(*args, **kwargs)
     _add_lib('static', libname, lib)
     static_deps, shared_deps = _known_deps(env, **kwargs)
@@ -135,7 +148,7 @@ def static_library(env, *args, **kwargs):
     return lib
 
 
-def library(env, *args, **kwargs):
+def _library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
     denv.Replace(RPATH=[])
@@ -149,7 +162,7 @@ def library(env, *args, **kwargs):
     return lib
 
 
-def program(env, *args, **kwargs):
+def _program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
@@ -162,7 +175,7 @@ def program(env, *args, **kwargs):
     return prog
 
 
-def test(env, *args, **kwargs):
+def _test_program(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
@@ -173,11 +186,6 @@ def test(env, *args, **kwargs):
     Depends(testbuild, static_deps)
     env.Requires(testbuild, shared_deps)
     return testbuild
-
-
-def add_static_library(name, target):
-    """Add a static library to our db"""
-    _add_lib('static', name, target)
 
 
 def _find_mpicc(env):
@@ -241,3 +249,7 @@ def setup(env):
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
     env.AddMethod(_run_command, 'd_run_command')
     env.AddMethod(_add_rpaths, 'd_add_rpaths')
+    env.AddMethod(_program, 'd_program')
+    env.AddMethod(_test_program, 'd_test_program')
+    env.AddMethod(_library, 'd_library')
+    env.AddMethod(_static_library, 'd_static_library')

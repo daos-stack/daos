@@ -1,7 +1,6 @@
 #!/bin/env python
 """Build DAOS SPDK Go bindings"""
 from os.path import join
-import daos_build
 
 
 def scons():
@@ -28,7 +27,7 @@ def scons():
 
     senv.nc = senv.Object("src/nvme_control.c")
     senv.ncc = senv.Object("src/nvme_control_common.c")
-    daos_build.static_library(senv, "nvme_control", [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
+    senv.d_static_library("nvme_control", [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
 
     if prereqs.test_requested():
         SConscript('ctests/SConscript', exports='senv')
