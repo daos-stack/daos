@@ -116,15 +116,6 @@ reconf_end(struct pool_svc_reconf *reconf)
 }
 
 static void
-reconf_wait(struct pool_svc_reconf *reconf)
-{
-	ABT_mutex_lock(reconf->psc_mutex);
-	while (reconf->psc_in_progress)
-		ABT_cond_wait(reconf->psc_cv, reconf->psc_mutex);
-	ABT_mutex_unlock(reconf->psc_mutex);
-}
-
-static void
 reconf_cancel_and_wait(struct pool_svc_reconf *reconf)
 {
 	/*
@@ -5474,16 +5465,15 @@ pool_svc_cancel_and_wait_reconf(struct pool_svc *svc)
 }
 
 /**
- * Perform PS reconfigurations (if necessary) synchronously. This is currently
- * for the chk module only.
+ * Schedule PS reconfigurations (if necessary). This is currently for the chk
+ * module only.
  */
 void
-ds_pool_svc_reconf(struct ds_pool_svc *svc)
+ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc)
 {
 	struct pool_svc *s = pool_ds2svc(svc);
 
 	pool_svc_schedule_reconf(s, true /* for_chk */);
-	reconf_wait(&s->ps_reconf);
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
