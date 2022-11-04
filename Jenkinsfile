@@ -717,10 +717,14 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+#DH test only
+#                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()

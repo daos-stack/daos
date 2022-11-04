@@ -826,6 +826,7 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
+    @staticmethod
     def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
@@ -2034,7 +2035,7 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold, code_coverage_hosts):
+                  core_files, threshold):
         """Run all the tests.
 
         Args:
@@ -2047,8 +2048,6 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
-            code_coverage_hosts (NodeSet): set of hosts from which to collect the code coverage
-                files after all tests have completed.
 
         Returns:
             int: status code to use when exiting launch.py
