@@ -2034,7 +2034,7 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold, code_coverage_hosts):
+                  core_files, threshold):
         """Run all the tests.
 
         Args:
@@ -2047,8 +2047,6 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
-            code_coverage_hosts (NodeSet): set of hosts from which to collect the code coverage
-                files after all tests have completed.
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2160,16 +2158,35 @@ class Launch():
         """
         if self.bullseye_hosts:
             bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
-            return self._archive_files(
+            bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
+            status = self._archive_files(
                 "bullseye coverage log files",
                 self.bullseye_hosts,
                 bullseye_path,
                 "".join([bullseye_file, "*"]),
-                os.path.join(self.job_results_dir, "bullseye_coverage_logs"),
+                bullseye_dir,
                 1,
                 None,
                 900)
-        return 0
+
+            # Rename bullseye_coverage_logs.host/test.cov.* to
+            # bullseye_coverage_logs/test.host.cov.*
+            for item in os.listdir(self.job_results_dir):
+                item_full =  os.path.join(self.job_results_dir, item)
+                if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                    host_ext = os.path.splitext(item)
+                    if len(host_ext) > 1:
+                        os.makedirs(bullseye_dir)
+                        for name in os.listdir(item_full):
+                            old_file = os.path.join(item_full, name)
+                            if os.path.isfile(old_file):
+                                new_name = name.split(".")
+                                new_name.insert(1, host_ext[-1])
+                                new_file = os.path.join(bullseye_dir, new_name)
+                                logger.debug("Renaming %s to %s", old_file, new_file)
+                                os.rename(old_file, new_file)
+
+            return status
 
     @staticmethod
     def display_disk_space(path):

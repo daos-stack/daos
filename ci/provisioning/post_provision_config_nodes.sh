@@ -110,7 +110,6 @@ fi
 # for that device and future bindings to the device do not work, resulting in messages like, "NVMe
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
 if lspci | grep -i nvme; then
-  export COVFILE="/tmp/test.cov"
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 
