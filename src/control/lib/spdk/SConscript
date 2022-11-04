@@ -25,12 +25,12 @@ def scons():
     # Other libs
     libs += ['numa', 'dl']
 
-    senv.nc = senv.Object("src/nvme_control.c")
-    senv.ncc = senv.Object("src/nvme_control_common.c")
-    senv.d_static_library("nvme_control", [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
+    nc_obj = senv.Object("src/nvme_control.c")
+    ncc_obj = senv.Object("src/nvme_control_common.c")
+    senv.d_static_library("nvme_control", [nc_obj, ncc_obj, control_tgts], LIBS=libs)
 
     if prereqs.test_requested():
-        SConscript('ctests/SConscript', exports='senv')
+        SConscript('ctests/SConscript', exports=['senv', 'nc_obj', 'ncc_obj'])
 
 
 if __name__ == "SCons.Script":

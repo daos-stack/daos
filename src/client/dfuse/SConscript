@@ -214,8 +214,6 @@ def scons():
 
     cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
 
-    Export('dfuse_env')
-
 
 if __name__ == "SCons.Script":
     scons()

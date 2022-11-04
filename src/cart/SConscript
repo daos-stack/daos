@@ -84,14 +84,11 @@ def scons():
 
         Depends(cart_targets, header)
 
-    cart_lib = denv.d_library('cart', [cart_targets, swim_targets],
-                              SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib,
-                             SHLIBVERSION=CART_VERSION)
+    cart_lib = denv.d_library('cart', [cart_targets, swim_targets], SHLIBVERSION=CART_VERSION)
+    denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib, SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)
     Export('cart_targets')
-    Export('env', 'prereqs')
 
 
 if __name__ == "SCons.Script":

@@ -27,7 +27,6 @@ def scons():
 
     # dc_security: Security Client
     dc_security_tgts = get_objects(cache, 'cli_security.c', 'auth.pb-c.c')
-    Export('dc_security_tgts')
     libdaos_tgts.extend(dc_security_tgts)
 
     if not prereqs.server_requested():
@@ -39,12 +38,11 @@ def scons():
                             install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_sec)
 
-    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c',
-                                  'auth.pb-c.c')
+    dc_sectest_tgts = get_objects(cache, 'srv_acl.c', 'cli_security.c', 'auth.pb-c.c')
     Export('dc_sectest_tgts')
 
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports='denv')
+        SConscript('tests/SConscript', exports=['denv', 'dc_security_tgts'])
 
 
 if __name__ == "SCons.Script":
