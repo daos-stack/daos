@@ -2155,37 +2155,31 @@ class Launch():
             int: status code: 0 = success, 16 = failure
 
         """
-        if self.bullseye_hosts:
-            bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
-            bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
-            status = self._archive_files(
-                "bullseye coverage log files",
-                self.bullseye_hosts,
-                bullseye_path,
-                "".join([bullseye_file, "*"]),
-                bullseye_dir,
-                1,
-                None,
-                900)
+        if not self.bullseye_hosts:
+            return 0
 
-            # Rename bullseye_coverage_logs.host/test.cov.* to
-            # bullseye_coverage_logs/test.host.cov.*
-            for item in os.listdir(self.job_results_dir):
-                item_full = os.path.join(self.job_results_dir, item)
-                if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                    host_ext = os.path.splitext(item)
-                    if len(host_ext) > 1:
-                        os.makedirs(bullseye_dir)
-                        for name in os.listdir(item_full):
-                            old_file = os.path.join(item_full, name)
-                            if os.path.isfile(old_file):
-                                new_name = name.split(".")
-                                new_name.insert(1, host_ext[-1])
-                                new_file = os.path.join(bullseye_dir, new_name)
-                                logger.debug("Renaming %s to %s", old_file, new_file)
-                                os.rename(old_file, new_file)
-
-            return status
+        bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
+        bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
+        status = self._archive_files(
+                "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
+                "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
+        # Rename bullseye_coverage_logs.host/test.cov.* to
+        # bullseye_coverage_logs/test.host.cov.*
+        for item in os.listdir(self.job_results_dir):
+            item_full = os.path.join(self.job_results_dir, item)
+            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    os.makedirs(bullseye_dir)
+                    for name in os.listdir(item_full):
+                        old_file = os.path.join(item_full, name)
+                        if os.path.isfile(old_file):
+                            new_name = name.split(".")
+                            new_name.insert(1, host_ext[-1])
+                            new_file = os.path.join(bullseye_dir, new_name)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            os.rename(old_file, new_file)
+        return status
 
     @staticmethod
     def display_disk_space(path):
