@@ -1570,6 +1570,9 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		/* Share the same device/blobstore used by previous type */
 		if (d_bdev && is_role_match(d_bdev->bb_roles, dev_type2role(st)))
 			continue;
+		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
+		if (st != SMD_DEV_TYPE_DATA && !bio_nvme_configured(SMD_DEV_TYPE_META))
+			break;
 
 		rc = init_xs_blobstore_ctxt(ctxt, tgt_id, st);
 		if (rc)
@@ -1581,10 +1584,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_ASSERT(bbs != NULL);
 		d_bdev = bbs->bb_dev;
 		D_ASSERT(d_bdev != NULL);
-
-		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
-		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-			break;
 	}
 
 	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
