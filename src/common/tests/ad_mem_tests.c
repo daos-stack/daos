@@ -691,6 +691,9 @@ adt_delayed_free_1(void **state)
 	addr2 = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
 	assert_int_not_equal(addr, addr2);
 
+	rc = ad_tx_publish(&tx, &act, 1);
+	assert_rc_equal(rc, 0);
+
 	rc = ad_tx_end(&tx, 0);
 	assert_rc_equal(rc, 0);
 }
@@ -746,6 +749,7 @@ static void
 adt_no_space_1(void **state)
 {
 	const int	     alloc_size = 4096;
+	const int	     alloc_size1 = 512;
 	struct ad_tx	     tx;
 	struct ad_reserv_act act;
 	daos_off_t	     addr;
@@ -794,7 +798,7 @@ adt_no_space_1(void **state)
 
 	printf("Consume all space again\n");
 	for (i = 0;; i++) {
-		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+		addr = ad_reserve(adt_bh, 0, alloc_size1, &arena, &act);
 		if (addr == 0) {
 			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
 			       (int)((alloc_size * i) >> 20), arena);
@@ -809,8 +813,7 @@ adt_no_space_1(void **state)
 		rc = ad_tx_end(&tx, 0);
 		assert_rc_equal(rc, 0);
 	}
-	printf("array_size: %d, i: %d\n", array_size, i);
-	D_ASSERT(i == array_size);
+	D_ASSERT(i >= array_size * (alloc_size / alloc_size1));
 	D_FREE(addr_array);
 }
 

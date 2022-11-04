@@ -103,6 +103,7 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 	D_INIT_LIST_HEAD(&tx->tx_ar_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_free);
+	D_INIT_LIST_HEAD(&tx->tx_gp_reset);
 
 	tx->tx_redo_act_nr	= 0;
 	tx->tx_redo_payload_len	= 0;

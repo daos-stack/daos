@@ -23,6 +23,7 @@ struct ad_tx {
 	d_list_t		 tx_ar_pub;
 	d_list_t		 tx_gp_pub;
 	d_list_t		 tx_gp_free;
+	d_list_t		 tx_gp_reset;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct umem_act_item	*tx_redo_act_pos;
@@ -74,7 +75,11 @@ struct ad_group {
 	/** unpublished group */
 	unsigned int		 gp_unpub:1,
 	/** being published */
-				 gp_publishing:1;
+				 gp_publishing:1,
+	/* group freed and being reset */
+				 gp_reset:1,
+	/* need increase ad_grp_nr */
+				 gp_incr_grp_nr:1;
 	int			 gp_ref;
 	/** number of reserved units */
 	int			 gp_unit_rsv;
@@ -188,6 +193,7 @@ struct ad_arena {
 	struct ad_group_df	**ar_addr_sorter;
 	/** reserved bits for groups */
 	uint64_t		  ar_bmap_rsv[ARENA_GRP_BMSZ];
+	uint64_t		  ar_bmap_rsv1[ARENA_GRP_BMSZ];
 	/** metrics */
 	struct ad_group_metrics   ar_grp_mtcs[ARENA_GRP_SPEC_MAX];
 };
