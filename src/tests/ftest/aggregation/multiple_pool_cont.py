@@ -81,8 +81,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         start_time = 0
         finish_time = 0
 
-        job_manager = get_job_manager(self, "Mpirun", None, False, "mpich",
-                                      self.get_remaining_time())
+        job_manager = get_job_manager(self, subprocess=False, timeout=self.get_remaining_time())
         # Create requested pools
         self.add_pool_qty(total_pools, connect=False)
         start_time = time.time()

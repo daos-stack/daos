@@ -485,7 +485,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         process.start()
         # Wait for the thread to finish
         process.join()
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
@@ -542,7 +542,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
                                out_queue=self.out_queue)
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def run_mdtest_thread(self, oclass="RP_2G1"):

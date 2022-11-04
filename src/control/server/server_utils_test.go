@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -581,12 +582,12 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
-			sp := scm.NewMockSysProvider(log, nil)
+			sp := sysprov.NewMockSysProvider(log, nil)
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}
@@ -697,12 +698,12 @@ func TestServer_scanBdevStorage(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
-			sp := scm.NewMockSysProvider(log, nil)
+			sp := sysprov.NewMockSysProvider(log, nil)
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}

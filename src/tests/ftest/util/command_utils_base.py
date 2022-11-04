@@ -12,7 +12,7 @@ from exception_utils import CommandFailure
 class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None, yaml_key=None, position=None):
+    def __init__(self, value, default=None, yaml_key=None, position=None, mapped_values=None):
         """Create a BasicParameter object.
 
         Normal use includes assigning this object to an attribute name that
@@ -27,11 +27,15 @@ class BasicParameter():
             yaml_key (str, optional): the yaml key name to use when finding the
                 value to assign from the test yaml file. Default is None which
                 will use the object's variable name as the yaml key.
+            position (int, optional): position of the parameter for sorting. Default is None
+            mapped_values (dict, optional): dict of values to replace. Default is None,
+                which uses the direct value.
         """
         self._value = value if value is not None else default
         self._default = default
         self._yaml_key = yaml_key
         self._position = position
+        self._mapped_values = mapped_values
         self.log = getLogger(__name__)
 
         # Flag used to indicate if a parameter value has or has not been updated
@@ -63,6 +67,8 @@ class BasicParameter():
             object: value currently assigned to the setting
 
         """
+        if self._mapped_values:
+            return self._mapped_values.get(self._value, self._value)
         return self._value
 
     @value.setter
@@ -307,39 +313,6 @@ class LogParameter(FormattedParameter):
         super().update(value, name, append)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
-
-
-class MappedParameter(BasicParameter):
-    """A class for parameters whose values are read from a yaml file."""
-
-    def __init__(self, value, default=None, yaml_key=None, mapping=None):
-        """Create a MappedParameter object.
-
-        In addition to BasicParameter usage, a mapping can be supplied to replace
-        values from the yaml. This is useful, for example, when the value is a python reference.
-
-        Args:
-            value (object): initial value for the parameter
-            default (object, optional): default value. Defaults to None.
-            yaml_key (str, optional): the yaml key name to use when finding the
-                value to assign from the test yaml file. Default is None which
-                will use the object's variable name as the yaml key.
-            mapping (dict, optional): dict of values to replace. Default is None,
-                which replaces nothing.
-        """
-        super().__init__(value, default, yaml_key)
-        self._mapping = mapping or {}
-
-    @BasicParameter.value.getter
-    def value(self):
-        # pylint: disable=invalid-overridden-method
-        """Get the value of this parameter.
-
-        Returns:
-            object: mapped value currently assigned to the parameter
-
-        """
-        return self._mapping.get(self._value, super().value)
 
 
 class ObjectWithParameters():
