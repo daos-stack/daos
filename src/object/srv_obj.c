@@ -108,6 +108,34 @@ out:
 	return 0;
 }
 
+static inline void
+obj_update_vos_latency(uint32_t opc, uint64_t start_time, uint64_t io_size)
+{
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+	uint64_t		time;
+
+	/**
+	 * Measure latency of successful bulk transfer only.
+	 * Use bit shift for performance and tolerate some inaccuracy.
+	 */
+	time = daos_get_ntime() - start_time;
+	time >>= 10;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
+		break;
+	case DAOS_OBJ_RPC_FETCH:
+		lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
+		break;
+	default:
+		D_ASSERTF(0, "invalid opc %u\n", opc);
+	}
+	d_tm_set_gauge(lat, time);
+}
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -122,12 +150,17 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		bool update = obj_rpc_is_update(rpc);
 
 		if (update) {
+			uint64_t time;
+
 			if (status == 0)
 				status = dtx_sub_init(dth, &orwi->orw_oid,
 						      orwi->orw_dkey_hash);
+			time = daos_get_ntime();
 			rc = vos_update_end(ioh, ioc->ioc_map_ver,
 					    &orwi->orw_dkey, status,
 					    &ioc->ioc_io_size, dth);
+			if (rc == 0)
+				obj_update_vos_latency(ioc->ioc_opc, time, ioc->ioc_io_size);
 		} else {
 			rc = vos_fetch_end(ioh, &ioc->ioc_io_size, status);
 		}
@@ -218,10 +251,11 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 }
 
 struct obj_bulk_args {
+	ABT_eventual	eventual;
+	uint64_t	bulk_size;
 	int		bulks_inflight;
 	int		result;
 	bool		inited;
-	ABT_eventual	eventual;
 };
 
 static int
@@ -450,6 +484,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		bulk_desc.bd_remote_off	= remote_off;
 		bulk_desc.bd_local_off	= local_off;
 
+		p_arg->bulk_size += length;
 		p_arg->bulks_inflight++;
 		if (bulk_bind)
 			rc = crt_bulk_bind_transfer(&bulk_desc,
@@ -480,6 +515,35 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	return rc;
 }
 
+static inline void
+obj_bulk_update_latency(uint32_t opc, uint64_t start_time, uint64_t io_size)
+{
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+	uint64_t		time;
+
+	/**
+	 * Measure latency of successful bulk transfer only.
+	 * Use bit shift for performance and tolerate some inaccuracy.
+	 */
+	time = daos_get_ntime() - start_time;
+	time >>= 10;
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
+		break;
+	case DAOS_OBJ_RPC_FETCH:
+		lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
+		break;
+	default:
+		/* Only record update/fetch bulk latency */
+		return;
+	}
+	d_tm_set_gauge(lat, time);
+}
+
 static int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 		  crt_bulk_t *remote_bulks, uint64_t *remote_offs,
@@ -489,6 +553,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
 	struct obj_bulk_args	arg = { 0 };
 	int			i, rc, *status, ret;
 	bool			async = true;
+	uint64_t		time = daos_get_ntime();
 
 	if (remote_bulks == NULL) {
 		D_ERROR("No remote bulks provided\n");
@@ -560,6 +625,8 @@ done:
 
 	ABT_eventual_free(&p_arg->eventual);
 
+	if (rc == 0)
+		obj_bulk_update_latency(opc_get(rpc->cr_opc), time, arg.bulk_size);
 	if (rc == 0 && coh != NULL && unlikely(coh->sch_closed)) {
 		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
 			DP_UUID(coh->sch_uuid));
@@ -1344,10 +1411,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 	} else {
-		uint32_t			 fetch_flags = 0;
-		bool				 ec_deg_fetch;
-		bool				 ec_recov;
-		bool				 is_parity_shard;
+		uint32_t			fetch_flags = 0;
+		uint64_t			time;
+		bool				ec_deg_fetch;
+		bool				ec_recov;
+		bool				is_parity_shard;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1433,6 +1501,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			}
 		}
 
+		time = daos_get_ntime();
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
 				     cond_flags | fetch_flags, shadows, &ioh, dth);
@@ -1445,10 +1514,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 
+		obj_update_vos_latency(ioc->ioc_opc, time, vos_get_io_size(ioh));
+
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
-				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
+				daos_recx_ep_list_set(parity_list, orw->orw_nr,
+						      ioc->ioc_coc->sc_ec_agg_eph_boundry, 0);
 				daos_recx_ep_list_merge(parity_list, orw->orw_nr);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
@@ -1618,6 +1690,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 post:
 	rc = bio_iod_post(biod, rc);
 out:
+	/* The DTX has been aborted during long time bulk data transfer. */
+	if (unlikely(dth->dth_aborted))
+		rc = -DER_CANCELED;
+
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
 	 */
@@ -1771,7 +1847,7 @@ out:
 	ioc->ioc_vos_coh = coc->sc_hdl;
 	ioc->ioc_coc	 = coc;
 	ioc->ioc_coh	 = coh;
-	ioc->ioc_ec_rotate_parity = 0;
+	ioc->ioc_ec_rotate_parity = 1;
 	return 0;
 failed:
 	if (coc != NULL)
@@ -1874,24 +1950,6 @@ out:
 	return rc;
 }
 
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr =  __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
-}
-
 static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
@@ -1918,9 +1976,12 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-	case DAOS_OBJ_RPC_TGT_UPDATE:
 		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
 		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
+		break;
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
+		lat = tls->ot_tgt_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
 		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
@@ -1966,6 +2027,39 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 	return 0;
 }
 
+static int
+obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
+{
+	if (!obj_is_modification_opc(opc))
+		return 0;
+
+	/* If the incoming I/O is during integration, then it needs to wait the
+	 * vos discard to finish, which otherwise might discard these new inflight
+	 * I/O update.
+	 */
+	if ((flags & ORF_REINTEGRATING_IO) &&
+	    (child->sc_pool->spc_pool->sp_need_discard &&
+	     child->sc_pool->spc_discard_done == 0)) {
+		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		return -DER_UPDATE_AGAIN;
+	}
+
+	/* All I/O during rebuilding, needs to wait for the rebuild fence to
+	 * be generated (see rebuild_prepare_one()), which will create a boundary
+	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
+	 * which otherwise might be written duplicately, which might cause
+	 * the failure in VOS.
+	 */
+	if ((flags & ORF_REBUILDING_IO) &&
+	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
+	      child->sc_pool->spc_rebuild_fence == 0)) {
+		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		return -DER_UPDATE_AGAIN;
+	}
+
+	return 0;
+}
+
 /* Various check before access VOS */
 static int
 obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
@@ -1979,12 +2073,9 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		return rc;
 
-	if (obj_is_modification_opc(opc) && (flags & ORF_REINTEGRATING_IO) &&
-	    ioc->ioc_coc->sc_pool->spc_pool->sp_need_discard &&
-	    ioc->ioc_coc->sc_pool->spc_discard_done == 0) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(pool_uuid));
-		D_GOTO(failed, rc = -DER_UPDATE_AGAIN);
-	}
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
+	if (rc != 0)
+		goto failed;
 
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
 			    obj_is_ec_agg_opc(opc) ||
@@ -2530,8 +2621,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	version = orw->orw_map_ver;
 
-	if (tgt_cnt == 0)
+	if (tgt_cnt == 0) {
+		if (!(orw->orw_api_flags & DAOS_COND_MASK))
+			dtx_flags |= DTX_DROP_CMT;
 		dtx_flags |= DTX_SOLO;
+	}
+
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
@@ -3406,8 +3501,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 	}
 
-	if (tgt_cnt == 0)
+	if (tgt_cnt == 0) {
+		if (!(opi->opi_api_flags & DAOS_COND_MASK))
+			dtx_flags |= DTX_DROP_CMT;
 		dtx_flags |= DTX_SOLO;
+	}
 	if (opi->opi_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
@@ -3724,9 +3822,8 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 					DP_OID(oid), rc);
 			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
 				D_ERROR("Data Verification failed (object: "
-					DF_OID ", extent: "DF_RECX"): %d\n",
-					DP_OID(oid), DP_RECX(iod->iod_recxs[i]),
-					rc);
+					DF_OID", extent: "DF_RECX"): %d\n",
+					DP_OID(oid), DP_RECX(iod->iod_recxs[i]), rc);
 			}
 			break;
 		}
@@ -4041,6 +4138,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			goto out;
 		}
 	}
+
+	/* The DTX has been aborted during long time bulk data transfer. */
+	if (unlikely(dth->dth_aborted))
+		D_GOTO(out, rc = -DER_CANCELED);
 
 	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
 	 * Let's check resent again before further process.
@@ -4538,6 +4639,158 @@ ds_obj_dtx_leader_ult(void *arg)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
 }
 
+static int
+ds_obj_cpd_body_prep(struct daos_cpd_bulk *dcb, uint32_t type, uint32_t nr)
+{
+	int	rc = 0;
+
+	if (dcb->dcb_size == 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_ASSERT(dcb->dcb_iov.iov_buf == NULL);
+
+	D_ALLOC(dcb->dcb_iov.iov_buf, dcb->dcb_size);
+	if (dcb->dcb_iov.iov_buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	dcb->dcb_iov.iov_buf_len = dcb->dcb_size;
+	dcb->dcb_iov.iov_len = dcb->dcb_size;
+
+	dcb->dcb_sgl.sg_nr = 1;
+	dcb->dcb_sgl.sg_nr_out = 1;
+	dcb->dcb_sgl.sg_iovs = &dcb->dcb_iov;
+
+	dcb->dcb_type = type;
+	dcb->dcb_item_nr = nr;
+
+out:
+	return rc;
+}
+
+/* Handle the bulk for CPD RPC body. */
+static int
+ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
+		     struct daos_cpd_bulk ***p_dcbs, uint32_t *dcb_nr)
+{
+	struct obj_cpd_in		 *oci = crt_req_get(rpc);
+	struct daos_cpd_bulk		**dcbs = NULL;
+	struct daos_cpd_bulk		 *dcb = NULL;
+	crt_bulk_t			 *bulks = NULL;
+	d_sg_list_t			**sgls = NULL;
+	struct daos_cpd_sub_head	 *dcsh;
+	struct daos_cpd_disp_ent	 *dcde;
+	struct daos_cpd_req_idx		 *dcri;
+	void				 *end;
+	uint32_t			  total = 0;
+	uint32_t			  count = 0;
+	int				  rc = 0;
+	int				  i;
+	int				  j;
+
+	total += oci->oci_sub_heads.ca_count;
+	total += oci->oci_disp_ents.ca_count;
+	if (leader)
+		total += oci->oci_disp_tgts.ca_count;
+
+	D_ALLOC_ARRAY(dcbs, total);
+	if (dcbs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	*p_dcbs = dcbs;
+	*dcb_nr = total;
+
+	for (i = 0; i < oci->oci_sub_heads.ca_count; i++) {
+		dcb = ds_obj_cpd_get_head_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_HEAD,
+						  ds_obj_cpd_get_dcsh_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
+		}
+	}
+
+	for (i = 0; i < oci->oci_disp_ents.ca_count; i++) {
+		dcb = ds_obj_cpd_get_disp_bulk(rpc, i);
+		if (dcb != NULL) {
+			rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_DISP,
+						  ds_obj_cpd_get_dcde_cnt(rpc, i));
+			if (rc != 0)
+				goto out;
+
+			dcbs[count++] = dcb;
+		}
+	}
+
+	if (leader) {
+		for (i = 0; i < oci->oci_disp_tgts.ca_count; i++) {
+			dcb = ds_obj_cpd_get_tgts_bulk(rpc, i);
+			if (dcb != NULL) {
+				rc = ds_obj_cpd_body_prep(dcb, DCST_BULK_TGT,
+							  ds_obj_cpd_get_tgt_cnt(rpc, i));
+				if (rc != 0)
+					goto out;
+
+				dcbs[count++] = dcb;
+			}
+		}
+	}
+
+	/* no bulk for this CPD RPC body. */
+	if (count == 0)
+		D_GOTO(out, rc = 0);
+
+	D_ALLOC_ARRAY(bulks, count);
+	if (bulks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(sgls, count);
+	if (sgls == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < count; i++) {
+		bulks[i] = *dcbs[i]->dcb_bulk;
+		sgls[i] = &dcbs[i]->dcb_sgl;
+	}
+
+	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, ORF_BULK_BIND, bulks, NULL,
+			       DAOS_HDL_INVAL, sgls, count, NULL, ioc->ioc_coh);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < count; i++) {
+		switch (dcbs[i]->dcb_type) {
+		case DCST_BULK_HEAD:
+			dcsh = &dcbs[i]->dcb_head;
+			dcsh->dcsh_mbs = dcbs[i]->dcb_iov.iov_buf;
+			break;
+		case DCST_BULK_DISP:
+			dcde = dcbs[i]->dcb_iov.iov_buf;
+			dcri = dcbs[i]->dcb_iov.iov_buf + sizeof(*dcde) * dcbs[i]->dcb_item_nr;
+			end = dcbs[i]->dcb_iov.iov_buf + dcbs[i]->dcb_iov.iov_len;
+
+			for (j = 0; j < dcbs[i]->dcb_item_nr; j++) {
+				dcde[j].dcde_reqs = dcri;
+				dcri += dcde[j].dcde_read_cnt + dcde[j].dcde_write_cnt;
+				D_ASSERT((void *)dcri <= end);
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+out:
+	if (rc != 0)
+		D_ERROR("Failed to bulk transfer CPD RPC body for %p: "DF_RC"\n", rpc, DP_RC(rc));
+
+	D_FREE(sgls);
+	D_FREE(bulks);
+
+	return rc;
+}
+
 void
 ds_obj_cpd_handler(crt_rpc_t *rpc)
 {
@@ -4546,6 +4799,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	struct daos_cpd_args	*dcas = NULL;
 	struct obj_io_context	 ioc;
 	ABT_future		 future = ABT_FUTURE_NULL;
+	struct daos_cpd_bulk   **dcbs = NULL;
+	uint32_t		 dcb_nr = 0;
 	int			 tx_count = oci->oci_sub_heads.ca_count;
 	int			 rc = 0;
 	int			 i;
@@ -4571,43 +4826,43 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto reply;
 
-	if ((oci->oci_flags & ORF_REINTEGRATING_IO) &&
-	    ioc.ioc_coc->sc_pool->spc_pool->sp_need_discard &&
-	    ioc.ioc_coc->sc_pool->spc_rebuild_fence == 0) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(oci->oci_pool_uuid));
-		D_GOTO(reply, rc = -DER_UPDATE_AGAIN);
-	}
+	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_flags);
+	if (rc != 0)
+		goto reply;
 
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
-		    oci->oci_disp_ents.ca_count != 1 ||
-		    oci->oci_disp_tgts.ca_count != 0) {
+		    oci->oci_disp_ents.ca_count != 1 || oci->oci_disp_tgts.ca_count != 0) {
 			D_ERROR("Unexpected CPD RPC format for non-leader: "
 				"head %u, req set %lu, disp %lu, tgts %lu\n",
 				tx_count, oci->oci_sub_reqs.ca_count,
-				oci->oci_disp_ents.ca_count,
-				oci->oci_disp_tgts.ca_count);
+				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
 
 			D_GOTO(reply, rc = -DER_PROTO);
 		}
+	} else {
+		if (tx_count != oci->oci_sub_reqs.ca_count ||
+		    tx_count != oci->oci_disp_ents.ca_count ||
+		    tx_count != oci->oci_disp_tgts.ca_count || tx_count == 0) {
+			D_ERROR("Unexpected CPD RPC format for leader: "
+				"head %u, req set %lu, disp %lu, tgts %lu\n",
+				tx_count, oci->oci_sub_reqs.ca_count,
+				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
 
+			D_GOTO(reply, rc = -DER_PROTO);
+		}
+	}
+
+	rc = ds_obj_cpd_body_bulk(rpc, &ioc, leader, &dcbs, &dcb_nr);
+	if (rc != 0)
+		goto reply;
+
+	if (!leader) {
 		oco->oco_sub_rets.ca_arrays = NULL;
 		oco->oco_sub_rets.ca_count = 0;
 		rc = ds_obj_dtx_follower(rpc, &ioc);
 
 		D_GOTO(reply, rc);
-	}
-
-	if (tx_count != oci->oci_sub_reqs.ca_count ||
-	    tx_count != oci->oci_disp_ents.ca_count ||
-	    tx_count != oci->oci_disp_tgts.ca_count || tx_count == 0) {
-		D_ERROR("Unexpected CPD RPC format for leader: "
-			"head %u, req set %lu, disp %lu, tgts %lu\n",
-			tx_count, oci->oci_sub_reqs.ca_count,
-			oci->oci_disp_ents.ca_count,
-			oci->oci_disp_tgts.ca_count);
-
-		D_GOTO(reply, rc = -DER_PROTO);
 	}
 
 	D_ALLOC(oco->oco_sub_rets.ca_arrays, sizeof(int32_t) * tx_count);
@@ -4668,6 +4923,13 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 reply:
 	D_FREE(dcas);
+	if (dcbs != NULL) {
+		for (i = 0; i < dcb_nr; i++) {
+			if (dcbs[i] != NULL)
+				D_FREE(dcbs[i]->dcb_iov.iov_buf);
+		}
+		D_FREE(dcbs);
+	}
 	obj_cpd_reply(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
 }

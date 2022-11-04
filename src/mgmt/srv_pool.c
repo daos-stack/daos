@@ -16,31 +16,23 @@
 
 #include "srv_internal.h"
 
-/**
- * Destroy the pool on the specified ranks.
- * If filter_invert == false: destroy on all ranks EXCEPT those in filter_ranks.
- * If filter_invert == true:  destroy on all ranks specified in filter_ranks.
- */
+/** Destroy the pool on the specified ranks. */
 static int
-ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid,
-			       d_rank_list_t *filter_ranks, bool filter_invert)
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 {
 	crt_rpc_t			*td_req;
 	struct mgmt_tgt_destroy_in	*td_in;
 	struct mgmt_tgt_destroy_out	*td_out;
 	unsigned int			opc;
 	int				topo;
-	uint32_t			flags;
 	int				rc;
 
 	/* Collective RPC to destroy the pool on all of targets */
-	flags = filter_invert ? CRT_RPC_FLAG_FILTER_INVERT : 0;
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
-				  filter_ranks, opc, NULL, NULL, flags, topo,
-				  &td_req);
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, filter_ranks, opc, NULL,
+				  NULL, CRT_RPC_FLAG_FILTER_INVERT, topo, &td_req);
 	if (rc)
 		D_GOTO(fini_ranks, rc);
 
@@ -63,21 +55,6 @@ out_rpc:
 	crt_req_decref(td_req);
 
 fini_ranks:
-	return rc;
-}
-
-/**
- * Destroy the pool on specified storage ranks
- */
-static int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks)
-{
-	int				 rc;
-
-	D_DEBUG(DB_MD, DF_UUID ": send tgt destroy to %u UP ranks:\n",
-		DP_UUID(pool_uuid), ranks->rl_nr);
-	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks, true);
-
 	return rc;
 }
 
@@ -139,8 +116,7 @@ decref:
 
 	crt_req_decref(tc_req);
 	if (rc) {
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
-							    rank_list, true);
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, rank_list);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
@@ -229,10 +205,10 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		 * those here together with other pool resources to save one
 		 * round of RPCs.
 		 */
-		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets, true);
+		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, targets);
 		if (rc_cleanup)
 			D_ERROR(DF_UUID": failed to clean up failed pool: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+				DP_UUID(pool_uuid), DP_RC(rc_cleanup));
 	}
 
 out:
@@ -244,37 +220,26 @@ out:
 }
 
 int
-ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 {
-	int		 rc;
-	d_rank_list_t	*ranks = NULL;
+	int rc;
 
 	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	if (svc_ranks == NULL) {
-		D_ERROR("svc_ranks was NULL\n");
+	if (ranks == NULL) {
+		D_ERROR("ranks was NULL\n");
 		return -DER_INVAL;
 	}
 
-	/* Ask PS for list of storage ranks (tgt corpc destinations) */
-	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
-	if (rc) {
-		D_ERROR(DF_UUID ": failed to get pool storage ranks, "
-			DF_RC "\n", DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
-	rc = ds_mgmt_tgt_pool_destroy(pool_uuid, ranks);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid, ranks);
 	if (rc != 0) {
 		D_ERROR("Destroying pool "DF_UUID" failed, " DF_RC ".\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		goto free_ranks;
+		goto out;
 	}
 
 	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
 		DP_UUID(pool_uuid));
-free_ranks:
-	d_rank_list_free(ranks);
 out:
 	return rc;
 }

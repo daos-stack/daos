@@ -100,6 +100,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	      bool for_refresh);
 
 /**
+ * Load participants information for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -195,9 +207,10 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  * Cleanup local DTX when local modification failed.
  *
  * \param dth	[IN]	The DTX handle.
+ * \param unpin	[IN]	unpin the DTX entry or not.
  */
 void
-vos_dtx_cleanup(struct dtx_handle *dth);
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
 
 /**
  * Reset DTX related cached information in VOS.
@@ -1180,6 +1193,9 @@ vos_profile_start(char *path, int avg);
 void
 vos_profile_stop(void);
 
+uint64_t
+vos_get_io_size(daos_handle_t ioh);
+
 /**
  * Helper functions for dedup verify.
  */
@@ -1329,5 +1345,21 @@ uint64_t
 get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 		       uint64_t duration_seconds, uint64_t periods_nr,
 		       uint64_t per_idx);
+
+/** Set the VOS portion of the anchor for a given dkey or akey
+ *
+ * \param[in]	coh	Container open handle
+ * \param[in]	oid	Object ID
+ * \param[in]	dkey	Distribution key
+ * \param[in]	akey	Optional attribute key. If NULL, anchor is set using dkey
+ * \param[out]	anchor	The anchor to set.
+ *
+ * \return 0 on success, error otherwise.
+ *
+ * If the tree containing the key doesn't exist, the anchor will be set anchor to EOF.
+ */
+int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor);
 
 #endif /* __VOS_API_H */

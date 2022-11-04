@@ -95,18 +95,21 @@ func IsRaftLeadershipError(err error) bool {
 }
 
 // ResignLeadership causes this instance to give up its raft
-// leadership state. No-op if there is only one replica configured.
+// leadership state. No-op if there is only one replica configured
+// or the cause is a raft leadership error.
 func (db *Database) ResignLeadership(cause error) error {
+	if IsRaftLeadershipError(cause) {
+		// no-op
+		return nil
+	}
+
 	if cause == nil {
 		cause = errors.New("unknown error")
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
-	if err := db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withReadLock(func(svc raftService) error {
 		return svc.LeadershipTransfer().Error()
-	}); err != nil {
-		return errors.Wrap(err, cause.Error())
-	}
-	return cause
+	})
 }
 
 // Barrier blocks until the raft implementation has persisted all
@@ -193,6 +196,12 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 	// volume, so set this value to strike a balance between
 	// creating snapshots too frequently and not often enough.
 	raftCfg.SnapshotThreshold = 32
+	if dbCfg.RaftSnapshotThreshold > 0 {
+		raftCfg.SnapshotThreshold = dbCfg.RaftSnapshotThreshold
+	}
+	if dbCfg.RaftSnapshotInterval > 0 {
+		raftCfg.SnapshotInterval = dbCfg.RaftSnapshotInterval
+	}
 	raftCfg.HeartbeatTimeout = 2000 * time.Millisecond
 	raftCfg.ElectionTimeout = 2000 * time.Millisecond
 	raftCfg.LeaderLeaseTimeout = 1000 * time.Millisecond

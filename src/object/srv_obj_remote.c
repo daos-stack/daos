@@ -309,6 +309,9 @@ ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde
 {
 	struct daos_cpd_disp_ent	*dcde = NULL;
 	struct daos_cpd_sub_req		*dcsr = NULL;
+	struct daos_cpd_req_idx		*dcri_child;
+	struct daos_cpd_req_idx		*dcri_parent;
+	uint32_t			 idx;
 	int				 count;
 	int				 prev = -1;
 	int				 cur = 0;
@@ -334,10 +337,6 @@ ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde
 	dcde->dcde_write_cnt = dcde_parent->dcde_write_cnt;
 
 	for (i = 0; i < count; i++) {
-		struct daos_cpd_req_idx		*dcri_child;
-		struct daos_cpd_req_idx		*dcri_parent;
-		int				 idx;
-
 		dcri_child = &dcde->dcde_reqs[i];
 		dcri_parent = &dcde_parent->dcde_reqs[i];
 		idx = dcri_parent->dcri_req_idx;
@@ -345,24 +344,26 @@ ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde
 
 		dcri_child->dcri_shard_off = dcri_parent->dcri_shard_off;
 		dcri_child->dcri_shard_id = dcri_parent->dcri_shard_id;
-		dcri_child->dcri_req_idx = cur;
 		dcri_child->dcri_padding = dcri_parent->dcri_padding;
 
 		if (idx == prev &&
 		    (dcsr_parent[idx].dcsr_opc != DCSO_UPDATE ||
-		     dcsr_parent[idx].dcsr_update.dcu_ec_split_req == NULL))
-			continue;
+		     dcsr_parent[idx].dcsr_update.dcu_ec_split_req == NULL)) {
+			D_ASSERT(cur >= 1);
 
-		prev = idx;
+			dcri_child->dcri_req_idx = cur - 1;
+			continue;
+		}
 
 		/*
 		 * Only copy the top level data structure for daos_cpd_sub_req. Some DRAM
 		 * area pointed via the pointer inside daos_cpd_sub_req are shared between
 		 * 'dcsr' and 'dcsr_parent'. Because we hold the parent RPC's reference,
-		 * then related DRAM area will not be freeduntil the callback for forwarded
+		 * then related DRAM area will not be freed until the callback for forwarded
 		 * RPC is handled.
 		 */
 		memcpy(&dcsr[cur], &dcsr_parent[idx], sizeof(dcsr[cur]));
+		dcri_child->dcri_req_idx = cur;
 
 		if (dcsr_parent[idx].dcsr_opc == DCSO_UPDATE) {
 			struct daos_cpd_update	*dcu_parent;
@@ -394,6 +395,7 @@ ds_obj_cpd_clone_reqs(struct daos_shard_tgt *tgt, struct daos_cpd_disp_ent *dcde
 			}
 		}
 
+		prev = idx;
 		cur++;
 	}
 
@@ -490,10 +492,14 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
 
+	/* It is safe to share the head with parent since we are holding reference on parent RPC. */
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-	head_dcs->dcs_type = DCST_HEAD;
+	head_dcs->dcs_type = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
 	head_dcs->dcs_nr = 1;
-	head_dcs->dcs_buf = dcsh;
+	if (head_dcs->dcs_type == DCST_BULK_HEAD)
+		head_dcs->dcs_buf = ds_obj_cpd_get_head_bulk(dca->dca_rpc, dca->dca_idx);
+	else
+		head_dcs->dcs_buf = dcsh;
 	oci->oci_sub_heads.ca_arrays = head_dcs;
 	oci->oci_sub_heads.ca_count = 1;
 
@@ -514,6 +520,8 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		remote_arg->cpd_reqs = dcsr;
 		remote_arg->cpd_desc = dcde;
 	} else {
+		remote_arg->cpd_reqs = NULL;
+		remote_arg->cpd_desc = NULL;
 		dcsr = dcsr_parent;
 		dcde = dcde_parent;
 		rc = total;

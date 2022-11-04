@@ -6,9 +6,7 @@
 # pylint: disable=too-many-lines
 
 from logging import getLogger
-import grp
 import os
-import pwd
 import re
 import random
 import string
@@ -23,6 +21,9 @@ from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+
+from user_utils import get_chown_command, get_primary_group
+from run_utils import get_clush_command
 
 
 class DaosTestError(Exception):
@@ -1115,7 +1116,7 @@ def get_job_manager_class(name, job=None, subprocess=False, mpi="openmpi"):
     manager_class = get_module_class(name, "job_manager_utils")
     if name in ["Mpirun", "Orterun"]:
         manager = manager_class(job, subprocess=subprocess, mpi_type=mpi)
-    elif name == "Systemctl":
+    elif name in ["Systemctl", "Clush"]:
         manager = manager_class(job)
     else:
         manager = manager_class(job, subprocess=subprocess)
@@ -1213,8 +1214,8 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
 
     """
     return run_command(
-        "{} chown {}:{} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), owner, group, filename),
+        "{} {} {}".format(
+            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
         timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
@@ -1302,30 +1303,6 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
     return result
 
 
-def get_clush_command(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
-
-    Args:
-        hosts (object): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        str: the clush command
-
-    """
-    command = ["clush", "-w", convert_string(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return " ".join(command)
-
-
 def get_default_config_file(name):
     """Get the default config file.
 
@@ -1344,7 +1321,7 @@ def get_file_listing(hosts, files):
     """Get the file listing from multiple hosts.
 
     Args:
-        hosts (object): hosts with which to use the clush command
+        hosts (NodeSet): hosts with which to use the clush command
         files (object): list of multiple files to list or a single file as a str
 
     Returns:
@@ -1450,26 +1427,6 @@ def percent_change(val1, val2):
     if val1 and val2:
         return (float(val2) - float(val1)) / float(val1)
     return 0.0
-
-
-def get_primary_group(user=None):
-    """Get the name of the user's primary group.
-
-    Args:
-        user (str, optional): the user account name. Defaults to None, which uses the current user.
-
-    Returns:
-        str: the primary group name
-
-    """
-    if user is None:
-        user = getuser()
-    try:
-        gid = pwd.getpwnam(user).pw_gid
-        return grp.getgrgid(gid).gr_name
-    except KeyError:
-        # User may not exist on this host, e.g. daos_server, so just return the user name
-        return user
 
 
 def get_journalctl(hosts, since, until, journalctl_type):

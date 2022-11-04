@@ -191,7 +191,12 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
-	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
+	rc = ds_pool_lookup(svc->cs_pool_uuid, &svc->cs_pool);
+	if (rc != 0)  {
+		D_ERROR(DF_UUID": pool lookup failed: "DF_RC"\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+		return rc;
+	}
 	D_ASSERT(svc->cs_pool != NULL);
 
 	rc = cont_svc_ec_agg_leader_start(svc);
@@ -2333,11 +2338,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop,
 				   &ds_cont_prop_scrubber_disabled, &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST)
+			val = 0;
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type =
-			DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2547,7 +2553,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc == -DER_NONEXIST)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		else  if (rc != 0)
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
@@ -2661,6 +2667,8 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	rf = daos_cont_prop2redunfac(prop);
 	rc = ds_pool_rf_verify(pool, last_ver, rlvl, rf);
 	if (rc == -DER_RF) {
+		D_ERROR(DF_CONT": RF broken, last_ver %d, rlvl %d, rf %d, "DF_RC"\n",
+			DP_CONT(pool->sp_uuid, cont->c_uuid), last_ver, rlvl, rf, DP_RC(rc));
 		rc = 0;
 		cont_status_set_unclean(prop);
 	}
@@ -3760,6 +3768,20 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		entry->dpe_val = pda;
 	}
 
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		pda = 0;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container scrubbing disabled prop: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
+	}
+
 	/* Initialize or update container open / metadata modify times.
 	 * Update even when the container already has co_md_times key in properties KVS.
 	 */
@@ -4452,6 +4474,44 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out_put:
+	cont_svc_put_leader(svc);
+	return rc;
+}
+
+int
+ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid, struct container_hdl *chdl)
+{
+	d_iov_t		key;
+	d_iov_t		value;
+	struct rdb_tx	tx;
+	struct cont_svc *svc;
+	int		rc;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": find leader: %d\n",
+			DP_CONT(pool_uuid, cont_hdl_uuid), rc);
+		return rc;
+	}
+
+	/* check if it is server container hdl */
+	if (uuid_compare(cont_hdl_uuid, svc->cs_pool->sp_srv_cont_hdl) == 0)
+		D_GOTO(put, rc);
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(put, rc);
+
+	ABT_rwlock_rdlock(svc->cs_lock);
+	/* See if this container handle already exists. */
+	d_iov_set(&key, cont_hdl_uuid, sizeof(uuid_t));
+	d_iov_set(&value, chdl, sizeof(*chdl));
+	rc = rdb_tx_lookup(&tx, &svc->cs_hdls, &key, &value);
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+put:
+	D_DEBUG(DB_MD, DF_CONT "lookup rc %d.\n", DP_CONT(pool_uuid, cont_hdl_uuid), rc);
 	cont_svc_put_leader(svc);
 	return rc;
 }

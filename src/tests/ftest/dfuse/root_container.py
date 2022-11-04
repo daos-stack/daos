@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -116,10 +115,10 @@ class RootContainerTest(DfuseTestBase):
         container and verify they're accessible.
         """
         pool_count = self.params.get("pool_count", "/run/pool/*")
-        for i in range(pool_count):
+        for idx in range(pool_count):
             pool = self._create_pool()
-            for j in range(self.cont_count):
-                cont_name = "/cont_{}{}".format(i, j)
+            for jdx in range(self.cont_count):
+                cont_name = "/cont_{}{}".format(idx, jdx)
                 sub_cont = str(self.dfuse.mount_dir.value + cont_name)
                 self._create_cont(pool=pool, path=sub_cont)
                 self.insert_files_and_verify(cont_name)
@@ -138,19 +137,18 @@ class RootContainerTest(DfuseTestBase):
         self.log.info("Verifying multiple container create delete")
         pool_space_before = pool.get_pool_free_space(self.device)
         self.log.info("Pool space before = %s", pool_space_before)
-        for i in range(cont_count):
-            sub_cont = str(self.dfuse.mount_dir.value + "/cont{}".format(i+1))
+        for idx in range(cont_count):
+            sub_cont = str(self.dfuse.mount_dir.value + "/cont{}".format(idx + 1))
             self._create_cont(pool, path=sub_cont)
-            self.insert_files_and_verify("cont{}".format(i+1))
+            self.insert_files_and_verify("cont{}".format(idx + 1))
         expected = pool_space_before - \
             cont_count * self.tmp_file_count * self.tmp_file_size
         pool_space_after = pool.get_pool_free_space(self.device)
         self.log.info("Pool space <= Expected")
         self.log.info("%s <= %s", pool_space_after, expected)
         self.assertTrue(pool_space_after <= expected)
-        self.log.info("Destroying half of the containers = %s",
-                      cont_count//2)
-        for i in range(cont_count // 2):
+        self.log.info("Destroying half of the containers = %s", cont_count // 2)
+        for _ in range(cont_count // 2):
             self.container[-1].destroy(1)
             self.container.pop()
         expected = pool_space_after + \
@@ -180,9 +178,9 @@ class RootContainerTest(DfuseTestBase):
         cmds = []
         ls_cmds = []
 
-        for i in range(self.tmp_file_count):
+        for idx in range(self.tmp_file_count):
             # Create 40 MB files
-            file_name = "{}{}".format(self.tmp_file_name, i+1)
+            file_name = "{}{}".format(self.tmp_file_name, idx + 1)
             cmd = "head -c {} /dev/urandom > {}/{}".format(
                 self.tmp_file_size, cont_dir, file_name)
             ls_cmds.append("ls {}".format(file_name))

@@ -14,10 +14,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func TestServer_CtlSvc_getScmUsage(t *testing.T) {
@@ -31,9 +31,10 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 	mockScmNs1wMount.Mount = storage.MockScmMountPoint(1)
 
 	for name, tc := range map[string]struct {
-		smsc        *scm.MockSysConfig
+		smsc        *system.MockSysConfig
 		inResp      *storage.ScmScanResponse
 		storageCfgs []storage.TierConfigs
+		nilRank     bool
 		expErr      error
 		expOutResp  *storage.ScmScanResponse
 	}{
@@ -86,8 +87,8 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			expErr: errors.New("no pmem namespace"),
 		},
 		"get usage fails": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{Err: errors.New("unknown")},
 				},
 			},
@@ -106,9 +107,34 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			},
 			expErr: errors.New("unknown"),
 		},
+		"get rank fails": {
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
+					{
+						Total: mockScmNs0wMount.Mount.TotalBytes,
+						Avail: mockScmNs0wMount.Mount.AvailBytes,
+					},
+				},
+			},
+			inResp: &storage.ScmScanResponse{
+				Namespaces: storage.ScmNamespaces{
+					mockScmNs0,
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockScmMountPath0).
+						WithScmDeviceList(mockScmNs0.BlockDevice),
+				},
+			},
+			nilRank: true,
+			expErr:  errors.New("nil rank in superblock"),
+		},
 		"get usage": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockScmNs0wMount.Mount.TotalBytes,
 						Avail: mockScmNs0wMount.Mount.AvailBytes,
@@ -135,8 +161,8 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			},
 		},
 		"get usage; multiple engines": {
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockScmNs0wMount.Mount.TotalBytes,
 						Avail: mockScmNs0wMount.Mount.AvailBytes,
@@ -180,11 +206,18 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			var engineCfgs []*engine.Config
-			for _, sc := range tc.storageCfgs {
-				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
+			for i, sc := range tc.storageCfgs {
+				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...).WithRank(uint32(i)))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, nil, nil, tc.smsc)
+
+			if tc.nilRank {
+				for _, ei := range cs.harness.Instances() {
+					srv := ei.(*EngineInstance)
+					srv._superblock.Rank = nil
+				}
+			}
 
 			cs.harness.started.SetTrue()
 

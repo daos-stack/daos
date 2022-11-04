@@ -19,6 +19,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -107,7 +108,7 @@ func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
 func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error) {
-	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
+	readyRanks := make([]ranklist.Rank, 0, len(ps.Replicas))
 	for _, r := range ps.Replicas {
 		m, err := svc.sysdb.FindMemberByRank(r)
 		if err != nil {
@@ -123,7 +124,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		return nil, errors.Errorf("unable to find any available service ranks for pool %s", ps.PoolUUID)
 	}
 
-	return system.RanksToUint32(readyRanks), nil
+	return ranklist.RanksToUint32(readyRanks), nil
 }
 
 func minRankScm(tgtCount uint64) uint64 {
@@ -284,29 +285,34 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		// If the request supplies a specific rank list, use it. Note that
 		// the rank list may include downed ranks, in which case the create
 		// will fail with an error.
-		reqRanks := system.RanksFromUint32(req.GetRanks())
+		reqRanks := ranklist.RanksFromUint32(req.GetRanks())
 		// Create a RankSet to sort/dedupe the ranks.
-		reqRanks = system.RankSetFromRanks(reqRanks).Ranks()
+		reqRanks = ranklist.RankSetFromRanks(reqRanks).Ranks()
 
-		if invalid := system.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
+		if invalid := ranklist.CheckRankMembership(allRanks, reqRanks); len(invalid) > 0 {
 			return nil, FaultPoolInvalidRanks(invalid)
 		}
 
-		req.Ranks = system.RanksToUint32(reqRanks)
+		req.Ranks = ranklist.RanksToUint32(reqRanks)
 	} else {
 		// Otherwise, create the pool across the requested number of
 		// available ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
-		nRanks := len(allRanks)
+		nAllRanks := len(allRanks)
+		nRanks := nAllRanks
 		if req.GetNumranks() > 0 {
 			nRanks = int(req.GetNumranks())
+
+			if nRanks > nAllRanks {
+				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
+			}
 
 			// TODO (DAOS-6263): Improve rank selection algorithm.
 			// In the short term, we can just randomize the set of
 			// available ranks in order to avoid always choosing the
 			// first N ranks.
 			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(allRanks), func(i, j int) {
+			rand.Shuffle(nAllRanks, func(i, j int) {
 				allRanks[i], allRanks[j] = allRanks[j], allRanks[i]
 			})
 		}
@@ -346,7 +352,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.Tierbytes, system.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(uuid, req.Tierbytes, ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
@@ -398,7 +404,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 
 		switch errors.Cause(err) {
-		case errInstanceNotReady, FaultDataPlaneNotStarted:
+		case errInstanceNotReady:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
 			resp.Status = int32(daos.TryAgain)
@@ -420,7 +426,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return resp, nil
 	}
 
-	ps.Replicas = system.RanksFromUint32(resp.GetSvcReps())
+	ps.Replicas = ranklist.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
 	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 		return nil, err
@@ -545,18 +551,11 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 	req.SetUUID(poolUUID)
-	req.SvcRanks = system.RanksToUint32(ps.Replicas)
+	req.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
 
 	resp := &mgmtpb.PoolDestroyResp{}
 
-	inCleanupMode := false
-	if ps.State == system.PoolServiceStateDestroying {
-		// If we already tried to destroy the pool but it failed for some
-		// reason, try again, but instead use the full set of storage ranks
-		// in case the MS has lost track of the actual svc ranks.
-		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
-		inCleanupMode = true
-	} else {
+	if ps.State != system.PoolServiceStateDestroying {
 		// If recursive flag is unset, refuse to destroy pool if resident containers exist.
 		if !req.Recursive {
 			hasContainers, err := svc.poolHasContainers(ctx, req)
@@ -582,9 +581,9 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		}
 
 		// If the request is being forced, or the evict request did not fail
-		// due to the pool being busy, then transition to the destroying state
-		// and persist the update(s).
-		if req.Force || evStatus != daos.Busy {
+		// due to the pool being busy or service not up, then transition to the
+		// destroying state and persist the update(s).
+		if req.Force || (evStatus != daos.Busy && evStatus != daos.NoService) {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
@@ -599,7 +598,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
+	// Note that, here, we set req.SvcRanks to all ranks in the system, not
+	// the PS replicas, not the up ranks in the pool. Doing such a "blind"
+	// destroy avoids contacting the PS, who may have already been destroyed
+	// by a previous pool destroy attempt or otherwise unavailable at this
+	// point. Moreover, we will also clean up pool resources on ranks that
+	// are now available but have previously been excluded from the pool.
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return nil, err
+	}
+	allRanks := make([]uint32, 0, len(gm.RankEntries))
+	for i := range gm.RankEntries {
+		allRanks = append(allRanks, i.Uint32())
+	}
+	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
+	req.SvcRanks = allRanks
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -612,18 +627,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
 	ds := daos.Status(resp.Status)
-	switch ds {
-	case daos.Success, daos.NotLeader, daos.NotReplica:
-		if ds == daos.NotLeader || ds == daos.NotReplica {
-			// If we're not cleaning up, then this is an error.
-			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
-			if !inCleanupMode {
-				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
-				break
-			}
-			// Otherwise, we've done all we can to try to recover.
-			resp.Status = int32(daos.Success)
-		}
+	if ds == daos.Success {
 		if err := svc.sysdb.RemovePoolService(poolUUID); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
 			// As we know the service entry existed when we started this handler,
@@ -633,7 +637,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 				return nil, errors.Wrapf(err, "failed to remove pool %s", poolUUID)
 			}
 		}
-	default:
+	} else {
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 
@@ -1083,7 +1087,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 		resp.Pools = append(resp.Pools, &mgmtpb.ListPoolsResp_Pool{
 			Uuid:    ps.PoolUUID.String(),
 			Label:   ps.PoolLabel,
-			SvcReps: system.RanksToUint32(ps.Replicas),
+			SvcReps: ranklist.RanksToUint32(ps.Replicas),
 			State:   ps.State.String(),
 		})
 	}

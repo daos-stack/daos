@@ -472,6 +472,16 @@ err:
 }
 
 static void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
+}
+
+static void
 dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
@@ -486,12 +496,6 @@ static struct d_hlink_ops cont_h_ops = {
 };
 
 void
-dc_cont_put(struct dc_cont *dc)
-{
-	daos_hhash_link_putref(&dc->dc_hlink);
-}
-
-void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
@@ -501,16 +505,6 @@ void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
-}
-
-void
-dc_cont_free(struct dc_cont *dc)
-{
-	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
 }
 
 struct dc_cont *
@@ -2110,11 +2104,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_slave = 1;
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	if (pool->dp_disconnecting) {
+	if (pool->dp_disconnecting || DAOS_FAIL_CHECK(DAOS_CONT_G2L_FAIL)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		dc_cont_free(cont);
 		D_ERROR("pool connection being invalidated\n");
-		D_GOTO(out_pool, rc = -DER_NO_HDL);
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
@@ -3143,35 +3136,33 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 }
 
 int
-dc_cont_hdl2redunlvl(daos_handle_t coh)
+dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_lvl;
+	*rl = dc->dc_props.dcp_redun_lvl;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 int
-dc_cont_hdl2redunfac(daos_handle_t coh)
+dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_fac;
+	*rf = dc->dc_props.dcp_redun_fac;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 struct daos_csummer *

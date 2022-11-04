@@ -84,8 +84,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage replace nvme":
 				testArgs = append(testArgs, "--old-uuid", test.MockUUID(),
 					"--new-uuid", test.MockUUID())
-			case "storage identify vmd":
-				testArgs = append(testArgs, "--uuid", test.MockUUID())
+			case "storage led identify", "storage led check", "storage led clear":
+				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
 				testArgs = append(testArgs, "-s", "1TB")
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
@@ -115,6 +115,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":
 				testArgs = append(testArgs, "foo")
+			case "system exclude":
+				testArgs = append(testArgs, "--ranks", "0")
+			case "system clear-exclude":
+				testArgs = append(testArgs, "--ranks", "0")
 			}
 
 			// replace os.Stdout so that we can verify the generated output

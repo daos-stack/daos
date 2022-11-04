@@ -48,7 +48,7 @@ func eventNotify(ctx context.Context, rpcClient UnaryInvoker, seq uint64, evt *e
 
 	req := &EventNotifyReq{}
 	req.SetHostList(aps)
-	rpcClient.Debugf("forwarding %s event to MS access points %v (seq: %d)", evt.ID, aps, seq)
+	rpcClient.Debugf("forwarding %s event (seq: %d)", evt.ID, seq)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		msg, err := mgmtpb.NewMgmtSvcClient(conn).ClusterEvent(ctx,

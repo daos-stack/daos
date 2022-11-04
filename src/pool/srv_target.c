@@ -198,7 +198,7 @@ start_gc_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_gc_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
@@ -260,7 +260,7 @@ start_flush_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, 0);
+	child->spc_flush_req = sched_create_ult(&attr, flush_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_flush_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create flush ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
@@ -614,27 +614,34 @@ ds_pool_cache_fini(void)
 	daos_lru_cache_destroy(pool_cache);
 }
 
-struct ds_pool *
-ds_pool_lookup(const uuid_t uuid)
+/**
+ * If the pool can not be found due to non-existence or it is being stopped, then
+ * @pool will be set to NULL and return proper failure code, otherwise return 0 and
+ * set @pool.
+ */
+int
+ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
-	struct ds_pool		*pool;
 	int			 rc;
 
+	D_ASSERT(pool != NULL);
+	*pool = NULL;
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       NULL /* create_args */, &llink);
 	if (rc != 0)
-		return NULL;
+		return rc;
 
-	pool = pool_obj(llink);
-	if (pool->sp_stopping) {
+	*pool = pool_obj(llink);
+	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
-		ds_pool_put(pool);
-		return NULL;
+		ds_pool_put(*pool);
+		*pool = NULL;
+		return -DER_SHUTDOWN;
 	}
 
-	return pool;
+	return 0;
 }
 
 void
@@ -864,11 +871,10 @@ ds_pool_stop(uuid_t uuid)
 
 	ds_pool_failed_remove(uuid);
 
-	pool = ds_pool_lookup(uuid);
+	ds_pool_lookup(uuid, &pool);
 	if (pool == NULL)
 		return;
-	if (pool->sp_stopping)
-		return;
+	D_ASSERT(!pool->sp_stopping);
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
@@ -1520,10 +1526,10 @@ ds_pool_tgt_query_handler(crt_rpc_t *rpc)
 	}
 
 	/* Aggregate query over all targets on the node */
-	pool = ds_pool_lookup(in->tqi_op.pi_uuid);
-	if (pool == NULL) {
-		D_ERROR("Failed to find pool "DF_UUID"\n",
-			DP_UUID(in->tqi_op.pi_uuid));
+	rc = ds_pool_lookup(in->tqi_op.pi_uuid, &pool);
+	if (rc) {
+		D_ERROR("Failed to find pool "DF_UUID": %d\n",
+			DP_UUID(in->tqi_op.pi_uuid), rc);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -1565,9 +1571,12 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (ret == 0 && pool->sp_global_version >= 1) {
+	if (ret == 0) {
 		/** If necessary, upgrade the vos pool format */
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+		if (pool->sp_global_version >= 2)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
+		else if (pool->sp_global_version == 1)
+			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
 	}
 
 	ds_pool_child_put(child);
@@ -1587,6 +1596,11 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+
+	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+		pool->sp_disable_rebuild = 0;
+	else
+		pool->sp_disable_rebuild = 1;
 
 	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
 				   &pool->sp_policy_desc)) {
@@ -1641,9 +1655,10 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		 * See the comment on validating the pool handle in
 		 * ds_pool_query_handler.
 		 */
-		pool = ds_pool_lookup(in->tmi_op.pi_uuid);
-		if (pool == NULL) {
-			D_ERROR(DF_UUID": failed to look up pool\n", DP_UUID(in->tmi_op.pi_uuid));
+		rc = ds_pool_lookup(in->tmi_op.pi_uuid, &pool);
+		if (rc) {
+			D_ERROR(DF_UUID": failed to look up pool: %d\n",
+				DP_UUID(in->tmi_op.pi_uuid), rc);
 			rc = -DER_NONEXIST;
 			goto out;
 		}
@@ -1677,6 +1692,7 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
+	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 
@@ -1860,9 +1876,9 @@ ds_pool_tgt_discard_ult(void *data)
 	 * still succeed, though it might leave some garbage on the reintegration
 	 * target, the future scrub tool might fix it. XXX
 	 */
-	pool = ds_pool_lookup(arg->pool_uuid);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
 	if (pool == NULL) {
-		D_INFO(DF_UUID" is stopping!\n", DP_UUID(arg->pool_uuid));
+		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
 		D_GOTO(free, rc = 0);
 	}
 
@@ -1921,9 +1937,9 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	 */
 	uuid_copy(arg->pool_uuid, in->ptdi_uuid);
 	arg->epoch = DAOS_EPOCH_MAX;
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL) {
-		D_INFO(DF_UUID" is stopping!\n", DP_UUID(arg->pool_uuid));
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc) {
+		D_INFO(DF_UUID" can not be found: %d\n", DP_UUID(arg->pool_uuid), rc);
 		D_GOTO(out, rc = 0);
 	}
 
