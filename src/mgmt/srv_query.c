@@ -298,10 +298,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->devices, list_devs_info.dev_list_cnt);
-	if (resp->devices == NULL) {
-		D_ERROR("Failed to allocate devices for resp\n");
+	if (resp->devices == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list, bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
@@ -357,7 +355,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			buflen = strlen(dev_info->bdi_traddr) + 1;
 			D_ALLOC(resp->devices[i]->tr_addr, buflen);
 			if (resp->devices[i]->tr_addr == NULL) {
-				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
@@ -429,10 +426,8 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
-	if (resp->pools == NULL) {
-		D_ERROR("Failed to allocate pools for resp\n");
+	if (resp->pools == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		D_ALLOC_PTR(resp->pools[i]);
@@ -591,7 +586,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -637,10 +631,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	resp->device->tr_addr = NULL;
 
 	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
-	if (resp->device->tr_addr == NULL) {
-		D_ERROR("Failed to allocate transport address in response");
+	if (resp->device->tr_addr == NULL)
 		return -DER_NOMEM;
-	}
 
 	if (strlen(req->ids) == 0) {
 		D_ERROR("Transport address not provided in request\n");
@@ -713,7 +705,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate new device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}
