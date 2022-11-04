@@ -107,27 +107,17 @@ tx_range_merge(struct ad_range *r1, struct ad_range *r2)
 }
 
 static int
-tx_range_add(struct ad_tx *tx, void *ptr, size_t size)
+tx_range_add(struct ad_tx *tx, void *ptr, size_t size, bool alloc)
 {
 	struct ad_range		*tmp;
-	d_list_t		*at = NULL;
-	struct ad_range		 range;
+	d_list_t		*at = &tx->tx_ranges;
 
-	range.ar_ptr = ptr;
-	range.ar_size = size;
 	d_list_for_each_entry(tmp, &tx->tx_ranges, ar_link) {
-		if (tx_range_overlap(tmp, &range)) {
-			tx_range_merge(tmp, &range);
-			return 0;
-		}
-		if ((uintptr_t)ptr < (uintptr_t)tmp->ar_ptr) {
+		if ((uintptr_t)ptr <= (uintptr_t)tmp->ar_ptr) {
 			at = &tmp->ar_link;
 			break;
 		}
 	}
-
-	if (at == NULL)
-		at = &tx->tx_ranges;
 
 	D_ALLOC_PTR(tmp);
 	if(tmp == NULL)
@@ -135,9 +125,27 @@ tx_range_add(struct ad_tx *tx, void *ptr, size_t size)
 	D_INIT_LIST_HEAD(&tmp->ar_link);
 	tmp->ar_ptr = ptr;
 	tmp->ar_size = size;
+	tmp->ar_alloc = alloc;
 	d_list_add(&tmp->ar_link, at);
 
 	return 0;
+}
+
+/* delete a range (only for newly allocated) */
+static void
+tx_range_del(struct ad_tx *tx, void *ptr)
+{
+	struct ad_range		*tmp, *next;
+
+	d_list_for_each_entry_safe(tmp, next, &tx->tx_ranges, ar_link) {
+		if ((uintptr_t)ptr < (uintptr_t)tmp->ar_ptr)
+			break;
+		if ((uintptr_t)ptr == (uintptr_t)tmp->ar_ptr && tmp->ar_alloc) {
+			d_list_del(&tmp->ar_link);
+			D_FREE(tmp);
+			break;
+		}
+	}
 }
 
 /* post process for tx ranges in tx commit - insert tx_add redo actions */
@@ -885,8 +893,14 @@ umo_tx_stage(void)
 static int
 umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	struct ad_tx	*tx = tx_get();
-	int		 rc = 0;
+	struct ad_tx		*tx = tx_get();
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob = bh.bh_blob;
+	void			*ptr;
+	int			 rc = 0;
+
+	ptr = blob_addr2ptr(blob, umoff);
+	tx_range_del(tx, ptr);
 
 	/*
 	 * This free call could be on error cleanup code path where
@@ -924,7 +938,7 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 		int	rc;
 
 		ptr = blob_addr2ptr(blob, off);
-		rc = tx_range_add(tx, ptr, size);
+		rc = tx_range_add(tx, ptr, size, true);
 		if (rc) {
 			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
 			rc = ad_tx_free(tx, off);
@@ -946,7 +960,7 @@ tx_add_internal(struct ad_tx *tx, void *ptr, size_t size, uint32_t flags)
 		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
 	if (flags & AD_TX_REDO) {
-		rc = tx_range_add(tx, ptr, size);
+		rc = tx_range_add(tx, ptr, size, false);
 		if (rc) {
 			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
 			return rc;
@@ -1005,8 +1019,20 @@ static umem_off_t
 umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob = bh.bh_blob;
+	struct ad_reserv_act	*ract = act;
+	void			*ptr;
+	umem_off_t		 off;
 
-	return ad_reserve(bh, 0, size, NULL, (struct ad_reserv_act *)act);
+	off = ad_reserve(bh, 0, size, NULL, ract);
+
+	if (!UMOFF_IS_NULL(off)) {
+		ptr = blob_addr2ptr(blob, off);
+		ract->ra_ptr = ptr;
+		ract->ra_size = size;
+	}
+
+	return off;
 }
 
 static void
@@ -1019,11 +1045,24 @@ static int
 umo_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	struct ad_tx		*tx = tx_get();
+	struct ad_reserv_act	*ractv = actv;
+	int			 i, rc;
 
 	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
 		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
-	return ad_tx_publish(tx, (struct ad_reserv_act *)actv, actv_cnt);
+	rc = ad_tx_publish(tx, ractv, actv_cnt);
+	if (rc == 0) {
+		for (i = 0; i < actv_cnt; i++) {
+			rc = tx_range_add(tx, ractv[i].ra_ptr, ractv[i].ra_size, true);
+			if (rc) {
+				D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+				break;
+			}
+		}
+	}
+
+	return rc;
 }
 
 static void *
@@ -1074,6 +1113,9 @@ static int
 umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 {
 	struct ad_tx		*tx;
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob = bh.bh_blob;
+	void			*ptr;
 	int			 rc = 0;
 
 	rc = umo_tx_begin(umm, NULL);
@@ -1082,6 +1124,9 @@ umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 		return rc;
 	}
 	tx = tx_get();
+
+	ptr = blob_addr2ptr(blob, umoff);
+	tx_range_del(tx, ptr);
 
 	rc = ad_tx_free(tx, umoff);
 	if (rc) {

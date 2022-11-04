@@ -26,6 +26,7 @@ struct ad_range {
 	d_list_t		 ar_link;
 	void			*ar_ptr;
 	size_t			 ar_size;
+	bool			 ar_alloc;
 };
 
 /** ad-hoc allocator transaction handle */
