@@ -1795,7 +1795,7 @@ dtx_comp_cb(void **arg)
 	dlh = arg[0];
 
 	if (dlh->dlh_agg_cb) {
-		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
+		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_allow_failure);
 		return;
 	}
 
@@ -1959,7 +1959,7 @@ dtx_leader_exec_ops_delay_ult(void *arg)
  */
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg)
+		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg)
 {
 	struct dtx_ult_arg	*ult_arg;
 	int			 rc;
@@ -1981,10 +1981,10 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 
 	if (dlh->dlh_delay_sub_cnt > 0) {
 		dlh->dlh_agg_cb = NULL;
-		dlh->dlh_agg_cb_arg = NULL;
+		dlh->dlh_allow_failure = 0;
 	} else {
 		dlh->dlh_agg_cb = agg_cb;
-		dlh->dlh_agg_cb_arg = agg_cb_arg;
+		dlh->dlh_allow_failure = allow_failure;
 	}
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
@@ -2024,11 +2024,17 @@ exec:
 			rc1 = 0;
 	}
 
-	if (rc != 0)
+	if (rc != 0 && rc != allow_failure)
 		return rc;
 
-	if (rc1 != 0 || likely(dlh->dlh_delay_sub_cnt == 0))
+	if (rc1 != 0 && rc1 != allow_failure)
 		return rc1;
+
+	if (likely(dlh->dlh_delay_sub_cnt == 0)) {
+		if (rc == allow_failure && (dlh->dlh_normal_sub_cnt == 0 || rc1 == allow_failure))
+			return allow_failure;
+		return rc != 0 ? rc : rc1;
+	}
 
 	/* For delay forward sub requests. */
 
@@ -2042,7 +2048,7 @@ exec:
 	ult_arg->func_arg = func_arg;
 	ult_arg->dlh = dlh;
 	dlh->dlh_agg_cb = agg_cb;
-	dlh->dlh_agg_cb_arg = agg_cb_arg;
+	dlh->dlh_allow_failure = allow_failure;
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 

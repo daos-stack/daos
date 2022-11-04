@@ -2726,7 +2726,7 @@ again2:
 	exec_arg.start = orw->orw_start_shard;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, 0, &exec_arg);
 
 	/* Stop the distributed transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -3352,19 +3352,13 @@ out:
 }
 
 static int
-obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
+obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 {
-	uint64_t	*flag = agg_arg;
 	uint32_t	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 	int		succeeds = 0;
-	int		allow_failure = 0;
 	int		allow_failure_cnt = 0;
 	int		result = 0;
 	int		i;
-
-	D_ASSERT(flag != NULL);
-	if (*flag & DAOS_COND_PUNCH)
-		allow_failure = -DER_NONEXIST;
 
 	for (i = 0; i < sub_cnt; i++) {
 		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
@@ -3380,11 +3374,11 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 		}
 	}
 
-	D_DEBUG(DB_IO, DF_DTI" %d/%d shards flags "DF_X64" result %d\n",
+	D_DEBUG(DB_IO, DF_DTI" %d/%d allow failure %d, result %d\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt,
-		succeeds, *flag, result);
+		succeeds, allow_failure, result);
 
-	if (*flag & DAOS_COND_PUNCH) {
+	if (allow_failure != 0) {
 		/* For punch, let's ignore DER_NONEXIST if there are shards
 		 * succeed, since the object may not exist on some shards
 		 * due to EC partial update.
@@ -3393,8 +3387,6 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 			D_ASSERT(sub_cnt == allow_failure_cnt);
 			return -DER_NONEXIST;
 		}
-
-		return result;
 	}
 
 	return result;
@@ -3588,7 +3580,8 @@ again2:
 
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch, obj_punch_agg_cb,
-				 &opi->opi_api_flags, &exec_arg);
+				 (opi->opi_api_flags & DAOS_COND_PUNCH) ? -DER_NONEXIST : 0,
+				 &exec_arg);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -4578,7 +4571,7 @@ again:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all targets */
-	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, NULL, &exec_arg);
+	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, 0, &exec_arg);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
