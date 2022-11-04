@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +36,7 @@ class AggregationPunching(MdtestBase):
             self.add_pool(connect=False)
         self.pool.connect()
 
-        storage_index = 1 # SSD
+        storage_index = 1   # SSD
         pool_info = self.pool.pool.pool_query()
         initial_free_space =\
             pool_info.pi_space.ps_space.s_free[storage_index]

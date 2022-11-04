@@ -10,6 +10,17 @@ timeouts:
   test_two_pools: 320
   test_recycle_pools: 640
 
+targets: &engine_targets
+  targets_count: !mux
+    1_target:
+      targets: 1
+    2_targets:
+      targets: 2
+    3_targets:
+      targets: 3
+    4_targets:
+      targets: 4
+
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -44,17 +55,6 @@ server_config:
         1:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
-
-targets: &engine_targets
-  targets_count: !mux
-    1_target:
-      targets: 1
-    2_targets:
-      targets: 2
-    3_targets:
-      targets: 3
-    4_targets:
-      targets: 4
 
 pool:
   control_method: dmg
