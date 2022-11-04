@@ -1040,10 +1040,9 @@ class Launch():
             logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
 
         # Execute the tests
-        code_coverage_hosts = args.test_servers | NodeSet(get_local_host())
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold, code_coverage_hosts)
+            args.rename, args.jenkinslog, core_files, args.logs_threshold)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
