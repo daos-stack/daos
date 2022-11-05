@@ -48,6 +48,7 @@ struct dtx_batched_cont_args {
 	struct sched_request		*dbca_agg_req;
 	struct ds_cont_child		*dbca_cont;
 	struct dtx_batched_pool_args	*dbca_pool;
+	struct dtx_tls			*dbca_tls;
 	int				 dbca_refs;
 	uint32_t			 dbca_reg_gen;
 	uint32_t			 dbca_deregister:1,
@@ -335,7 +336,6 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 	struct sched_req_attr		 attr;
 	struct dtx_batched_cont_args	*victim_dbca = NULL;
 	struct dtx_stat			 victim_stat = { 0 };
-	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(dbpa->dbpa_pool);
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &dbpa->dbpa_pool->spc_uuid);
@@ -358,10 +358,10 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		}
 
 		/* Finish this cycle scan. */
-		if (dbca->dbca_agg_gen == tls->dt_agg_gen)
+		if (dbca->dbca_agg_gen == dbca->dbca_tls->dt_agg_gen)
 			break;
 
-		dbca->dbca_agg_gen = tls->dt_agg_gen;
+		dbca->dbca_agg_gen = dbca->dbca_tls->dt_agg_gen;
 		d_list_move_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
 
 		if (dbca->dbca_agg_req != NULL)
@@ -472,8 +472,8 @@ static void
 dtx_batched_commit_one(void *arg)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
-	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_batched_cont_args	*dbca = arg;
+	struct dtx_tls			*tls = dbca->dbca_tls;
 	struct ds_cont_child		*cont = dbca->dbca_cont;
 
 	if (dbca->dbca_commit_req == NULL)
@@ -1601,6 +1601,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
 	dbca->dbca_pool = dbpa;
+	dbca->dbca_tls = tls;
 	dbca->dbca_agg_gen = tls->dt_agg_gen;
 	d_list_add_tail(&dbca->dbca_sys_link, &dmi->dmi_dtx_batched_cont_close_list);
 	d_list_add_tail(&dbca->dbca_pool_link, &dbpa->dbpa_cont_list);
