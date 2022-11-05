@@ -17,7 +17,7 @@
 #include "srv_internal.h"
 
 /** Destroy the pool on the specified ranks. */
-static int
+int
 ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *filter_ranks)
 {
 	crt_rpc_t			*td_req;

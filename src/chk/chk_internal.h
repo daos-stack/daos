@@ -1038,15 +1038,13 @@ chk_pools_find_slowest(struct chk_instance *ins, bool *done)
 	struct chk_pool_rec	*cpr;
 	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
 
-	if (done != NULL)
-		*done = true;
+	*done = true;
 
 	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
 		if (cpr->cpr_skip || cpr->cpr_done)
 			continue;
 
-		if (done != NULL)
-			*done = false;
+		*done = false;
 
 		if (cpr->cpr_bk.cb_phase < phase)
 			phase = cpr->cpr_bk.cb_phase;

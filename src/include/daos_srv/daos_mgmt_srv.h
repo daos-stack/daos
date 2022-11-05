@@ -34,7 +34,7 @@ ds_mgmt_pool_exist(uuid_t uuid);
 int
 ds_mgmt_tgt_pool_exist(uuid_t uuid, char **path);
 int
-ds_mgmt_tgt_pool_destroy(uuid_t pool_uuid, d_rank_list_t *ranks);
+ds_mgmt_tgt_pool_destroy_ranks(uuid_t pool_uuid, d_rank_list_t *ranks);
 int
 ds_mgmt_tgt_pool_shard_destroy(uuid_t pool_uuid, int shard_idx, d_rank_t rank);
 

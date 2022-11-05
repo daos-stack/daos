@@ -263,7 +263,7 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 			if (index < 0) {
 				ranks.rl_ranks = &rank;
 				ranks.rl_nr = 1;
-				result = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, &ranks);
+				result = ds_mgmt_tgt_pool_destroy_ranks(cpr->cpr_uuid, &ranks);
 			} else {
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
@@ -373,7 +373,7 @@ report:
 			if (index < 0) {
 				ranks.rl_ranks = &rank;
 				ranks.rl_nr = 1;
-				result = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, &ranks);
+				result = ds_mgmt_tgt_pool_destroy_ranks(cpr->cpr_uuid, &ranks);
 			} else {
 				result = ds_mgmt_tgt_pool_shard_destroy(cpr->cpr_uuid, index, rank);
 			}
@@ -509,10 +509,10 @@ report:
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects dangling %s entry in pool map for pool "
 		 DF_UUIDF" rank %u, index %u, action %u (%s), handle_rc %d, report_rc %d, "
-		 "decision %d\n",
+		 "decision %d, expected_status %u\n",
 		 DP_ENGINE(ins), comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act,
-		 option_nr ? "need interact" : "no interact", result, rc, decision);
+		 option_nr ? "need interact" : "no interact", result, rc, decision, status);
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
@@ -533,10 +533,10 @@ report:
 	switch (decision) {
 	default:
 		D_ERROR(DF_ENGINE" got invalid decision %d for dangling %s entry in pool map "
-			"for pool "DF_UUIDF", rank %u, index %u. Ignore the inconsistency.\n",
+			"for pool "DF_UUIDF", rank %u, index %u, expected_status %u. Ignore.\n",
 			DP_ENGINE(ins), decision,
 			comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
-			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index);
+			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, status);
 		/*
 		 * Invalid option, ignore the inconsistency.
 		 *
