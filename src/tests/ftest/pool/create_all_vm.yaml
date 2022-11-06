@@ -17,5 +17,6 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
           scm_size: 4
+          scm_hugepages_disabled: true
 pool:
   control_method: dmg

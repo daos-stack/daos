@@ -375,6 +375,9 @@ func (p *Provider) mountRamdisk(target string, params *storage.RamdiskParams) (*
 	if params.Size > 0 {
 		opts = append(opts, fmt.Sprintf("size=%dg", params.Size))
 	}
+	if !params.DisableHugepages {
+		opts = append(opts, "huge=always")
+	}
 
 	return p.mounter.Mount(storage.MountRequest{
 		Source:     ramFsType,
