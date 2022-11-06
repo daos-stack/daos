@@ -5,8 +5,8 @@
  * tx.h -- internal definitions for transactions
  */
 
-#ifndef DAV_INTERNAL_TX_H
-#define DAV_INTERNAL_TX_H 1
+#ifndef __DAOS_COMMON_INTERNAL_TX_H
+#define __DAOS_COMMON_INTERNAL_TX_H 1
 
 #include <stdint.h>
 

@@ -8,15 +8,11 @@
  * the buckets.
  */
 
-#ifndef LIBPMEMOBJ_RECYCLER_H
-#define LIBPMEMOBJ_RECYCLER_H 1
+#ifndef __DAOS_COMMON_RECYCLER_H
+#define __DAOS_COMMON_RECYCLER_H 1
 
 #include "memblock.h"
 #include "vec.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct recycler;
 VEC(empty_runs, struct memory_block);
@@ -44,8 +40,4 @@ struct empty_runs recycler_recalc(struct recycler *r, int force);
 void recycler_inc_unaccounted(struct recycler *r,
 	const struct memory_block *m);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_RECYCLER_H */
