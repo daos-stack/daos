@@ -248,6 +248,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
 					WithStorageClass("ram").
+					WithScmDisableHugepages().
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
