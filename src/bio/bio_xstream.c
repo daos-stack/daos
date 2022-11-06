@@ -22,6 +22,8 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
+#include "smd.pb-c.h"
+
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */

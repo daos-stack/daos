@@ -14,6 +14,8 @@
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 
+#include "smd.pb-c.h"
+
 #define LED_STATE_NAME(s) (ctl__led_state__descriptor.values[s].name)
 #define LED_ACTION_NAME(a) (ctl__led_action__descriptor.values[a].name)
 
