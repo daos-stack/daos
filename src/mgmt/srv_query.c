@@ -354,7 +354,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
-		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
+		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS,
 				     0, 0);
 		if (rc != 0) {
 			if (rc != -DER_NOSYS)
@@ -621,7 +621,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	led_info.state = &led_state;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
 		if (rc == -DER_NOSYS)
@@ -674,7 +674,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.state = &led_state;
 
 	/* Manage the VMD LED state on init xstream */
-	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
+	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_SYS, 0, 0);
 	if (rc == -DER_NOSYS)
 		resp->device->led_state = CTL__LED_STATE__NA;
 	else if (rc == 0)
