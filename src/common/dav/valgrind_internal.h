@@ -134,15 +134,18 @@ extern unsigned _On_drd_or_hg;
 extern unsigned _On_pmemcheck;
 #define On_pmemcheck __builtin_expect(_On_pmemcheck, 0)
 
-#include "valgrind/pmemcheck.h"
-
-void pobj_emit_log(const char *func, int order);
-void pmem_emit_log(const char *func, int order);
-void pmem2_emit_log(const char *func, int order);
 extern int _Pmreorder_emit;
-
 #define Pmreorder_emit __builtin_expect(_Pmreorder_emit, 0)
 
+void util_emit_log(const char *lib, const char *func, int order);
+
+static inline void
+pobj_emit_log(const char *func, int order)
+{
+	util_emit_log("libdaos_common_pmem.so", func, order);
+}
+
+#include "valgrind/pmemcheck.h"
 #define VALGRIND_REGISTER_PMEM_MAPPING(addr, len) do {\
 	if (On_pmemcheck)\
 		VALGRIND_PMC_REGISTER_PMEM_MAPPING((addr), (len));\
@@ -258,24 +261,8 @@ extern int _Pmreorder_emit;
 	if (Pmreorder_emit)\
 		pobj_emit_log(__func__, 1);\
 } while (0)
-#define PMEM_API_START() do {\
-	if (Pmreorder_emit)\
-		pmem_emit_log(__func__, 0);\
-} while (0)
-#define PMEM_API_END() do {\
-	if (Pmreorder_emit)\
-		pmem_emit_log(__func__, 1);\
-} while (0)
-#define PMEM2_API_START(func_name) do {\
-	if (Pmreorder_emit)\
-		pmem2_emit_log(func_name, 0);\
-} while (0)
-#define PMEM2_API_END(func_name) do {\
-	if (Pmreorder_emit)\
-		pmem2_emit_log(func_name, 1);\
-} while (0)
 
-#else
+#else /* VG_PMEMCHECK_ENABLED */
 
 #define On_pmemcheck (0)
 #define Pmreorder_emit (0)
@@ -365,14 +352,7 @@ extern int _Pmreorder_emit;
 
 #define PMEMOBJ_API_END() do {} while (0)
 
-#define PMEM_API_START() do {} while (0)
-
-#define PMEM_API_END() do {} while (0)
-
-#define PMEM2_API_START(func_name) { (void) (func_name); }
-
-#define PMEM2_API_END(func_name) { (void) (func_name); }
-#endif
+#endif /* VG_PMEMCHECK_ENABLED */
 
 #if VG_MEMCHECK_ENABLED
 
