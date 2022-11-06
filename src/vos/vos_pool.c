@@ -94,7 +94,7 @@ vos_delete_blob(uuid_t pool_uuid)
 	int			 rc;
 
 	/* NVMe device isn't configured */
-	if (!bio_nvme_configured() || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		return;
 
 	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
@@ -306,7 +306,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	}
 
 	/* Create SPDK blob on NVMe device */
-	if (bio_nvme_configured()) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
 		D_DEBUG(DB_MGMT,
 			"Creating blobs for xs:%p pool:"DF_UUID" scm_sz: %llu, nvme_sz: %llu\n",
 			xs_ctxt, DP_UUID(uuid), (unsigned long long)scm_sz,
@@ -400,7 +400,7 @@ end:
 	}
 
 	/* SCM only pool or NVMe device isn't configured */
-	if (nvme_sz == 0 || !bio_nvme_configured())
+	if (nvme_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_MAX))
 		goto open;
 
 	/* Format SPDK blob header */
@@ -732,7 +732,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	pool->vp_metrics = metrics;
-	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_DATA) && pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context	 unmap_ctxt;
 		struct vos_pool_metrics		*vp_metrics = metrics;
 		void				*vea_metrics = NULL;
@@ -830,7 +830,7 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		}
 	}
 
-	if (bio_is_meta_on_ssd_configured()) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		rc = bio_mc_open(xs_ctxt, uuid, flags & VOS_POF_SYSDB ? BIO_MC_FL_SYSDB : 0,
