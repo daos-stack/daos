@@ -787,6 +787,7 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  * \param action	[IN]		Action to perform on the VMD device
  * \param state		[IN,OUT]	State to set the LED to (i.e. identify, off, fault/on)
  *					Update to reflect transition after action
+ * \param duration	[IN]		Time period to blink (identify) the LED for
  *
  * \return				Zero on success, negative value on error
  */
