@@ -9,8 +9,12 @@
 #define __DAOS_COMMON_OUT_H 1
 
 #include <daos/debug.h>
+#include "util.h"
 
 #define DAV_LOG_FAC DB_TRACE
+
+/* enable extra debug messages and extra checks */
+/*#define DAV_EXTRA_DEBUG*/
 
 #define MAX_BT_ENTRIES 256
 static __thread void *bt[MAX_BT_ENTRIES];
@@ -28,7 +32,7 @@ static inline void dav_print_backtrace(void)
 }
 
 #ifndef EVALUATE_DBG_EXPRESSIONS
-#if defined(DEBUG) || defined(__clang_analyzer__) || defined(__COVERITY__) ||\
+#if defined(DAV_EXTRA_DEBUG) || defined(__clang_analyzer__) || defined(__COVERITY__) ||\
 	defined(__KLOCWORK__)
 #define EVALUATE_DBG_EXPRESSIONS 1
 #else
@@ -50,9 +54,13 @@ static inline void dav_print_backtrace(void)
 } while (0)
 
 /* produce debug/trace output */
+#if defined(DAV_EXTRA_DEBUG)
 #define DAV_DEBUG(fmt, ...) do {			\
 	D_DEBUG(DAV_LOG_FAC, fmt "\n", ## __VA_ARGS__);	\
 } while (0)
+#else
+#define DAV_DEBUG(fmt, ...) SUPPRESS_UNUSED(__VA_ARGS__);
+#endif
 
 /* produce output and exit */
 #define FATAL(fmt, ...)					\

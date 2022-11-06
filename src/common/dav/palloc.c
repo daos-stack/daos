@@ -271,12 +271,12 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	const struct dav_action_internal *act,
 	struct operation_context *ctx)
 {
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
 		D_CRIT("invalid operation or heap corruption\n");
 		ASSERT(0);
 	}
-#endif /* DEBUG */
+#endif
 
 	/*
 	 * The actual required metadata modifications are chunk-type

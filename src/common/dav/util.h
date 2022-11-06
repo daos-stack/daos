@@ -162,17 +162,18 @@ util_div_ceil(unsigned a, unsigned b)
 
 /* macro for counting the number of varargs (up to 9) */
 #define COUNT(...)\
-	COUNT_I(__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#define COUNT_I(_, _9, _8, _7, _6, _5, _4, _3, _2,  X, ...) X
+	COUNT_11TH(_, ##__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+#define COUNT_11TH(_11, _10, _9, _8, _7, _6, _5, _4, _3, _2,  X, ...) X
 
 /* concatenation macro */
 #define GLUE(A, B) GLUE_I(A, B)
 #define GLUE_I(A, B) A##B
 
-/* macro for suppresing errors from unused variables (up to 9) */
+/* macro for suppresing errors from unused variables (zero to 9) */
 #define SUPPRESS_UNUSED(...)\
 	GLUE(SUPPRESS_ARG_, COUNT(__VA_ARGS__))(__VA_ARGS__)
-#define SUPPRESS_ARG_1(X) ((void) X)
+#define SUPPRESS_ARG_0(X)
+#define SUPPRESS_ARG_1(X) ((void) (X))
 #define SUPPRESS_ARG_2(X, ...) do {\
 	SUPPRESS_ARG_1(X); SUPPRESS_ARG_1(__VA_ARGS__);\
 } while (0)

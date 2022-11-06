@@ -858,7 +858,7 @@ run_ensure_header_type(const struct memory_block *m,
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(m, t);
 
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
 	ASSERTeq(hdr->type, CHUNK_TYPE_RUN);

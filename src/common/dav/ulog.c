@@ -609,7 +609,7 @@ ulog_process(struct ulog *ulog, ulog_check_offset_fn check,
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(check);
 
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	if (check)
 		ulog_check(ulog, check, p_ops);
 #endif

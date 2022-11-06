@@ -491,7 +491,7 @@ alloc_class_collection_new()
 	ac->last_run_max_size = theoretical_run_max_size <= MAX_RUN_SIZE ?
 		theoretical_run_max_size : MAX_RUN_SIZE;
 
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	/*
 	 * Verify that each bucket's unit size points back to the bucket by the
 	 * bucket map. This must be true for the default allocation classes,
