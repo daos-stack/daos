@@ -2019,7 +2019,7 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
 			/* fall through and create a new one */
-		} if (!arena2heap_node(arena)->mh_active) {
+		} else if (!arena2heap_node(arena)->mh_active) {
 			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
 			arena_decref(arena);
 			arena = NULL;
