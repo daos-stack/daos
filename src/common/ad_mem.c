@@ -1995,7 +1995,7 @@ tx_complete(struct ad_tx *tx, int err)
 	}
 
 	if (arena_last != NULL) {
-		arena_reorder_if_needed(arena);
+		arena_reorder_if_needed(arena_last);
 		arena_decref(arena_last);
 	}
 	/* TODO: if rc != 0, run all undo operations */
