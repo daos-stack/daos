@@ -47,34 +47,11 @@ struct tx {
  * This function should be used only in high-level functions.
  */
 static struct tx *
-get_tx_nochk(void)
+get_tx()
 {
 	static __thread struct tx tx;
 
 	return &tx;
-}
-
-static struct tx *
-get_tx(dav_obj_t *pop)
-{
-	struct tx *tx = get_tx_nochk();
-
-	if (pop != NULL) {
-		if (tx->pop == NULL)
-			tx->pop = pop;
-		else {
-			if (tx->pop != pop) {
-				ERR("tx stage=%d pop:%p new:%p", tx->stage, tx->pop, pop);
-				dav_print_backtrace();
-			}
-			D_ASSERT(tx->pop == pop);
-		}
-	}
-	if (tx->pop == NULL)
-		dav_print_backtrace();
-	D_ASSERT(tx->pop != NULL);
-
-	return tx;
 }
 
 struct tx_alloc_args {
@@ -324,7 +301,7 @@ tx_pre_commit(struct tx *tx)
 static void
 tx_abort(dav_obj_t *pop)
 {
-	struct tx *tx = get_tx(pop);
+	struct tx *tx = get_tx();
 
 	tx_abort_set(pop);
 
@@ -483,7 +460,7 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 {
 
 	int err = 0;
-	struct tx *tx = get_tx(pop);
+	struct tx *tx = get_tx();
 
 	enum dav_tx_failure_behavior failure_behavior = DAV_TX_FAILURE_ABORT;
 
@@ -619,7 +596,7 @@ obj_tx_callback(struct tx *tx)
 enum dav_tx_stage
 dav_tx_stage(void)
 {
-	return get_tx_nochk()->stage;
+	return get_tx()->stage;
 }
 
 /*
@@ -628,11 +605,10 @@ dav_tx_stage(void)
 static void
 obj_tx_abort(int errnum, int user)
 {
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
-
 	ASSERT(tx->pop != NULL);
 
 	if (errnum == 0)
@@ -681,9 +657,9 @@ dav_tx_abort(int errnum)
 int
 dav_tx_errno(void)
 {
-	DAV_DEBUG("err:%d", get_tx(NULL)->last_errnum);
+	DAV_DEBUG("err:%d", get_tx()->last_errnum);
 
-	return get_tx(NULL)->last_errnum;
+	return get_tx()->last_errnum;
 }
 
 static void
@@ -699,7 +675,7 @@ void
 dav_tx_commit(void)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -742,7 +718,7 @@ dav_tx_commit(void)
 int
 dav_tx_end(void)
 {
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	if (tx->stage == DAV_TX_STAGE_WORK)
 		FATAL("dav_tx_end called without dav_tx_commit");
@@ -1077,10 +1053,11 @@ int
 dav_tx_add_range_direct(const void *ptr, size_t size)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
+	ASSERT(tx->pop != NULL);
 
 	int ret;
 
@@ -1114,7 +1091,7 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 {
 
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1159,7 +1136,7 @@ int
 dav_tx_add_range(uint64_t hoff, size_t size)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1189,7 +1166,7 @@ int
 dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
 {
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1229,7 +1206,7 @@ dav_tx_alloc(size_t size, uint64_t type_num)
 	uint64_t off;
 
 	PMEMOBJ_API_START();
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1257,7 +1234,7 @@ uint64_t
 dav_tx_zalloc(size_t size, uint64_t type_num)
 {
 	uint64_t off;
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1288,7 +1265,7 @@ uint64_t
 dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 {
 	uint64_t off;
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1325,7 +1302,7 @@ dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
 static int
 dav_tx_xfree(uint64_t off, uint64_t flags)
 {
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1343,13 +1320,7 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 
 	dav_obj_t *pop = tx->pop;
 
-#if DEBUG
-	if (pop->do_phdr->dp_uuid_lo != tx->pop->do_phdr->pool_uuid_lo) {
-		ERR("invalid pool uuid");
-		return obj_tx_fail_err(EINVAL, flags);
-	}
-#endif
-
+	ASSERT(pop != NULL);
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
 
 	PMEMOBJ_API_START();
@@ -1408,10 +1379,11 @@ dav_tx_free(uint64_t off)
 void*
 dav_tx_off2ptr(uint64_t off)
 {
-	struct tx *tx = get_tx_nochk();
+	struct tx *tx = get_tx();
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
+	ASSERT(tx->pop != NULL);
 
 	ASSERT(OBJ_OFF_IS_VALID(tx->pop, off));
 	return (void *)OBJ_OFF_TO_PTR(tx->pop, off);
@@ -1497,7 +1469,7 @@ dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 int
 dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 {
-	struct tx *tx = get_tx(NULL);
+	struct tx *tx = get_tx();
 	uint64_t flags = 0;
 	uint64_t off, size;
 	int ret;
@@ -1720,20 +1692,17 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 
 	operation_start(ctx);
 
-	/* set pool for atomic pseudo tx */
-	(void)get_tx(pop);
+	/* TODO set pool for atomic pseudo tx */
 
 	int ret = palloc_operation(pop->do_heap, 0, offp, size,
 			constructor_alloc, &carg, type_num, 0,
 			CLASS_ID_FROM_FLAG(flags), ARENA_ID_FROM_FLAG(flags),
 			ctx);
 
-	if (ret == 0)
-		wal_tx_commit(pop);
-
 	if (ret == 0) {
 		struct wal_tx *wal_tx = &pop->do_wtx;
 
+		wal_tx_commit(pop);
 		DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
 			  wal_tx->wt_id,
 			  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
