@@ -56,6 +56,8 @@ bool bio_spdk_inited;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
+/* FIXME: Remove it once md on SSD feature is fully done */
+static bool md_on_ssd_enabled;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -82,15 +84,6 @@ struct bio_nvme_data {
 
 static struct bio_nvme_data nvme_glb;
 uint64_t vmd_led_period;
-
-static int (*bio_sys_smd_init)(void);
-static void (*bio_sys_smd_fini)(void);
-
-void bio_register_smd_ops(int (*sys_smd_init)(void), void (*sys_smd_fini)(void))
-{
-	bio_sys_smd_init = sys_smd_init;
-	bio_sys_smd_fini = sys_smd_fini;
-}
 
 static int
 bio_spdk_env_init(void)
@@ -213,6 +206,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
+
+	d_getenv_bool("DAOS_MD_ON_SSD_ENABLED", &md_on_ssd_enabled);
+	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -743,6 +739,7 @@ bdev_name2roles(const char *name)
 	if (value & (~NVME_ROLE_ALL))
 		return -DER_INVAL;
 
+	D_INFO("bdev name:%s, bdev role:%u\n", name, value);
 	return value;
 }
 
@@ -1073,6 +1070,14 @@ bio_nvme_configured(enum smd_dev_type type)
 
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
+	/*
+	 * FIXME When storage class 'ram' is used in server yaml, control
+	 * plane regards MD on SSD is enabled and meta role will be set to
+	 * bdev name, that'll fail CI tests before the md on SSD feature is
+	 * fully implemented.
+	 */
+	if (type == SMD_DEV_TYPE_META && !md_on_ssd_enabled)
+		return false;
 
 	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
 }
@@ -1466,9 +1471,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		ctxt->bxc_dma_buf = NULL;
 	}
 
-	if (ctxt->bxc_tgt_id == BIO_SYS_TGT_ID)
-		bio_sys_smd_fini();
-
 	D_FREE(ctxt);
 }
 
@@ -1585,12 +1587,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		D_ASSERT(bbs != NULL);
 		d_bdev = bbs->bb_dev;
 		D_ASSERT(d_bdev != NULL);
-	}
-
-	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
-		rc = bio_sys_smd_init();
-		if (rc)
-			goto out;
 	}
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
