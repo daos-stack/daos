@@ -2808,6 +2808,10 @@ free:
 			ds_cont_child_put(cont_child);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
+	    tls->mpt_obj_count >= daos_fail_value_get())
+		rc = -DER_IO;
+
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3281,6 +3285,8 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 						  migrate_in->om_max_eph, migrate_in->om_opc);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	if (pool_tls->mpt_fini)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 
 	/* NB: only create this tree on xstream 0 */
 	rc = migrate_try_create_object_tree(pool_tls);
