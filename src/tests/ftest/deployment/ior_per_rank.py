@@ -33,7 +33,7 @@ class IorPerRank(IorTestBase):
         self.log.info("Running Test on rank: %s", rank)
         # create the pool on specified rank.
         self.add_pool(connect=False, target_list=[rank])
-        
+
         # execute ior on given rank for different transfer sizes and collect the results
         for idx, _ in enumerate(self.transfer_sizes):
             self.ior_cmd.transfer_size.update(self.transfer_sizes[idx])
