@@ -2176,7 +2176,7 @@ class Launch():
                         if os.path.isfile(old_file):
                             new_name = name.split(".")
                             new_name.insert(1, host_ext[-1])
-                            new_file = os.path.join(bullseye_dir, new_name)
+                            new_file = os.path.join(bullseye_dir, ".".join(new_name))
                             logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
         return status
