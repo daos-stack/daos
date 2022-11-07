@@ -78,6 +78,9 @@ struct dav_action_internal {
 		uint64_t data2[14];
 	};
 };
+_Static_assert(offsetof(struct dav_action_internal, data2) ==
+	       offsetof(struct dav_action, data2),
+	       "struct dav_action misaligned!");
 
 /*
  * palloc_set_value -- creates a new set memory action
