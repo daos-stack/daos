@@ -1104,6 +1104,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	daos_off_t		 phy_lo = 0;
 	unsigned int		 i, seg_count, biov_idx = 0;
 	struct bio_copy_desc	*copy_desc;
+	struct umem_instance	*umem;
 	int			 rc;
 
 	D_ASSERT(obj != NULL);
@@ -1121,6 +1122,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	bio_ctxt = bio_mc2data(obj->obj_cont->vc_pool->vp_meta_context);
 	D_ASSERT(bio_ctxt != NULL);
+	umem = &obj->obj_cont->vc_pool->vp_umm;
 
 	seg_count = lgc_seg->ls_idx_end - lgc_seg->ls_idx_start + 1;
 	rc = bio_sgl_init(&bsgl, seg_count);
@@ -1202,7 +1204,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
 	bio_iov_set(&bsgl_dst.bs_iovs[0], ent_in->ei_addr, seg_size);
 
-	copy_desc = bio_copy_prep(bio_ctxt, &bsgl, &bsgl_dst);
+	copy_desc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst);
 	if (copy_desc == NULL) {
 		D_ERROR("Failed to Prepare source & target SGLs for copy.\n");
 		goto out;
