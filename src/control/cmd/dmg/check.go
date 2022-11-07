@@ -70,7 +70,13 @@ type checkEnableCmd struct {
 
 func (cmd *checkEnableCmd) Execute([]string) error {
 	req := new(control.SystemCheckEnableReq)
-	return control.SystemCheckEnable(context.Background(), cmd.ctlInvoker, req)
+	if err := control.SystemCheckEnable(context.Background(), cmd.ctlInvoker, req); err != nil {
+		return err
+	}
+
+	cmd.Info("system checker enabled")
+
+	return nil
 }
 
 type checkDisableCmd struct {
@@ -79,7 +85,13 @@ type checkDisableCmd struct {
 
 func (cmd *checkDisableCmd) Execute([]string) error {
 	req := new(control.SystemCheckDisableReq)
-	return control.SystemCheckDisable(context.Background(), cmd.ctlInvoker, req)
+	if err := control.SystemCheckDisable(context.Background(), cmd.ctlInvoker, req); err != nil {
+		return err
+	}
+
+	cmd.Info("system checker disabled")
+
+	return nil
 }
 
 type setRepPolFlag struct {
@@ -129,11 +141,12 @@ func (f *setRepPolFlag) Complete(match string) []flags.Completion {
 type checkStartCmd struct {
 	checkPoolCmdBase
 
-	DryRun   bool          `short:"n" long:"dry-run" description:"Scan only; do not initiate repairs."`
-	Reset    bool          `short:"r" long:"reset" description:"Reset the system check state."`
-	Failout  bool          `short:"f" long:"failout" description:"Stop on failure."`
-	Auto     bool          `short:"a" long:"auto" description:"Attempt to automatically repair problems."`
-	Policies setRepPolFlag `short:"p" long:"policies" description:"Set repair policies."`
+	DryRun      bool           `short:"n" long:"dry-run" description:"Scan only; do not initiate repairs."`
+	Reset       bool           `short:"r" long:"reset" description:"Reset the system check state."`
+	Failout     ui.EnabledFlag `short:"f" long:"failout" description:"Stop on failure." choice:"on" choice:"off"`
+	Auto        ui.EnabledFlag `short:"a" long:"auto" description:"Attempt to automatically repair problems." choice:"on" choice:"off"`
+	FindOrphans bool           `short:"O" long:"find-orphans" description:"Find orphaned pools."`
+	Policies    setRepPolFlag  `short:"p" long:"policies" description:"Set repair policies."`
 }
 
 func (cmd *checkStartCmd) Execute(_ []string) error {
@@ -148,11 +161,22 @@ func (cmd *checkStartCmd) Execute(_ []string) error {
 	if cmd.Reset {
 		req.Flags |= uint32(control.SystemCheckFlagReset)
 	}
-	if cmd.Failout {
-		req.Flags |= uint32(control.SystemCheckFlagFailout)
+	if cmd.Failout.Set {
+		if cmd.Failout.Enabled {
+			req.Flags |= uint32(control.SystemCheckFlagFailout)
+		} else {
+			req.Flags |= uint32(control.SystemCheckFlagDisableFailout)
+		}
 	}
-	if cmd.Auto {
-		req.Flags |= uint32(control.SystemCheckFlagAuto)
+	if cmd.Auto.Set {
+		if cmd.Auto.Enabled {
+			req.Flags |= uint32(control.SystemCheckFlagAuto)
+		} else {
+			req.Flags |= uint32(control.SystemCheckFlagDisableAuto)
+		}
+	}
+	if cmd.FindOrphans {
+		req.Flags |= uint32(control.SystemCheckFlagFindOrphans)
 	}
 	req.Policies = cmd.Policies.SetPolicies
 
@@ -212,8 +236,10 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 type checkSetPolicyCmd struct {
 	checkCmdBase
 
-	Args struct {
-		Policies setRepPolFlag `description:"Repair policies" required:"1"`
+	ResetToDefaults bool `short:"d" long:"reset-defaults" description:"Set all policies to their default action."`
+	AllInteractive  bool `short:"a" long:"all-interactive" description:"Set all policies to interactive."`
+	Args            struct {
+		Policies setRepPolFlag `description:"Repair policies (required unless --all-interactive is specified)"`
 	} `positional-args:"yes"`
 }
 
@@ -221,13 +247,11 @@ func (cmd *checkSetPolicyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
 	req := &control.SystemCheckSetPolicyReq{
-		Policies: cmd.Args.Policies.SetPolicies,
+		ResetToDefaults: cmd.ResetToDefaults,
+		AllInteractive:  cmd.AllInteractive,
+		Policies:        cmd.Args.Policies.SetPolicies,
 	}
-	err := control.SystemCheckSetPolicy(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
-	}
-	if err != nil {
+	if err := control.SystemCheckSetPolicy(ctx, cmd.ctlInvoker, req); err != nil {
 		return err
 	}
 
