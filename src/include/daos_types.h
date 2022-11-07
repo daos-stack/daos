@@ -132,8 +132,8 @@ typedef struct {
 	uuid_t			ci_uuid;
 	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
-	/** Redundancy factor */
-	uint32_t		ci_redun_fac;
+	/** Number of open handles */
+	uint32_t		ci_nhandles;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Latest open time (hybrid logical clock) */

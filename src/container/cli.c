@@ -772,7 +772,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
-	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
+	arg->coa_info->ci_nhandles = out->coo_nhandles;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
@@ -1188,9 +1188,7 @@ cont_query_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
-
-	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
-
+	arg->cqa_info->ci_nhandles = out->cqo_nhandles;
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
 	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 	arg->cqa_info->ci_md_otime = out->cqo_md_otime;

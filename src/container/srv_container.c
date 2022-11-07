@@ -29,6 +29,7 @@
 #include "gurt/telemetry_producer.h"
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
+#define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -309,7 +310,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 }
 
 
-/* Get or update container open and metadata modify times, if the co_md_times key exists in rdb */
+/* Get container open and metadata modify times, if the co_md_times key exists in rdb */
 static int
 get_metadata_times(struct rdb_tx *tx, struct cont *cont, struct co_md_times *mdtimes)
 {
@@ -338,6 +339,7 @@ err:
 	return rc;
 }
 
+/* Update container open and metadata modify times, if the co_md_times key exists in rdb */
 static int
 update_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool update_mtime)
 {
@@ -379,6 +381,80 @@ update_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, b
 		update_mtime ? "updated" : "unchanged", upd_mdtimes.mtime);
 
 	return 0;
+}
+
+/* Get container number of open handles, if the key exists in rdb */
+static int
+get_nhandles(struct rdb_tx *tx, struct cont *cont, uint32_t *nhandles)
+{
+	uint32_t	result = 0;
+	d_iov_t		value;
+	int		rc;
+
+	d_iov_set(&value, &result, sizeof(result));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+	if (rc == -DER_NONEXIST)
+		goto out;		/* pool/container has old layout without nhandles */
+	else if (rc != 0) {
+		D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto err;
+	}
+
+	D_DEBUG(DB_MD, DF_CONT": nhandles=%u\n", DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		result);
+
+out:
+	*nhandles = result;
+	return 0;
+err:
+	return rc;
+}
+
+enum nhandles_op {
+	NHANDLES_INCREMENT = 0,
+	NHANDLES_DECREMENT
+};
+
+/* Increment or decrement container number of open handles, if the key exists in rdb */
+static int
+update_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t *nhandles)
+{
+	uint32_t	result = 0;
+	uint32_t	orig_val;
+	d_iov_t		value;
+	int		rc;
+
+	d_iov_set(&value, &result, sizeof(result));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+	if (rc == -DER_NONEXIST)
+		goto out;		/* pool/container has old layout without nhandles */
+	else if (rc != 0) {
+		D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto err;
+	}
+
+	orig_val = result;
+	result = (op == NHANDLES_INCREMENT) ? (result + 1) : (result -1 );
+
+	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto err;
+	}
+
+	D_DEBUG(DB_MD, DF_CONT": %s nhandles %u -> %u\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		(op == NHANDLES_INCREMENT) ? "incremented" : "decremented", orig_val, result);
+
+out:
+	if (nhandles)
+		*nhandles = result;
+	return 0;
+err:
+	return rc;
 }
 
 /* check if container exists by UUID and (if applicable) non-default label */
@@ -944,6 +1020,20 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_DEBUG(DB_MD, DF_CONT": set metadata times: open="DF_X64", modify="DF_X64"\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), mdtimes.otime,
 			mdtimes.mtime);
+	}
+
+	/* Number of open handles */
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES) {
+		uint32_t	nhandles = 0;
+
+		d_iov_set(&value, &nhandles, sizeof(nhandles));
+		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_nhandles, &value);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": create nhandles failed: "DF_RC"\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid),
+				DP_RC(rc));
+			goto out_kvs;
+		}
 	}
 
 	/* write container properties to rdb. */
@@ -1809,6 +1899,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uint32_t		stat_pm_ver = 0;
 	uint64_t		sec_capas = 0;
 	uint32_t		snap_count;
+	uint32_t		nhandles;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " flags=" DF_X64 "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
@@ -1981,6 +2072,26 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->coo_lsnapshot);
 	}
 
+	/* Get number of open handles (increment after, update not included in RPC reply) */
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
+		rc = get_nhandles(tx, cont, &nhandles);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": get_nhandles() failed: "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+		out->coo_nhandles = nhandles;
+	}
+
+	rc = update_nhandles(tx, cont, NHANDLES_INCREMENT, &nhandles);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": update_nhandles(increment) failed: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out;
+	}
+	D_DEBUG(DB_MD, DF_CONT": incremented nhandles %u -> %u\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), (nhandles - 1), nhandles);
+
 out:
 	if (rc == 0) {
 		/**
@@ -2041,8 +2152,7 @@ out:
 }
 
 static int
-cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
-		   crt_context_t ctx, const uuid_t uuid)
+cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, crt_context_t ctx, const uuid_t uuid)
 {
 	d_iov_t			key;
 	d_iov_t			value;
@@ -2060,6 +2170,11 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 	rc = cont_lookup(tx, svc, chdl.ch_cont, &cont);
 	if (rc != 0)
 		return rc;
+
+	/* Decrement number of open handles */
+	rc = update_nhandles(tx, cont, NHANDLES_DECREMENT, NULL /* nhandles */);
+	if (rc != 0)
+		goto out;
 
 	rc = rdb_tx_delete(tx, &cont->c_hdls, &key);
 	if (rc != 0)
@@ -2726,6 +2841,16 @@ cont_info_read(struct rdb_tx *tx, struct cont *cont, int cont_proto_ver, daos_co
 		out.ci_md_mtime = mdtimes.mtime;
 	}
 
+	/* Get number of open handles */
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
+		rc = get_nhandles(tx, cont, &out.ci_nhandles);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": get_nhandles failed, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+	}
+
 out:
 	if (rc == 0)
 		*cinfo = out;
@@ -2767,6 +2892,9 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		out_v7->cqo_md_otime = cinfo.ci_md_otime;
 		out_v7->cqo_md_mtime = cinfo.ci_md_mtime;
 	}
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES)
+		out->cqo_nhandles = cinfo.ci_nhandles;
 
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
@@ -3444,8 +3572,7 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	hdl = val->iov_buf;
 
-	if (!shall_close(hdl->ch_pool_hdl, arg->cia_pool_hdls,
-			 arg->cia_n_pool_hdls))
+	if (!shall_close(hdl->ch_pool_hdl, arg->cia_pool_hdls, arg->cia_n_pool_hdls))
 		return 0;
 
 	rc = recs_buf_grow(buf);
@@ -3687,7 +3814,11 @@ cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filt
 		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
 		val64 = (uint64_t)val32;
 		break;
-	/* TODO: track number of open handles in rdb, add matching, e.g., PCF_KEY_NUM_HANDLES */
+	case PCF_KEY_NUM_HANDLES:
+		d_iov_set(&value, &val32, sizeof(val32));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+		val64 = (uint64_t)val32;
+		break;
 	default:
 		/* Should not be here so long as caller verifies. See pool_cont_filter_is_valid() */
 		rc = -DER_INVAL;
@@ -3983,6 +4114,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	bool				 upgraded = false;
 	uint32_t			 global_ver = 0;
 	uint32_t			 from_global_ver;
+	uint32_t			 nhandles = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	struct co_md_times		 mdtimes;
@@ -4105,21 +4237,39 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		upgraded = true;
 	}
 
+	/* Initialize number of open handles to zero */
+	d_iov_set(&value, &nhandles, sizeof(nhandles));
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container nhandles pool/cont: "DF_CONTF
+				", "DF_RC"\n", DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+			goto out;
+		}
+		upgraded = true;
+	}
+
 	/* Initialize or update container open / metadata modify times.
-	 * Update even when the container already has co_md_times key in properties KVS.
+	 * Update modify time even when the container already has co_md_times key in properties KVS.
 	 */
 	d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_co_md_times, &value);
 	if (rc && rc != -DER_NONEXIST)
 		goto out;
-	if ((rc == -DER_NONEXIST) &&
-	    (from_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES)) {
-		D_ERROR(DF_CONT": version %u container metadata is missing key co_md_times!\n",
-			DP_CONT(ap->pool_uuid, cont_uuid), from_global_ver);
-		goto out;
+	else if (rc == -DER_NONEXIST) {
+		if (from_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES) {
+			D_ERROR(DF_CONT": version %u container metadata is missing co_md_times!\n",
+				DP_CONT(ap->pool_uuid, cont_uuid), from_global_ver);
+			goto out;
+		}
+
+		mdtimes.otime = 0;
 	}
-	mdtimes.otime = 0;
+
 	mdtimes.mtime = crt_hlc_get();
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 	if (rc) {

@@ -37,6 +37,8 @@ co_create(void **state)
 
 	/** create container */
 	if (arg->myrank == 0) {
+		daos_handle_t	 coh2;
+
 		print_message("creating container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
 		rc = daos_cont_create(arg->pool.poh, &uuid, NULL,
@@ -52,7 +54,28 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(info.ci_nhandles, 0);
 		print_message("container opened\n");
+
+		/* Open a second time to verify num handles was incremented */
+		rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh2,
+				    &info, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(info.ci_nhandles, 1);
+		print_message("container opened (coh2)\n");
+
+		rc = daos_cont_close(coh2, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		print_message("container closed (coh2)\n");
+
+		/* Query with first handle (coh), verify num handles was decremented 2 -> 1 */
+		info.ci_nhandles = 0xABCD0123;
+		rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(info.ci_nhandles, 1);
 	}
 
 	if (arg->hdl_share)
@@ -2240,9 +2263,16 @@ co_rf_simple(void **state)
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		daos_prop_t	*prop_out = daos_prop_alloc(1);
+
+		assert_non_null(prop_out);
+		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+
+		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_RF2);
+
+		daos_prop_free(prop_out);
 	}
 	par_barrier(PAR_COMM_WORLD);
 

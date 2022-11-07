@@ -51,6 +51,8 @@ RDB_STRING_KEY(ds_cont_prop_, rp_pda);
 RDB_STRING_KEY(ds_cont_prop_, cont_global_version);
 RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, co_md_times);
+RDB_STRING_KEY(ds_cont_prop_, nhandles);
+
 
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;

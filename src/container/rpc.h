@@ -183,7 +183,7 @@ CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 	((daos_prop_t)		(coo_prop)		CRT_PTR) \
 	((daos_epoch_t)		(coo_lsnapshot)		CRT_VAR) \
 	((uint32_t)		(coo_snap_count)	CRT_VAR) \
-	((uint32_t)		(coo_pad)		CRT_VAR)
+	((uint32_t)		(coo_nhandles)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -199,8 +199,9 @@ CRT_RPC_DECLARE(cont_open_v7, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V7)
 
 CRT_RPC_DECLARE(cont_open_v6, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V6)
 
-/* version in which cont open, metadata modify times were added to container open, query RPCs */
+/* version in which metadata open/modify times and number of handles added to open, query RPCs */
 #define CONT_PROTO_VER_WITH_MDTIMES 7
+#define CONT_PROTO_VER_WITH_NHANDLES 7
 
 /* Container open bylabel input
  * Must begin with what DAOS_ISEQ_CONT_OPEN has, for reusing cont_open_in
@@ -286,7 +287,7 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
 	((daos_epoch_t)		(cqo_lsnapshot)		CRT_VAR) \
 	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
-	((uint32_t)		(cqo_pad)		CRT_VAR)
+	((uint32_t)		(cqo_nhandles)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 

@@ -3344,10 +3344,14 @@ pool_cont_filter_is_valid(uuid_t pool_uuid, daos_pool_cont_filter_t *filt)
 	for (i = 0; i < filt->pcf_nparts; i++) {
 		daos_pool_cont_filter_part_t *part = filt->pcf_parts[i];
 
-		if (part->pcfp_key >= PCF_FUNC_MAX) {
+		if (part->pcfp_key >= PCF_KEY_MAX) {
 			D_ERROR(DF_UUID": filter part key %u is outside of valid range %u..%u\n",
-				DP_UUID(pool_uuid), part->pcfp_key, PCF_FUNC_EQ,
-				(PCF_FUNC_MAX - 1));
+				DP_UUID(pool_uuid), part->pcfp_key, 0, (PCF_KEY_MAX - 1));
+			return false;
+		}
+		if (part->pcfp_func >= PCF_FUNC_MAX) {
+			D_ERROR(DF_UUID": filter part func %u is outside of valid range %u..%u\n",
+				DP_UUID(pool_uuid), part->pcfp_key, 0, (PCF_FUNC_MAX - 1));
 			return false;
 		}
 		D_DEBUG(DB_MD, DF_UUID": filter part %u: key(%s) %s "DF_U64"\n",

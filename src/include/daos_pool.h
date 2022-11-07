@@ -509,9 +509,9 @@ enum daos_pool_cont_filter_key {
 	PCF_KEY_MD_MTIME,
 	/** container number of snapshots (use with daos_pool_cont_filter_part_t.pcfp_val64) */
 	PCF_KEY_NUM_SNAPSHOTS,
-	/* TODO: add number of open handles, e.g., PCF_KEY_NUM_HANDLES
-	 * when available in pool/container service
-	 */
+	/** number of open handles (use with daos_pool_cont_filter_part_t.pcfp_val64) */
+	PCF_KEY_NUM_HANDLES,
+	PCF_KEY_MAX
 };
 
 /** Convert metadata key numeric identifier into printable string */
@@ -524,7 +524,9 @@ daos_pool_cont_filter_key_str(enum daos_pool_cont_filter_key k)
 	case PCF_KEY_MD_MTIME:
 		return "md_modify_time";
 	case PCF_KEY_NUM_SNAPSHOTS:
-		return "md_num_snapshots";
+		return "num_snapshots";
+	case PCF_KEY_NUM_HANDLES:
+		return "num_handles";
 	default:
 		return "UNKNOWN";
 	}
