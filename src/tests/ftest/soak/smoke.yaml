@@ -185,6 +185,7 @@ vpic_smoke:
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
+    disable_caching: true
   oclass:
     - "EC_2P1GX"
 lammps_smoke:
@@ -198,6 +199,7 @@ lammps_smoke:
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
+    disable_caching: true
   oclass:
     - "EC_2P1GX"
 mdtest_smoke:
