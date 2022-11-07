@@ -1170,6 +1170,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 			failed_st = st;
 			goto error;
 		}
+		assigned = true;
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
