@@ -95,12 +95,12 @@ typedef uint64_t ulog_operation_type;
 #define	ULOG_ENTRY_IS_BIT_OP(opc)	((opc == ULOG_OPERATION_CLR_BITS) || \
 					 (opc == ULOG_OPERATION_SET_BITS))
 #define ULOG_ENTRY_OPS_POS		16 /* bits' pos at value:16 */
-#define ULOG_ENTRY_OPS_BITS_MAKS	((1ULL << ULOG_ENTRY_OPS_POS) - 1)
-#define ULOG_ENTRY_VAL_TO_BITS(val)	((val) & ULOG_ENTRY_OPS_BITS_MAKS)
+#define ULOG_ENTRY_OPS_BITS_MASK	((1ULL << ULOG_ENTRY_OPS_POS) - 1)
+#define ULOG_ENTRY_VAL_TO_BITS(val)	((val) & ULOG_ENTRY_OPS_BITS_MASK)
 #define ULOG_ENTRY_VAL_TO_POS(val)	((val) >> ULOG_ENTRY_OPS_POS)
-#define ULOG_ENTRY_OPS_POS_MAKS		(RUN_BITS_PER_VALUE - 1ULL)
-#define ULOG_ENTRY_TO_VAL(pos, nbits)	(((uint64_t)(nbits) & ULOG_ENTRY_OPS_BITS_MAKS) | \
-					 ((pos) & ULOG_ENTRY_OPS_POS_MAKS) << ULOG_ENTRY_OPS_POS)
+#define ULOG_ENTRY_OPS_POS_MASK		(RUN_BITS_PER_VALUE - 1ULL)
+#define ULOG_ENTRY_TO_VAL(pos, nbits)	(((uint64_t)(nbits) & ULOG_ENTRY_OPS_BITS_MASK) | \
+					 ((pos) & ULOG_ENTRY_OPS_POS_MASK) << ULOG_ENTRY_OPS_POS)
 #endif
 
 /* immediately frees all associated ulog structures */

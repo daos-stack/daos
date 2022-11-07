@@ -723,7 +723,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	uint16_t num = m->size_idx;
 	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
 
-	D_ASSERT(num < 16);
+	ASSERT_rt(num > 0 && num <= RUN_BITS_PER_VALUE);
 	bmask = ULOG_ENTRY_TO_VAL(pos, num);
 #endif
 
