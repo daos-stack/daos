@@ -30,6 +30,7 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                 {ComponentAdmin},
+	"/ctl.CtlSvc/SmdManage":                {ComponentAdmin},
 	"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
 	"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
 	"/ctl.CtlSvc/StopRanks":                {ComponentServer},

@@ -321,6 +321,43 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
+    def storage_identify_vmd(self, uuid, verbose=False):
+        """Get the result of the 'dmg storage identify vmd".
+
+        Args:
+            uuid (str): Device UUID to query.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "identify", "vmd"), uuid=uuid,
+            verbose=verbose)
+
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+        """Get the result of the 'dmg storage replace nvme' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "replace", "nvme"), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
+
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
 

@@ -31,7 +31,7 @@ def scons():
     """Execute build"""
     Import('env')
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
 
     denv = env.Clone()
 

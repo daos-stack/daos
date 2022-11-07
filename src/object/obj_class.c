@@ -20,6 +20,18 @@ static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf)
+{
+	struct daos_obj_class *oc;
+
+	oc = oclass_ident2cl(oc_id, NULL);
+	if (oc == NULL)
+		return -DER_INVAL;
+	*tf = oc->oc_resil_degree;
+	return 0;
+}
+
 /**
  * Find the object class attributes for the provided @oid.
  */
