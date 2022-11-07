@@ -1726,8 +1726,9 @@ tx_complete(struct ad_tx *tx, int err)
 	int		    i;
 	int		    rc;
 
+	/* TODO: Get umem_wal_tx from ad_tx */
 	if (!err)
-		rc = store->stor_ops->so_wal_submit(store, ad_tx_id(tx), &tx->tx_redo);
+		rc = store->stor_ops->so_wal_submit(store, NULL, NULL);
 	else
 		rc = err;
 

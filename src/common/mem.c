@@ -70,14 +70,20 @@ umempobj_settings_init(void)
  *  \param	flags[IN]		Additional flags
  *  \param	poolsize[IN]		Size of the pool
  *  \param	mode[IN]		Permission for creating the object
+ *  \param	store[IN]		umem_store
  *
  *  \return	A pointer to the pool, NULL if creation fails.
  */
 struct umem_pool *
 umempobj_create(const char *path, const char *layout_name, int flags,
-		size_t poolsize, mode_t mode)
+		size_t poolsize, mode_t mode, struct umem_store *store)
 {
-	dav_obj_t *dav_hdl;
+	struct umem_pool	*umm_pool;
+	dav_obj_t		*dav_hdl;
+
+	D_ALLOC_PTR(umm_pool);
+	if (umm_pool == NULL)
+		return NULL;
 
 	if (!use_bmem) {
 		PMEMobjpool     *pop;
@@ -88,6 +94,7 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		if (!pop) {
 			D_ERROR("Failed to create pool %s, size="DF_U64": %s\n",
 				path, poolsize, pmemobj_errormsg());
+			D_FREE(umm_pool);
 			return NULL;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
@@ -97,19 +104,30 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 					DP_RC(rc));
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
-				pop = NULL;
+				D_FREE(umm_pool);
+				return NULL;
 			}
 		}
-		return ((struct umem_pool *)pop);
+
+		if (store != NULL)
+			umm_pool->up_store = *store;
+		umm_pool->up_priv = pop;
+		return umm_pool;
 	}
 
 	dav_hdl = dav_obj_create(path, 0, poolsize, mode);
 	if (!dav_hdl) {
 		D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
 			path, poolsize, errno);
+		D_FREE(umm_pool);
 		return NULL;
 	}
-	return (struct umem_pool *)dav_hdl;
+	if (store != NULL)
+		umm_pool->up_store = *store;
+	umm_pool->up_priv = dav_hdl;
+
+	/* TODO: Do checkpoint here to write back allocator heap */
+	return umm_pool;
 }
 
 /** Open the given persistent memory object.
@@ -117,13 +135,19 @@ umempobj_create(const char *path, const char *layout_name, int flags,
  *  \param	path[IN]		Name of the memory pool file
  *  \param	layout_name[IN]		Name of the layout [PMDK]
  *  \param	flags[IN]		Additional flags
+ *  \param	store[IN]		umem_store
  *
  *  \return	A pointer to the pool, NULL if creation fails.
  */
 struct umem_pool *
-umempobj_open(const char *path, const char *layout_name, int flags)
+umempobj_open(const char *path, const char *layout_name, int flags, struct umem_store *store)
 {
-	dav_obj_t *dav_hdl;
+	struct umem_pool	*umm_pool;
+	dav_obj_t		*dav_hdl;
+
+	D_ALLOC_PTR(umm_pool);
+	if (umm_pool == NULL)
+		return NULL;
 
 	if (!use_bmem) {
 		PMEMobjpool     *pop;
@@ -134,6 +158,7 @@ umempobj_open(const char *path, const char *layout_name, int flags)
 		if (!pop) {
 			D_ERROR("Error in opening the pool %s: %s\n",
 				path, pmemobj_errormsg());
+			D_FREE(umm_pool);
 			return NULL;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
@@ -143,19 +168,33 @@ umempobj_open(const char *path, const char *layout_name, int flags)
 					DP_RC(rc));
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
-				pop = NULL;
+				D_FREE(umm_pool);
+				return NULL;
 			}
 		}
-		return ((struct umem_pool *)pop);
+
+		if (store != NULL)
+			umm_pool->up_store = *store;
+		umm_pool->up_priv = pop;
+		return umm_pool;
 	}
+
+	/* TODO mmap tmpfs file */
+	/* TODO Load all meta pages from SSD */
+	/* TODO Replay WAL */
 
 	dav_hdl = dav_obj_open(path, 0);
 	if (!dav_hdl) {
 		D_ERROR("Error in opening the pool %s: errno =%d\n",
 			path, errno);
+		D_FREE(umm_pool);
 		return NULL;
 	}
-	return (struct umem_pool *)dav_hdl;
+
+	if (store != NULL)
+		umm_pool->up_store = *store;
+	umm_pool->up_priv = dav_hdl;
+	return umm_pool;
 }
 
 /** Close the pmem object.
@@ -166,11 +205,14 @@ void
 umempobj_close(struct umem_pool *ph_p)
 {
 	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p;
+		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemobj_close(pop);
-	} else
-		dav_obj_close((dav_obj_t *)ph_p);
+	} else {
+		dav_obj_close((dav_obj_t *)ph_p->up_priv);
+	}
+
+	D_FREE(ph_p);
 }
 
 /** Obtain the root memory address for the pmem object.
@@ -187,7 +229,7 @@ umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 	uint64_t off;
 
 	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p;
+		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
 		PMEMoid root;
 		void *rootp;
 
@@ -196,8 +238,8 @@ umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 		return rootp;
 	}
 
-	off = dav_root((dav_obj_t *)ph_p, size);
-	return (char *)dav_get_base_ptr((dav_obj_t *)ph_p) + off;
+	off = dav_root((dav_obj_t *)ph_p->up_priv, size);
+	return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
 }
 
 /** Obtain the usage statistics for the pmem object
@@ -213,14 +255,14 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 	int rc;
 
 	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p;
+		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
 
 		rc = pmemobj_ctl_get(pop, "stats.heap.curr_allocated",
 			     curr_allocated);
 	} else {
 		struct dav_heap_stats st;
 
-		rc = dav_get_heap_stats((dav_obj_t *)ph_p, &st);
+		rc = dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
 		if (rc == 0)
 			*curr_allocated = st.curr_allocated;
 	}
@@ -237,7 +279,7 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 {
 	if (!use_bmem) {
 		daos_size_t scm_used, scm_active;
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p;
+		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemobj_ctl_get(pop, "stats.heap.run_allocated", &scm_used);
 		pmemobj_ctl_get(pop, "stats.heap.run_active", &scm_active);
@@ -247,7 +289,7 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 	} else {
 		struct dav_heap_stats st;
 
-		dav_get_heap_stats((dav_obj_t *)ph_p, &st);
+		dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
 		D_ERROR("Fragmentation info, run_allocated: "
 		  DF_U64", run_active: "DF_U64"\n",
 		  st.run_allocated, st.run_active);
@@ -268,7 +310,7 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 
 	if (!use_bmem) {
 		struct pobj_alloc_class_desc pmemslab;
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p;
+		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemslab.unit_size = slab->unit_size;
 		pmemslab.alignment = 0;
@@ -286,7 +328,7 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		davslab.units_per_block = 1000;
 		davslab.header_type = DAV_HEADER_NONE;
 		davslab.class_id = slab->class_id;
-		rc = dav_class_register((dav_obj_t *)ph_p, &davslab);
+		rc = dav_class_register((dav_obj_t *)ph_p->up_priv, &davslab);
 		/* update with the new slab id */
 		slab->class_id = davslab.class_id;
 	}
@@ -545,7 +587,7 @@ static int
 pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	int rc;
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 	if (txd != NULL) {
 		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
@@ -580,7 +622,7 @@ pmem_tx_commit(struct umem_instance *umm)
 static void
 pmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 {
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 	PMEMoid	id = umem_off2id(umm, off);
 
 	pmemobj_defer_free(pop, id, (struct pobj_action *)act);
@@ -595,7 +637,7 @@ pmem_tx_stage(void)
 static umem_off_t
 pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 	return umem_id2off(umm, pmemobj_reserve(pop, (struct pobj_action *)act, size, type_num));
 }
@@ -603,7 +645,7 @@ pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int typ
 static void
 pmem_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
 {
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 	pmemobj_cancel(pop, (struct pobj_action *)actv, actv_cnt);
 }
@@ -621,7 +663,7 @@ static void *
 pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 		 size_t len)
 {
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 	return pmemobj_memcpy_persist(pop, dest, src, len);
 }
@@ -631,7 +673,7 @@ pmem_atomic_alloc(struct umem_instance *umm, size_t size,
 		  unsigned int type_num)
 {
 	PMEMoid oid;
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 	int rc;
 
 	rc = pmemobj_alloc(pop, &oid, size, type_num, NULL, NULL);
@@ -655,7 +697,7 @@ pmem_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 static void
 pmem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 {
-	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 	pmemobj_flush(pop, addr, len);
 }
@@ -842,7 +884,7 @@ static int
 bmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	int rc;
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 	if (txd != NULL) {
 		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
@@ -883,7 +925,7 @@ bmem_tx_stage(void)
 static void
 bmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 {
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 	dav_defer_free(pop, umem_off2offset(off),
 			(struct dav_action *)act);
@@ -892,7 +934,7 @@ bmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 static umem_off_t
 bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 	return dav_reserve(pop, (struct dav_action *)act, size, type_num);
 }
@@ -900,7 +942,7 @@ bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int typ
 static void
 bmem_cancel(struct umem_instance *umm, void *actv, int actv_cnt)
 {
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 	dav_cancel(pop, (struct dav_action *)actv, actv_cnt);
 }
@@ -918,7 +960,7 @@ static void *
 bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 		 size_t len)
 {
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 	return dav_memcpy_persist(pop, dest, src, len);
 }
@@ -928,7 +970,7 @@ bmem_atomic_alloc(struct umem_instance *umm, size_t size,
 		  unsigned int type_num)
 {
 	uint64_t off;
-	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 	int rc;
 
 	rc = dav_alloc(pop, &off, size, type_num, NULL, NULL);
@@ -943,7 +985,7 @@ bmem_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 	if (!UMOFF_IS_NULL(umoff)) {
 		uint64_t off = umem_off2offset(umoff);
 
-		dav_free((dav_obj_t *)umm->umm_pool, off);
+		dav_free((dav_obj_t *)umm->umm_pool->up_priv, off);
 	}
 	return 0;
 }
@@ -952,7 +994,7 @@ static void
 bmem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 {
 	/* REVISIT: We need to update the WAL with this info
-	 * dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+	 * dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 	 * dav_flush(pop, addr, len);
 	 */
 }
@@ -1097,7 +1139,7 @@ set_offsets(struct umem_instance *umm)
 	if (!use_bmem) {
 		char		*root;
 		PMEMoid		 root_oid;
-		PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool;
+		PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 		root_oid = pmemobj_root(pop, 0);
 		D_ASSERTF(!OID_IS_NULL(root_oid),
@@ -1108,7 +1150,7 @@ set_offsets(struct umem_instance *umm)
 		umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
 		umm->umm_base = (uint64_t)root - root_oid.off;
 	} else {
-		dav_obj_t *pop = (dav_obj_t *)umm->umm_pool;
+		dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 		umm->umm_base = (uint64_t)dav_get_base_ptr(pop);
 	}

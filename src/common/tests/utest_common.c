@@ -71,7 +71,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	strcpy(ctx->uc_pool_name, name);
 	ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
 	ctx->uc_uma.uma_pool = umempobj_create(name, "utest_pool",
-				UMEMPOBJ_ENABLE_STATS, pool_size, 0666);
+				UMEMPOBJ_ENABLE_STATS, pool_size, 0666, NULL);
 
 	if (ctx->uc_uma.uma_pool == NULL) {
 		perror("Utest pmem pool couldn't be created");

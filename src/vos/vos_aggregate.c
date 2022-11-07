@@ -1120,8 +1120,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(lgc_seg->ls_idx_start <= lgc_seg->ls_idx_end);
 	D_ASSERT(lgc_seg->ls_idx_end < mw->mw_lgc_cnt);
 
-	bio_ctxt = bio_mc2data(obj->obj_cont->vc_pool->vp_meta_context);
-	D_ASSERT(bio_ctxt != NULL);
+	bio_ctxt = vos_data_ioctxt(obj->obj_cont->vc_pool);
 	umem = &obj->obj_cont->vc_pool->vp_umm;
 
 	seg_count = lgc_seg->ls_idx_end - lgc_seg->ls_idx_start + 1;

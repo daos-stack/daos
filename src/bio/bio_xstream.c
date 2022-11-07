@@ -355,6 +355,12 @@ is_init_xstream(struct bio_xs_context *ctxt)
 	return ctxt->bxc_thread == nvme_glb.bd_init_thread;
 }
 
+inline uint32_t
+default_cluster_sz(void)
+{
+	return nvme_glb.bd_bs_opts.cluster_sz;
+}
+
 bool
 bio_need_nvme_poll(struct bio_xs_context *ctxt)
 {

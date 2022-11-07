@@ -217,8 +217,8 @@ struct vos_pool {
 	d_list_t		vp_gc_cont;
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
-	/** meta I/O context */
-	struct bio_meta_context	*vp_meta_context;
+	/** Dummy data I/O context */
+	struct bio_io_context	*vp_dummy_ioctxt;
 	/** In-memory free space tracking for NVMe device */
 	struct vea_space_info	*vp_vea_info;
 	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
@@ -1526,5 +1526,20 @@ vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
 	D_ASSERT(umem != NULL);
 	memcpy(iov_out->iov_buf, umem_off2ptr(umem, addr.ba_off), iov_out->iov_len);
 	return 0;
+}
+
+static inline struct bio_io_context *
+vos_data_ioctxt(struct vos_pool *vp)
+{
+	struct bio_meta_context	*mc;
+
+	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
+	mc = (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
+	if (mc != NULL && bio_mc2data(mc) != NULL)
+		return bio_mc2data(mc);
+
+	/* Use dummy I/O context when data blob doesn't exist */
+	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
+	return vp->vp_dummy_ioctxt;
 }
 #endif /* __VOS_INTERNAL_H__ */

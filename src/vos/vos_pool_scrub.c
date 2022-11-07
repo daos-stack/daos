@@ -472,7 +472,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	/* Fetch data */
 	iter = vos_hdl2iter(ih);
 	oiter = vos_iter2oiter(iter);
-	bio_ctx = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
+	bio_ctx = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
 	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 	rc = vos_media_read(bio_ctx, umem, biov->bi_addr, &data);
 

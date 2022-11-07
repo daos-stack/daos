@@ -90,6 +90,79 @@ act_copy_payload(struct umem_action *act, const void *addr, daos_size_t size)
 		memcpy(dst, addr, size);
 }
 
+/**
+ * query action number in redo list.
+ */
+static inline uint32_t
+ad_tx_redo_act_nr(struct umem_wal_tx *wal_tx)
+{
+	struct ad_tx	*tx = umem_tx2ad_tx(wal_tx);
+
+	return tx->tx_redo_act_nr;
+}
+
+/**
+ * query payload length in redo list.
+ */
+static inline uint32_t
+ad_tx_redo_payload_len(struct umem_wal_tx *wal_tx)
+{
+	struct ad_tx	*tx = umem_tx2ad_tx(wal_tx);
+
+	return tx->tx_redo_payload_len;
+}
+
+/**
+ * get first action pointer, NULL for list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_first(struct umem_wal_tx *wal_tx)
+{
+	struct ad_tx	*tx = umem_tx2ad_tx(wal_tx);
+
+	if (d_list_empty(&tx->tx_redo)) {
+		tx->tx_redo_act_pos = NULL;
+		return NULL;
+	}
+
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item, it_link);
+	return &tx->tx_redo_act_pos->it_act;
+}
+
+/**
+ * get next action pointer, NULL for done or list empty.
+ */
+struct umem_action *
+ad_tx_redo_act_next(struct umem_wal_tx *wal_tx)
+{
+	struct ad_tx	*tx = umem_tx2ad_tx(wal_tx);
+
+	if (tx->tx_redo_act_pos == NULL) {
+		if (d_list_empty(&tx->tx_redo))
+			return NULL;
+		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item,
+						   it_link);
+		return &tx->tx_redo_act_pos->it_act;
+	}
+
+	D_ASSERT(!d_list_empty(&tx->tx_redo));
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
+					   struct umem_act_item, it_link);
+	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
+		tx->tx_redo_act_pos = NULL;
+		return NULL;
+	}
+	return &tx->tx_redo_act_pos->it_act;
+}
+
+/* TODO: Assign ad_wal_tx_ops to umem_wal_tx->utx_ops on TX begin */
+struct umem_wal_tx_ops ad_wal_tx_ops = {
+	.wtx_act_nr	= ad_tx_redo_act_nr,
+	.wtx_payload_sz	= ad_tx_redo_payload_len,
+	.wtx_act_first	= ad_tx_redo_act_first,
+	.wtx_act_next	= ad_tx_redo_act_next,
+};
+
 /** start a ad-hoc memory transaction */
 int
 ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
@@ -556,63 +629,6 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	return 0;
 }
 
-/**
- * query action number in redo list.
- */
-uint32_t
-ad_tx_redo_act_nr(struct ad_tx *tx)
-{
-	return tx->tx_redo_act_nr;
-}
-
-/**
- * query payload length in redo list.
- */
-uint32_t
-ad_tx_redo_payload_len(struct ad_tx *tx)
-{
-	return tx->tx_redo_payload_len;
-}
-
-/**
- * get first action pointer, NULL for list empty.
- */
-struct umem_action *
-ad_tx_redo_act_first(struct ad_tx *tx)
-{
-	if (d_list_empty(&tx->tx_redo)) {
-		tx->tx_redo_act_pos = NULL;
-		return NULL;
-	}
-
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item, it_link);
-	return &tx->tx_redo_act_pos->it_act;
-}
-
-/**
- * get next action pointer, NULL for done or list empty.
- */
-struct umem_action *
-ad_tx_redo_act_next(struct ad_tx *tx)
-{
-	if (tx->tx_redo_act_pos == NULL) {
-		if (d_list_empty(&tx->tx_redo))
-			return NULL;
-		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item,
-						   it_link);
-		return &tx->tx_redo_act_pos->it_act;
-	}
-
-	D_ASSERT(!d_list_empty(&tx->tx_redo));
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
-					   struct umem_act_item, it_link);
-	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
-		tx->tx_redo_act_pos = NULL;
-		return NULL;
-	}
-	return &tx->tx_redo_act_pos->it_act;
-}
-
 static struct ad_tx *
 tx_get()
 {
@@ -636,8 +652,8 @@ tx_callback(struct ad_tx *tx)
 static int
 tx_end(struct ad_tx *tx, int err)
 {
-	struct umem_tx	*utx;
-	int		 rc;
+	struct umem_wal_tx	*utx;
+	int			 rc;
 
 	if (err == 0)
 		err = tx->tx_last_errno;
@@ -684,7 +700,7 @@ tx_abort(struct ad_tx *tx, int err)
 static int
 umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
-	struct umem_tx		*utx = NULL;
+	struct umem_wal_tx	*utx = NULL;
 	struct ad_tx		*tx;
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 	struct ad_blob		*blob;
@@ -963,30 +979,6 @@ failed:
 	return rc;
 }
 
-static uint32_t
-umo_tx_act_nr(struct umem_tx *utx)
-{
-	return ad_tx_redo_act_nr(umem_tx2ad_tx(utx));
-}
-
-static uint32_t
-umo_tx_payload_sz(struct umem_tx *utx)
-{
-	return ad_tx_redo_payload_len(umem_tx2ad_tx(utx));
-}
-
-static struct umem_action *
-umo_tx_act_first(struct umem_tx *utx)
-{
-	return ad_tx_redo_act_first(umem_tx2ad_tx(utx));
-}
-
-static struct umem_action *
-umo_tx_act_next(struct umem_tx *utx)
-{
-	return ad_tx_redo_act_next(umem_tx2ad_tx(utx));
-}
-
 umem_ops_t	ad_mem_ops = {
 	.mo_tx_free		= umo_tx_free,
 	.mo_tx_alloc		= umo_tx_alloc,
@@ -1007,9 +999,5 @@ umem_ops_t	ad_mem_ops = {
 	.mo_atomic_free		= umo_atomic_free,
 	/* NOOP flush for ADMEM */
 	.mo_atomic_flush	= NULL,
-	.mo_tx_act_nr		= umo_tx_act_nr,
-	.mo_tx_payload_sz	= umo_tx_payload_sz,
-	.mo_tx_act_first	= umo_tx_act_first,
-	.mo_tx_act_next		= umo_tx_act_next,
 	.mo_tx_add_callback	= umem_tx_add_cb,
 };

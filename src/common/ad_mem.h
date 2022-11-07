@@ -339,15 +339,15 @@ daos_off_t blob_ptr2addr(struct ad_blob *blob, void *ptr);
 int tx_complete(struct ad_tx *tx, int err);
 
 static inline struct ad_tx *
-umem_tx2ad_tx(struct umem_tx *utx)
+umem_tx2ad_tx(struct umem_wal_tx *utx)
 {
 	return (struct ad_tx *)&utx->utx_private;
 }
 
-static inline struct umem_tx *
+static inline struct umem_wal_tx *
 ad_tx2umem_tx(struct ad_tx *atx)
 {
-	return container_of(atx, struct umem_tx, utx_private);
+	return container_of(atx, struct umem_wal_tx, utx_private);
 }
 
 static inline uint64_t

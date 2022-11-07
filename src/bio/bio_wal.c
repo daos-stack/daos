@@ -508,7 +508,7 @@ place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks
 }
 
 static void
-fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_tx *tx,
+fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_wal_tx *tx,
 		unsigned int blk_sz, struct wal_blks_desc *bd)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
@@ -759,7 +759,7 @@ data_completion(void *arg, int err)
 }
 
 int
-bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data)
+bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct bio_desc		*biod;
@@ -1576,6 +1576,14 @@ bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_
 {
 	D_ASSERT(mc->mc_meta != NULL);
 	return bio_writev(mc->mc_meta, bsgl, sgl);
+}
+
+void
+bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz)
+{
+	D_ASSERT(mc != NULL);
+	*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
+	*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
 }
 
 void

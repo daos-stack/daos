@@ -1569,8 +1569,7 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	 * size in vos_media_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
-	bioc = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
-	D_ASSERT(bioc != NULL);
+	bioc = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
 	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 
 	return vos_media_read(bioc, umem, biov->bi_addr, iov_out);

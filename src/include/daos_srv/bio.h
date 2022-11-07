@@ -490,26 +490,21 @@ int bio_nvme_poll(struct bio_xs_context *ctxt);
  * \param[OUT] pctxt	I/O context to be returned
  * \param[IN] xs_ctxt	Per-xstream NVMe context
  * \param[IN] uuid	Pool UUID
+ * \param[IN] dummy	Create a dummy I/O context
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_open(struct bio_io_context **pctxt,
-		    struct bio_xs_context *xs_ctxt, uuid_t uuid);
-
-enum bio_mc_flags {
-	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
-	BIO_MC_FL_NO_DATABLOB	= (1UL << 1),	/* No associated data blob */
-};
+int bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
+		    uuid_t uuid, bool dummy);
 
 /*
  * Finalize per VOS instance I/O context.
  *
  * \param[IN] ctxt	I/O context
- * \param[IN] flags	bio_mc_flags
  *
  * \returns		Zero on success, negative value on error
  */
-int bio_ioctxt_close(struct bio_io_context *ctxt, enum bio_mc_flags flags);
+int bio_ioctxt_close(struct bio_io_context *ctxt);
 
 /*
  * Unmap (TRIM) the extent being freed.
@@ -905,6 +900,10 @@ int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	     struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst, unsigned int copy_size,
 	     struct bio_csum_desc *csum_desc);
 
+enum bio_mc_flags {
+	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
+};
+
 /*
  * Create Meta/Data/WAL blobs, format Meta & WAL blob
  *
@@ -950,11 +949,10 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
  * Close Meta/Data/WAL blobs, free meta context
  *
  * \param[in]	mc		BIO meta context
- * \param[in]	flags		bio_mc_flags
  *
  * \return			N/A
  */
-int bio_mc_close(struct bio_meta_context *mc, enum bio_mc_flags flags);
+int bio_mc_close(struct bio_meta_context *mc);
 
 /* Function to return current data io context */
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
@@ -978,7 +976,7 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance
@@ -1055,5 +1053,10 @@ int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_li
  * \return			Zero on success, negative value on error
  */
 int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
+
+/*
+ * Query meta capacity & meta block size.
+ */
+void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz);
 
 #endif /* __BIO_API_H__ */
