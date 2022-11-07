@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -33,7 +32,8 @@ class IorPerRank(IorTestBase):
 
         self.log.info("Running Test on rank: %s", rank)
         # create the pool on specified rank.
-        self.create_pool([rank])
+        self.add_pool(connect=False, target_list=[rank])
+        
         # execute ior on given rank for different transfer sizes and collect the results
         for idx, _ in enumerate(self.transfer_sizes):
             self.ior_cmd.transfer_size.update(self.transfer_sizes[idx])
@@ -79,7 +79,7 @@ class IorPerRank(IorTestBase):
         self.pool.destroy()
         self.pool = None
 
-    def test_iorperrank(self):
+    def test_ior_per_rank(self):
         """
         Test Description: Test to check node health using ior with daos.
                           Start entire daos system on each rack of a group.
@@ -88,10 +88,10 @@ class IorPerRank(IorTestBase):
                               Large transfer size: 1M
                               Small transfer size: 256B
                           Compare results and isolate bad nodes.
-        :avocado: tags=all,deployment,full_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ior
-        :avocado: tags=iorperrank
+        :avocado: tags=ior,deployment
+        :avocado: tags=ior_per_rank,test_ior_per_rank
         """
 
         # test params
@@ -105,8 +105,7 @@ class IorPerRank(IorTestBase):
         self.expected_bw = self.params.get("expected_bw", self.ior_cmd.namespace, None)
         self.expected_iops = self.params.get("expected_iops", self.ior_cmd.namespace, None)
 
-        if (self.write_x is None or self.read_x is None or self.expected_bw is None or
-                self.expected_iops is None):
+        if not all((self.write_x, self.read_x, self.expected_bw, self.expected_iops)):
             self.fail("Failed to get write_x, read_x, expected_bw, expected_iops from config")
 
         # create a list of all the ranks
@@ -127,4 +126,4 @@ class IorPerRank(IorTestBase):
             self.log.info("List of failed ranks with corresponding nodes")
             for node, rank in self.failed_nodes.items():
                 self.log.info("Node: %s, Rank: %s", node, rank)
-            self.fail()
+            self.fail("Performance check failed for one or more nodes")

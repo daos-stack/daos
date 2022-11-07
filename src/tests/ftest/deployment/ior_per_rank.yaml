@@ -37,7 +37,7 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  size: 95%
+  size: 750G # Cannot use percentage, as it does not work when using pool create for per rank.
   control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
@@ -46,16 +46,15 @@ container:
     control_method: daos
 ior:
     client_processes:
-          ppn: 16
+          ppn: 32
     test_file: testFile
-    repetitions: 1
     flags: "-w -r -R -C -e -g -D 30 -G 27 -k -Q 1 -v"
     dfs_oclass: 'SX'
     transfer_sizes:
         - 1M
         - 256B
     block_size: 150G
-    write_x: 0.1 # Max 10% performance difference.
+    write_x: 0.15 # Max 15% performance difference.
     read_x: 0.15  # Max 15% performance difference.
     expected_bw: 22500    # For transfer size 1M
     expected_iops: 600000       # For transfer size 256B
