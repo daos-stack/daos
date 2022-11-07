@@ -1272,9 +1272,19 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (rc != 0)
 		goto out_prop;
 
-	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
-	if (rc != 0)
-		goto out_prop;
+	if (DAOS_FAIL_CHECK(DAOS_CONT_DESTROY_SKIP_CORPC)) {
+		/*
+		 * Note that this fault injection is for catastrophic
+		 * recovery---we just want to leak the data on targets for
+		 * testing purposes without questioning how that is possible
+		 * normally (assume that there is a bug).
+		 */
+		rc = 0;
+	} else {
+		rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
+		if (rc != 0)
+			goto out_prop;
+	}
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
 
