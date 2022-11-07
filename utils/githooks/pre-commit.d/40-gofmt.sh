@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Runs gofmt for the DAOS project as a commit hook.
 #
