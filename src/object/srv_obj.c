@@ -3356,22 +3356,24 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 {
 	uint64_t	*flag = agg_arg;
 	uint32_t	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	int		succeeds = 0;
 	int		allow_failure = 0;
 	int		allow_failure_cnt = 0;
-	int		result = 0;
+	int		result = dlh->dlh_result;
 	int		i;
 
 	D_ASSERT(flag != NULL);
 	if (*flag & DAOS_COND_PUNCH)
 		allow_failure = -DER_NONEXIST;
 
+	if (result == allow_failure) {
+		allow_failure_cnt++;
+		result = 0;
+	}
+
 	for (i = 0; i < sub_cnt; i++) {
 		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
 
-		if (sub->dss_result == 0) {
-			succeeds++;
-		} else if (sub->dss_result == allow_failure) {
+		if (sub->dss_result == allow_failure) {
 			allow_failure_cnt++;
 		} else {
 			/* Ignore INPROGRESS if there other failures */
@@ -3380,21 +3382,16 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *agg_arg)
 		}
 	}
 
-	D_DEBUG(DB_IO, DF_DTI" %d/%d shards flags "DF_X64" result %d\n",
-		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt,
-		succeeds, *flag, result);
+	D_DEBUG(DB_IO, DF_DTI" allow failures %d shards flags "DF_X64" result %d\n",
+		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt, *flag, result);
 
 	if (*flag & DAOS_COND_PUNCH) {
 		/* For punch, let's ignore DER_NONEXIST if there are shards
 		 * succeed, since the object may not exist on some shards
 		 * due to EC partial update.
 		 */
-		if (result == 0 && succeeds == 0) {
-			D_ASSERT(sub_cnt == allow_failure_cnt);
+		if (result == 0 && (allow_failure_cnt == sub_cnt + 1))
 			return -DER_NONEXIST;
-		}
-
-		return result;
 	}
 
 	return result;

@@ -1063,7 +1063,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 	return rc;
 }
 
-static int
+static void
 dtx_leader_wait(struct dtx_leader_handle *dlh)
 {
 	int	rc;
@@ -1079,7 +1079,8 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid), DP_RC(dlh->dlh_result));
 
-	return dlh->dlh_result;
+	if (unlikely(dlh->dlh_result == -DER_ALREADY))
+		dlh->dlh_result = 0;
 };
 
 /**
@@ -1963,7 +1964,6 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 {
 	struct dtx_ult_arg	*ult_arg;
 	int			 rc;
-	int			 rc1 = 0;
 
 	dlh->dlh_result = 0;
 	dlh->dlh_normal_sub_done = 0;
@@ -2016,19 +2016,15 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 exec:
 	/* Then execute the local operation */
 	rc = func(dlh, func_arg, -1, NULL);
+	if (dlh->dlh_result == 0)
+		dlh->dlh_result = rc;
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0) {
-		rc1 = dtx_leader_wait(dlh);
-		if (unlikely(rc1 == -DER_ALREADY))
-			rc1 = 0;
-	}
+	if (dlh->dlh_normal_sub_cnt > 0)
+		dtx_leader_wait(dlh);
 
-	if (rc != 0)
-		return rc;
-
-	if (rc1 != 0 || likely(dlh->dlh_delay_sub_cnt == 0))
-		return rc1;
+	if (dlh->dlh_result != 0 || likely(dlh->dlh_delay_sub_cnt == 0))
+		return dlh->dlh_result;
 
 	/* For delay forward sub requests. */
 
@@ -2062,11 +2058,9 @@ exec:
 		return rc;
 	}
 
-	rc = dtx_leader_wait(dlh);
-	if (unlikely(rc == -DER_ALREADY))
-		rc = 0;
+	dtx_leader_wait(dlh);
 
-	return rc;
+	return dlh->dlh_result;
 }
 
 int
