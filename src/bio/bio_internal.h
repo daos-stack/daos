@@ -519,6 +519,14 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
+struct bio_faulty_criteria {
+	uint32_t	fc_max_io_errs;
+	uint32_t	fc_max_csum_errs;
+	bool		fc_enabled;
+};
+
+extern struct bio_faulty_criteria	glb_criteria;
+
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
@@ -603,6 +611,7 @@ void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
+void auto_faulty_detect(struct bio_blobstore *bbs);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
