@@ -206,7 +206,7 @@ def _find_mpicc(env):
 def _configure_mpi_pkg(env):
     """Configure MPI using pkg-config"""
     if _find_mpicc(env):
-        return True
+        return
     try:
         env.ParseConfig('pkg-config --cflags --libs $MPI_PKG')
     except OSError as error:
@@ -216,7 +216,7 @@ def _configure_mpi_pkg(env):
         print('**********************************')
         raise error
 
-    return True
+    return
 
 
 def _configure_mpi(self):
@@ -230,7 +230,8 @@ def _configure_mpi(self):
     env['CXX'] = None
 
     if env.subst("$MPI_PKG") != "":
-        return _configure_mpi_pkg(env)
+        _configure_mpi_pkg(env)
+        return env
 
     for mpi in ['openmpi', 'mpich']:
         if not load_mpi(mpi):

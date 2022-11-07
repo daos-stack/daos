@@ -287,8 +287,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
 			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
-				DP_OID(md->omd_id),
-				DP_TARGET(spare_tgt),
+				DP_OID(md->omd_id), DP_TARGET(spare_tgt),
 				md->omd_ver);
 			spare_avail = false;
 			goto next_fail;
@@ -300,10 +299,9 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * and try next spare in the placement.
 		 */
 		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq) {
-			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u"
-				" shard f_seq %u\n", spare_tgt->ta_comp.co_id,
-				spare_tgt->ta_comp.co_fseq,
-				f_shard->fs_fseq);
+			D_WARN("spare tgt %u co fs_seq %u shard f_seq %u\n",
+			       spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_fseq,
+			       f_shard->fs_fseq);
 			return; /* try next spare */
 		}
 		/*
@@ -509,23 +507,3 @@ out:
 	return rc;
 }
 
-bool
-is_pool_adding(struct pool_domain *dom)
-{
-	uint32_t child_nr;
-
-	while (dom->do_children &&
-	       dom->do_comp.co_status != PO_COMP_ST_NEW) {
-		child_nr = dom->do_child_nr;
-		dom = &dom->do_children[child_nr - 1];
-	}
-
-	if (dom->do_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	child_nr = dom->do_target_nr;
-	if (dom->do_targets[child_nr - 1].ta_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	return false;
-}
