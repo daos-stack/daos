@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Runs pylint for the DAOS project as a commit hook.
+# Runs gofmt for the DAOS project as a commit hook.
 #
 # To get the most out of this hook the 'gh' command should be installed and working.
 
