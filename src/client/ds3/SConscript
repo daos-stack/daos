@@ -5,7 +5,7 @@ def scons():
     """Execute build"""
     Import('env')
 
-    env.add_build_rpath()
+    env.d_add_build_rpath()
 
     denv = env.Clone()
 
