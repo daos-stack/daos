@@ -24,8 +24,8 @@ struct ad_act {
 struct ad_range {
 	/* link to ad_tx::tx_redo_ranges */
 	d_list_t		 ar_link;
-	void			*ar_ptr;
-	size_t			 ar_size;
+	uint64_t		 ar_off;
+	uint64_t		 ar_size;
 	bool			 ar_alloc;
 };
 
