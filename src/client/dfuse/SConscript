@@ -79,7 +79,7 @@ def build_client_libs_shared(env, prereqs):
     env.Install('$PREFIX/share/daos', script)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), dfuse_lib)
 
-    return dfuse_lib + il_lib
+    Default(dfuse_lib, il_lib)
 
 
 def build_client_libs_static(env, common):
@@ -99,7 +99,7 @@ def build_client_libs_static(env, common):
     dfuse_lib = ilenv.d_static_library(target='libdfuse.a', source=common, hide_syms=True)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
-    return il_lib + dfuse_lib
+    Default(il_lib, dfuse_lib)
 
 
 def check_struct_member(context, text, struct, member):
@@ -184,13 +184,13 @@ def scons():
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
-    libs = build_client_libs_shared(gcc_env, prereqs)
+    build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
 
     # Build a static library of the common parts.
     common = build_common(dfuse_env, COMMON_SRC, False)
-    libs += build_client_libs_static(static_env, common)
+    build_client_libs_static(static_env, common)
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
@@ -208,11 +208,11 @@ def scons():
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
     cenv.AppendUnique(LIBS=['gurt'])
-    progs = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
+    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
-    Default(progs + libs)
+    Default(dfuse_bin)
 
-    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
+    cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
 
 
 if __name__ == "SCons.Script":
