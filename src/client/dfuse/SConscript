@@ -92,11 +92,11 @@ def build_client_libs_static(env, common):
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
-    il_lib = ilenv.d_static_library(target='il/libioil', source=il_obj + common, hide_syms=True)
+    il_lib = ilenv.d_static_library(target='il/libioil.a', source=il_obj + common, hide_syms=True)
     env.Install('$PREFIX/lib64', il_lib)
 
     # Now build the dfuse library
-    dfuse_lib = ilenv.d_static_library(target='libdfuse_source', source=common, hide_syms=True)
+    dfuse_lib = ilenv.d_static_library(target='libdfuse.a', source=common, hide_syms=True)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
     return il_lib + dfuse_lib
