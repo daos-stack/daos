@@ -5422,7 +5422,8 @@ pool_svc_schedule_reconf(struct pool_svc *svc, bool for_chk)
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
 	if (!for_chk && engine_in_check()) {
-		D_DEBUG(DB_MD, DF_UUID": end: skip in check mode\n", DP_UUID(svc->ps_uuid));
+		D_DEBUG(DB_MD, DF_UUID": end: skip automatic reconf in check mode\n",
+			DP_UUID(svc->ps_uuid));
 		return;
 	}
 
