@@ -36,7 +36,7 @@ server_config:
           bdev_list: ["bbbb:bb:bb.b"]
 pool:
   scm_size: 40G
-  nvme_size: 400G
+  nvme_size: 350G
   control_method: dmg
 container:
   type: POSIX

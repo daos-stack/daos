@@ -138,6 +138,26 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: self._expected_states[rank]["host"] for rank in self._expected_states}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 

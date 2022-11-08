@@ -44,8 +44,8 @@ class RbldWithIOR(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
-            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_nnodes": self.server_managers[0].engines,
+            "pi_ntargets": self.server_managers[0].engines * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(

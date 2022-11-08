@@ -28,7 +28,7 @@ ior:
   env_vars:
     - D_LOG_MASK=INFO
   client_processes:
-    ppn: 18
+    ppn: 6
   test_file: daos:/testFile
   repetitions: 1
   dfs_destroy: False

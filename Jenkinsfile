@@ -16,6 +16,8 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@pahender/DAOS-12023') _
+
 
 job_status_internal = [:]
 
@@ -129,10 +131,10 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for this run.  Specifies the default provider ' +
-                            'to use the daos_server config file when running functional tests' +
-                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
-                            '"ofi+tcp")')
+               description: 'Test-provider to use for the non-Provider Functional Harware test ' +
+                            'stages.  Specifies the default provider to use the daos_server ' +
+                            'config file when running functional tests (the launch.py ' +
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -190,10 +192,13 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the functional Ubuntu 20 CI tests' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_small_TEST',
-                     defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
         booleanParam(name: 'CI_medium_TEST',
+                     defaultValue: true,
+                     description: 'Run the Medium Cluster CI tests')
+        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Medium Cluster CI tests')
+        booleanParam(name: 'CI_medium-ucx-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Medium Cluster CI tests')
         booleanParam(name: 'CI_large_TEST',
@@ -202,21 +207,24 @@ pipeline {
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
-        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+        string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
-        string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
-        string(name: 'CI_NVME_5_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
-        string(name: 'CI_NVME_9_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large tests')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -769,7 +777,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -789,7 +797,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -809,7 +817,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -829,7 +837,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -954,27 +962,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
@@ -982,7 +969,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -996,6 +983,48 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
+                stage('Functional Hardware Medium Verbs Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium Verbs Provider')
+                stage('Functional Hardware Medium UCX Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium UCX Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -1003,7 +1032,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
