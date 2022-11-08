@@ -237,6 +237,9 @@ int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf);
+
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
