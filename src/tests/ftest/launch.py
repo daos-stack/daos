@@ -2170,13 +2170,15 @@ class Launch():
             if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
                 host_ext = os.path.splitext(item)
                 if len(host_ext) > 1:
-                    os.makedirs(bullseye_dir)
+                    if not os.path.exists(bullseye_dir):
+                        os.makedirs(bullseye_dir)
                     for name in os.listdir(item_full):
                         old_file = os.path.join(item_full, name)
                         if os.path.isfile(old_file):
                             new_name = name.split(".")
                             new_name.insert(1, host_ext[-1])
-                            new_file = os.path.join(bullseye_dir, ".".join(new_name))
+                            new_file_name = ".".join(new_name).replace("..", ".")
+                            new_file = os.path.join(bullseye_dir, new_file_name)
                             logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
         return status
