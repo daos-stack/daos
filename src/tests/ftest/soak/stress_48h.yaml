@@ -15,7 +15,6 @@ setup:
   start_agents: true
 server_config:
   name: daos_server
-  provider: ofi+verbs;ofi_rxm
   control_log_mask: INFO
   control_log_file: daos_control0.log
   crt_timeout: 60
@@ -197,7 +196,7 @@ vpic_stress:
   oclass:
     - "EC_2P1GX"
 lammps_stress:
-  job_timeout: 30
+  job_timeout: 35
   nodesperjob:
     - 8
   taskspernode:

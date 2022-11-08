@@ -14,7 +14,6 @@ setup:
   start_agents: false
 server_config:
   name: daos_server
-  provider: ofi+tcp
   control_log_mask: INFO
   control_log_file: daos_control0.log
   engines_per_host: 1
