@@ -177,37 +177,6 @@ int
 dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
 
 /**
- * A DFS wrapper around daos_pool_connect that returns positive errno instead of negative DER.
- *
- * \param[in]	pool	label or UUID string to identify a pool.
- * \param[in]	sys	DAOS system name to use for the pool connect.
- *			Pass NULL to connect to the default system.
- * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
- * \param[out]	poh	Returned open handle.
- * \param[in,out]
- *		info	Optional, returned pool information, see daos_pool_info_bit.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev);
-
-/**
- * A DFS wrapper around daos_pool_disconnect that returns positive errno instead of negative DER.
- *
- * \param[in]	poh	Pool connection handle
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
-
-/**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
  * on the container.
  *
@@ -242,56 +211,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t
 int
 dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
 			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
-
-/**
- * A DFS wrapper around daos_cont_open that returns positive errno instead of negative DER, with one
- * difference that the open will fail if the container is not of type POSIX.
- *
- * \param[in]	poh	Pool connection handle.
- * \param[in]	cont	Label or UUID string to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
- * \param[out]	coh	Returned open handle.
- * \param[out]	info	Optional, return container information
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-	      daos_cont_info_t *info, daos_event_t *ev);
-
-/**
- * A DFS wrapper around daos_cont_close that returns positive errno instead of negative DER.
- *
- * \param[in]	coh	Container open handle.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_cont_close(daos_handle_t coh, daos_event_t *ev);
-
-/**
- * A DFS wrapper around daos_cont_destroy that returns positive errno instead of negative DER. Note
- * that this does not evict any container handle from cache in case the DFS container was mounted
- * with dfs_connect. In such case, to destroy the container, one must use dfs_destroy() instead.
- *
- * \param[in]	poh	Pool connection handle.
- * \param[in]	cont	Label or UUID string to idenfity the container to
- *			destroy
- * \param[in]	force	Container destroy will return failure if the container
- *			is still busy (outstanding open handles). This parameter
- *			will force the destroy to proceed even if there is an
- *			outstanding open handle.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return              0 on success, errno code on failure.
- */
-int
-dfs_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain

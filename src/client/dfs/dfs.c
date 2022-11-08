@@ -1804,53 +1804,6 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 }
 
 int
-dfs_pool_connect(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev)
-{
-	int rc;
-
-	rc = daos_pool_connect(pool, sys, flags, poh, info, ev);
-	return daos_der2errno(rc);
-}
-
-int
-dfs_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
-{
-	int rc;
-
-	rc = daos_pool_disconnect(poh, ev);
-	return daos_der2errno(rc);
-}
-
-int
-dfs_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-	      daos_cont_info_t *info, daos_event_t *ev)
-{
-	int rc;
-
-	rc = daos_cont_open(poh, cont, flags, coh, info, ev);
-	return daos_der2errno(rc);
-}
-
-int
-dfs_cont_close(daos_handle_t coh, daos_event_t *ev)
-{
-	int rc;
-
-	rc = daos_cont_close(coh, ev);
-	return daos_der2errno(rc);
-}
-
-int
-dfs_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
-{
-	int rc;
-
-	rc = daos_cont_destroy(poh, cont, force, ev);
-	return daos_der2errno(rc);
-}
-
-int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		daos_handle_t *_coh, dfs_t **_dfs)
 {
