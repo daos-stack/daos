@@ -976,7 +976,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info, struct dfuse_projection_info **_fsh
 	if (fs_handle == NULL)
 		return -DER_NOMEM;
 
-	fs_handle->dpi_eqt_count = 4;
+	fs_handle->dpi_eqt_count = dfuse_info->di_equeue_count;
 
 	D_ALLOC_ARRAY(fs_handle->dpi_eqt, fs_handle->dpi_eqt_count);
 	if (fs_handle->dpi_eqt == NULL)

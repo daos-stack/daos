@@ -104,7 +104,8 @@ ior_mpiio_sx:
   transfer_size: 1MiB
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
-  disable_caching: True
+  disable_caching: true
+  eq-count: 4
 client:
   env_vars:
     - D_LOG_MASK=INFO

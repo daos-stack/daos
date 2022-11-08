@@ -332,6 +332,7 @@ main(int argc, char **argv)
 							{"sys-name", required_argument, 0, 'G'},
 							{"singlethread", no_argument, 0, 'S'},
 							{"thread-count", required_argument, 0, 't'},
+							{"eq-count", required_argument, 0, 'e'},
 							{"foreground", no_argument, 0, 'f'},
 							{"enable-caching", no_argument, 0, 'E'},
 							{"enable-wb-cache", no_argument, 0, 'F'},
@@ -353,6 +354,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 	dfuse_info->di_caching = true;
 	dfuse_info->di_wb_cache = true;
+	dfuse_info->di_equeue_count = 2;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
@@ -399,6 +401,9 @@ main(int argc, char **argv)
 			 */
 			dfuse_info->di_threaded     = false;
 			dfuse_info->di_thread_count = 2;
+			break;
+		case 'e':
+			dfuse_info->di_equeue_count = atoi(optarg);
 			break;
 		case 't':
 			dfuse_info->di_thread_count = atoi(optarg);
