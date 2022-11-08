@@ -38,19 +38,14 @@ func SystemCheckEnable(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEnable(ctx, &req.CheckEnableReq)
 	})
-	rpcClient.Debugf("DAOS system checker enable request: %+v", req)
 
+	rpcClient.Debugf("DAOS system checker enable request: %s", mgmtpb.Debug(&req.CheckEnableReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system checker enable response: %+v", ms)
 
-	return nil
+	return ur.getMSError()
 }
 
 type SystemCheckDisableReq struct {
@@ -70,26 +65,24 @@ func SystemCheckDisable(ctx context.Context, rpcClient UnaryInvoker, req *System
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDisable(ctx, &req.CheckDisableReq)
 	})
-	rpcClient.Debugf("DAOS system checker disable request: %+v", req)
 
+	rpcClient.Debugf("DAOS system checker disable request: %s", mgmtpb.Debug(&req.CheckDisableReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system checker disable response: %+v", ms)
 
-	return nil
+	return ur.getMSError()
 }
 
 const (
-	SystemCheckFlagDryRun  = SystemCheckFlags(chkpb.CheckFlag_CF_DRYRUN)
-	SystemCheckFlagReset   = SystemCheckFlags(chkpb.CheckFlag_CF_RESET)
-	SystemCheckFlagFailout = SystemCheckFlags(chkpb.CheckFlag_CF_FAILOUT)
-	SystemCheckFlagAuto    = SystemCheckFlags(chkpb.CheckFlag_CF_AUTO)
+	SystemCheckFlagDryRun         = SystemCheckFlags(chkpb.CheckFlag_CF_DRYRUN)
+	SystemCheckFlagReset          = SystemCheckFlags(chkpb.CheckFlag_CF_RESET)
+	SystemCheckFlagFailout        = SystemCheckFlags(chkpb.CheckFlag_CF_FAILOUT)
+	SystemCheckFlagAuto           = SystemCheckFlags(chkpb.CheckFlag_CF_AUTO)
+	SystemCheckFlagFindOrphans    = SystemCheckFlags(chkpb.CheckFlag_CF_ORPHAN_POOL)
+	SystemCheckFlagDisableFailout = SystemCheckFlags(chkpb.CheckFlag_CF_NO_FAILOUT)
+	SystemCheckFlagDisableAuto    = SystemCheckFlags(chkpb.CheckFlag_CF_NO_AUTO)
 
 	incClassPrefix     = "CIC_"
 	incActionPrefix    = "CIA_"
@@ -112,6 +105,15 @@ func (f SystemCheckFlags) String() string {
 	}
 	if f&SystemCheckFlagAuto != 0 {
 		flags = append(flags, "auto")
+	}
+	if f&SystemCheckFlagFindOrphans != 0 {
+		flags = append(flags, "find-pool-orphans")
+	}
+	if f&SystemCheckFlagDisableFailout != 0 {
+		flags = append(flags, "reset-failout")
+	}
+	if f&SystemCheckFlagDisableAuto != 0 {
+		flags = append(flags, "reset-auto")
 	}
 	if len(flags) == 0 {
 		return "none"
@@ -233,10 +235,35 @@ type SystemCheckStartReq struct {
 	mgmtpb.CheckStartReq
 }
 
+func checkSetFlags(setFlags uint32, incompatFlags ...chkpb.CheckFlag) error {
+	found := make(map[chkpb.CheckFlag]struct{})
+	for _, flag := range incompatFlags {
+		if setFlags&uint32(flag) != 0 {
+			found[flag] = struct{}{}
+		}
+	}
+	if len(found) <= 1 {
+		return nil
+	}
+
+	strFlags := make([]string, 0, len(found))
+	for found := range found {
+		strFlags = append(strFlags, found.String())
+	}
+
+	return errors.Errorf("flags %s are mutually exclusive", strings.Join(strFlags, ", "))
+}
+
 // SystemCheckStart starts the system checker.
 func SystemCheckStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckStartReq) error {
 	if req == nil {
 		return errors.Errorf("nil %T", req)
+	}
+	if err := checkSetFlags(req.Flags, chkpb.CheckFlag_CF_FAILOUT, chkpb.CheckFlag_CF_NO_FAILOUT); err != nil {
+		return err
+	}
+	if err := checkSetFlags(req.Flags, chkpb.CheckFlag_CF_AUTO, chkpb.CheckFlag_CF_NO_AUTO); err != nil {
+		return err
 	}
 
 	req.CheckStartReq.Sys = req.getSystem(rpcClient)
@@ -246,19 +273,14 @@ func SystemCheckStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStart(ctx, &req.CheckStartReq)
 	})
-	rpcClient.Debugf("DAOS system check start request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check start request: %s", mgmtpb.Debug(&req.CheckStartReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system check start response: %+v", ms)
 
-	return nil
+	return ur.getMSError()
 }
 
 type SystemCheckStopReq struct {
@@ -278,19 +300,14 @@ func SystemCheckStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemChe
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStop(ctx, &req.CheckStopReq)
 	})
-	rpcClient.Debugf("DAOS system check stop request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check stop request: %s", mgmtpb.Debug(&req.CheckStopReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system check stop response: %+v", ms)
 
-	return nil
+	return ur.getMSError()
 }
 
 type SystemCheckQueryReq struct {
@@ -429,8 +446,8 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckQuery(ctx, &req.CheckQueryReq)
 	})
-	rpcClient.Debugf("DAOS system check query request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check query request: %s", mgmtpb.Debug(&req.CheckQueryReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -439,7 +456,6 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 	if err := convertMSResponse(ur, pbResp); err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("DAOS system check query response: %+v", pbResp)
 
 	resp := &SystemCheckQueryResp{
 		Status:    SystemCheckStatus(pbResp.GetInsStatus()),
@@ -483,8 +499,8 @@ func SystemCheckGetPolicy(ctx context.Context, rpcClient UnaryInvoker, req *Syst
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckGetPolicy(ctx, &req.CheckGetPolicyReq)
 	})
-	rpcClient.Debugf("DAOS system check get-policy request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check get-policy request: %s", mgmtpb.Debug(&req.CheckGetPolicyReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -493,7 +509,6 @@ func SystemCheckGetPolicy(ctx context.Context, rpcClient UnaryInvoker, req *Syst
 	if err != nil {
 		return nil, err
 	}
-	rpcClient.Debugf("DAOS system check get-policy response: %+v", ms)
 
 	resp := new(SystemCheckGetPolicyResp)
 	if pbResp, ok := ms.(*mgmtpb.CheckGetPolicyResp); ok {
@@ -511,36 +526,51 @@ type SystemCheckSetPolicyReq struct {
 	unaryRequest
 	msRequest
 
-	Policies []*SystemCheckPolicy
+	ResetToDefaults bool
+	AllInteractive  bool
+	Policies        []*SystemCheckPolicy
 	mgmtpb.CheckSetPolicyReq
 }
 
 // SystemCheckSetPolicy sets the system checker properties.
 func SystemCheckSetPolicy(ctx context.Context, rpcClient UnaryInvoker, req *SystemCheckSetPolicyReq) error {
-	if req == nil {
+	switch {
+	case req == nil:
 		return errors.Errorf("nil %T", req)
+	case len(req.Policies) == 0 && !(req.AllInteractive || req.ResetToDefaults):
+		return errors.New("no policies specified")
+	case len(req.Policies) > 0 && (req.AllInteractive || req.ResetToDefaults):
+		return errors.New("cannot specify policy list and AllInteractive or ResetToDefaults")
 	}
 
 	req.CheckSetPolicyReq.Sys = req.getSystem(rpcClient)
-	for _, p := range req.Policies {
-		req.CheckSetPolicyReq.Policies = append(req.CheckSetPolicyReq.Policies, p.toPB())
+	if req.AllInteractive || req.ResetToDefaults {
+		action := chkpb.CheckInconsistAction_CIA_INTERACT
+		if req.ResetToDefaults {
+			action = chkpb.CheckInconsistAction_CIA_DEFAULT
+		}
+		for _, cls := range CheckerPolicyClasses() {
+			req.CheckSetPolicyReq.Policies = append(req.CheckSetPolicyReq.Policies, &mgmtpb.CheckInconsistPolicy{
+				InconsistCas: chkpb.CheckInconsistClass(cls),
+				InconsistAct: action,
+			})
+		}
+	} else {
+		for _, p := range req.Policies {
+			req.CheckSetPolicyReq.Policies = append(req.CheckSetPolicyReq.Policies, p.toPB())
+		}
 	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckSetPolicy(ctx, &req.CheckSetPolicyReq)
 	})
-	rpcClient.Debugf("DAOS system check set-policy request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check set-policy request: %s", mgmtpb.Debug(&req.CheckSetPolicyReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	ms, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system check get-policy response: %+v", ms)
 
-	return nil
+	return ur.getMSError()
 }
 
 type SystemCheckRepairReq struct {
@@ -569,17 +599,12 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 		req.CheckActReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRepair(ctx, &req.CheckActReq)
 	})
-	rpcClient.Debugf("DAOS system check repair request: %+v", req)
 
+	rpcClient.Debugf("DAOS system check repair request: %s", mgmtpb.Debug(&req.CheckActReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("DAOS system check repair response: %+v", msResp)
 
-	return nil
+	return ur.getMSError()
 }
