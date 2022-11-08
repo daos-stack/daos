@@ -116,6 +116,12 @@ func (tc *TierConfig) Validate() error {
 	return errors.New("no storage class set")
 }
 
+// SetNumaNodeIndex sets the NUMA node index for the tier.
+func (tc *TierConfig) SetNumaNodeIndex(idx uint) {
+	tc.Scm.NumaNodeIndex = idx
+	tc.Bdev.NumaNodeIndex = idx
+}
+
 func (tc *TierConfig) WithTier(tier int) *TierConfig {
 	tc.Tier = tier
 	return tc
@@ -124,6 +130,12 @@ func (tc *TierConfig) WithTier(tier int) *TierConfig {
 // WithStorageClass defines the type of storage (scm or bdev) to be configured.
 func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	tc.Class = Class(cls)
+	return tc
+}
+
+// WithScmDisableHugepages disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+	tc.Scm.DisableHugepages = true
 	return tc
 }
 
@@ -174,6 +186,12 @@ func (tc *TierConfig) WithBdevFileSize(size int) *TierConfig {
 // WithBdevBusidRange sets the bus-ID range to be used to filter hot plug events.
 func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	tc.Bdev.BusidRange = MustNewBdevBusRange(rangeStr)
+	return tc
+}
+
+// WithNumaNodeIndex sets the NUMA node index to be used for this tier.
+func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
+	tc.SetNumaNodeIndex(idx)
 	return tc
 }
 
@@ -279,9 +297,11 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint  string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize uint     `yaml:"scm_size,omitempty"`
-	DeviceList  []string `yaml:"scm_list,omitempty"`
+	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DeviceList       []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex    uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -297,6 +317,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
+		}
+		if sc.DisableHugepages {
+			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
 		if sc.RamdiskSize == 0 {
@@ -534,10 +557,11 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
-	DeviceList  *BdevDeviceList `yaml:"bdev_list,omitempty"`
-	DeviceCount int             `yaml:"bdev_number,omitempty"`
-	FileSize    int             `yaml:"bdev_size,omitempty"`
-	BusidRange  *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
+	DeviceCount   int             `yaml:"bdev_number,omitempty"`
+	FileSize      int             `yaml:"bdev_size,omitempty"`
+	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	NumaNodeIndex uint            `yaml:"-"`
 }
 
 func (bc *BdevConfig) checkNonZeroDevFileSize(class Class) error {
@@ -732,6 +756,13 @@ type Config struct {
 	EnableHotplug    bool        `yaml:"-"`
 	NumaNodeIndex    uint        `yaml:"-"`
 	AccelProps       AccelProps  `yaml:"acceleration,omitempty"`
+}
+
+func (c *Config) SetNUMAAffinity(node uint) {
+	c.NumaNodeIndex = node
+	for _, tier := range c.Tiers {
+		tier.SetNumaNodeIndex(node)
+	}
 }
 
 func (c *Config) GetBdevs() *BdevDeviceList {

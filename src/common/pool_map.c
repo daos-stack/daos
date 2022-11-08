@@ -80,7 +80,10 @@ struct pool_map {
 	 * of component found in the pool
 	 */
 	struct pool_fail_comp	*po_comp_fail_cnts;
-
+	/* Current least in version from all UP/NEW targets. */
+	uint32_t		po_in_ver;
+	/* Current least fseq version from all DOWN targets. */
+	uint32_t		po_fseq;
 };
 
 static struct pool_comp_state_dict comp_state_dict[] = {
@@ -125,13 +128,13 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 	},
 	{
 		.td_type	= PO_COMP_TP_RANK,
-		.td_abbr	= 'n',
-		.td_name	= "node",
+		.td_abbr	= 'r',
+		.td_name	= "rank",
 	},
 	{
-		.td_type	= PO_COMP_TP_NODE, /** for testing */
-		.td_abbr	= 'r',
-		.td_name	= "rack",
+		.td_type	= PO_COMP_TP_NODE,
+		.td_abbr	= 'n',
+		.td_name	= "node",
 	},
 	{
 		.td_type	= PO_COMP_TP_ROOT,
@@ -510,9 +513,9 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			goto out;
 		}
 
-		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d\n",
+		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d status %u\n",
 			pool_comp_type2str(comp->co_type), comp->co_id,
-			i, comp->co_nr);
+			i, comp->co_nr, comp->co_status);
 
 		if (comp->co_type == type)
 			continue;
@@ -909,6 +912,28 @@ pool_map_finalise(struct pool_map *map)
 	D_MUTEX_DESTROY(&map->po_lock);
 }
 
+void
+pool_map_init_in_fseq(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+	int i;
+
+	pool_tree_count(map->po_tree, &cntr);
+
+	for (i = 0; i < cntr.cc_targets; i++) {
+		struct pool_target *ta;
+
+		ta = &map->po_tree->do_targets[i];
+		if (ta->ta_comp.co_status == PO_COMP_ST_UP)
+			map->po_in_ver = min(map->po_in_ver, ta->ta_comp.co_in_ver);
+
+		if (ta->ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    ta->ta_comp.co_status == PO_COMP_ST_DRAIN)
+			map->po_fseq = min(map->po_fseq, ta->ta_comp.co_fseq);
+	}
+
+}
+
 /**
  * Install a component tree to a pool map.
  *
@@ -988,6 +1013,8 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	if (rc != 0)
 		goto out_domain_sorters;
 
+	map->po_in_ver = -1;
+	map->po_fseq = -1;
 	for (i = 0; i < cntr.cc_targets; i++) {
 		struct pool_target *ta;
 
@@ -995,6 +1022,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
 	}
 
+	pool_map_init_in_fseq(map);
 	rc = comp_sorter_sort(&map->po_target_sorter);
 	if (rc != 0)
 		goto out_target_sorter;
@@ -1384,25 +1412,62 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 	return rc;
 }
 
-static int
-add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
-			int map_version,
-			int ndomains, const uint32_t *domains)
+static void
+fill_domain_comp(struct pool_map *map, struct d_fd_node *domain, int idx, int map_version,
+		 uint8_t new_status, struct pool_component *map_comp)
 {
-	int			i = 0;
+	/* TODO DAOS-6353: Use the layer number as type */
+	map_comp->co_type = PO_COMP_TP_NODE;
+	map_comp->co_status = new_status;
+	map_comp->co_index = idx;
+	map_comp->co_id = domain->fdn_val.dom->fd_id;
+	map_comp->co_ver = map_version;
+	map_comp->co_in_ver = map_version;
+	map_comp->co_fseq = 1;
+	map_comp->co_flags = PO_COMPF_NONE;
+	map_comp->co_nr = domain->fdn_val.dom->fd_children_nr;
+}
+
+static void
+fill_rank_comp(uint32_t rank, int idx, int map_version, uint8_t new_status, uint32_t nr_tgts,
+	       struct pool_component *map_comp)
+{
+	map_comp->co_type = PO_COMP_TP_RANK;
+	map_comp->co_status = new_status;
+	map_comp->co_index = idx;
+	map_comp->co_id = rank;
+	map_comp->co_rank = rank;
+	map_comp->co_ver = map_version;
+	map_comp->co_in_ver = map_version;
+	map_comp->co_fseq = 1;
+	map_comp->co_flags = PO_COMPF_NONE;
+	map_comp->co_nr = nr_tgts;
+}
+
+static int
+add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
+			    int map_version, uint32_t nr_tgts,
+			    int ndomains, const uint32_t *domains, d_rank_list_t *ordered_ranks)
+{
 	int			rc;
-	uint32_t		num_comps;
+	uint32_t		num_dom_comps;
+	uint32_t		num_rank_comps;
 	uint8_t			new_status;
 	struct d_fd_tree	tree = {0};
 	struct d_fd_node	node = {0};
+	bool			updated = false;
+	int			i = 0;
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
-						 PO_COMP_ID_ALL, NULL);
+		num_dom_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
+						     PO_COMP_ID_ALL, NULL);
+		num_rank_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
+						      PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
-		num_comps = 0;
+		num_dom_comps = 0;
+		num_rank_comps = 0;
 	}
 
 	rc = d_fd_tree_init(&tree, domains, ndomains);
@@ -1412,7 +1477,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	/* discard the root - it's being added to the pool buf elsewhere */
 	rc = d_fd_tree_next(&tree, &node);
 	while (rc == 0) {
-		struct pool_component map_comp;
+		struct pool_component map_comp = {0};
 
 		rc = d_fd_tree_next(&tree, &node);
 		if (rc != 0) {
@@ -1422,129 +1487,123 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 			break;
 		}
 
-		/* ranks are handled elsewhere for now */
-		if (node.fdn_type != D_FD_NODE_TYPE_DOMAIN)
+		switch (node.fdn_type) {
+		case D_FD_NODE_TYPE_DOMAIN:
+			fill_domain_comp(map, &node, num_dom_comps, map_version, new_status,
+					 &map_comp);
+			if (map != NULL) {
+				struct pool_domain	*current;
+				int			already_in_map;
+
+				already_in_map = pool_map_find_domain(map,
+								      PO_COMP_TP_NODE,
+									map_comp.co_id,
+									&current);
+				if (already_in_map > 0) {
+					D_DEBUG(DB_TRACE, "domain %d already in map\n",
+						map_comp.co_id);
+					map_comp.co_status = current->do_comp.co_status;
+					map_comp.co_index = current->do_comp.co_index;
+				} else {
+					num_dom_comps++;
+				}
+			} else {
+				num_dom_comps++;
+			}
 			break;
+		case D_FD_NODE_TYPE_RANK:
+		{
+			uint32_t rank = node.fdn_val.rank;
 
-		/* TODO DAOS-6353: Use the layer number as type */
-		map_comp.co_type = PO_COMP_TP_NODE;
-		map_comp.co_status = new_status;
-		map_comp.co_index = i + num_comps;
-		map_comp.co_padding = 0;
-		map_comp.co_id = node.fdn_val.dom->fd_id;
-		map_comp.co_rank = 0;
-		map_comp.co_ver = map_version;
-		map_comp.co_in_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_flags = PO_COMPF_NONE;
-		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+			if (map) {
+				struct pool_domain *found_dom;
 
-		if (map != NULL) {
-			struct pool_domain	*current;
-			int			already_in_map;
+				found_dom = pool_map_find_node_by_rank(map, rank);
+				if (found_dom) {
+					D_DEBUG(DB_TRACE, "rank %u already in map\n", rank);
+					continue;
+				}
+			}
 
-			already_in_map = pool_map_find_domain(map,
-							      PO_COMP_TP_NODE,
-							      map_comp.co_id,
-							      &current);
-			if (already_in_map > 0)
-				map_comp.co_status = current->do_comp.co_status;
+			updated = true;
+			fill_rank_comp(node.fdn_val.rank, num_rank_comps, map_version,
+				       new_status, nr_tgts, &map_comp);
+
+			D_ASSERT(i < ordered_ranks->rl_nr);
+			ordered_ranks->rl_ranks[i++] = node.fdn_val.rank;
+			num_rank_comps++;
+			break;
+		}
+		default:
+			D_ERROR("bad fault domain tree, node type=%d\n", node.fdn_type);
+			return -DER_INVAL;
 		}
 
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		D_DEBUG(DB_TRACE, "adding component: type=0x%hhx, status=%hhu, idx=%d, id=%u, "
+			"ver=%d, in_ver=%d, fseq=%u, flags=0x%x, nr=%u\n",
+			map_comp.co_type, map_comp.co_status, map_comp.co_index, map_comp.co_id,
+			map_comp.co_ver, map_comp.co_in_ver, map_comp.co_fseq, map_comp.co_flags,
+			map_comp.co_nr);
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1);
 		if (rc != 0)
-			D_ERROR("failed attaching domain ID %d to pool "
-				"buf\n", node.fdn_val.dom->fd_id);
-		i++;
+			D_ERROR("failed attaching component ID %u to pool buf\n", map_comp.co_id);
 	}
+
+	ordered_ranks->rl_nr = i;
+
+	if (rc == 0 && !updated)
+		return -DER_ALREADY;
 
 	return rc;
 }
 
 int
 gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-	     int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
-	     uint32_t dss_tgt_nr)
+	     int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr)
 {
 	struct pool_component	map_comp;
 	struct pool_buf		*map_buf;
-	struct pool_domain	*found_dom;
 	uint32_t		num_comps;
 	uint8_t			new_status;
-	bool			updated;
 	int			i, rc;
-	uint32_t		num_domain_comps;
-
-	updated = false;
+	uint32_t		num_domain_comps = 0;
+	d_rank_list_t		*ordered_ranks;
 
 	/*
 	 * Estimate number of domains for allocating the pool buffer
 	 */
 	rc = d_fd_get_exp_num_domains(ndomains, nnodes, &num_domain_comps);
 	if (rc != 0) {
-		D_ERROR("Invalid domain array, len=%u\n", ndomains);
+		D_ERROR("failed to calculate number of domains, "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	D_ASSERT(num_domain_comps > 0);
 	num_domain_comps--; /* remove the root domain - allocated separately */
 
+	ordered_ranks = d_rank_list_alloc(nnodes);
+	if (ordered_ranks == NULL)
+		return -DER_NOMEM;
+
 	map_buf = pool_buf_alloc(num_domain_comps + nnodes + ntargets);
 	if (map_buf == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
-	rc = add_domains_to_pool_buf(map, map_buf, map_version, ndomains,
-				     domains);
+	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains,
+					 domains, ordered_ranks);
 	if (rc != 0)
 		D_GOTO(out_map_buf, rc);
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
-		num_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
-						 PO_COMP_ID_ALL, NULL);
+		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
 		num_comps = 0;
 	}
 
-	/* fill nodes */
-	for (i = 0; i < nnodes; i++) {
-		if (map) {
-			found_dom = pool_map_find_node_by_rank(map, ranks->rl_ranks[i]);
-			if (found_dom)
-				continue;
-		}
-
-		updated = true;
-		map_comp.co_type = PO_COMP_TP_RANK;
-		map_comp.co_status = new_status;
-		map_comp.co_index = i + num_comps;
-		map_comp.co_padding = 0;
-		map_comp.co_id = ranks->rl_ranks[i];
-		map_comp.co_rank = ranks->rl_ranks[i];
-		map_comp.co_ver = map_version;
-		map_comp.co_in_ver = map_version;
-		map_comp.co_fseq = 1;
-		map_comp.co_flags = PO_COMPF_NONE;
-		map_comp.co_nr = dss_tgt_nr;
-
-		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-		if (rc != 0) {
-			D_ERROR("failed to attach to pool buf, "DF_RC"\n",
-				DP_RC(rc));
-			D_GOTO(out_map_buf, rc);
-		}
-	}
-
-	if (!updated)
-		D_GOTO(out_map_buf, rc = -DER_ALREADY);
-
-	if (map != NULL)
-		num_comps = pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
-	else
-		num_comps = 0;
-
 	/* fill targets */
-	for (i = 0; i < nnodes; i++) {
+	for (i = 0; i < ordered_ranks->rl_nr; i++) {
 		int j;
 
 		for (j = 0; j < dss_tgt_nr; j++) {
@@ -1553,12 +1612,18 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 			map_comp.co_index = j;
 			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
-			map_comp.co_rank = ranks->rl_ranks[i];
+			map_comp.co_rank = ordered_ranks->rl_ranks[i];
 			map_comp.co_ver = map_version;
 			map_comp.co_in_ver = map_version;
 			map_comp.co_fseq = 1;
 			map_comp.co_flags = PO_COMPF_NONE;
 			map_comp.co_nr = 1;
+
+			D_DEBUG(DB_TRACE, "adding target: type=0x%hhx, status=%hhu, idx=%d, "
+				"rank=%d, ver=%d, in_ver=%d, fseq=%u, flags=0x%x, nr=%u\n",
+				map_comp.co_type, map_comp.co_status, map_comp.co_index,
+				map_comp.co_rank, map_comp.co_ver, map_comp.co_in_ver,
+				map_comp.co_fseq, map_comp.co_flags, map_comp.co_nr);
 
 			rc = pool_buf_attach(map_buf, &map_comp, 1);
 			if (rc != 0)
@@ -1567,10 +1632,13 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	}
 
 	*map_buf_out = map_buf;
+	d_rank_list_free(ordered_ranks);
 	return 0;
 
 out_map_buf:
 	pool_buf_free(map_buf);
+out_ranks:
+	d_rank_list_free(ordered_ranks);
 	return rc;
 }
 
@@ -3039,4 +3107,9 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	addr_list->pta_number++;
 
 	return 0;
+}
+
+bool is_pool_map_adding(struct pool_map *map, uint32_t version)
+{
+	return map->po_in_ver != (uint32_t)(-1) && version >= map->po_in_ver;
 }

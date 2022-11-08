@@ -84,7 +84,7 @@ cont_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-cont_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+cont_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -923,10 +923,11 @@ cont_iv_capa_refresh_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1359,10 +1360,11 @@ cont_iv_prop_fetch_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
 	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)

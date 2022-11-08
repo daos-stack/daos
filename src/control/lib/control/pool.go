@@ -23,7 +23,10 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -82,9 +85,9 @@ func formatNameGroup(ext auth.UserExt, usr string, grp string) (string, string, 
 	return usr, grp, nil
 }
 
-func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
+func convertPoolProps(in []*daos.PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty, error) {
 	out := make([]*mgmtpb.PoolProperty, len(in))
-	allProps := PoolProperties()
+	allProps := daos.PoolProperties()
 
 	for i, prop := range in {
 		if prop == nil {
@@ -110,15 +113,13 @@ func convertPoolProps(in []*PoolProperty, setProp bool) ([]*mgmtpb.PoolProperty,
 			}
 		}
 
-		switch val := prop.Value.data.(type) {
-		case string:
-			out[i].SetValueString(val)
-		case uint64:
-			out[i].SetValueNumber(val)
-		case nil:
+		if num, err := prop.Value.GetNumber(); err == nil {
+			out[i].SetValueNumber(num)
+		} else if prop.Value.IsSet() {
+			out[i].SetValueString(prop.Value.String())
+		} else {
+			// not set; just skip it
 			continue
-		default:
-			return nil, errors.Errorf("unhandled property value: %+v", prop.Value.data)
 		}
 	}
 
@@ -206,6 +207,13 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		default:
 			return false
 		}
+	case *fault.Fault:
+		switch e.Code {
+		case code.ServerDataPlaneNotStarted:
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
@@ -219,13 +227,13 @@ type (
 		UserGroup  string
 		ACL        *AccessControlList
 		NumSvcReps uint32
-		Properties []*PoolProperty `json:"-"`
+		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
 		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
-		Ranks     []system.Rank
+		Ranks     []ranklist.Rank
 		TierBytes []uint64
 	}
 
@@ -254,27 +262,21 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Create DAOS pool request: %+v\n", req)
+	rpcClient.Debugf("Create DAOS pool request: %+v\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
+	pcr := new(PoolCreateResp)
+	if err := convertMSResponse(ur, pcr); err != nil {
 		return nil, errors.Wrap(err, "pool create failed")
 	}
-	rpcClient.Debugf("Create DAOS pool response: %s\n", mgmtpb.Debug(msResp))
-
-	pbPcr, ok := msResp.(*mgmtpb.PoolCreateResp)
-	if !ok {
-		return nil, errors.New("unable to extract PoolCreateResp from MS response")
+	if pcr.UUID == "" {
+		pcr.UUID = pbReq.Uuid
 	}
 
-	pcr := new(PoolCreateResp)
-	pcr.UUID = pbReq.Uuid
-
-	return pcr, convert.Types(pbPcr, pcr)
+	return pcr, nil
 }
 
 // PoolDestroyReq contains the parameters for a pool destroy request.
@@ -287,28 +289,23 @@ type PoolDestroyReq struct {
 
 // PoolDestroy performs a pool destroy operation on a DAOS Management Server instance.
 func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyReq) error {
+	pbReq := &mgmtpb.PoolDestroyReq{
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		Recursive: req.Recursive,
+		Force:     req.Force,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, &mgmtpb.PoolDestroyReq{
-			Sys:       req.getSystem(rpcClient),
-			Id:        req.ID,
-			Recursive: req.Recursive,
-			Force:     req.Force,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %+v\n", req)
+	rpcClient.Debugf("Destroy DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool destroy failed")
-	}
-	rpcClient.Debugf("Destroy DAOS pool response: %+v\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool destroy failed")
 }
 
 // PoolUpgradeReq contains the parameters for a pool upgrade request.
@@ -319,26 +316,21 @@ type PoolUpgradeReq struct {
 
 // PoolUpgrade performs a pool upgrade operation on a DAOS Management Server instance.
 func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeReq) error {
+	pbReq := &mgmtpb.PoolUpgradeReq{
+		Sys: req.getSystem(rpcClient),
+		Id:  req.ID,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, &mgmtpb.PoolUpgradeReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Upgrade DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Upgrade DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool upgrade failed")
-	}
-	rpcClient.Debugf("Upgrade DAOS pool response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool upgrade failed")
 }
 
 // PoolEvictReq contains the parameters for a pool evict request.
@@ -350,27 +342,22 @@ type PoolEvictReq struct {
 
 // PoolEvict performs a pool connection evict operation on a DAOS Management Server instance.
 func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) error {
+	pbReq := &mgmtpb.PoolEvictReq{
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Handles: req.Handles,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, &mgmtpb.PoolEvictReq{
-			Sys:     req.getSystem(rpcClient),
-			Id:      req.ID,
-			Handles: req.Handles,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Evict DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Evict DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool evict failed")
-	}
-	rpcClient.Debugf("Evict DAOS pool response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool evict failed")
 }
 
 type (
@@ -413,8 +400,8 @@ type (
 		Leader           uint32               `json:"leader"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`
-		EnabledRanks     *system.RankSet      `json:"-"`
-		DisabledRanks    *system.RankSet      `json:"-"`
+		EnabledRanks     *ranklist.RankSet    `json:"-"`
+		DisabledRanks    *ranklist.RankSet    `json:"-"`
 		PoolLayoutVer    uint32               `json:"pool_layout_ver"`
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
@@ -430,7 +417,7 @@ type (
 	PoolQueryTargetReq struct {
 		poolRequest
 		ID      string
-		Rank    system.Rank
+		Rank    ranklist.Rank
 		Targets []uint32
 	}
 
@@ -474,8 +461,8 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 
 	type Alias PoolQueryResp
 	aux := &struct {
-		EnabledRanks  *[]system.Rank `json:"enabled_ranks"`
-		DisabledRanks *[]system.Rank `json:"disabled_ranks"`
+		EnabledRanks  *[]ranklist.Rank `json:"enabled_ranks"`
+		DisabledRanks *[]ranklist.Rank `json:"disabled_ranks"`
 		*Alias
 	}{
 		Alias: (*Alias)(pqr),
@@ -494,14 +481,14 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&aux)
 }
 
-func unmarshallRankSet(ranks string) (*system.RankSet, error) {
+func unmarshallRankSet(ranks string) (*ranklist.RankSet, error) {
 	switch ranks {
 	case "":
 		return nil, nil
 	case "[]":
-		return &system.RankSet{}, nil
+		return &ranklist.RankSet{}, nil
 	default:
-		return system.CreateRankSet(ranks)
+		return ranklist.CreateRankSet(ranks)
 	}
 }
 
@@ -583,16 +570,17 @@ func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 // PoolQuery performs a pool query operation for the specified pool ID on a
 // DAOS Management Server instance.
 func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (*PoolQueryResp, error) {
+	pbReq := &mgmtpb.PoolQueryReq{
+		Sys:                  req.getSystem(rpcClient),
+		Id:                   req.ID,
+		IncludeEnabledRanks:  req.IncludeEnabledRanks,
+		IncludeDisabledRanks: req.IncludeDisabledRanks,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, &mgmtpb.PoolQueryReq{
-			Sys:                  req.getSystem(rpcClient),
-			Id:                   req.ID,
-			IncludeEnabledRanks:  req.IncludeEnabledRanks,
-			IncludeDisabledRanks: req.IncludeDisabledRanks,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Query DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -605,16 +593,17 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
 // for the specified pool ID, pool engine rank, and target indices.
 func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
+	pbReq := &mgmtpb.PoolQueryTargetReq{
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Rank:    uint32(req.Rank),
+		Targets: req.Targets,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, &mgmtpb.PoolQueryTargetReq{
-			Sys:     req.getSystem(rpcClient),
-			Id:      req.ID,
-			Rank:    uint32(req.Rank),
-			Targets: req.Targets,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool targets request: %v\n", req)
+	rpcClient.Debugf("Query DAOS pool targets request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -733,7 +722,7 @@ type PoolSetPropReq struct {
 	poolRequest
 	// ID identifies the pool for which this property should be set.
 	ID         string
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolSetProp sends a pool set-prop request to the pool service leader.
@@ -760,19 +749,13 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS pool set-prop request: %+v\n", pbReq)
+	rpcClient.Debugf("DAOS pool set-prop request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return err
-	}
-	rpcClient.Debugf("pool set-prop response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool set-prop failed")
 }
 
 // PoolGetPropReq contains pool get-prop parameters.
@@ -786,15 +769,15 @@ type PoolGetPropReq struct {
 	Name string
 	// Properties is the list of properties to be retrieved. If empty,
 	// all properties will be retrieved.
-	Properties []*PoolProperty
+	Properties []*daos.PoolProperty
 }
 
 // PoolGetProp sends a pool get-prop request to the pool service leader.
-func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*PoolProperty, error) {
+func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropReq) ([]*daos.PoolProperty, error) {
 	// Get all by default.
 	if len(req.Properties) == 0 {
-		allProps := PoolProperties()
-		req.Properties = make([]*PoolProperty, 0, len(allProps))
+		allProps := daos.PoolProperties()
+		req.Properties = make([]*daos.PoolProperty, 0, len(allProps))
 		for _, key := range allProps.Keys() {
 			hdlr := allProps[key]
 			req.Properties = append(req.Properties, hdlr.GetProperty(key))
@@ -815,7 +798,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("pool get-prop request: %+v\n", req)
+	rpcClient.Debugf("pool get-prop request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -842,6 +825,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	for _, prop := range resp {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
+			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -854,8 +838,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		}
 	}
 
-	rpcClient.Debugf("pool get-prop resp: %+v\n", resp)
-
 	return resp, nil
 }
 
@@ -863,7 +845,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 type PoolExcludeReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -873,36 +855,30 @@ type PoolExcludeReq struct {
 // This should automatically start the rebuildiing process.
 // Returns an error (including any DER code from DAOS).
 func PoolExclude(ctx context.Context, rpcClient UnaryInvoker, req *PoolExcludeReq) error {
+	pbReq := &mgmtpb.PoolExcludeReq{
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		Rank:      req.Rank.Uint32(),
+		Targetidx: req.Targetidx,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, &mgmtpb.PoolExcludeReq{
-			Sys:       req.getSystem(rpcClient),
-			Id:        req.ID,
-			Rank:      req.Rank.Uint32(),
-			Targetidx: req.Targetidx,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolExclude(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Exclude DAOS pool target request: %v\n", req)
-
+	rpcClient.Debugf("Exclude DAOS pool target request: %s\n", pbReq)
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool Exclude failed")
-	}
-	rpcClient.Debugf("Exclude DAOS pool target response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool exclude failed")
 }
 
 // PoolDrainReq struct contains request
 type PoolDrainReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -912,29 +888,23 @@ type PoolDrainReq struct {
 // This should automatically start the rebuildiing process.
 // Returns an error (including any DER code from DAOS).
 func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) error {
+	pbReq := &mgmtpb.PoolDrainReq{
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		Rank:      req.Rank.Uint32(),
+		Targetidx: req.Targetidx,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, &mgmtpb.PoolDrainReq{
-			Sys:       req.getSystem(rpcClient),
-			Id:        req.ID,
-			Rank:      req.Rank.Uint32(),
-			Targetidx: req.Targetidx,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Drain DAOS pool target request: %v\n", req)
-
+	rpcClient.Debugf("Drain DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool Drain failed")
-	}
-	rpcClient.Debugf("Drain DAOS pool target response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool drain failed")
 }
 
 func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err error) {
@@ -950,7 +920,7 @@ func genPoolExtendRequest(in *PoolExtendReq) (out *mgmtpb.PoolExtendReq, err err
 type PoolExtendReq struct {
 	poolRequest
 	ID    string
-	Ranks []system.Rank
+	Ranks []ranklist.Rank
 }
 
 // PoolExtend will extend the DAOS pool by the specified ranks.
@@ -967,26 +937,20 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Extend DAOS pool request: %v\n", req)
+	rpcClient.Debugf("Extend DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool extend failed")
-	}
-	rpcClient.Debugf("Extend DAOS pool response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool extend failed")
 }
 
 // PoolReintegrateReq struct contains request
 type PoolReintegrateReq struct {
 	poolRequest
 	ID        string
-	Rank      system.Rank
+	Rank      ranklist.Rank
 	Targetidx []uint32
 }
 
@@ -996,29 +960,24 @@ type PoolReintegrateReq struct {
 // This should automatically start the reintegration process.
 // Returns an error (including any DER code from DAOS).
 func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReintegrateReq) error {
+	pbReq := &mgmtpb.PoolReintegrateReq{
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		Rank:      req.Rank.Uint32(),
+		Targetidx: req.Targetidx,
+	}
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, &mgmtpb.PoolReintegrateReq{
-			Sys:       req.getSystem(rpcClient),
-			Id:        req.ID,
-			Rank:      req.Rank.Uint32(),
-			Targetidx: req.Targetidx,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Reintegrate DAOS pool target request: %v\n", req)
-
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	msResp, err := ur.getMSResponse()
-	if err != nil {
-		return errors.Wrap(err, "pool reintegrate failed")
-	}
-	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
-
-	return nil
+	return errors.Wrap(ur.getMSError(), "pool reintegrate failed")
 }
 
 type (
@@ -1044,7 +1003,7 @@ type (
 		Label string `json:"label,omitempty"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_reps"`
+		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
 		// State is the current state of the pool.
 		State string `json:"state"`
 
@@ -1167,13 +1126,12 @@ func (lpr *ListPoolsResp) Errors() error {
 // ListPools fetches the list of all pools and their service replicas from the
 // system.
 func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
+	pbReq := &mgmtpb.ListPoolsReq{Sys: req.getSystem(rpcClient)}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
-			Sys: req.getSystem(rpcClient),
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, pbReq)
 	})
-	rpcClient.Debugf("DAOS system list-pools request: %+v", req)
 
+	rpcClient.Debugf("DAOS system list-pools request: %s", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1229,12 +1187,12 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	return resp, nil
 }
 
-type rankFreeSpaceMap map[system.Rank]uint64
+type rankFreeSpaceMap map[ranklist.Rank]uint64
 
-type filterRankFn func(rank system.Rank) bool
+type filterRankFn func(rank ranklist.Rank) bool
 
-func newFilterRankFunc(ranks system.RankList) filterRankFn {
-	return func(rank system.Rank) bool {
+func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
+	return func(rank ranklist.Rank) bool {
 		return len(ranks) == 0 || rank.InList(ranks)
 	}
 }
@@ -1278,7 +1236,7 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, nvmeController := range nvmeControllers {
 		for _, smdDevice := range nvmeController.SmdDevices {
-			if !smdDevice.NvmeState.IsNormal() {
+			if smdDevice.NvmeState != storage.NvmeStateNormal {
 				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
 				continue
@@ -1307,7 +1265,7 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 }
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks system.RankList) (uint64, uint64, error) {
+func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
 	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err

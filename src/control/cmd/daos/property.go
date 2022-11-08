@@ -103,8 +103,11 @@ var propHdlrs = propHdlrMap{
 			}
 			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
-			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
-			freeString(cStr)
+			defer freeString(cStr)
+			rc := C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
+			if err := daosError(rc); err != nil {
+				return err
+			}
 			return nil
 		},
 		nil,
@@ -338,7 +341,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_FAC,
 		"Redundancy Factor",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf", v)
+			vh, err := h.valHdlrs.get("rd_fac", v)
 			if err != nil {
 				return err
 			}
@@ -358,15 +361,15 @@ var propHdlrs = propHdlrMap{
 			}
 			switch C.get_dpe_val(e) {
 			case C.DAOS_PROP_CO_REDUN_RF0:
-				return "rf0"
+				return "rd_fac0"
 			case C.DAOS_PROP_CO_REDUN_RF1:
-				return "rf1"
+				return "rd_fac1"
 			case C.DAOS_PROP_CO_REDUN_RF2:
-				return "rf2"
+				return "rd_fac2"
 			case C.DAOS_PROP_CO_REDUN_RF3:
-				return "rf3"
+				return "rd_fac3"
 			case C.DAOS_PROP_CO_REDUN_RF4:
-				return "rf4"
+				return "rd_fac4"
 			default:
 				return propInvalidValue(e, name)
 			}
@@ -531,7 +534,7 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
-			vh, err := h.valHdlrs.get("rf_lvl", v)
+			vh, err := h.valHdlrs.get("rd_lvl", v)
 			if err != nil {
 				return err
 			}
@@ -604,6 +607,11 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
+}
+
+var contDeprProps = map[string]string{
+	"rf":     "rd_fac",
+	"rf_lvl": "rd_lvl",
 }
 
 // NB: Most feature work should not require modification to the code
@@ -951,6 +959,7 @@ func (f *CreatePropertiesFlag) setWritableKeys() {
 		}
 	}
 	f.SettableKeys(keys...)
+	f.DeprecatedKeyMap(contDeprProps)
 }
 
 func (f *CreatePropertiesFlag) Complete(match string) []flags.Completion {
@@ -1008,14 +1017,18 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	}
 
 	for i, name := range f.names {
-		f.names[i] = strings.TrimSpace(name)
-		if len(name) == 0 {
+		key := strings.TrimSpace(name)
+		if len(key) == 0 {
 			return propError("name must not be empty")
 		}
-		if len(name) > maxNameLen {
+		if len(key) > maxNameLen {
 			return propError("name too long (%d > %d)",
 				len(name), maxNameLen)
 		}
+		if newKey, found := contDeprProps[key]; found {
+			key = newKey
+		}
+		f.names[i] = key
 	}
 
 	return nil

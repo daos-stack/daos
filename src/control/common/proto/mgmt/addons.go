@@ -14,7 +14,8 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func (p *PoolProperty) UnmarshalJSON(b []byte) error {
@@ -223,28 +224,28 @@ func Debug(msg proto.Message) string {
 	var bld strings.Builder
 	switch m := msg.(type) {
 	case *SystemQueryResp:
-		stateRanks := make(map[string]*system.RankSet)
+		stateRanks := make(map[string]*ranklist.RankSet)
 		for _, m := range m.Members {
 			if _, found := stateRanks[m.State]; !found {
-				stateRanks[m.State] = &system.RankSet{}
+				stateRanks[m.State] = &ranklist.RankSet{}
 			}
-			stateRanks[m.State].Add(system.Rank(m.Rank))
+			stateRanks[m.State].Add(ranklist.Rank(m.Rank))
 		}
 		fmt.Fprintf(&bld, "%T ", m)
 		for state, set := range stateRanks {
-			fmt.Fprintf(&bld, "%s: %s ", state, set.String())
+			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
 	case *PoolCreateReq:
 		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
 		if len(m.Properties) > 0 {
 			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
 		}
-		ranks := &system.RankSet{}
+		ranks := &ranklist.RankSet{}
 		for _, r := range m.Ranks {
-			ranks.Add(system.Rank(r))
+			ranks.Add(ranklist.Rank(r))
 		}
-		fmt.Fprintf(&bld, "ranks: %s ", ranks.String())
-		fmt.Fprint(&bld, "tiers: ")
+		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
+		fmt.Fprint(&bld, "tiers:")
 		for i, b := range m.Tierbytes {
 			fmt.Fprintf(&bld, "%d: %d ", i, b)
 			if len(m.Tierratio) > i+1 {
@@ -253,22 +254,31 @@ func Debug(msg proto.Message) string {
 		}
 	case *PoolCreateResp:
 		fmt.Fprintf(&bld, "%T ", m)
-		ranks := &system.RankSet{}
+		ranks := &ranklist.RankSet{}
 		for _, r := range m.SvcReps {
-			ranks.Add(system.Rank(r))
+			ranks.Add(ranklist.Rank(r))
 		}
-		fmt.Fprintf(&bld, "svc_ranks: %s ", ranks.String())
-		ranks = &system.RankSet{}
+		fmt.Fprintf(&bld, "svc_ranks:%s ", ranks.String())
+		ranks = &ranklist.RankSet{}
 		for _, r := range m.TgtRanks {
-			ranks.Add(system.Rank(r))
+			ranks.Add(ranklist.Rank(r))
 		}
-		fmt.Fprintf(&bld, "tgt_ranks: %s ", ranks.String())
-		fmt.Fprint(&bld, "tiers: ")
+		fmt.Fprintf(&bld, "tgt_ranks:%s ", ranks.String())
+		fmt.Fprint(&bld, "tiers:")
 		for i, b := range m.TierBytes {
-			fmt.Fprintf(&bld, "%d: %d ", i, b)
+			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+	case *JoinResp:
+		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t)", m, m.Rank, m.State, m.LocalJoin)
 	default:
-		return fmt.Sprintf("%+v", m)
+		fmt.Fprintf(&bld, "%T", m)
+		if sr, ok := m.(interface{ GetStatus() int32 }); ok {
+			fmt.Fprintf(&bld, " status:%s", daos.Status(sr.GetStatus()))
+		}
+		dbg := fmt.Sprintf("%+v", m)
+		if len(dbg) > 0 {
+			fmt.Fprintf(&bld, " (%s)", dbg)
+		}
 	}
 
 	return bld.String()

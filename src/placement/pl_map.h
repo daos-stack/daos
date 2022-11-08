@@ -35,7 +35,7 @@ struct pl_map_ops {
 	/** see \a pl_map_obj_select and \a pl_map_obj_rebalance */
 	int (*o_obj_place)(struct pl_map *map,
 			   struct daos_obj_md *md,
-			   unsigned int	mode,
+			   unsigned int	mode, uint32_t rebuild_ver,
 			   struct daos_obj_shard_md *shard_md,
 			   struct pl_obj_layout **layout_pp);
 	/** see \a pl_map_obj_rebuild */
@@ -131,9 +131,6 @@ spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,
 
 int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
-
-bool
-is_pool_adding(struct pool_domain *dom);
 
 bool
 need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow_version);

@@ -3,41 +3,45 @@ hosts:
   test_clients: 3
 timeout: 600
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
 pool:
-    name: daos_server
-    control_method: dmg
-    size: 53%
-    tier_ratio: 50
+  control_method: dmg
+  size: 53%
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 mdtest:
   client_processes:
     np_48:
@@ -64,7 +68,7 @@ mdtest:
       read_bytes: 32000
       depth: 10
   objectclass:
-      dfs_oclass:
+    dfs_oclass:
       - "EC_2P1G1"
       - "EC_2P1GX"
       - "EC_2P2G1"

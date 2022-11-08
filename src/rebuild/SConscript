@@ -1,6 +1,7 @@
 """Build rebuild library"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -20,6 +21,7 @@ def scons():
                                  ['scan.c', 'srv.c', 'rpc.c', 'ras.c',
                                   'rebuild_iv.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', rebuild)
+
 
 if __name__ == "SCons.Script":
     scons()

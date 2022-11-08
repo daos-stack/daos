@@ -169,7 +169,7 @@ func (srv *server) logDuration(msg string, start time.Time) {
 
 // CreateDatabaseConfig creates a new database configuration.
 func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
-	dbReplicas, err := cfgGetReplicas(cfg, net.ResolveTCPAddr)
+	dbReplicas, err := cfgGetReplicas(cfg, net.LookupIP)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to retrieve replicas from config")
 	}
@@ -278,7 +278,7 @@ func (srv *server) initNetwork() error {
 	ctlAddr, err := getControlAddr(ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
-		resolveAddr:    net.ResolveTCPAddr,
+		lookupHost:     net.LookupIP,
 	})
 	if err != nil {
 		return err

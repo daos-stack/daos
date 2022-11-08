@@ -22,11 +22,6 @@ wrap scons-3.""")
 
 SCons.Warnings.warningAsException()
 
-try:
-    input = raw_input  # pylint: disable=redefined-builtin
-except NameError:
-    pass
-
 
 def get_version(env):
     """ Read version from VERSION file """
@@ -43,13 +38,15 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "4"
+API_VERSION_MINOR = "6"
 API_VERSION_FIX = "0"
 API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM spec file """
+
+    # pylint: disable=consider-using-f-string
     spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
@@ -151,6 +148,7 @@ def build_misc(build_prefix):
 def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
+        # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
             import pygit2
@@ -329,7 +327,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
     if 'LD_PRELOAD' in os.environ:
-        # pylint: disable=invalid-sequence-index
         env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
         for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
@@ -348,7 +345,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     if 'VIRTUAL_ENV' in os.environ:
         env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
-        # pylint: disable=invalid-sequence-index
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
@@ -376,18 +372,21 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     set_defaults(env, daos_version)
 
+    # Add project specific methods to SCons environments.
+    daos_build.setup(env)
+    compiler_setup.setup(env)
+
     base_env = env.Clone()
 
-    base_env_mpi = env.Clone()
-
-    compiler_setup.base_setup(env)
-
     if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(base_env_mpi)
-        if not mpi:
+        base_env_mpi = env.d_configure_mpi()
+        if not base_env_mpi:
             print("\nSkipping compilation for tests that need MPI")
             print("Install and load mpich or openmpi\n")
-            base_env_mpi = None
+    else:
+        base_env_mpi = None
+
+    env.compiler_setup()
 
     args = GetOption('analyze_stack')
     if args is not None:
@@ -407,12 +406,9 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     buildinfo.save('.build_vars.json')
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        daos_build.install(env, "lib/daos/",
-                           ['.build_vars.sh', '.build_vars.json'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                    ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/',
-                    ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 
