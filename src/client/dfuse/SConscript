@@ -1,7 +1,6 @@
 """Build DFuse"""
 import os
 import daos_build
-import compiler_setup
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h', 'ioil_api.h', 'ioil.h']
 COMMON_SRC = ['dfuse_obj_da.c', 'dfuse_vector.c']
@@ -179,7 +178,7 @@ def scons():
         il_env = base_env.Clone()
         il_env['CC'] = 'gcc'
         il_env['CXX'] = None
-        compiler_setup.base_setup(il_env)
+        il_env.compiler_setup()
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
