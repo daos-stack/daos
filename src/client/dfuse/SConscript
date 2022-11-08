@@ -107,6 +107,7 @@ def check_struct_member(context, text, struct, member):
 
     context.Message(f'Checking for {member} in {struct} ')
 
+    # pylint: disable-next=consider-using-f-string
     src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct, member)
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
@@ -118,6 +119,7 @@ def check_ioctl_def(context, ctype):
 
     context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
+    # pylint: disable-next=consider-using-f-string
     src = """#include <fuse3/fuse_lowlevel.h>
 
 extern void

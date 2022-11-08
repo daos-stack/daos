@@ -1,5 +1,6 @@
 """Common DAOS build functions"""
 import os
+from inspect import getframeinfo, stack
 
 from SCons.Subst import Literal
 from SCons.Script import Dir
@@ -175,8 +176,66 @@ def _program(env, *args, **kwargs):
     return prog
 
 
+def _report_fault(message):
+
+    idx = 0
+    while True:
+        caller = getframeinfo(stack()[idx][0])
+        base = os.path.basename(caller.filename)
+        if base not in ('SConscript', 'SConstruct'):
+            idx += 1
+            continue
+        print(f'{caller.filename}:{caller.lineno} - {message}')
+        return
+
+
 def _test_program(env, *args, **kwargs):
     """build Program with fixed RPATH"""
+
+    target = None
+    source = kwargs.get('source')
+
+    if 'target' in kwargs:
+        target = kwargs['target']
+    else:
+        if len(args) == 2:
+            target = args[0]
+            source = args[1]
+        else:
+            assert len(args) == 1
+            if source:
+                target = args[0]
+            else:
+                source = args[0]
+
+    if isinstance(source, list):
+        first_source = source[0]
+    else:
+        first_source = source
+
+    if target:
+        have_target = True
+    else:
+        have_target = False
+        target = first_source
+        if not target.endswith('.c'):
+            print(args)
+            print(kwargs)
+            print(target)
+            print(type(target))
+            _report_fault('Unable to infer target')
+        assert target.endswith('.c')
+        target = target[:-2]
+
+    if have_target and f'{target}.c' == first_source:
+        _report_fault('Target superflous')
+
+    if isinstance(source, list) and len(source) == 1:
+        _report_fault('Souce is list of length 1')
+
+    if not isinstance(target, str):
+        _report_fault('Incorrect type')
+
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])
