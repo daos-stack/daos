@@ -20,6 +20,8 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -82,6 +84,17 @@ func TestControl_PoolDestroy(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
+				},
+			},
+		},
+		"DataPlaneNotStarted error is retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolDestroyResp{}),
 				},
 			},
@@ -315,6 +328,12 @@ func TestControl_PoolEvict(t *testing.T) {
 }
 
 func TestControl_PoolCreate(t *testing.T) {
+	strVal := func(s string) daos.PoolPropertyValue {
+		v := daos.PoolPropertyValue{}
+		v.SetString(s)
+		return v
+	}
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolCreateReq
@@ -351,11 +370,11 @@ func TestControl_PoolCreate(t *testing.T) {
 		"bad label": {
 			req: &PoolCreateReq{
 				TotalBytes: 10,
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					{
 						Name:   "label",
 						Number: daos.PoolPropertyLabel,
-						Value:  PoolPropertyValue{"yikes!"},
+						Value:  strVal("yikes!"),
 					},
 				},
 			},
@@ -391,14 +410,24 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
+		"create DataPlaneNotStarted error is retried": {
+			req: &PoolCreateReq{TotalBytes: 10},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
+					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
+				},
+			},
+			expResp: &PoolCreateResp{},
+		},
 		"success": {
 			req: &PoolCreateReq{
 				TotalBytes: 10,
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					{
 						Name:   "label",
 						Number: daos.PoolPropertyLabel,
-						Value:  PoolPropertyValue{"foo"},
+						Value:  strVal("foo"),
 					},
 				},
 			},
@@ -846,8 +875,8 @@ func TestControl_PoolQuery(t *testing.T) {
 	}
 }
 
-func propWithVal(key, val string) *PoolProperty {
-	hdlr := PoolProperties()[key]
+func propWithVal(key, val string) *daos.PoolProperty {
+	hdlr := daos.PoolProperties()[key]
 	prop := hdlr.GetProperty(key)
 	if val != "" {
 		if err := prop.SetValue(val); err != nil {
@@ -860,7 +889,7 @@ func propWithVal(key, val string) *PoolProperty {
 func TestPoolSetProp(t *testing.T) {
 	defaultReq := &PoolSetPropReq{
 		ID:         test.MockUUID(),
-		Properties: []*PoolProperty{propWithVal("label", "foo")},
+		Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
 	}
 
 	for name, tc := range map[string]struct {
@@ -889,7 +918,7 @@ func TestPoolSetProp(t *testing.T) {
 		"unknown property": {
 			req: &PoolSetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					{
 						Name: "fido",
 					},
@@ -900,7 +929,7 @@ func TestPoolSetProp(t *testing.T) {
 		"bad property": {
 			req: &PoolSetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					{
 						Name: "label",
 					},
@@ -911,7 +940,7 @@ func TestPoolSetProp(t *testing.T) {
 		"success": {
 			req: &PoolSetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					propWithVal("label", "ok"),
 					propWithVal("space_rb", "5"),
 				},
@@ -946,14 +975,14 @@ func TestPoolSetProp(t *testing.T) {
 func TestPoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
 		ID: test.MockUUID(),
-		Properties: []*PoolProperty{propWithVal("label", ""),
+		Properties: []*daos.PoolProperty{propWithVal("label", ""),
 			propWithVal("policy", "type=io_size")},
 	}
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolGetPropReq
-		expResp []*PoolProperty
+		expResp []*daos.PoolProperty
 		expErr  error
 	}{
 		"local failure": {
@@ -971,7 +1000,7 @@ func TestPoolGetProp(t *testing.T) {
 		"nil prop in request": {
 			req: &PoolGetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					propWithVal("label", ""),
 					nil,
 					propWithVal("space_rb", ""),
@@ -1012,7 +1041,7 @@ func TestPoolGetProp(t *testing.T) {
 			},
 			req: &PoolGetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					propWithVal("label", ""),
 				},
 			},
@@ -1047,7 +1076,7 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Numval{4096},
 						},
 						{
-							Number: propWithVal("rf", "").Number,
+							Number: propWithVal("rd_fac", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1},
 						},
 						{
@@ -1082,26 +1111,35 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("svc_rf", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{3},
 						},
+						{
+							Number: propWithVal("svc_list", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
+						},
 					},
 				}),
 			},
 			req: &PoolGetPropReq{
 				ID: test.MockUUID(),
 			},
-			expResp: []*PoolProperty{
+			expResp: []*daos.PoolProperty{
 				propWithVal("ec_cell_sz", "4096"),
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
 				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
-				propWithVal("rf", "1"),
 				propWithVal("rp_pda", "2"),
 				propWithVal("scrub", "timed"),
 				propWithVal("scrub-freq", "1024"),
 				propWithVal("scrub-thresh", "0"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
 				propWithVal("svc_rf", "3"),
 				propWithVal("upgrade_status", "in progress"),
 			},
@@ -1123,12 +1161,12 @@ func TestPoolGetProp(t *testing.T) {
 			},
 			req: &PoolGetPropReq{
 				ID: test.MockUUID(),
-				Properties: []*PoolProperty{
+				Properties: []*daos.PoolProperty{
 					propWithVal("label", ""),
 					propWithVal("space_rb", ""),
 				},
 			},
-			expResp: []*PoolProperty{
+			expResp: []*daos.PoolProperty{
 				propWithVal("label", "foo"),
 				propWithVal("space_rb", "42"),
 			},
@@ -1157,8 +1195,8 @@ func TestPoolGetProp(t *testing.T) {
 			}
 
 			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(PoolProperty{}),
-				cmp.Comparer(func(a, b PoolPropertyValue) bool {
+				cmpopts.IgnoreUnexported(daos.PoolProperty{}),
+				cmp.Comparer(func(a, b daos.PoolPropertyValue) bool {
 					return a.String() == b.String()
 				}),
 			}
@@ -1572,6 +1610,7 @@ func TestControl_ListPools(t *testing.T) {
 }
 
 func TestControl_GetMaxPoolSize(t *testing.T) {
+	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
 		ScmBytes  uint64
 		NvmeBytes uint64
@@ -2038,7 +2077,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  new(storage.NvmeDevState),
+								NvmeState:  &devStateFaulty,
 							},
 							Rank: 0,
 						},

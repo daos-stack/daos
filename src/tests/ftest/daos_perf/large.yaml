@@ -16,10 +16,14 @@ container:
   control_method: daos
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
 daos_perf:
   test_command: 'U;p F;p V O;p'
   test_type: daos

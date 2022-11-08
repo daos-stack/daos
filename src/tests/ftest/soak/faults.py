@@ -26,7 +26,7 @@ class SoakFaultInject(SoakTestBase):
 
         :avocado: tags=manual
         :avocado: tags=hw,24
-        :avocado: tags=soak,soak_harassers
+        :avocado: tags=soak,soak_faults
         :avocado: tags=test_soak_faults
         """
         test_param = "/run/soak_faults/"

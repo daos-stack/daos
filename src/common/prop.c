@@ -65,6 +65,7 @@ bool
 daos_prop_has_ptr(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
+	case DAOS_PROP_PO_SVC_LIST:
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
@@ -76,6 +77,12 @@ daos_prop_has_ptr(struct daos_prop_entry *entry)
 static void
 daos_prop_entry_free_value(struct daos_prop_entry *entry)
 {
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST) {
+		if (entry->dpe_val_ptr)
+			d_rank_list_free((d_rank_list_t *)entry->dpe_val_ptr);
+		return;
+	}
+
 	if (daos_prop_has_str(entry)) {
 		D_FREE(entry->dpe_str);
 		return;
@@ -85,12 +92,8 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 		D_FREE(entry->dpe_val_ptr);
 		return;
 	}
-
-	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
-		if (entry->dpe_val_ptr)
-			d_rank_list_free(
-				(d_rank_list_t *)entry->dpe_val_ptr);
 }
+
 void
 daos_prop_fini(daos_prop_t *prop)
 {
@@ -1028,7 +1031,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC_OLD) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		if (!strcmp(val, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -1056,6 +1060,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL_OLD) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||

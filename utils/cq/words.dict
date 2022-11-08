@@ -73,6 +73,7 @@ arg
 argobots
 argparse
 args
+ascii
 async
 attachinfo
 attr
@@ -145,6 +146,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -333,6 +335,7 @@ proc
 procs
 protoc
 ps
+puuid
 py
 pydaos
 ramdisk
@@ -397,6 +400,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock

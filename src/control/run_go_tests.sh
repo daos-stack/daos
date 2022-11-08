@@ -93,6 +93,7 @@ function setup_environment()
 		echo "Unable to find .build_vars.sh" && exit 1
 	fi
 
+	# shellcheck disable=SC1090
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
@@ -142,7 +143,7 @@ function get_test_runner()
 		test_runner="gotestsum --format short "
 		test_runner+="--junitfile-testcase-classname relative "
 		test_runner+="--junitfile-testsuite-name relative "
-		if [ -n "${IS_CI:-}" ]; then
+		if ${IS_CI:-false}; then
 			test_runner+="--no-color "
 		fi
 		test_runner+="--junitfile $GO_TEST_XML --"
@@ -157,7 +158,8 @@ if [ "$check" == "false" ]; then
 	setup_environment
 fi
 
-DAOS_BASE=${DAOS_BASE:-${SL_PREFIX%/install*}}
+DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
+
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)

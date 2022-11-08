@@ -496,12 +496,6 @@ static struct d_hlink_ops cont_h_ops = {
 };
 
 void
-dc_cont_put(struct dc_cont *dc)
-{
-	daos_hhash_link_putref(&dc->dc_hlink);
-}
-
-void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
@@ -3142,35 +3136,33 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 }
 
 int
-dc_cont_hdl2redunlvl(daos_handle_t coh)
+dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_lvl;
+	*rl = dc->dc_props.dcp_redun_lvl;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 int
-dc_cont_hdl2redunfac(daos_handle_t coh)
+dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_fac;
+	*rf = dc->dc_props.dcp_redun_fac;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 struct daos_csummer *

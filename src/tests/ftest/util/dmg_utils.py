@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-
+from logging import getLogger
 from grp import getgrgid
 from pwd import getpwuid
 import re
@@ -320,6 +320,43 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
+
+    def storage_identify_vmd(self, uuid, verbose=False):
+        """Get the result of the 'dmg storage identify vmd".
+
+        Args:
+            uuid (str): Device UUID to query.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "identify", "vmd"), uuid=uuid,
+            verbose=verbose)
+
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+        """Get the result of the 'dmg storage replace nvme' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "replace", "nvme"), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
 
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
@@ -1246,32 +1283,27 @@ def check_system_query_status(data):
     """Check if any server crashed.
 
     Args:
-        data (dict): dictionary of system query data obtained from
-            DmgCommand.system_query()
+        data (dict): dictionary of system query data obtained from DmgCommand.system_query()
 
     Returns:
         bool: True if no server crashed, False otherwise.
 
     """
+    log = getLogger()
     failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.
     if "response" in data and "members" in data["response"]:
         for member in data["response"]["members"]:
-            rank_info = [
-                "{}: {}".format(key, member[key]) for key in sorted(member)]
-            print(
-                "Rank {} info:\n  {}".format(
-                    member["rank"], "\n  ".join(rank_info)))
+            rank_info = ["{}: {}".format(key, member[key]) for key in sorted(member)]
+            log.debug("Rank %s info:\n  %s", member["rank"], "\n  ".join(rank_info))
             if "state" in member and member["state"].lower() in failed_states:
                 failed_rank_list[member["rank"]] = member["state"]
 
     # Display the details of any failed ranks
     for rank in sorted(failed_rank_list):
-        print(
-            "Rank {} failed with state '{}'".format(
-                rank, failed_rank_list[rank]))
+        log.debug("Rank %s failed with state '%s'", rank, failed_rank_list[rank])
 
     # Return True if no ranks failed
     return not bool(failed_rank_list)

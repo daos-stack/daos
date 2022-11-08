@@ -21,8 +21,6 @@ failed=0
 failures=()
 log_num=0
 
-set -x
-
 if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi
@@ -74,11 +72,6 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
@@ -124,6 +117,11 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
+
+        run_test src/vos/tests/evt_stress.py
+        run_test src/vos/tests/evt_stress.py --algo dist_even
+        run_test src/vos/tests/evt_stress.py --algo soff
+
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -250,7 +248,7 @@ if [ -d "/mnt/daos" ]; then
         for ((i = 0; i < ${#failures[@]}; i++)); do
             echo "    ${failures[$i]}"
         done
-        if ! ${OLD_CI:-true}; then
+        if ! ${IS_CI:-false}; then
             exit 1
         fi
     fi

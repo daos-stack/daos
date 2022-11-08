@@ -80,8 +80,8 @@ func TestPoolCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	propWithVal := func(key, val string) *control.PoolProperty {
-		hdlr := control.PoolProperties()[key]
+	propWithVal := func(key, val string) *daos.PoolProperty {
+		hdlr := daos.PoolProperties()[key]
 		prop := hdlr.GetProperty(key)
 		if val != "" {
 			if err := prop.SetValue(val); err != nil {
@@ -126,7 +126,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -143,7 +143,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -160,7 +160,7 @@ func TestPoolCommands(t *testing.T) {
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []ranklist.Rank{},
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 					},
 				}),
@@ -189,7 +189,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (size nranks)",
 			"pool create --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --num-ranks"),
+			errors.New("--size may not be mixed with --nranks"),
+		},
+		{
+			"Create pool with incompatible arguments (size tier-ratio)",
+			"pool create --size 100% --tier-ratio 16",
+			"",
+			errors.New("--size may not be mixed with --tier-ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
@@ -337,7 +343,7 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("scrub", "timed"),
 						propWithVal("scrub-freq", "1"),
 					},
@@ -540,7 +546,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -554,7 +560,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", "foo"),
 						propWithVal("space_rb", "42"),
 					},
@@ -568,7 +574,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolSetPropReq{
 					ID:         "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{propWithVal("label", "foo")},
+					Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
 				}),
 			}, " "),
 			nil,
@@ -598,6 +604,12 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool rd_fac property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
+			"",
+			errors.New("can't set redundancy factor on existing pool."),
+		},
+		{
 			"Set pool rf property is not allowed",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rf:1",
 			"",
@@ -621,7 +633,7 @@ func TestPoolCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.PoolGetPropReq{
 					ID: "031bcaf8-f0f5-42ef-b3c5-ee048676dceb",
-					Properties: []*control.PoolProperty{
+					Properties: []*daos.PoolProperty{
 						propWithVal("label", ""),
 					},
 				}),
@@ -1426,6 +1438,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			poolCreateCmd.TierRatio = `6,94`
 
 			err := poolCreateCmd.Execute(nil)
 

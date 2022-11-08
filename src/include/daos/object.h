@@ -108,8 +108,6 @@ daos_rp_pda_valid(uint32_t rp_pda)
 
 enum daos_io_mode {
 	DIM_DTX_FULL_ENABLED	= 0,	/* by default */
-	DIM_SERVER_DISPATCH	= 1,
-	DIM_CLIENT_DISPATCH	= 2,
 };
 
 #define DAOS_OBJ_GRP_MAX	MAX_NUM_GROUPS
@@ -237,8 +235,11 @@ unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
-daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type,
-				   daos_oclass_hints_t hints, uint32_t args);
+int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
+			uint32_t args, daos_oclass_id_t *cid);
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf);
+
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
@@ -325,6 +326,12 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 	oid->hi |= hdr;
 }
 
+/* the default value length of each OID in OIT table */
+#define DAOS_OIT_DEFAULT_VAL_LEN	(8)
+#define DAOS_OIT_DKEY_SET(dkey_ptr, bid_ptr)			\
+	(d_iov_set((dkey_ptr), (bid_ptr), sizeof(*(bid_ptr))))
+#define DAOS_OIT_AKEY_SET(akey_ptr, oid_ptr)			\
+	(d_iov_set((akey_ptr), (oid_ptr), sizeof(*(oid_ptr))))
 
 /* check if an object ID is OIT (Object ID Table) */
 static inline bool

@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -46,6 +47,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	mountReqPayload, err := json.Marshal(storage.ScmMountRequest{
 		Class:  storage.ClassRam,
 		Target: testTarget,
+		Ramdisk: &storage.RamdiskParams{
+			Size: 1024,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -54,8 +58,8 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
-		expPayload *storage.ScmMountResponse
+		smsc       *system.MockSysConfig
+		expPayload *storage.MountResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -72,14 +76,14 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: true},
+			expPayload: &storage.MountResponse{Target: testTarget, Mounted: true},
 		},
 		"ScmMount failure": {
 			req: &pbin.Request{
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				MountErr: errors.New("test mount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
@@ -95,14 +99,14 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: false},
+			expPayload: &storage.MountResponse{Target: testTarget, Mounted: false},
 		},
 		"ScmUnmount failure": {
 			req: &pbin.Request{
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				UnmountErr: errors.New("test unmount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("failed to unmount %s: test unmount failed", testTarget)),
@@ -121,9 +125,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &storage.ScmMountResponse{}
+				tc.expPayload = &storage.MountResponse{}
 			}
-			expectPayload(t, resp, &storage.ScmMountResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.MountResponse{}, tc.expPayload)
 		})
 	}
 }
@@ -148,7 +152,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
 		OwnerGID:   os.Getgid(),
-		Dcpm: &storage.DcpmParams{
+		Dcpm: &storage.DeviceParams{
 			Device: "/foo/bar",
 		},
 	})
@@ -161,7 +165,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmFormatResponse
 		expErr     *fault.Fault
 	}{
@@ -190,7 +194,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 				Method:  "ScmFormat",
 				Payload: scmFormatReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				MountErr: errors.New("test mount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
@@ -250,7 +254,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmPrepareResponse
 		expErr     *fault.Fault
 	}{
@@ -349,7 +353,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmScanResponse
 		expErr     *fault.Fault
 	}{

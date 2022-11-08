@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.2/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_server_helper.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -325,7 +325,7 @@ Verify if you're using Infiniband for `fabric_iface`: in the server config. The 
 
 ## Common Errors and Workarounds
 
-### Use dmg command without daos_admin privilege
+### Use dmg command without daos_server_helper privilege
 ```
 # Error message or timeout after dmg system query
 $ dmg system query
@@ -970,6 +970,162 @@ May 29 03:18:01 wolf-164.wolf.hpdd.intel.com rsyslogd[1962]: [origin software="r
 To configure a Syslog daemon to resolve the delivery errors and receive messages from 'daos_server'
 consult the relevant operating system specific documentation for installing and/or enabling a syslog
 server package e.g. 'rsyslog'.
+
+## Tools to debug connectivity issues across nodes
+
+### ifconfig
+```
+$ ifconfig
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 127  bytes 9664 (9.4 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 127  bytes 9664 (9.4 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 9000
+        inet 10.165.192.121  netmask 255.255.255.128  broadcast 10.165.192.127
+        inet6 fe80::9a03:9bff:fea2:9716  prefixlen 64  scopeid 0x20<link>
+        ether 98:03:9b:a2:97:16  txqueuelen 1000  (Ethernet)
+        RX packets 2347  bytes 766600 (748.6 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 61  bytes 4156 (4.0 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 9000
+        inet 10.165.192.122  netmask 255.255.255.128  broadcast 10.165.192.127
+        inet6 fe80::9a03:9bff:fea2:967e  prefixlen 64  scopeid 0x20<link>
+        ether 98:03:9b:a2:96:7e  txqueuelen 1000  (Ethernet)
+        RX packets 2346  bytes 766272 (748.3 KiB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 61  bytes 4156 (4.0 KiB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+```
+You can get the ip and network interface card (NIC) name with ifconfig. Important: Please run ifconfig on both DAOS server and client nodes to make sure mtu size are same for the network interfaces on different nodes. Mismatched mtu size could lead to DAOS hang on RDMA over converged Ethernet (RoCE) interfaces.
+
+### lstopo-no-graphics
+```
+$ lstopo-no-graphics
+...
+    HostBridge
+      PCIBridge
+        PCI 18:00.0 (Ethernet)
+          Net "eth0"
+          OpenFabrics "mlx5_0"
+...
+    HostBridge
+      PCIBridge
+        PCI af:00.0 (Ethernet)
+          Net "eth1"
+          OpenFabrics "mlx5_1"
+...
+```
+You can get the domain name and numa node information of your NICs.
+In case lstopo-no-graphics in not installed, you can install package "hwloc" with yum/dnf or other package managers.
+
+### ping
+```
+client_node $ ping -c 3 -I eth1 10.165.192.121
+PING 10.165.192.121 (10.165.192.121) from 10.165.192.2 ens102: 56(84) bytes of data.
+64 bytes from 10.165.192.121: icmp_seq=1 ttl=64 time=0.177 ms
+64 bytes from 10.165.192.121: icmp_seq=2 ttl=64 time=0.120 ms
+64 bytes from 10.165.192.121: icmp_seq=3 ttl=64 time=0.083 ms
+```
+Make sure ping can reach the NIC your DAOS server is bound to.
+
+### fi_pingpong
+```
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
+
+bytes   #sent   #ack     total       time     MB/sec    usec/xfer   Mxfers/sec
+64      10      =10      1.2k        0.03s      0.05    1378.30       0.00
+256     10      =10      5k          0.00s     22.26      11.50       0.09
+1k      10      =10      20k         0.00s     89.04      11.50       0.09
+4k      10      =10      80k         0.00s    320.00      12.80       0.08
+64k     10      =10      1.2m        0.01s    154.89     423.10       0.00
+1m      10      =10      20m         0.01s   2659.00     394.35       0.00
+
+Make sure communications with tcp can go through.
+
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 ip_of_eth0_server
+
+Make sure communications with verbs can go through.
+
+server_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0
+client_node $ fi_pingpong -p "verbs;ofi_rxm" -e rdm -d mlx5_0 ip_of_mlx5_0_server
+```
+### ib_send_lat
+```
+server_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3
+client_node $ ib_send_lat -d mlx5_0 -s 16384 -D 3 ip_of_server
+```
+This test checks whether verbs goes through with Infiniband or RoCE cards. In case ib_send_lat in not installed, you can install package "perftest" with yum/dnf or other package managers.
+
+## Tools to measure the network latency and bandwidth across nodes
+
+### The tools in perftest for Infiniband and RoCE
+You can install package "perftest" with yum/dnf or other package managers if it is not available.
+
+Examples for measuring bandwidth,
+```
+ib_read_bw -a
+ib_read_bw -a 192.168.1.46
+
+ib_write_bw -a
+ib_write_bw -a 192.168.1.46
+
+ib_send_bw -a
+ib_send_bw -a 192.168.1.46
+```
+Examples for measuring latency,
+```
+ib_read_lat -a
+ib_read_lat -a 192.168.1.46
+
+ib_write_lat -a
+ib_write_lat -a 192.168.1.46
+
+ib_send_lat -a
+ib_send_lat -a 192.168.1.46
+```
+
+### fi_pingpong for Ethernet
+You can install package "libfabric" with yum/dnf or other package managers if it is not available.
+
+Example,
+```
+server_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000
+client_node $ fi_pingpong -p "tcp;ofi_rxm" -e rdm -d eth0 -I 1000 ip_of_eth0_server
+```
+This reports network bandwidth. One can deduce the latency for given packet size.
+
+## Tools to diagnose network issues for a large cluster
+
+### [Intel CLuster Checker](https://www.intel.com/content/www/us/en/developer/tools/oneapi/cluster-checker.html)
+This suite contains multiple useful tools including network_time_uniformity to debug network issue.
+
+### [mpi-benchmarks](https://github.com/intel/mpi-benchmarks)
+Tools like IMB-P2P, IMB-MPI1, and IMB-RMA are helpful for the sanity check of the latency and bandwidth.
+```
+$ for((i=1;i<=65536;i*=4)); do echo "$i"; done &> msglen
+$ mpirun -np 4 -f hostlist ./IMB-P2P -msglen msglen PingPong
+#----------------------------------------------------------------
+# Benchmarking PingPong
+# #processes = 4
+#----------------------------------------------------------------
+       #bytes #repetitions      t[usec]   Mbytes/sec      Msg/sec
+            1       100000        24.50         0.08        81627
+            4       100000        24.50         0.33        81631
+           16       100000        24.50         1.31        81629
+           64       100000        24.50         5.22        81631
+          256       100000        24.60        20.73        80983
+         1024       100000        49.50        41.37        40404
+         4096       100000       224.05        36.43         8894
+        16384        51200       230.22       141.65         8646
+        65536        12800       741.47       176.58         2694
+```
 
 ## Bug Report
 
