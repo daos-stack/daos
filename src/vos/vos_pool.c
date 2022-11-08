@@ -92,7 +92,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
-	rc = bio_mc_open(xs_ctxt, pool_id, flags, &mc);
+	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	if (rc != 0) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
