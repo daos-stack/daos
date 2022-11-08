@@ -82,15 +82,25 @@ func AddContextLock(parent context.Context, lock *PoolLock) (context.Context, er
 	}
 
 	cl, err := getCtxLock(parent)
-	if err != nil && err != errNoCtxLock {
-		return nil, err
-	} else if cl != nil {
-		if cl.id != lock.id {
-			return nil, errors.Errorf("context already contains lock for pool %s", cl.poolUUID)
+	if err != nil {
+		if err != errNoCtxLock {
+			return nil, err
 		}
+		// If the parent context doesn't already have a lock,
+		// add the supplied lock to a new child context.
+		return context.WithValue(parent, poolLockKey, lock), nil
 	}
 
-	return context.WithValue(parent, poolLockKey, lock), nil
+	// Otherwise, if the parent context already has a lock,
+	// verify that it is the same as the supplied lock and
+	// return an error if not.
+	if cl.id != lock.id {
+		return nil, errors.Errorf("parent context contains another lock for pool %s", cl.poolUUID)
+	}
+
+	// If the parent context already has the supplied lock,
+	// just return the parent context.
+	return parent, nil
 }
 
 // InContext returns a new child context with the lock added
@@ -114,11 +124,15 @@ func (pl *PoolLock) decRef() {
 	atomic.AddInt32(&pl.refCount, -1)
 }
 
+func (pl *PoolLock) getRef() int32 {
+	return atomic.LoadInt32(&pl.refCount)
+}
+
 // Release releases the lock on the pool when the reference
 // count reaches zero.
 func (pl *PoolLock) Release() {
 	pl.decRef()
-	if atomic.LoadInt32(&pl.refCount) > 0 {
+	if pl.getRef() > 0 {
 		return
 	}
 	pl.relOnce.Do(pl.release)
@@ -128,6 +142,10 @@ func (pl *PoolLock) Release() {
 // if the pool is not already locked, otherwise it returns
 // an error.
 func (plm *poolLockMap) take(poolUUID uuid.UUID) (*PoolLock, error) {
+	if poolUUID == uuid.Nil {
+		return nil, errors.New("nil pool UUID")
+	}
+
 	plm.Lock()
 	defer plm.Unlock()
 
@@ -180,6 +198,9 @@ func (plm *poolLockMap) checkLock(lock *PoolLock) error {
 	plm.RLock()
 	defer plm.RUnlock()
 
+	// Verify that the supplied lock matches the stored lock. This
+	// is a belt-and-suspenders check because in theory the logic
+	// in take() should prevent this from ever happening.
 	if pl, exists := plm.locks[lock.poolUUID]; exists {
 		if lock.id != pl.id {
 			return system.FaultPoolLocked(lock.poolUUID, pl.id, pl.takenAt)

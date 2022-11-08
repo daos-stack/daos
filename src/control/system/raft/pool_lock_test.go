@@ -146,10 +146,11 @@ func TestRaft_AddContextLock(t *testing.T) {
 	lock2 := makeLock(0, 3, 4)
 
 	for name, tc := range map[string]struct {
-		parent  context.Context
-		lock    *PoolLock
-		expLock *PoolLock
-		expErr  error
+		parent    context.Context
+		lock      *PoolLock
+		expLock   *PoolLock
+		expNewCtx bool
+		expErr    error
 	}{
 		"nil parent": {
 			parent: nil,
@@ -163,12 +164,18 @@ func TestRaft_AddContextLock(t *testing.T) {
 		"parent contains different lock": {
 			parent: lock2.InContext(context.Background()),
 			lock:   lock1,
-			expErr: errors.New("already contains lock"),
+			expErr: errors.New("contains another lock"),
 		},
 		"parent contains same lock": {
 			parent:  lock1.InContext(context.Background()),
 			lock:    lock1,
 			expLock: lock1,
+		},
+		"new child context with lock": {
+			parent:    context.Background(),
+			lock:      lock1,
+			expLock:   lock1,
+			expNewCtx: true,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -186,14 +193,20 @@ func TestRaft_AddContextLock(t *testing.T) {
 			if diff := cmp.Diff(tc.expLock, gotLock, lockCmpOpts...); diff != "" {
 				t.Fatalf("unexpected lock (-want, +got):\n%s", diff)
 			}
+
+			if tc.expNewCtx && ctx == tc.parent {
+				t.Fatal("expected new context")
+			} else if !tc.expNewCtx && ctx != tc.parent {
+				t.Fatal("expected same context")
+			}
 		})
 	}
 }
 
 func TestRaft_poolLockMap_take(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	uuid0 := uuid.MustParse(test.MockUUID(0))
-	uuid1 := uuid.MustParse(test.MockUUID(1))
+	uuid0 := uuid.MustParse(test.MockUUID(1))
+	uuid1 := uuid.MustParse(test.MockUUID(2))
 	lock0 := &PoolLock{id: uuid1, poolUUID: uuid0}
 
 	for name, tc := range map[string]struct {
@@ -235,8 +248,8 @@ func TestRaft_poolLockMap_take(t *testing.T) {
 
 func TestRaft_poolLockMap_checkLock(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	uuid0 := uuid.MustParse(test.MockUUID(0))
-	uuid1 := uuid.MustParse(test.MockUUID(1))
+	uuid0 := uuid.MustParse(test.MockUUID(1))
+	uuid1 := uuid.MustParse(test.MockUUID(2))
 	lock0 := &PoolLock{id: uuid1, poolUUID: uuid0}
 	lock1 := &PoolLock{id: uuid0, poolUUID: uuid0}
 

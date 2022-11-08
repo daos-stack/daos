@@ -35,6 +35,8 @@ import (
 )
 
 func getPoolLockCtx(t *testing.T, parent context.Context, sysdb *raft.Database, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
+	t.Helper()
+
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -127,7 +129,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
-			poolUUID := uuid.MustParse(test.MockUUID(0))
+			poolUUID := test.MockPoolUUID(1)
 			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
 			defer lock.Release()
 
@@ -141,7 +143,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 
 			req := &mgmtpb.PoolCreateReq{
 				Sys:        build.DefaultSystemName,
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Totalbytes: engine.ScmMinBytesPerTarget,
 				Properties: testPoolLabelProp(),
 			}
@@ -307,7 +309,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			mgmtSvc:     missingSB,
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -317,7 +319,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			mgmtSvc:     notAP,
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -326,7 +328,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"dRPC send fails": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -335,7 +337,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"zero target count": {
 			targetCount: 0,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -344,7 +346,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"garbage resp": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -359,7 +361,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"successful creation": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Properties: testPoolLabelProp(),
 			},
@@ -371,7 +373,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"successful creation minimum size": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{engine.ScmMinBytesPerTarget * 8, engine.NvmeMinBytesPerTarget * 8},
 				Properties: testPoolLabelProp(),
 			},
@@ -383,7 +385,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"successful creation auto size": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Totalbytes: 100 * humanize.GiByte,
 				Properties: testPoolLabelProp(),
 			},
@@ -395,7 +397,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"failed creation invalid ranks": {
 			targetCount: 1,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Ranks:      []uint32{40, 11},
 				Properties: testPoolLabelProp(),
@@ -405,7 +407,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"failed creation invalid number of ranks": {
 			targetCount: 1,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Tierbytes:  []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 				Numranks:   3,
 				Properties: testPoolLabelProp(),
@@ -416,7 +418,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 1,
 			memberCount: MaxPoolServiceReps + 2,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Totalbytes: 100 * humanize.GByte,
 				Tierratio:  []float64{0.06, 0.94},
 				Numsvcreps: MaxPoolServiceReps + 2,
@@ -428,7 +430,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount: 1,
 			memberCount: MaxPoolServiceReps - 2,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:       test.MockUUID(0),
+				Uuid:       test.MockUUID(1),
 				Totalbytes: 100 * humanize.GByte,
 				Tierratio:  []float64{0.06, 0.94},
 				Numsvcreps: MaxPoolServiceReps - 1,
@@ -439,7 +441,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"no label": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:      test.MockUUID(0),
+				Uuid:      test.MockUUID(1),
 				Tierbytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
 			},
 			expErr: FaultPoolNoLabel,
@@ -1305,13 +1307,13 @@ func TestListPools_Success(t *testing.T) {
 
 	testPools := []*system.PoolService{
 		{
-			PoolUUID:  uuid.MustParse(test.MockUUID(0)),
+			PoolUUID:  test.MockPoolUUID(1),
 			PoolLabel: "0",
 			State:     system.PoolServiceStateReady,
 			Replicas:  []ranklist.Rank{0, 1, 2},
 		},
 		{
-			PoolUUID:  uuid.MustParse(test.MockUUID(1)),
+			PoolUUID:  test.MockPoolUUID(2),
 			PoolLabel: "1",
 			State:     system.PoolServiceStateReady,
 			Replicas:  []ranklist.Rank{0, 1, 2},

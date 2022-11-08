@@ -907,7 +907,10 @@ func (db *Database) FindPoolServiceByLabel(label string) (*system.PoolService, e
 	return nil, system.ErrPoolLabelNotFound(label)
 }
 
-func (db *Database) TakePoolLock(ctx context.Context, uuid uuid.UUID) (*PoolLock, error) {
+// TakePoolLock attempts to take a lock on the pool with the given UUID,
+// if the supplied context does not already contain a valid lock for that
+// pool.
+func (db *Database) TakePoolLock(ctx context.Context, poolUUID uuid.UUID) (*PoolLock, error) {
 	if err := db.CheckLeader(); err != nil {
 		return nil, err
 	}
@@ -915,19 +918,26 @@ func (db *Database) TakePoolLock(ctx context.Context, uuid uuid.UUID) (*PoolLock
 	defer db.Unlock()
 
 	lock, err := getCtxLock(ctx)
-	if err != nil && err != errNoCtxLock {
-		return nil, err
-	} else if lock != nil {
-		if err := db.poolLocks.checkLock(lock); err != nil {
+	if err != nil {
+		if err != errNoCtxLock {
 			return nil, err
 		}
-		if lock.poolUUID == uuid {
-			lock.addRef()
-			return lock, nil
-		}
+		// No lock in context, so create a new one.
+		return db.poolLocks.take(poolUUID)
 	}
 
-	return db.poolLocks.take(uuid)
+	// Lock already exists in context, so verify that it's valid and for the same pool.
+	if err := db.poolLocks.checkLock(lock); err != nil {
+		return nil, err
+	}
+	if lock.poolUUID != poolUUID {
+		return nil, errors.Errorf("context lock is for a different pool (%s != %s)", lock.poolUUID, poolUUID)
+	}
+
+	// Now that we've verified that the lock is still valid, we can just
+	// increment its reference count and return it.
+	lock.addRef()
+	return lock, nil
 }
 
 // AddPoolService creates an entry for a new pool service in the pool database.
