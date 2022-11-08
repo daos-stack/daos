@@ -29,7 +29,7 @@ class PoolServicesFaultInjection(TestWithServers):
         self.object_class = self.params.get("object_class", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
 
-    def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
+    def look_missed_request(self, cmd_stderr, msg=b"err:"):
         """ Read dmg_stderr for the msg string
         If found, the instance attribute self.failed_request is
         increased by 1.
