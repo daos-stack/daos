@@ -186,13 +186,17 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	struct daos_oclass_attr	 ca;
 	int grp_size;
 	uint32_t nr_grps;
+	int rc;
 
 	D_ASSERT(target_nr > 0);
 	D_ASSERT(domain_nr > 0);
 
 	oc = oclass_ident2cl(oc_id, &nr_grps);
-	if (!oc)
-		return -DER_INVAL;
+	if (!oc) {
+		rc = -DER_INVAL;
+		D_ERROR("oclass_ident2cl(oc_id %d), failed "DF_RC"\n", oc_id, DP_RC(rc));
+		return rc;
+	}
 
 	memcpy(&ca, &oc->oc_attr, sizeof(ca));
 	ca.ca_grp_nr = nr_grps;
@@ -700,6 +704,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	uint16_t rdd;
 	uint32_t grp_size;
 	uint32_t grp_nr;
+	int      rc;
 
 	rdd = hints & DAOS_OCH_RDD_MASK;
 	shd = hints & DAOS_OCH_SHD_MASK;
@@ -708,7 +713,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	switch (rf_factor) {
 	default:
 	case DAOS_PROP_CO_REDUN_RF0:
-		if (rdd == DAOS_OCH_RDD_RP) {
+		if (rdd == DAOS_OCH_RDD_RP && domain_nr >= 2) {
 			*ord =  OR_RP_2;
 			grp_size = 2;
 		} else if (rdd == DAOS_OCH_RDD_EC) {
@@ -731,7 +736,8 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if ((rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) &&
+		    domain_nr >= 3) {
 			if (domain_nr >= 18) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
@@ -751,7 +757,8 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+		if ((rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) &&
+		    domain_nr >= 4) {
 			if (domain_nr >= 20) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;
@@ -784,7 +791,9 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 
 	if (unlikely(grp_size > domain_nr)) {
 		/** cannot meet redundancy requirement */
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		D_ERROR("grp_size %d > domain_nr %d, "DF_RC"\n", grp_size, domain_nr, DP_RC(rc));
+		return rc;
 	}
 
 	/** adjust the group size based on the sharding hint */
