@@ -17,7 +17,6 @@ import oclass_utils
 from exception_utils import CommandFailure
 
 
-# TODO dmg system query as non-json to reduce log clutter # pylint: disable=fixme
 class PerformanceTestBase(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Base performance class.
