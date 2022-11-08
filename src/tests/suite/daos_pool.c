@@ -1776,7 +1776,6 @@ filter_containers_test(void **state)
 				 CLEAN, tnum++);
 		daos_pool_cont_filter_fini(&filt);
 
-
 		epr.epr_lo = epr.epr_hi = c0_epc;
 		print_message("destroy snapshot on container %s, epoch %zu\n",
 			      c0.pci_id.pci_label, c0_epc);
