@@ -1216,7 +1216,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
-    app_cmd = self.params.get("cmdline", app_params, default=None)
+    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
     posix = self.params.get("posix", app_params, default=False)
     if app_cmd is None:
