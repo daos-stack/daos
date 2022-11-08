@@ -115,7 +115,8 @@ func drpcServerSetup(ctx context.Context, req *drpcServerSetupReq) error {
 
 	sockPath := getDrpcServerSocketPath(req.sockDir)
 
-	// Server socket file to be readable and writable by user.
+	// Server socket file to be readable and writable by user. daos_server should receive
+	// messages from daos_engine and both processes will be run by the same user.
 	drpcServer, err := drpc.NewDomainSocketServer(req.log, sockPath, 0600)
 	if err != nil {
 		return errors.Wrap(err, "unable to create socket server")

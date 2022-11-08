@@ -20,7 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-var testFileMode os.FileMode = 0666
+var testFileMode os.FileMode = 0600
 
 func TestNewSession(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())

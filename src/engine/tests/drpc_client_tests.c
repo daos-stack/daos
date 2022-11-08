@@ -106,6 +106,7 @@ static int
 drpc_client_test_setup(void **state)
 {
 	mock_socket_setup();
+	mock_fchmod_setup();
 	mock_connect_setup();
 	mock_sendmsg_setup();
 	mock_recvmsg_setup();
