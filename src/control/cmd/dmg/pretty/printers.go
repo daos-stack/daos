@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,6 @@ var (
 	defaultPrintConfig = &PrintConfig{
 		Verbose:       false,
 		ShowHostPorts: false,
-		LEDInfoOnly:   false,
 	}
 )
 
@@ -38,8 +37,6 @@ type (
 		Verbose bool
 		// ShowHostPorts indicates that the host output should include the network port.
 		ShowHostPorts bool
-		// LEDInfoOnly indicates that the output should only include LED related info.
-		LEDInfoOnly bool
 	}
 
 	// PrintConfigOption defines a config function.
@@ -63,13 +60,6 @@ func PrintWithVerboseOutput(verbose bool) PrintConfigOption {
 func PrintWithHostPorts() PrintConfigOption {
 	return func(cfg *PrintConfig) {
 		cfg.ShowHostPorts = true
-	}
-}
-
-// PrintOnlyLEDInfo enables display of details relevant to LED state in output.
-func PrintOnlyLEDInfo() PrintConfigOption {
-	return func(cfg *PrintConfig) {
-		cfg.LEDInfoOnly = true
 	}
 }
 

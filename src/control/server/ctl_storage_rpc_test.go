@@ -50,7 +50,7 @@ var (
 		protocmp.IgnoreFields(&ctlpb.NvmeController{}, "serial"))
 )
 
-func adjustNvmeSize(smdDevices []*ctl.SmdDevice) {
+func adjustNvmeSize(smdDevices []*ctl.NvmeController_SmdDevice) {
 	const targetNb uint64 = 4
 
 	clusterCount := uint64(math.MaxUint64)
@@ -406,7 +406,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		ctrlr.Model = fmt.Sprintf("model-%d", sIdx)
 		ctrlr.Serial = test.MockUUID(sIdx)
 		ctrlr.HealthStats = proto.MockNvmeHealth(idx + 1)
-		ctrlr.HealthStats.ClusterSize = clusterSize
 		ctrlr.SmdDevices = nil
 
 		bioHealthResp := new(ctlpb.BioHealthResp)
@@ -415,6 +414,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		}
 		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
 		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+		bioHealthResp.ClusterSize = clusterSize
 
 		return ctrlr, bioHealthResp
 	}
@@ -437,17 +437,17 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		if len(smdIndexes) == 0 {
 			smdIndexes = append(smdIndexes, ctrlrIdx)
 		}
-		smdDevRespDevices := make([]*ctlpb.SmdDevice, len(smdIndexes))
-		ctrlr.SmdDevices = make([]*ctlpb.SmdDevice, len(smdIndexes))
+		smdDevRespDevices := make([]*ctlpb.SmdDevResp_Device, len(smdIndexes))
+		ctrlr.SmdDevices = make([]*ctlpb.NvmeController_SmdDevice, len(smdIndexes))
 		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
 		for i, idx := range smdIndexes {
 			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
-			sd.DevState = devStateNormal
+			sd.DevState = storage.MockNvmeStateNormal.String()
 			sd.Rank = uint32(ctrlrIdx)
 			sd.TrAddr = ctrlr.PciAddr
 			ctrlr.SmdDevices[i] = sd
 
-			smdPB := new(ctlpb.SmdDevice)
+			smdPB := new(ctlpb.SmdDevResp_Device)
 			if err := convert.Types(sd, smdPB); err != nil {
 				t.Fatal(err)
 			}
@@ -484,18 +484,18 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	}
 
 	smdDevRespStateNew := newSmdDevResp(1)
-	smdDevRespStateNew.Devices[0].DevState = devStateNew
+	smdDevRespStateNew.Devices[0].DevState = storage.MockNvmeStateNew.String()
 
 	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
-	ctrlrPBwMetaNew.SmdDevices[0].DevState = devStateNew
+	ctrlrPBwMetaNew.SmdDevices[0].DevState = storage.MockNvmeStateNew.String()
 	ctrlrPBwMetaNew.SmdDevices[0].ClusterSize = 0
 
 	ctrlrPBwMetaNormal := newCtrlrPBwMeta(1)
 	ctrlrPBwMetaNormal.SmdDevices[0].AvailBytes = 0
 	ctrlrPBwMetaNormal.SmdDevices[0].TotalBytes = 0
-	ctrlrPBwMetaNormal.SmdDevices[0].DevState = devStateNormal
+	ctrlrPBwMetaNormal.SmdDevices[0].DevState = storage.MockNvmeStateNormal.String()
 	ctrlrPBwMetaNormal.SmdDevices[0].ClusterSize = 0
 
 	mockPbScmMount0 := proto.MockScmMountPoint(0)
@@ -2259,13 +2259,13 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2273,7 +2273,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{4, 5, 6, 7},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2281,7 +2281,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{8, 9, 10, 11},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2289,7 +2289,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        1,
 							},
 							{
@@ -2297,7 +2297,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{3, 4, 5},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        1,
 							},
 						},
@@ -2318,13 +2318,13 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2332,7 +2332,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{4, 5, 6},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2340,7 +2340,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{7, 8, 9, 10},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        0,
 							},
 							{
@@ -2348,7 +2348,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        1,
 							},
 							{
@@ -2356,7 +2356,7 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 								TgtIds:      []int32{3, 4, 5},
 								AvailBytes:  20 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 								Rank:        1,
 							},
 						},
@@ -2377,20 +2377,20 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 							},
 							{
 								Uuid:        "nvme1",
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNew,
+								DevState:    "NEW",
 							},
 						},
 					},
@@ -2408,20 +2408,20 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 							},
 							{
 								Uuid:        "nvme1",
 								TgtIds:      []int32{0, 1, 2},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateFaulty,
+								DevState:    "EVICTED",
 							},
 						},
 					},
@@ -2439,18 +2439,18 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 							},
 							{
 								TgtIds:      []int32{},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 							},
 						},
 					},
@@ -2468,19 +2468,19 @@ func TestServer_adjustNvmeSize(t *testing.T) {
 			input: &ctlpb.ScanNvmeResp{
 				Ctrlrs: []*ctlpb.NvmeController{
 					{
-						SmdDevices: []*ctlpb.SmdDevice{
+						SmdDevices: []*ctlpb.NvmeController_SmdDevice{
 							{
 								Uuid:        "nvme0",
 								TgtIds:      []int32{0, 1, 2, 3},
 								AvailBytes:  10 * humanize.GiByte,
 								ClusterSize: clusterSize,
-								DevState:    devStateNormal,
+								DevState:    "NORMAL",
 							},
 							{
 								Uuid:       "nvme1",
 								TgtIds:     []int32{0, 1, 2},
 								AvailBytes: 10 * humanize.GiByte,
-								DevState:   devStateNormal,
+								DevState:   "NORMAL",
 							},
 						},
 					},

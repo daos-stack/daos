@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,6 @@
 #define __MGMT_SRV_LAYOUT_H__
 
 #include <daos_types.h>
-#include "srv_internal.h"
 
 /* Root KVS (RDB_KVS_GENERIC) */
 extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */
@@ -34,6 +33,9 @@ extern d_iov_t ds_mgmt_prop_rank_next;		/* uint32_t */
 
 /* server_rec.sr_flags */
 #define SERVER_IN	(1U << 0)
+
+/* Length of server_rec.sr_addr and server_rec.sr_uri */
+#define ADDR_STR_MAX_LEN 128
 
 struct server_rec {
 	uint16_t	sr_flags;

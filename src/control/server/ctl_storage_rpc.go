@@ -169,16 +169,16 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	type deviceSizeStat struct {
 		clusterCount uint64 // Number of SPDK cluster for each target
-		devices      []*ctl.SmdDevice
+		devices      []*ctl.NvmeController_SmdDevice
 	}
 
 	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
 		for _, dev := range ctlr.GetSmdDevices() {
-			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
+			if dev.GetDevState() != "NORMAL" {
 				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
-					"(ctlr %s) to O Bytes: device state %q", dev.GetUuid(),
-					ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
+					"(ctlr %s) to O Bytes: device state %q",
+					dev.GetUuid(), ctlr.GetPciAddr(), dev.GetDevState())
 				dev.AvailBytes = 0
 				continue
 			}

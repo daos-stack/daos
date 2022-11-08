@@ -7,124 +7,106 @@
 package storage
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
 func Test_NvmeDevState(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state  NvmeDevState
-		expStr string
-		expErr error
+		state       NvmeDevState
+		expIsNew    bool
+		expIsNormal bool
+		expIsFaulty bool
+		expStr      string
 	}{
 		"new state": {
-			state:  NvmeStateNew,
-			expStr: "NEW",
+			state:    NvmeStatePlugged,
+			expIsNew: true,
+			expStr:   "NEW",
 		},
 		"normal state": {
-			state:  NvmeStateNormal,
-			expStr: "NORMAL",
+			state:       NvmeStatePlugged | NvmeStateInUse,
+			expIsNormal: true,
+			expStr:      "NORMAL",
 		},
 		"faulty state": {
+			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateFaulty,
+			expIsFaulty: true,
+			expStr:      "EVICTED",
+		},
+		"new and faulty state": {
+			state:       NvmeStatePlugged | NvmeStateFaulty,
+			expIsNew:    true,
+			expIsFaulty: true,
+			expStr:      "EVICTED",
+		},
+		"unplugged, new and faulty": {
 			state:  NvmeStateFaulty,
-			expStr: "EVICTED",
+			expStr: "UNPLUGGED",
 		},
-		"invalid state": {
-			state:  NvmeDevState(99),
-			expErr: errors.New("invalid nvme dev state 99"),
+		"new and identify state": {
+			state:    NvmeStatePlugged | NvmeStateIdentify,
+			expIsNew: true,
+			expStr:   "NEW|IDENTIFY",
+		},
+		"new, faulty and identify state": {
+			state:       NvmeStatePlugged | NvmeStateFaulty | NvmeStateIdentify,
+			expIsNew:    true,
+			expIsFaulty: true,
+			expStr:      "EVICTED|IDENTIFY",
+		},
+		"normal and identify state": {
+			state:       NvmeStatePlugged | NvmeStateInUse | NvmeStateIdentify,
+			expIsNormal: true,
+			expStr:      "NORMAL|IDENTIFY",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			spb := new(ctlpb.NvmeDevState)
-			gotErr := convert.Types(tc.state, spb)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
+			test.AssertEqual(t, tc.expIsNew, tc.state.IsNew(),
+				"unexpected IsNew() result")
+			test.AssertEqual(t, tc.expIsNormal, tc.state.IsNormal(),
+				"unexpected IsNormal() result")
+			test.AssertEqual(t, tc.expIsFaulty, tc.state.IsFaulty(),
+				"unexpected IsFaulty() result")
+			test.AssertEqual(t, tc.expStr, tc.state.String(),
+				"unexpected status string")
 
-			ns := new(NvmeDevState)
-			if err := convert.Types(spb, ns); err != nil {
-				t.Fatal(err)
-			}
+			stateNew := NvmeDevStateFromString(tc.state.String())
 
-			test.AssertEqual(t, tc.state, *ns, "unexpected conversion result")
-			test.AssertEqual(t, tc.expStr, ns.String(), "unexpected status string")
+			test.AssertEqual(t, tc.state.String(), stateNew.String(),
+				fmt.Sprintf("expected string %s to yield state %s",
+					tc.state.String(), stateNew.String()))
 		})
 	}
 }
 
-func Test_LedState(t *testing.T) {
+func Test_NvmeDevStateFromString_invalid(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state  LedState
-		expStr string
-		expErr error
+		inStr    string
+		expState NvmeDevState
+		expStr   string
 	}{
-		"normal state": {
-			state:  LedStateNormal,
-			expStr: "OFF",
+		"empty string": {
+			expState: NvmeStateUnknown,
+			expStr:   "UNKNOWN",
 		},
-		"identify state": {
-			state:  LedStateIdentify,
-			expStr: "QUICK_BLINK",
-		},
-		"faulty state": {
-			state:  LedStateFaulty,
-			expStr: "ON",
-		},
-		"rebuild state": {
-			state:  LedStateRebuild,
-			expStr: "SLOW_BLINK",
-		},
-		"unsupported state": {
-			state:  LedStateUnknown,
-			expStr: "NA",
-		},
-		"unexpected state": {
-			state:  LedState(99),
-			expErr: errors.New("invalid vmd led state 99"),
+		"unrecognized string": {
+			inStr:    "BAD",
+			expState: NvmeStateUnknown,
+			expStr:   "UNKNOWN",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			spb := new(ctlpb.LedState)
-			gotErr := convert.Types(tc.state, spb)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
+			state := NvmeDevStateFromString(tc.inStr)
 
-			ns := new(LedState)
-			if err := convert.Types(spb, ns); err != nil {
-				t.Fatal(err)
-			}
-
-			test.AssertEqual(t, tc.state, *ns, "unexpected conversion result")
-			test.AssertEqual(t, tc.expStr, ns.String(), "unexpected status string")
+			test.AssertEqual(t, tc.expState, state, "unexpected state")
+			test.AssertEqual(t, tc.expStr, state.String(), "unexpected states string")
 		})
-	}
-}
-
-func Test_Convert_SmdDevice(t *testing.T) {
-	native := MockSmdDevice(test.MockPCIAddr(1))
-
-	s := new(ctlpb.SmdDevice)
-	if err := convert.Types(native, s); err != nil {
-		t.Fatal(err)
-	}
-
-	convertedNative := new(SmdDevice)
-	if err := convert.Types(s, convertedNative); err != nil {
-		t.Fatal(err)
-	}
-
-	if diff := cmp.Diff(native, convertedNative); diff != "" {
-		t.Fatalf("expected converted device to match original (-want, +got):\n%s\n", diff)
 	}
 }
 

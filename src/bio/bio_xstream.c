@@ -1589,16 +1589,14 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev		*d_bdev;
-	unsigned int		 led_state;
-	int			 rc;
+	struct bio_bdev         *d_bdev;
 
 	/*
-	 * Check VMD_LED_PERIOD environment variable, if not set use double
-	 * NVME_MONITOR_PERIOD of 60 seconds (2min total) as default value.
+	 * Check VMD_LED_PERIOD environment variable, if not set use default
+	 * NVME_MONITOR_PERIOD of 60 seconds.
 	 */
 	if (vmd_led_period == 0)
-		vmd_led_period = NVME_MONITOR_PERIOD * 2;
+		vmd_led_period = NVME_MONITOR_PERIOD;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
@@ -1606,12 +1604,9 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
 				continue;
 
-			/* LED will be reset to either faulty or normal state */
-			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
-					    (unsigned int)CTL__LED_ACTION__RESET, &led_state);
-			if (rc != 0)
-				D_ERROR("Reset LED state after timeout failed on device:"
-					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
+					      true/*reset*/) != 0)
+				D_ERROR("Failed resetting LED state\n");
 		}
 	}
 }

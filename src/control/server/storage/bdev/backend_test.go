@@ -7,6 +7,7 @@
 package bdev
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,7 +21,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
@@ -65,11 +65,20 @@ func defCmpOpts() []cmp.Option {
 	}
 }
 
+func convertTypes(in interface{}, out interface{}) error {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, out)
+}
+
 func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	native := storage.MockNvmeController(varIdx...)
 
 	s := new(storage.NvmeController)
-	if err := convert.Types(native, s); err != nil {
+	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
 

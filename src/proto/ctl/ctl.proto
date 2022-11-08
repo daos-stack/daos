@@ -38,8 +38,6 @@ service CtlSvc {
 	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
-	// Manage devices (per-server) identified in SMD table
-	rpc SmdManage(SmdManageReq) returns (SmdManageResp) {}
 	// Set log level for DAOS I/O Engines on a host.
 	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)

@@ -1278,14 +1278,15 @@ func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	mockController := storage.MockNvmeController(1)
 
 	for name, tc := range map[string]struct {
-		noDevs      bool
-		noPools     bool
+		req         *control.SmdQueryReq
 		hsm         control.HostStorageMap
 		opts        []PrintConfigOption
 		expPrintStr string
 	}{
 		"list-pools (standard)": {
-			noDevs: true,
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1323,8 +1324,10 @@ host1
 `,
 		},
 		"list-pools (verbose)": {
-			noDevs: true,
-			opts:   []PrintConfigOption{PrintWithVerboseOutput(true)},
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
+			opts: []PrintConfigOption{PrintWithVerboseOutput(true)},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1361,8 +1364,11 @@ host1
 
 `,
 		},
+
 		"list-pools (none found)": {
-			noDevs: true,
+			req: &control.SmdQueryReq{
+				OmitDevices: true,
+			},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1379,7 +1385,9 @@ host1
 `,
 		},
 		"list-devices": {
-			noPools: true,
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1391,32 +1399,28 @@ host1
 									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.NvmeStateNew,
-									LedState:  storage.LedStateNormal,
+									NvmeState: storage.MockNvmeStateNormal,
 								},
 								{
 									UUID:      test.MockUUID(1),
 									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      0,
-									NvmeState: storage.NvmeStateFaulty,
-									LedState:  storage.LedStateFaulty,
+									NvmeState: storage.MockNvmeStateEvicted,
 								},
 								{
 									UUID:      test.MockUUID(2),
 									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									NvmeState: storage.NvmeDevState(99),
-									LedState:  storage.LedStateUnknown,
+									NvmeState: storage.NvmeDevState(0),
 								},
 								{
 									UUID:      test.MockUUID(3),
 									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateIdentify,
+									NvmeState: storage.MockNvmeStateIdentify,
 								},
 							},
 						},
@@ -1429,17 +1433,19 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NEW LED:OFF
+      Targets:[0 1 2] Rank:0 State:NORMAL
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
+      Targets:[3 4 5] Rank:0 State:EVICTED
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
+      Targets:[0 1 2] Rank:1 State:UNPLUGGED
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
+      Targets:[3 4 5] Rank:1 State:NORMAL|IDENTIFY
 `,
 		},
 		"list-devices (none found)": {
-			noPools: true,
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1456,7 +1462,9 @@ host1
 `,
 		},
 		"device-health": {
-			noPools: true,
+			req: &control.SmdQueryReq{
+				OmitPools: true,
+			},
 			hsm: mockHostStorageMap(t,
 				&mockHostStorage{
 					"host1",
@@ -1467,8 +1475,7 @@ host1
 									UUID:      test.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateNormal,
+									NvmeState: storage.MockNvmeStateNormal,
 									Health:    mockController.HealthStats,
 								},
 							},
@@ -1482,7 +1489,7 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
+      Targets:[0 1 2] Rank:0 State:NORMAL
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s
@@ -1543,63 +1550,10 @@ host1
 				mockController.HealthStats.NandBytesWritten, mockController.HealthStats.HostBytesWritten,
 			),
 		},
-		"identify led": {
-			noPools: true,
-			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Devices
-    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
-`,
-		},
-		"identify led; transport address specified": {
-			noPools: true,
-			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
-			hsm: mockHostStorageMap(t,
-				&mockHostStorage{
-					"host1",
-					&control.HostStorage{
-						SmdInfo: &control.SmdInfo{
-							Devices: []*storage.SmdDevice{
-								{
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
-								},
-							},
-						},
-					},
-				},
-			),
-			expPrintStr: `
------
-host1
------
-  Devices
-    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
-`,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintSmdInfoMap(tc.noDevs, tc.noPools, tc.hsm, &bld, tc.opts...); err != nil {
+			if err := PrintSmdInfoMap(tc.req, tc.hsm, &bld, tc.opts...); err != nil {
 				t.Fatal(err)
 			}
 

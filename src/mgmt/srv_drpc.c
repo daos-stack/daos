@@ -2006,6 +2006,8 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				D_FREE(resp->devices[i]->tgt_ids);
 			if (resp->devices[i]->tr_addr != NULL)
 				D_FREE(resp->devices[i]->tr_addr);
+			if (resp->devices[i]->dev_state != NULL)
+				D_FREE(resp->devices[i]->dev_state);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -2212,50 +2214,96 @@ out:
 		D_FREE(bio_health);
 }
 
-static void
-drpc_dev_manage_pack(Ctl__DevManageResp *resp, Drpc__Response *drpc_resp)
+void
+ds_mgmt_drpc_dev_state_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	size_t	 len = ctl__dev_manage_resp__get_packed_size(resp);
-	uint8_t	*body = NULL;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__DevStateReq	*req = NULL;
+	Ctl__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
+	int			 rc = 0;
 
+	/* Unpack the inner request from the drpc call body */
+	req = ctl__dev_state_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev state query)\n");
+		return;
+	}
+
+	D_INFO("Received request to query device state\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	ctl__dev_state_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->dev_uuid = NULL;
+
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
+
+	rc = ds_mgmt_dev_state_query(uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to query device state :%d\n", rc);
+
+	resp->status = rc;
+	len = ctl__dev_state_resp__get_packed_size(resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to allocate drpc response body\n");
-		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 	} else {
-		ctl__dev_manage_resp__pack(resp, body);
+		ctl__dev_state_resp__pack(resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
-}
 
-static void
-drpc_dev_manage_free(Ctl__DevManageResp *resp)
-{
-	if (resp != NULL) {
-		if (resp->device != NULL) {
-			if (resp->device->uuid != NULL)
-				D_FREE(resp->device->uuid);
-			D_FREE(resp->device);
-		}
-		D_FREE(resp);
+	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
 	}
+
+	D_FREE(resp);
 }
 
 void
 ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Ctl__SetFaultyReq	*req = NULL;
-	Ctl__DevManageResp	*resp = NULL;
-	uuid_t			 dev_uuid;
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__DevStateReq	*req = NULL;
+	Ctl__DevStateResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 uuid;
 	int			 rc = 0;
 
-	req = ctl__set_faulty_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+	/* Unpack the inner request from the drpc call body */
+	req = ctl__dev_state_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to unpack req (dev state set faulty)\n");
-		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		return;
 	}
 
@@ -2263,66 +2311,53 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response ref\n");
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
+		D_ERROR("Failed to allocate daos response ref\n");
+		ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
 
-	ctl__dev_manage_resp__init(resp);
+	/* Response status is populated with SUCCESS on init. */
+	ctl__dev_state_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->dev_uuid = NULL;
 
-	if (uuid_parse(req->uuid, dev_uuid) != 0) {
-		D_ERROR("Device UUID (%s) is invalid\n", req->uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
-	}
+	if (strlen(req->dev_uuid) != 0) {
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			D_ERROR("Unable to parse device UUID %s: %d\n",
+				req->dev_uuid, rc);
+			uuid_clear(uuid);
+		}
+	} else
+		uuid_clear(uuid); /* need to set uuid = NULL */
 
-	rc = ds_mgmt_dev_set_faulty(dev_uuid, resp);
+	rc = ds_mgmt_dev_set_faulty(uuid, resp);
 	if (rc != 0)
 		D_ERROR("Failed to set FAULTY device state :%d\n", rc);
 
-pack_resp:
 	resp->status = rc;
-	drpc_dev_manage_pack(resp, drpc_resp);
-	drpc_dev_manage_free(resp);
-	ctl__set_faulty_req__free_unpacked(req, &alloc.alloc);
-}
-
-void
-ds_mgmt_drpc_dev_manage_led(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
-{
-	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Ctl__LedManageReq	*req = NULL;
-	Ctl__DevManageResp	*resp = NULL;
-	int			 rc = 0;
-
-	req = ctl__led_manage_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
-
-	if (alloc.oom || req == NULL) {
-		D_ERROR("Failed to unpack req (dev manage led)\n");
-		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
-		return;
-	}
-
-	D_INFO("Received request to manage LED at address %s\n", req->ids);
-
-	D_ALLOC_PTR(resp);
-	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response ref\n");
+	len = ctl__dev_state_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
-		ctl__led_manage_req__free_unpacked(req, &alloc.alloc);
-		return;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		ctl__dev_state_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
 	}
 
-	ctl__dev_manage_resp__init(resp);
+	ctl__dev_state_req__free_unpacked(req, &alloc.alloc);
 
-	rc = ds_mgmt_dev_manage_led(req, resp);
-	if (rc != 0)
-		D_ERROR("Failed to manage LED state (%d)\n", rc);
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
 
-	resp->status = rc;
-	drpc_dev_manage_pack(resp, drpc_resp);
-	drpc_dev_manage_free(resp);
-	ctl__led_manage_req__free_unpacked(req, &alloc.alloc);
+	D_FREE(resp);
 }
 
 void
@@ -2330,7 +2365,9 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Ctl__DevReplaceReq	*req = NULL;
-	Ctl__DevManageResp	*resp = NULL;
+	Ctl__DevReplaceResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
 	uuid_t			 old_uuid;
 	uuid_t			 new_uuid;
 	int			 rc = 0;
@@ -2339,8 +2376,21 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	req = ctl__dev_replace_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
 		D_ERROR("Failed to unpack req (dev replace)\n");
-		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		return;
+	}
+
+	if (strlen(req->old_dev_uuid) == 0) {
+		D_ERROR("Old device UUID for replacement command is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+	if (strlen(req->new_dev_uuid) == 0) {
+		D_ERROR("New device UUID for replacement command is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
 
@@ -2349,51 +2399,139 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_ALLOC_PTR(resp);
 	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response ref\n");
 		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
 		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 		return;
 	}
 
 	/* Response status is populated with SUCCESS on init. */
-	ctl__dev_manage_resp__init(resp);
-
-	D_ALLOC_PTR(resp->device);
-	if (resp == NULL) {
-		D_ERROR("Failed to allocate daos response device ref\n");
-		drpc_resp->status = DRPC__STATUS__FAILURE;
-		drpc_dev_manage_free(resp);
-		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
-		return;
-	}
-
-	ctl__smd_device__init(resp->device);
+	ctl__dev_replace_resp__init(resp);
 	/* Init empty strings to NULL to avoid error cleanup with free */
-	resp->device->uuid = NULL;
+	resp->dev_state = NULL;
+	resp->new_dev_uuid = NULL;
 
 	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
-		D_ERROR("Old device UUID (%s) is invalid\n", req->old_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		D_ERROR("Unable to parse device UUID %s: %d\n",
+			req->old_dev_uuid, rc);
+		uuid_clear(old_uuid); /* need to set uuid = NULL */
 	}
 
 	if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
-		D_ERROR("New device UUID (%s) is invalid\n", req->new_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		D_ERROR("Unable to parse device UUID %s: %d\n",
+			req->new_dev_uuid, rc);
+		uuid_clear(new_uuid); /* need to set uuid = NULL */
 	}
 
 	/* TODO: Implement no-reint device replacement option */
 
 	rc = ds_mgmt_dev_replace(old_uuid, new_uuid, resp);
 	if (rc != 0)
-		D_ERROR("Failed to replace device %s with %s (%d)\n", req->old_dev_uuid,
-			req->new_dev_uuid, rc);
+		D_ERROR("Failed to replace device :%d\n", rc);
 
-pack_resp:
 	resp->status = rc;
-	drpc_dev_manage_pack(resp, drpc_resp);
-	drpc_dev_manage_free(resp);
+	len = ctl__dev_replace_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		ctl__dev_replace_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
 	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->new_dev_uuid != NULL)
+			D_FREE(resp->new_dev_uuid);
+	}
+
+	D_FREE(resp);
 }
+
+void
+ds_mgmt_drpc_dev_identify(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__DevIdentifyReq	*req = NULL;
+	Ctl__DevIdentifyResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	uuid_t			 dev_uuid;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = ctl__dev_identify_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to unpack req (dev identify)\n");
+		return;
+	}
+
+	if (strlen(req->dev_uuid) == 0) {
+		D_ERROR("Device UUID for identify command is empty\n");
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
+	D_INFO("Received request to identify device %s\n", req->dev_uuid);
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate daos response ref\n");
+		ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	ctl__dev_identify_resp__init(resp);
+	/* Init empty strings to NULL to avoid error cleanup with free */
+	resp->dev_state = NULL;
+	resp->dev_uuid = NULL;
+
+	if (uuid_parse(req->dev_uuid, dev_uuid) != 0) {
+		D_ERROR("Unable to parse device UUID %s: %d\n",
+			req->dev_uuid, rc);
+		uuid_clear(dev_uuid); /* need to set uuid = NULL */
+	}
+
+	rc = ds_mgmt_dev_identify(dev_uuid, resp);
+	if (rc != 0)
+		D_ERROR("Failed to set LED to IDENTIFY on device:%s\n",
+			req->dev_uuid);
+
+	resp->status = rc;
+	len = ctl__dev_identify_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		ctl__dev_identify_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	ctl__dev_identify_req__free_unpacked(req, &alloc.alloc);
+
+	if (rc == 0) {
+		if (resp->dev_state != NULL)
+			D_FREE(resp->dev_state);
+		if (resp->dev_uuid != NULL)
+			D_FREE(resp->dev_uuid);
+	}
+
+	D_FREE(resp);
+}
+
+
 
 void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)

@@ -176,28 +176,15 @@ func PrintStorageFormatMap(hsm control.HostStorageMap, out io.Writer, opts ...Pr
 }
 
 func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOption) error {
-	fc := getPrintConfig(opts...)
+	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n",
+		dev.UUID, dev.TrAddr); err != nil {
 
-	if fc.LEDInfoOnly {
-		if _, err := fmt.Fprintf(iw, "TrAddr:%s", dev.TrAddr); err != nil {
-			return err
-		}
-		if dev.UUID != "" {
-			if _, err := fmt.Fprintf(iw, " [UUID:%s]", dev.UUID); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintf(iw, " LED:%s\n", dev.LedState); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n", dev.UUID, dev.TrAddr); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw), "Targets:%+v Rank:%d State:%s LED:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.LedState); err != nil {
+
+	iw1 := txtfmt.NewIndentWriter(iw)
+	if _, err := fmt.Fprintf(iw1, "Targets:%+v Rank:%d State:%s\n",
+		dev.TargetIDs, dev.Rank, dev.NvmeState.String()); err != nil {
 
 		return err
 	}
@@ -218,7 +205,7 @@ func printSmdPool(pool *control.SmdPool, out io.Writer, opts ...PrintConfigOptio
 
 // PrintSmdInfoMap generates a human-readable representation of the supplied
 // HostStorageMap, with a focus on presenting the per-server metadata (SMD) information.
-func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
+func PrintSmdInfoMap(req *control.SmdQueryReq, hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
 	for _, key := range hsm.Keys() {
@@ -233,7 +220,7 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 			continue
 		}
 
-		if !omitDevs {
+		if !req.OmitDevices {
 			if len(hss.HostStorage.SmdInfo.Devices) > 0 {
 				fmt.Fprintln(iw, "Devices")
 
@@ -255,7 +242,7 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 			}
 		}
 
-		if !omitPools {
+		if !req.OmitPools {
 			if len(hss.HostStorage.SmdInfo.Pools) > 0 {
 				fmt.Fprintln(iw, "Pools")
 
