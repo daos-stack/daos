@@ -124,6 +124,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
 
+	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
 	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
 };
 

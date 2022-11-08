@@ -1439,9 +1439,9 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d epoch "DF_U64".\n",
-		 opc, tgt_ep.ep_rank, tgt_ep.ep_tag,
-		 args->pa_auxi.epoch.oe_value);
+	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d flags "DF_X64" epoch "DF_U64".\n",
+		opc, tgt_ep.ep_rank, tgt_ep.ep_tag, obj_args->flags,
+		args->pa_auxi.epoch.oe_value);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)

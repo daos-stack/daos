@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2021-2022 Intel Corporation.
 
@@ -82,8 +81,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         start_time = 0
         finish_time = 0
 
-        job_manager = get_job_manager(self, "Mpirun", None, False, "mpich",
-                                      self.get_remaining_time())
+        job_manager = get_job_manager(self, subprocess=False, timeout=self.get_remaining_time())
         # Create requested pools
         self.add_pool_qty(total_pools, connect=False)
         start_time = time.time()
@@ -101,7 +99,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                 self.add_container_qty(total_containers_per_pool, pool)
 
             # Run ior on each container sequentially
-            for i in [1, 2]:
+            for idx in [1, 2]:
                 for container in self.container:
                     ior_log = "{}_{}_{}_ior1.log".format(self.test_id,
                                                          container.pool.uuid,
@@ -114,8 +112,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
                         self.log.info(result)
                     except CommandFailure as error:
                         self.log.info(error)
-                self.save_free_space(i, storage_index)
-                self.verify_free_space((i-1), i)
+                self.save_free_space(idx, storage_index)
+                self.verify_free_space((idx - 1), idx)
 
             # Enable the aggregation
             for pool in self.pool:

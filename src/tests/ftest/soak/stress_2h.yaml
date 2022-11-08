@@ -150,6 +150,7 @@ vpic_stress:
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
+    disable_caching: true
   oclass:
     - "SX"
 lammps_stress:
@@ -163,5 +164,6 @@ lammps_stress:
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
+    disable_caching: true
   oclass:
     - "SX"

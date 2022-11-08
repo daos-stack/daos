@@ -118,6 +118,7 @@ typedef enum {
 	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_KV_LIST,
 
+	DAOS_OPC_POOL_FILTER_CONT,
 	DAOS_OPC_OBJ_KEY2ANCHOR,
 	DAOS_OPC_MAX
 } daos_opc_t;
@@ -216,6 +217,18 @@ typedef struct {
 	/** Array of container structures. */
 	struct daos_pool_cont_info	*cont_buf;
 } daos_pool_list_cont_t;
+
+/** pool filter containers args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t			 poh;
+	/** [in] filter selection criteria */
+	daos_pool_cont_filter_t		*filt;
+	/** [in] length of \a cont_buf. [out] number of containers that match filter criteria. */
+	daos_size_t			*ncont;
+	/** Array of container extended info structures. */
+	struct daos_pool_cont_info2	*cont_buf;
+} daos_pool_filter_cont_t;
 
 /** pool list attributes args */
 typedef struct {

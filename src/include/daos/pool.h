@@ -141,6 +141,7 @@ int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
+int dc_pool_filter_cont(tse_task_t *task);
 int dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 			struct pool_target **tgt);
 
