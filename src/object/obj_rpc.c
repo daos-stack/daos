@@ -548,13 +548,14 @@ crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 
 static int
 crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
-				  struct daos_cpd_sub_head *dcsh)
+				  struct daos_cpd_sub_head *dcsh, bool mbs)
 {
 	uint32_t	size = 0;
 	int		rc;
 
 	if (FREEING(proc_op)) {
-		D_FREE(dcsh->dcsh_mbs);
+		if (mbs)
+			D_FREE(dcsh->dcsh_mbs);
 		return 0;
 	}
 
@@ -570,6 +571,9 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 			     &dcsh->dcsh_epoch, sizeof(dcsh->dcsh_epoch));
 	if (unlikely(rc))
 		return rc;
+
+	if (!mbs)
+		return 0;
 
 	if (ENCODING(proc_op))
 		/* Pack the size of dcsh->dcsh_mbs to help decode case. */
@@ -883,6 +887,46 @@ crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct daos_cpd_bulk *dcb, bool head)
+{
+	int	rc;
+
+	if (head) {
+		rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op, &dcb->dcb_head, false);
+		if (unlikely(rc))
+			return rc;
+	}
+
+	if (FREEING(proc_op)) {
+		D_FREE(dcb->dcb_bulk);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_size);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_padding);
+	if (unlikely(rc))
+		return rc;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_PTR(dcb->dcb_bulk);
+		if (dcb->dcb_bulk == NULL)
+			return -DER_NOMEM;
+	}
+
+	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
+	if (unlikely(rc))
+		return rc;
+
+	/* The other fields will not be packed on-wire. */
+
+	return 0;
+}
+
+static int
 crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 			    struct daos_cpd_sg *dcs)
 {
@@ -912,8 +956,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op,
-							       &dcsh[i]);
+			rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op, &dcsh[i], true);
 			if (unlikely(rc))
 				D_GOTO(out, rc);
 		}
@@ -991,6 +1034,28 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 			if (unlikely(rc))
 				D_GOTO(out, rc);
 		}
+
+		break;
+	}
+	case DCST_BULK_HEAD:
+	case DCST_BULK_DISP:
+	case DCST_BULK_TGT: {
+		struct daos_cpd_bulk	*dcb;
+
+		if (DECODING(proc_op)) {
+			D_ALLOC_PTR(dcb);
+			if (dcb == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			dcs->dcs_buf = dcb;
+		} else {
+			dcb = dcs->dcs_buf;
+		}
+
+		rc = crt_proc_struct_daos_cpd_bulk(proc, proc_op, dcb,
+						   dcs->dcs_type == DCST_BULK_HEAD ? true : false);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
 
 		break;
 	}

@@ -537,11 +537,38 @@ struct daos_cpd_disp_ent {
 };
 
 enum daos_cpd_sg_type {
+	DCST_UNKNOWN	= 0,
 	DCST_HEAD	= 1,
 	DCST_REQ_CLI	= 2,
 	DCST_REQ_SRV	= 3,
 	DCST_DISP	= 4,
 	DCST_TGT	= 5,
+	DCST_BULK_HEAD	= 6,
+	DCST_BULK_DISP	= 7,
+	DCST_BULK_TGT	= 8,
+};
+
+struct daos_cpd_bulk {
+	/*
+	 * The epoch may be generated when leader handle the CPD RPC, so we cannot bulk
+	 * transfer the epoch from client to non-leader. So DCST_BULK_HEAD only contain
+	 * the MBS information. The other parts of daos_cpd_sub_head are packed here.
+	 *
+	 * Another benefit of separated MBS from the other parts from daos_cpd_sub_head
+	 * is to avoid data copy when prepare the MBS bulk. See dc_tx_commit_prepare().
+	 */
+	struct daos_cpd_sub_head	 dcb_head;
+	uint32_t			 dcb_size;
+	uint32_t			 dcb_padding;
+	crt_bulk_t			*dcb_bulk;
+	/*
+	 * The following are only used to handle the bulk for CPD RPC body temporarily,
+	 * do not pack on-wire.
+	 */
+	d_sg_list_t			 dcb_sgl;
+	d_iov_t				 dcb_iov;
+	uint32_t			 dcb_type;
+	uint32_t			 dcb_item_nr;
 };
 
 /** Scatter/gather info for CPD RPC data structure. */
