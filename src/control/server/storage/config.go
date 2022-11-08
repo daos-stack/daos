@@ -133,6 +133,12 @@ func (tc *TierConfig) WithStorageClass(cls string) *TierConfig {
 	return tc
 }
 
+// WithScmDisableHugepages disables hugepages for tmpfs.
+func (tc *TierConfig) WithScmDisableHugepages() *TierConfig {
+	tc.Scm.DisableHugepages = true
+	return tc
+}
+
 // WithScmMountPoint sets the path to the device used for SCM storage.
 func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	tc.Scm.MountPoint = scmPath
@@ -291,10 +297,11 @@ func (tcs *TierConfigs) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // ScmConfig represents a SCM (Storage Class Memory) configuration entry.
 type ScmConfig struct {
-	MountPoint    string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
-	RamdiskSize   uint     `yaml:"scm_size,omitempty"`
-	DeviceList    []string `yaml:"scm_list,omitempty"`
-	NumaNodeIndex uint     `yaml:"-"`
+	MountPoint       string   `yaml:"scm_mount,omitempty" cmdLongFlag:"--storage" cmdShortFlag:"-s"`
+	RamdiskSize      uint     `yaml:"scm_size,omitempty"`
+	DisableHugepages bool     `yaml:"scm_hugepages_disabled,omitempty"`
+	DeviceList       []string `yaml:"scm_list,omitempty"`
+	NumaNodeIndex    uint     `yaml:"-"`
 }
 
 // Validate sanity checks engine scm config parameters.
@@ -310,6 +317,9 @@ func (sc *ScmConfig) Validate(class Class) error {
 		}
 		if len(sc.DeviceList) == 0 {
 			return errors.New("scm_list must be set when scm_class is dcpm")
+		}
+		if sc.DisableHugepages {
+			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
 		if sc.RamdiskSize == 0 {

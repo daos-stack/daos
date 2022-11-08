@@ -163,13 +163,11 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
-            scm_avail_bytes = self.get_available_bytes()
+            scm_bytes = self.get_available_bytes()
             msg = r"Invalid SCM size: want={}, got={}, delta={}"
             self.assertLessEqual(
-                abs(scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-            self.assertEqual(
-                0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
+                abs(self.scm_avail_bytes - scm_bytes), self.delta_bytes,
+                msg.format(self.scm_avail_bytes, scm_bytes, self.delta_bytes))
 
     def check_pool_distribution(self):
         """Check if the size used on each hosts is more or less uniform

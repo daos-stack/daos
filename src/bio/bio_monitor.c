@@ -632,33 +632,58 @@ out:
 	spdk_bdev_free_io(bdev_io);
 }
 
-static int
-auto_detect_faulty(struct bio_blobstore *bbs)
+static bool
+is_bbs_faulty(struct bio_blobstore *bbs)
 {
-	uint64_t	tgtidx;
-	int		i;
+	struct nvme_stats	*dev_stats = &bbs->bb_dev_health.bdh_health_state;
 
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
-		return 0;
-	/*
-	 * TODO: Check the health data stored in @bbs, and mark the bbs as
-	 *	 faulty when certain faulty criteria are satisfied.
-	 */
+	if (!glb_criteria.fc_enabled)
+		return false;
+
+	if (dev_stats->bio_read_errs + dev_stats->bio_write_errs > glb_criteria.fc_max_io_errs) {
+		D_ERROR("NVMe I/O errors %u/%u reached limit %u\n", dev_stats->bio_read_errs,
+			dev_stats->bio_write_errs, glb_criteria.fc_max_io_errs);
+		return true;
+	}
+
+	if (dev_stats->checksum_errs > glb_criteria.fc_max_csum_errs) {
+		D_ERROR("NVME csum errors %u reached limit %u\n", dev_stats->checksum_errs,
+			glb_criteria.fc_max_csum_errs);
+		return true;
+	}
 
 	/*
 	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
 	 * only if the specified target is assigned to the device.
 	 */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY)) {
+		uint64_t	tgtidx;
+		int		i;
+
 		tgtidx = daos_fail_value_get();
 		for (i = 0; i < bbs->bb_ref; i++) {
 			if (bbs->bb_xs_ctxts[i]->bxc_tgt_id == tgtidx)
-				return bio_bs_state_set(bbs,
-							BIO_BS_STATE_FAULTY);
+				return true;
 		}
 	}
 
-	return 0;
+	return false;
+}
+
+void
+auto_faulty_detect(struct bio_blobstore *bbs)
+{
+	int	rc;
+
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
+		return;
+
+	if (!is_bbs_faulty(bbs))
+		return;
+
+	rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+	if (rc)
+		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
@@ -750,10 +775,7 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 		return;
 	dev_health->bdh_stat_age = now;
 
-	rc = auto_detect_faulty(bbs);
-	if (rc)
-		D_ERROR("Auto faulty detect on target %d failed. %d\n",
-			ctxt->bxc_tgt_id, rc);
+	auto_faulty_detect(bbs);
 
 	rc = bio_bs_state_transit(bbs);
 	if (rc)
