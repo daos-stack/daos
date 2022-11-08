@@ -236,19 +236,14 @@ type SystemCheckStartReq struct {
 }
 
 func checkSetFlags(setFlags uint32, incompatFlags ...chkpb.CheckFlag) error {
-	found := make(map[chkpb.CheckFlag]struct{})
+	strFlags := make([]string, 0, len(incompatFlags))
 	for _, flag := range incompatFlags {
 		if setFlags&uint32(flag) != 0 {
-			found[flag] = struct{}{}
+			strFlags = append(strFlags, flag.String())
 		}
 	}
-	if len(found) <= 1 {
+	if len(strFlags) <= 1 {
 		return nil
-	}
-
-	strFlags := make([]string, 0, len(found))
-	for found := range found {
-		strFlags = append(strFlags, found.String())
 	}
 
 	return errors.Errorf("flags %s are mutually exclusive", strings.Join(strFlags, ", "))
