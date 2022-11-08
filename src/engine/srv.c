@@ -489,6 +489,15 @@ dss_srv_handler(void *arg)
 			wait_all_exited(dx, dmi);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
+
+		if (dx->dx_xs_id == 0) {
+			rc = vos_db_init(dss_storage_path);
+			if (rc) {
+				D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
+				D_GOTO(nvme_fini, rc);
+			}
+			smd_init(vos_db_get());
+		}
 	}
 
 	dmi->dmi_xstream = dx;
@@ -541,6 +550,11 @@ dss_srv_handler(void *arg)
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
+	}
+
+	if (dx->dx_xs_id == 0) {
+		smd_fini();
+		vos_db_fini();
 	}
 
 nvme_fini:
@@ -1228,26 +1242,6 @@ dss_srv_fini(bool force)
 	return 0;
 }
 
-static int dss_smd_init(void)
-{
-	int rc;
-
-	rc = vos_db_init(dss_storage_path);
-	if (rc)
-		return rc;
-	rc = smd_init(vos_db_get());
-	if (rc)
-		vos_db_fini();
-
-	return rc;
-}
-
-static void dss_smd_fini(void)
-{
-	vos_db_fini();
-	smd_fini();
-}
-
 int
 dss_srv_init(void)
 {
@@ -1305,7 +1299,6 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
-	bio_register_smd_ops(dss_smd_init, dss_smd_fini);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();
