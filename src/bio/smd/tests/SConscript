@@ -6,14 +6,13 @@ def scons():
     Import('denv', 'prereqs')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem',
-                 'uuid', 'abt', 'gurt']
+    libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     tenv = denv.Clone()
 
     prereqs.require(tenv, 'argobots')
 
     tenv.AppendUnique(LIBPATH=[Dir('..')])
-    smd_ut = tenv.d_test_program('smd_ut', 'smd_ut.c', LIBS=libraries)
+    smd_ut = tenv.d_test_program('smd_ut.c', LIBS=libraries)
     tenv.Install('$PREFIX/bin/', smd_ut)
 
 
