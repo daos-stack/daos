@@ -145,12 +145,35 @@ extern char	*ds_mgmt_cont_set_owner_group;
 void mock_ds_mgmt_cont_set_owner_setup(void);
 void mock_ds_mgmt_cont_set_owner_teardown(void);
 void mock_ds_mgmt_pool_query_targets_gen_infos(uint32_t n_infos);
+
 /*
  * Mock ds_mgmt_upgrade
  */
-extern int		ds_mgmt_pool_upgrade_return;
-extern uuid_t		ds_mgmt_pool_upgrade_uuid;
+extern int	ds_mgmt_pool_upgrade_return;
+extern uuid_t	ds_mgmt_pool_upgrade_uuid;
 void mock_ds_mgmt_pool_upgrade_setup(void);
+
+/*
+ * Mock ds_mgmt_dev_manage_led
+ */
+extern int	ds_mgmt_dev_manage_led_return;
+extern uuid_t	ds_mgmt_dev_manage_led_uuid;
+void mock_ds_mgmt_dev_manage_led_setup(void);
+
+/*
+ * Mock ds_mgmt_dev_replace
+ */
+extern int	ds_mgmt_dev_replace_return;
+extern uuid_t	ds_mgmt_dev_replace_old_uuid;
+extern uuid_t	ds_mgmt_dev_replace_new_uuid;
+void mock_ds_mgmt_dev_replace_setup(void);
+
+/*
+ * Mock ds_mgmt_dev_set_faulty
+ */
+extern int	ds_mgmt_dev_set_faulty_return;
+extern uuid_t	ds_mgmt_dev_set_faulty_uuid;
+void mock_ds_mgmt_dev_set_faulty_setup(void);
 
 
 #endif /* __MGMT_TESTS_MOCKS_H__ */

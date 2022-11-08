@@ -843,7 +843,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
 			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			rebuild_op == RB_OP_REINT ? PO_COMP_ST_UP :
-			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_NEW :
+			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_UP :
 			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM */
 
 	if (tgts != NULL && tgts->pti_number > 0) {
@@ -1840,11 +1840,17 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 			DP_UUID(pool->sp_uuid));
 	}
 
+	/* NB: some of the extending job might be regenerate as reintegrate
+	 * job here, but it is ok, since the only difference between reintegrate
+	 * and extend job would be
+	 * 1. extend job needs to add new targets to the pool map.
+	 * 2. reintegrate job needs to discard the existing objects/records on the
+	 *    reintegrating targets.
+	 * But since the pool map already includs these extending targets, and also
+	 * discarding on an empty targets is harmless. So it is ok to use REINT to
+	 * do EXTEND here.
+	 */
 	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, RB_OP_REINT);
-	if (rc != 0)
-		return rc;
-
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_NEW, RB_OP_EXTEND);
 	if (rc != 0)
 		return rc;
 

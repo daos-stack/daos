@@ -70,7 +70,7 @@ The following features from POSIX are not supported:
     Commands like `ls -al` will not include these entries in their output.
     Those directory entries are not required by POSIX, so this is not a limitation to POSIX
     compliance. But scripts that parse directory listings under the assumption that those dot
-    directories are present may need to be adapted to to correctly handle this situation.
+    directories are present may need to be adapted to correctly handle this situation.
     Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
     containers.
 
@@ -121,8 +121,8 @@ support.  Additionally, DFuse provides an Interception Library `libioil` to
 transparently allow POSIX clients to talk directly to DAOS servers, providing
 OS-Bypass for I/O without modifying or recompiling of the application.
 
-DFuse builds heavily on DFS. Data written via DFuse can be accessed by DFS and
-vice versa.
+DFuse is layered on top of DFS.  Data written via DFuse can be accessed by DFS and
+vice versa, even simultaneously from different client applications.
 
 ### DFuse Daemon
 
@@ -131,7 +131,7 @@ to DAOS. It should be run with the credentials of the user, and typically will
 be started and stopped on each compute node as part of the prolog and epilog
 scripts of any resource manager or scheduler in use.
 
-### Core binding and threads.
+### Core binding and threads
 
 DFuse will launch one thread per available core by default, although this can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
@@ -139,22 +139,20 @@ use kernel level tasksets which will bind DFuse to a subset of cores. This can b
 done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
 will again launch one thread per available core by default.  Many metadata
 operations will block a thread until completed so if restricting DFuse to a small
-number of cores then overcommiting via the `--thread-count` option is desirable.
+number of cores then overcommiting via the `--thread-count` option may be desirable.
 
 ### Restrictions
 
-DFuse is limited to a single user. Access to the filesystem from other users,
+DFuse by default is limited to a single user. Access to the filesystem from other users,
 including root, will not be honored. As a consequence of this, the `chown`
 and `chgrp` calls are not supported.  Hard links and special device files,
-except symbolic links, are not supported, nor are any ACLs.
+except symbolic links, are not supported, nor are any ACLs beyond standard
+POSIX permissions.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
-daemonize to run like a system daemon.
-However, to do this and still be able to access DAOS it needs to daemonize
-before calling `daos_init()`. This in turns means it cannot report some kinds
-of startup errors either on stdout/stderr or via its return code.
-When initially starting with DFuse it is recommended to run in foreground mode
-(`--foreground`) to better observe any failures.
+daemonize to run like a system daemon.  The default is to run in the background
+and when doing this it will remain attached to the terminal until after
+initialization to be able to report back status or failure to start to the user.
 
 Inodes are managed on the local node by DFuse. So while inode numbers
 will be consistent on a node for the duration of the session, they are not
@@ -163,17 +161,31 @@ guaranteed to be consistent across restarts of DFuse or across nodes.
 It is not possible to see pool/container listings through DFuse.
 So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 
+### Multi-user mode
+
+The `--multi-user` option will put DFuse into multi user mode where it will tell the kernel to
+make the filesystem available to all users on a node rather than only the user running the DFuse
+process.  This makes DFuse appear like a generic multi-user filesystem and the standard `chown`
+and `chgrp` calls are enabled, all filesystem entries will be owned by the user that created them
+as is normal in a POSIX filesystem.
+
+Links to other containers can be created in this mode even if the new containers are not owned
+by the user running DFuse.  In this case the user running DFuse should be given 'r' access to the
+pool if required and the container create command will apply permissions required to the container
+at create time.
+
+It is anticipated that in this mode DFuse will be configured to start at boot time and run as a
+general purpose filesystem providing access to multiple users.
+
 ### Launching
+
+#### Via dfuse command
 
 DFuse should be run with the credentials (user/group) of the user who will
 be accessing it, and who owns any pools that will be used.
 
-There are two mandatory command-line options, these are:
-
-| **Command-line Option**  | **Description**     |
-| ------------------------ | ------------------- |
-| --mountpoint=<path\>     | path to mount dfuse |
-
+There is one mandatory command-line option, this is a mount point to start dfuse and can be
+supplied either via the `--mountpoint` option or the first positional argument.
 The mount point specified should be an empty directory on the local node that
 is owned by the user.
 
@@ -188,35 +200,359 @@ Additionally, there are several optional command-line options:
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
 
-When DFuse starts, it will register a single mount with the kernel, at the
-location specified by the `--mountpoint` option. This mount will be
-visible in `/proc/mounts`, and possibly in the output of `df`.
-The contents of multiple pools/containers will be accessible via this
-single kernel mountpoint.
+The `--pool` and `--container` options can also be passed as the second and third positional
+arguments.
+
+When DFuse starts, it will register a single mount with the kernel, at the location specified.
+This mount will be visible in `/proc/mounts`, and possibly in the output of `df`. The contents of
+multiple pools/containers may be accessible via this single kernel mount.
 
 Below is an example of creating and mounting a POSIX container under
-the /tmp/dfuse mountpoint.
+the /scratch_fs/dfuse mountpoint.
 
 ```bash
-$ mkdir /tmp/dfuse
+$ mkdir /scratch_fs/dfuse
 
-$ dfuse -m /tmp/dfuse --pool tank --cont mycont
+$ dfuse -m /scratch_fs/dfuse tank mycont
 
-$ touch /tmp/dfuse/foo
+$ touch /scratch_fs/dfuse/foo
 
-$ ls -l /tmp/dfuse/
+$ ls -l /scratch_fs/dfuse/
 total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 16:31 foo
 
-$ df -h /tmp/dfuse/
+$ df -h /scratch_fs/dfuse/
 Filesystem      Size  Used Avail Use% Mounted on
-dfuse           9.4G  326K  9.4G   1% /tmp/dfuse
+dfuse           537G  5.1G  532G   1% /scratch_fs/dfuse
+$
 ```
-
-### Launching via fstab
-
 DFuse can be launched via fstab and the standard mount command, it will parse -o options
 and extract pool=<name>,container=<name> if provided and ignore any other filesystem options given.
+
+There are few use cases described below to explain how systemd or /etc/fstab can be used to mount
+the daos container using dfuse.
+
+#### Via mount.fuse3 command
+
+```bash
+$  dmg pool create --scm-size=8G --nvme-size=64G --label=samirrav_pool -u samirrav@
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : b43b06fe-4013-4177-911c-6d230b88fe6e
+  Service Ranks        : [1-5]
+  Storage Ranks        : [0-7]
+  Total Size           : 576 GB
+  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+
+$  daos cont create samirrav_pool samirrav_cont --type=POSIX
+  Container UUID : 6efdc02c-5eaa-4a29-a34b-a062f1fe3371
+  Container Label: samirrav_cont
+  Container Type : POSIX
+
+Successfully created container 6efdc02c-5eaa-4a29-a34b-a062f1fe3371
+$  daos cont get-prop samirrav_pool samirrav_cont
+Properties for container samirrav_cont
+Name                                    Value
+----                                    -----
+Highest Allocated OID                   0
+Checksum                                off
+Checksum Chunk Size                     32 KiB
+Compression                             off
+Deduplication                           off
+Dedupe Threshold                        4.0 KiB
+EC Cell Size                            64 KiB
+Performance domain affinity level of EC 1
+Encryption                              off
+Global Version                          2
+Group                                   samirrav@
+Label                                   samirrav_cont
+Layout Type                             POSIX (1)
+Layout Version                          1
+Max Snapshot                            0
+Owner                                   samirrav@
+Redundancy Factor                       rf0
+Redundancy Level                        node (2)
+Performance domain affinity level of RP 3
+Server Checksumming                     off
+Health                                  HEALTHY
+Access Control List                     A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
+$  mkdir /scratch_fs/daos_dfuse_samir
+$  mount.fuse3 dfuse /scratch_fs/daos_dfuse_samir -o pool=samirrav_pool,container=samirrav_cont
+$  touch /scratch_fs/daos_dfuse_samir/foo
+$  ls -l /scratch_fs/daos_dfuse_samir/
+total 0
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 15:49 foo
+$  df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /scratch_fs/daos_dfuse_samir
+$
+```
+
+#### Via fstab
+
+Only root can run 'mount -a' command so this example should be run as root user.
+
+```bash
+$  dmg pool create --scm-size=8G --nvme-size=64G --label=admin_pool
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : 97196853-a487-41b2-a5d2-286e62f14e9e
+  Service Ranks        : [1-5]
+  Storage Ranks        : [0-7]
+  Total Size           : 576 GB
+  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+
+$  daos cont create admin_pool admin_cont --type=POSIX
+  Container UUID : ac4fb4db-a15e-45bf-8225-b71d34e3e578
+  Container Label: admin_cont
+  Container Type : POSIX
+
+Successfully created container ac4fb4db-a15e-45bf-8225-b71d34e3e578
+$  daos cont get-prop admin_pool admin_cont
+Properties for container admin_cont
+Name                                    Value
+----                                    -----
+Highest Allocated OID                   0
+Checksum                                off
+Checksum Chunk Size                     32 KiB
+Compression                             off
+Deduplication                           off
+Dedupe Threshold                        4.0 KiB
+EC Cell Size                            64 KiB
+Performance domain affinity level of EC 1
+Encryption                              off
+Global Version                          2
+Group                                   root@
+Label                                   admin_cont
+Layout Type                             POSIX (1)
+Layout Version                          1
+Max Snapshot                            0
+Owner                                   root@
+Redundancy Factor                       rf0
+Redundancy Level                        node (2)
+Performance domain affinity level of RP 3
+Server Checksumming                     off
+Health                                  HEALTHY
+Access Control List                     A::OWNER@:rwdtTaAo, A:G:GROUP@:rwtT
+$  echo 'dfuse /scratch_fs/root_dfuse fuse3 pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service    0 0' >> /etc/fstab
+$  mkdir /scratch_fs/root_dfuse
+$  df -h | grep fuse
+$  mount -a
+$  df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
+$
+```
+
+#### Via systemd for user
+
+User can mount/unmount the dfuse using systemd.
+
+```bash
+
+$ dmg pool create --scm-size=8G --nvme-size=64G samirrav_pool -u samirrav@ -g samirrav@
+Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
+Pool created with 11.11%,88.89% storage tier ratio
+--------------------------------------------------
+  UUID                 : a635cc99-22b3-4af4-8cee-d756463b5ca0
+  Service Ranks        : [0-1]
+  Storage Ranks        : [0-1]
+  Total Size           : 144 GB
+  Storage tier 0 (SCM) : 16 GB (8.0 GB / rank)
+  Storage tier 1 (NVMe): 128 GB (64 GB / rank)
+
+$ daos cont create samirrav_pool --type='POSIX' samirrav_cont
+  Container UUID : 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
+  Container Label: samirrav_cont
+  Container Type : POSIX
+
+Successfully created container 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
+$
+
+$ cat ~/.config/systemd/user/samirrav_dfuse.service
+[Service]
+ExecStart=dfuse  --foreground -m /scratch_fs/samirrav_dfuse/  --pool samirrav_pool --cont samirrav_cont
+ExecStop=fusermount3 -u /scratch_fs/samirrav_dfuse/
+
+[Install]
+WantedBy=default.target
+$
+
+$ systemctl --user daemon-reload
+
+$ systemctl --user list-unit-files | grep samirrav
+samirrav_dfuse.service         disabled
+
+$ systemctl --user status samirrav_dfuse.service
+● samirrav_dfuse.service
+   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+   Active: inactive (dead)
+
+$ systemctl --user start samirrav_dfuse.service
+
+$ systemctl --user status samirrav_dfuse.service
+● samirrav_dfuse.service
+   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+   Active: active (running) since Thu 2022-10-20 15:41:46 UTC; 1s ago
+ Main PID: 2845753 (dfuse)
+   CGroup: /user.slice/user-11832957.slice/user@11832957.service/samirrav_dfuse.service
+           └─2845753 /usr/bin/dfuse --foreground -m /scratch_fs/samirrav_dfuse/ --pool samirrav_pool --cont samirrav_cont
+
+$ df -h | grep fuse
+dfuse                         135G  1.3G  133G   1% /scratch_fs/samirrav_dfuse
+
+$ touch /scratch_fs/samirrav_dfuse/test1
+
+$ systemctl --user stop samirrav_dfuse.service
+$ df -h | grep fuse
+$ ls -l /scratch_fs/samirrav_dfuse/test1
+ls: cannot access '/scratch_fs/samirrav_dfuse/test1': No such file or directory
+
+$ systemctl --user start samirrav_dfuse.service
+$ ls -l /scratch_fs/samirrav_dfuse/test1
+-rw-rw-r-- 1 samirrav samirrav 0 Oct 20 15:42 /scratch_fs/samirrav_dfuse/test1
+
+```
+
+#### Via systemd for root
+
+Root user can create the systemd file from /etc/fstab using the 'systemd-fstab-generator' command.
+Consider the previous example /etc/fstab entry which has the admin_pool and admin_cont.
+Steps mention below will explain, how to generate the systemd file and start/stop the dfuse service.
+
+```bash
+$  cat /etc/fstab | grep fuse
+dfuse /scratch_fs/root_dfuse fuse3 pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service    0 0
+$  /usr/lib/systemd/system-generators/systemd-fstab-generator
+Failed to create unit file /tmp/-.mount, as it already exists. Duplicate entry in /etc/fstab?
+Failed to create unit file /tmp/var-tmp.mount, as it already exists. Duplicate entry in /etc/fstab?
+Failed to create unit file /tmp/dev-sda2.swap, as it already exists. Duplicate entry in /etc/fstab?
+$  cat /tmp/scratch_fs-root_dfuse.mount
+# Automatically generated by systemd-fstab-generator
+
+[Unit]
+SourcePath=/etc/fstab
+Documentation=man:fstab(5) man:systemd-fstab-generator(8)
+Before=local-fs.target
+After=daos_agent.service
+Requires=daos_agent.service
+
+[Mount]
+Where=/scratch_fs/root_dfuse
+What=dfuse
+Type=fuse3
+Options=pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service
+$  cp -rf /tmp/scratch_fs-root_dfuse.mount  /usr/lib/systemd/system/
+$  systemctl daemon-reload
+$  systemctl status scratch_fs-root_dfuse.mount
+● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: inactive (dead) since Fri 2022-09-23 15:55:33 UTC; 1min 50s ago
+    Where: /scratch_fs/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+
+Sep 23 15:55:33 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+$  systemctl start scratch_fs-root_dfuse.mount
+$  df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
+$  ls -l /scratch_fs/root_dfuse/
+total 0
+$  systemctl status scratch_fs-root_dfuse.mount
+● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: active (mounted) since Fri 2022-09-23 15:57:53 UTC; 31s ago
+    Where: /scratch_fs/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 63 (limit: 1648282)
+   Memory: 51.5M
+   CGroup: /system.slice/scratch_fs-root_dfuse.mount
+           └─4173 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+
+Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+$  systemctl stop scratch_fs-root_dfuse.mount
+$  systemctl status scratch_fs-root_dfuse.mount
+● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
+   Loaded: loaded (/etc/fstab; generated)
+   Active: inactive (dead) since Fri 2022-09-23 15:58:32 UTC; 2s ago
+    Where: /scratch_fs/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 0 (limit: 1648282)
+   Memory: 540.0K
+   CGroup: /system.slice/scratch_fs-root_dfuse.mount
+
+Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounting /scratch_fs/root_dfuse...
+Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
+Sep 23 15:58:32 wolf-170.wolf.hpdd.intel.com systemd[1]: Unmounted /scratch_fs/root_dfuse.
+$
+```
+
+#### Via systemd during system power ON
+
+  Same systemd file mention in previous example is used to mount the fuse during system power ON.
+
+```bash
+$  echo -e '\n[Install]\nWantedBy = multi-user.target' >> /usr/lib/systemd/system/scratch_fs-root_dfuse.mount
+$  cat /usr/lib/systemd/system/scratch_fs-root_dfuse.mount
+# Automatically generated by systemd-fstab-generator
+
+[Unit]
+SourcePath=/etc/fstab
+Documentation=man:fstab(5) man:systemd-fstab-generator(8)
+Before=local-fs.target
+After=daos_agent.service
+Requires=daos_agent.service
+
+[Mount]
+Where=/scratch_fs/root_dfuse
+What=dfuse
+Type=fuse3
+Options=pool=admin_pool,container=admin_cont,auto,x-systemd.requires=daos_agent.service
+
+[Install]
+WantedBy = multi-user.target
+
+$  systemctl is-enabled  scratch_fs-root_dfuse.mount
+generated
+$  systemctl daemon-reload
+$  rm -rf /run/systemd/generator/scratch_fs-root_dfuse.mount
+$  systemctl enable  scratch_fs-root_dfuse.mount
+Created symlink /etc/systemd/system/multi-user.target.wants/scratch_fs-root_dfuse.mount → /usr/lib/systemd/system/scratch_fs-root_dfuse.mount.
+$  systemctl is-enabled  scratch_fs-root_dfuse.mount
+enabled
+$  reboot
+$  dmesg | grep fuse
+[   18.060203] systemd[1]: sysinit.target: Found dependency on scratch_fs-root_dfuse.mount/start
+[   28.736227] fuse: init (API version 7.33)
+$  df -h | grep fuse
+dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
+$  systemctl status scratch_fs-root_dfuse.mount
+● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
+   Loaded: loaded (/etc/fstab; enabled; vendor preset: disabled)
+   Active: active (mounted) since Fri 2022-09-23 16:13:35 UTC; 4min 8s ago
+    Where: /scratch_fs/root_dfuse
+     What: dfuse
+     Docs: man:fstab(5)
+           man:systemd-fstab-generator(8)
+    Tasks: 63 (limit: 1648282)
+   Memory: 56.2M
+   CGroup: /system.slice/scratch_fs-root_dfuse.mount
+           └─2346 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+
+Sep 23 16:13:34 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
+Sep 23 16:13:35 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
+$
+```
 
 ### Links into other Containers
 
@@ -259,25 +595,30 @@ $ daos container info --path <path to entry point>
 Please find below an example.
 
 ```bash
-$ dfuse -m /tmp/dfuse --pool tank --cont mycont
-$ cd /tmp/dfuse/
-$ ls
-foo
-$ daos cont create tank --label mycont3 --type POSIX --path ./link_to_externa_container
-  Container UUID : 933944a9-ddf2-491a-bdbf-4442f0437d56
+$ dfuse -m /scratch_fs/dfuse --pool tank --cont mycont3
+$ cd /scratch_fs/dfuse/
+$ ls -l
+total 0
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 16:31 foo
+$ daos cont create tank mycont3 --type POSIX --path ./link_to_external_container
+  Container UUID : 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca
   Container Label: mycont3
   Container Type : POSIX
 
-Successfully created container 933944a9-ddf2-491a-bdbf-4442f0437d56 type POSIX
+Successfully created container 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca type POSIX
 $ ls -lrt
 total 0
--rw-rw-r-- 1 jlombard jlombard  0 Jul 10 20:23 foo
-drwxr-xr-x 1 jlombard jlombard 72 Jul 10 20:56 link_to_externa_container
-$ daos cont destroy --path ./link_to_externa_container/
-Successfully destroyed container 933944a9-ddf2-491a-bdbf-4442f0437d56
-jlombard@wolf-151:/tmp/dfuse$ ls -l
+-rw-rw-r-- 1 samirrav samirrav   0 Sep 23 16:31 foo
+drwxr-xr-x 1 samirrav samirrav 120 Sep 23 16:32 link_to_external_container
+$ daos cont destroy --path ./link_to_external_container/
+Successfully destroyed container ./link_to_external_container/
+$ pwd
+/scratch_fs/dfuse
+$ ls -l
 total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 16:31 foo
+$
+
 ```
 
 ### Caching
@@ -332,7 +673,7 @@ and ndentry timeouts will be 5 seconds, and data caching will be enabled.
 Readdir caching is available when supported by libfuse; however, on many distributions the system
 libfuse is not able to support this feature. Libfuse version 3.5.0 or newer is required at both
 compile and run-time.  Use `dfuse --version` or the runtime logs to see the fuse version used and if
-the feature is compiled into dfuse.  Readir caching is controlled by the dfuse-dentry-time setting.
+the feature is compiled into dfuse.  Readdir caching is controlled by the dfuse-dentry-time setting.
 
 These are two command line options to control the DFuse process itself.
 
@@ -341,8 +682,7 @@ These are two command line options to control the DFuse process itself.
 | --disable-caching       | Disables all caching      |
 | --disable-wb-caching    | Disables write-back cache |
 
-These will affect all containers accessed via DFuse, regardless of any
-container attributes.
+These will affect all containers accessed via DFuse, regardless of any container attributes.
 
 ### Permissions
 
@@ -376,7 +716,7 @@ Write permission for the container is optional; however, without it the containe
 When done, the file system can be unmounted via fusermount:
 
 ```bash
-$ fusermount3 -u /tmp/daos
+$ fusermount3 -u /scratch_fs/daos
 ```
 
 When this is done, the local DFuse daemon should shut down the mount point,
@@ -486,32 +826,29 @@ accessed by the path `<mount point>/<container uuid>`. The container uuid
 will have to be provided from an external source.
 
 ```bash
-$ daos cont create tank --label mycont --type POSIX
-   Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
-   Container Label: mycont
-   Container Type : POSIX
- Successfully created container 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+$ daos cont create tank  mycont --type POSIX
+  Container UUID : 7dee7162-8ab2-4704-ad22-8b43f2eb5279
+  Container Label: mycont
+  Container Type : POSIX
 
-$ daos cont create tank --label mycont2 --type POSIX
-  Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
+Successfully created container 7dee7162-8ab2-4704-ad22-8b43f2eb5279
+$ daos cont create tank  mycont2 --type POSIX
+  Container UUID : 8437e099-b19a-4b33-85da-81f5b3b7a833
   Container Label: mycont2
   Container Type : POSIX
 
-Successfully created container 0db21789-5372-4f2a-b7bc-14c0a5e968df
-
-$ dfuse -m /tmp/dfuse --pool tank
-
-$ ls -l /tmp/dfuse/
-ls: cannot open directory '/tmp/dfuse/': Operation not supported
-
-$ ls -l /tmp/dfuse/0db21789-5372-4f2a-b7bc-14c0a5e968df
+Successfully created container 8437e099-b19a-4b33-85da-81f5b3b7a833
+$ dfuse -m /scratch_fs/dfuse --pool tank
+$ ls -l /scratch_fs/dfuse/
+ls: cannot open directory '/scratch_fs/dfuse/': Operation not supported
+$ ls -l /scratch_fs/dfuse/8437e099-b19a-4b33-85da-81f5b3b7a833
 total 0
-
-$ ls -l /tmp/dfuse/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+$ touch /scratch_fs/dfuse/7dee7162-8ab2-4704-ad22-8b43f2eb5279/foo
+$ ls -l /scratch_fs/dfuse/7dee7162-8ab2-4704-ad22-8b43f2eb5279
 total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
-
-$ fusermount3 -u /tmp/dfuse/
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 17:00 foo
+$ fusermount3 -u /scratch_fs/dfuse
+$
 ```
 
 #### System Mode
@@ -523,17 +860,19 @@ points or directories representing pools here. So the pool and container uuids
 will have to be provided from an external source.
 
 ```bash
-$ dfuse -m /tmp/dfuse
-$ df -h /tmp/dfuse
+$ dfuse -m /scratch_fs/dfuse
+$ df -h /scratch_fs/dfuse/
 Filesystem      Size  Used Avail Use% Mounted on
-dfuse              -     -     -    - /tmp/dfuse
+dfuse              -     -     -    - /scratch_fs/dfuse
 $ daos pool query tank | grep -- -.*-
-Pool 004abf7c-26c8-4cba-9059-8b3be39161fc, ntarget=32, disabled=0, leader=0, version=1
-$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/0db21789-5372-4f2a-b7bc-14c0a5e968df
+Pool 3559e4b2-7f55-41ad-8d37-f279a8f3f586, ntarget=128, disabled=0, leader=5, version=1
+$
+$ ls -l /scratch_fs/dfuse/3559e4b2-7f55-41ad-8d37-f279a8f3f586/8437e099-b19a-4b33-85da-81f5b3b7a833
 total 0
-$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+$ ls -l /scratch_fs/dfuse/3559e4b2-7f55-41ad-8d37-f279a8f3f586/7dee7162-8ab2-4704-ad22-8b43f2eb5279
 total 0
--rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+-rw-rw-r-- 1 samirrav samirrav 0 Sep 23 17:00 foo
+$
 ```
 
 While this mode is not expected to be used directly by users, it is useful for

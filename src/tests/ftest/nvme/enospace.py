@@ -7,9 +7,10 @@
 import time
 import threading
 
+from avocado.core.exceptions import TestFail
+
 from apricot import skipForTicket
 from nvme_utils import ServerFillUp
-from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
@@ -99,7 +100,7 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.test_file.update('/testfile_background')
 
         # Define the job manager for the IOR command
-        job_manager = get_job_manager(self, "Mpirun", ior_bg_cmd, mpi_type="mpich")
+        job_manager = get_job_manager(self, job=ior_bg_cmd)
 
         # create container
         container = self.get_container(self.pool)

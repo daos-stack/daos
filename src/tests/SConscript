@@ -1,6 +1,5 @@
 """Build tests"""
 import daos_build
-import compiler_setup
 
 
 def build_dts_library(env, prereqs, dc_credit):
@@ -17,7 +16,7 @@ def build_tests(prereqs, env):
     """build the tests"""
     Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
-    compiler_setup.base_setup(denv)
+    denv.compiler_setup()
 
     libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
                    'dpar', 'isal', 'protobuf-c', 'cmocka']

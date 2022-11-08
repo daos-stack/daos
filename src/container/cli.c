@@ -496,12 +496,6 @@ static struct d_hlink_ops cont_h_ops = {
 };
 
 void
-dc_cont_put(struct dc_cont *dc)
-{
-	daos_hhash_link_putref(&dc->dc_hlink);
-}
-
-void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
@@ -694,6 +688,9 @@ cont_open_complete(tse_task_t *task, void *data)
 	struct cont_open_v7_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
+	time_t			 otime_sec, mtime_sec;
+	char			 otime_str[32];
+	char			 mtime_str[32];
 	uint32_t		 cli_pm_ver;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
@@ -788,8 +785,20 @@ cont_open_complete(tse_task_t *task, void *data)
 		arg->coa_info->ci_md_otime = out->coo_md_otime;
 		arg->coa_info->ci_md_mtime = out->coo_md_mtime;
 	}
-	D_DEBUG(DB_MD, DF_CONT": metadata times: open "DF_X64", modify "DF_X64"\n",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), out->coo_md_otime, out->coo_md_mtime);
+
+	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
+	rc = daos_hlc2timestamp(arg->coa_info->ci_md_otime, &otime_sec);
+	if (rc)
+		goto out;
+	rc = daos_hlc2timestamp(arg->coa_info->ci_md_mtime, &mtime_sec);
+	if (rc)
+		goto out;
+	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
+	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1143,6 +1152,9 @@ cont_query_complete(tse_task_t *task, void *data)
 	struct cont_query_v7_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
+	time_t				 otime_sec, mtime_sec;
+	char				 otime_str[32];
+	char				 mtime_str[32];
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1183,8 +1195,20 @@ cont_query_complete(tse_task_t *task, void *data)
 	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 	arg->cqa_info->ci_md_otime = out->cqo_md_otime;
 	arg->cqa_info->ci_md_mtime = out->cqo_md_mtime;
-	D_DEBUG(DB_MD, DF_CONT": metadata times: open "DF_X64", modify "DF_X64"\n",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), out->cqo_md_otime, out->cqo_md_mtime);
+
+	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
+	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_otime, &otime_sec);
+	if (rc)
+		goto out;
+	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_mtime, &mtime_sec);
+	if (rc)
+		goto out;
+	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
+	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);

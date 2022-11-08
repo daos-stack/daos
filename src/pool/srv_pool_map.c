@@ -137,7 +137,26 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			break;
 		}
 		break;
-
+	case POOL_EXTEND:
+		switch (target->ta_comp.co_status) {
+		case PO_COMP_ST_NEW:
+			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_in_ver = ++(*version);
+			D_DEBUG(DB_MD, "change "DF_TARGET" to UP %p\n",
+				DP_TARGET(target), map);
+			break;
+		case PO_COMP_ST_UP:
+		case PO_COMP_ST_UPIN:
+			/* Nothing to do, already added */
+			D_INFO("Skip extend "DF_TARGET"\n", DP_TARGET(target));
+			break;
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_DRAIN:
+		case PO_COMP_ST_DOWNOUT:
+			D_ERROR("Can't extend "DF_TARGET"\n", DP_TARGET(target));
+			return -DER_BUSY;
+		}
+		break;
 	case POOL_ADD_IN:
 		switch (target->ta_comp.co_status) {
 		case PO_COMP_ST_UPIN:
@@ -264,6 +283,14 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 
 		if (tgt_map_ver != NULL && *tgt_map_ver < version)
 			*tgt_map_ver = version;
+
+		if (opc == POOL_EXTEND && dom->do_comp.co_status == PO_COMP_ST_NEW) {
+			dom->do_comp.co_status = PO_COMP_ST_UP;
+			dom->do_comp.co_in_ver = target->ta_comp.co_in_ver;
+
+			D_DEBUG(DB_MD, "change rank %u to UP\n", dom->do_comp.co_rank);
+			version++;
+		}
 
 		if (exclude_rank &&
 		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN |

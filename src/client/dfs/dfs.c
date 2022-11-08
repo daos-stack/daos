@@ -1820,6 +1820,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
+	uint32_t		cont_tf, cid_tf;
 	uint32_t		pa_domain;
 
 	if (cuuid == NULL)
@@ -1882,6 +1883,35 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	} else {
 		rf = dpe->dpe_val;
 	}
+
+	/** verify object class redundancy */
+	cont_tf = daos_cont_rf2allowedfailures(rf);
+	if (cont_tf < 0)
+		D_GOTO(err_prop, rc = EINVAL);
+
+	if (dattr.da_oclass_id) {
+		rc = daos_oclass_cid2allowedfailures(dattr.da_oclass_id, &cid_tf);
+		if (rc) {
+			D_ERROR("Invalid oclass OID\n");
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		}
+		if (cid_tf < cont_tf) {
+			D_ERROR("File object class cannot tolerate RF failures\n");
+			D_GOTO(err_prop, rc = EINVAL);
+		}
+	}
+	if (dattr.da_dir_oclass_id) {
+		rc = daos_oclass_cid2allowedfailures(dattr.da_dir_oclass_id, &cid_tf);
+		if (rc) {
+			D_ERROR("Invalid oclass OID\n");
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
+		}
+		if (cid_tf < cont_tf) {
+			D_ERROR("Directory object class cannot tolerate RF failures\n");
+			D_GOTO(err_prop, rc = EINVAL);
+		}
+	}
+
 	pa_domain = daos_cont_prop2redunlvl(prop);
 
 	/** check hints for SB and Root Dir */
@@ -5409,6 +5439,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recxs[i].rx_nr = sizeof(uid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_UID;
+		rstat.st_uid = stbuf->st_uid;
 	}
 	if (flags & DFS_SET_ATTR_GID) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
@@ -5416,6 +5447,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recxs[i].rx_nr = sizeof(gid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_GID;
+		rstat.st_gid = stbuf->st_gid;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
 		/* It shouldn't be possible to set the size of something which isn't a file but

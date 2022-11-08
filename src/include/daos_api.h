@@ -205,6 +205,31 @@ daos_anchor_is_eof(daos_anchor_t *anchor)
 	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
 }
 
+/**
+ * Convert daos hybrid logical clock (HLC) time to system struct timespec.
+ *
+ * \param[in]	hlc	64-bit HLC value returned by libdaos API (such as found in daos_cont_info_t)
+ * \param[out]	ts	pointer to timespec structure to fill with system time converted from HLC.
+ *
+ * \return		0 if Success, negative if failed.
+ * \retval -DER_INVAL	Invalid parameter
+ */
+int
+daos_hlc2timespec(uint64_t hlc, struct timespec *ts);
+
+/**
+ * Convert daos hybrid logical clock (HLC) time to seconds timestamp.
+ *
+ * \param[in]	hlc	64-bit HLC value returned by libdaos API (such as found in daos_cont_info_t)
+ * \param[out]	ts	pointer to time_t value to assign with seconds since the UNIX epoch,
+ *			converted from daos HLC.
+ *
+ * \return		0 if Success, negative if failed.
+ * \retval -DER_INVAL	Invalid parameter
+ */
+int
+daos_hlc2timestamp(uint64_t hlc, time_t *ts);
+
 #if defined(__cplusplus)
 }
 #endif
