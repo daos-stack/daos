@@ -354,7 +354,7 @@ main(int argc, char **argv)
 	dfuse_info->di_threaded = true;
 	dfuse_info->di_caching = true;
 	dfuse_info->di_wb_cache = true;
-	dfuse_info->di_equeue_count = 2;
+	dfuse_info->di_equeue_count = 1;
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
