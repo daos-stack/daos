@@ -33,7 +33,6 @@ ior:
   max_duration: 10
   # 1MiB
   transfer_size: 1048576
-  dfs_chunk: 1048576
   # 0,5GiB, 512MiB
   block_size: 536870912
   dfs_destroy: false

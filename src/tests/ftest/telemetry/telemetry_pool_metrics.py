@@ -22,8 +22,6 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         super().__init__(*args, **kwargs)
 
         self.dfs_oclass = None
-        self.ior_transfer_size = None
-        self.ior_block_size = None
 
     def setUp(self):
         """Set up each test case."""
@@ -31,13 +29,15 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         super().setUp()
 
         self.dfs_oclass = self.params.get("oclass", '/run/container/*', self.dfs_oclass)
-        self.ior_transfer_size = self.params.get(
-            "transfer_size", '/run/ior/*', self.ior_transfer_size)
-        self.ior_block_size = self.params.get("block_size", '/run/ior/*', self.ior_block_size)
 
-    def get_expected_values(self, resent_ops):
-        """Return the expected metrics value output"""
-        ops_number = int(self.ior_block_size / self.ior_transfer_size)
+    def get_expected_value_range(self, resent_ops):
+        """Return the expected metrics value output
+
+            This function returns a hash map of pairs defining min and max values of each tested
+            telemetry metrics.  The hash map of pairs returned depends of the tested object class,
+            and the values are weighted according to the number of resent update rpc.
+        """
+        ops_number = int(self.ior_cmd.block_size.value / self.ior_cmd.transfer_size.value)
         pool_ops_minmax = {
             "SX": {
                 "engine_pool_ops_fetch": (
@@ -49,12 +49,12 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                     ops_number + resent_ops + 2
                 ),
                 "engine_pool_xferred_fetch": (
-                    ops_number * self.ior_transfer_size,
-                    (ops_number + 1) * self.ior_transfer_size
+                    ops_number * self.ior_cmd.transfer_size.value,
+                    (ops_number + 1) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
-                    ops_number * self.ior_transfer_size,
-                    (ops_number + resent_ops + 1) * self.ior_transfer_size
+                    ops_number * self.ior_cmd.transfer_size.value,
+                    (ops_number + resent_ops + 1) * self.ior_cmd.transfer_size.value
                 )
             },
             "RP_3GX": {
@@ -67,12 +67,12 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                     ops_number + resent_ops + 2
                 ),
                 "engine_pool_xferred_fetch": (
-                    ops_number * self.ior_transfer_size,
-                    (ops_number + 1) * self.ior_transfer_size
+                    ops_number * self.ior_cmd.transfer_size.value,
+                    (ops_number + 1) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
-                    3 * ops_number * self.ior_transfer_size,
-                    3 * (ops_number + resent_ops + 1) * self.ior_transfer_size
+                    3 * ops_number * self.ior_cmd.transfer_size.value,
+                    3 * (ops_number + resent_ops + 1) * self.ior_cmd.transfer_size.value
                 )
             }
         }
@@ -142,9 +142,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         try:
             self.update_ior_cmd_with_pool(False)
             self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
-            self.ior_cmd.transfer_size.update(self.ior_transfer_size)
-            self.ior_cmd.dfs_chunk.update(self.ior_transfer_size)
-            self.ior_cmd.block_size.update(self.ior_block_size)
+            self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
             self.run_ior_with_pool(
                 timeout=200, create_pool=False, create_cont=False)
         except TestFail:
@@ -158,11 +156,10 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             metric_values[name] = self.get_metric_value(name, metrics_data)
 
         # perform verification check
-        expected_values = self.get_expected_values(metric_values["engine_pool_resent"])
+        expected_values = self.get_expected_value_range(metric_values["engine_pool_resent"])
         for name in expected_values:
             val = metric_values[name]
-            min_val = expected_values[name][0]
-            max_val = expected_values[name][1]
+            min_val, max_val = expected_values[name]
             self.assertTrue(
                 min_val <= val <= max_val,
                 "Aggregated value of the metric {} for oclass {} is invalid: "
