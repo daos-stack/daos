@@ -1022,8 +1022,12 @@ class Launch():
             logger.warning(error)
 
         # Get the core file pattern information
-        core_files = self._get_core_file_pattern(
-            args.test_servers, args.test_clients, args.process_cores)
+        try:
+            core_files = self._get_core_file_pattern(
+                args.test_servers, args.test_clients, args.process_cores)
+        except LaunchException:
+            message = "Error obtaining the core file pattern information"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
@@ -1304,21 +1308,20 @@ class Launch():
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
             result = run_remote(logger, all_hosts, command)
             # Verify each host has the same interface speed
-            if result.passed and result.homogeneous:
-                for line in result.output[0].stdout:
-                    try:
-                        interface_speeds[interface] = int(line.strip())
-                    except IOError as io_error:
-                        # KVM/Qemu/libvirt returns an EINVAL
-                        if io_error.errno == errno.EINVAL:
-                            interface_speeds[interface] = 1000
-                    except ValueError:
-                        # Any line not containing a speed (integer)
-                        pass
-            elif not result.homogeneous:
+            if not result.homogeneous:
                 logger.error(
                     "Non-homogeneous interface speed detected for %s on %s.",
                     interface, str(all_hosts))
+            elif not result.passed and "Invalid argument" in "\n".join(result.output[0].stdout):
+                # Concatenating the speed of a KVM/Qemu/libvirt device yields 'Invalid argument'
+                interface_speeds[interface] = 1000
+            elif result.passed:
+                for line in result.output[0].stdout:
+                    try:
+                        interface_speeds[interface] = int(line.strip())
+                    except ValueError:
+                        # Any line not containing a speed (integer)
+                        pass
             else:
                 logger.error("Error detecting speed of %s on %s", interface, str(all_hosts))
 
@@ -2007,6 +2010,9 @@ class Launch():
             clients (NodeSet): hosts designated for the client role in testing
             process_cores (bool): whether or not to collect core files after the tests complete
 
+        Raises:
+            LaunchException: if there was an error obtaining the core file pattern information
+
         Returns:
             dict: a dictionary containing the path and pattern for the core files per NodeSet
 
@@ -2024,20 +2030,18 @@ class Launch():
 
         # Verify all the hosts have the same core file pattern
         if not result.passed:
-            message = "Error obtaining the core file pattern"
-            return self.get_exit_status(1, message, "Setup")
+            raise LaunchException("Error obtaining the core file pattern")
 
         # Get the path and pattern information from the core pattern
         for data in result.output:
             hosts = str(data.hosts)
             try:
                 info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError):
-                message = "Error obtaining the core file pattern and directory"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+            except (TypeError, IndexError) as error:
+                raise LaunchException(
+                    "Error obtaining the core file pattern and directory") from error
             if not info[0]:
-                message = "Error obtaining the core file pattern directory"
-                return self.get_exit_status(1, message, "Setup")
+                raise LaunchException("Error obtaining the core file pattern directory")
             core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
             logger.info(
                 "Collecting any '%s' core files written to %s on %s",
