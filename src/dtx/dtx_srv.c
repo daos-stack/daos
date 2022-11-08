@@ -421,6 +421,24 @@ dtx_init(void)
 
 	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
 
+	str = getenv("DTX_DISP_STEP_LENGTH");
+	if (str != NULL) {
+		dtx_disp_step_length = atoi(str);
+		if (dtx_disp_step_length < DTX_DISP_STEP_MIN ||
+		    dtx_disp_step_length > DTX_DISP_STEP_MAX) {
+			D_WARN("Invalid DTX dispatch step length %d, "
+			       "the valid range is [%d, %d], use the "
+			       "default value %d\n",
+			       dtx_disp_step_length, DTX_DISP_STEP_MIN,
+			       DTX_DISP_STEP_MAX, DTX_DISP_STEP_DEF);
+			dtx_disp_step_length = DTX_DISP_STEP_DEF;
+		}
+	} else {
+		dtx_disp_step_length = DTX_DISP_STEP_DEF;
+	}
+
+	D_INFO("Set DTX dispatch step length as %u\n", dtx_disp_step_length);
+
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 				   &dbtree_dtx_cf_ops);
