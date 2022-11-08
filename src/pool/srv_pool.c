@@ -5381,6 +5381,9 @@ static int pool_find_all_targets_by_addr(struct pool_map *map,
  * \param[in]	svc		pool service
  * \param[in]	opc		update operation (e.g., POOL_EXCLUDE)
  * \param[in]	exclude_rank	for excluding ranks (rather than targets)
+ * \param[in]	extend_rank_list ranks list to be extended.
+ * \param[in]	extend_domains_nr number of extend domains.
+ * \param[in]	extend_domains	domains to be extended.
  * \param[in,out]
  *		tgts		target IDs (if empty, must specify tgt_addrs)
  * \param[in]	tgt_addrs	optional target addresses (ignored if \a tgts is
@@ -5398,7 +5401,8 @@ static int pool_find_all_targets_by_addr(struct pool_map *map,
  */
 static int
 pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
-			     bool exclude_rank,
+			     bool exclude_rank, d_rank_list_t *extend_rank_list,
+			     uint32_t extend_domains_nr, uint32_t *extend_domains,
 			     struct pool_target_id_list *tgts,
 			     struct pool_target_addr_list *tgt_addrs,
 			     struct rsvc_hint *hint, bool *p_updated,
@@ -5427,32 +5431,57 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	if (rc != 0)
 		goto out_lock;
 
-	/*
-	 * If an empty target ID list is provided, convert from target
-	 * addresses.
-	 */
-	if (tgts->pti_number == 0) {
-		D_ASSERT(tgts->pti_ids == NULL);
-		D_ASSERT(tgt_addrs != NULL);
-		D_ASSERT(inval_tgt_addrs != NULL);
-		rc = pool_find_all_targets_by_addr(map, tgt_addrs, tgts,
-						   inval_tgt_addrs);
+	if (opc == POOL_EXTEND) {
+		D_ASSERT(extend_rank_list != NULL);
+		map_version = pool_map_get_version(map) + 1;
+		rc = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
+				  extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
+				  extend_domains, dss_tgt_nr);
+		if (rc != 0) {
+			pool_buf_free(map_buf);
+			D_GOTO(out_map, rc);
+		}
+
+		/* Extend the current pool map */
+		rc = pool_map_extend(map, map_version, map_buf);
 		if (rc != 0)
-			goto out_map;
-		if (inval_tgt_addrs->pta_number > 0) {
-			/*
-			 * If any invalid ranks/targets were specified here,
-			 * abort the entire request. This will mean the
-			 * operator needs to resubmit the request with
-			 * corrected arguments, which will be easier without
-			 * trying to figure out which arguments were accepted &
-			 * started processing already.
-			 */
-			rc = -DER_NONEXIST;
-			goto out_map;
+			D_GOTO(out_map, rc);
+
+		pool_buf_free(map_buf);
+		/* Get a list of all the targets being added */
+		rc = pool_map_find_targets_on_ranks(map, extend_rank_list, tgts);
+		if (rc <= 0) {
+			D_ERROR(DF_UUID" failed to find targets rc: "DF_RC"\n",
+				DP_UUID(svc->ps_uuid), DP_RC(rc));
+			D_GOTO(out_map, rc);
+		}
+	} else {
+		/*
+		 * If an empty target ID list is provided, convert from target
+		 * addresses.
+		 */
+		if (tgts->pti_number == 0) {
+			D_ASSERT(tgts->pti_ids == NULL);
+			D_ASSERT(tgt_addrs != NULL);
+			D_ASSERT(inval_tgt_addrs != NULL);
+			rc = pool_find_all_targets_by_addr(map, tgt_addrs, tgts,
+							   inval_tgt_addrs);
+			if (rc != 0)
+				goto out_map;
+			if (inval_tgt_addrs->pta_number > 0) {
+				/*
+				 * If any invalid ranks/targets were specified here,
+				 * abort the entire request. This will mean the
+				 * operator needs to resubmit the request with
+				 * corrected arguments, which will be easier without
+				 * trying to figure out which arguments were accepted &
+				 * started processing already.
+				 */
+				rc = -DER_NONEXIST;
+				goto out_map;
+			}
 		}
 	}
-
 	/*
 	 * Attempt to modify the temporary pool map and save its versions
 	 * before and after. If the version hasn't changed, we are done.
@@ -5597,8 +5626,8 @@ pool_update_map_internal(uuid_t pool_uuid, unsigned int opc, bool exclude_rank,
 	if (rc != 0)
 		return rc;
 
-	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, tgts,
-					  tgt_addrs, hint, p_updated,
+	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, NULL, 0,
+					  NULL, tgts, tgt_addrs, hint, p_updated,
 					  map_version_p, tgt_map_ver,
 					  inval_tgt_addrs);
 
@@ -5635,7 +5664,8 @@ ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list)
  */
 static int
 pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
-		    struct pool_target_addr_list *list,
+		    d_rank_list_t *extend_rank_list, uint32_t *extend_domains,
+		    uint32_t extend_domains_nr, struct pool_target_addr_list *list,
 		    struct pool_target_addr_list *inval_list_out,
 		    uint32_t *map_version, struct rsvc_hint *hint)
 {
@@ -5650,9 +5680,10 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	daos_epoch_t			rebuild_eph = crt_hlc_get();
 	uint64_t			delay = 2;
 
-	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
-					  list, hint, &updated, map_version,
-					  &tgt_map_ver, inval_list_out);
+	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
+					  extend_domains_nr, extend_domains,
+					  &target_list, list, hint, &updated,
+					  map_version, &tgt_map_ver, inval_list_out);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -5714,157 +5745,12 @@ out:
 	return rc;
 }
 
-/*
- * Currently can only add racks/top level domains. There's not currently
- * any way to specify fault domain at a better level
- */
-static int
-pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc, uint32_t nnodes,
-		uint32_t ndomains, uint32_t *domains, bool *updated_p,
-		uint32_t *map_version_p, struct rsvc_hint *hint)
-{
-	struct pool_buf		*map_buf = NULL;
-	struct pool_map		*map = NULL;
-	uint32_t		map_version;
-	bool			updated = false;
-	int			ntargets;
-	int			rc;
-
-	ntargets = nnodes * dss_tgt_nr;
-
-	/* Create a temporary pool map based on the last committed version. */
-	rc = read_map(tx, &svc->ps_root, &map);
-	if (rc != 0)
-		return rc;
-
-	map_version = pool_map_get_version(map) + 1;
-
-	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  dss_tgt_nr);
-	if (rc != 0)
-		D_GOTO(out_map_buf, rc);
-
-	/* Extend the current pool map */
-	rc = pool_map_extend(map, map_version, map_buf);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
-
-	/* Write the new pool map. */
-	rc = pool_buf_extract(map, &map_buf);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
-
-	rc = write_map_buf(tx, &svc->ps_root, map_buf, map_version);
-	if (rc != 0)
-		D_GOTO(out_map, rc);
-
-	rc = rdb_tx_commit(tx);
-	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out_map, rc);
-	}
-
-	updated = true;
-	/* Update svc->ps_pool to match the new pool map. */
-	rc = ds_pool_tgt_map_update(svc->ps_pool, map_buf, map_version);
-	if (rc != 0) {
-		/*
-		* We must resign to avoid handling future requests with a
-		* stale pool map cache.
-		*/
-		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
-		rc = 0;
-		goto out_map;
-	}
-
-	ds_rsvc_request_map_dist(&svc->ps_rsvc);
-
-	pool_svc_schedule_reconf(svc);
-
-out_map:
-	if (map_version_p != NULL) {
-		if (map == NULL || rc != 0)
-			*map_version_p = ds_pool_get_version(svc->ps_pool);
-		else
-			*map_version_p = pool_map_get_version(map);
-	}
-
-out_map_buf:
-	if (map_buf != NULL)
-		pool_buf_free(map_buf);
-	if (updated_p)
-		*updated_p = updated;
-	if (map)
-		pool_map_decref(map);
-
-	return rc;
-}
-
-static int
-pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
-		     d_rank_list_t *rank_list, uint32_t ndomains, uint32_t *domains,
-		     uint32_t *map_version_p)
-{
-	struct pool_svc		*svc;
-	struct rdb_tx		tx;
-	bool			updated = false;
-	daos_epoch_t		extend_eph = crt_hlc_get();
-	struct pool_target_id_list tgts = { 0 };
-	int rc;
-
-	rc = pool_svc_lookup_leader(pool_uuid, &svc, hint);
-	if (rc != 0)
-		return rc;
-
-	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-	ABT_rwlock_wrlock(svc->ps_lock);
-
-	/*
-	 * Extend the pool map directly - this is more complicated than other
-	 * operations which are handled within pool_svc_update_map()
-	 */
-	rc = pool_extend_map(&tx, svc, nnodes, ndomains, domains, &updated,
-			     map_version_p, hint);
-
-	if (!updated)
-		D_GOTO(out_lock, rc);
-
-	/* Get a list of all the targets being added */
-	rc = pool_map_find_targets_on_ranks(svc->ps_pool->sp_map, rank_list,
-					    &tgts);
-	if (rc <= 0) {
-		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_lock, rc);
-	}
-
-	/* Schedule an extension rebuild for those targets */
-	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, extend_eph, &tgts,
-				 RB_OP_EXTEND, 2);
-	if (rc != 0) {
-		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_lock, rc);
-	}
-
-out_lock:
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
-
-out_svc:
-	pool_target_id_list_free(&tgts);
-	if (hint != NULL)
-		ds_rsvc_set_hint(&svc->ps_rsvc, hint);
-	pool_svc_put_leader(svc);
-	return rc;
-}
-
 void
 ds_pool_extend_handler(crt_rpc_t *rpc)
 {
 	struct pool_extend_in	*in = crt_req_get(rpc);
 	struct pool_extend_out	*out = crt_reply_get(rpc);
+	struct pool_svc		*svc;
 	uuid_t			pool_uuid;
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
@@ -5879,9 +5765,18 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	ndomains = in->pei_ndomains;
 	domains = in->pei_domains.ca_arrays;
 
-	rc = pool_extend_internal(pool_uuid, &out->peo_op.po_hint, rank_list.rl_nr, &rank_list,
-				  ndomains, domains, &out->peo_op.po_map_version);
+	rc = pool_svc_lookup_leader(in->pei_op.pi_uuid, &svc, &out->peo_op.po_hint);
+	if (rc != 0)
+		goto out;
 
+	rc = pool_svc_update_map(svc, opc_get(rpc->cr_opc),
+				 false /* exclude_rank */,
+				 &rank_list, domains, ndomains,
+				 NULL, NULL, &out->peo_op.po_map_version,
+				 &out->peo_op.po_hint);
+
+	pool_svc_put_leader(svc);
+out:
 	out->peo_op.po_rc = rc;
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p " DF_RC "\n", DP_UUID(in->pei_op.pi_uuid), rpc,
 		DP_RC(rc));
@@ -5979,7 +5874,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_svc_update_map(svc, opc_get(rpc->cr_opc),
-				 false /* exclude_rank */, &list,
+				 false /* exclude_rank */, NULL, NULL, 0, &list,
 				 &inval_list_out, &out->pto_op.po_map_version,
 				 &out->pto_op.po_hint);
 	if (rc != 0)
@@ -6013,7 +5908,7 @@ pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank)
 	list.pta_addrs = &tgt_rank;
 
 	rc = pool_svc_update_map(svc, POOL_EXCLUDE, true /* exclude_rank */,
-				 &list, &inval_list_out, &map_version,
+				 NULL, NULL, 0, &list, &inval_list_out, &map_version,
 				 NULL /* hint */);
 
 	D_DEBUG(DB_MD, "Exclude pool "DF_UUID"/%u rank %u: rc %d\n",
@@ -6382,28 +6277,6 @@ out:
 	return rc;
 }
 
-static int
-ranks_get_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      d_rank_t *buf, daos_size_t nranks)
-{
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
-
-	d_iov_set(&iov, buf, nranks * sizeof(d_rank_t));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-}
-
-static void
-ranks_get_bulk_destroy(crt_bulk_t bulk)
-{
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
-}
-
 /*
  * Transfer list of pool ranks to "remote_bulk". If the remote bulk buffer
  * is too small, then return -DER_TRUNC. RPC response will contain the number
@@ -6481,112 +6354,6 @@ out:
 	return rc;
 }
 
-/**
- * Send CaRT RPC to pool svc to get list of storage server ranks.
- *
- * \param[in]	uuid		UUID of the pool
- * \param[in]	svc_ranks	Pool service replicas
- * \param[out]	ranks		Storage server ranks (allocated, caller-freed)
- *
- * return	0		Success
- *
- */
-int
-ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-		      d_rank_list_t **ranks)
-{
-	int				 rc;
-	struct rsvc_client		 client;
-	crt_endpoint_t			 ep;
-	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t			*rpc;
-	struct pool_ranks_get_in	*in;
-	struct pool_ranks_get_out	*out;
-	uint32_t			 resp_nranks = 2048;
-	d_rank_list_t			*out_ranks = NULL;
-
-	D_DEBUG(DB_MGMT, DF_UUID ": Getting storage ranks\n", DP_UUID(uuid));
-
-	rc = rsvc_client_init(&client, svc_ranks);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-rechoose:
-	ep.ep_grp = NULL; /* primary group */
-	rc = rsvc_client_choose(&client, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": cannot find pool service: " DF_RC "\n",
-			DP_UUID(uuid), DP_RC(rc));
-		goto out_client;
-	}
-
-realloc_resp:
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_RANKS_GET, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create POOL_RANKS_GET rpc, "
-			DF_RC "\n", DP_UUID(uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
-	}
-
-	/* Allocate response buffer */
-	out_ranks = d_rank_list_alloc(resp_nranks);
-	if (out_ranks == NULL)
-		D_GOTO(out_rpc, rc = -DER_NOMEM);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->prgi_op.pi_uuid, uuid);
-	uuid_clear(in->prgi_op.pi_hdl);
-	in->prgi_nranks = resp_nranks;
-	rc = ranks_get_bulk_create(info->dmi_ctx, &in->prgi_ranks_bulk,
-				   out_ranks->rl_ranks, in->prgi_nranks);
-	if (rc != 0)
-		D_GOTO(out_resp_buf, rc);
-
-	D_DEBUG(DB_MD, DF_UUID ": send POOL_RANKS_GET to PS rank %u, "
-		"reply capacity %u\n", DP_UUID(uuid), ep.ep_rank, resp_nranks);
-
-	rc = dss_rpc_send(rpc);
-	out = crt_reply_get(rpc);
-	D_ASSERT(out != NULL);
-
-	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->prgo_op);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
-		/* To simplify logic, destroy bulk hdl and buffer each time */
-		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-		d_rank_list_free(out_ranks);
-		crt_req_decref(rpc);
-		dss_sleep(RECHOOSE_SLEEP_MS);
-		D_GOTO(rechoose, rc);
-	}
-
-	rc = out->prgo_op.po_rc;
-	if (rc == -DER_TRUNC) {
-		/* out_ranks too small - realloc with server-provided nranks */
-		resp_nranks = out->prgo_nranks;
-		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-		d_rank_list_free(out_ranks);
-		crt_req_decref(rpc);
-		D_GOTO(realloc_resp, rc);
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to get ranks, " DF_RC "\n",
-			DP_UUID(uuid), DP_RC(rc));
-	} else {
-		out_ranks->rl_nr = out->prgo_nranks;
-		*ranks = out_ranks;
-	}
-
-	ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-out_resp_buf:
-	if (rc != 0)
-		d_rank_list_free(out_ranks);
-out_rpc:
-	crt_req_decref(rpc);
-out_client:
-	rsvc_client_fini(&client);
-out:
-	return rc;
-}
-
 /* CaRT RPC handler run in PS leader to return pool storage ranks
  */
 void
@@ -6612,7 +6379,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 
 	/* Get available ranks */
 	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid,
-			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN | PO_COMP_ST_NEW,
+			       PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN,
 			       &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",

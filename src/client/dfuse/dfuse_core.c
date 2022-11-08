@@ -1107,6 +1107,9 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	args.argc = 5;
 
+	if (fs_handle->dpi_info->di_multi_user)
+		args.argc++;
+
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
 	 */
@@ -1134,6 +1137,12 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	args.argv[4] = strdup("-onoatime");
 	if (!args.argv[4])
 		D_GOTO(err, rc = -DER_NOMEM);
+
+	if (fs_handle->dpi_info->di_multi_user) {
+		args.argv[5] = strdup("-oallow_other");
+		if (!args.argv[5])
+			D_GOTO(err, rc = -DER_NOMEM);
+	}
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
@@ -1194,7 +1203,6 @@ err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
-	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }

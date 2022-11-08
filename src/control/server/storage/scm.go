@@ -258,8 +258,8 @@ const (
 type (
 	// ScmProvider defines an interface to be implemented by a PMem provider.
 	ScmProvider interface {
-		Mount(ScmMountRequest) (*ScmMountResponse, error)
-		Unmount(ScmMountRequest) (*ScmMountResponse, error)
+		Mount(ScmMountRequest) (*MountResponse, error)
+		Unmount(ScmMountRequest) (*MountResponse, error)
 		Format(ScmFormatRequest) (*ScmFormatResponse, error)
 		CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error)
 		Scan(ScmScanRequest) (*ScmScanResponse, error)
@@ -295,16 +295,12 @@ type (
 		Namespaces ScmNamespaces
 	}
 
-	// DcpmParams defines the sub-parameters of a Format operation that will use PMem
-	DcpmParams struct {
-		Device string
-	}
-
 	// RamdiskParams defines the sub-parameters of a Format or Mount operation that
 	// will use tmpfs-based ramdisk
 	RamdiskParams struct {
-		Size     uint
-		NUMANode uint
+		Size             uint
+		NUMANode         uint
+		DisableHugepages bool
 	}
 
 	// ScmFormatRequest defines the parameters for a Format operation or query.
@@ -315,7 +311,7 @@ type (
 		OwnerUID   int
 		OwnerGID   int
 		Ramdisk    *RamdiskParams
-		Dcpm       *DcpmParams
+		Dcpm       *DeviceParams
 	}
 
 	// ScmFormatResponse contains the results of a successful Format operation or query.
@@ -326,19 +322,13 @@ type (
 		Mountable  bool
 	}
 
-	// ScmMountRequest defines the parameters for a Mount operation.
+	// ScmMountRequest represents an SCM mount request.
 	ScmMountRequest struct {
 		pbin.ForwardableRequest
 		Class   Class
 		Device  string
 		Target  string
 		Ramdisk *RamdiskParams
-	}
-
-	// ScmMountResponse contains the results of a successful Mount operation.
-	ScmMountResponse struct {
-		Target  string
-		Mounted bool
 	}
 
 	// ScmFirmwareQueryRequest defines the parameters for a firmware query.
@@ -411,10 +401,10 @@ func NewScmAdminForwarder(log logging.Logger) *ScmAdminForwarder {
 }
 
 // Mount forwards an SCM mount request.
-func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmMount", req, res); err != nil {
 		return nil, err
 	}
@@ -423,10 +413,10 @@ func (f *ScmAdminForwarder) Mount(req ScmMountRequest) (*ScmMountResponse, error
 }
 
 // Unmount forwards an SCM unmount request.
-func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*ScmMountResponse, error) {
+func (f *ScmAdminForwarder) Unmount(req ScmMountRequest) (*MountResponse, error) {
 	req.Forwarded = true
 
-	res := new(ScmMountResponse)
+	res := new(MountResponse)
 	if err := f.SendReq("ScmUnmount", req, res); err != nil {
 		return nil, err
 	}
