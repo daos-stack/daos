@@ -5537,7 +5537,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
-	struct pool_buf	       *map_buf;
+	struct pool_buf	       *map_buf = NULL;
 	bool			updated = false;
 	int			rc;
 
@@ -5561,17 +5561,16 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 		rc = gen_pool_buf(map, &map_buf, map_version, extend_domains_nr,
 				  extend_rank_list->rl_nr, extend_rank_list->rl_nr * dss_tgt_nr,
 				  extend_domains, dss_tgt_nr);
-		if (rc != 0) {
-			pool_buf_free(map_buf);
-			D_GOTO(out_map, rc);
-		}
-
-		/* Extend the current pool map */
-		rc = pool_map_extend(map, map_version, map_buf);
 		if (rc != 0)
 			D_GOTO(out_map, rc);
 
+		/* Extend the current pool map */
+		rc = pool_map_extend(map, map_version, map_buf);
 		pool_buf_free(map_buf);
+		map_buf = NULL;
+		if (rc != 0)
+			D_GOTO(out_map, rc);
+
 		/* Get a list of all the targets being added */
 		rc = pool_map_find_targets_on_ranks(map, extend_rank_list, tgts);
 		if (rc <= 0) {
