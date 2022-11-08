@@ -53,6 +53,7 @@ struct dfuse_projection_info {
 
 	struct d_slab                    dpi_slab;
 	struct d_slab_type              *dpi_read_slab;
+	struct d_slab_type              *dpi_write_slab;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
@@ -170,7 +171,6 @@ struct dfuse_event {
 	d_list_t                      de_list;
 	struct dfuse_projection_info *de_handle;
 	void (*de_complete_cb)(struct dfuse_event *ev);
-	struct dfuse_obj_hdl *de_oh;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;

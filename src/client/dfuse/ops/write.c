@@ -14,13 +14,12 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
 	else
 		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
-	D_FREE(ev->de_iov.iov_buf);
-	D_FREE(ev);
+	d_slab_release(ev->de_handle->dpi_write_slab, ev);
 }
 
 void
-dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
-	       off_t position, struct fuse_file_info *fi)
+dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t position,
+	       struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
@@ -30,8 +29,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	size_t                        len  = fuse_buf_size(bufv);
 	struct fuse_bufvec            ibuf = FUSE_BUFVEC_INIT(len);
 
-	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d",
-			position, position + len - 1,
+	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
 			bufv->buf[0].flags, fc->pid);
 
 	if (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0) {
@@ -40,50 +38,34 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 		}
 	}
 
-	D_ALLOC_PTR(ev);
+	ev = d_slab_acquire(fs_handle->dpi_write_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
 	DFUSE_TRA_UP(ev, oh, "write");
 
-	/* Allocate temporary space for the data whilst they asynchronous
-	 * operation is happening.
-	 */
-
 	/* Declare a bufvec on the stack and have fuse copy into it.
 	 * For page size and above this will read directly into the
 	 * buffer, avoiding any copying of the data.
 	 */
-	D_ALLOC(ibuf.buf[0].mem, len);
-	if (ibuf.buf[0].mem == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	ibuf.buf[0].mem = ev->de_iov.iov_buf;
 
 	rc = fuse_buf_copy(&ibuf, bufv, 0);
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
-	rc = daos_event_init(&ev->de_ev, fs_handle->dpi_eq, NULL);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err, rc = daos_der2errno(rc));
-
-	ev->de_oh          = oh;
 	ev->de_req         = req;
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
-
-	ev->de_sgl.sg_nr = 1;
-	d_iov_set(&ev->de_iov, ibuf.buf[0].mem, len);
-	ev->de_sgl.sg_iovs = &ev->de_iov;
 
 	/* Check for potentially using readahead on this file, ie_truncated
 	 * will only be set if caching is enabled so only check for the one
 	 * flag rather than two here
 	 */
 	if (oh->doh_ie->ie_truncated) {
-		if (oh->doh_ie->ie_start_off == 0 &&
-		    oh->doh_ie->ie_end_off == 0) {
+		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
 			oh->doh_ie->ie_start_off = position;
-			oh->doh_ie->ie_end_off = position + len;
+			oh->doh_ie->ie_end_off   = position + len;
 		} else {
 			if (oh->doh_ie->ie_start_off > position)
 				oh->doh_ie->ie_start_off = position;
@@ -95,8 +77,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
 
-	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
-		       position, &ev->de_ev);
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_ev);
 	if (rc != 0)
 		D_GOTO(err, rc);
 

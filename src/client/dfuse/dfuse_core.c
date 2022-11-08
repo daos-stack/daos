@@ -1055,7 +1055,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 }
 
 static void
-dfuse_read_event_init(void *arg, void *handle)
+dfuse_event_init(void *arg, void *handle)
 {
 	struct dfuse_event *ev = arg;
 
@@ -1086,8 +1086,32 @@ dfuse_read_event_reset(void *arg)
 	return true;
 }
 
+static bool
+dfuse_write_event_reset(void *arg)
+{
+	struct dfuse_event *ev = arg;
+	int                 rc;
+
+	if (ev->de_iov.iov_buf == NULL) {
+		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		if (ev->de_iov.iov_buf == NULL)
+			return false;
+
+		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
+		ev->de_sgl.sg_iovs     = &ev->de_iov;
+		ev->de_sgl.sg_nr       = 1;
+	}
+
+	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
+	if (rc != -DER_SUCCESS) {
+		return false;
+	}
+
+	return true;
+}
+
 static void
-dfuse_read_event_release(void *arg)
+dfuse_event_release(void *arg)
 {
 	struct dfuse_event *ev = arg;
 
@@ -1099,10 +1123,15 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
 	struct fuse_args          args     = {0};
 	struct dfuse_inode_entry *ie       = NULL;
-	struct d_slab_reg         slab_reg = {.sr_init    = dfuse_read_event_init,
-					      .sr_reset   = dfuse_read_event_reset,
-					      .sr_release = dfuse_read_event_release,
-					      POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
+						.sr_reset   = dfuse_read_event_reset,
+						.sr_release = dfuse_event_release,
+						POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         write_slab = {.sr_init    = dfuse_event_init,
+						.sr_reset   = dfuse_write_event_reset,
+						.sr_release = dfuse_event_release,
+						POOL_TYPE_INIT(dfuse_event, de_list)};
+
 	int                       rc;
 
 	args.argc = 5;
@@ -1181,7 +1210,11 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_ie_remove, rc);
 
-	rc = d_slab_register(&fs_handle->dpi_slab, &slab_reg, &fs_handle->dpi_read_slab);
+	rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, &fs_handle->dpi_read_slab);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_slab, rc);
+
+	rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, &fs_handle->dpi_write_slab);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_slab, rc);
 
@@ -1192,9 +1225,10 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	rc = dfuse_launch_fuse(fs_handle, &args);
-	fuse_opt_free_args(&args);
-	if (rc == -DER_SUCCESS)
+	if (rc == -DER_SUCCESS) {
+		fuse_opt_free_args(&args);
 		return rc;
+	}
 
 err_slab:
 	d_slab_destroy(&fs_handle->dpi_slab);
@@ -1203,6 +1237,7 @@ err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
+	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }
