@@ -438,7 +438,8 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 #define CLI_OBJ_IO_PARMS	8
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph,
+	   uint64_t boundary);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -478,6 +479,12 @@ is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
 {
 	D_ASSERT(daos_oclass_is_ec(&obj->cob_oca));
 	return obj_ec_shard_off(obj, dkey_hash, shard) >= obj_ec_data_tgt_nr(&obj->cob_oca);
+}
+
+static inline bool
+daos_obj_id_is_ec(daos_obj_id_t oid)
+{
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
 }
 
 #define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)

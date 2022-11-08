@@ -176,15 +176,14 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt,
 	}
 	req->osr_start_shard = start_shard;
 
+	tgt_nr = tgt_map != NULL ? map_size : tgt_nr;
 	for (i = 0; i < tgt_nr; i++) {
 		if (tgt_map != NULL) {
-			if (!obj_ec_is_valid_tgt(tgt_map, map_size,
-						 tgts[i].st_tgt_id, &tgt_idx))
-				continue;
+			struct daos_cpd_ec_tgts *ec_tgts = tgt_map;
 
+			tgt_idx = ec_tgts[i].dcet_shard_idx;
 			D_ASSERTF(tgt_idx >= start_shard, "i %d, tgt_idx %d, start_shard %d\n",
 				  i, tgt_idx, start_shard);
-
 			tgt_idx -= start_shard;
 			if (tgt_max_idx < tgt_idx)
 				tgt_max_idx = tgt_idx;

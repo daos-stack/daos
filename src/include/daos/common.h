@@ -195,6 +195,18 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	return 1;
 }
 
+static inline uint8_t
+isset_2ranges(uint8_t *bitmap1, uint8_t *bitmap2, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		if (isclr(bitmap1, index) && isclr(bitmap2, index))
+			return 0;
+
+	return 1;
+}
+
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
@@ -882,13 +894,31 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
  * Merge \a src recx to \a dst recx.
  */
 static inline void
+daos_recx_merge_with_offset_size(daos_recx_t *dst, uint64_t offset, uint64_t size)
+{
+	uint64_t end;
+
+	end = max(offset + size, DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(offset, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
+static inline void
 daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 {
-	uint64_t	end;
+	daos_recx_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
+}
 
-	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
-	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
-	dst->rx_nr = end - dst->rx_idx;
+static inline bool
+daos_recx_can_merge_with_offset_size(daos_recx_t *recx, uint64_t offset, uint64_t size)
+{
+	return max(recx->rx_idx, offset) <= min(DAOS_RECX_END(*recx), offset + size);
+}
+
+static inline bool
+daos_recx_can_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	return daos_recx_can_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
 }
 
 /* NVMe shared constants */

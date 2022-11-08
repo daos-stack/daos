@@ -434,3 +434,18 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=DaosCoreTest,test_daos_dedup
         """
         self.run_subtest()
+
+    def test_daos_upgrade(self):
+        """Jira ID: DAOS-10681
+
+        Test Description:
+            Run daos_test -P
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=daos_test,daos_core_test,test_daos_upgrade
+        """
+        self.run_subtest()

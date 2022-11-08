@@ -701,7 +701,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_DRAIN:
 	case RB_OP_REINT:
 	case RB_OP_EXTEND:
-		rc = find_rebuild_shards(map, arg->co_props.dcp_global_version, &md,
+		rc = find_rebuild_shards(map, arg->co_props.dcp_obj_version, &md,
 					 rpt->rt_tgts_num, rpt->rt_rebuild_op,
 					 rpt->rt_rebuild_ver, myrank,
 					 &tgts, &shards, LOCAL_ARRAY_SIZE);
