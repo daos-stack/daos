@@ -54,6 +54,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (rc != len)
 		D_GOTO(err, rc = EIO);
 
+	ev->de_iov.iov_len = len;
 	ev->de_req         = req;
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
@@ -84,10 +85,14 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	/* Send a message to the async thread to wake it up and poll for events
 	 */
 	sem_post(&fs_handle->dpi_sem);
+
+	/* Now ensure there are more descriptors for the next request */
+	d_slab_restock(fs_handle->dpi_write_slab);
+
 	return;
 
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(ibuf.buf[0].mem);
-	D_FREE(ev);
+	if (ev)
+		d_slab_release(fs_handle->dpi_write_slab, ev);
 }

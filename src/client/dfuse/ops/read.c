@@ -64,7 +64,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
-	ev->de_req_position = position;
 	ev->de_sgl.sg_nr    = 1;
 
 	if (mock_read) {
@@ -85,7 +84,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&fs_handle->dpi_sem);
 
-	/* Now ensure there are more read descriptors for the next request */
+	/* Now ensure there are more descriptors for the next request */
 	d_slab_restock(fs_handle->dpi_read_slab);
 
 	return;
