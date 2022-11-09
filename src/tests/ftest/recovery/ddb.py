@@ -406,7 +406,7 @@ class DdbTest(TestWithServers):
         self.log.info("##################")
 
     def test_recovery_ddb_load(self):
-        """Test ddb load.
+        """Test ddb value_load.
 
         1. Create a pool and a container.
         2. Insert one object with one dkey with the API.
@@ -471,7 +471,7 @@ class DdbTest(TestWithServers):
                 "ERROR: Copying new_data.txt to {}: {}".format(host, error))
 
         # The file with the new data is ready. Run ddb load.
-        ddb_command.load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
+        ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
 
         # 6. Restart the server.
         dmg_command.system_start()
@@ -543,10 +543,10 @@ class DdbTest(TestWithServers):
 
         # 5. Dump the two akeys to files.
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
-        ddb_command.dump_value(
+        ddb_command.value_dump(
             component_path="[0]/[0]/[0]/[0]", out_file_path=akey1_file_path)
         akey2_file_path = os.path.join(self.test_dir, "akey2.txt")
-        ddb_command.dump_value(
+        ddb_command.value_dump(
             component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
 
         # Copy them from remote server node to local test node.

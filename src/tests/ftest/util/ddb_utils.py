@@ -141,7 +141,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_value(self, component_path, out_file_path):
+    def value_dump(self, component_path, out_file_path):
         """Call ddb -R "value_dump <component_path> <out_file_path>"
 
         dump_value writes the contents to the file. e.g., if akey is specified, its data
@@ -165,7 +165,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def load(self, component_path, load_file_path):
+    def value_load(self, component_path, load_file_path):
         """Call ddb -w -R "value_load <load_file_path> <component_path>"
 
         load writes the given data into the container. e.g.,
@@ -205,7 +205,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_ilog(self, component_path):
+    def ilog_dump(self, component_path):
         """Call ddb -R "ilog_dump <component_path>"
 
         Args:
@@ -222,7 +222,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def commit_ilog(self, component_path):
+    def ilog_commit(self, component_path):
         """Call ddb -R "ilog_commit <component_path>"
 
         Args:
@@ -239,7 +239,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def rm_ilog(self, component_path):
+    def ilog_clear(self, component_path):
         """Call ddb -R "ilog_clear <component_path>"
 
         Args:
@@ -256,7 +256,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_superblock(self, component_path):
+    def superblock_dump(self, component_path):
         """Call ddb -R "superblock_dump <component_path>"
 
         Args:
@@ -273,7 +273,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_dtx(self, component_path="[0]", committed=False, active=False):
+    def dtx_dump(self, component_path="[0]", committed=False, active=False):
         """Call ddb -R "dtx_dump <component_path>"
 
         committed and active can't be set at the same time.
@@ -302,7 +302,7 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def clear_cmt_dtx(self, component_path="[0]"):
+    def dtx_cmt_clear(self, component_path="[0]"):
         """Call ddb -R "dtx_cmt_clear <component_path>"
 
         Args:
