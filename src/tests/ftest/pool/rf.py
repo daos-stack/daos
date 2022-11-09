@@ -10,7 +10,7 @@ from ior_test_base import IorTestBase
 class PoolRedunFacProperty(IorTestBase):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
-    """run tests with different pool Redun factor.
+    """run tests with different pool redundancy factor.
 
     Test Class Description: To validate pool rf works properly
 
@@ -23,9 +23,9 @@ class PoolRedunFacProperty(IorTestBase):
         Args:
             expected_value (int): expected container rf value
         """
-        cont_props = self.container.get_prop(properties=["rf"])
+        cont_props = self.container.get_prop(properties=["rd_fac"])
         rf_str = cont_props["response"][0]["value"]
-        rf_value = int(rf_str.replace("rf", ""))
+        rf_value = int(rf_str.replace("rd_fac", ""))
         self.assertEqual(expected_value, rf_value)
 
     def test_rf_pool_property(self):
@@ -54,7 +54,7 @@ class PoolRedunFacProperty(IorTestBase):
         # Verify pool rf.
         pool_prop_expected = int(self.pool.properties.value.split(":")[1])
         self.assertEqual(pool_prop_expected,
-                         self.pool.get_property("rf"))
+                         self.pool.get_property("rd_fac"))
 
         for cont_rf in cont_rfs:
             # Initial container

@@ -836,7 +836,8 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
+    @staticmethod
+    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -1028,6 +1029,12 @@ class Launch():
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
             return self.get_exit_status(0, "Modifying test yaml files complete")
+
+        try:
+            self.setup_fuse_config(args.test_servers | args.test_clients)
+        except LaunchException as error:
+            # Warn but don't fail
+            logger.warning(error)
 
         # Get the core file pattern information
         core_files = self._get_core_file_pattern(
@@ -1870,6 +1877,30 @@ class Launch():
                 return 128
 
         return 0
+
+    @staticmethod
+    def setup_fuse_config(hosts):
+        """Set up the system fuse config file.
+
+        Args:
+            hosts (NodeSet): hosts to setup
+
+        Raises:
+            LaunchException: if setup fails
+
+        """
+        logger.info("Setting up fuse config")
+        fuse_configs = ("/etc/fuse.conf", "/etc/fuse3.conf")
+        command = ";".join([
+            "if [ -e {0} ]",
+            "then ls -l {0}",
+            "(grep -q '^user_allow_other$' {0} || echo user_allow_other | sudo tee -a {0})",
+            "cat {0}",
+            "fi"
+        ])
+        for config in fuse_configs:
+            if not run_remote(logger, hosts, command.format(config)).passed:
+                raise LaunchException(f"Failed to setup {config}")
 
     @staticmethod
     def _replace_yaml_file(yaml_file, args, yaml_dir):

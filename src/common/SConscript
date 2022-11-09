@@ -44,8 +44,8 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
-    daos_build.add_build_rpath(base_env)
-    daos_build.add_build_rpath(env)
+    base_env.d_add_build_rpath()
+    env.d_add_build_rpath()
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path

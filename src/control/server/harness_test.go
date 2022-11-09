@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -234,12 +235,12 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
 
-				msc := scm.MockSysConfig{IsMountedBool: true}
-				sysp := scm.NewMockSysProvider(log, &msc)
+				msc := &sysprov.MockSysConfig{IsMountedBool: true}
+				sysp := sysprov.NewMockSysProvider(log, msc)
 				provider := storage.MockProvider(
 					log, 0, &engineCfg.Storage,
 					sysp,
-					scm.NewMockProvider(log, nil, &msc),
+					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
 				)
 

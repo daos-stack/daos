@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
@@ -158,11 +159,18 @@ func (hem HostErrorsMap) Keys() []string {
 type UnaryResponse struct {
 	Responses []*HostResponse
 	fromMS    bool
+	log       debugLogger
 }
 
-// getMSResponse is a helper method to return the MS response
-// message from a UnaryResponse.
-func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
+func (ur *UnaryResponse) debugf(format string, args ...interface{}) {
+	if ur.log != nil {
+		ur.log.Debugf(format, args...)
+	}
+}
+
+// findMSResponse returns the first *HostResponse in the slice that
+// contains a management service response.
+func (ur *UnaryResponse) findMSResponse() (*HostResponse, error) {
 	if ur == nil {
 		return nil, errors.Errorf("nil %T", ur)
 	}
@@ -172,6 +180,7 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if len(ur.Responses) == 0 {
+		ur.debugf("zero MS responses received")
 		return nil, errNoMsResponse
 	}
 
@@ -188,10 +197,12 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if msResp == nil {
+		ur.debugf("no usable MS responses received")
 		return nil, errNoMsResponse
 	}
 
 	if msResp.Error != nil {
+		ur.debugf("%s: err: %s", msResp.Addr, msResp.Error)
 		return nil, msResp.Error
 	}
 
@@ -199,7 +210,25 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, errors.New("management service response message was nil")
 	}
 
-	return msResp.Message, nil
+	return msResp, nil
+}
+
+// getMSError returns the error, if any, from the management service response.
+func (ur *UnaryResponse) getMSError() error {
+	_, err := ur.findMSResponse()
+	return err
+}
+
+// getMSResponse is a helper method to return the MS response
+// message from a UnaryResponse.
+func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
+	msr, err := ur.findMSResponse()
+	if err != nil {
+		return nil, err
+	}
+
+	ur.debugf("%s: %s", msr.Addr, mgmtpb.Debug(msr.Message))
+	return msr.Message, nil
 }
 
 // convertMSResponse is a helper function to extract the MS response
