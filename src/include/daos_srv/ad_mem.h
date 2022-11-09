@@ -110,6 +110,8 @@ enum {
 struct ad_reserv_act {
 	struct ad_arena		*ra_arena;
 	struct ad_group		*ra_group;
+	uint64_t		 ra_off;
+	uint64_t		 ra_size;
 	/** reserved allocation bit (in group) */
 	int			 ra_bit;
 };

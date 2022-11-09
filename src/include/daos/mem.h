@@ -832,11 +832,4 @@ struct umem_action {
 	};
 };
 
-struct umem_act_item {
-	d_list_t		it_link;
-	/** it is action for reserve, the modified content is in DRAM only */
-	bool			it_is_reserv;
-	struct umem_action	it_act;
-};
-
 #endif /* __DAOS_MEM_H__ */
