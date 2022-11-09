@@ -426,7 +426,7 @@ tx_create_wal_entry(struct ulog_entry_base *e, void *arg,
 	case ULOG_OPERATION_SET:
 		ev = (struct ulog_entry_val *)e;
 
-		rc = wal_tx_assign(p_ops->base, dst, ev->value);
+		rc = wal_tx_snap(p_ops->base, dst, dst_size, (void *)&ev->value, 0);
 		break;
 	case ULOG_OPERATION_BUF_SET:
 		eb = (struct ulog_entry_buf *)e;

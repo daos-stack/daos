@@ -744,16 +744,12 @@ enum {
 	UMEM_ACT_COPY,
 	/** copy payload addressed by @ptr to specified storage address */
 	UMEM_ACT_COPY_PTR,
-	/** assign 8/16/32/64 bits integer to specified storage address */
+	/** assign 8/16/32 bits integer to specified storage address */
 	UMEM_ACT_ASSIGN,
 	/** move specified bytes from source address to destination address */
 	UMEM_ACT_MOVE,
 	/** memset a region with specified value */
 	UMEM_ACT_SET,
-	/** perform arith and-op on the target (8 byte) with specified value */
-	UMEM_ACT_AND8,
-	/** perform arith or-op on the target (8 byte) with specified value */
-	UMEM_ACT_OR8,
 	/** set the specified bit in bitmap */
 	UMEM_ACT_SET_BITS,
 	/** unset the specified bit in bitmap */
@@ -781,8 +777,8 @@ struct umem_action {
 			uint64_t		ptr;
 		} ac_copy_ptr;	/**< copy payload from @ptr to @addr */
 		struct {
-			uint64_t		size;
-			uint64_t		val;
+			uint16_t		size;
+			uint32_t		val;
 			uint64_t		addr;
 		} ac_assign;	/**< assign integer to @addr, int64 should use ac_copy */
 		struct {

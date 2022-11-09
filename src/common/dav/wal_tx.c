@@ -111,7 +111,7 @@ wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 				WAL_PRT_PG_OFF(ua->ac_copy.addr), ua->ac_copy.size);
 			break;
 		case UMEM_ACT_ASSIGN:
-			D_DEBUG(DB_TRACE, "%s: ACT_ASSIGN   txid=%lu, (p,o)=%lu,%lu size=%lu\n",
+			D_DEBUG(DB_TRACE, "%s: ACT_ASSIGN   txid=%lu, (p,o)=%lu,%lu size=%u\n",
 				pathname, id,
 				WAL_PRT_PG_OFF(ua->ac_assign.addr), ua->ac_assign.size);
 			break;
