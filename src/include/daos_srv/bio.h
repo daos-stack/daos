@@ -924,10 +924,11 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
  *
  * \param[in]	xs_ctxt		Per-xstream NVMe context
  * \param[in]	pool_id		Pool UUID
+ * \param[in]	flags		bio_mc_flags
  *
  * \return			Zero on success, negative value on error.
  */
-int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id);
+int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags);
 
 /* Opaque meta context */
 struct bio_meta_context;

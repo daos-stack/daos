@@ -274,11 +274,24 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
  * \param uuid		[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid);
+vos_pool_kill(uuid_t uuid, unsigned int flags);
+
+/**
+ * Destroy a Versioned Object Storage Pool (VOSP)
+ *
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)

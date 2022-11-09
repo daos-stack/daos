@@ -195,6 +195,8 @@ struct vos_pool {
 	int			vp_dying:1;
 	/** exclusive handle (see VOS_POF_EXCL) */
 	int			vp_excl:1;
+	/** this pool is for sysdb */
+	bool			vp_sysdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
 	/** UUID of vos pool */

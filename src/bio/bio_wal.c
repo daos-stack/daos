@@ -1581,9 +1581,11 @@ bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_
 void
 bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz)
 {
-	D_ASSERT(mc != NULL);
-	*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
-	*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
+	/* The mc could be NULL when md on SSD not enabled & data blob not existing */
+	if (mc != NULL) {
+		*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
+		*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
+	}
 }
 
 void

@@ -72,7 +72,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop = NULL;
-	enum bio_mc_flags	 mc_flags;
+	enum bio_mc_flags	 mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
 	int			 rc, ret;
 
 	*ph = NULL;
@@ -84,7 +84,6 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		"scm_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
 		xs_ctxt, DP_UUID(pool_id), scm_sz, nvme_sz, wal_sz);
 
-	mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
 	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz, wal_sz, nvme_sz, mc_flags);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
@@ -96,7 +95,12 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (rc != 0) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
-		goto out;
+
+		ret = bio_mc_destroy(xs_ctxt, pool_id, mc_flags);
+		if (ret)
+			D_ERROR("Failed to destroy BIO meta context. "DF_RC"\n", DP_RC(ret));
+
+		return rc;
 	}
 
 	bio_meta_get_attr(mc, &store.stor_size, (uint32_t *)&store.stor_blk_size);
@@ -109,7 +113,6 @@ umem_create:
 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
 	D_MUTEX_UNLOCK(&vos_pmemobj_lock);
 
-out:
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -123,7 +126,7 @@ out:
 			D_ERROR("Failed to close BIO meta context. "DF_RC"\n", DP_RC(ret));
 			return rc;
 		}
-		ret = bio_mc_destroy(xs_ctxt, pool_id);
+		ret = bio_mc_destroy(xs_ctxt, pool_id, mc_flags);
 		if (ret)
 			D_ERROR("Failed to destroy BIO meta context. "DF_RC"\n", DP_RC(ret));
 	}
@@ -139,7 +142,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop;
-	enum bio_mc_flags	 mc_flags;
+	enum bio_mc_flags	 mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
 	int			 rc, ret;
 
 	*ph = NULL;
@@ -150,7 +153,6 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_id));
 
-	mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	if (rc) {
 		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
@@ -218,7 +220,7 @@ pool_hlink2ptr(struct d_ulink *hlink)
 }
 
 static void
-vos_delete_blob(uuid_t pool_uuid)
+vos_delete_blob(uuid_t pool_uuid, unsigned int flags)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	int			 rc;
@@ -230,7 +232,7 @@ vos_delete_blob(uuid_t pool_uuid)
 	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_uuid));
 
-	rc = bio_mc_destroy(xs_ctxt, pool_uuid);
+	rc = bio_mc_destroy(xs_ctxt, pool_uuid, (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0);
 	if (rc)
 		D_ERROR("Destroying meta context blob for xs:%p pool="DF_UUID" failed: "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_uuid), DP_RC(rc));
@@ -272,7 +274,7 @@ pool_hop_free(struct d_ulink *hlink)
 		bio_ioctxt_close(pool->vp_dummy_ioctxt);
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id);
+		vos_delete_blob(pool->vp_id, pool->vp_sysdb ? VOS_POF_SYSDB : 0);
 
 	D_FREE(pool);
 }
@@ -532,7 +534,7 @@ close:
  * - detach from GC, delete SPDK blob
  */
 int
-vos_pool_kill(uuid_t uuid)
+vos_pool_kill(uuid_t uuid, unsigned int flags)
 {
 	struct d_uuid	ukey;
 	int		rc;
@@ -570,7 +572,7 @@ vos_pool_kill(uuid_t uuid)
 	}
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
-	vos_delete_blob(uuid);
+	vos_delete_blob(uuid, flags);
 	return 0;
 }
 
@@ -578,14 +580,14 @@ vos_pool_kill(uuid_t uuid)
  * Destroy a Versioning Object Storage Pool (VOSP) and revoke all its handles
  */
 int
-vos_pool_destroy(const char *path, uuid_t uuid)
+vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags)
 {
 	int	rc;
 
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
-	rc = vos_pool_kill(uuid);
+	rc = vos_pool_kill(uuid, flags);
 	if (rc)
 		return rc;
 
@@ -605,6 +607,12 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	}
 exit:
 	return rc;
+}
+
+int
+vos_pool_destroy(const char *path, uuid_t uuid)
+{
+	return vos_pool_destroy_ex(path, uuid, 0);
 }
 
 static int
@@ -846,6 +854,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
+	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
 		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)

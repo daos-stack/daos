@@ -371,11 +371,9 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 		return false;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		bxb = bio_xs_context2xs_blobstore(ctxt, st);
+		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
-		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-			return false;
 	}
 
 	return false;
