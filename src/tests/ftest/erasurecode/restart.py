@@ -63,7 +63,6 @@ class EcodServerRestart(ErasureCodeIor):
             if not size_after_restart['scm'] > size_before_restart['scm']:
                 self.fail("Aggregation failed : SCM space not recovered")
 
-
         # Read all EC object data from NVMe
         self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
         # Read all EC object data which was written on SCM
