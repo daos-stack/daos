@@ -5,7 +5,6 @@
  */
 
 #include <daos/mem.h>
-#include "common.h"
 #include "dav_internal.h"
 #include "wal_tx.h"
 #include "util.h"
@@ -156,13 +155,16 @@ wal_tx_commit(void *hdl)
 
 	D_INIT_LIST_HEAD(&wt_redo);
 	d_list_splice_init(&tx->wt_redo, &wt_redo);
-	wal_tx_reinit(hdl);
 
 	/* write actions in redo list to WAL */
 	rc = wal_tx_push(dav_hdl, &wt_redo, tx->wt_id);
 	/* FAIL the engine if commit fails */
 	D_ASSERT(rc == 0);
+	DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
+		  tx->wt_id, tx->wt_redo_payload_len, tx->wt_redo_cnt);
+
 	wal_tx_act_cleanup(&wt_redo);
+	wal_tx_reinit(hdl);
 
 	return 0;
 }

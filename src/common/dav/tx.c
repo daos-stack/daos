@@ -322,8 +322,8 @@ tx_ranges_insert_def(dav_obj_t *pop, struct tx *tx,
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(pop);
 
-	DAV_DEBUG("rdef->offset %"PRIu64" rdef->size %"PRIu64,
-		rdef->offset, rdef->size);
+	DAV_DEBUG("(%lu,%lu) size=%zu",
+		rdef->offset / 4096, rdef->offset % 4096, rdef->size);
 
 	int ret = ravl_emplace_copy(tx->ranges, rdef);
 
@@ -477,6 +477,8 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 		VALGRIND_START_TX;
 	} else if (tx->stage == DAV_TX_STAGE_NONE) {
+		DAV_DEBUG("");
+
 		VALGRIND_START_TX;
 
 		dav_hold_clogs(pop);
@@ -647,6 +649,7 @@ void
 dav_tx_abort(int errnum)
 {
 	PMEMOBJ_API_START();
+	DAV_DEBUG("");
 	obj_tx_abort(errnum, 1);
 	PMEMOBJ_API_END();
 }
@@ -680,6 +683,7 @@ dav_tx_commit(void)
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
 	ASSERT(tx->pop);
+	DAV_DEBUG("");
 
 	/* WORK */
 	obj_tx_callback(tx);
@@ -743,17 +747,12 @@ dav_tx_end(void)
 	int ret = tx->last_errnum;
 
 	if (DAV_SLIST_EMPTY(&tx->tx_entries)) {
+		DAV_DEBUG("");
 		ASSERT(tx->pop);
 
 		/* commit to WAL */
-		if (ret == 0) {
-			struct wal_tx *wal_tx = &tx->pop->do_wtx;
-
+		if (ret == 0)
 			wal_tx_commit(tx->pop);
-			DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
-				  wal_tx->wt_id,
-				  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
-		}
 
 		tx->pop = NULL;
 		tx->stage = DAV_TX_STAGE_NONE;
@@ -902,6 +901,8 @@ dav_tx_add_common(struct tx *tx, struct tx_range_def *args)
 	 * snapshot.
 	 */
 	struct tx_range_def r = *args;
+
+	DAV_DEBUG("(%lu,%lu) size=%zu", r.offset / 4096, r.offset % 4096, r.size);
 	struct tx_range_def search = {0, 0, 0};
 	/*
 	 * If the range is directly adjacent to an existing one,
@@ -1456,6 +1457,7 @@ dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 void
 dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 {
+	DAV_DEBUG("actvcnt=%zu", actvcnt);
 	PMEMOBJ_API_START();
 	palloc_cancel(pop->do_heap, actv, actvcnt);
 	PMEMOBJ_API_END();
@@ -1589,14 +1591,8 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 			constructor_zrealloc_root, &carg,
 			0, 0, 0, 0, ctx); /* REVISIT: object_flags and type num ignored*/
 
-	if (ret == 0) {
-		struct wal_tx *wal_tx = &pop->do_wtx;
-
+	if (ret == 0)
 		wal_tx_commit(pop);
-		DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
-			  wal_tx->wt_id,
-			  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
-	}
 
 	return ret;
 }
@@ -1699,14 +1695,8 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 			CLASS_ID_FROM_FLAG(flags), ARENA_ID_FROM_FLAG(flags),
 			ctx);
 
-	if (ret == 0) {
-		struct wal_tx *wal_tx = &pop->do_wtx;
-
+	if (ret == 0)
 		wal_tx_commit(pop);
-		DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
-			  wal_tx->wt_id,
-			  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
-	}
 
 	return ret;
 }
@@ -1765,12 +1755,6 @@ dav_free(dav_obj_t *pop, uint64_t off)
 
 	wal_tx_commit(pop);
 
-	struct wal_tx *wal_tx = &pop->do_wtx;
-
-	DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
-		  wal_tx->wt_id,
-		  wal_tx->wt_redo_payload_len, wal_tx->wt_redo_cnt);
-
 	PMEMOBJ_API_END();
 }
 
@@ -1783,11 +1767,13 @@ dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src,
 {
 	DAV_DEBUG("pop %p dest %p src %p len %zu", pop, dest, src, len);
 	D_ASSERT((dav_tx_stage() == DAV_TX_STAGE_NONE));
+
 	PMEMOBJ_API_START();
 
 	void *ptr = mo_wal_memcpy(&pop->p_ops, dest, src, len, 0);
 
 	wal_tx_commit(pop);
+
 	PMEMOBJ_API_END();
 	return ptr;
 }
