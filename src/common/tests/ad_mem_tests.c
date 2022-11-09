@@ -801,7 +801,7 @@ adt_no_space_1(void **state)
 		addr = ad_reserve(adt_bh, 0, alloc_size1, &arena, &act);
 		if (addr == 0) {
 			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
-			       (int)((alloc_size * i) >> 20), arena);
+			       (int)((alloc_size1 * i) >> 20), arena);
 			break;
 		}
 		rc = ad_tx_begin(adt_bh, &tx);

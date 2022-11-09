@@ -323,15 +323,17 @@ arena_free_size(struct ad_arena_df *ad)
 	int		    grp_idx;
 	uint32_t	    free_size = 0;
 	struct ad_group_df  *gd;
-	uint32_t	    grp_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
+	uint32_t	    grp_bit_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
 
-	for (grp_idx = 0; grp_idx < grp_max; grp_idx++) {
-		if (isset64(ad->ad_bmap, grp_idx)) {
-			gd = &ad->ad_groups[grp_idx];
-			free_size += gd->gd_unit_free * gd->gd_unit;
-		} else {
+	for (grp_idx = 0; grp_idx < grp_bit_max; grp_idx++) {
+		if (!isset64(ad->ad_bmap, grp_idx))
 			free_size += (1 << GRP_SIZE_SHIFT);
-		}
+	}
+
+	for (grp_idx = 0; grp_idx < ARENA_GRP_MAX; grp_idx++) {
+		gd = &ad->ad_groups[grp_idx];
+		if (gd->gd_addr != 0)
+			free_size += gd->gd_unit_free * gd->gd_unit;
 	}
 
 	return free_size;
@@ -1403,6 +1405,7 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 
 	/* no WAL, in DRAM */
 	len = arena->ar_grp_nr++;
+	D_ASSERT(arena->ar_grp_nr <= ARENA_GRP_MAX);
 	if (len == 0) {
 		addr_sorter[0] = gd;
 		size_sorter[0] = gd;
@@ -1605,7 +1608,9 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 		if (!isset64(arena->ar_gpid_rsv, grp_idx))
 			break;
 	}
-	D_ASSERT(grp_idx < ARENA_GRP_MAX);
+	/* run out of ad groups */
+	if (grp_idx == ARENA_GRP_MAX)
+		return -DER_NOSPACE;
 
 	gd = &ad->ad_groups[grp_idx];
 	gd->gd_addr	   = ad->ad_addr + (bit_at << GRP_SIZE_SHIFT);
