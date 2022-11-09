@@ -339,7 +339,8 @@ static uint64_t
 tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 		palloc_constr constructor, struct tx_alloc_args args)
 {
-	uint64_t ret;
+	const struct tx_range_def *r;
+	uint64_t off;
 
 	if (size > DAV_MAX_ALLOC_SIZE) {
 		ERR("requested size too large");
@@ -358,15 +359,12 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 		ARENA_ID_FROM_FLAG(args.flags), action) != 0)
 		goto err_oom;
 
-	ret = action->heap.offset;
-	size = action->heap.usable_size;
-
-	const struct tx_range_def r = {ret, size, args.flags};
-
-	if (tx_ranges_insert_def(pop, tx, &r) != 0)
+	palloc_get_prange(action, &off, &size, 1);
+	r = &(struct tx_range_def){off, size, args.flags};
+	if (tx_ranges_insert_def(pop, tx, r) != 0)
 		goto err_oom;
 
-	return ret;
+	return action->heap.offset;
 
 err_oom:
 	tx_action_remove(tx);
@@ -1327,10 +1325,11 @@ dav_tx_xfree(uint64_t off, uint64_t flags)
 	PMEMOBJ_API_START();
 
 	struct dav_action *action;
+	uint64_t roff = palloc_get_realoffset(pop->do_heap, off);
 
-	struct tx_range_def range = {off, 0, 0};
+	struct tx_range_def range = {roff, 0, 0};
 	struct ravl_node *n = ravl_find(tx->ranges, &range,
-		RAVL_PREDICATE_EQUAL);
+			RAVL_PREDICATE_EQUAL);
 
 	/*
 	 * If attempting to free an object allocated within the same
@@ -1408,7 +1407,6 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act,
 		PMEMOBJ_API_END();
 		return 0;
 	}
-	palloc_mark_act_reserve(act);
 
 	PMEMOBJ_API_END();
 	return act->heap.offset;
@@ -1492,8 +1490,10 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 
 	for (size_t i = 0; i < actvcnt; ++i) {
 		VEC_PUSH_BACK(&tx->actions, actv[i]);
-		if (palloc_is_reserve(&actv[i], &off, &size)) {
+		if (palloc_action_isalloc(&actv[i])) {
+			palloc_get_prange(&actv[i], &off, &size, 1);
 			struct tx_range_def r = {off, size, DAV_XADD_NO_SNAPSHOT};
+
 			ret = dav_tx_add_common(tx, &r);
 			D_ASSERT(ret == 0);
 		}
@@ -1687,8 +1687,6 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	struct operation_context *ctx = pop->external;
 
 	operation_start(ctx);
-
-	/* TODO set pool for atomic pseudo tx */
 
 	int ret = palloc_operation(pop->do_heap, 0, offp, size,
 			constructor_alloc, &carg, type_num, 0,

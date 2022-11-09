@@ -48,8 +48,7 @@ struct dav_action_internal {
 	/* type of operation (alloc/free vs set) */
 	enum dav_action_type type;
 
-	/* Is associated with dav_reserve? */
-	uint32_t is_reserve;
+	uint32_t padding;
 
 	/*
 	 * Action-specific lock that needs to be taken for the duration of
@@ -254,7 +253,6 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size,
 
 	out->lock = new_block->m_ops->get_lock(new_block);
 	out->new_state = MEMBLOCK_ALLOCATED;
-	out->is_reserve = 0;
 
 out:
 	heap_bucket_release(b);
@@ -363,7 +361,6 @@ palloc_reservation_clear(struct palloc_heap *heap,
 	} else {
 		VALGRIND_ANNOTATE_HAPPENS_BEFORE(&mresv->nresv);
 	}
-	act->is_reserve = 0;
 }
 
 /*
@@ -608,23 +605,46 @@ palloc_reserve(struct palloc_heap *heap, size_t size,
 		(struct dav_action_internal *)act);
 }
 
-void
-palloc_mark_act_reserve(struct dav_action *act)
+/*
+ * palloc_action_isalloc - action is a heap reservation
+ * 			   created by palloc_reserve().
+ */
+int
+palloc_action_isalloc(struct dav_action *act)
 {
-	((struct dav_action_internal *)act)->is_reserve = 1;
+	struct dav_action_internal *actp = (struct dav_action_internal *)act;
+	return ((actp->type == DAV_ACTION_TYPE_HEAP) &&
+		(actp->new_state == MEMBLOCK_ALLOCATED));
 }
 
-int
-palloc_is_reserve(struct dav_action *act, uint64_t *off, uint64_t *size)
+uint64_t
+palloc_get_realoffset(struct palloc_heap *heap, uint64_t off)
+{
+	struct memory_block m = memblock_from_offset(heap, off);
+	return HEAP_PTR_TO_OFF(m.heap, m.m_ops->get_real_data(&m));
+}
+
+/*
+ * palloc_get_prange -- get the start offset and size of allocated memory that
+ *			needs to be persisted.
+ *
+ * persist_udata - if true, persist the user data.
+ */
+void
+palloc_get_prange(struct dav_action *act, uint64_t *const offp, uint64_t *const sizep,
+	int persist_udata)
 {
 	struct dav_action_internal *act_in = (struct dav_action_internal *)act;
 
-	if (act_in->is_reserve == 1) {
-		*off = act->heap.offset;
-		*size = act->heap.usable_size;
-		return 1;
-	}
-	return 0;
+	D_ASSERT(act_in->type == DAV_ACTION_TYPE_HEAP);
+	/* we need to persist the header if present */
+	*offp = HEAP_PTR_TO_OFF(act_in->m.heap, act_in->m.m_ops->get_real_data(&act_in->m));
+	*sizep = header_type_to_size[act_in->m.header_type];
+
+	D_ASSERT(act_in->offset == *offp + header_type_to_size[act_in->m.header_type]);
+	/* persist the user data */
+	if (persist_udata)
+		*sizep += act_in->usable_size;
 }
 
 /*
@@ -735,6 +755,8 @@ palloc_operation(struct palloc_heap *heap,
 	size_t user_size = 0;
 
 	size_t nops = 0;
+	uint64_t aoff;
+	uint64_t asize;
 	struct dav_action_internal ops[2];
 	struct dav_action_internal *alloc = NULL;
 	struct dav_action_internal *dealloc = NULL;
@@ -764,6 +786,11 @@ palloc_operation(struct palloc_heap *heap,
 			operation_cancel(ctx);
 			return -1;
 		}
+
+		palloc_get_prange((struct dav_action *)alloc, &aoff, &asize, 0);
+		if (asize) /* != CHUNK_FLAG_HEADER_NONE */
+			wal_tx_snap(heap->p_ops.base, HEAP_OFF_TO_PTR(heap, aoff),
+				asize, HEAP_OFF_TO_PTR(heap, aoff), 0);
 	}
 
 	/* realloc */

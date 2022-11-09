@@ -52,8 +52,10 @@ palloc_reserve(struct palloc_heap *heap, size_t size,
 	uint16_t class_id, uint16_t arena_id,
 	struct dav_action *act);
 
-void palloc_mark_act_reserve(struct dav_action *act);
-int palloc_is_reserve(struct dav_action *act, uint64_t *off, uint64_t *size);
+int palloc_action_isalloc(struct dav_action *act);
+void palloc_get_prange(struct dav_action *act, uint64_t *const off, uint64_t *const size,
+	int persist_udata);
+uint64_t palloc_get_realoffset(struct palloc_heap *heap, uint64_t off);
 
 void
 palloc_defer_free(struct palloc_heap *heap, uint64_t off,

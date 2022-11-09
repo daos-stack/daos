@@ -173,9 +173,7 @@ memblock_header_legacy_write(const struct memory_block *m,
 	VALGRIND_DO_MAKE_MEM_UNDEFINED(hdrp, sizeof(*hdrp));
 
 	VALGRIND_ADD_TO_TX(hdrp, sizeof(*hdrp));
-	mo_wal_memcpy(&m->heap->p_ops, hdrp, &hdr,
-		sizeof(hdr), /* legacy header is 64 bytes in size */
-		0);
+	memcpy(hdrp, &hdr, sizeof(hdr)); /* legacy header is 64 bytes in size */
 	VALGRIND_REMOVE_FROM_TX(hdrp, sizeof(*hdrp));
 
 	/* unused fields of the legacy headers are used as a red zone */
@@ -217,7 +215,6 @@ memblock_header_compact_write(const struct memory_block *m,
 	VALGRIND_ADD_TO_TX(hdrp, hdr_size);
 
 	memcpy(hdrp, &padded, hdr_size);
-	mo_wal_flush(&m->heap->p_ops, hdrp, ALLOC_HDR_COMPACT_SIZE);
 	VALGRIND_DO_MAKE_MEM_UNDEFINED((char *)hdrp + ALLOC_HDR_COMPACT_SIZE,
 		hdr_size - ALLOC_HDR_COMPACT_SIZE);
 
