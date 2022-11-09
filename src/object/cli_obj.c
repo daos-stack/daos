@@ -1320,7 +1320,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 	D_ASSERT(cont_tf >= 0);
 	if (obj_tf < cont_tf) {
 		rc = -DER_INVAL;
-		D_ERROR(DF_OID" obj:cont tolerate faiures %d:%d, "DF_RC"\n",
+		D_ERROR(DF_OID" obj:cont tolerate failures %d:%d, "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), obj_tf, cont_tf,
 			DP_RC(rc));
 		return rc;
