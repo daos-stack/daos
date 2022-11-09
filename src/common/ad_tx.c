@@ -125,7 +125,7 @@ ad_tx_redo_act_first(struct umem_wal_tx *wal_tx)
 		return NULL;
 	}
 
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item, it_link);
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
 	return &tx->tx_redo_act_pos->it_act;
 }
 
@@ -140,14 +140,13 @@ ad_tx_redo_act_next(struct umem_wal_tx *wal_tx)
 	if (tx->tx_redo_act_pos == NULL) {
 		if (d_list_empty(&tx->tx_redo))
 			return NULL;
-		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item,
-						   it_link);
+		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
 		return &tx->tx_redo_act_pos->it_act;
 	}
 
 	D_ASSERT(!d_list_empty(&tx->tx_redo));
 	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
-					   struct umem_act_item, it_link);
+					   struct ad_act, it_link);
 	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
 		tx->tx_redo_act_pos = NULL;
 		return NULL;
