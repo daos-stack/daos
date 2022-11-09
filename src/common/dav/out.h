@@ -16,21 +16,6 @@
 /* enable extra debug messages and extra checks */
 /*#define DAV_EXTRA_DEBUG*/
 
-#define MAX_BT_ENTRIES 256
-static __thread void *bt[MAX_BT_ENTRIES];
-#include <execinfo.h>
-static inline void dav_print_backtrace(void)
-{
-	int bt_size = backtrace(bt, MAX_BT_ENTRIES);
-
-	if (bt_size == MAX_BT_ENTRIES)
-		fprintf(stderr, "backtrace may have been truncated\n");
-	if (bt_size > 1) /* start at 1 to ignore this frame */
-		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
-	else
-		fprintf(stderr, "No useful backtrace available");
-}
-
 #ifndef EVALUATE_DBG_EXPRESSIONS
 #if defined(DAV_EXTRA_DEBUG) || defined(__clang_analyzer__) || defined(__COVERITY__) ||\
 	defined(__KLOCWORK__)
