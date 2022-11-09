@@ -129,6 +129,23 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+def get_switch_user(user="root"):
+    """Get the switch user command for the requested user.
+
+    Args:
+        user (str): user account. Defaults to "root".
+
+    Returns:
+        list: the sudo command as a list
+
+    """
+    command = ["sudo", "-n"]
+    if user != "root":
+        # Use runuser to avoid using a password
+        command.extend(["runuser", "-u", user, "--"])
+    return command
+
+
 def get_clush_command_list(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
@@ -288,3 +305,20 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     if verbose:
         results.log_output(log)
     return results
+
+
+def command_as_user(command, user):
+    """Adjust a command to be ran as another user.
+
+    Args:
+        command (str): the original command
+        user (str): user to run as
+
+    Returns:
+        str: command adjusted to run as another user
+
+    """
+    if not user:
+        return command
+    switch_command = " ".join(get_switch_user(user))
+    return f"{switch_command} {command}"

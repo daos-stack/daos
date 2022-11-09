@@ -8,12 +8,12 @@ import re
 
 from apricot import TestWithoutServers
 
-from run_utils import run_remote
+from run_utils import run_remote, command_as_user
 from user_utils import getent
 
 
 class HarnessLaunchSetupTest(TestWithoutServers):
-    """Harness pre-launch test cases.
+    """Harness launch.py setup test cases.
 
     :avocado: recursive
     """
@@ -42,3 +42,9 @@ class HarnessLaunchSetupTest(TestWithoutServers):
                 self.fail('Error querying user {}'.format(user))
             if not re.findall(r'groups={}\('.format(gid), user_result.output[0].stdout[0]):
                 self.fail('User {} groups not as expected'.format(user))
+            self.log.info('Checking if user %s can run commands', user)
+            user_result_self = run_remote(self.log, hostlist_clients, command_as_user('id', user))
+            if not user_result_self.passed:
+                self.fail('Error running command as user {}'.format(user))
+            if user_result.output[0].stdout[0] != user_result_self.output[0].stdout[0]:
+                self.fail('Unexpected output running command as user {}'.format(user))
