@@ -1812,24 +1812,20 @@ class Launch():
             LaunchException: if there is an error querying or creating the user
 
         """
-        user_exists = False
-        try:
-            # Query and verify user
-            logger.info('Querying user %s', user)
-            result = run_remote(logger, hosts, f'id {user}')
-            if not result.passed:
-                raise LaunchException(f'Error querying user {user}')
-            user_exists = True
-            if not re.findall(rf'groups={gid}\(', result.output[0].stdout[0]):
-                raise LaunchException(f'User {user} groups not as expected')
-        except LaunchException:
+        logger.info('Querying user %s', user)
+        result = run_remote(logger, hosts, f'id {user}')
+        if result.passed:
+            if re.findall(rf'groups={gid}\(', result.output[0].stdout[0]):
+                # Exists and in correct group
+                return
             if not create:
-                raise
+                raise LaunchException(f'User {user} group not as expected')
+        elif not create:
+            raise LaunchException(f'Error querying user {user}')
 
-        # User exists but is not setup as desired. Delete and re-create properly
-        if user_exists:
-            logger.info('Deleting user %s', user)
-            _ = userdel(logger, hosts, user, True)
+        # Delete and ignore errors, in case user account is inconsistent across nodes
+        logger.info('Deleting user %s', user)
+        _ = userdel(logger, hosts, user, True)
 
         logger.info('Creating user %s in group %s', user, gid)
         parent_dir = os.environ["DAOS_TEST_USER_DIR"]
@@ -1865,14 +1861,14 @@ class Launch():
                 try:
                     group_gid[group] = self._query_create_group(clients, group, create)
                 except LaunchException as error:
-                    self._fail_test(self.result.tests[-1], "Prepare", error, sys.exc_info())
+                    self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
                     return 128
 
             gid = group_gid.get(group, None)
             try:
                 self._query_create_user(clients, user, gid, create)
             except LaunchException as error:
-                self._fail_test(self.result.tests[-1], "Prepare", error, sys.exc_info())
+                self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
                 return 128
 
         return 0
