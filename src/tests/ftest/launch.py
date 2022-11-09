@@ -1818,7 +1818,6 @@ class Launch():
             logger.info('Querying user %s', user)
             result = run_remote(logger, hosts, f'id {user}')
             if not result.passed:
-                logger.info('here1')
                 raise LaunchException(f'Error querying user {user}')
             user_exists = True
             if not re.findall(rf'groups={gid}\(', result.output[0].stdout[0]):
