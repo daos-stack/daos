@@ -83,7 +83,7 @@ adt_store_wal_rsv(struct umem_store *store, uint64_t *id)
 }
 
 static int
-adt_store_wal_submit(struct umem_store *store, uint64_t id, d_list_t *actions)
+adt_store_wal_submit(struct umem_store *store, struct umem_tx *tx)
 {
 	return 0;
 }
