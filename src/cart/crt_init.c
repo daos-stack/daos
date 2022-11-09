@@ -178,15 +178,13 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	/* Must be set on the server when using UCX, will not affect OFI */
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-
 	if (ucx_ib_fork_init) {
 		if (server) {
-			D_INFO("UCX_IB_FORK_INIT was set to %c, updating setting to n\n", ucx_ib_fork_init);
+			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
 		} else {
 			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
 		}
 	}
-
 	if (server)
 		setenv("UCX_IB_FORK_INIT", "n", 1);
 
