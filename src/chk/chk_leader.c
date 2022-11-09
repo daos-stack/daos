@@ -400,7 +400,7 @@ chk_leader_destroy_pool(struct chk_pool_rec *cpr, uint64_t seq, bool dereg)
 	if (ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_tgt_pool_destroy(cpr->cpr_uuid, ranks);
+	rc = ds_mgmt_tgt_pool_destroy_ranks(cpr->cpr_uuid, ranks);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 	if (rc == 0)
@@ -1942,6 +1942,7 @@ chk_leader_sched(void *args)
 	uint32_t		 pool_status;
 	int			 rc = 0;
 	bool			 bcast = false;
+	bool			 done = false;
 
 	D_INFO(DF_LEADER" scheduler enter at phase %u\n", DP_LEADER(ins), cbk->cb_phase);
 
@@ -1982,7 +1983,7 @@ handle:
 		 *	then the leader will be blocked there.
 		 */
 
-		phase = chk_pools_find_slowest(ins, NULL);
+		phase = chk_pools_find_slowest(ins, &done);
 		if (cbk->cb_phase == CHK_INVAL_PHASE || cbk->cb_phase < phase) {
 			D_INFO(DF_LEADER" moves (1) from phase %u to phase %u\n",
 			       DP_LEADER(ins), cbk->cb_phase, phase);
@@ -1995,13 +1996,18 @@ handle:
 				D_GOTO(out, bcast = true);
 		}
 
+		if (done) {
+			D_INFO(DF_LEADER" has done (1)\n", DP_LEADER(ins));
+			D_GOTO(out, rc = 1);
+		}
+
 		/*
 		 * NOTE: Some check engine may exited with only reporting the rank's status instead
 		 *	 of each pool's detailed status. So let's check the ranks' status for sure.
 		 */
 		phase = chk_leader_find_slowest(ins);
 		if (phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
-			D_INFO(DF_LEADER" has done\n", DP_LEADER(ins));
+			D_INFO(DF_LEADER" has done (2)\n", DP_LEADER(ins));
 			D_GOTO(out, rc = 1);
 		}
 
