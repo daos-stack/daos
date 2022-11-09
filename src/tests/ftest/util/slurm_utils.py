@@ -14,7 +14,7 @@ import re
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 
-from run_utils import run_remote
+from run_utils import run_remote, run_local, RunException
 
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()
@@ -299,12 +299,11 @@ def run_slurm_script(log, control, script, logfile=None):
     return job_id
 
 
-def check_slurm_job(log, control, handle):
+def check_slurm_job(log, handle):
     """Get the state of a job initiated via slurm.
 
     Args:
         log (logger): logger for the messages produced by this method
-        control (NodeSet): slurm control host
         handle (str): slurm job id
 
     Returns:
@@ -314,11 +313,13 @@ def check_slurm_job(log, control, handle):
     """
     state = "UNKNOWN"
     command = ["scontrol", "show", "job", handle]
-    result = run_remote(log, control, ' '.join(command), verbose=False)
-    if result.passed:
-        match = re.search(r"JobState=([a-zA-Z]+)", "\n".join(result.all_stdout.values()))
+    try:
+        result = run_local(log, command, verbose=False, check=True)
+        match = re.search(r"JobState=([a-zA-Z]+)", "\n".join(result.stdout))
         if match is not None:
             state = match.group(1)
+    except RunException as error:
+        log.debug(str(error))
     return state
 
 
@@ -332,7 +333,6 @@ def register_for_job_results(handle, test, max_wait=3600):
     """
     params = {
         "log": test.log,
-        "control": test.control,
         "handle": handle,
         "max_wait": max_wait,
         "test_obj": test
@@ -341,19 +341,18 @@ def register_for_job_results(handle, test, max_wait=3600):
     athread.start()
 
 
-def watch_job(log, control, handle, max_wait, test_obj):
+def watch_job(log, handle, max_wait, test_obj):
     """Watch for a slurm job to finish use callback function with the result.
 
     Args:
         log (logger): logger for the messages produced by this method
-        control (NodeSet): slurm control host
         handle (str): the slurm job handle
         max_wait (int): max time in seconds to wait
         test_obj (Test): whom to notify when its done
     """
     wait_time = 0
     while True:
-        state = check_slurm_job(log, control, handle)
+        state = check_slurm_job(log, handle)
         if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
             if wait_time > max_wait:
                 state = "MAXWAITREACHED"

@@ -491,7 +491,7 @@ class SoakTestBase(TestWithServers):
         # Create local avocado log directory for this pass
         os.makedirs(outputsoaktest_dir)
         # Create shared log directory for this pass
-        os.makedirs(self.sharedsoaktest_dir)
+        os.makedirs(self.sharedsoaktest_dir, exist_ok=True)
         # Create local test log directory for this pass
         os.makedirs(self.soaktest_dir)
         # create the batch scripts

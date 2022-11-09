@@ -235,9 +235,9 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
-    if timeout:
+    if timeout and verbose:
         log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
-    else:
+    elif verbose:
         log.debug("Running on %s: %s", local_host, command_str)
 
     try:
