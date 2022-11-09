@@ -315,7 +315,7 @@ def check_slurm_job(log, handle):
     command = ["scontrol", "show", "job", handle]
     try:
         result = run_local(log, command, verbose=False, check=True)
-        match = re.search(r"JobState=([a-zA-Z]+)", "\n".join(result.stdout))
+        match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
         if match is not None:
             state = match.group(1)
     except RunException as error:
