@@ -13,7 +13,7 @@ else
   exit 1
 fi
 
-DAOS_BASE="${SL_PREFIX%/install*}"
+DAOS_BASE="${SL_SRC_DIR}"
 NODE="${NODELIST%%,*}"
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -46,7 +46,3 @@ mkdir $test_log_dir
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include test.cov" \
       --filter="exclude *" "$test_log_dir/"
-
-# Note that we are taking advantage of the NFS mount here and if that
-# should ever go away, we need to pull run_test.sh/ from $NODE
-python utils/fix_cmocka_xml.py

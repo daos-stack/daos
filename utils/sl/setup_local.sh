@@ -150,3 +150,4 @@ if [ $? -eq 0 ]; then
 fi
 export PATH
 export SL_PREFIX
+export SL_SRC_DIR
