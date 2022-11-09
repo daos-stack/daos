@@ -46,7 +46,7 @@ enum {
 };
 
 static inline void
-act_item_add(struct ad_tx *tx, struct umem_act_item *it, int undo_or_redo)
+act_item_add(struct ad_tx *tx, struct ad_act *it, int undo_or_redo)
 {
 	if (undo_or_redo == ACT_UNDO) {
 		D_DEBUG(DB_TRACE, "Add to undo %s\n", act_opc2str(it->it_act.ac_opc));
@@ -67,11 +67,11 @@ act_item_add(struct ad_tx *tx, struct umem_act_item *it, int undo_or_redo)
 	}
 }
 
-/** allocate umem_act_item, if success the it_link and it_act.ac_opc will be init-ed */
+/** allocate ad_act, if success the it_link and it_act.ac_opc will be init-ed */
 #define D_ALLOC_ACT(it, opc, size)							\
 	do {										\
 		if (opc == UMEM_ACT_COPY)						\
-			D_ALLOC(it, offsetof(struct umem_act_item,			\
+			D_ALLOC(it, offsetof(struct ad_act,				\
 					     it_act.ac_copy.payload[size]));		\
 		else									\
 			D_ALLOC_PTR(it);						\
@@ -90,6 +90,101 @@ act_copy_payload(struct umem_action *act, const void *addr, daos_size_t size)
 		memcpy(dst, addr, size);
 }
 
+#define ad_range_end(r)		((r)->ar_off + (r)->ar_size)
+
+static bool
+tx_range_canmerge(struct ad_range *r1, struct ad_range *r2)
+{
+	return (r1->ar_off < ad_range_end(r2) && r2->ar_off < ad_range_end(r1)) ||
+	       (r1->ar_off == ad_range_end(r2)) || (r2->ar_off == ad_range_end(r1));
+}
+
+/* merge r2 to r1 */
+static void
+tx_range_merge(struct ad_range *r1, struct ad_range *r2)
+{
+	r1->ar_off = min(r1->ar_off, r2->ar_off);
+	r1->ar_size = max(ad_range_end(r1), ad_range_end(r2)) - r1->ar_off;
+}
+
+static int
+tx_range_add(struct ad_tx *tx, uint64_t off, uint64_t size, bool alloc)
+{
+	struct ad_range		 range;
+	struct ad_range		*tmp;
+	d_list_t		*at = &tx->tx_ranges;
+
+	range.ar_off = off;
+	range.ar_size = size;
+	d_list_for_each_entry(tmp, &tx->tx_ranges, ar_link) {
+		if (!alloc && !tmp->ar_alloc && tx_range_canmerge(tmp, &range)) {
+			tx_range_merge(tmp, &range);
+			return 0;
+		}
+		if (off <= tmp->ar_off) {
+			at = &tmp->ar_link;
+			break;
+		}
+	}
+
+	D_ALLOC_PTR(tmp);
+	if(tmp == NULL)
+		return -DER_NOMEM;
+	D_INIT_LIST_HEAD(&tmp->ar_link);
+	tmp->ar_off = off;
+	tmp->ar_size = size;
+	tmp->ar_alloc = alloc;
+	d_list_add(&tmp->ar_link, at);
+
+	return 0;
+}
+
+/* delete a range (only for newly allocated) */
+static void
+tx_range_del(struct ad_tx *tx, uint64_t off)
+{
+	struct ad_range		*tmp, *next;
+
+	d_list_for_each_entry_safe(tmp, next, &tx->tx_ranges, ar_link) {
+		if (off < tmp->ar_off)
+			break;
+		if (off == tmp->ar_off && tmp->ar_alloc) {
+			d_list_del(&tmp->ar_link);
+			D_FREE(tmp);
+			break;
+		}
+	}
+}
+
+/* post process for tx ranges in tx commit - insert tx_add redo actions */
+static int
+tx_range_post(struct ad_tx *tx)
+{
+	struct ad_range		*tmp, *next;
+	struct ad_blob_handle	 bh;
+
+	bh.bh_blob = tx->tx_blob;
+	d_list_for_each_entry_safe(tmp, next, &tx->tx_ranges, ar_link) {
+		int	rc;
+
+		if (&next->ar_link != &tx->tx_ranges &&
+		    tx_range_canmerge(next, tmp)) {
+			tx_range_merge(next, tmp);
+			d_list_del(&tmp->ar_link);
+			D_FREE(tmp);
+			continue;
+		}
+
+		rc = ad_tx_snap(tx, ad_addr2ptr(bh, tmp->ar_off), tmp->ar_size, AD_TX_REDO);
+		if (rc) {
+			D_ERROR("ad_tx_snap failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
 /** start a ad-hoc memory transaction */
 int
 ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
@@ -103,6 +198,7 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 	D_INIT_LIST_HEAD(&tx->tx_ar_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_free);
+	D_INIT_LIST_HEAD(&tx->tx_ranges);
 
 	tx->tx_redo_act_nr	= 0;
 	tx->tx_redo_payload_len	= 0;
@@ -115,7 +211,7 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 }
 
 static int
-ad_act_item_replay(struct ad_tx *tx, struct umem_action *act)
+ad_act_replay(struct ad_tx *tx, struct umem_action *act)
 {
 	int rc = 0;
 
@@ -168,11 +264,11 @@ ad_act_item_replay(struct ad_tx *tx, struct umem_action *act)
 static int
 ad_tx_act_replay(struct ad_tx *tx, d_list_t *list)
 {
-	struct umem_act_item	*it;
-	int			 rc = 0;
+	struct ad_act	*it;
+	int		 rc = 0;
 
 	d_list_for_each_entry(it, list, it_link) {
-		rc = ad_act_item_replay(tx, &it->it_act);
+		rc = ad_act_replay(tx, &it->it_act);
 		if (rc)
 			break;
 	}
@@ -182,10 +278,21 @@ ad_tx_act_replay(struct ad_tx *tx, d_list_t *list)
 static void
 ad_tx_act_cleanup(d_list_t *list)
 {
-	struct umem_act_item	*it, *next;
+	struct ad_act	*it, *next;
 
 	d_list_for_each_entry_safe(it, next, list, it_link) {
 		d_list_del(&it->it_link);
+		D_FREE(it);
+	}
+}
+
+static void
+ad_tx_ranges_cleanup(d_list_t *list)
+{
+	struct ad_range	*it, *next;
+
+	d_list_for_each_entry_safe(it, next, list, ar_link) {
+		d_list_del(&it->ar_link);
 		D_FREE(it);
 	}
 }
@@ -202,6 +309,7 @@ ad_tx_end(struct ad_tx *tx, int err)
 
 	ad_tx_act_cleanup(&tx->tx_undo);
 	ad_tx_act_cleanup(&tx->tx_redo);
+	ad_tx_ranges_cleanup(&tx->tx_ranges);
 
 	blob_decref(tx->tx_blob);
 	return rc;
@@ -226,7 +334,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 		return 0;
 
 	if (undo) {
-		struct umem_act_item	*it_undo;
+		struct ad_act	*it_undo;
 
 		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
@@ -237,7 +345,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 		it_undo->it_act.ac_copy.size = size;
 		act_item_add(tx, it_undo, ACT_UNDO);
 	} else {
-		struct umem_act_item	*it_redo = NULL;
+		struct ad_act	*it_redo = NULL;
 
 		D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
 		if (it_redo == NULL)
@@ -267,7 +375,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 	}
 
 	if (flags & AD_TX_UNDO) {
-		struct umem_act_item *it_undo;
+		struct ad_act *it_undo;
 
 		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
@@ -279,7 +387,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 		act_item_add(tx, it_undo, ACT_UNDO);
 
 	} else {
-		struct umem_act_item *it_redo;
+		struct ad_act *it_redo;
 
 		if (!(flags & AD_TX_REDO))
 			return -DER_INVAL;
@@ -345,7 +453,7 @@ assign_integer(void *addr, int size, uint32_t val)
 int
 ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 {
-	struct umem_act_item	*it_undo, *it_redo;
+	struct ad_act	*it_undo, *it_redo;
 
 	if (addr == NULL || (size != 1 && size != 2 && size != 4))
 		return -DER_INVAL;
@@ -387,7 +495,7 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 int
 ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags)
 {
-	struct umem_act_item	*it_undo, *it_redo;
+	struct ad_act	*it_undo, *it_redo;
 
 	if (addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
@@ -431,7 +539,7 @@ ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags
 int
 ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 {
-	struct umem_act_item	*it_undo, *it_redo;
+	struct ad_act	*it_undo, *it_redo;
 
 	if (dst == NULL || src == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
@@ -468,7 +576,7 @@ ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 int
 ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 {
-	struct umem_act_item	*it_undo, *it_redo;
+	struct ad_act	*it_undo, *it_redo;
 	uint32_t		 end = pos + nbits - 1;
 
 	if (bmap == NULL) {
@@ -514,8 +622,8 @@ ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 int
 ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 {
-	struct umem_act_item	*it_undo, *it_redo;
-	uint32_t		 end = pos + nbits - 1;
+	struct ad_act	*it_undo, *it_redo;
+	uint32_t	 end = pos + nbits - 1;
 
 	if (bmap == NULL) {
 		D_ERROR("empty bitmap\n");
@@ -585,7 +693,7 @@ ad_tx_redo_act_first(struct ad_tx *tx)
 		return NULL;
 	}
 
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item, it_link);
+	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
 	return &tx->tx_redo_act_pos->it_act;
 }
 
@@ -598,14 +706,13 @@ ad_tx_redo_act_next(struct ad_tx *tx)
 	if (tx->tx_redo_act_pos == NULL) {
 		if (d_list_empty(&tx->tx_redo))
 			return NULL;
-		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct umem_act_item,
-						   it_link);
+		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
 		return &tx->tx_redo_act_pos->it_act;
 	}
 
 	D_ASSERT(!d_list_empty(&tx->tx_redo));
 	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
-					   struct umem_act_item, it_link);
+					   struct ad_act, it_link);
 	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
 		tx->tx_redo_act_pos = NULL;
 		return NULL;
@@ -647,6 +754,9 @@ tx_end(struct ad_tx *tx, int err)
 	D_ASSERTF(tx->tx_layer >= 0, "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
 	if (tx->tx_layer != 0)
 		return 0;
+
+	if (err == 0)
+		err = tx_range_post(tx);
 
 	rc = ad_tx_end(tx, err);
 	if (rc == 0) {
@@ -793,8 +903,10 @@ umo_tx_stage(void)
 static int
 umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 {
-	struct ad_tx	*tx = tx_get();
-	int		 rc = 0;
+	struct ad_tx		*tx = tx_get();
+	int			 rc = 0;
+
+	tx_range_del(tx, umoff);
 
 	/*
 	 * This free call could be on error cleanup code path where
@@ -821,9 +933,47 @@ static umem_off_t
 umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags,
 	     unsigned int type_num)
 {
+	struct ad_tx		*tx = tx_get();
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	umem_off_t		 off;
 
-	return ad_alloc(bh, 0, size, NULL);
+	off = ad_alloc(bh, 0, size, NULL);
+	if (!UMOFF_IS_NULL(off) && !(flags & UMEM_FLAG_NO_FLUSH)) {
+		int	rc;
+
+		rc = tx_range_add(tx, off, size, true);
+		if (rc) {
+			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+			rc = ad_tx_free(tx, off);
+			if (rc)
+				D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
+			return 0;
+		}
+	}
+
+	return off;
+}
+
+static int
+tx_add_internal(struct ad_tx *tx, void *ptr, size_t size, uint32_t flags)
+{
+	int	rc;
+
+	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
+		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
+
+	if (flags & AD_TX_REDO) {
+		rc = tx_range_add(tx, blob_ptr2addr(tx->tx_blob, ptr), size, false);
+		if (rc) {
+			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
+
+	if (flags & AD_TX_UNDO)
+		return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
+
+	return 0;
 }
 
 static int
@@ -835,40 +985,54 @@ umo_tx_add(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t 
 	void			*ptr;
 
 	D_ASSERT(offset == 0);
-	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
-		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 	ptr = blob_addr2ptr(blob, umoff);
-	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
+	return tx_add_internal(tx, ptr, size, AD_TX_UNDO | AD_TX_REDO);
 }
 
 static int
 umo_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t size,
 	    uint64_t flags)
 {
-	/* NOOP for UMEM_XADD_NO_SNAPSHOT */
-	if (flags & UMEM_XADD_NO_SNAPSHOT)
-		return 0;
+	struct ad_tx		*tx = tx_get();
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_blob		*blob = bh.bh_blob;
+	void			*ptr;
+	uint32_t		 ad_flags = 0;
 
-	return umo_tx_add(umm, umoff, offset, size);
+	if (!(flags & UMEM_XADD_NO_SNAPSHOT))
+		ad_flags |= AD_TX_UNDO;
+	if (!(flags & UMEM_FLAG_NO_FLUSH))
+		ad_flags |= AD_TX_REDO;
+
+	D_ASSERT(offset == 0);
+	ptr = blob_addr2ptr(blob, umoff);
+
+	return tx_add_internal(tx, ptr, size, ad_flags);
 }
 
 static int
 umo_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
-	struct ad_tx		*tx = tx_get();
+	struct ad_tx	*tx = tx_get();
 
-	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
-		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
-
-	return ad_tx_snap(tx, ptr, size, AD_TX_UNDO);
+	return tx_add_internal(tx, ptr, size, AD_TX_UNDO | AD_TX_REDO);
 }
 
 static umem_off_t
 umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+	struct ad_reserv_act	*ract = act;
+	umem_off_t		 off;
 
-	return ad_reserve(bh, 0, size, NULL, (struct ad_reserv_act *)act);
+	off = ad_reserve(bh, 0, size, NULL, ract);
+
+	if (!UMOFF_IS_NULL(off)) {
+		ract->ra_off = off;
+		ract->ra_size = size;
+	}
+
+	return off;
 }
 
 static void
@@ -881,11 +1045,24 @@ static int
 umo_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 {
 	struct ad_tx		*tx = tx_get();
+	struct ad_reserv_act	*ractv = actv;
+	int			 i, rc;
 
 	D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
 		  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
-	return ad_tx_publish(tx, (struct ad_reserv_act *)actv, actv_cnt);
+	rc = ad_tx_publish(tx, ractv, actv_cnt);
+	if (rc == 0) {
+		for (i = 0; i < actv_cnt; i++) {
+			rc = tx_range_add(tx, ractv[i].ra_off, ractv[i].ra_size, true);
+			if (rc) {
+				D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+				break;
+			}
+		}
+	}
+
+	return rc;
 }
 
 static void *
@@ -929,9 +1106,7 @@ failed:
 static umem_off_t
 umo_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
 {
-	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
-
-	return ad_alloc(bh, 0, size, NULL);
+	return umo_tx_alloc(umm, size, 0, 0, type_num);
 }
 
 static int
@@ -946,6 +1121,8 @@ umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 		return rc;
 	}
 	tx = tx_get();
+
+	tx_range_del(tx, umoff);
 
 	rc = ad_tx_free(tx, umoff);
 	if (rc) {
