@@ -315,7 +315,7 @@ bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st
 
 static int
 bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
-		spdk_blob_id blob_id)
+		spdk_blob_id blob_id, enum bio_mc_flags flags)
 {
 	struct blob_msg_arg		 bma = { 0 };
 	struct blob_cp_arg		*ba = &bma.bma_cp_arg;
@@ -353,7 +353,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 	if (rc != 0) {
 		D_ERROR("Delete blobID "DF_U64" failed for pool:"DF_UUID" "
 			"xs:%p rc:%d\n", blob_id, DP_UUID(uuid), xs_ctxt, rc);
-	} else {
+	} else if (!(flags & BIO_MC_FL_SYSDB)) {
 		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
 			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
 			xs_ctxt);
@@ -369,7 +369,7 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 	return rc;
 }
 
-int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, unsigned int flags)
+int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_flags flags)
 {
 	struct bio_meta_context	*mc;
 	spdk_blob_id		 data_blobid, wal_blobid, meta_blobid;
@@ -393,7 +393,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, unsigned int 
 		}
 
 		D_ASSERT(data_blobid != SPDK_BLOBID_INVALID);
-		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid);
+		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc) {
 			D_ERROR("Delete data blob "DF_U64" failed. "DF_RC"\n",
 				data_blobid, DP_RC(rc));
@@ -423,7 +423,8 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, unsigned int 
 	}
 
 	if (data_blobid != SPDK_BLOBID_INVALID) {
-		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid);
+		D_ASSERT(!(flags & BIO_MC_FL_SYSDB));
+		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc) {
 			D_ERROR("Failed to delete data blob "DF_U64". "DF_RC"\n",
 				data_blobid, DP_RC(rc));
@@ -432,7 +433,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, unsigned int 
 	}
 
 	if (wal_blobid != SPDK_BLOBID_INVALID) {
-		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid);
+		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid, flags);
 		if (rc) {
 			D_ERROR("Failed to delete WAL blob "DF_U64". "DF_RC"\n",
 				wal_blobid, DP_RC(rc));
@@ -440,7 +441,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, unsigned int 
 		}
 	}
 
-	rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid);
+	rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid, flags);
 	if (rc)
 		D_ERROR("Failed to delete meta blob "DF_U64". "DF_RC"\n", wal_blobid, DP_RC(rc));
 
@@ -552,7 +553,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
 				xs_ctxt->bxc_tgt_id, rc);
 			/* Delete newly created blob */
-			if (bio_blob_delete(uuid, xs_ctxt, st, ba->bca_id))
+			if (bio_blob_delete(uuid, xs_ctxt, st, ba->bca_id, flags))
 				D_ERROR("Unable to delete newly created blobID "
 					""DF_U64" for xs:%p pool:"DF_UUID"\n",
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
@@ -720,21 +721,21 @@ delete_wal:
 	D_FREE(mc);
 	D_FREE(fi);
 	if (rc && wal_blobid != SPDK_BLOBID_INVALID) {
-		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid);
+		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid, flags);
 		if (rc1)
 			D_ERROR("Unable to delete WAL blob for xs:%p pool:"DF_UUID"\n",
 				xs_ctxt, DP_UUID(pool_id));
 	}
 delete_meta:
 	if (rc && meta_blobid != SPDK_BLOBID_INVALID) {
-		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid);
+		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid, flags);
 		if (rc1)
 			D_ERROR("Unable to delete meta blob for xs:%p pool:"DF_UUID"\n",
 				xs_ctxt, DP_UUID(pool_id));
 	}
 delete_data:
 	if (rc && data_blobid != SPDK_BLOBID_INVALID) {
-		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid);
+		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc1)
 			D_ERROR("Unable to delete data blob for xs:%p pool:"DF_UUID"\n",
 				xs_ctxt, DP_UUID(pool_id));
