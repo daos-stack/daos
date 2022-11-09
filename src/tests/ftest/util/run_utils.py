@@ -78,6 +78,19 @@ class RemoteCommandResult():
         """
         return any(data.timeout for data in self.output)
 
+    @property
+    def all_stdout(self):
+        """Get all of the stdout from the issued command from each host.
+
+        Returns:
+            dict: the stdout (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stdout = {}
+        for data in self.output:
+            stdout[str(data.hosts)] = '\n'.join(data.stdout)
+        return stdout
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 

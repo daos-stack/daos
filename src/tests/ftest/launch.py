@@ -1305,23 +1305,28 @@ class Launch():
         # Find the speed of each common active interface in order to be able to choose the fastest
         interface_speeds = {}
         for interface in common_interfaces:
+            # Check for a virtual interface
+            module_path = os.path.join(net_path, interface, "device", "driver", "module")
+            command = [f"readlink {module_path}", "grep 'virtio_net'"]
+            result = run_remote(logger, all_hosts, " | ".join(command))
+            if result.passed and result.homogeneous:
+                interface_speeds[interface] = 1000
+                continue
+
+            # Verify each host has the same speed for non-virtual interfaces
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
             result = run_remote(logger, all_hosts, command)
-            # Verify each host has the same interface speed
-            if not result.homogeneous:
-                logger.error(
-                    "Non-homogeneous interface speed detected for %s on %s.",
-                    interface, str(all_hosts))
-            elif not result.passed and "Invalid argument" in "\n".join(result.output[0].stdout):
-                # Concatenating the speed of a KVM/Qemu/libvirt device yields 'Invalid argument'
-                interface_speeds[interface] = 1000
-            elif result.passed:
+            if result.passed and result.homogeneous:
                 for line in result.output[0].stdout:
                     try:
                         interface_speeds[interface] = int(line.strip())
                     except ValueError:
                         # Any line not containing a speed (integer)
                         pass
+            elif not result.homogeneous:
+                logger.error(
+                    "Non-homogeneous interface speed detected for %s on %s.",
+                    interface, str(all_hosts))
             else:
                 logger.error("Error detecting speed of %s on %s", interface, str(all_hosts))
 
