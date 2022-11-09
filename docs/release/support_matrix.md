@@ -166,6 +166,10 @@ Links to Rocky Linux Release Notes:
 * [Rocky Linux 8.5](https://docs.rockylinux.org/release_notes/8.5/)
 * [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
 
+### Alma Linux 8
+
+DAOS Version 2.2 is supported on Alma Linux 8.6.
+
 ### openSUSE Leap 15
 
 DAOS Version 2.2 is supported on openSUSE Leap 15.3.
@@ -192,7 +196,6 @@ openSUSE Tumbleweed,
 Fedora,
 CentOS Stream,
 CentOS Linux,
-Alma Linux,
 Ubuntu, or
 Oracle Linux.
 

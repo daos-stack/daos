@@ -32,6 +32,7 @@ ET.Element = Element
 ET.SubElement = SubElement
 ET.tostring = tostring
 
+DEFAULT_DAOS_APP_DIR = "/scratch"
 DEFAULT_DAOS_TEST_LOG_DIR = "/var/tmp/daos_testing"
 YAML_KEYS = OrderedDict(
     [
@@ -202,6 +203,8 @@ def set_test_environment(args):
         os.environ["D_LOG_FILE"] = os.path.join(
             os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+        if "DAOS_APP_DIR" not in os.environ:
+            os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
 
         # Assign the default value for transport configuration insecure mode
         os.environ["DAOS_INSECURE_MODE"] = str(args.insecure_mode)

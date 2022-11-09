@@ -64,12 +64,16 @@ The default of the pool property `ec_cell_sz` was 1MiB in DAOS 2.0.
 In DAOS 2.2, the default has been changed to 64kiB.
 While this smaller EC cell size should generally improve performance,
 some workloads may benefit from a bigger EC cell size.
-See [Pool Operations](../admin/pool_operations/) and
-[Erasure Code](../user/container/#erasure-code) for details
+See [Pool Operations](../../admin/pool_operations/) and
+[Erasure Code](../../user/container/#erasure-code) for details
 on setting the EC cell size.
 
 
 ### Known Issues and limitations
+
+- [DAOS-11685](https://daosio.atlassian.net/browse/DAOS-11685):
+  Under certain workloads with `rf=2`, a server may crash.
+  There is not workaround; a fix is targeted for daos-2.2.1.
 
 - [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317):
   Running the Mellanox-provided `mlnxofedinstall` script to install a new version of MLNX\_OFED,
@@ -90,8 +94,8 @@ on setting the EC cell size.
 - [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215):
   For Replication and Erasure Coding (EC), in DAOS 2.2 the redundancy level (`rf_lvl`)
   is set to `1 (rank=engine)`. On servers with more than one engine per server,
-  setting the redundancy level to `2 (server)` would be more appropriate
-  but the `daos cont create` command currently does not support this
+  setting the redundancy level to `2 (server)` would be more appropriate,
+  but the `daos cont create` command currently does not support this.
   No workaround is available at this point.
 
 - No OPA/PSM2 support.

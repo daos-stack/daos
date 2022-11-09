@@ -705,8 +705,10 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
-	D_ASSERT(dth->dth_ent == NULL);
-	D_ASSERT(dth->dth_pinned == 0);
+	if (dth->dth_modification_cnt > 0) {
+		D_ASSERT(dth->dth_ent != NULL);
+		D_ASSERT(dth->dth_pinned != 0);
+	}
 	D_ASSERT(dth->dth_already == 0);
 
 	dth->dth_modify_shared = 0;
@@ -1260,7 +1262,7 @@ abort:
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
 		/* Drop partial modification for distributed transaction. */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
@@ -1268,7 +1270,7 @@ abort:
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		if (result < 0 && !aborted)
-			vos_dtx_cleanup(dth);
+			vos_dtx_cleanup(dth, true);
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
@@ -1392,7 +1394,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		/* 1. Drop partial modification for distributed transaction.
 		 * 2. Remove the pinned DTX entry.
 		 */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 	}
 
 	D_DEBUG(DB_IO,
