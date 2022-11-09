@@ -1,6 +1,7 @@
 """Build rdb"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -32,6 +33,7 @@ def scons():
     # tests
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

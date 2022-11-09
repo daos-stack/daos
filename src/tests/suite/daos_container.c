@@ -52,7 +52,7 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
-		print_message("contained opened\n");
+		print_message("container opened\n");
 	}
 
 	if (arg->hdl_share)
@@ -333,6 +333,7 @@ co_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
 	/** setting the label on entries with no type should fail */
 	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
 	assert_rc_equal(rc, -DER_NONEXIST);
@@ -1954,6 +1955,7 @@ co_owner_implicit_access(void **state)
 
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
+	assert_non_null(tmp_prop);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
@@ -2227,6 +2229,7 @@ co_rf_simple(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 
@@ -2372,6 +2375,7 @@ co_rf_simple(void **state)
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
@@ -2389,6 +2393,39 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+co_global2local_fail_test(void **state)
+{
+	test_arg_t   *arg0 = *state;
+	test_arg_t   *arg  = NULL;
+	d_iov_t       ghdl = {NULL, 0, 0};
+	daos_handle_t coh_g2l;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank, SMALL_POOL_SIZE, 0,
+			NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_local2global(arg->coh, &ghdl);
+	assert_rc_equal(rc, 0);
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
+	ghdl.iov_len = ghdl.iov_buf_len;
+	rc = daos_cont_local2global(arg->coh, &ghdl);
+	assert_rc_equal(rc, 0);
+
+	daos_fail_loc_set(DAOS_CONT_G2L_FAIL | DAOS_FAIL_ONCE);
+	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
+	assert_rc_equal(rc, -DER_NO_HDL);
+	daos_fail_loc_set(0);
+
+	free(ghdl.iov_buf);
+
 	test_teardown((void **)&arg);
 }
 
@@ -2564,6 +2601,7 @@ co_redun_lvl(void **state)
 	daos_handle_t		 coh, oh, coh_g2l;
 	d_iov_t			 ghdl = { NULL, 0, 0 };
 	daos_prop_t		*prop = NULL;
+	daos_prop_t		*prop_out = NULL;
 	struct daos_prop_entry	*entry;
 	struct daos_co_status	 stat = { 0 };
 	daos_cont_info_t	 info = { 0 };
@@ -2590,6 +2628,7 @@ co_redun_lvl(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	assert_non_null(prop);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_NODE;
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -2602,10 +2641,16 @@ co_redun_lvl(void **state)
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		prop_out = daos_prop_alloc(2);
+		assert_non_null(prop_out);
+		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+		prop_out->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+
+		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -2760,6 +2805,7 @@ out:
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
@@ -2768,10 +2814,14 @@ out:
 	assert_rc_equal(rc, 0);
 
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(coh_g2l, &info, NULL, NULL);
+		prop_out->dpp_entries[0].dpe_val = 0;
+		prop_out->dpp_entries[1].dpe_val = 0;
+
+		rc = daos_cont_query(coh_g2l, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_lvl, DAOS_PROP_CO_REDUN_NODE);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF1);
+		/* Verify DAOS_PROP_CO_REDUN_LVL and DAOS_PROP_CO_REDUN_FAC values */
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_NODE);
+		assert_int_equal(prop_out->dpp_entries[1].dpe_val, DAOS_PROP_CO_REDUN_RF1);
 	}
 
 	rc = daos_cont_close(coh_g2l, NULL);
@@ -2784,7 +2834,144 @@ out:
 	if (plmap != NULL)
 		pl_map_decref(plmap);
 	daos_prop_free(prop);
+	daos_prop_free(prop_out);
 	test_teardown((void **)&arg);
+}
+
+static void
+co_mdtimes(void **state)
+{
+	test_arg_t	       *arg = *state;
+	daos_event_t		ev;
+	char			str[37];
+	uint64_t		prev_otime;
+	uint64_t		prev_mtime;
+	daos_handle_t		coh;
+	daos_cont_info_t	cinfo;
+	daos_epoch_t		epc;
+	daos_epoch_range_t	epr;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	print_message("open container (RO_MDSTATS flag)\n");
+	uuid_unparse(arg->co_uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("initial container metadata otime (0x"DF_X64") mtime (0x"DF_X64")\n",
+		      cinfo.ci_md_otime, cinfo.ci_md_otime);
+	prev_otime = cinfo.ci_md_otime;
+	prev_mtime = cinfo.ci_md_mtime;
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("open container again (RO_MDSTATS), verify metadata times unchanged\n");
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	print_message("query container, verify metadata times unchanged\n");
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	/* open updates the otime, visible upon subsequent query */
+	print_message("open container again (no special flags), query to see updated otime\n");
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh, &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
+	print_message("query returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	print_message("open container again (RW), verify mtime updated (from close)\n");
+	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	/* NOTE: otime was updated by cont_open(), visible in next query */
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_mtime);
+
+	print_message("create container snapshot, query and verify updated mtime\n");
+	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("created snapshot 0x"DF_X64", query returned updated otime (0x"DF_X64"), "
+		      "updated mtime (0x"DF_X64")\n", epc, cinfo.ci_md_otime, cinfo.ci_md_mtime);
+
+	print_message("destroy container snapshot, query and verify updated mtime\n");
+	epr.epr_lo = epr.epr_hi = epc;
+	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_mtime = cinfo.ci_md_mtime;
+	print_message("destroyed snapshot 0x"DF_X64", query returned updated mtime (0x"DF_X64")\n",
+		      epc, cinfo.ci_md_mtime);
+
+	print_message("close container\n");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	/* TODO: perform other metadata RO operations verify mtime unchanged.
+	 * (e.g., attr-list, attr-get, list-snap, get-acl)
+	 */
+
+	/* TODO: perform other metadata RW operations, verify mtime updated.
+	 * (attr-set/del, set-prop, update/overwrite/delete-acl)
+	 */
 }
 
 static int
@@ -2811,61 +2998,47 @@ setup(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-	{ "CONT1: create/open/close/destroy container",
-	  co_create, async_disable, test_case_teardown},
-	{ "CONT2: create/open/close/destroy container (async)",
-	  co_create, async_enable, test_case_teardown},
-	{ "CONT3: container handle local2glocal and global2local",
-	  co_create, hdl_share_enable, test_case_teardown},
-	{ "CONT4: set/get/list user-defined container attributes (sync)",
-	  co_attribute, co_setup_sync, test_case_teardown},
-	{ "CONT5: set/get/list user-defined container attributes (async)",
-	  co_attribute, co_setup_async, test_case_teardown},
-	{ "CONT6: create container with properties and query",
-	  co_properties, NULL, test_case_teardown},
-	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
-	  co_op_retry, NULL, test_case_teardown},
-	{ "CONT8: get/set container ACL",
-	  co_acl, NULL, test_case_teardown},
-	{ "CONT9: container set prop",
-	  co_set_prop, NULL, test_case_teardown},
-	{ "CONT10: container create access denied",
-	  co_create_access_denied, NULL, test_case_teardown},
-	{ "CONT11: container destroy access denied",
-	  co_destroy_access_denied, NULL, test_case_teardown},
-	{ "CONT12: container destroy allowed by pool ACL only",
-	  co_destroy_allowed_by_pool, NULL, test_case_teardown},
-	{ "CONT13: container open access by ACL",
-	  co_open_access, NULL, test_case_teardown},
-	{ "CONT14: container query access by ACL",
-	  co_query_access, NULL, test_case_teardown},
-	{ "CONT15: container get-acl access by ACL",
-	  co_get_acl_access, NULL, test_case_teardown},
-	{ "CONT16: container set-prop access by ACL",
-	  co_set_prop_access, NULL, test_case_teardown},
-	{ "CONT17: container overwrite/update/delete ACL access by ACL",
-	  co_modify_acl_access, NULL, test_case_teardown},
-	{ "CONT18: container set owner",
-	  co_set_owner, NULL, test_case_teardown},
-	{ "CONT19: container set-owner access by ACL",
-	  co_set_owner_access, NULL, test_case_teardown},
-	{ "CONT20: container destroy force",
-	  co_destroy_force, NULL, test_case_teardown},
-	{ "CONT21: container owner has implicit ACL access",
-	  co_owner_implicit_access, NULL, test_case_teardown},
-	{ "CONT22: container get/set attribute access by ACL",
-	  co_attribute_access, NULL, test_case_teardown},
-	{ "CONT23: container open failed/destroy",
-	  co_open_fail_destroy, NULL, test_case_teardown},
-	{ "CONT24: container RF simple test",
-	  co_rf_simple, NULL, test_case_teardown},
-	{ "CONT25: Delete Container during Aggregation",
-	  delet_container_during_aggregation, co_setup_async,
-	  test_case_teardown},
-	{ "CONT26: container API compat",
-	  co_api_compat, NULL, test_case_teardown},
-	{ "CONT27: container REDUN_LVL and RF test",
-	  co_redun_lvl, NULL, test_case_teardown},
+    {"CONT1: create/open/close/destroy container", co_create, async_disable, test_case_teardown},
+    {"CONT2: create/open/close/destroy container (async)", co_create, async_enable,
+     test_case_teardown},
+    {"CONT3: container handle local2glocal and global2local", co_create, hdl_share_enable,
+     test_case_teardown},
+    {"CONT4: set/get/list user-defined container attributes (sync)", co_attribute, co_setup_sync,
+     test_case_teardown},
+    {"CONT5: set/get/list user-defined container attributes (async)", co_attribute, co_setup_async,
+     test_case_teardown},
+    {"CONT6: create container with properties and query", co_properties, NULL, test_case_teardown},
+    {"CONT7: retry CONT_{CLOSE,DESTROY,QUERY}", co_op_retry, NULL, test_case_teardown},
+    {"CONT8: get/set container ACL", co_acl, NULL, test_case_teardown},
+    {"CONT9: container set prop", co_set_prop, NULL, test_case_teardown},
+    {"CONT10: container create access denied", co_create_access_denied, NULL, test_case_teardown},
+    {"CONT11: container destroy access denied", co_destroy_access_denied, NULL, test_case_teardown},
+    {"CONT12: container destroy allowed by pool ACL only", co_destroy_allowed_by_pool, NULL,
+     test_case_teardown},
+    {"CONT13: container open access by ACL", co_open_access, NULL, test_case_teardown},
+    {"CONT14: container query access by ACL", co_query_access, NULL, test_case_teardown},
+    {"CONT15: container get-acl access by ACL", co_get_acl_access, NULL, test_case_teardown},
+    {"CONT16: container set-prop access by ACL", co_set_prop_access, NULL, test_case_teardown},
+    {"CONT17: container overwrite/update/delete ACL access by ACL", co_modify_acl_access, NULL,
+     test_case_teardown},
+    {"CONT18: container set owner", co_set_owner, NULL, test_case_teardown},
+    {"CONT19: container set-owner access by ACL", co_set_owner_access, NULL, test_case_teardown},
+    {"CONT20: container destroy force", co_destroy_force, NULL, test_case_teardown},
+    {"CONT21: container owner has implicit ACL access", co_owner_implicit_access, NULL,
+     test_case_teardown},
+    {"CONT22: container get/set attribute access by ACL", co_attribute_access, NULL,
+     test_case_teardown},
+    {"CONT23: container open failed/destroy", co_open_fail_destroy, NULL, test_case_teardown},
+    {"CONT24: container RF simple test", co_rf_simple, NULL, test_case_teardown},
+    {"CONT25: Delete Container during Aggregation", delet_container_during_aggregation,
+     co_setup_async, test_case_teardown},
+    {"CONT26: container API compat", co_api_compat, NULL, test_case_teardown},
+    {"CONT27: container REDUN_LVL and RF test", co_redun_lvl, NULL, test_case_teardown},
+    {"CONT28: container metadata times test (sync)", co_mdtimes, co_setup_sync, test_case_teardown},
+    {"CONT29: container metadata times test (async)", co_mdtimes, co_setup_async,
+     test_case_teardown},
+    {"CONT30: daos_cont_global2local failure test", co_global2local_fail_test, NULL,
+     test_case_teardown},
 };
 
 int

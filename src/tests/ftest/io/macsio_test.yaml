@@ -3,16 +3,20 @@ hosts:
   test_clients: 6
 timeout: 120
 server_config:
-    name: daos_server
-    servers:
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
   control_method: dmg
-  mode: 511
-  name: daos_server
   scm_size: 5G
   nvme_size: 10G
 container:
@@ -34,15 +38,15 @@ job_manager: !mux
     macsio_path: /usr/lib64/mpich/bin
     plugin_path: /usr/lib64/mpich/lib
     timeout:
-        test_macsio: 10
-        test_macsio_daos_vol: 20
+      test_macsio: 10
+      test_macsio_daos_vol: 20
   openmpi:
     class_name: Orterun
     mpi_type: openmpi
     macsio_path: /usr/lib64/openmpi3/bin
     plugin_path: /usr/lib64/openmpi3/lib
     timeout:
-        test_macsio: 10
-        test_macsio_daos_vol: 20
+      test_macsio: 10
+      test_macsio_daos_vol: 20
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"

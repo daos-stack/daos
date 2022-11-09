@@ -30,6 +30,7 @@ type legacyStorageCmd struct {
 
 type legacyPrepCmd struct {
 	cmdutil.LogCmd
+	helperLogCmd
 	iommuCheckerCmd
 	scs *server.StorageControlService
 
@@ -129,7 +130,11 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 }
 
 func (cmd *legacyPrepCmd) Execute(args []string) error {
-	cmd.Info("storage prepare subcommand is deprecated, use nvme or pmem subcommands instead")
+	if err := cmd.setHelperLogFile(); err != nil {
+		return err
+	}
+
+	cmd.Info("storage prepare subcommand is deprecated, use nvme or scm subcommands instead")
 
 	// This is a little ugly, but allows for easier unit testing.
 	// FIXME: With the benefit of hindsight, it seems apparent
@@ -146,15 +151,15 @@ func (cmd *legacyPrepCmd) Execute(args []string) error {
 type legacyScanCmd struct {
 	cmdutil.LogCmd
 
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_server_helper binary."`
 	DisableVMD    bool   `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }
 
 func (cmd *legacyScanCmd) Execute(args []string) error {
-	cmd.Notice("storage scan subcommand is deprecated, use nvme or pmem subcommands instead")
+	cmd.Notice("storage scan subcommand is deprecated, use nvme or scm subcommands instead")
 
 	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+		if err := os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, cmd.HelperLogFile); err != nil {
 			cmd.Errorf("unable to configure privileged helper logging: %s", err)
 		}
 	}

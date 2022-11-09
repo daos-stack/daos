@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=ubuntu:20.04
+ARG BASE_DISTRO=ubuntu:22.04
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 

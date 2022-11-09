@@ -31,7 +31,10 @@ dc_cont_init(void)
 {
 	int rc;
 
-	rc = daos_rpc_register(&cont_proto_fmt, CONT_PROTO_CLI_COUNT,
+	/* TODO: issue a cart protocol query to an engine, then register either the
+	 * latest, or latest-1 version of the container RPC protocol. See dc_pool_init().
+	 */
+	rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
 				NULL, DAOS_CONT_MODULE);
 	if (rc != 0)
 		D_ERROR("failed to register cont RPCs: "DF_RC"\n", DP_RC(rc));
@@ -47,7 +50,7 @@ dc_cont_fini(void)
 {
 	int rc;
 
-	rc = daos_rpc_unregister(&cont_proto_fmt);
+	rc = daos_rpc_unregister(&cont_proto_fmt_v7);
 	if (rc != 0)
 		D_ERROR("failed to unregister cont RPCs: "DF_RC"\n", DP_RC(rc));
 }
@@ -197,7 +200,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		roots->cr_oids[0].hi = 0;
 		rf = daos_cont_prop2redunfac(prop_in);
 		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
-						 0, 0, 0);
+						 0, 0, 0, daos_cont_prop2redunlvl(prop_in));
 		if (rc) {
 			D_ERROR("Failed to generate root OID "DF_RC"\n",
 				DP_RC(rc));
@@ -469,6 +472,16 @@ err:
 }
 
 static void
+dc_cont_free(struct dc_cont *dc)
+{
+	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
+	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
+	D_ASSERT(d_list_empty(&dc->dc_po_list));
+	D_ASSERT(d_list_empty(&dc->dc_obj_list));
+	D_FREE(dc);
+}
+
+static void
 dc_cont_hop_free(struct d_hlink *hlink)
 {
 	struct dc_cont *dc;
@@ -483,12 +496,6 @@ static struct d_hlink_ops cont_h_ops = {
 };
 
 void
-dc_cont_put(struct dc_cont *dc)
-{
-	daos_hhash_link_putref(&dc->dc_hlink);
-}
-
-void
 dc_cont_hdl_link(struct dc_cont *dc)
 {
 	daos_hhash_link_insert(&dc->dc_hlink, DAOS_HTYPE_CO);
@@ -498,16 +505,6 @@ void
 dc_cont_hdl_unlink(struct dc_cont *dc)
 {
 	daos_hhash_link_delete(&dc->dc_hlink);
-}
-
-void
-dc_cont_free(struct dc_cont *dc)
-{
-	D_ASSERT(daos_hhash_link_empty(&dc->dc_hlink));
-	D_RWLOCK_DESTROY(&dc->dc_obj_list_lock);
-	D_ASSERT(d_list_empty(&dc->dc_po_list));
-	D_ASSERT(d_list_empty(&dc->dc_obj_list));
-	D_FREE(dc);
 }
 
 struct dc_cont *
@@ -688,9 +685,12 @@ static int
 cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_out	*out = crt_reply_get(arg->rpc);
+	struct cont_open_v7_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
+	time_t			 otime_sec, mtime_sec;
+	char			 otime_str[32];
+	char			 mtime_str[32];
 	uint32_t		 cli_pm_ver;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
@@ -719,7 +719,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	/* If open by label, copy the returned UUID into dc_cont structure */
 	if (arg->coa_label) {
-		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
 
 		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
 	}
@@ -772,11 +772,33 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
-	arg->coa_info->ci_redun_lvl = cont->dc_props.dcp_redun_lvl;
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
+	if (arg->coa_label) {
+		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
+
+		arg->coa_info->ci_md_otime = lbl_out->coo_md_otime;
+		arg->coa_info->ci_md_mtime = lbl_out->coo_md_mtime;
+	} else {
+		arg->coa_info->ci_md_otime = out->coo_md_otime;
+		arg->coa_info->ci_md_mtime = out->coo_md_mtime;
+	}
+
+	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
+	rc = daos_hlc2timestamp(arg->coa_info->ci_md_otime, &otime_sec);
+	if (rc)
+		goto out;
+	rc = daos_hlc2timestamp(arg->coa_info->ci_md_mtime, &mtime_sec);
+	if (rc)
+		goto out;
+	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
+	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1126,11 +1148,14 @@ struct cont_query_args {
 static int
 cont_query_complete(tse_task_t *task, void *data)
 {
-	struct cont_query_args	*arg = (struct cont_query_args *)data;
-	struct cont_query_out	*out = crt_reply_get(arg->rpc);
-	struct dc_pool		*pool = arg->cqa_pool;
-	struct dc_cont		*cont = arg->cqa_cont;
-	int			 rc   = task->dt_result;
+	struct cont_query_args		*arg = (struct cont_query_args *)data;
+	struct cont_query_v7_out	*out = crt_reply_get(arg->rpc);
+	struct dc_pool			*pool = arg->cqa_pool;
+	struct dc_cont			*cont = arg->cqa_cont;
+	time_t				 otime_sec, mtime_sec;
+	char				 otime_str[32];
+	char				 mtime_str[32];
+	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cqo_op, task);
@@ -1164,11 +1189,26 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
-	arg->cqa_info->ci_redun_lvl = cont->dc_props.dcp_redun_lvl;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
 	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
+	arg->cqa_info->ci_md_otime = out->cqo_md_otime;
+	arg->cqa_info->ci_md_mtime = out->cqo_md_mtime;
+
+	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
+	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_otime, &otime_sec);
+	if (rc)
+		goto out;
+	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_mtime, &mtime_sec);
+	if (rc)
+		goto out;
+	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
+	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -2094,11 +2134,10 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_slave = 1;
 
 	D_RWLOCK_WRLOCK(&pool->dp_co_list_lock);
-	if (pool->dp_disconnecting) {
+	if (pool->dp_disconnecting || DAOS_FAIL_CHECK(DAOS_CONT_G2L_FAIL)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		dc_cont_free(cont);
 		D_ERROR("pool connection being invalidated\n");
-		D_GOTO(out_pool, rc = -DER_NO_HDL);
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 	cont->dc_pool_hdl = poh;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
@@ -3127,35 +3166,33 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 }
 
 int
-dc_cont_hdl2redunlvl(daos_handle_t coh)
+dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_lvl;
+	*rl = dc->dc_props.dcp_redun_lvl;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 int
-dc_cont_hdl2redunfac(daos_handle_t coh)
+dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf)
 {
 	struct dc_cont	*dc;
-	int		 rc;
 
 	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc->dc_props.dcp_redun_fac;
+	*rf = dc->dc_props.dcp_redun_fac;
 	dc_cont_put(dc);
 
-	return rc;
+	return 0;
 }
 
 struct daos_csummer *

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -12,7 +11,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from apricot import skipForTicket
 from daos_utils import DaosCommand
 
 
@@ -48,8 +46,6 @@ class OSAOnlineExtend(OSAUtils):
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
-        self.daos_racer.set_environment(
-            self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
     def run_online_extend_test(self, num_pool, racer=False,
@@ -144,78 +140,76 @@ class OSAOnlineExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
-            self.run_ior_thread("Read", oclass, test_seq)
+            if app_name == "ior":
+                self.run_ior_thread("Read", oclass, test_seq)
+            else:
+                break
             self.container = self.pool_cont_dict[self.pool][0]
             kwargs = {"pool": self.pool.uuid,
                       "cont": self.container.uuid}
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend with checksum
         enabled.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_with_csum
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend
         """
         self.log.info("Online Extend : With Checksum")
         self.run_online_extend_test(1)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_without_checksum(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend without checksum enabled.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_without_csum
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_without_checksum
         """
         self.log.info("Online Extend : Without Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
         self.run_online_extend_test(1)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_oclass(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with different
         object class.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_oclass
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_oclass
         """
         self.log.info("Online Extend : Oclass")
         self.run_online_extend_test(1, oclass=self.test_oclass[0])
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_mdtest(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with mdtest application.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_mdtest
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_mdtest
         """
         self.log.info("Online Extend : Mdtest")
         self.run_online_extend_test(1, app_name="mdtest")
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_with_aggregation(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with aggregation on.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_extend,online_extend,online_extend_with_aggregation
+        :avocado: tags=osa_extend,online_extend,test_osa_online_extend_with_aggregation
         """
         self.log.info("Online Extend : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",

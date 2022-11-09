@@ -71,7 +71,7 @@ do_openat(void **state)
 
 	assert_return_code(root, errno);
 
-	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	fd = openat(root, "openat_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	/* This will write six bytes, including a \0 terminator */
@@ -100,7 +100,7 @@ do_openat(void **state)
 	assert_int_equal(stbuf0.st_size, sizeof(input_buf) * 2);
 
 	/* stat through kernel to ensure it has observed write */
-	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
@@ -120,7 +120,7 @@ do_openat(void **state)
 	rc = ftruncate(fd, offset);
 	assert_return_code(rc, errno);
 
-	rc = fstatat(root, "my_file", &stbuf, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, offset);
 
@@ -146,14 +146,14 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, 4);
 
-	rc = fstatat(root, "my_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
+	rc = fstatat(root, "openat_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = unlinkat(root, "my_file", 0);
+	rc = unlinkat(root, "openat_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -333,7 +333,7 @@ do_mtime(void **state)
 	assert_return_code(root, errno);
 
 	/* Open a file and sanity check the mtime */
-	fd = openat(root, "my_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
+	fd = openat(root, "mtime_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 
 	rc = fstatfs(root, &fs);
@@ -407,7 +407,7 @@ do_mtime(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = unlinkat(root, "my_file", 0);
+	rc = unlinkat(root, "mtime_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -427,31 +427,31 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 		case 'i':
 			printf("\n\n=================");
 			printf("dfuse IO tests");
-			printf("=====================");
+			printf("=====================\n");
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			    cmocka_unit_test(do_ioctl),
 			};
-			nr_failed = cmocka_run_group_tests(io_tests, NULL, NULL);
+			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
 		case 's':
 			printf("\n\n=================");
 			printf("dfuse streaming tests");
-			printf("=====================");
+			printf("=====================\n");
 			const struct CMUnitTest stream_tests[] = {
 			    cmocka_unit_test(do_stream),
 			};
-			nr_failed = cmocka_run_group_tests(stream_tests, NULL, NULL);
+			nr_failed += cmocka_run_group_tests(stream_tests, NULL, NULL);
 			break;
 
 		case 'm':
 			printf("\n\n=================");
 			printf("dfuse metadata tests");
-			printf("=====================");
+			printf("=====================\n");
 			const struct CMUnitTest metadata_tests[] = {
 			    cmocka_unit_test(do_mtime),
 			};
-			nr_failed = cmocka_run_group_tests(metadata_tests, NULL, NULL);
+			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
 
 		default:
@@ -468,9 +468,8 @@ int
 main(int argc, char **argv)
 {
 	char                 tests[64];
-	int                  ntests          = 0;
-	int                  nr_failed       = 0;
-	int                  nr_total_failed = 0;
+	int                  ntests = 0;
+	int                  nr_failed = 0;
 	int                  opt = 0, index = 0;
 
 	static struct option long_options[] = {{"test-dir", required_argument, NULL, 'M'},
@@ -482,7 +481,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "a:M:ims", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:ims", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -509,10 +508,10 @@ main(int argc, char **argv)
 	nr_failed = run_specified_tests(tests, NULL, 0);
 
 	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_total_failed == 0)
+	if (nr_failed == 0)
 		print_message("OK - NO TEST FAILURES\n");
 	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
+		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
 
 	return nr_failed;
 }

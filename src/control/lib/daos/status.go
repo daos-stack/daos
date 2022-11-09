@@ -101,6 +101,8 @@ const (
 	BadTarget Status = -C.DER_BAD_TARGET
 	// GroupVersionMismatch indicates that group versions didn't match
 	GroupVersionMismatch Status = -C.DER_GRPVER
+	// NoService indicates the pool service is not up and didn't process the pool request
+	NoService Status = -C.DER_NO_SERVICE
 )
 
 const (

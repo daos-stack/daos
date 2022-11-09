@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 var (
@@ -96,7 +97,7 @@ func IsNotLeader(err error) bool {
 // ErrMemberExists indicates the failure of an operation that
 // expected the given member to not exist.
 type ErrMemberExists struct {
-	Rank *Rank
+	Rank *ranklist.Rank
 	UUID *uuid.UUID
 }
 
@@ -111,7 +112,7 @@ func (err *ErrMemberExists) Error() string {
 	}
 }
 
-func ErrRankExists(r Rank) *ErrMemberExists {
+func ErrRankExists(r ranklist.Rank) *ErrMemberExists {
 	return &ErrMemberExists{Rank: &r}
 }
 
@@ -134,8 +135,8 @@ type ErrJoinFailure struct {
 	isExcluded  bool
 	newUUID     *uuid.UUID
 	curUUID     *uuid.UUID
-	newRank     *Rank
-	curRank     *Rank
+	newRank     *ranklist.Rank
+	curRank     *ranklist.Rank
 }
 
 func (err *ErrJoinFailure) Error() string {
@@ -151,7 +152,7 @@ func (err *ErrJoinFailure) Error() string {
 	}
 }
 
-func ErrRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
+func ErrRankChanged(new, cur ranklist.Rank, uuid uuid.UUID) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		rankChanged: true,
 		curUUID:     &uuid,
@@ -160,7 +161,7 @@ func ErrRankChanged(new, cur Rank, uuid uuid.UUID) *ErrJoinFailure {
 	}
 }
 
-func ErrUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrUuidChanged(new, cur uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		uuidChanged: true,
 		newUUID:     &new,
@@ -169,7 +170,7 @@ func ErrUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 	}
 }
 
-func ErrAdminExcluded(uuid uuid.UUID, rank Rank) *ErrJoinFailure {
+func ErrAdminExcluded(uuid uuid.UUID, rank ranklist.Rank) *ErrJoinFailure {
 	return &ErrJoinFailure{
 		isExcluded: true,
 		curUUID:    &uuid,
@@ -187,7 +188,7 @@ func IsJoinFailure(err error) bool {
 // ErrMemberNotFound indicates a failure to find a member with the
 // given search criterion.
 type ErrMemberNotFound struct {
-	byRank *Rank
+	byRank *ranklist.Rank
 	byUUID *uuid.UUID
 	byAddr *net.TCPAddr
 }
@@ -212,7 +213,7 @@ func IsMemberNotFound(err error) bool {
 	return ok
 }
 
-func ErrMemberRankNotFound(r Rank) *ErrMemberNotFound {
+func ErrMemberRankNotFound(r ranklist.Rank) *ErrMemberNotFound {
 	return &ErrMemberNotFound{byRank: &r}
 }
 
@@ -227,7 +228,7 @@ func ErrMemberAddrNotFound(a *net.TCPAddr) *ErrMemberNotFound {
 // ErrPoolNotFound indicates a failure to find a pool service with the
 // given search criterion.
 type ErrPoolNotFound struct {
-	byRank  *Rank
+	byRank  *ranklist.Rank
 	byUUID  *uuid.UUID
 	byLabel *string
 }
@@ -252,7 +253,7 @@ func IsPoolNotFound(err error) bool {
 	return ok
 }
 
-func ErrPoolRankNotFound(r Rank) *ErrPoolNotFound {
+func ErrPoolRankNotFound(r ranklist.Rank) *ErrPoolNotFound {
 	return &ErrPoolNotFound{byRank: &r}
 }
 

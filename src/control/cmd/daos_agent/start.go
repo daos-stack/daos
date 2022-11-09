@@ -14,11 +14,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
+	"github.com/daos-stack/daos/src/control/lib/systemd"
 )
 
 type ctxKey string
@@ -80,7 +83,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
-	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled)
+	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
 		// Cache is required to use user-defined fabric interfaces
 		fabricCache.enabled.SetTrue()
@@ -117,6 +120,10 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	cmd.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)
+	if err := systemd.Ready(); err != nil && err != systemd.ErrSdNotifyNoSocket {
+		return errors.Wrap(err, "unable to notify systemd")
+	}
+	defer systemd.Stopping()
 
 	// Setup signal handlers so we can block till we get SIGINT or SIGTERM
 	signals := make(chan os.Signal)

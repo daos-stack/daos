@@ -1,13 +1,15 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from os.path import join
-from data_mover_test_base import DataMoverTestBase
-from pydaos.raw import DaosApiError
+
 import avocado
+from pydaos.raw import DaosApiError
+
+from data_mover_test_base import DataMoverTestBase
+from duns_utils import format_path
 
 
 class DmvrDstCreate(DataMoverTestBase):
@@ -66,11 +68,20 @@ class DmvrDstCreate(DataMoverTestBase):
         src_props = self.write_cont(cont1)
 
         result = self.run_datamover(
-            self.test_id + " cont1 to cont3 (same pool) (empty cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool1, None)
-        cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
-        cont3 = self.get_cont(pool1, cont3_uuid)
+            self.test_id + " cont1 to cont2 (same pool) (empty cont)",
+            src_path=format_path(pool1, cont1),
+            dst_path=format_path(pool1))
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
+        cont2 = self.get_cont(pool1, cont2_label)
+        cont2.type.update(cont1.type.value, "type")
+        self.verify_cont(cont2, api, check_props, src_props)
+
+        result = self.run_datamover(
+            self.test_id + " cont1 to cont3 (same pool) (new cont label)",
+            src_path=format_path(pool1, cont1),
+            dst_path=format_path(pool1, 'cont3_label'))
+        cont3_label = self.parse_create_cont_label(result.stdout_text)
+        cont3 = self.get_cont(pool1, cont3_label)
         cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
@@ -79,29 +90,28 @@ class DmvrDstCreate(DataMoverTestBase):
         pool2.connect(2)
 
         result = self.run_datamover(
-            self.test_id + " cont1 to cont5 (different pool) (empty cont)",
-            "DAOS", "/", pool1, cont1,
-            "DAOS", "/", pool2, None)
-        cont5_uuid = self.parse_create_cont_uuid(result.stdout_text)
-        cont5 = self.get_cont(pool2, cont5_uuid)
-        cont5.type.update(cont1.type.value, "type")
-        self.verify_cont(cont5, api, check_props, src_props)
+            self.test_id + " cont1 to cont4 (different pool) (empty cont)",
+            src_path=format_path(pool1, cont1),
+            dst_path=format_path(pool2))
+        cont4_label = self.parse_create_cont_label(result.stdout_text)
+        cont4 = self.get_cont(pool2, cont4_label)
+        cont4.type.update(cont1.type.value, "type")
+        self.verify_cont(cont4, api, check_props, src_props)
 
         # Only test POSIX paths with DFS API
         if api == "DFS":
             # Create a posix source path
             posix_path = join(self.new_posix_test_path(), self.test_file)
-            self.run_ior_with_params(
-                "POSIX", posix_path, flags=self.ior_flags[0])
+            self.run_ior_with_params("POSIX", posix_path, flags=self.ior_flags[0])
 
             result = self.run_datamover(
-                self.test_id + " posix to cont7 (empty cont)",
-                "POSIX", posix_path, None, None,
-                "DAOS", "/", pool1, None)
-            cont7_uuid = self.parse_create_cont_uuid(result.stdout_text)
-            cont7 = self.get_cont(pool1, cont7_uuid)
-            cont7.type.update(cont1.type.value, "type")
-            self.verify_cont(cont7, api, False)
+                self.test_id + " posix to cont6 (empty cont)",
+                src_path=posix_path,
+                dst_path=format_path(pool1))
+            cont6_label = self.parse_create_cont_label(result.stdout_text)
+            cont6 = self.get_cont(pool1, cont6_label)
+            cont6.type.update(cont1.type.value, "type")
+            self.verify_cont(cont6, api, False)
 
         pool1.disconnect()
         pool2.disconnect()
@@ -118,8 +128,7 @@ class DmvrDstCreate(DataMoverTestBase):
         """
         if cont.type.value == "POSIX":
             self.run_ior_with_params(
-                "DAOS", "/" + self.test_file,
-                cont.pool, cont, flags=self.ior_flags[0])
+                "DAOS", "/" + self.test_file, cont.pool, cont, flags=self.ior_flags[0])
         else:
             self.obj_list = self.dataset_gen(cont, 1, 1, 1, 0, [1024], [])
 
@@ -154,8 +163,7 @@ class DmvrDstCreate(DataMoverTestBase):
         if cont.type.value == "POSIX":
             # Verify POSIX containers copied with the DFS and Object APIs
             self.run_ior_with_params(
-                "DAOS", "/" + self.test_file,
-                cont.pool, cont, flags=self.ior_flags[1])
+                "DAOS", "/" + self.test_file, cont.pool, cont, flags=self.ior_flags[1])
         else:
             # Verify non-POSIX containers copied with the Object API
             self.dataset_verify(self.obj_list, cont, 1, 1, 1, 0, [1024], [])
@@ -167,8 +175,7 @@ class DmvrDstCreate(DataMoverTestBase):
             cont (TestContainer): the container to get props of.
 
         Returns:
-            list: list of dictionaries that contain properties and values from daos
-                command.
+            list: list of dictionaries that contain properties and values from daos command.
 
         """
         prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
@@ -186,30 +193,30 @@ class DmvrDstCreate(DataMoverTestBase):
 
         # Make sure sizes match
         if len(prop_list) != len(actual_list):
-            self.log.info("Expected\n%s\nbut got\n%s\n",
-                          prop_list, actual_list)
+            self.log.info("Expected\n%s\nbut got\n%s\n", prop_list, actual_list)
             self.fail("Container property verification failed.")
 
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
+            # Labels must be unique
+            if prop['name'] == 'label':
+                continue
             # This one is not set
-            if api == "DFS" and "OID" in str(prop["description"]):
+            if api == "DFS" and "OID" in prop["description"]:
                 continue
             if prop != actual_list[prop_idx]:
-                self.log.info("Expected\n%s\nbut got\n%s\n",
-                              prop_list, actual_list)
+                self.log.info("Expected\n%s\nbut got\n%s\n", prop_list, actual_list)
                 self.fail("Container property verification failed.")
 
-        self.log.info("Verified %d container properties:\n%s",
-                      len(actual_list), actual_list)
+        self.log.info("Verified %d container properties:\n%s", len(actual_list), actual_list)
 
     @staticmethod
     def get_cont_usr_attr():
         """Generate some user attributes"""
-        attrs = {}
-        attrs["attr1".encode("utf-8")] = "value 1".encode("utf-8")
-        attrs["attr2".encode("utf-8")] = "value 2".encode("utf-8")
-        return attrs
+        return {
+            "attr1".encode("utf-8"): "value 1".encode("utf-8"),
+            "attr2".encode("utf-8"): "value 2".encode("utf-8")
+        }
 
     def verify_usr_attr(self, cont):
         """Verify user attributes. Expects the container to be open.
@@ -223,22 +230,18 @@ class DmvrDstCreate(DataMoverTestBase):
 
         # Make sure the sizes match
         if len(attrs.keys()) != len(actual_attrs.keys()):
-            self.log.info("Expected\n%s\nbut got\n%s\n",
-                          attrs.items(), actual_attrs.items())
+            self.log.info("Expected\n%s\nbut got\n%s\n", attrs.items(), actual_attrs.items())
             self.fail("Container user attributes verification failed.")
 
         # Make sure each attr matches
         for attr, val in attrs.items():
             if attr not in actual_attrs:
-                self.log.info("Expected\n%s\nbut got\n%s\n",
-                              attrs.items(), actual_attrs.items())
+                self.log.info("Expected\n%s\nbut got\n%s\n", attrs.items(), actual_attrs.items())
                 self.fail("Container user attributes verification failed.")
             if val != actual_attrs[attr]:
-                self.log.info("Expected\n%s\nbut got\n%s\n",
-                              attrs.items(), actual_attrs.items())
+                self.log.info("Expected\n%s\nbut got\n%s\n", attrs.items(), actual_attrs.items())
                 self.fail("Container user attributes verification failed.")
-        self.log.info("Verified %d user attributes:\n%s",
-                      len(attrs.keys()), attrs.items())
+        self.log.info("Verified %d user attributes:\n%s", len(attrs.keys()), attrs.items())
 
     @avocado.fail_on(DaosApiError)
     def test_dm_dst_create_dcp_posix_dfs(self):

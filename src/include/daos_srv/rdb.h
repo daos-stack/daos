@@ -116,10 +116,11 @@ struct rdb_storage;
 struct rdb_cbs;
 
 /** Database storage methods */
-int rdb_create(const char *path, const uuid_t uuid, size_t size, const d_rank_list_t *replicas,
-	       struct rdb_cbs *cbs, void *arg, struct rdb_storage **storagep);
-int rdb_open(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	     struct rdb_storage **storagep);
+int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
+	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	       struct rdb_storage **storagep);
+int rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs,
+	     void *arg, struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);
 int rdb_destroy(const char *path, const uuid_t uuid);
 
@@ -165,6 +166,7 @@ int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
+int rdb_ping(struct rdb *db, uint64_t caller_term);
 
 /**
  * Path (opaque)
@@ -246,6 +248,8 @@ int rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		       const d_iov_t *key);
 int rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key, const d_iov_t *value);
+int rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs,
+			   const d_iov_t *key, const d_iov_t *value);
 int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key);
 

@@ -77,8 +77,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "pool_layout_ver": 1,
-            "upgrade_layout_ver": 1,
+            "pool_layout_ver": 2,
+            "upgrade_layout_ver": 2,
             "rebuild": {
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),

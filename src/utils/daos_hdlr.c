@@ -564,14 +564,16 @@ cont_create_hdlr(struct cmd_args_s *ap)
 	cmd_args_print(ap);
 
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t attr;
+		dfs_attr_t attr = {0};
 
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
+		attr.da_dir_oclass_id = ap->dir_oclass;
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
-
+		if (ap->hints)
+			strncpy(attr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
 		rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
@@ -612,7 +614,10 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	uuid_copy(dattr.da_cuuid, ap->c_uuid);
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
+	dattr.da_dir_oclass_id = ap->dir_oclass;
 	dattr.da_chunk_size = ap->chunk_size;
+	if (ap->hints)
+		strncpy(dattr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
 	dattr.da_props = ap->props;
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
@@ -1154,12 +1159,14 @@ fs_copy_dir(struct cmd_args_s *ap,
 		D_GOTO(out, rc);
 	}
 
-	/* create the destination directory if it does not exist */
-	rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-	if (rc == EEXIST) {
-		DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-	} else if (rc != 0) {
-		D_GOTO(out, rc = daos_errno2der(rc));
+	/* create the destination directory if it does not exist. Assume root always exists */
+	if (strcmp(dst_path, "/") != 0) {
+		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
+		if (rc == EEXIST) {
+			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
+		} else if (rc != 0) {
+			D_GOTO(out, rc = daos_errno2der(rc));
+		}
 	}
 	/* copy all directory entries */
 	while (1) {
@@ -1937,39 +1944,62 @@ dm_connect(struct cmd_args_s *ap,
 			}
 		}
 
-		/* try to open container if this is a filesystem copy, and if it fails try to create
-		 * a destination, then attempt to open again
+		/* try to open container if this is a filesystem copy, and if it fails try to
+		 * create a destination, then attempt to open again
 		 */
 		if (dst_cont_passed) {
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
-			if (rc != 0 && rc != -DER_NONEXIST)
+			if (rc != 0 && rc != -DER_NONEXIST) {
+				DH_PERROR_DER(ap, rc, "failed to open destination container");
 				D_GOTO(err, rc);
+			}
 		} else {
 			rc = -DER_NONEXIST;
 		}
 		if (rc == -DER_NONEXIST) {
-			uuid_t cuuid;
+			uuid_t	cuuid;
+			bool	dst_cont_is_uuid = true;
+
+			if (dst_cont_passed) {
+				rc = uuid_parse(ca->dst_cont, cuuid);
+				dst_cont_is_uuid = (rc == 0);
+				if (dst_cont_is_uuid) {
+					/* Cannot create a container with a user-supplied UUID */
+					rc = -DER_NONEXIST;
+					DH_PERROR_DER(ap, rc,
+						      "failed to open destination container");
+					D_GOTO(err, rc);
+				}
+			}
 
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
 				attr.da_props = props;
-				rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr, NULL, NULL);
-				if (rc != 0) {
+				if (dst_cont_is_uuid)
+					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
+							     NULL, NULL);
+				else
+					rc = dfs_cont_create_with_label(ca->dst_poh, ca->dst_cont,
+									&attr, &cuuid, NULL, NULL);
+				if (rc) {
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
-				uuid_unparse(cuuid, ca->dst_cont);
 			} else {
-				rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
-				if (rc != 0) {
+				if (dst_cont_is_uuid)
+					rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
+				else
+					rc = daos_cont_create_with_label(
+						ca->dst_poh, ca->dst_cont, props, &cuuid, NULL);
+				if (rc) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
-				uuid_unparse(cuuid, ca->dst_cont);
 			}
+			uuid_unparse(cuuid, ca->dst_cont);
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {

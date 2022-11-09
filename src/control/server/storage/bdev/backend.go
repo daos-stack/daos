@@ -9,6 +9,7 @@ package bdev
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -172,6 +174,22 @@ func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error
 		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
 }
 
+func logNUMAStats(log logging.Logger) {
+	var toLog string
+
+	out, err := exec.Command("numastat", "-m").Output()
+	if err != nil {
+		toLog = (&system.RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
+		}).Error()
+	} else {
+		toLog = string(out)
+	}
+
+	log.Debugf("run cmd numastat -m: %s", toLog)
+}
+
 // prepare receives function pointers for external interfaces.
 func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
@@ -183,6 +201,8 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
 		}
 		resp.NrHugePagesRemoved = nrRemoved
+
+		logNUMAStats(sb.log)
 
 		return resp, nil
 	}
@@ -228,7 +248,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, DetectVMD)
@@ -240,7 +260,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
+// devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
 	return sb.prepare(req, DetectVMD, cleanHugePages)
@@ -258,9 +278,13 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	var missing hardware.PCIAddressSet
 	out := make(storage.NvmeControllers, 0)
 
-	vmds, err := mapVMDToBackingDevs(discovered)
-	if err != nil {
-		return nil, err
+	var vmds map[string]storage.NvmeControllers
+	if vmdEnabled {
+		vmdMap, err := mapVMDToBackingDevs(discovered)
+		if err != nil {
+			return nil, err
+		}
+		vmds = vmdMap
 	}
 
 	for _, want := range reqDevs.Addresses() {

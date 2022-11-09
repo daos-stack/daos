@@ -89,12 +89,12 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container create command fails.
 
         """
-        # Default to RANK fault domain (rf_lvl:1) when not specified
+        # Default to RANK fault domain (rd_lvl:1) when not specified
         if properties:
-            if 'rf_lvl' not in properties:
-                properties += ',rf_lvl:1'
+            if 'rd_lvl' not in properties:
+                properties += ',rd_lvl:1'
         else:
-            properties = 'rf_lvl:1'
+            properties = 'rd_lvl:1'
         return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
@@ -483,7 +483,7 @@ class DaosCommand(DaosCommandBase):
         #     },
         #     {
         #       "value": "rank (1)",
-        #       "name": "rf_lvl",
+        #       "name": "rd_lvl",
         #       "description": "Redundancy Level"
         #     },
         #     {

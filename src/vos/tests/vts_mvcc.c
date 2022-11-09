@@ -1736,7 +1736,7 @@ run_mvcc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
+	dts_create_config(test_name, "MVCC Tests %s", cfg);
 
 	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);

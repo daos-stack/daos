@@ -1214,9 +1214,12 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_tgt_destroy_in in;
 	int rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return -DER_NO_HDL;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
@@ -1364,8 +1367,7 @@ ds_dtx_resync(void *arg)
 	int				 rc;
 
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version,
-			false, true);
+			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont "
 		       DF_UUID"/"DF_UUID" that may affect subsequent "
@@ -1922,8 +1924,10 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
-	pool = ds_pool_lookup(args->pool_uuid);
-	if (pool == NULL) {
+	rc = ds_pool_lookup(args->pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(args->pool_uuid), DP_RC(rc));
 		rc = -DER_NO_HDL;
 		goto out;
 	}
@@ -2476,6 +2480,11 @@ cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
 		goto out;
 
 	rw_arg.csa_rw_disable = (rc == -DER_RF);
+	if (rc == -DER_RF)
+		D_ERROR(DF_CONT": RF broken, last_ver %d, rlvl %d, rf %d, "DF_RC"\n",
+			DP_CONT(cont_child->sc_pool_uuid, cont_child->sc_uuid),
+			cont_child->sc_status_pm_ver, cont_child->sc_props.dcp_redun_lvl,
+			cont_child->sc_props.dcp_redun_fac, DP_RC(rc));
 	if (rw_arg.csa_rw_disable == cont_child->sc_rw_disabled)
 		D_GOTO(out, rc = 0);
 

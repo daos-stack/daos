@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -9,7 +8,6 @@ from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
 
-import oclass_utils
 
 class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
@@ -33,22 +31,20 @@ class BasicCheckout(PerformanceTestBase):
         """
 
         # ior easy
-        self.run_performance_ior(namespace="/run/ior_dfs_sx/*", use_stonewalling_read=True)
-        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2GX'):
-            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*",
-                                     use_stonewalling_read=True)
-        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2GX'):
-            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*",
-                                     use_stonewalling_read=True)
+        self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
+        if self.verify_oclass_engine_count('EC_16P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
+        elif self.verify_oclass_engine_count('EC_8P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*")
 
         # mdtest easy
         self.run_performance_mdtest(namespace="/run/mdtest_dfs_s1/*")
-        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2G1'):
+        if self.verify_oclass_engine_count('EC_16P2G1', fail=False):
             self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
-        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2G1'):
+        elif self.verify_oclass_engine_count('EC_8P2G1', fail=False):
             self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_8p2g1/*")
 
-        #run autotest
+        # run autotest
         self.log.info("Autotest start")
         daos_cmd = self.get_daos_command()
         try:

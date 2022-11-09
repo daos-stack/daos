@@ -18,12 +18,12 @@
 #define DAOS_PROP_ENTRY_DEDUP_THRESHOLD	"dedup_threshold"
 #define DAOS_PROP_ENTRY_COMPRESS	"compression"
 #define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
-#define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
+#define DAOS_PROP_ENTRY_REDUN_FAC	"rd_fac"
 #define DAOS_PROP_ENTRY_STATUS		"status"
 #define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
 #define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
 #define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
-#define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
+#define DAOS_PROP_ENTRY_REDUN_LVL	"rd_lvl"
 #define DAOS_PROP_ENTRY_SNAPSHOT_MAX	"max_snapshot"
 #define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
 #define DAOS_PROP_ENTRY_OWNER		"owner"
@@ -31,6 +31,10 @@
 #define DAOS_PROP_ENTRY_EC_PDA		"ec_pda"
 #define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
 #define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
+
+/** DAOS deprecated property entry names keeped for backward compatibility */
+#define DAOS_PROP_ENTRY_REDUN_FAC_OLD	"rf"
+#define DAOS_PROP_ENTRY_REDUN_LVL_OLD	"rf_lvl"
 
 struct cont_props {
 	uint32_t	 dcp_chunksize;

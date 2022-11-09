@@ -1,6 +1,7 @@
 """Build rsvc"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -19,6 +20,7 @@ def scons():
                                                 'rpc.c'],
                                  install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_rsvc)
+
 
 if __name__ == "SCons.Script":
     scons()

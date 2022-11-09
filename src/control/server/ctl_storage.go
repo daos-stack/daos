@@ -155,6 +155,15 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 			nss[idx] = ns
 		}
 
+		if nss[idx].Mount != nil {
+			rank, err := ei.GetRank()
+			if err != nil {
+				return nil, errors.Wrapf(err, "instance %d: no rank associated for mount %s",
+					ei.Index(), mount.Path)
+			}
+			nss[idx].Mount.Rank = rank
+		}
+
 		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
 			nss[idx].BlockDevice, mount.Path, nss[idx].Mount)
 	}

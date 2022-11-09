@@ -12,16 +12,16 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     sudo sysctl vm.max_map_count=1000000
 fi
 
-# Create the directory path as root, then replace the actual directory itself
-# with a symlink back to the data.  This avoids a copy, and allows the remote
-# node to pull from a known location.
-sudo mkdir -p "$DAOS_BASE"
-sudo ln -sF "$(readlink -f build)/install" "$DAOS_BASE"
-
 cd build
+tar -xf opt-daos.tar
+sudo mv opt/daos /opt/
 
 # Setup daos admin etc.
-sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_admin.sh"
+sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 # NLT will mount /mnt/daos itself.
+# TODO: Enable this for DAOS-10905
+# ./utils/node_local_test.py --max-log-size 650MiB --dfuse-dir /localhome/jenkins/ \
+#			   --server-valgrind all
+
 ./utils/node_local_test.py --max-log-size 650MiB --dfuse-dir /localhome/jenkins/ all

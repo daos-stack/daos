@@ -12,21 +12,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
-)
 
-type daosServerTestErr string
-
-func (dste daosServerTestErr) Error() string {
-	return string(dste)
-}
-
-const (
-	errMissingFlag = daosServerTestErr("required flag")
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type cmdTest struct {
@@ -116,6 +107,40 @@ func TestNoCommand(t *testing.T) {
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
 }
 
+func TestPreExecCheckBypass(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cmdLine string
+		expErr  error
+	}{
+		"help": {
+			cmdLine: "--help",
+			expErr:  flags.ErrHelp,
+		},
+		"version": {
+			cmdLine: "version",
+		},
+		"start (should fail)": {
+			cmdLine: "start",
+			expErr:  errors.New("ouch"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			opts := mainOpts{
+				preExecTests: []execTestFn{
+					func() error {
+						return errors.New("ouch")
+					},
+				},
+			}
+			err := parseOpts([]string{tc.cmdLine}, &opts, log)
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
 func TestDaosServer_NVMe_Commands(t *testing.T) {
 	multPCIAddrsSpaceSep := "0000:80:00.0 0000:81:00.0"
 	multPCIAddrsCommaSep := "0000:80:00.0,0000:81:00.0"
@@ -167,7 +192,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		},
 		{
 			"Prepare namespaces with all opts",
-			"scm prepare -S 2 -f",
+			"scm prepare -S 2 -f --socket 0",
 			printCommand(t, &prepareSCMCmd{
 				NrNamespacesPerSocket: 2,
 				Force:                 true,
@@ -182,7 +207,7 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 		},
 		{
 			"Reset namespaces with all opts",
-			"scm reset -f",
+			"scm reset -f --socket 1",
 			printCommand(t, &resetSCMCmd{
 				Force: true,
 			}),

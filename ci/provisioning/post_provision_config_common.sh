@@ -39,7 +39,7 @@ case "$id" in
             EXCLUDE_UPGRADE+=,fuse
         else
             DISTRO_NAME=el${release%%.*}
-            EXCLUDE_UPGRADE+=,dpdk
+            EXCLUDE_UPGRADE+=,dpdk\*
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el
@@ -56,3 +56,6 @@ case "$id" in
         EXCLUDE_UPGRADE+=,fuse,fuse-libs,fuse-devel
         ;;
 esac
+
+# shellcheck disable=SC2034
+MLNX_VER_NUM=5.6-2.0.9.0

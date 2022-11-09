@@ -7,11 +7,13 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/security"
@@ -36,22 +39,50 @@ import (
 // netListenerFn is a type alias for the net.Listener function signature.
 type netListenFn func(string, string) (net.Listener, error)
 
-// resolveTCPFn is a type alias for the net.ResolveTCPAddr function signature.
-type resolveTCPFn func(string, string) (*net.TCPAddr, error)
+// ipLookupFn defines the function signature for a helper that can
+// be used to resolve a host address to a list of IP addresses.
+type ipLookupFn func(string) ([]net.IP, error)
+
+// resolveFirstAddr is a helper function to resolve a hostname to a TCP address.
+// If the hostname resolves to multiple addresses, the first one is returned.
+func resolveFirstAddr(addr string, lookup ipLookupFn) (*net.TCPAddr, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to split %q", addr)
+	}
+	iPort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to convert %q to int", port)
+	}
+	addrs, err := lookup(host)
+	if err != nil {
+		return nil, errors.Wrapf(err, "unable to resolve %q", host)
+	}
+
+	if len(addrs) == 0 {
+		return nil, errors.Errorf("no addresses found for %q", host)
+	}
+
+	isIPv4 := func(ip net.IP) bool {
+		return ip.To4() != nil
+	}
+	// Ensure stable ordering of addresses.
+	sort.Slice(addrs, func(i, j int) bool {
+		if !isIPv4(addrs[i]) && isIPv4(addrs[j]) {
+			return false
+		} else if isIPv4(addrs[i]) && !isIPv4(addrs[j]) {
+			return true
+		}
+		return bytes.Compare(addrs[i], addrs[j]) < 0
+	})
+
+	return &net.TCPAddr{IP: addrs[0], Port: iPort}, nil
+}
 
 const scanMinHugePageCount = 128
 
-func getBdevDevicesFromCfgs(bdevCfgs storage.TierConfigs) *storage.BdevDeviceList {
-	bdevs := []string{}
-	for _, bc := range bdevCfgs {
-		bdevs = append(bdevs, bc.Bdev.DeviceList.Devices()...)
-	}
-
-	return storage.MustNewBdevDeviceList(bdevs...)
-}
-
 func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
-	bdevCfgs := []*storage.TierConfig{}
+	var bdevCfgs storage.TierConfigs
 	for _, engineCfg := range cfg.Engines {
 		bdevCfgs = append(bdevCfgs, engineCfg.Storage.Tiers.BdevConfigs()...)
 	}
@@ -59,10 +90,10 @@ func getBdevCfgsFromSrvCfg(cfg *config.Server) storage.TierConfigs {
 	return bdevCfgs
 }
 
-func cfgGetReplicas(cfg *config.Server, resolve resolveTCPFn) ([]*net.TCPAddr, error) {
+func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, error) {
 	var dbReplicas []*net.TCPAddr
 	for _, ap := range cfg.AccessPoints {
-		apAddr, err := resolve("tcp", ap)
+		apAddr, err := resolveFirstAddr(ap, lookup)
 		if err != nil {
 			return nil, config.FaultConfigBadAccessPoints
 		}
@@ -107,7 +138,7 @@ type replicaAddrGetter interface {
 type ctlAddrParams struct {
 	port           int
 	replicaAddrSrc replicaAddrGetter
-	resolveAddr    resolveTCPFn
+	lookupHost     ipLookupFn
 }
 
 func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
@@ -117,7 +148,7 @@ func getControlAddr(params ctlAddrParams) (*net.TCPAddr, error) {
 		ipStr = repAddr.IP.String()
 	}
 
-	ctlAddr, err := params.resolveAddr("tcp", fmt.Sprintf("[%s]:%d", ipStr, params.port))
+	ctlAddr, err := resolveFirstAddr(fmt.Sprintf("[%s]:%d", ipStr, params.port), params.lookupHost)
 	if err != nil {
 		return nil, errors.Wrap(err, "resolving control address")
 	}
@@ -218,9 +249,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		}
 	}
 
+	// When requesting to prepare NVMe drives during service start-up, use all addresses
+	// specified in engine config BdevList parameters as the PCIAllowList and the server
+	// config BdevExclude parameter as the PCIBlockList.
+
 	prepReq := storage.BdevPrepareRequest{
 		TargetUser:   srv.runningUser.Username,
-		PCIAllowList: strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIAllowList: strings.Join(bdevCfgs.NVMeBdevs().Devices(), storage.BdevPciAddrSep),
 		PCIBlockList: strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:  srv.cfg.DisableVFIO,
 	}
@@ -296,7 +331,7 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	}
 
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList:  getBdevDevicesFromCfgs(getBdevCfgsFromSrvCfg(srv.cfg)),
+		DeviceList:  getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
 		BypassCache: true, // init cache on first scan
 	})
 	if err != nil {
@@ -308,9 +343,62 @@ func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
 	return nvmeScanResp, nil
 }
 
+func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, lastEngineIdx, lastBdevCount *int) error {
+	badInput := ""
+	switch {
+	case engine == nil:
+		badInput = "engine"
+	case scanResp == nil:
+		badInput = "scanResp"
+	case lastEngineIdx == nil:
+		badInput = "lastEngineIdx"
+	case lastBdevCount == nil:
+		badInput = "lastBdevCount"
+	}
+	if badInput != "" {
+		return errors.New("nil input param: " + badInput)
+	}
+
+	if err := engine.storage.SetBdevCache(*scanResp); err != nil {
+		return errors.Wrap(err, "setting engine storage bdev cache")
+	}
+
+	// After engine's bdev cache has been set, the cache will only contain details of bdevs
+	// identified in the relevant engine config and device addresses will have been verified
+	// against NVMe scan results. As any VMD endpoint addresses will have been replaced with
+	// backing device addresses, device counts will reflect the number of physical (as opposed
+	// to logical) bdevs and engine bdev counts can be accurately compared.
+
+	eIdx := engine.Index()
+	bdevCache := engine.storage.GetBdevCache()
+	newNrBdevs := len(bdevCache.Controllers)
+
+	engine.log.Debugf("last: [index: %d, bdevCount: %d], current: [index: %d, bdevCount: %d]",
+		*lastEngineIdx, *lastBdevCount, eIdx, newNrBdevs)
+
+	// Update last recorded counters if this is the first update or if the number of bdevs is
+	// unchanged. If bdev count differs between engines, return fault.
+	switch {
+	case *lastEngineIdx < 0:
+		if *lastBdevCount >= 0 {
+			return errors.New("expecting both lastEngineIdx and lastBdevCount to be unset")
+		}
+		*lastEngineIdx = int(eIdx)
+		*lastBdevCount = newNrBdevs
+	case *lastBdevCount < 0:
+		return errors.New("expecting both lastEngineIdx and lastBdevCount to be set")
+	case newNrBdevs == *lastBdevCount:
+		*lastEngineIdx = int(eIdx)
+	default:
+		return config.FaultConfigBdevCountMismatch(int(eIdx), newNrBdevs, *lastEngineIdx, *lastBdevCount)
+	}
+
+	return nil
+}
+
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
-		if err := setenv(pbin.DaosAdminLogFileEnvVar, cfg.HelperLogFile); err != nil {
+		if err := setenv(pbin.DaosPrivHelperLogFileEnvVar, cfg.HelperLogFile); err != nil {
 			return errors.Wrap(err, "unable to configure privileged helper logging")
 		}
 	}
@@ -332,7 +420,7 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	ec := engine.runner.GetConfig()
 	ei := ec.Index
 
-	if getBdevDevicesFromCfgs(ec.Storage.Tiers.BdevConfigs()).Len() == 0 {
+	if ec.Storage.Tiers.Bdevs().Len() == 0 {
 		srv.log.Debugf("skipping mem check on engine %d, no bdevs", ei)
 		engine.RUnlock()
 		return nil
@@ -352,12 +440,12 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	memSizeFreeMb := hpi.Free * pageSizeMb
 
 	// Fail if free hugepage mem is not enough to sustain average I/O workload (~1GB).
+	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB (info: %+v)", memSizeReqMb,
+		pageSizeMb, *hpi)
 	if memSizeFreeMb < memSizeReqMb {
-		srv.log.Errorf("huge page info: %+v", *hpi)
 		return FaultInsufficientFreeHugePageMem(int(ei), memSizeReqMb, memSizeFreeMb,
 			nrPagesRequired, hpi.Free)
 	}
-	srv.log.Debugf("Per-engine MemSize:%dMB, HugepageSize:%dMB", memSizeReqMb, pageSizeMb)
 
 	// Set engine mem_size and hugepage_size (MiB) values based on hugepage info.
 	engine.setMemSize(memSizeReqMb)
@@ -366,19 +454,19 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	return nil
 }
 
-func cleanEngineHugePages(srv *server, engineIdx uint32) error {
-	msg := fmt.Sprintf("engine %d: cleaning hugepages before starting", engineIdx)
-
+func cleanEngineHugePages(srv *server) error {
 	req := storage.BdevPrepareRequest{
 		CleanHugePagesOnly: true,
 	}
+
+	msg := "cleanup hugepages via bdev backend"
 
 	resp, err := srv.ctlSvc.NvmePrepare(req)
 	if err != nil {
 		return errors.Wrap(err, msg)
 	}
 
-	srv.log.Debugf("%s, %d removed", msg, resp.NrHugePagesRemoved)
+	srv.log.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
 
 	return nil
 }
@@ -400,14 +488,12 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 		return nil
 	})
 
-	engine.RLock()
-	engineIdx := engine.runner.GetConfig().Index
-	engine.RUnlock()
-
 	// Register callback to update engine cfg mem_size after format.
 	engine.OnStorageReady(func(_ context.Context) error {
+		srv.log.Debugf("engine %d: storage ready", engine.Index())
+
 		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugePages(srv, engineIdx); err != nil {
+		if err := cleanEngineHugePages(srv); err != nil {
 			srv.log.Errorf(err.Error())
 		}
 
@@ -449,7 +535,7 @@ func configureFirstEngine(ctx context.Context, engine *EngineInstance, sysdb *ra
 		if sb := engine.getSuperblock(); !sb.ValidRank {
 			engine.log.Debug("marking bootstrap instance as rank 0")
 			req.Rank = 0
-			sb.Rank = system.NewRankPtr(0)
+			sb.Rank = ranklist.NewRankPtr(0)
 		}
 
 		return join(ctx, req)
@@ -504,7 +590,7 @@ func registerLeaderSubscriptions(srv *server) {
 				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err != nil {
+				if err := srv.membership.MarkRankDead(ranklist.Rank(evt.Rank), evt.Incarnation); err != nil {
 					srv.log.Errorf("failed to mark rank %d:%x dead: %s", evt.Rank, evt.Incarnation, err)
 					if system.IsNotLeader(err) {
 						// If we've lost leadership while processing the event,
@@ -525,6 +611,7 @@ func registerLeaderSubscriptions(srv *server) {
 	})
 }
 
+// getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		unaryErrorInterceptor,

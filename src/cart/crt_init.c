@@ -112,6 +112,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
+	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -174,6 +175,18 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	}
+
+	/* Must be set on the server when using UCX, will not affect OFI */
+	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
+	if (ucx_ib_fork_init) {
+		if (server) {
+			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
+		} else {
+			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
+		}
+	}
+	if (server)
+		setenv("UCX_IB_FORK_INIT", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
@@ -310,7 +323,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		plugin_idx;
 	int		prov;
 	bool		set_sep = false;
-	int		max_num_ctx = 256;
+	int		max_num_ctx = CRT_SRV_CONTEXT_NUM;
 	uint32_t	ctx_num;
 	bool		share_addr;
 	int		rc = 0;
@@ -413,25 +426,27 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		if (!provider_found) {
 			D_ERROR("Requested provider %s not found\n", addr_env);
-			D_GOTO(out, rc = -DER_NONEXIST);
+			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
 do_init:
 		prov = crt_gdata.cg_init_prov;
 
 		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep)
+			if (opt->cio_use_sep) {
 				set_sep = true;
-			max_num_ctx = opt->cio_ctx_max_num;
+				max_num_ctx = opt->cio_ctx_max_num;
+			}
 		} else {
 			share_addr = false;
 			ctx_num = 0;
 
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr)
-				set_sep = true;
-
 			d_getenv_int("CRT_CTX_NUM", &ctx_num);
-			max_num_ctx = ctx_num;
+
+			if (share_addr) {
+				set_sep = true;
+				max_num_ctx = ctx_num;
+			}
 		}
 
 		uint32_t max_expect_size = 0;
@@ -478,7 +493,7 @@ do_init:
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init() failed, "
 					DF_RC"\n", DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(unlock, rc);
 			}
 		}
 

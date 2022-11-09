@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,15 +63,15 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	int		   rc;
 
 	D_ASSERT(bucket->ob_nr <= OID_SEND_MAX);
-	d_iov_set(&oa->oa_dkey, &bucket_id, sizeof(bucket_id));
+	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &bucket_id);
+	D_CASSERT(sizeof(oa->oa_epoch) == DAOS_OIT_DEFAULT_VAL_LEN);
 	d_iov_set(&oa->oa_iov, &oa->oa_epoch, sizeof(oa->oa_epoch));
 
 	for (i = 0; i < bucket->ob_nr; i++) {
 		daos_iod_t	*iod = &oa->oa_iods[i];
 		d_sg_list_t	*sgl = &oa->oa_sgls[i];
 
-		d_iov_set(&iod->iod_name, &bucket->ob_oids[i],
-			  sizeof(bucket->ob_oids[i]));
+		DAOS_OIT_AKEY_SET(&iod->iod_name, &bucket->ob_oids[i]);
 		iod->iod_type	= DAOS_IOD_SINGLE;
 		iod->iod_size	= sizeof(oa->oa_epoch);
 		iod->iod_nr	= 1;

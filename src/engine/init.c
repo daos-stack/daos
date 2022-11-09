@@ -18,7 +18,6 @@
 #include <getopt.h>
 #include <errno.h>
 #include <execinfo.h>
-#include <sys/prctl.h>
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
@@ -169,6 +168,13 @@ register_dbtree_classes(void)
 	if (rc != 0) {
 		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
 			DP_RC(rc));
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_IFV: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1157,17 +1163,6 @@ main(int argc, char **argv)
 	sigset_t	set;
 	int		sig;
 	int		rc;
-
-	/**
-	 * Disable transparent huge pages (THP) early before any allocations
-	 * see https://github.com/pmodels/argobots/issues/369 for more
-	 * information
-	 */
-	rc = prctl(PR_SET_THP_DISABLE, 1, 0, 0, 0);
-	if (rc < 0) {
-		perror("failed to disable transparent hugepages");
-		exit(EXIT_FAILURE);
-	}
 
 	/** parse command line arguments */
 	rc = parse(argc, argv);

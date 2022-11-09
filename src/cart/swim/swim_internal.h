@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,10 @@ enum swim_context_state {
 				 */
 	SCS_TIMEDOUT,		/**< the state when no dping response was
 				 * received and we should select iping targets.
+				 */
+	SCS_IPINGED,		/**< the state after ipings were sent and we
+				 * are waiting for responses or the end of the
+				 * current period.
 				 */
 	SCS_SELECT,		/**< the state to select next target */
 };

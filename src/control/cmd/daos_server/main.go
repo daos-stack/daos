@@ -29,7 +29,7 @@ const defaultConfigFile = "daos_server.yml"
 // helperLogCmd is an embeddable type that extends a command with
 // helper privileged binary logging capabilities.
 type helperLogCmd struct {
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_admin binary"`
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_server_helper binary"`
 }
 
 func (hlc *helperLogCmd) setHelperLogFile() error {
@@ -38,21 +38,40 @@ func (hlc *helperLogCmd) setHelperLogFile() error {
 		return nil
 	}
 
-	return errors.Wrap(os.Setenv(pbin.DaosAdminLogFileEnvVar, filename),
+	return errors.Wrap(os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, filename),
 		"unable to configure privileged helper logging")
 }
 
+type iommuCheckFn func() (bool, error)
+
 type iommuChecker interface {
-	setIOMMUChecker(func() (bool, error))
+	setIOMMUChecker(iommuCheckFn)
 }
 
 type iommuCheckerCmd struct {
-	isIOMMUEnabled func() (bool, error)
+	isIOMMUEnabled iommuCheckFn
 }
 
-func (icc *iommuCheckerCmd) setIOMMUChecker(isIOMMUEnabled func() (bool, error)) {
-	icc.isIOMMUEnabled = isIOMMUEnabled
+func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
+	if icc == nil {
+		return
+	}
+	icc.isIOMMUEnabled = fn
 }
+
+// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
+func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
+	if icc == nil {
+		return false, errors.New("nil pointer receiver")
+	}
+	if icc.isIOMMUEnabled == nil {
+		return false, errors.New("nil isIOMMUEnabled function")
+	}
+
+	return icc.isIOMMUEnabled()
+}
+
+type execTestFn func() error
 
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
@@ -71,14 +90,17 @@ type mainOpts struct {
 	Start         startCmd               `command:"start" description:"Start daos_server"`
 	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`
+	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+
+	// Allow a set of tests to be run before executing commands.
+	preExecTests []execTestFn
 }
 
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
-	os.Exit(0)
 	return nil
 }
 
@@ -98,6 +120,19 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if len(cmdArgs) > 0 {
 			// don't support positional arguments, extra cmdArgs are unexpected
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
+		switch cmd.(type) {
+		case *versionCmd:
+			// No pre-exec tests or setup needed for these commands; just
+			// execute them directly.
+			return cmd.Execute(nil)
+		default:
+			for _, test := range opts.preExecTests {
+				if err := test(); err != nil {
+					return err
+				}
+			}
 		}
 
 		if !opts.AllowProxy {
@@ -128,7 +163,9 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
 				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
 			}
-			log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			if _, err := os.Stat(opts.ConfigPath); err == nil {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+			}
 
 			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
 				if err := ovrCmd.setCLIOverrides(); err != nil {
@@ -141,10 +178,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(func() (bool, error) {
-				enabled, err := hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled()
-				return enabled, errors.Wrap(err, "unable to verify if iommu is enabled")
-			})
+			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
@@ -165,11 +199,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 func main() {
 	log := logging.NewCommandLineLogger()
-	var opts mainOpts
-
-	// Check this right away to avoid lots of annoying failures later.
-	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
-		exitWithError(log, err)
+	opts := mainOpts{
+		preExecTests: []execTestFn{
+			// Check that the privileged helper is installed and working.
+			func() error {
+				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
+			},
+		},
 	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {

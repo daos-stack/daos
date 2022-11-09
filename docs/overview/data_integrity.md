@@ -137,7 +137,7 @@ Unit and functional testing is performed at many layers.
 | Test executable   | What's tested | Key test files |
 | --- | --- | --- |
 | common_test | daos_csummer, utility functions to help with chunk alignment  | src/common/tests/checksum_tests.c |
-| vos_test | vos_obj_update/fetch apis with checksum params to ensure updating and fetching checksums | src/vos/tests/vts_checksum.c |
+| vos_tests | vos_obj_update/fetch apis with checksum params to ensure updating and fetching checksums | src/vos/tests/vts_checksum.c |
 | srv_checksum_tests | Server side logic for adding fetched checksums to an array request. Checksums are appropriately copied or created depending on extent layout. | src/object/tests/srv_checksum_tests.c |
 | daos_test | daos_obj_update/fetch with checksums enabled. The -z flag can be used for specific checksum tests. Also --csum_type flag can be used to enable  checksums with any of the other daos_tests | src/tests/suite/daos_checksum.c |
 
@@ -146,7 +146,7 @@ Unit and functional testing is performed at many layers.
 
 ```
 ./commont_test
-./vos_test -z
+./vos_tests -z
 ./srv_checksum_tests
 ./pool_scrubbing_tests
 ```

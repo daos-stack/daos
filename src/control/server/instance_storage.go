@@ -16,8 +16,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // GetStorage retrieve the storage provider for an engine instance.
@@ -53,7 +53,7 @@ func (ei *EngineInstance) NotifyStorageReady() {
 func createPublishFormatRequiredFunc(publish func(*events.RASEvent), hostname string) onAwaitFormatFn {
 	return func(_ context.Context, engineIdx uint32, formatType string) error {
 		evt := events.NewEngineFormatRequiredEvent(hostname, engineIdx, formatType).
-			WithRank(uint32(system.NilRank))
+			WithRank(uint32(ranklist.NilRank))
 		publish(evt)
 
 		return nil

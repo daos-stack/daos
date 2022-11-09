@@ -9,6 +9,8 @@ package test
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"os"
@@ -316,4 +318,81 @@ func SetupTestListener(t *testing.T, conn chan *net.UnixConn) (string, func()) {
 	}()
 
 	return path, cleanup
+}
+
+// CopyFile copies the src file to dst. Any existing file will be overwritten and
+// will not copy file attributes.
+func CopyFile(t *testing.T, src, dst string) {
+	t.Helper()
+
+	in, err := os.Open(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// CopyDir will recursively copy src to test. Fails if src does
+// not exist or dst already exists.
+func CopyDir(t *testing.T, src, dst string) {
+	t.Helper()
+
+	if _, err := os.Stat(dst); err == nil {
+		t.Fatalf("dst already exists: %s", dst)
+	}
+	srcStat, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !srcStat.IsDir() {
+		t.Fatalf("%s is not a directory", src)
+	}
+
+	if err := os.MkdirAll(dst, srcStat.Mode()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		switch {
+		case d.IsDir():
+			if path == src || d.Name() == "." || d.Name() == ".." {
+				return nil
+			}
+			CopyDir(t, path, filepath.Join(dst, d.Name()))
+			return nil
+		case d.Type() == os.ModeSymlink:
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, filepath.Join(dst, d.Name()))
+		case d.Type().IsRegular():
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			destPath := filepath.Join(dst, d.Name())
+			CopyFile(t, path, destPath)
+			return os.Chmod(destPath, info.Mode())
+		default:
+			return fmt.Errorf("unsupported file type: %s", d.Type())
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

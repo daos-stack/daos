@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -28,10 +28,57 @@
 #define NUM_CTX 8
 #define NUM_RANKS 99
 
+static pthread_barrier_t	barrier1;
+static pthread_barrier_t	barrier2;
+static crt_context_t		crt_ctx[NUM_CTX];
+
+static void *
+my_crtu_progress_fn(void *data)
+{
+	crt_context_t	*p_ctx = (crt_context_t *)data;
+	void		*ret;
+	int		rc;
+
+	rc = crt_context_create(p_ctx);
+	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
+
+	/* Wait for all threads to create their contexts */
+	pthread_barrier_wait(&barrier1);
+
+	/* Only the first thread will do the sanity check */
+	if (p_ctx == &crt_ctx[0]) {
+		bool	ctx_id_present[NUM_CTX];
+		int	i;
+		int	idx;
+
+		for (i = 0; i < NUM_CTX; i++)
+			ctx_id_present[i] = false;
+
+		for (i = 0; i < NUM_CTX; i++) {
+			rc = crt_context_idx(crt_ctx[i], &idx);
+			D_ASSERTF(rc == 0, "crt_context_idx() failed; rc=%d\n", rc);
+
+			ctx_id_present[idx] = true;
+		}
+
+		for (i = 0; i < NUM_CTX; i++)
+			D_ASSERTF(ctx_id_present[i] == true, "ctx id=%d not found\n", i);
+
+		DBG_PRINT("Context creation sanity check passed\n");
+	}
+
+	/* Prevent other threads from executing progress/destroy during sanity check */
+	pthread_barrier_wait(&barrier2);
+
+	/* context is destroyed by crtu_progress_fn() at exit */
+	ret = crtu_progress_fn(p_ctx);
+
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	crt_group_t	*grp;
-	crt_context_t	crt_ctx[NUM_CTX];
 	pthread_t	progress_thread[NUM_CTX];
 	int		i;
 	int		rc;
@@ -45,6 +92,12 @@ int main(int argc, char **argv)
 		D_ERROR("crt_init() failed; rc=%d\n", rc);
 		assert(0);
 	}
+
+	rc = pthread_barrier_init(&barrier1, NULL, NUM_CTX);
+	D_ASSERTF(rc == 0, "pthread_barrier_init() failed; rc=%d\n", rc);
+
+	rc = pthread_barrier_init(&barrier2, NULL, NUM_CTX);
+	D_ASSERTF(rc == 0, "pthread_barrier_init() failed; rc=%d\n", rc);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 20, true, true);
@@ -62,14 +115,8 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < NUM_CTX; i++) {
-		rc = crt_context_create(&crt_ctx[i]);
-		if (rc != 0) {
-			D_ERROR("crt_context_create() failed; rc=%d\n", rc);
-			assert(0);
-		}
-
 		rc = pthread_create(&progress_thread[i], 0,
-				    crtu_progress_fn, &crt_ctx[i]);
+				    my_crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 	}
 

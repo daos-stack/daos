@@ -8,6 +8,7 @@ package daos
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -59,6 +60,77 @@ func (pv BoolPropVal) Choices() []string {
 
 func (pv BoolPropVal) copy() SystemPropertyValue {
 	return NewBoolPropVal(bool(pv))
+}
+
+// IntPropVal is an integer property value. It may be used to store
+// a signed 64-bit integer value.
+type IntPropVal struct {
+	value        int64
+	valueChoices []int64
+}
+
+// NewIntPropVal returns a new IntPropVal initialized to a default value.
+func NewIntPropVal(defVal int64, choices ...int64) *IntPropVal {
+	return &IntPropVal{
+		value:        defVal,
+		valueChoices: choices,
+	}
+}
+
+func (pv *IntPropVal) Handler(val string) error {
+	if pv == nil {
+		return errors.Errorf("%T is nil", pv)
+	}
+
+	v, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return errors.Wrapf(err, "invalid value %q", val)
+	}
+
+	if len(pv.valueChoices) == 0 {
+		pv.value = v
+		return nil
+	}
+
+	for _, choice := range pv.valueChoices {
+		if choice == v {
+			pv.value = v
+			return nil
+		}
+	}
+
+	choices := pv.Choices()
+	return errors.Errorf("invalid value %s (valid: %s)", val, strings.Join(choices, ","))
+}
+
+func (pv *IntPropVal) Choices() []string {
+	if len(pv.valueChoices) == 0 {
+		return nil
+	}
+
+	choices := make([]string, len(pv.valueChoices))
+	for i, choice := range pv.valueChoices {
+		choices[i] = strconv.FormatInt(choice, 10)
+	}
+	return choices
+}
+
+func (pv *IntPropVal) String() string {
+	if pv == nil {
+		return "(nil)"
+	}
+	return strconv.FormatInt(pv.value, 10)
+}
+
+func (pv *IntPropVal) Value() int64 {
+	return pv.value
+}
+
+func (pv *IntPropVal) copy() SystemPropertyValue {
+	return &IntPropVal{
+		value:        pv.value,
+		valueChoices: pv.valueChoices,
+	}
 }
 
 // StringPropVal is a string-based property value.

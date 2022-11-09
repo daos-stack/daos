@@ -7,13 +7,14 @@
 package engine
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 const maxHelperStreamCount = 2
@@ -135,20 +136,9 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
-type LegacyStorage struct {
-	storage.ScmConfig  `yaml:",inline,omitempty"`
-	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
-	storage.BdevConfig `yaml:",inline,omitempty"`
-	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
-}
-
-func (ls *LegacyStorage) WasDefined() bool {
-	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank   `yaml:"rank,omitempty"`
+	Rank              *ranklist.Rank `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -194,6 +184,51 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+type cfgNumaMismatch struct {
+	cfgNode uint
+	detNode uint
+}
+
+func (cnm *cfgNumaMismatch) Error() string {
+	return fmt.Sprintf("configured NUMA node %d does not match detected NUMA node %d", cnm.cfgNode, cnm.detNode)
+}
+
+func errNumaMismatch(cfg, det uint) error {
+	return &cfgNumaMismatch{cfgNode: cfg, detNode: det}
+}
+
+// IsNUMAMismatch returns true if the supplied error is the result
+// of a NUMA node configuration error.
+func IsNUMAMismatch(err error) bool {
+	_, ok := errors.Cause(err).(*cfgNumaMismatch)
+	return ok
+}
+
+// SetNUMAAffinity sets the NUMA affinity for the engine,
+// if not already set in the configuration.
+func (c *Config) SetNUMAAffinity(node uint) error {
+	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
+		return errors.New("cannot set both NUMA node and service core")
+	}
+
+	var hasMismatch error
+	if c.PinnedNumaNode != nil {
+		if *c.PinnedNumaNode != node {
+			// advisory for now; may become fatal in future
+			hasMismatch = errNumaMismatch(*c.PinnedNumaNode, node)
+		}
+	} else {
+		// If not set via config, use the detected NUMA node affinity.
+		c.PinnedNumaNode = &node
+	}
+
+	// Propagate the NUMA node affinity to the nested config structs.
+	c.Storage.SetNUMAAffinity(*c.PinnedNumaNode)
+	c.Fabric.NumaNodeIndex = *c.PinnedNumaNode
+
+	return hasMismatch
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
@@ -282,7 +317,7 @@ func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 
 // WithRank sets the instance rank.
 func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = system.NewRankPtr(r)
+	c.Rank = ranklist.NewRankPtr(r)
 	return c
 }
 
@@ -449,5 +484,11 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
 	c.Storage.AccelProps.Engine = name
 	c.Storage.AccelProps.Options = mask
+	return c
+}
+
+// WithIndex sets the I/O Engine instance index.
+func (c *Config) WithIndex(i uint32) *Config {
+	c.Index = i
 	return c
 }

@@ -1,4 +1,3 @@
-#!python
 # (C) Copyright 2016-2021 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -9,12 +8,13 @@ import daos_build
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
        'fault_inject.c', 'slab.c', 'telemetry.c']
 
+
 def scons():
     """Scons function"""
 
     Import('env', 'prereqs', 'CART_VERSION')
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 

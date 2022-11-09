@@ -128,7 +128,8 @@ bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 			    uint32_t shard);
 
 int pl_obj_place(struct pl_map *map, struct daos_obj_md *md, unsigned int mode,
-		 struct daos_obj_shard_md *shard_md, struct pl_obj_layout **layout_pp);
+		 uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
+		 struct pl_obj_layout **layout_pp);
 
 int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_md *md,

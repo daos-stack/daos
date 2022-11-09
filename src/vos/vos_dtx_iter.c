@@ -246,6 +246,15 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(!dae->dae_aborted);
 	D_ASSERT(dae->dae_dth == NULL);
 
+	/*
+	 * The DTX entry is returned via the iteration. The upper layer caller, for DTX resync
+	 * or DTX cleanup, may abort it sometime later. Before being aborted, it may re-attach
+	 * to some DTX handle for handling resent request. Then there is race between them. So
+	 * before become committable or being committed by RPC handler, needs to check whether
+	 * it has been aborted or not.
+	 */
+	dae->dae_need_validation = 1;
+
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);
 	it_entry->ie_dtx_oid = DAE_OID(dae);

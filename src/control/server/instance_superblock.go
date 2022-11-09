@@ -16,7 +16,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 const (
@@ -30,7 +30,7 @@ type Superblock struct {
 	Version         uint8
 	UUID            string
 	System          string
-	Rank            *system.Rank
+	Rank            *ranklist.Rank
 	URI             string
 	ValidRank       bool
 	HostFaultDomain string
@@ -155,7 +155,7 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 	}
 
 	if cfg.Rank != nil {
-		superblock.Rank = new(system.Rank)
+		superblock.Rank = new(ranklist.Rank)
 		if cfg.Rank != nil {
 			*superblock.Rank = *cfg.Rank
 		}

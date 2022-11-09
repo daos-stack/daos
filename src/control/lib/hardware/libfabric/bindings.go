@@ -95,7 +95,7 @@ import (
 func Load() (func(), error) {
 	hdl, err := openLib()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "loading libfabric")
 	}
 	return func() {
 		hdl.Close()

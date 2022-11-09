@@ -147,7 +147,13 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				TargetUser:   "root",
 				DisableVFIO:  true,
 			},
-			expErr: errors.New("expecting comma-separated list"),
+			expPrepNVMeCall: &storage.BdevPrepareRequest{
+				TargetUser:    "root",
+				HugePageCount: 9182,
+				PCIAllowList:  spaceSepMultiAddrList,
+				PCIBlockList:  defaultSingleAddrList,
+				DisableVFIO:   true,
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -157,7 +163,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
 			msb := scm.NewMockBackend(tc.smbc)
-			msp := scm.NewProvider(log, msb, nil)
+			msp := scm.NewProvider(log, msb, nil, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			if tc.legacyCmd == nil {

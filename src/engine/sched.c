@@ -485,8 +485,9 @@ prealloc_requests(struct sched_info *info, int cnt)
 	return 0;
 }
 
-#define SCHED_PREALLOC_INIT_CNT		8192
-#define SCHED_PREALLOC_BATCH_CNT	1024
+/* These values will be tuned down in the code if Valgrind is being used. */
+#define SCHED_PREALLOC_INIT_CNT  8192
+#define SCHED_PREALLOC_BATCH_CNT 1024
 
 static void
 sched_metrics_init(struct dss_xstream *dx)
@@ -533,8 +534,9 @@ sched_metrics_init(struct dss_xstream *dx)
 static int
 sched_info_init(struct dss_xstream *dx)
 {
-	struct sched_info	*info = &dx->dx_sched_info;
-	int			 rc;
+	struct sched_info *info = &dx->dx_sched_info;
+	int                rc;
+	int                count = SCHED_PREALLOC_INIT_CNT;
 
 	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_cur_seq = 0;
@@ -556,7 +558,10 @@ sched_info_init(struct dss_xstream *dx)
 		return rc;
 	}
 
-	rc = prealloc_requests(info, SCHED_PREALLOC_INIT_CNT);
+	if (D_ON_VALGRIND)
+		count = 16;
+
+	rc = prealloc_requests(info, count);
 	if (rc)
 		sched_info_fini(dx);
 
@@ -603,7 +608,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	return spi;
 }
 
-
 static struct sched_request *
 req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	void (*func)(void *), void *arg, ABT_thread ult, bool owned)
@@ -625,7 +629,12 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	}
 
 	if (d_list_empty(&info->si_idle_list)) {
-		rc = prealloc_requests(info, SCHED_PREALLOC_BATCH_CNT);
+		int count = SCHED_PREALLOC_BATCH_CNT;
+
+		if (D_ON_VALGRIND)
+			count = 8;
+
+		rc = prealloc_requests(info, count);
 		if (rc)
 			return NULL;
 	}
