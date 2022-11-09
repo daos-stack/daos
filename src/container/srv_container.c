@@ -191,7 +191,12 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
-	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
+	rc = ds_pool_lookup(svc->cs_pool_uuid, &svc->cs_pool);
+	if (rc != 0)  {
+		D_ERROR(DF_UUID": pool lookup failed: "DF_RC"\n",
+			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
+		return rc;
+	}
 	D_ASSERT(svc->cs_pool != NULL);
 
 	rc = cont_svc_ec_agg_leader_start(svc);
@@ -2333,11 +2338,12 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &cont->c_prop,
 				   &ds_cont_prop_scrubber_disabled, &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST)
+			val = 0;
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type =
-			DAOS_PROP_CO_SCRUBBER_DISABLED;
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
@@ -2547,7 +2553,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 				   &value);
 		if (rc == -DER_NONEXIST)
 			val = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		else  if (rc != 0)
+		else if (rc != 0)
 			D_GOTO(out, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_RP_PDA;
@@ -2661,6 +2667,8 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	rf = daos_cont_prop2redunfac(prop);
 	rc = ds_pool_rf_verify(pool, last_ver, rlvl, rf);
 	if (rc == -DER_RF) {
+		D_ERROR(DF_CONT": RF broken, last_ver %d, rlvl %d, rf %d, "DF_RC"\n",
+			DP_CONT(pool->sp_uuid, cont->c_uuid), last_ver, rlvl, rf, DP_RC(rc));
 		rc = 0;
 		cont_status_set_unclean(prop);
 	}
@@ -2669,23 +2677,13 @@ cont_status_check(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 }
 
 static int
-cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-	   struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
-{
-	struct cont_query_in   *in  = crt_req_get(rpc);
-	struct cont_query_out  *out = crt_reply_get(rpc);
-	daos_prop_t	       *prop = NULL;
-	uint32_t		last_ver = 0;
+cont_info_read(struct rdb_tx *tx, struct cont *cont, int cont_proto_ver, daos_cont_info_t *cinfo) {
 	d_iov_t			value;
 	int			snap_count;
-	int			rc = 0;
+	daos_cont_info_t	out = {0};
+	int			rc;
 
-	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
-		DP_UUID(in->cqi_op.ci_hdl));
-
-	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
-		return -DER_NO_PERM;
+	uuid_copy(out.ci_uuid, cont->c_uuid);
 
 	/* Get nsnapshots */
 	d_iov_set(&value, &snap_count, sizeof(snap_count));
@@ -2695,7 +2693,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
 		return rc;
 	}
-	out->cqo_snap_count = snap_count;
+	out.ci_nsnapshots = snap_count;
 
 	/* Get latest snapshot */
 	if (snap_count > 0) {
@@ -2707,16 +2705,15 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
 			goto out;
 		}
-		out->cqo_lsnapshot = *(uint64_t *)key_out.iov_buf;
+		out.ci_lsnapshot = *(uint64_t *)key_out.iov_buf;
 		D_DEBUG(DB_MD, DF_CONT": got lsnapshot="DF_X64"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->cqo_lsnapshot);
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out.ci_lsnapshot);
 	}
 
 	/* lookup metadata times */
 	D_DEBUG(DB_MD, DF_CONT": cont_proto_ver=%d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), cont_proto_ver);
 	if (cont_proto_ver >= CONT_PROTO_VER_WITH_MDTIMES) {
-		struct cont_query_v7_out       *out_v7 = crt_reply_get(rpc);
 		struct co_md_times		mdtimes;
 
 		/* NB client/engine may have recent (protocol) versions, however the pool may not
@@ -2725,8 +2722,50 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		rc = get_metadata_times(tx, cont, &mdtimes);
 		if (rc != 0)
 			goto out;
-		out_v7->cqo_md_otime = mdtimes.otime;
-		out_v7->cqo_md_mtime = mdtimes.mtime;
+		out.ci_md_otime = mdtimes.otime;
+		out.ci_md_mtime = mdtimes.mtime;
+	}
+
+out:
+	if (rc == 0)
+		*cinfo = out;
+	return rc;
+
+}
+
+static int
+cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+	   struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+{
+	struct cont_query_in   *in  = crt_req_get(rpc);
+	struct cont_query_out  *out = crt_reply_get(rpc);
+	daos_cont_info_t	cinfo;
+	daos_prop_t	       *prop = NULL;
+	uint32_t		last_ver = 0;
+	int			rc = 0;
+
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
+		DP_UUID(in->cqi_op.ci_hdl));
+
+	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
+		return -DER_NO_PERM;
+
+	/* Read container info */
+	rc = cont_info_read(tx, cont, cont_proto_ver, &cinfo);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to read container info, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	out->cqo_snap_count = cinfo.ci_nsnapshots;
+	if (cinfo.ci_nsnapshots > 0)
+		out->cqo_lsnapshot = cinfo.ci_lsnapshot;
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_MDTIMES) {
+		struct cont_query_v7_out       *out_v7 = crt_reply_get(rpc);
+
+		out_v7->cqo_md_otime = cinfo.ci_md_otime;
+		out_v7->cqo_md_mtime = cinfo.ci_md_mtime;
 	}
 
 	/* need RF to process co_status */
@@ -3625,6 +3664,298 @@ out:
 	return rc;
 }
 
+static int
+cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_part_t *part,
+		       bool *match)
+{
+	d_iov_t			value;
+	uint64_t		val64;
+	uint32_t		val32;
+	bool			result = false;
+	struct co_md_times	mdtimes;
+	int			rc;
+
+	/* Fetch the key's value from rdb */
+	switch(part->pcfp_key) {
+	case PCF_KEY_MD_OTIME:
+	case PCF_KEY_MD_MTIME:
+		rc = get_metadata_times(tx, cont, &mdtimes);
+		val64 = (part->pcfp_key == PCF_KEY_MD_OTIME) ? mdtimes.otime : mdtimes.mtime;
+		break;
+	case PCF_KEY_NUM_SNAPSHOTS:
+		d_iov_set(&value, &val32, sizeof(val32));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+		val64 = (uint64_t)val32;
+		break;
+	/* TODO: track number of open handles in rdb, add matching, e.g., PCF_KEY_NUM_HANDLES */
+	default:
+		/* Should not be here so long as caller verifies. See pool_cont_filter_is_valid() */
+		rc = -DER_INVAL;
+		break;
+	}
+
+	if (rc != 0) {
+		D_ERROR(DF_CONT": metadata lookup of %s failed, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			daos_pool_cont_filter_key_str(part->pcfp_key), DP_RC(rc));
+		goto out;
+	}
+
+	/* Apply the comparison function to the key */
+	switch(part->pcfp_func) {
+	case PCF_FUNC_EQ:
+		result = (val64 == part->pcfp_val64);
+		break;
+	case PCF_FUNC_NE:
+		result = (val64 != part->pcfp_val64);
+		break;
+	case PCF_FUNC_LT:
+		result = (val64 < part->pcfp_val64);
+		break;
+	case PCF_FUNC_LE:
+		result = (val64 <= part->pcfp_val64);
+		break;
+	case PCF_FUNC_GT:
+		result = (val64 > part->pcfp_val64);
+		break;
+	case PCF_FUNC_GE:
+		result = (val64 >= part->pcfp_val64);
+		break;
+	default:
+		/* Should not be here so long as caller verifies. See pool_cont_filter_is_valid() */
+		D_ERROR(DF_CONT": invalid comparison function (%u)\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), part->pcfp_func);
+		rc = -DER_INVAL;
+		break;	/* goto out */
+	}
+
+out:
+	if (rc == 0) {
+		D_DEBUG(DB_MD, DF_CONT": %s filter part: %s(value "DF_U64") %s "DF_U64")\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			result ? "matched" : "did not match",
+			daos_pool_cont_filter_key_str(part->pcfp_key), val64,
+			daos_pool_cont_filter_func_str(part->pcfp_func), part->pcfp_val64);
+		*match = result;
+	}
+	return rc;
+}
+
+static int
+cont_filter_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_t *filt, bool *match)
+{
+	int		i;
+	bool		whole_match = true;
+	uint32_t	combine_op = filt->pcf_combine_func;
+	int		rc = 0;
+
+	/* logical OR combining: start with false result, transition to true on first match */
+	if ((filt->pcf_parts > 0) && (combine_op == PCF_COMBINE_LOGICAL_OR))
+		whole_match = false;
+
+	for (i = 0; i < filt->pcf_nparts; i++) {
+		bool	part_match;
+
+		rc = cont_filter_part_match(tx, cont, filt->pcf_parts[i], &part_match);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": cont_filter_part_match() failed, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		} else {
+			if (!part_match && (combine_op == PCF_COMBINE_LOGICAL_AND)) {
+				D_DEBUG(DB_MD, DF_CONT": logical AND, done due to false compare\n",
+					DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+				whole_match = false;
+				break;
+			} else if (part_match && (combine_op == PCF_COMBINE_LOGICAL_OR)) {
+				D_DEBUG(DB_MD, DF_CONT": logical OR, done due to true compare\n",
+					DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+				whole_match = true;
+				break;
+			}
+			/* otherwise, keep testing remaining filter parts */
+		}
+	}
+
+out:
+	if (rc == 0) {
+		D_DEBUG(DB_MD, DF_CONT": whole filter %s\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			whole_match ? "matched" : "did not match");
+		*match = whole_match;
+	}
+
+	return rc;
+}
+
+/* argument type for callback function to filter containers */
+struct filter_cont_iter_args {
+	uuid_t				 pool_uuid;
+
+	/* Filter criteria specification */
+	daos_pool_cont_filter_t		*filt;
+
+	/* Number of containers in pool and conts[] index while counting */
+	uint64_t			 ncont;
+
+	/* conts[]: capacity*/
+	uint64_t			 conts_len;
+	struct daos_pool_cont_info2	*conts;
+	struct cont_svc			*svc;
+	struct rdb_tx			*tx;
+};
+
+/* callback function for filter containers iteration. */
+static int
+filter_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
+{
+	struct filter_cont_iter_args	*ap = varg;
+	struct daos_pool_cont_info2	*pcinfo;
+	uuid_t				 cont_uuid;
+	struct cont			*cont;
+	daos_prop_t			*prop = NULL;
+	bool				 filt_match = false;
+	int				 rc;
+	(void)val;
+
+	if (key->iov_len != sizeof(uuid_t)) {
+		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
+		return -DER_IO;
+	}
+	uuid_copy(cont_uuid, key->iov_buf);
+
+	D_DEBUG(DB_MD, "pool/cont: "DF_CONTF": ncont=%zu, conts_len=%zu\n",
+		DP_CONT(ap->pool_uuid, cont_uuid), ap->ncont, ap->conts_len);
+
+	/* Lookup container, see if it matches filter specification before adding to ap->conts[] */
+	rc = cont_lookup(ap->tx, ap->svc, cont_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": lookup cont failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = cont_filter_match(ap->tx, cont, ap->filt, &filt_match);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cont_match() failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		goto out_cont;
+	} else if (filt_match == false) {
+		goto out_cont;
+	}
+
+	/* The container matches the filter specification: save information */
+
+	/* Realloc conts[] if needed (double each time starting with 1) */
+	if (ap->ncont == ap->conts_len) {
+		void	*ptr;
+		size_t	realloc_elems = (ap->conts_len == 0) ? 1 : ap->conts_len * 2;
+
+		D_REALLOC_ARRAY(ptr, ap->conts, ap->conts_len, realloc_elems);
+		if (ptr == NULL)
+			D_GOTO(out_cont, rc = -DER_NOMEM);
+
+		ap->conts = ptr;
+		ap->conts_len = realloc_elems;
+	}
+
+	pcinfo = &ap->conts[ap->ncont];
+	ap->ncont++;
+	uuid_copy(pcinfo->pci_id.pci_uuid, cont_uuid);
+
+	/* TODO: Specify client cont_proto_version. This is invoked from a pool client RPC */
+	rc = cont_info_read(ap->tx, cont, DAOS_CONT_VERSION /* engine protocol version */,
+			    &pcinfo->pci_cinfo);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": read container info failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		goto out_cont;
+	}
+
+	rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_LABEL, &prop, true);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": cont_prop_read() failed, "DF_RC"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		goto out_cont;
+	}
+
+	memset(pcinfo->pci_id.pci_label, 0, sizeof(pcinfo->pci_id.pci_label));
+	if (prop->dpp_entries[0].dpe_str) {
+		strncpy(pcinfo->pci_id.pci_label, prop->dpp_entries[0].dpe_str,
+			DAOS_PROP_LABEL_MAX_LEN);
+		pcinfo->pci_id.pci_label[DAOS_PROP_LABEL_MAX_LEN] = '\0';
+	}
+
+	daos_prop_free(prop);
+
+out_cont:
+	cont_put(cont);
+
+	return rc;
+}
+
+/**
+ * Select/filter from the containers in a pool.
+ *
+ * \param[in]	pool_uuid	Pool UUID.
+ * \param[in]	filt		Filtering criteria specification.
+ * \param[out]	conts		Array of container extended info structures
+ *				to be allocated. Caller must free.
+ * \param[out]	ncont		Number of containers in the pool
+ *				(number of items populated in conts[]).
+ */
+int
+ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+	       struct daos_pool_cont_info2 **conts, uint64_t *ncont)
+{
+	int				 rc;
+	struct cont_svc			*svc;
+	struct rdb_tx			 tx;
+	struct filter_cont_iter_args	 args;
+
+	*conts = NULL;
+	*ncont = 0;
+
+	uuid_copy(args.pool_uuid, pool_uuid);
+	args.filt = filt;
+	args.ncont = 0;			/* number of containers in the pool */
+	args.conts_len = 0;		/* allocated length of conts[] */
+	args.conts = NULL;
+
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc, NULL /* hint **/);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	args.svc = svc;
+
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+	args.tx = &tx;
+	ABT_rwlock_rdlock(svc->cs_lock);
+
+	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */, filter_cont_cb, &args);
+
+	/* read-only, so no rdb_tx_commit */
+	ABT_rwlock_unlock(svc->cs_lock);
+	rdb_tx_end(&tx);
+
+out_svc:
+	cont_svc_put_leader(svc);
+
+out:
+	D_DEBUG(DB_MD, "filter rc=%d, args.conts=%p, args.ncont="DF_U64"\n",
+		rc, args.conts, args.ncont);
+
+	if (rc != 0) {
+		/* Error in iteration */
+		D_FREE(args.conts);
+	} else {
+		*ncont = args.ncont;
+		*conts = args.conts;
+	}
+	return rc;
+}
+
 /* argument type for callback function to upgrade containers */
 struct upgrade_cont_iter_args {
 	uuid_t				 pool_uuid;
@@ -3758,6 +4089,20 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ASSERT(daos_prop_is_set(entry) == false);
 		entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 		entry->dpe_val = pda;
+	}
+
+	rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
+	if (rc && rc != -DER_NONEXIST)
+		goto out;
+	if (rc == -DER_NONEXIST) {
+		pda = 0;
+		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container scrubbing disabled prop: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
 	}
 
 	/* Initialize or update container open / metadata modify times.

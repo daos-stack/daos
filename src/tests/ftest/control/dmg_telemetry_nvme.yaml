@@ -2,9 +2,17 @@ hosts:
   test_servers: 2
 timeout: 90
 server_config:
-  servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 telemetry_metrics:
   nvme_crit_warn_metrics_valid: [0, 1]
   nvme_temp_metrics_valid: [280, 350]

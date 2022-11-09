@@ -203,10 +203,10 @@ A view of DAOS' software component architecture:
 ## Running
 
 For instructions on building and running DAOS see the
-[admin guide](https://daos-stack.github.io/admin/installation/).
+[admin guide](https://docs.daos.io/latest/admin/hardware/).
 
 ## Configuration
 
 For instructions on configuring the DAOS server see the
-[admin guide](https://daos-stack.github.io/admin/deployment/#server-configuration-file).
+[admin guide](https://docs.daos.io/latest/admin/deployment/#server-configuration-file).
 

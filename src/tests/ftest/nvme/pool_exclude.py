@@ -69,7 +69,7 @@ class NvmePoolExclude(OSAUtils):
             self.add_container(self.pool)
             self.cont_list.append(self.container)
             rf = ''.join(self.container.properties.value.split(":"))
-            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
+            rf_num = int(re.search(r"rd_fac([0-9]+)", rf).group(1))
             for test in range(0, rf_num):
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,

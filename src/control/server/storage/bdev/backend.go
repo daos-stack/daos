@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -178,9 +179,9 @@ func logNUMAStats(log logging.Logger) {
 
 	out, err := exec.Command("numastat", "-m").Output()
 	if err != nil {
-		toLog = (&runCmdError{
-			wrapped: err,
-			stdout:  string(out),
+		toLog = (&system.RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
 		}).Error()
 	} else {
 		toLog = string(out)

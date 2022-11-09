@@ -935,12 +935,21 @@ add_region:
 			      bio_iov2media(biov));
 }
 
+static inline bool
+injected_nvme_error(struct bio_desc *biod)
+{
+	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
+		return DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) != 0;
+	else
+		return DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) != 0;
+}
+
 static void
 rw_completion(void *cb_arg, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
 	struct bio_desc		*biod = cb_arg;
-	struct media_error_msg	*mem = NULL;
+	struct media_error_msg	*mem;
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_ASSERT(biod->bd_inflights > 0);
@@ -951,30 +960,27 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
 	xs_ctxt->bxc_blob_rw--;
 
-	/* Induce NVMe Read/Write Error*/
-	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
-		err = DAOS_FAIL_CHECK(DAOS_NVME_WRITE_ERR) ? -EIO : err;
-	else
-		err = DAOS_FAIL_CHECK(DAOS_NVME_READ_ERR) ? -EIO : err;
+	if (err != 0 || injected_nvme_error(biod)) {
+		/* Report only one NVMe I/O error per IOD */
+		if (biod->bd_result != 0)
+			goto done;
 
-	/* Return the error value of the first NVMe IO error */
-	if (biod->bd_result == 0 && err != 0)
-		biod->bd_result = daos_errno2der(-err);
+		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
+			biod->bd_result = -DER_NVME_IO;
+		else
+			biod->bd_result = -DER_IO;
 
-	/* Report all NVMe IO errors */
-	if (err != 0) {
 		D_ALLOC_PTR(mem);
-		if (mem == NULL)
-			goto skip_media_error;
-		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ?
-						MET_WRITE : MET_READ;
+		if (mem == NULL) {
+			D_ERROR("NVMe I/O error report is skipped\n");
+			goto done;
+		}
+		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ? MET_WRITE : MET_READ;
 		mem->mem_bs = xs_ctxt->bxc_blobstore;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
-		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
-				     mem);
+		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
-
-skip_media_error:
+done:
 	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
 		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
 }
@@ -1045,6 +1051,16 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
 	if (daos_io_bypass & IOBP_NVME)
 		return;
+
+	/* No locking for BS state query here is tolerable */
+	if (xs_ctxt->bxc_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
+		D_ERROR("Blobstore is marked as FAULTY.\n");
+		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
+			biod->bd_result = -DER_NVME_IO;
+		else
+			biod->bd_result = -DER_IO;
+		return;
+	}
 
 	if (!is_blob_valid(biod->bd_ctxt)) {
 		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",

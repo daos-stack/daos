@@ -3,20 +3,26 @@ hosts:
 timeout: 900
 server_config:
   name: daos_server
-  targets: 8
-  servers:
-   bdev_class: nvme
-   bdev_list: ["0000:5e:00.0","0000:5f:00.0"]
-   scm_class: dcpm
-   scm_list: ["/dev/pmem0"]
-   log_mask: DEBUG,MEM=ERR
-   env_vars:
-    - ABT_ENV_MAX_NUM_XSTREAMS=100
-    - ABT_MAX_NUM_XSTREAMS=100
-    - DAOS_MD_CAP=1024
-    - DD_MASK=mgmt,md,any
-    - D_LOG_FILE_APPEND_PID=1
-    - COVFILE=/tmp/test.cov
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - ABT_ENV_MAX_NUM_XSTREAMS=100
+        - ABT_MAX_NUM_XSTREAMS=100
+        - DAOS_MD_CAP=1024
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - COVFILE=/tmp/test.cov
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
   scm_size: 12G
 datasize:

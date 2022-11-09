@@ -214,16 +214,16 @@
 #control_log_file: /tmp/daos_server.log
 #
 #
-## Enable daos_admin (privileged helper) logging.
+## Enable daos_server_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#helper_log_file: /tmp/daos_admin.log
+#helper_log_file: /tmp/daos_server_helper.log
 #
 #
-## Enable daos_firmware (privileged helper) logging.
+## Enable daos_firmware_helper (privileged helper) logging.
 #
 ## default: disabled (errors only to control_log_file)
-#firmware_helper_log_file: /tmp/daos_firmware.log
+#firmware_helper_log_file: /tmp/daos_firmware_helper.log
 #
 #
 ## Enable HTTP endpoint for remote telemetry collection.
@@ -352,6 +352,11 @@
 #    # When class is set to ram, tmpfs will be used to emulate SCM.
 #    # The size of ram is specified by scm_size in GB units.
 #    scm_size: 16
+#
+#    # When class is set to ram, tmpfs will be mounted with hugepage
+#    # support, if the kernel supports it. If this is not desirable,
+#    # the behavior may be disabled here.
+#    scm_hugepages_disabled: true
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine

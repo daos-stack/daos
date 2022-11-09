@@ -4,12 +4,17 @@ hosts:
 timeout: 240
 server_config:
   name: daos_server
-  servers:
-    targets: 4
-    nr_xs_helpers: 0
-    scm_size: 4
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  name: daos_server
   scm_size: 1G
   control_method: dmg
 container:
@@ -17,10 +22,10 @@ container:
   control_method: daos
   replication: !mux
     rf0:
-      properties: rf:0
+      properties: rd_fac:0
       oclass: SX
     rf2:
-      properties: rf:2
+      properties: rd_fac:2
       oclass: RP_3GX
 telemetry_metrics:
   # remove this variable and it's use from the code,
