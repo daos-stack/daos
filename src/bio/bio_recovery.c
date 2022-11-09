@@ -603,6 +603,7 @@ bio_media_error(void *msg_arg)
 		break;
 	}
 
+	auto_faulty_detect(mem->mem_bs);
 
 	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
 		goto out;

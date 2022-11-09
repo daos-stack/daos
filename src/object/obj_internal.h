@@ -365,6 +365,7 @@ struct obj_auxi_args {
 					 csum_retry:1,
 					 csum_report:1,
 					 tx_uncertain:1,
+					 nvme_io_err:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
 					 ec_in_recov:1,
@@ -608,7 +609,8 @@ obj_retry_error(int err)
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
+	       err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
+	       daos_crt_network_error(err);
 }
 
 static inline daos_handle_t

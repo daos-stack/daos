@@ -398,6 +398,8 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 				DP_RC(rc));
 			goto err_group;
 		}
+
+		D_INFO("rank: %d uri: %s\n", rank_uri->rank, rank_uri->uri);
 	}
 
 err_group:
@@ -419,10 +421,8 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
 	/* Query the agent for the CaRT network configuration parameters */
-	rc = dc_get_attach_info(name,
-				true /* all_ranks */,
-				&crt_net_cfg_info,
-				&crt_net_cfg_resp);
+	rc = dc_get_attach_info(name, true /* all_ranks */,
+				&crt_net_cfg_info, &crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -432,11 +432,13 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	/* These two are always set */
+	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_net_cfg_info.provider);
 	rc = setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", crt_net_cfg_info.crt_ctx_share_addr);
+	D_INFO("setenv CRT_CTX_SHARE_ADDR=%d\n", crt_net_cfg_info.crt_ctx_share_addr);
 	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
@@ -445,11 +447,11 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (crt_net_cfg_info.srv_srx_set != -1) {
 		sprintf(buf, "%d", crt_net_cfg_info.srv_srx_set);
 		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		D_INFO("setenv FI_OFI_RXM_USE_SRX=%d\n", crt_net_cfg_info.srv_srx_set);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-		D_DEBUG(DB_MGMT,
-			"Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
-			buf);
+
+		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
@@ -465,17 +467,17 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (!crt_timeout) {
 		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
 		rc = setenv("CRT_TIMEOUT", buf, 1);
+		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT,
-			"Using client provided CRT_TIMEOUT: %s\n",
-			crt_timeout);
+		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
+		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
@@ -487,15 +489,14 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_domain) {
 		rc = setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
+		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT,
-			"Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
-	D_DEBUG(DB_MGMT,
-		"CaRT initialization with:\n"
+	D_INFO("CaRT env setup with:\n"
 		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
 		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
 		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),

@@ -296,7 +296,7 @@ bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st
 	struct bio_xs_blobstore *bxb = NULL;
 
 	if (st != SMD_DEV_TYPE_DATA)
-		D_ASSERT(bio_is_meta_on_ssd_configured());
+		D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
 
 	switch (st) {
 	case SMD_DEV_TYPE_WAL:
@@ -410,7 +410,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id)
 		rc = bio_blob_delete(pool_id, xs_ctxt, st);
 		if (rc)
 			return rc;
-		if (!bio_is_meta_on_ssd_configured())
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
 	}
 
@@ -464,7 +464,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 	spdk_blob_opts_init(&bma.bma_opts, sizeof(bma.bma_opts));
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
-	if (!(flags & BIO_MC_FL_SYSDB) || !bio_is_meta_on_ssd_configured()) {
+	if (!(flags & BIO_MC_FL_SYSDB) || !bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		/**
 		 * Query per-server metadata to make sure the blob for this pool:target
 		 * hasn't been created yet.
@@ -505,7 +505,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 
-		if (!(flags & BIO_MC_FL_SYSDB) || !bio_is_meta_on_ssd_configured()) {
+		if (!(flags & BIO_MC_FL_SYSDB) || !bio_nvme_configured(SMD_DEV_TYPE_META)) {
 			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id,
 					      st, blob_sz);
 		} else if (st == SMD_DEV_TYPE_META) {
@@ -557,7 +557,7 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	uuid_copy(ctxt->bic_pool_id, uuid);
 
 	/* NVMe isn't configured or pool doesn't have NVMe partition */
-	if (!bio_nvme_configured() ||
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) ||
 	    (flags & BIO_MC_FL_NO_DATABLOB && st == SMD_DEV_TYPE_DATA)) {
 		*pctxt = ctxt;
 		return 0;
@@ -600,7 +600,7 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 			return rc;
 	}
 
-	if (!bio_is_meta_on_ssd_configured())
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		return 0;
 
 	if (meta_sz > 0) {
@@ -735,7 +735,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys, enum smd_dev
 		/*
 		 * Query per-server metadata to get blobID for this pool:target
 		 */
-		if (!is_sys || !bio_is_meta_on_ssd_configured()) {
+		if (!is_sys || !bio_nvme_configured(SMD_DEV_TYPE_META)) {
 			rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
 					       st, &blob_id);
 			if (rc != 0) {
@@ -810,7 +810,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 	if (xs_ctxt == NULL)
 		goto out;
 
-	if (bio_is_meta_on_ssd_configured()) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id,
 				       flags, SMD_DEV_TYPE_META, open_blobid);
 		if (rc)
@@ -930,7 +930,7 @@ bio_ioctxt_close(struct bio_io_context *ctxt, enum bio_mc_flags flags)
 	int			 rc;
 
 	/* NVMe isn't configured or pool doesn't have NVMe partition */
-	if (!bio_nvme_configured() || flags & BIO_MC_FL_NO_DATABLOB) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || flags & BIO_MC_FL_NO_DATABLOB) {
 		d_list_del_init(&ctxt->bic_link);
 		D_FREE(ctxt);
 		return 0;
@@ -1223,10 +1223,4 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 struct bio_io_context *bio_mc2data(struct bio_meta_context *mc)
 {
 	return mc->mc_data;
-}
-
-bool
-bio_is_meta_on_ssd_configured(void)
-{
-	return false;
 }

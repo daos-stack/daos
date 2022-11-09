@@ -795,13 +795,6 @@ struct umem_action {
 	};
 };
 
-struct umem_act_item {
-	d_list_t		it_link;
-	/** it is action for reserve, the modified content is in DRAM only */
-	bool			it_is_reserv;
-	struct umem_action	it_act;
-};
-
 struct umem_store;
 
 /* TODO: sgl */
@@ -811,8 +804,7 @@ struct umem_store_ops {
 	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
 			    d_sg_list_t *sgl);
 	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
-	/** @actions is list head of umem_act_item */
-	int	(*so_wal_submit)(struct umem_store *store, uint64_t id, d_list_t *actions);
+	int	(*so_wal_submit)(struct umem_store *store, struct umem_tx *tx);
 };
 
 struct umem_store {

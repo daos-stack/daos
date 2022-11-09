@@ -767,23 +767,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
 		},
-		// Note: expect PoolDestroy() converts to successful status in this case
-		"already destroying, destroy dRPC fails with -DER_NOTLEADER in cleanup": {
-			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
-			expDrpcReq: &mgmtpb.PoolDestroyReq{
-				Sys:       build.DefaultSystemName,
-				Id:        mockUUID,
-				SvcRanks:  []uint32{0, 1, 2, 3, 4, 5, 6, 7},
-				Recursive: true,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(daos.NotLeader),
-				}, nil)
-			},
-			poolSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
-			expResp: &mgmtpb.PoolDestroyResp{},
-		},
 		"evict dRPC fails with -DER_NOTREPLICA on first try": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
 			expDrpcEvReq: &mgmtpb.PoolEvictReq{
@@ -803,23 +786,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
 		},
-		// Note: expect PoolDestroy() converts to successful status in this case
-		"already destroying, destroy dRPC fails with -DER_NOTREPLICA in cleanup": {
-			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
-			expDrpcReq: &mgmtpb.PoolDestroyReq{
-				Sys:       build.DefaultSystemName,
-				Id:        mockUUID,
-				SvcRanks:  []uint32{0, 1, 2, 3, 4, 5, 6, 7},
-				Recursive: true,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
-					Status: int32(daos.NotReplica),
-				}, nil)
-			},
-			poolSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
-			expResp: &mgmtpb.PoolDestroyResp{},
-		},
 		"already destroying, destroy dRPC succeeds": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
@@ -837,7 +803,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:       build.DefaultSystemName,
 				Id:        mockUUID,
-				SvcRanks:  []uint32{0, 1, 2},
+				SvcRanks:  []uint32{0, 1, 2, 3, 4, 5, 6, 7},
 				Recursive: true,
 			},
 			expResp: &mgmtpb.PoolDestroyResp{},
@@ -847,7 +813,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:       build.DefaultSystemName,
 				Id:        mockUUID,
-				SvcRanks:  []uint32{0, 1, 2},
+				SvcRanks:  []uint32{0, 1, 2, 3, 4, 5, 6, 7},
 				Recursive: true,
 				Force:     true,
 			},
@@ -894,7 +860,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			expDrpcReq: &mgmtpb.PoolDestroyReq{
 				Sys:      build.DefaultSystemName,
 				Id:       mockUUID,
-				SvcRanks: []uint32{0, 1, 2},
+				SvcRanks: []uint32{0, 1, 2, 3, 4, 5, 6, 7},
 			},
 			// ListContainers RPC resp contains no containers so poolHasContainers()
 			// check passes.
@@ -909,6 +875,14 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				tc.mgmtSvc = newTestMgmtSvc(t, log)
 			}
 			tc.mgmtSvc.log = log
+
+			numMembers := 8
+			for i := 0; i < numMembers; i++ {
+				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			poolSvc := tc.poolSvc
 			if poolSvc == nil {
 				poolSvc = testPoolService

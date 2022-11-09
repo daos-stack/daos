@@ -15,7 +15,6 @@
 #include <gurt/list.h>
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/daos_engine.h>
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,
@@ -46,6 +45,7 @@ struct smd_pool_info {
 	uint64_t	*spi_blobs[SMD_DEV_TYPE_MAX];
 };
 
+struct sys_db;
 /**
  * Initialize SMD store, create store if it's not existing
  *

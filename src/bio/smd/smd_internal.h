@@ -18,6 +18,7 @@
 #include <daos/btree.h>
 #include <daos/mem.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/daos_engine.h>	/* Revise the potential layering issue later */
 
 #define TABLE_DEV	"device"
 

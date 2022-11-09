@@ -14,6 +14,21 @@
 
 typedef void (*ad_tx_cb_t)(int stage, void *data);
 
+struct ad_act {
+	d_list_t		it_link;
+	/** it is action for reserve, the modified content is in DRAM only */
+	bool			it_is_reserv;
+	struct umem_action	it_act;
+};
+
+struct ad_range {
+	/* link to ad_tx::tx_redo_ranges */
+	d_list_t		 ar_link;
+	uint64_t		 ar_off;
+	uint64_t		 ar_size;
+	bool			 ar_alloc;
+};
+
 /** ad-hoc allocator transaction handle */
 struct ad_tx {
 	struct ad_blob		*tx_blob;
@@ -24,12 +39,14 @@ struct ad_tx {
 	d_list_t		 tx_gp_free;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
-	struct umem_act_item	*tx_redo_act_pos;
+	struct ad_act		*tx_redo_act_pos;
 	/* the number of layer of nested TX, outermost layer is 1, +1 for inner TX */
 	int			 tx_layer;
 	int			 tx_last_errno;
 	ad_tx_cb_t		 tx_stage_cb;
 	void			*tx_stage_cb_arg;
+	/* tx_add ranges that need to redo when commit */
+	d_list_t		 tx_ranges;
 };
 
 /** action parameters for free() */
