@@ -8,6 +8,7 @@ package daos
 
 import (
 	"encoding/json"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"strconv"
 	"strings"
 
@@ -251,6 +252,7 @@ type SystemProperty struct {
 	Key         SystemPropertyKey
 	Value       SystemPropertyValue
 	Description string
+	PoolProperty uint32
 }
 
 func (sp *SystemProperty) String() string {
@@ -283,8 +285,10 @@ func (sp SystemPropertyKey) IsValid() bool {
 
 func (sp SystemPropertyKey) String() string {
 	if str, found := map[SystemPropertyKey]string{
-		SystemPropertyDaosVersion: "daos_version",
-		SystemPropertyDaosSystem:  "daos_system",
+		SystemPropertyDaosVersion:   "daos_version",
+		SystemPropertyDaosSystem:    "daos_system",
+		SystemPropertyPoolScrubMode: "scrub_mode",
+		SystemPropertyPoolScrubThresh: "scrub_thresh",
 	}[sp]; found {
 		return str
 	}
@@ -320,7 +324,10 @@ const (
 	SystemPropertyDaosVersion
 	// SystemPropertyDaosSystem retrieves the DAOS system name.
 	SystemPropertyDaosSystem
-
+	// SystemPropertyPoolScrubMode sets or retrieves the scrubbing mode for each pool in the system.
+	SystemPropertyPoolScrubMode
+	// SystemPropertyPoolScrubThresh sets or retrieves the scrubbing error threshold for each pool in the system.
+	SystemPropertyPoolScrubThresh
 	// NB: This must be the last entry.
 	systemPropertyMax
 )
@@ -415,5 +422,52 @@ func SystemProperties() SystemPropertyMap {
 			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
 			Description: "DAOS system name",
 		},
+		SystemPropertyPoolScrubMode: SystemProperty{
+			Key:         SystemPropertyPoolScrubMode,
+			Value:       NewStringPropVal("off", "off", "lazy", "timed"),
+			Description: "Checksum scrubbing mode",
+			PoolProperty: PoolPropertyScrubMode,
+		},
+		SystemPropertyPoolScrubThresh: SystemProperty{
+			Key:         SystemPropertyPoolScrubThresh,
+			Value:       NewIntPropVal(0),
+			Description: "Checksum scrubbing threshold",
+			PoolProperty: PoolPropertyScrubThresh,
+		},
+	}
+}
+
+func SystemPropToPoolProp(poolProperty uint32, v string) (*mgmtpb.PoolProperty, error) {
+	switch poolProperty {
+	case PoolPropertyScrubMode :
+		// Need to convert string system prop value to int pool property
+		// todo: hmmm these strings must match
+		//   what's in system_prop.go: ...NewStringPropVal("off", "off", "lazy", "timed"),
+		value := map[string]uint64{
+			"off":   PoolScrubModeOff,
+			"lazy":  PoolScrubModeLazy,
+			"timed": PoolScrubModeTimed,
+		}[v]
+
+		return &mgmtpb.PoolProperty{
+			Number: poolProperty,
+			Value:  &mgmtpb.PoolProperty_Numval{
+				Numval: value,
+			},
+		}, nil
+	case PoolPropertyScrubThresh:
+		intValue, err := strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return &mgmtpb.PoolProperty{
+			Number: poolProperty,
+			Value:  &mgmtpb.PoolProperty_Numval{
+				Numval: intValue,
+			},
+		}, nil
+	default:
+		return nil, errors.Errorf("Pool Property %d unexpected", poolProperty)
+
 	}
 }

@@ -1138,6 +1138,25 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 		return nil, err
 	}
 
+	// for any system property that has a pool property, update all pools
+	for k, v := range req.GetProperties() {
+		p, ok := svc.systemProps.Get(k)
+		if !ok {
+			return nil, errors.Errorf("unknown property %q", k)
+		}
+		if p.PoolProperty > daos.PoolPropertyMin {
+			poolProp, err := daos.SystemPropToPoolProp(p.PoolProperty, v)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := svc.PoolSetSystemProp(ctx, poolProp, req.GetSys()); err != nil {
+				fmt.Printf("Error setting p: %s\n", err)
+				return nil, err
+			}
+		}
+	}
+
 	return &mgmtpb.DaosResp{}, nil
 }
 
@@ -1158,4 +1177,42 @@ func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetProp
 
 	resp = &mgmtpb.SystemGetPropResp{Properties: props}
 	return
+}
+
+// PoolSetSystemProp sets the system prop for each pool
+func (svc *mgmtSvc) PoolSetSystemProp(ctx context.Context, prop *mgmtpb.PoolProperty, sys string) (err error) {
+	listPoolReq := &mgmtpb.ListPoolsReq{
+		Sys: sys,
+	}
+
+	poolRes, err := svc.ListPools(ctx, listPoolReq)
+	if err != nil {
+		fmt.Printf("Error listing pools: %s\n", err)
+		return err
+	}
+	for _, p := range poolRes.Pools {
+		ps, err := svc.getPoolService(p.Label)
+		if err != nil {
+			return err
+		}
+		ranks, err := svc.getPoolServiceRanks(ps)
+		if err != nil {
+			return err
+		}
+
+		req := &mgmtpb.PoolSetPropReq{
+			Sys: sys,
+			Id:  p.Label, // Pool uuid/label
+			Properties: []*mgmtpb.PoolProperty{
+				prop,
+			},
+			SvcRanks: ranks,
+		}
+		_, err = svc.PoolSetProp(ctx, req)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
