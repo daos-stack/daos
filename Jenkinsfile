@@ -654,7 +654,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -710,7 +710,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -737,7 +737,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -849,7 +849,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
@@ -868,7 +868,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),

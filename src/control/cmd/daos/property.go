@@ -103,8 +103,11 @@ var propHdlrs = propHdlrMap{
 			}
 			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
-			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
-			freeString(cStr)
+			defer freeString(cStr)
+			rc := C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
+			if err := daosError(rc); err != nil {
+				return err
+			}
 			return nil
 		},
 		nil,

@@ -321,7 +321,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, err
 		}
 
-		ur := new(UnaryResponse)
+		ur := &UnaryResponse{log: log}
 		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
 			return nil, wrapReqTimeout(req, err)
 		}
@@ -409,13 +409,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		ur := &UnaryResponse{fromMS: true}
+		ur := &UnaryResponse{log: log, fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		_, err = ur.getMSResponse()
+		err = ur.getMSError()
 		// If the request specifies that the error is retryable,
 		// check to see if it also defines its own retry logic
 		// and run that if so. Otherwise, let the usual retry
@@ -486,7 +486,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 
 		backoff := common.ExpBackoff(req.retryAfter(baseMSBackoff), uint64(try), maxMSBackoffFactor)
-		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
+		log.Debugf("retrying MS request after %s", backoff)
 		select {
 		case <-reqCtx.Done():
 			if isTimeout(reqCtx.Err()) {

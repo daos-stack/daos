@@ -189,7 +189,13 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (size nranks)",
 			"pool create --size 100% --nranks 16",
 			"",
-			errors.New("--size may not be mixed with --num-ranks"),
+			errors.New("--size may not be mixed with --nranks"),
+		},
+		{
+			"Create pool with incompatible arguments (size tier-ratio)",
+			"pool create --size 100% --tier-ratio 16",
+			"",
+			errors.New("--size may not be mixed with --tier-ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
@@ -1432,6 +1438,7 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			poolCreateCmd.TierRatio = `6,94`
 
 			err := poolCreateCmd.Execute(nil)
 

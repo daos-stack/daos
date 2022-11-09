@@ -1214,9 +1214,12 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_tgt_destroy_in in;
 	int rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return -DER_NO_HDL;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
@@ -1921,8 +1924,10 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
-	pool = ds_pool_lookup(args->pool_uuid);
-	if (pool == NULL) {
+	rc = ds_pool_lookup(args->pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(args->pool_uuid), DP_RC(rc));
 		rc = -DER_NO_HDL;
 		goto out;
 	}

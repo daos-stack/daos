@@ -1218,49 +1218,28 @@ dfs_test_mt_connect(void **state)
 }
 
 static void
-dfs_test_chown(void **state)
+run_chown_tests(dfs_obj_t *obj, char *name, int mode)
 {
-	test_arg_t	*arg = *state;
-	dfs_obj_t	*obj, *sym;
-	char		*filename = "chown_test";
-	char		*symname = "sym_chown_test";
+	dfs_obj_t	*sym;
+	char		*s = "sym_chown_test";
 	struct stat	stbuf;
-	struct stat	stbuf2;
 	uid_t		orig_uid;
 	gid_t		orig_gid;
-	int		rc;
-	char		*filename_file1 = "open_stat1";
-	char		*filename_file2 = "open_stat2";
-	mode_t		create_mode = S_IWUSR | S_IRUSR;
-	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	struct timespec	prev_ts;
+	int		rc;
 
-	if (arg->myrank != 0)
-		return;
-
-	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &obj, NULL, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_uid, geteuid());
-	assert_int_equal(stbuf.st_gid, getegid());
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
-		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &obj);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
-	assert_int_equal(rc, 0);
-	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
-	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
+	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
+	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	orig_uid = stbuf.st_uid;
 	orig_gid = stbuf.st_gid;
 
 	/** should succeed but not change anything */
-	rc = dfs_chown(dfs_mt, NULL, filename, -1, -1, 0);
+	rc = dfs_chown(dfs_mt, NULL, name, -1, -1, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, orig_uid);
 	assert_int_equal(stbuf.st_gid, orig_gid);
@@ -1269,9 +1248,9 @@ dfs_test_chown(void **state)
 	assert_int_equal(prev_ts.tv_nsec, stbuf.st_ctim.tv_nsec);
 
 	/** set uid to 0 */
-	rc = dfs_chown(dfs_mt, NULL, filename, 0, -1, 0);
+	rc = dfs_chown(dfs_mt, NULL, name, 0, -1, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, orig_gid);
@@ -1280,9 +1259,9 @@ dfs_test_chown(void **state)
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** set gid to 0 */
-	rc = dfs_chown(dfs_mt, NULL, filename, -1, 0, 0);
+	rc = dfs_chown(dfs_mt, NULL, name, -1, 0, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 0);
 	assert_int_equal(stbuf.st_gid, 0);
@@ -1297,8 +1276,10 @@ dfs_test_chown(void **state)
 	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 3);
 	assert_int_equal(stbuf.st_gid, 4);
@@ -1307,9 +1288,9 @@ dfs_test_chown(void **state)
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
 	/** set uid to 1, gid to 2 */
-	rc = dfs_chown(dfs_mt, NULL, filename, 1, 2, 0);
+	rc = dfs_chown(dfs_mt, NULL, name, 1, 2, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 1);
 	assert_int_equal(stbuf.st_gid, 2);
@@ -1317,43 +1298,92 @@ dfs_test_chown(void **state)
 	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
 
-	/** create a symlink to that file */
-	rc = dfs_open(dfs_mt, NULL, symname, S_IFLNK | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT | O_EXCL, 0, 0, filename, &sym);
+	/** create a symlink to that file/dir */
+	rc = dfs_open(dfs_mt, NULL, s, S_IFLNK | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0, 0,
+		      name, &sym);
 	assert_int_equal(rc, 0);
 
-	/** chown of file through symlink */
-	rc = dfs_chown(dfs_mt, NULL, symname, 3, 4, 0);
+	/** chown of file/dir through symlink */
+	rc = dfs_chown(dfs_mt, NULL, s, 3, 4, 0);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 3);
 	assert_int_equal(stbuf.st_gid, 4);
 
 	/** chown of symlink itself */
-	rc = dfs_chown(dfs_mt, NULL, symname, 5, 6, O_NOFOLLOW);
+	rc = dfs_chown(dfs_mt, NULL, s, 5, 6, O_NOFOLLOW);
 	assert_int_equal(rc, 0);
-	rc = dfs_stat(dfs_mt, NULL, filename, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 3);
 	assert_int_equal(stbuf.st_gid, 4);
-	rc = dfs_stat(dfs_mt, NULL, symname, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, s, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, 5);
 	assert_int_equal(stbuf.st_gid, 6);
 
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
 	rc = dfs_release(sym);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, s, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_chown(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file, *dir;
+	char		*f = "chown_test_f";
+	char		*d = "chown_test_d";
+	struct stat	stbuf;
+	struct stat	stbuf2;
+	char		*filename_file1 = "open_stat1";
+	char		*filename_file2 = "open_stat2";
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_uid, geteuid());
+	assert_int_equal(stbuf.st_gid, getegid());
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, f, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR, create_flags,
+		      0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs_mt, NULL, d, S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR, create_flags,
+		      0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	print_message("Running chown tests on file object...\n");
+	run_chown_tests(file, f, S_IFREG);
+	print_message("done\n");
+	print_message("Running chown tests on dir object...\n");
+	run_chown_tests(dir, d, S_IFDIR);
+	print_message("done\n");
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, f, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, d, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	/* Test the open_stat call with passing in uid/gid */
 	/** Create /file1 */
 	rc = dfs_open_stat(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
-			   create_flags, 0, 0, NULL, &obj, NULL);
+			   create_flags, 0, 0, NULL, &file, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_release(obj);
+	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
 
 	/** verify ownership */
@@ -1366,13 +1396,13 @@ dfs_test_chown(void **state)
 	stbuf2.st_uid = 14;
 	stbuf2.st_gid = 15;
 	rc = dfs_open_stat(dfs_mt, NULL, filename_file2, create_mode | S_IFREG,
-			   create_flags, 0, 0, NULL, &obj, &stbuf2);
+			   create_flags, 0, 0, NULL, &file, &stbuf2);
 	assert_int_equal(rc, 0);
 
 	assert_int_equal(stbuf2.st_uid, 14);
 	assert_int_equal(stbuf2.st_gid, 15);
 
-	rc = dfs_release(obj);
+	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
 
 	/** verify ownership */
@@ -1383,11 +1413,8 @@ dfs_test_chown(void **state)
 }
 
 static void
-dfs_test_mtime(void **state)
+run_time_tests(dfs_obj_t *obj, char *name, int mode)
 {
-	test_arg_t		*arg = *state;
-	dfs_obj_t		*file;
-	char			*f = "test_mtime";
 	d_sg_list_t		sgl;
 	d_iov_t			iov;
 	char			buf[64];
@@ -1396,16 +1423,8 @@ dfs_test_mtime(void **state)
 	daos_size_t		size;
 	int			rc;
 
-	if (arg->myrank != 0)
-		return;
-
-	rc = dfs_open(dfs_mt, NULL, f, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
-		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
-
-	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 0);
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
@@ -1413,69 +1432,83 @@ dfs_test_mtime(void **state)
 	first_ts.tv_sec = prev_ts.tv_sec;
 	first_ts.tv_nsec = prev_ts.tv_nsec;
 
-	d_iov_set(&iov, buf, 64);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	dts_buf_render(buf, 64);
-	rc = dfs_write(dfs_mt, file, &sgl, 0, NULL);
-	assert_int_equal(rc, 0);
+	if (S_ISREG(mode)) {
+		d_iov_set(&iov, buf, 64);
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs = &iov;
+		dts_buf_render(buf, 64);
+		rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+	} else {
+		rc = dfs_mkdir(dfs_mt, obj, "d1", S_IFDIR, OC_S1);
+		assert_int_equal(rc, 0);
+	}
 
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
+	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 64);
+	if (S_ISREG(mode))
+		assert_int_equal(stbuf.st_size, 64);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
-	rc = dfs_read(dfs_mt, file, &sgl, 0, &size, NULL);
-	assert_int_equal(rc, 0);
+	if (S_ISREG(mode)) {
+		rc = dfs_read(dfs_mt, obj, &sgl, 0, &size, NULL);
+		assert_int_equal(rc, 0);
 
-	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_stat(dfs_mt, NULL, f, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 64);
-	assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
-	assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+		memset(&stbuf, 0, sizeof(stbuf));
+		rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 64);
+		assert_int_equal(prev_ts.tv_sec, stbuf.st_mtim.tv_sec);
+		assert_int_equal(prev_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
+	}
 
-	/** reset the mtime on the file to the first timestamp */
+	/** reset the mtime on the file/dir to the first timestamp */
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = first_ts.tv_sec;
 	stbuf.st_mtim.tv_nsec = first_ts.tv_nsec;
-	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 
-	/** truncate the file */
-	rc = dfs_punch(dfs_mt, file, 0, DFS_MAX_FSIZE);
-	assert_int_equal(rc, 0);
+	/** truncate the file or remove an entry from the dir */
+	if (S_ISREG(mode)) {
+		rc = dfs_punch(dfs_mt, obj, 0, DFS_MAX_FSIZE);
+		assert_int_equal(rc, 0);
+	} else {
+		rc = dfs_remove(dfs_mt, obj, "d1", true, NULL);
+		assert_int_equal(rc, 0);
+	}
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
 	/** set size on file with dfs_osetattr and stat at same time */
-	memset(&stbuf, 0, sizeof(stbuf));
-	stbuf.st_size = 1024;
-	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_SIZE);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 1024);
-	/** check the mtime was updated with the setattr */
-	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	if (S_ISREG(mode)) {
+		memset(&stbuf, 0, sizeof(stbuf));
+		stbuf.st_size = 1024;
+		rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_SIZE);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 1024);
+		/** check the mtime was updated with the setattr */
+		assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	}
 
 	struct tm	tm = {0};
 	time_t		ts;
@@ -1490,11 +1523,11 @@ dfs_test_mtime(void **state)
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = ts;
 	stbuf.st_mtim.tv_nsec = 0;
-	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 	/** verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);
@@ -1510,11 +1543,11 @@ dfs_test_mtime(void **state)
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = ts;
 	stbuf.st_mtim.tv_nsec = 0;
-	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 	/* verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);
@@ -1530,21 +1563,53 @@ dfs_test_mtime(void **state)
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_mtim.tv_sec = ts;
 	stbuf.st_mtim.tv_nsec = 0;
-	rc = dfs_osetattr(dfs_mt, file, &stbuf, DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	assert_int_equal(rc, 0);
 	/* verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, file, &stbuf);
+	rc = dfs_ostat(dfs_mt, obj, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);
 	strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
 	print_message("mtime = %s\n", time_str);
 	assert_true(strncmp("2999", time_str, 4) == 0);
+}
+
+static void
+dfs_test_mtime(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*file, *dir;
+	char			*f = "test_mtime_f";
+	char			*d = "test_mtime_d";
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = dfs_open(dfs_mt, NULL, f, S_IFREG | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, d, S_IFDIR | S_IWUSR | S_IRUSR | S_IXUSR,
+		      O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	print_message("Running mtime/ctime tests on file object...\n");
+	run_time_tests(file, f, S_IFREG);
+	print_message("done\n");
+	print_message("Running mtime/ctime tests on dir object...\n");
+	run_time_tests(dir, d, S_IFDIR);
+	print_message("done\n");
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, f, 0, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, d, 0, NULL);
 	assert_int_equal(rc, 0);
 }
 

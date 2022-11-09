@@ -2,7 +2,6 @@
 import sys
 import subprocess
 import daos_build
-import compiler_setup
 
 TEST_CMOCKA_SKIP = """
 #include <stdarg.h>
@@ -79,7 +78,7 @@ def scons():
     libraries += ['uuid', 'cmocka', 'pthread', 'isal', 'dpar']
 
     dfuse_env = base_env.Clone()
-    compiler_setup.base_setup(dfuse_env)
+    dfuse_env.compiler_setup()
     dfusetest = daos_build.program(dfuse_env, File("dfuse_test.c"), LIBS='cmocka')
     denv.Install('$PREFIX/bin/', dfusetest)
 
