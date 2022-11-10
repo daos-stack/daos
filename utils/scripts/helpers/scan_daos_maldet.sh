@@ -19,6 +19,15 @@ else
   echo "Unknown distribution."
   exit 1
 fi
+fails=0
+mal_strt="!-- "
+mal_end=" --"
+# fake a failure for testing
+if sudo /usr/local/sbin/maldet --update-sigs; then
+   ((fails+=1))
+   mal_strt=""
+   mal_end=""
+fi
 
 sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               -d /usr/local/maldetect/sigs/rfxn.hdb -r \
@@ -33,20 +42,24 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --infected / | tee /var/tmp/clamscan.out
 malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
-if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-  cat << EOF_GOOD > "$malxml"
-<testsuite skip="0" failures="0" errors="0" tests="1" name="Malware_Scan">
+clam_strt="!-- "
+clam_end=" --"
+if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+  clam_strt=""
+  clam_end=""
+  ((fails+=1))
+fi
+
+cat << EOF > "$malxml"
+<testsuite skip="0" failures="$fails" errors="0" tests="1" name="Malware_Scan">
+  <testcase name="Maldet update" classname="Maldet"/>
+    <${mal_strt}failure message="Maldet signature update failed" type="warning">
+    </failure${mal_end}>
+  </testcase>
   <testcase name="Malware_scan" classname="ClamAV"/>
-</testsuite>
-EOF_GOOD
-else
-  cat << EOF_BAD > "$malxml"
-<testsuite skip="0" failures="1" errors="0" tests="1" name="Malware_Scan">
-  <testcase name="Malware_scan" classname="ClamAV">
-    <failure message="Malware Detected" type="error">
+    <${clam_strt}failure message="Malware Detected" type="error">
       <![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>
-    </failure>
+    </failure${clam_end}>
   </testcase>
 </testsuite>
-EOF_BAD
-fi
+EOF

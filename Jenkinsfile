@@ -866,7 +866,7 @@ pipeline {
                                 failure_artifacts: env.STAGE_NAME,
                                 ignore_failure: false,
                                 description: env.STAGE_NAME,
-                                context: 'test' + env.STAGE_NAME
+                                context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
@@ -898,7 +898,7 @@ pipeline {
                               failure_artifacts: env.STAGE_NAME,
                               ignore_failure: false,
                               description: env.STAGE_NAME,
-                              context: 'test' + env.STAGE_NAME
+                              context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
