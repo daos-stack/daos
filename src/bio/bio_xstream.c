@@ -77,6 +77,9 @@ struct bio_nvme_data {
 	int			 bd_mem_size;
 	bool			 bd_started;
 	bool			 bd_bypass_health_collect;
+	/* Setting to persist SPDK JSON-RPC server */
+	bool			 bd_persist_rpc_srv;
+	const char		*bd_rpc_srv_addr;
 };
 
 static struct bio_nvme_data nvme_glb;
@@ -124,6 +127,12 @@ bio_spdk_env_init(void)
 			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
+
+		/**
+		 * TODO DAOS-11032: Retrieve flag to indicate whether to persist the SPDK JSON-RPC
+		 *                  server from the JSON config used to initialise SPDK subsystems
+		 *                  e.g. rc = bio_read_spdk_rpc_srv_settings(nvme_glb);
+		 */
 	}
 
 	rc = spdk_env_init(&opts);
@@ -202,6 +211,8 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
+	/* TODO DAOS-11032: Retrieve the following setting from bd_nvme_conf */
+	nvme_glb.bd_persist_rpc_srv = true;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
@@ -1268,6 +1279,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		if (is_init_xstream(ctxt)) {
 			struct common_cp_arg	cp_arg;
 
+			/* Close SPDK JSON-RPC server if it is being persisted. */
+			if (nvme_glb.bd_persist_rpc_srv)
+				spdk_rpc_finish();
+
 			/*
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
@@ -1411,6 +1426,17 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
+		}
+
+		/* After bio_bdevs are initialized, restart SPDK JSON-RPC server if required. */
+		if (nvme_glb.bd_persist_rpc_srv) {
+			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
+				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
+
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			if (rc != 0)
+				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
+					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
 		}
 	}
 
