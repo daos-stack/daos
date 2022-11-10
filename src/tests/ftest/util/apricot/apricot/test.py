@@ -192,7 +192,7 @@ class Test(avocadoTest):
             vals = item.split('|')
             skip_it, ticket = self._check_variant_skip(literal_eval(vals[0]))
             if skip_it:
-                # test is on the skiplist
+                # test is on the skip list
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
@@ -776,7 +776,7 @@ class TestWithServers(TestWithoutServers):
         if self.start_servers_once and not force_agent_start:
             # Check for any existing pools that may still exist in each
             # continually running server group.  Pools may still exists if a
-            # previous test method/varaint's tearDown was unable to complete.
+            # previous test method/variant's tearDown was unable to complete.
             # This will hopefully ensure these errors do not affect the next
             # test.  Since the storage is reformatted and the pool metadata is
             # erased when the servers are restarted this check is only needed
@@ -1726,7 +1726,7 @@ class TestWithServers(TestWithoutServers):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
     @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, **kwargs):
+    def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):
         """Create a TestContainer object.
 
         Args:
@@ -1734,6 +1734,8 @@ class TestWithServers(TestWithoutServers):
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults to True.
+            daos_command (DaosCommand, optional): daos command object.
+                Defaults to self.get_daos_command()
             kwargs (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
 
@@ -1745,7 +1747,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=self.get_daos_command())
+        container = TestContainer(pool, daos_command=(daos_command or self.get_daos_command()))
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)
