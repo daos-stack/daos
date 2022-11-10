@@ -186,7 +186,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	comm->flags = flags;
 
 	/** Socket file to be readable and writable by user only */
-	if (fchmod(comm->fd, S_IRUSR|S_IWUSR) != 0) {
+	if (fchmod(comm->fd, S_IRUSR | S_IWUSR) != 0) {
 		int rc = errno;
 
 		D_ERROR("Failed to set access permissions on socket fd %d, errno=%d(%s)\n",
