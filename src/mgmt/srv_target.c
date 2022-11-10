@@ -114,8 +114,10 @@ dir_fsync(const char *path)
 
 	fd = open(path, O_RDONLY|O_DIRECTORY);
 	if (fd < 0) {
-		D_ERROR("failed to open %s for sync: %d\n", path, errno);
-		return daos_errno2der(errno);
+		rc = errno;
+		D_CDEBUG(rc == ENOENT, DB_MGMT, DLOG_ERR, "failed to open %s for sync: %d\n", path,
+			 rc);
+		return daos_errno2der(rc);
 	}
 
 	rc = fsync(fd);

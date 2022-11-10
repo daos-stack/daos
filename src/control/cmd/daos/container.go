@@ -162,7 +162,8 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
 		var attr C.dfs_attr_t
-		var oclass [10]C.char
+		var oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+		var dir_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
 		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
@@ -175,6 +176,9 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		}
 		C.daos_oclass_id2name(attr.da_oclass_id, &oclass[0])
 		ci.ObjectClass = C.GoString(&oclass[0])
+		C.daos_oclass_id2name(attr.da_dir_oclass_id, &dir_oclass[0])
+		ci.DirObjectClass = C.GoString(&dir_oclass[0])
+		ci.CHints = C.GoString(&attr.da_hints[0])
 		ci.ChunkSize = uint64(attr.da_chunk_size)
 
 		if err := dfsError(C.dfs_umount(dfs)); err != nil {
@@ -741,6 +745,12 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
 		}
+		if ci.DirObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass})
+		}
+		if ci.CHints != "" {
+			rows = append(rows, txtfmt.TableRow{"Hints": ci.CHints})
+		}
 		if ci.ChunkSize > 0 {
 			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
 		}
@@ -761,6 +771,8 @@ type containerInfo struct {
 	CloseModifyTime  *uint64    `json:"close_modify_time"`
 	Type             string     `json:"container_type"`
 	ObjectClass      string     `json:"object_class,omitempty"`
+	DirObjectClass   string     `json:"dir_object_class,omitempty"`
+	CHints           string     `json:"hints,omitempty"`
 	ChunkSize        uint64     `json:"chunk_size,omitempty"`
 }
 

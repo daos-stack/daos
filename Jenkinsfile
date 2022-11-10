@@ -252,7 +252,7 @@ pipeline {
                     env.COMMIT_MESSAGE.split('\n').each { line ->
                         String key, value
                         try {
-                            (key, value) = line.split(':')
+                            (key, value) = line.split(':', 2)
                             if (key.contains(' ')) {
                                 return
                             }
@@ -295,7 +295,7 @@ pipeline {
                             if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
                                 error('Your PR branch name does not follow the rules. Please rename it ' +
                                       'according to the rules described here: ' +
-                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
                                       'Once you have renamed your branch locally to match the ' +
                                       'format, close this PR and open a new one using the newly renamed ' +
                                       'local branch.')
@@ -654,7 +654,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -710,7 +710,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -737,7 +737,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -849,7 +849,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
@@ -868,7 +868,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),

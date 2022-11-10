@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -20,7 +19,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, convert_list
+    run_pcmd, convert_list, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
@@ -962,7 +961,9 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
-            env = macsio.get_environment("mpirun", log_file=daos_log)
+            env = macsio.env.copy()
+            env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
+
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
@@ -1110,8 +1111,7 @@ def create_racer_cmdline(self, job_spec):
         self.soaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
-    env = daos_racer.get_environment(self.server_managers[0], racer_log)
-    daos_racer.set_environment(env)
+    daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
     log_name = job_spec
     cmds = []
     cmds.append(str(daos_racer))

@@ -5,24 +5,28 @@ timeout: 1200
 server_config:
   name: daos_server
   crt_timeout: 60
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0","0000:da:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    env_vars:
-      - SWIM_PROTOCOL_PERIOD_LEN=2000
-      - SWIM_SUSPECT_TIMEOUT=19000
-      - SWIM_PING_TIMEOUT=1900
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      env_vars:
+        - SWIM_PROTOCOL_PERIOD_LEN=2000
+        - SWIM_SUSPECT_TIMEOUT=19000
+        - SWIM_PING_TIMEOUT=1900
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 testparams:
   ranks_to_kill:
     - [6]
     - [5]
     - [3,4]
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 10G
   nvme_size: 60G
   svcn: 5

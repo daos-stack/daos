@@ -110,7 +110,7 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_AGE_PRESERVE	3
 
 /* The threshold for yield CPU when handle DTX RPC. */
-#define DTX_RPC_YIELD_THD	64
+#define DTX_RPC_YIELD_THD	32
 
 /* The time threshold for triggering DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
@@ -144,6 +144,13 @@ extern uint32_t dtx_batched_ult_max;
 /* The threshold for using helper ULT when handle DTX RPC. */
 #define DTX_RPC_HELPER_THD_MIN	18
 #define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
+
+/*
+ * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
+ * dynamically when use it to avoid holding a lot of DRAM resource for long time that
+ * may happen on some very large system.
+ */
+#define DTX_INLINE_MBS_SIZE		512
 
 extern uint32_t dtx_rpc_helper_thd;
 

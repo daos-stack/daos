@@ -2,6 +2,7 @@
 
 * [ ] Two review approvals and any prior change requests have been resolved.
 * [ ] Testing is complete and all tests passed or there is a reason documented in the PR why it should be force landed and forced-landing tag is set.
+* [ ] `Features:` (or `Test-tag*`) commit pragma was used or there is a reason documented that there are no appropriate tags for this PR.
 * [ ] Commit messages follows the guidelines outlined [here](https://daosio.atlassian.net/wiki/spaces/DC/pages/11133911069/Commit+Comments).
 * [ ] Any tests skipped by the ticket being addressed have been run and passed in the PR.
 

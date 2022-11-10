@@ -3,32 +3,34 @@ hosts:
   test_clients: 3
 timeout: 1000
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 500G
   control_method: dmg
 container:

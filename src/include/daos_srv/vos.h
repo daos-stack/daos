@@ -100,6 +100,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	      bool for_refresh);
 
 /**
+ * Load participants information for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -195,9 +207,10 @@ vos_dtx_cmt_reindex(daos_handle_t coh, void *hint);
  * Cleanup local DTX when local modification failed.
  *
  * \param dth	[IN]	The DTX handle.
+ * \param unpin	[IN]	unpin the DTX entry or not.
  */
 void
-vos_dtx_cleanup(struct dtx_handle *dth);
+vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
 
 /**
  * Reset DTX related cached information in VOS.

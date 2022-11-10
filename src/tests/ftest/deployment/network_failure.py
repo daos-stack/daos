@@ -69,8 +69,7 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
 
@@ -123,7 +122,8 @@ class NetworkFailureTest(IorTestBase):
 
         return ip_to_host
 
-    def create_host_to_ranks(self, ip_to_host, system_query_members):
+    @staticmethod
+    def create_host_to_ranks(ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
         Args:
@@ -202,8 +202,7 @@ class NetworkFailureTest(IorTestBase):
         errors = []
         self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
-        self.interface = self.params.get(
-            "fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
         self.log.info("interface to update = %s", self.interface)
 
         if self.test_env == "ci":
@@ -390,7 +389,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 4. Take down the interface where the pool isn't created.
         errors = []
-        self.interface = self.params.get("fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
 
         # wolf
         if self.test_env == "ci":
@@ -402,12 +401,6 @@ class NetworkFailureTest(IorTestBase):
             command = "sudo ip link set {} {}".format(self.interface, "down")
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
-
-        # Some ranks may be excluded after bringing down the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            self.fail(
-                "One or more servers crashed after bringing down the network interface!")
 
         # 5. Run IOR with oclass SX.
         ior_results = {}
@@ -448,11 +441,33 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing up the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            msg = "One or more servers crashed after bringing up the network interface!"
-            errors.append(msg)
+        # Some ranks may be excluded after bringing up the network interface. Check if
+        # all ranks are joined. If not, restart the servers and check again.
+        dmg_command = self.get_dmg_command()
+
+        # First, wait up to 60 sec for server(s) to crash. Whether a rank is marked as
+        # dead is determined by SWIM, so we need to give some time for the protocol to
+        # make the decision.
+        count = 0
+        server_crashed = False
+        while count < 60:
+            if not check_system_query_status(dmg_command.system_query()):
+                server_crashed = True
+                break
+            count += 1
+            time.sleep(1)
+
+        # If server crash was detected, restart.
+        if server_crashed:
+            self.log.info("Not all ranks are joined. Restart the servers.")
+            dmg_command.system_stop()
+            dmg_command.system_start()
+
+            # Now all ranks should be joined.
+            if not self.wait_for_ranks_to_join():
+                msg = ("One or more servers crashed after bringing up the network "
+                       "interface!")
+                errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)
