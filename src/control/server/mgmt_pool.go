@@ -441,34 +441,46 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	return resp, nil
 }
 
-func (svc *mgmtSvc) PoolCreateAddSystemProps(ctx context.Context, req *mgmtpb.PoolCreateReq) (err error) {
-	// Getting System Properties ...
-	systemPropReq := &mgmtpb.SystemGetPropReq{
-		Sys:  req.Sys,
-		Keys: []string{},
-	}
-	props, err := svc.SystemGetProp(ctx, systemPropReq)
-
-	for k, v := range props.GetProperties() {
-		// note: svc.systemProps has all the original/default system properties, so can't use it for current values.
-		// But can use it to get an associated Pool Property
-		p, found := svc.systemProps.Get(k)
-
+func (svc *mgmtSvc) PoolCreateAddSystemProps(ctx context.Context, req *mgmtpb.PoolCreateReq) error {
+	poolSysProps := make(map[uint32]*daos.PoolProperty)
+	for sp := range svc.systemProps.Iter() {
+		pp, found := sp2pp(sp)
 		if !found {
-			return errors.Errorf("unable to get system property: %s", k)
-		} else {
-			if p.PoolProperty > daos.PoolPropertyMin {
-				// should push this system property down to pool
-				poolProp, err := daos.SystemPropToPoolProp(p.PoolProperty, v)
-				if err != nil {
-					return err
-				}
-				svc.log.Debugf("From system prop '%s (%s) ', added pool prop %d: %+v\n",
-					k, v, poolProp.Number, poolProp.Value)
-
-				req.Properties = append(req.Properties, poolProp)
-			}
+			continue
 		}
+		poolSysProps[pp.Number] = pp
+
+		curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, sp.Key.String())
+		if err != nil {
+			return err
+		}
+		if err := pp.SetValue(curVal); err != nil {
+			return err
+		}
+	}
+
+	if len(poolSysProps) == 0 {
+		return nil
+	}
+
+	poolSetProps := make(map[uint32]*mgmtpb.PoolProperty)
+	for _, p := range req.GetProperties() {
+		poolSetProps[p.GetNumber()] = p
+	}
+
+	for k, p := range poolSysProps {
+		if _, found := poolSetProps[k]; found {
+			continue
+		}
+		pbProp := &mgmtpb.PoolProperty{
+			Number: p.Number,
+		}
+		if nv, err := p.Value.GetNumber(); err == nil {
+			pbProp.SetValueNumber(nv)
+		} else {
+			pbProp.SetValueString(p.Value.String())
+		}
+		req.Properties = append(req.Properties, pbProp)
 	}
 
 	return nil

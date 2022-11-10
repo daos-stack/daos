@@ -1124,8 +1124,15 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	return
 }
 
+func sp2pp(sp *daos.SystemProperty) (*daos.PoolProperty, bool) {
+	if pp, ok := sp.Value.(interface{ PoolProperty() *daos.PoolProperty }); ok {
+		return pp.PoolProperty(), true
+	}
+	return nil, false
+}
+
 // SystemSetProp sets user-visible system properties.
-func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (_ *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetPropReq) (resp *mgmtpb.DaosResp, err error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -1139,25 +1146,55 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 	}
 
 	// for any system property that has a pool property, update all pools
-	for k, v := range req.GetProperties() {
+	var poolSysProps []*daos.PoolProperty
+	for k := range req.GetProperties() {
 		p, ok := svc.systemProps.Get(k)
 		if !ok {
 			return nil, errors.Errorf("unknown property %q", k)
 		}
-		if p.PoolProperty > daos.PoolPropertyMin {
-			poolProp, err := daos.SystemPropToPoolProp(p.PoolProperty, v)
-			if err != nil {
-				return nil, err
-			}
-
-			if err := svc.PoolSetSystemProp(ctx, poolProp, req.GetSys()); err != nil {
-				fmt.Printf("Error setting p: %s\n", err)
-				return nil, err
-			}
+		if pp, ok := sp2pp(p); ok {
+			poolSysProps = append(poolSysProps, pp)
 		}
 	}
 
-	return &mgmtpb.DaosResp{}, nil
+	resp = new(mgmtpb.DaosResp)
+	if len(poolSysProps) == 0 {
+		return
+	}
+
+	pspr := &mgmtpb.PoolSetPropReq{
+		Sys:        req.Sys,
+		Properties: make([]*mgmtpb.PoolProperty, len(poolSysProps)),
+	}
+	for i, p := range poolSysProps {
+		pspr.Properties[i] = &mgmtpb.PoolProperty{
+			Number: uint32(p.Number),
+		}
+		if nv, err := p.Value.GetNumber(); err == nil {
+			pspr.Properties[i].SetValueNumber(nv)
+		} else {
+			pspr.Properties[i].SetValueString(p.Value.String())
+		}
+	}
+
+	pools, err := svc.sysdb.PoolServiceList(false)
+	if err != nil {
+		return nil, err
+	}
+	for _, ps := range pools {
+		pspr.Id = ps.PoolUUID.String()
+		pspr.SvcRanks = ranklist.RanksToUint32(ps.Replicas)
+		dResp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, pspr)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
+		}
+	}
+
+	return
 }
 
 // SystemGetProp gets user-visible system properties.

@@ -8,7 +8,6 @@ package daos
 
 import (
 	"encoding/json"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"strconv"
 	"strings"
 
@@ -252,7 +251,6 @@ type SystemProperty struct {
 	Key         SystemPropertyKey
 	Value       SystemPropertyValue
 	Description string
-	PoolProperty uint32
 }
 
 func (sp *SystemProperty) String() string {
@@ -285,10 +283,10 @@ func (sp SystemPropertyKey) IsValid() bool {
 
 func (sp SystemPropertyKey) String() string {
 	if str, found := map[SystemPropertyKey]string{
-		SystemPropertyDaosVersion:   "daos_version",
-		SystemPropertyDaosSystem:    "daos_system",
-		SystemPropertyPoolScrubMode: "scrub_mode",
-		SystemPropertyPoolScrubThresh: "scrub_thresh",
+		SystemPropertyDaosVersion:     "daos_version",
+		SystemPropertyDaosSystem:      "daos_system",
+		SystemPropertyPoolScrubMode:   "pool_scrub_mode",
+		SystemPropertyPoolScrubThresh: "pool_scrub_thresh",
 	}[sp]; found {
 		return str
 	}
@@ -409,8 +407,60 @@ func (spm SystemPropertyMap) UpdateCompPropVal(key SystemPropertyKey, sourceFn f
 	return errors.Errorf("system property %q does not exist", key)
 }
 
+type poolPropValue struct {
+	pph *PoolPropHandler
+}
+
+func (ppv poolPropValue) Handler(val string) error {
+	if ppv.pph == nil {
+		return errors.New("nil handler")
+	}
+
+	return ppv.pph.Property.SetValue(val)
+}
+
+func (ppv poolPropValue) Choices() []string {
+	if ppv.pph == nil {
+		return nil
+	}
+
+	return ppv.pph.Values()
+}
+
+func (ppv poolPropValue) String() string {
+	if ppv.pph == nil {
+		return "<nil>"
+	}
+
+	return ppv.pph.Property.String()
+}
+
+func (ppv poolPropValue) copy() SystemPropertyValue {
+	return poolPropValue{
+		pph: ppv.pph,
+	}
+}
+
+func (ppv poolPropValue) PoolProperty() *PoolProperty {
+	if ppv.pph == nil {
+		return nil
+	}
+
+	return &ppv.pph.Property
+}
+
+func pph2sp(key SystemPropertyKey, pph *PoolPropHandler) SystemProperty {
+	return SystemProperty{
+		Key:         key,
+		Value:       &poolPropValue{pph: pph},
+		Description: pph.Property.Description,
+	}
+}
+
 // SystemProperties returns the map of standard system properties.
 func SystemProperties() SystemPropertyMap {
+	poolProps := PoolProperties()
+
 	return SystemPropertyMap{
 		SystemPropertyDaosVersion: SystemProperty{
 			Key:         SystemPropertyDaosVersion,
@@ -422,22 +472,24 @@ func SystemProperties() SystemPropertyMap {
 			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
 			Description: "DAOS system name",
 		},
-		SystemPropertyPoolScrubMode: SystemProperty{
-			Key:         SystemPropertyPoolScrubMode,
-			Value:       NewStringPropVal("off", "off", "lazy", "timed"),
-			Description: "Checksum scrubbing mode",
+		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"]),
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub-thresh"]),
+		/*SystemPropertyPoolScrubMode: SystemProperty{
+			Key:          SystemPropertyPoolScrubMode,
+			Value:        NewStringPropVal("off", "off", "lazy", "timed"),
+			Description:  "Checksum scrubbing mode",
 			PoolProperty: PoolPropertyScrubMode,
 		},
 		SystemPropertyPoolScrubThresh: SystemProperty{
-			Key:         SystemPropertyPoolScrubThresh,
-			Value:       NewIntPropVal(0),
-			Description: "Checksum scrubbing threshold",
+			Key:          SystemPropertyPoolScrubThresh,
+			Value:        NewIntPropVal(0),
+			Description:  "Checksum scrubbing threshold",
 			PoolProperty: PoolPropertyScrubThresh,
-		},
+		},*/
 	}
 }
 
-func SystemPropToPoolProp(poolProperty uint32, v string) (*mgmtpb.PoolProperty, error) {
+/*func SystemPropToPoolProp(poolProperty uint32, v string) (*mgmtpb.PoolProperty, error) {
 	switch poolProperty {
 	case PoolPropertyScrubMode :
 		// Need to convert string system prop value to int pool property
@@ -470,4 +522,4 @@ func SystemPropToPoolProp(poolProperty uint32, v string) (*mgmtpb.PoolProperty, 
 		return nil, errors.Errorf("Pool Property %d unexpected", poolProperty)
 
 	}
-}
+}*/
