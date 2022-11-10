@@ -24,7 +24,8 @@ errs=0
 mal_strt="!-- "
 mal_end=" --"
 # debug
-ls -l /usr/bin/md5sum | true
+# shellcheck disable=SC2012
+ls -l /usr/bin/md5sum || true
 # fake a failure for testing
 if sudo -S -E /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
@@ -52,7 +53,7 @@ if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
-elif [ "$PUBIC_DISTRO" = "leap" ]; then
+elif [ "$PUBLIC_DISTRO" = "leap" ]; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
