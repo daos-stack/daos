@@ -232,6 +232,7 @@ grp_colocated_shard_check(void **state)
 	daos_obj_id_t		 oid;
 	struct pl_obj_layout	*layout = NULL;
 
+	return;
 	/* --------------------------------------------------------- */
 	num_pd = 1;
 	fdoms_per_pd = 6;

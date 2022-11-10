@@ -234,7 +234,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
 	if (map == NULL) {
-		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		D_DEBUG(DB_PL, "Cannot find valid placement map.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
