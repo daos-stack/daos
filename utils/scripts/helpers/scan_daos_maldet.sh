@@ -22,8 +22,10 @@ fi
 fails=0
 mal_strt="!-- "
 mal_end=" --"
+# debug
+ls -l /usr/bin/md5sum | true
 # fake a failure for testing
-if sudo /usr/local/sbin/maldet --update-sigs; then
+if sudo -S -E /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
    mal_strt=""
    mal_end=""
@@ -44,7 +46,12 @@ malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
 clam_strt="!-- "
 clam_end=" --"
+: "${PUBLIC_DISTRO:=unknown}"
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
+  clam_strt=""
+  clam_end=""
+  ((fails+=1))
+elif [ "$PUBIC_DISTRO" = "leap" ]; then
   clam_strt=""
   clam_end=""
   ((fails+=1))
@@ -57,9 +64,9 @@ cat << EOF > "$malxml"
     </failure${mal_end}>
   </testcase>
   <testcase name="Malware_scan" classname="ClamAV"/>
-    <${clam_strt}failure message="Malware Detected" type="error">
+    <${clam_strt}error message="Malware Detected" type="error">
       <![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>
-    </failure${clam_end}>
+    </error${clam_end}>
   </testcase>
 </testsuite>
 EOF

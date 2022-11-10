@@ -864,13 +864,14 @@ pipeline {
                                         'utils/scripts/helpers/scan_daos_maldet.sh',
                                 junit_files: 'maldetect_el8.xml',
                                 failure_artifacts: env.STAGE_NAME,
-                                ignore_failure: false,
+                                ignore_failure: true,
                                 description: env.STAGE_NAME,
                                 context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
                             junit 'maldetect_el8.xml'
+                            archiveArtifacts artifacts: 'maldetect_el8.xml'
                             job_status_update()
                         }
                     }
@@ -896,13 +897,14 @@ pipeline {
                                         'utils/scripts/helpers/scan_daos_maldet.sh',
                               junit_files: 'maldetect_leap15.xml',
                               failure_artifacts: env.STAGE_NAME,
-                              ignore_failure: false,
+                              ignore_failure: true,
                               description: env.STAGE_NAME,
                               context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
                             junit 'maldetect_leap15.xml'
+                            archiveArtifacts artifacts: 'maldetect_leap15.xml'
                             job_status_update()
                         }
                     }
