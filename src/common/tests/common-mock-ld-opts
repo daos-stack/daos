@@ -1,6 +1,7 @@
 --wrap=socket
 --wrap=connect
 --wrap=bind
+--wrap=fchmod
 --wrap=fcntl
 --wrap=listen
 --wrap=accept
