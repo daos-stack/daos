@@ -204,7 +204,7 @@ tx_restore_range(dav_obj_t *pop, struct ulog_entry_buf *range)
 	end = (char *)begin + size;
 	ASSERT((char *)end >= (char *)begin);
 
-	mo_wal_memcpy(&pop->p_ops, begin, range->data, size, 0);
+	memcpy(begin, range->data, size);
 }
 
 /*
@@ -249,7 +249,6 @@ tx_abort_set(dav_obj_t *pop)
 {
 	ulog_foreach_entry((struct ulog *)&pop->clogs.undo,
 		tx_undo_entry_apply, NULL, &pop->p_ops);
-	mo_wal_drain(&pop->p_ops);
 	operation_finish(pop->undo, ULOG_INC_FIRST_GEN_NUM);
 }
 
