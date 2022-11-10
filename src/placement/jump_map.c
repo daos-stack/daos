@@ -574,7 +574,7 @@ retry:
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				grp_shard_nr_left = grp_size - (shard_num % grp_size);
 				grp_dom_nr_used = 0;
-				if (remap || curr_dom_used_by_grp ||
+				if (1 || remap || curr_dom_used_by_grp ||
 				    curr_dom->do_comp.co_type <= fdom_lvl ||
 				    curr_pd != root_pos) {
 					curr_dom = dom_stack[top--];
