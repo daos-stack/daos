@@ -20,6 +20,7 @@ else
   exit 1
 fi
 fails=0
+errs=0
 mal_strt="!-- "
 mal_end=" --"
 # debug
@@ -50,15 +51,15 @@ clam_end=" --"
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   clam_strt=""
   clam_end=""
-  ((fails+=1))
+  ((errs+=1))
 elif [ "$PUBIC_DISTRO" = "leap" ]; then
   clam_strt=""
   clam_end=""
-  ((fails+=1))
+  ((errs+=1))
 fi
 
 cat << EOF > "$malxml"
-<testsuite skip="0" failures="$fails" errors="0" tests="1" name="Malware_Scan">
+<testsuite skip="0" failures="$fails" errors="$errs" tests="2" name="Malware_Scan">
   <testcase name="Maldet update" classname="Maldet"/>
     <${mal_strt}failure message="Maldet signature update failed" type="warning">
     </failure${mal_end}>
