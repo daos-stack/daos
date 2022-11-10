@@ -213,7 +213,7 @@ dc_obj_get_pda(struct dc_object *obj)
 {
 	struct cont_props	props;
 
-	props = dc_cont_hdl2props(obj->cob_coh);
+	props = dc_cont2props(obj->cob_co);
 
 	return daos_cont_props2pda(&props, obj_is_ec(obj));
 }

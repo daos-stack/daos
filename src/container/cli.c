@@ -3212,6 +3212,12 @@ dc_cont_hdl2csummer(daos_handle_t coh)
 }
 
 struct cont_props
+dc_cont2props(struct dc_cont *cont)
+{
+	return cont->dc_props;
+}
+
+struct cont_props
 dc_cont_hdl2props(daos_handle_t coh)
 {
 	struct dc_cont	*dc = NULL;

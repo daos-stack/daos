@@ -82,6 +82,7 @@ int dc_cont_node_id2ptr(daos_handle_t coh, uint32_t node_id,
 int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *con_uuid);
 daos_handle_t dc_cont_hdl2pool_hdl(daos_handle_t coh);
 struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
+struct cont_props dc_cont2props(struct dc_cont *cont);
 struct cont_props dc_cont_hdl2props(daos_handle_t coh);
 int dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl);
 int dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf);
