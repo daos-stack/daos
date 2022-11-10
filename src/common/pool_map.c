@@ -80,7 +80,10 @@ struct pool_map {
 	 * of component found in the pool
 	 */
 	struct pool_fail_comp	*po_comp_fail_cnts;
-
+	/* Current least in version from all UP/NEW targets. */
+	uint32_t		po_in_ver;
+	/* Current least fseq version from all DOWN targets. */
+	uint32_t		po_fseq;
 };
 
 static struct pool_comp_state_dict comp_state_dict[] = {
@@ -510,9 +513,9 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			goto out;
 		}
 
-		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d\n",
+		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d status %u\n",
 			pool_comp_type2str(comp->co_type), comp->co_id,
-			i, comp->co_nr);
+			i, comp->co_nr, comp->co_status);
 
 		if (comp->co_type == type)
 			continue;
@@ -909,6 +912,28 @@ pool_map_finalise(struct pool_map *map)
 	D_MUTEX_DESTROY(&map->po_lock);
 }
 
+void
+pool_map_init_in_fseq(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+	int i;
+
+	pool_tree_count(map->po_tree, &cntr);
+
+	for (i = 0; i < cntr.cc_targets; i++) {
+		struct pool_target *ta;
+
+		ta = &map->po_tree->do_targets[i];
+		if (ta->ta_comp.co_status == PO_COMP_ST_UP)
+			map->po_in_ver = min(map->po_in_ver, ta->ta_comp.co_in_ver);
+
+		if (ta->ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    ta->ta_comp.co_status == PO_COMP_ST_DRAIN)
+			map->po_fseq = min(map->po_fseq, ta->ta_comp.co_fseq);
+	}
+
+}
+
 /**
  * Install a component tree to a pool map.
  *
@@ -988,6 +1013,8 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	if (rc != 0)
 		goto out_domain_sorters;
 
+	map->po_in_ver = -1;
+	map->po_fseq = -1;
 	for (i = 0; i < cntr.cc_targets; i++) {
 		struct pool_target *ta;
 
@@ -995,6 +1022,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
 	}
 
+	pool_map_init_in_fseq(map);
 	rc = comp_sorter_sort(&map->po_target_sorter);
 	if (rc != 0)
 		goto out_target_sorter;
@@ -3079,4 +3107,9 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	addr_list->pta_number++;
 
 	return 0;
+}
+
+bool is_pool_map_adding(struct pool_map *map, uint32_t version)
+{
+	return map->po_in_ver != (uint32_t)(-1) && version >= map->po_in_ver;
 }

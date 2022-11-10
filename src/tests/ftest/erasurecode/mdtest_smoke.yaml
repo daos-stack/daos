@@ -39,7 +39,6 @@ server_config:
 pool:
   control_method: dmg
   size: 53%
-  tier_ratio: 50
 container:
   type: POSIX
   control_method: daos

@@ -499,13 +499,14 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 			 * rebuild/exclude process, so let's check pool_map_version
 			 * for now.
 			 */
-			pool = ds_pool_lookup(pool_uuid);
+			rc = ds_pool_lookup(pool_uuid, &pool);
 			if (pool == NULL || pool->sp_map_version < 2)
 				status->rs_state = DRS_NOT_STARTED;
 			else
 				status->rs_state = DRS_COMPLETED;
 			if (pool != NULL)
 				ds_pool_put(pool);
+			rc = 0;
 		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
@@ -842,7 +843,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	match_status = (rebuild_op == RB_OP_FAIL ? PO_COMP_ST_DOWN :
 			rebuild_op == RB_OP_DRAIN ? PO_COMP_ST_DRAIN :
 			rebuild_op == RB_OP_REINT ? PO_COMP_ST_UP :
-			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_NEW :
+			rebuild_op == RB_OP_EXTEND ? PO_COMP_ST_UP :
 			PO_COMP_ST_UPIN); /* RB_OP_RECLAIM */
 
 	if (tgts != NULL && tgts->pti_number > 0) {
@@ -1302,10 +1303,10 @@ rebuild_task_ult(void *arg)
 		dss_sleep((task->dst_schedule_time - cur_ts) * 1000);
 	}
 
-	pool = ds_pool_lookup(task->dst_pool_uuid);
+	rc = ds_pool_lookup(task->dst_pool_uuid, &pool);
 	if (pool == NULL) {
-		D_ERROR(DF_UUID": failed to look up pool\n",
-			DP_UUID(task->dst_pool_uuid));
+		D_ERROR(DF_UUID": failed to look up pool: %d\n",
+			DP_UUID(task->dst_pool_uuid), rc);
 		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
 
@@ -1494,7 +1495,7 @@ rebuild_ults(void *arg)
 				continue;
 
 			rc = dss_ult_create(rebuild_task_ult, task,
-					    DSS_XS_SELF, 0, 0, NULL);
+					    DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, NULL);
 			if (rc == 0) {
 				rebuild_gst.rg_inflight++;
 				/* TODO: This needs to be expanded to select the
@@ -1839,11 +1840,17 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 			DP_UUID(pool->sp_uuid));
 	}
 
+	/* NB: some of the extending job might be regenerate as reintegrate
+	 * job here, but it is ok, since the only difference between reintegrate
+	 * and extend job would be
+	 * 1. extend job needs to add new targets to the pool map.
+	 * 2. reintegrate job needs to discard the existing objects/records on the
+	 *    reintegrating targets.
+	 * But since the pool map already includs these extending targets, and also
+	 * discarding on an empty targets is harmless. So it is ok to use REINT to
+	 * do EXTEND here.
+	 */
 	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, RB_OP_REINT);
-	if (rc != 0)
-		return rc;
-
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_NEW, RB_OP_EXTEND);
 	if (rc != 0)
 		return rc;
 
@@ -2196,10 +2203,10 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "prepare rebuild for "DF_UUID"/%d\n",
 		DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver);
 
-	pool = ds_pool_lookup(rsi->rsi_pool_uuid);
-	if (pool == NULL) {
-		D_ERROR("Can not find pool. "DF_UUID"\n", DP_UUID(rsi->rsi_pool_uuid));
-		return -DER_NONEXIST;
+	rc = ds_pool_lookup(rsi->rsi_pool_uuid, &pool);
+	if (rc) {
+		D_ERROR("Can not find pool "DF_UUID": %d\n", DP_UUID(rsi->rsi_pool_uuid), rc);
+		return rc;
 	}
 
 	if (ds_pool_get_version(pool) < rsi->rsi_rebuild_ver) {

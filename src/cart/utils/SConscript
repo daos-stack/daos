@@ -4,8 +4,6 @@
 #
 """Build crt_utils component"""
 
-import daos_build
-
 LIB_SRC = ['crt_utils.c']
 
 
@@ -25,7 +23,7 @@ def scons():
 
     prereqs.require(env, 'protobufc')
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
 
     # Generate cart utility shared objects
     build_utility_shared_obj(env)

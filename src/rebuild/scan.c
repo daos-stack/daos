@@ -1045,7 +1045,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	rpt_get(rpt);
 	rc = dss_ult_create(rebuild_tgt_status_check_ult, rpt, DSS_XS_SELF,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc) {
 		rpt_put(rpt);
 		D_GOTO(out, rc);
