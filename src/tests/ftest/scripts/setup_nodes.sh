@@ -67,14 +67,6 @@ EOF
     sudo mount /mnt/daos
 fi
 
-echo Setting up fuse.conf
-ls -l /etc/fuse.conf || true
-if [ -e /etc/fuse.conf ]
-then
-        echo user_allow_other | sudo tee -a /etc/fuse.conf
-        cat /etc/fuse.conf
-fi
-
 # make sure to set up for daos_agent. The test harness will take care of
 # creating the /var/run/daos_{agent,server} directories when needed.
 sudo bash -c "set -ex
