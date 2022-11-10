@@ -202,7 +202,13 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	    DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
-	D_ALLOC(dsp, sizeof(*dsp) + ent->ie_dtx_mbs_dsize);
+	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
+
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+		D_ALLOC_PTR(dsp);
+	else
+		D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+
 	if (dsp == NULL)
 		return -DER_NOMEM;
 
@@ -210,13 +216,21 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	dsp->dsp_oid = ent->ie_dtx_oid;
 	dsp->dsp_epoch = ent->ie_epoch;
 
-	mbs = &dsp->dsp_mbs;
-	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-	mbs->dm_flags = ent->ie_dtx_mbs_flags;
-	mbs->dm_dte_flags = ent->ie_dtx_flags;
-	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
+		dsp->dsp_inline_mbs = 0;
+		dsp->dsp_mbs = NULL;
+	} else {
+		mbs = (struct dtx_memberships *)(dsp + 1);
+		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+		mbs->dm_flags = ent->ie_dtx_mbs_flags;
+		mbs->dm_dte_flags = ent->ie_dtx_flags;
+		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+		dsp->dsp_inline_mbs = 1;
+		dsp->dsp_mbs = mbs;
+	}
 
 	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
 	dcsca->dcsca_count++;
@@ -271,7 +285,7 @@ dtx_cleanup_stale(void *arg)
 	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	dbca->dbca_cleanup_done = 1;
 
@@ -690,22 +704,22 @@ dtx_shares_fini(struct dtx_handle *dth)
 	while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_act_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	while ((dsp = d_list_pop_entry(&dth->dth_share_tbd_list,
 				       struct dtx_share_peer,
 				       dsp_link)) != NULL)
-		D_FREE(dsp);
+		dtx_dsp_free(dsp);
 
 	dth->dth_share_tbd_count = 0;
 }
@@ -713,8 +727,10 @@ dtx_shares_fini(struct dtx_handle *dth)
 int
 dtx_handle_reinit(struct dtx_handle *dth)
 {
-	D_ASSERT(dth->dth_ent == NULL);
-	D_ASSERT(dth->dth_pinned == 0);
+	if (dth->dth_modification_cnt > 0) {
+		D_ASSERT(dth->dth_ent != NULL);
+		D_ASSERT(dth->dth_pinned != 0);
+	}
 	D_ASSERT(dth->dth_already == 0);
 
 	dth->dth_modify_shared = 0;
@@ -743,8 +759,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		uint16_t sub_modification_cnt, uint32_t pm_ver,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
-		bool solo, bool sync, bool dist, bool migration,
-		bool ignore_uncommitted, bool resent, bool prepared, struct dtx_handle *dth)
+		bool solo, bool sync, bool dist, bool migration, bool ignore_uncommitted,
+		bool resent, bool prepared, bool drop_cmt, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -767,6 +783,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_cos_done = 0;
 	dth->dth_resent = resent ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
+	dth->dth_drop_cmt = drop_cmt ? 1 : 0;
 	dth->dth_modify_shared = 0;
 	dth->dth_active = 0;
 	dth->dth_touched_leader_oid = 0;
@@ -1028,7 +1045,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_RESEND) ? true : false,
-			     (flags & DTX_PREPARED) ? true : false, dth);
+			     (flags & DTX_PREPARED) ? true : false,
+			     (flags & DTX_DROP_CMT) ? true : false, dth);
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
@@ -1268,7 +1286,7 @@ abort:
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
 		/* Drop partial modification for distributed transaction. */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
@@ -1276,7 +1294,7 @@ abort:
 out:
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		if (result < 0 && !aborted)
-			vos_dtx_cleanup(dth);
+			vos_dtx_cleanup(dth, true);
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
@@ -1348,7 +1366,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
-			     (flags & DTX_RESEND) ? true : false, false, dth);
+			     (flags & DTX_RESEND) ? true : false, false, false, dth);
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, false);
 
@@ -1400,7 +1418,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		/* 1. Drop partial modification for distributed transaction.
 		 * 2. Remove the pinned DTX entry.
 		 */
-		vos_dtx_cleanup(dth);
+		vos_dtx_cleanup(dth, true);
 	}
 
 	D_DEBUG(DB_IO,

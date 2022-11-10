@@ -96,7 +96,9 @@ struct cmd_args_s {
 	char			*preserve_props; /* --path to metadata file */
 	daos_cont_layout_t	type;		/* --type cont type */
 	daos_oclass_id_t	oclass;		/* --oclass object class */
+	daos_oclass_id_t	dir_oclass;	/* --dir_oclass object class */
 	uint32_t		mode;		/* --posix consistency mode */
+	char			*hints;		/* --posix hints */
 	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
 
 	/* Container snapshot/rollback related */

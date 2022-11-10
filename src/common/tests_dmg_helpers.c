@@ -10,6 +10,7 @@
 #include <json-c/json.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -65,6 +66,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	char		*cmd_str = NULL;
 	size_t		size, old;
 	int		i;
+	void		*addr;
 
 	if (cmd_base == NULL)
 		return NULL;
@@ -92,7 +94,16 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 		old = size;
 	}
 
-	return cmd_str;
+	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (addr == MAP_FAILED) {
+		D_ERROR("mmap() failed : %s\n", strerror(errno));
+		D_FREE(cmd_str);
+		return NULL;
+	}
+	memcpy(addr, cmd_str, size);
+	D_FREE(cmd_str);
+
+	return (char *)addr;
 }
 
 static void
@@ -335,7 +346,8 @@ out_jbuf:
 out_close:
 	close(stdoutfd);
 out:
-	D_FREE(cmd_str);
+	if (munmap(cmd_str, strlen(cmd_str) + 1) == -1)
+		D_ERROR("munmap() failed : %s\n", strerror(errno));
 
 	if (obj != NULL) {
 		struct json_object *tmp;

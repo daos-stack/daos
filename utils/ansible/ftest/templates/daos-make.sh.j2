@@ -254,9 +254,9 @@ do
         run $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
 done
 
-info "Finalizing daos-admin install"
-run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
-run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
-run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
-run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
-run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
+info "Finalizing daos_server_helper install"
+run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_server_helper"
+run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_server_helper" /usr/bin
+run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_server_helper
+run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_server_helper
+run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_server_helper"

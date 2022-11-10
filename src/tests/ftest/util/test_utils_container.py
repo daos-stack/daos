@@ -338,10 +338,10 @@ class TestContainer(TestDaosApiBase):
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
-                cop.rf_lvl = con_in[5]
+                cop.rd_lvl = con_in[5]
             else:
-                # Default to RANK fault domain (rf_lvl:1) when not specified
-                cop.rf_lvl = ctypes.c_uint64(1)
+                # Default to RANK fault domain (rd_lvl:1) when not specified
+                cop.rd_lvl = ctypes.c_uint64(1)
 
             kwargs["con_prop"] = cop
 

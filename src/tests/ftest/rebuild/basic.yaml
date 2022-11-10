@@ -5,16 +5,20 @@ hosts:
 timeout: 900
 server_config:
   name: daos_server
-  servers:
-    targets: 2
-    nr_xs_helpers: 0
-    scm_size: 4
-    log_mask: DEBUG,MEM=ERR
-    env_vars:
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
         - DD_MASK=mgmt,md,rebuild
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30

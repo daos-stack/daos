@@ -219,9 +219,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	}
 
 	/** Handle the deferred NVMe cancellations */
-	if (!publish)
-		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
-				   false, VOS_IOS_GENERIC);
+	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
 
 	return 0;
 }
@@ -812,7 +810,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		D_INFO("Using start offset sort for evtree\n");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split\n");
 		break;
 	default:
 		D_INFO("Using distance with closest side split for evtree "

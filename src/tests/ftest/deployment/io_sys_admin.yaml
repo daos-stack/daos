@@ -3,77 +3,78 @@ hosts:
   test_clients: 2
 timeout: 700
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
 dmg:
-    dmg_sub_command: storage
-    storage:
-      storage_sub_command: scan
+  dmg_sub_command: storage
+  storage:
+    storage_sub_command: scan
 pool_1:
-    control_method: dmg
-    name: daos_server
-    scm_size: 128MiB
-    nvme_size: 16GiB
+  control_method: dmg
+  scm_size: 128MiB
+  nvme_size: 16GiB
 pool_2:
-    control_method: dmg
-    name: daos_server
-    scm_size: 10GiB
-    nvme_size: 50GiB
+  control_method: dmg
+  scm_size: 10GiB
+  nvme_size: 50GiB
 pool_3:
-    control_method: dmg
-    name: daos_server
-    scm_size: 90%
-    nvme_size: 90%
+  control_method: dmg
+  scm_size: 90%
+  nvme_size: 90%
 container_1:
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 container_2:
-    type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
-    oclass: RP_2GX
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
+  oclass: RP_2GX
 container_3:
-    type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
-    oclass: EC_2P2GX
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
+  oclass: EC_2P2GX
 
 pool:
-    mode: 146
-    name: daos_server
-    scm_size: 40%
-    nvme_size: 40%
-    control_method: dmg
+  scm_size: 40%
+  nvme_size: 40%
+  control_method: dmg
 container:
-    type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 container_acl:
-    new_user: daos_ci_tester_1@
-    new_group: daos_ci_test_grp_1@
+  new_user: daos_ci_tester_1@
+  new_group: daos_ci_test_grp_1@
 
 largefilecount:
   api:
@@ -87,7 +88,7 @@ largefilecount:
     - EC_2P1GX
 ior:
   client_processes:
-      ppn: 30
+    ppn: 30
   dfs_destroy: False
   flags: "-v -D 300 -W -w -r -R -F -k"
   test_file: daos:testFile
@@ -117,4 +118,4 @@ dcp:
   client_processes:
     np: 16
 hdf5_vol:
-    plugin_path: /usr/lib64/mpich/lib
+  plugin_path: /usr/lib64/mpich/lib

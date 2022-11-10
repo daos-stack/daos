@@ -33,8 +33,8 @@ class InfoTests(TestWithServers):
         """
         # Get the test params
         permissions = self.params.get("permissions", "/run/test/*")
-        targets = self.params.get("targets", "/run/server_config/*")
-        #pool_targets = len(self.hostlist_servers) * targets
+        targets = self.server_managers[0].get_config_value("targets")
+        # pool_targets = len(self.hostlist_servers) * targets
 
         # Create a pool
         self.add_pool()
@@ -56,7 +56,7 @@ class InfoTests(TestWithServers):
         self.assertTrue(status, "Invalid pool information detected prior")
         checks = {
             "s_total": (self.pool.scm_size.value, 0),
-            #"s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
+            # "s_free": (self.pool.scm_size.value - (256 * pool_targets), 0),
         }
         status = self.pool.check_pool_daos_space(**checks)
         self.assertTrue(status, "Invalid pool space information detected")

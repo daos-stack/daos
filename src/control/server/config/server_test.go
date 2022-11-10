@@ -222,8 +222,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
-		WithHelperLogFile("/tmp/daos_admin.log").
-		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
+		WithHelperLogFile("/tmp/daos_server_helper.log").
+		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -248,6 +248,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
 					WithStorageClass("ram").
+					WithScmDisableHugepages().
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").

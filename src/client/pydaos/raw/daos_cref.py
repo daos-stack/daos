@@ -275,8 +275,7 @@ def AsyncWorker1(func_ref, param_list, context, cb_func=None, obj=None):
     c_wait = ctypes.c_int(0)
     c_timeout = ctypes.c_ulonglong(-1)
     c_num = ctypes.c_uint(1)
-    anotherEvent = DaosEvent()
-    c_event_ptr = ctypes.pointer(anotherEvent)
+    c_event_ptr = ctypes.pointer(the_event)
 
     # start polling, wait forever
     rc = efunc(qhandle, c_wait, c_timeout, c_num, ctypes.byref(c_event_ptr))

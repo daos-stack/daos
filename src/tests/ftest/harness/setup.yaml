@@ -4,8 +4,14 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  servers:
-    scm_size: 20
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 20
 server_manager:
   storage_prepare_timeout: 60
   storage_format_timeout: 60

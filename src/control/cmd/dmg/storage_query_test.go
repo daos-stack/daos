@@ -14,7 +14,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func TestStorageQueryCommands(t *testing.T) {
@@ -104,9 +103,9 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted)",
 			"storage query list-devices --show-evicted",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:      ranklist.NilRank,
-				OmitPools: true,
-				StateMask: storage.NvmeStateFaulty,
+				Rank:           ranklist.NilRank,
+				OmitPools:      true,
+				FaultyDevsOnly: true,
 			}),
 			nil,
 		},
@@ -114,9 +113,9 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server metadata query devices (show only evicted short)",
 			"storage query list-devices -e",
 			printRequest(t, &control.SmdQueryReq{
-				Rank:      ranklist.NilRank,
-				OmitPools: true,
-				StateMask: storage.NvmeStateFaulty,
+				Rank:           ranklist.NilRank,
+				OmitPools:      true,
+				FaultyDevsOnly: true,
 			}),
 			nil,
 		},
@@ -143,6 +142,101 @@ func TestStorageQueryCommands(t *testing.T) {
 			"per-server storage space utilization query",
 			"storage query usage",
 			printRequest(t, &control.StorageScanReq{Usage: true}),
+			nil,
+		},
+		{
+			"Set FAULTY device status (force)",
+			"storage set nvme-faulty --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
+			printRequest(t, &control.SmdManageReq{
+				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				SetFaulty: true,
+			}),
+			nil,
+		},
+		{
+			"Set FAULTY device status (without force)",
+			"storage set nvme-faulty --uuid abcd",
+			"StorageSetFaulty",
+			errors.New("consent not given"),
+		},
+		{
+			"Set FAULTY device status (with > 1 host)",
+			"-l host-[1-2] storage set nvme-faulty -f --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"StorageSetFaulty",
+			errors.New("> 1 host"),
+		},
+		{
+			"Set FAULTY device status without device specified",
+			"storage set nvme-faulty",
+			"StorageSetFaulty",
+			errors.New("the required flag `-u, --uuid' was not specified"),
+		},
+		{
+			"Reuse a FAULTY device",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdManageReq{
+				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				ReplaceUUID: "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				NoReint:     false,
+			}),
+			nil,
+		},
+		{
+			"Replace an evicted device with a new device",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d --new-uuid 2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+			printRequest(t, &control.SmdManageReq{
+				IDs:         "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				ReplaceUUID: "2ccb8afb-5d32-454e-86e3-762ec5dca7be",
+				NoReint:     false,
+			}),
+			nil,
+		},
+		{
+			"Try to replace a device without a new device UUID specified",
+			"storage replace nvme --old-uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			"StorageReplaceNvme",
+			errors.New("the required flag `--new-uuid' was not specified"),
+		},
+		{
+			"Identify device without device UUID or PCI address specified",
+			"storage led identify",
+			"",
+			errors.New("neither a pci address or a uuid has been supplied"),
+		},
+		{
+			"Identify a device",
+			"storage led identify 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdManageReq{
+				IDs:      "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				Identify: true,
+			}),
+			nil,
+		},
+		{
+			"Identify a device with multiple device IDs",
+			"storage led identify 842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+			printRequest(t, &control.SmdManageReq{
+				IDs:      "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+				Identify: true,
+			}),
+			nil,
+		},
+		{
+			"Check LED state of a VMD device",
+			"storage led check 842c739b-86b5-462f-a7ba-b4a91b674f3d",
+			printRequest(t, &control.SmdManageReq{
+				IDs:    "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+				GetLED: true,
+			}),
+			nil,
+		},
+		{
+			"Check LED state of a VMD device with multiple device IDs",
+			"storage led check 842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+			printRequest(t, &control.SmdManageReq{
+				IDs:    "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+				GetLED: true,
+			}),
 			nil,
 		},
 		{

@@ -16,7 +16,7 @@ func main() {
 	app := pbin.NewApp().
 		WithAllowedCallers("daos_server")
 
-	if logPath, set := os.LookupEnv(pbin.DaosAdminLogFileEnvVar); set {
+	if logPath, set := os.LookupEnv(pbin.DaosPrivHelperLogFileEnvVar); set {
 		app = app.WithLogFile(logPath)
 	}
 
@@ -28,7 +28,7 @@ func main() {
 	}
 }
 
-// addMethodHandlers adds all of daos_admin's supported handler functions.
+// addMethodHandlers adds all of daos_server_helper's supported handler functions.
 func addMethodHandlers(app *pbin.App) {
 	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
 	app.AddHandler("ScmUnmount", &scmMountUnmountHandler{})

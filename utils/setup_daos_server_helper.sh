@@ -47,10 +47,10 @@ else
         DAOS_LOC=$SL_PREFIX
 fi
 
-DA_SRC=$DAOS_LOC/bin/daos_admin
-DA_DST=/usr/bin/daos_admin
+DA_SRC=$DAOS_LOC/bin/daos_server_helper
+DA_DST=/usr/bin/daos_server_helper
 
-echo "This script will install daos_admin for developer builds (not for production)."
+echo "This script will install daos_server_helper for developer builds (not for production)."
 
 echo -n "Installing $DA_SRC -> $DA_DST ... "
 chmod -x "$DA_SRC" || true

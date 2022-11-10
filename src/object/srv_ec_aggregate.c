@@ -2306,7 +2306,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
-	rc = pl_obj_place(map, &md, DAOS_OO_RO, NULL, &agg_entry->ae_obj_layout);
+	rc = pl_obj_place(map, &md, DAOS_OO_RO, -1, NULL, &agg_entry->ae_obj_layout);
 
 out:
 	return rc;

@@ -20,6 +20,18 @@ static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf)
+{
+	struct daos_obj_class *oc;
+
+	oc = oclass_ident2cl(oc_id, NULL);
+	if (oc == NULL)
+		return -DER_INVAL;
+	*tf = oc->oc_resil_degree;
+	return 0;
+}
+
 /**
  * Find the object class attributes for the provided @oid.
  */
@@ -677,9 +689,8 @@ oclass_ident2cl(daos_oclass_id_t oc_id, uint32_t *nr_grps)
 }
 
 int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      enum daos_otype_t otype, daos_oclass_hints_t hints,
-	      enum daos_obj_redun *ord, uint32_t *nr)
+dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
+	      daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr)
 {
 	uint16_t shd;
 	uint16_t rdd;
@@ -690,7 +701,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	shd = hints & DAOS_OCH_SHD_MASK;
 
 	/** first set a reasonable default based on RF & RDD hint (if set) */
-	switch (rf_factor) {
+	switch (rf) {
 	default:
 	case DAOS_PROP_CO_REDUN_RF0:
 		if (rdd == DAOS_OCH_RDD_RP) {
@@ -785,7 +796,7 @@ dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 		grp_nr = DAOS_OBJ_GRP_MAX;
 		break;
 	case DAOS_OCH_SHD_TINY:
-		grp_nr = 4;
+		grp_nr = 1;
 		break;
 	case DAOS_OCH_SHD_REG:
 		grp_nr = max(128, target_nr * 25 / 100);

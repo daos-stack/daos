@@ -200,9 +200,11 @@ class CoreFileProcessing():
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
-        for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5', 'argobots', 'libfabric',
-                    'hdf5-vol-daos', 'hdf5-vol-daos-mpich', 'hdf5-vol-daos-mpich-tests',
-                    'hdf5-vol-daos-openmpi', 'hdf5-vol-daos-openmpi-tests', 'ior']:
+        for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5',
+                    'libabt0' if "suse" in self.distro_info.name.lower() else "argobots",
+                    'libfabric', 'hdf5-vol-daos', 'hdf5-vol-daos-mpich',
+                    'hdf5-vol-daos-mpich-tests', 'hdf5-vol-daos-openmpi',
+                    'hdf5-vol-daos-openmpi-tests', 'ior']:
             debug_pkg = self.resolve_debuginfo(pkg)
             if debug_pkg and debug_pkg not in install_pkgs:
                 install_pkgs.append(debug_pkg)
@@ -317,7 +319,7 @@ class CoreFileProcessing():
         """
         package_info = None
         try:
-            # Eventually use python libraries for this rather than exec()ing out
+            # Eventually use python libraries for this rather than exec()ing out to rpm
             output = run_local(
                 self.log, ["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg],
                 check=False)

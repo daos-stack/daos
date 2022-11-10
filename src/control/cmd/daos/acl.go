@@ -10,12 +10,13 @@ package main
 #include "util.h"
 
 void
-free_strings(char **str, size_t str_count)
+free_ace_list(char **str, size_t str_count)
 {
 	int i;
 
 	for (i = 0; i < str_count; i++)
 		D_FREE(str[i]);
+	D_FREE(str);
 }
 */
 import "C"
@@ -43,7 +44,7 @@ func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
 	if err := daosError(rc); err != nil || aces == nil {
 		return
 	}
-	defer C.free_strings(aces, acesNr)
+	defer C.free_ace_list(aces, acesNr)
 
 	for _, ace := range (*[1 << 30]*C.char)(unsafe.Pointer(aces))[:acesNr:acesNr] {
 		out = append(out, C.GoString(ace))

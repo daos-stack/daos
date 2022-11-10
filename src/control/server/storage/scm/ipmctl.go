@@ -7,7 +7,6 @@
 package scm
 
 import (
-	"fmt"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -32,29 +32,16 @@ const (
 )
 
 type (
-	runCmdFn    func(string) (string, error)
-	lookPathFn  func(string) (string, error)
-	runCmdError struct {
-		wrapped error
-		stdout  string
-	}
+	runCmdFn   func(string) (string, error)
+	lookPathFn func(string) (string, error)
 )
-
-func (rce *runCmdError) Error() string {
-	if ee, ok := rce.wrapped.(*exec.ExitError); ok {
-		return fmt.Sprintf("%s: stdout: %s; stderr: %s", ee.ProcessState,
-			rce.stdout, ee.Stderr)
-	}
-
-	return fmt.Sprintf("%s: stdout: %s", rce.wrapped.Error(), rce.stdout)
-}
 
 func run(cmd string) (string, error) {
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
-		return "", &runCmdError{
-			wrapped: err,
-			stdout:  string(out),
+		return "", &system.RunCmdError{
+			Wrapped: err,
+			Stdout:  string(out),
 		}
 	}
 

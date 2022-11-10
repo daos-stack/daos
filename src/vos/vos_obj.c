@@ -555,6 +555,67 @@ reset:
 }
 
 int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor)
+{
+	struct vos_container  *cont;
+	struct daos_lru_cache *occ = vos_obj_cache_current();
+	int                    rc;
+	struct vos_object     *obj;
+	daos_epoch_range_t     epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t          toh;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Container is not open");
+		return -DER_INVAL;
+	}
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, DAOS_EPOCH_MAX, 0, DAOS_INTENT_DEFAULT, &obj, NULL);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			return 0;
+		}
+
+		D_ERROR("Could not hold object oid=" DF_UOID " rc=" DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	if (akey == NULL) {
+		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
+		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		goto out;
+	}
+
+	/** Otherwise, we need to find the dkey to convert the akey to the anchor */
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_DEFAULT, NULL,
+			      &toh, NULL);
+	if (rc) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			goto out;
+		}
+		D_ERROR("Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY " rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = dbtree_key2anchor(toh, akey, anchor);
+	D_DEBUG(DB_TRACE,
+		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
+
+	key_tree_release(toh, false);
+out:
+	vos_obj_release(occ, obj, false);
+
+	return rc;
+}
+
+int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();

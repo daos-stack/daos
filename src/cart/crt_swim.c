@@ -528,8 +528,12 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	if (self_id == SWIM_ID_INVALID)
 		D_GOTO(out, rc = -DER_UNINIT);
 
-	if (cb_info->cci_rc && to_id == ctx->sc_target)
-		ctx->sc_deadline = 0;
+	if (cb_info->cci_rc) {
+		swim_ctx_lock(ctx);
+		if (to_id == ctx->sc_target)
+			ctx->sc_deadline = 0;
+		swim_ctx_unlock(ctx);
+	}
 
 	reply_rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
 	if (reply_rc && reply_rc != -DER_TIMEDOUT && reply_rc != -DER_UNREACH) {

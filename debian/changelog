@@ -1,3 +1,9 @@
+daos (2.3.101-2) unstable; urgency=medium
+  [Michael MacDonald]
+  * Rename daos_admin -> daos_server_helper
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Thu, Oct 6 2022 10:10:00
+
 daos (2.3.101-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.3.101
