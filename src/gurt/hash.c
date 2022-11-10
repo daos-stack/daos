@@ -875,8 +875,10 @@ d_hash_table_create(uint32_t feats, uint32_t bits, void *priv,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = d_hash_table_create_inplace(feats, bits, priv, hops, htable);
-	if (rc)
+	if (rc) {
 		D_FREE(htable);
+		htable = NULL;
+	}
 out:
 	*htable_pp = htable;
 	return rc;
@@ -1161,6 +1163,7 @@ d_hhash_create(uint32_t feats, uint32_t bits, struct d_hhash **hhash_pp)
 					 &hhash->ch_htable);
 	if (rc) {
 		D_FREE(hhash);
+		hhash = NULL;
 		D_GOTO(out, rc);
 	}
 
