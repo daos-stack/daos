@@ -147,7 +147,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 
 	*ph = NULL;
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META) || xs_ctxt == NULL)
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_open;
 
 	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
@@ -492,8 +492,8 @@ end:
 		goto close;
 	}
 
-	/* SCM only pool or NVMe device isn't configured */
-	if (nvme_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_MAX))
+	/* SCM only pool or data blob isn't configured */
+	if (nvme_sz == 0 || !bio_nvme_configured(SMD_DEV_TYPE_DATA))
 		goto open;
 
 	/* Format SPDK blob header */
