@@ -133,8 +133,5 @@ int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list);
 
 bool
-is_pool_adding(struct pool_domain *dom);
-
-bool
 need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow_version);
 #endif /* __PL_MAP_H__ */

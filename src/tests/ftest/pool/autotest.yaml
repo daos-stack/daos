@@ -23,5 +23,4 @@ server_config:
           bdev_list: ["aaaa:aa:aa.a"]
 pool:
   size: 90%
-  tier_ratio: 6
   control_method: dmg

@@ -383,6 +383,11 @@ pool_comp_name(struct pool_component *comp)
 	return pool_comp_type2str(comp->co_type);
 }
 
+bool
+is_pool_map_adding(struct pool_map *map, uint32_t version);
+void
+pool_map_init_in_fseq(struct pool_map *map);
+
 #define pool_target_name(target)	pool_comp_name(&(target)->ta_comp)
 #define pool_domain_name(domain)	pool_comp_name(&(domain)->do_comp)
 
