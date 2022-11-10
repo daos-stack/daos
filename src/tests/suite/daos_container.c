@@ -2904,38 +2904,39 @@ co_mdtimes(void **state)
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	/* open updates the otime, visible upon subsequent query */
-	print_message("open container again (no special flags), query to see updated otime\n");
+	/* open updates the otime and returns updated time in daos_cont_info_t */
+	print_message("open container again (no special flags), confirm updated otime\n");
 	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh, &cinfo, arg->async ? &ev : NULL);
-	assert_rc_equal(rc, 0);
-	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime == prev_otime);
-	assert_true(cinfo.ci_md_mtime == prev_mtime);
-
-	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
 	prev_otime = cinfo.ci_md_otime;
-	print_message("query returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	print_message("query also returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
 
 	print_message("close container\n");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	print_message("open container again (RW), verify mtime updated (from close)\n");
+	print_message("open container again (RW), verify otime (open) and mtime (close) updated\n");
 	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
 	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	/* NOTE: otime was updated by cont_open(), visible in next query */
-	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_mtime);
+	print_message("open returned updated otime (0x"DF_X64"), mtime (0x"DF_X64")\n",
+		      cinfo.ci_md_otime, cinfo.ci_md_mtime);
 
 	print_message("create container snapshot, query and verify updated mtime\n");
 	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);
@@ -2945,12 +2946,11 @@ co_mdtimes(void **state)
 	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
-	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("created snapshot 0x"DF_X64", query returned updated otime (0x"DF_X64"), "
-		      "updated mtime (0x"DF_X64")\n", epc, cinfo.ci_md_otime, cinfo.ci_md_mtime);
+	print_message("created snapshot 0x"DF_X64", query returned updated mtime (0x"DF_X64")\n",
+		      epc, cinfo.ci_md_mtime);
 
 	print_message("destroy container snapshot, query and verify updated mtime\n");
 	epr.epr_lo = epr.epr_hi = epc;

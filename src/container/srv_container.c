@@ -310,77 +310,56 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 }
 
 
-/* Get container open and metadata modify times, if the co_md_times key exists in rdb */
-static int
-get_metadata_times(struct rdb_tx *tx, struct cont *cont, struct co_md_times *mdtimes)
-{
-	struct co_md_times	cur_mdtimes = {.otime = 0, .mtime = 0};
-	d_iov_t			value;
-	int			rc;
-
-	d_iov_set(&value, &cur_mdtimes, sizeof(cur_mdtimes));
-	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
-	if (rc == -DER_NONEXIST)
-		goto out;	/* pool/container has old layout without metadata times */
-	else if (rc != 0) {
-		D_ERROR(DF_CONT": rdb_tx_lookup co_md_times failed, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto err;
-	}
-
-	D_DEBUG(DB_MD, DF_CONT": metadata times: open="DF_X64", modify="DF_X64"\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), cur_mdtimes.otime,
-		cur_mdtimes.mtime);
-
-out:
-	*mdtimes = cur_mdtimes;
-	return 0;
-err:
-	return rc;
-}
-
 /* Update container open and metadata modify times, if the co_md_times key exists in rdb */
 static int
-update_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool update_mtime)
+get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool update_mtime,
+		   struct co_md_times *times)
 {
-	struct co_md_times	cur_mdtimes;
-	struct co_md_times	upd_mdtimes;
-	uint64_t		cur_hlc;
+	struct co_md_times	mdtimes = {0};
 	d_iov_t			value;
+	bool			do_update = (update_otime || update_mtime);
 	int			rc;
 
-	if (!update_otime && !update_mtime)
+	if ((cont == NULL) || (!do_update && (times == NULL)))
 		return 0;
 
 	/* Lookup most recent metadata times (may need to keep the mtime in the update below) */
-	d_iov_set(&value, &cur_mdtimes, sizeof(cur_mdtimes));
+	d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
-	if (rc == -DER_NONEXIST)
-		return 0;	/* pool/container has old layout without metadata times */
-	else if (rc != 0) {
+	if (rc == -DER_NONEXIST) {
+		rc = 0;			/* pool/container has old layout without metadata times */
+		goto out;
+	} else if (rc != 0) {
 		D_ERROR(DF_CONT": rdb_tx_lookup co_md_times failed, "DF_RC"\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
-	cur_hlc = crt_hlc_get();
-	upd_mdtimes.otime = update_otime ? cur_hlc : cur_mdtimes.otime;
-	upd_mdtimes.mtime = update_mtime ? cur_hlc : cur_mdtimes.mtime;
+	if(do_update) {
+		uint64_t		cur_hlc;
 
-	d_iov_set(&value, &upd_mdtimes, sizeof(upd_mdtimes));
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update metadata times, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		return rc;
+		cur_hlc = crt_hlc_get();
+		mdtimes.otime = update_otime ? cur_hlc : mdtimes.otime;
+		mdtimes.mtime = update_mtime ? cur_hlc : mdtimes.mtime;
+
+		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to update metadata times, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": metadata times: open(%s)="DF_X64", modify(%s)="DF_X64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		update_otime ? "updated" : "unchanged", upd_mdtimes.otime,
-		update_mtime ? "updated" : "unchanged", upd_mdtimes.mtime);
+		update_otime ? "updated" : "unchanged", mdtimes.otime,
+		update_mtime ? "updated" : "unchanged", mdtimes.mtime);
 
-	return 0;
+out:
+	if ((rc == 0) && (times != NULL))
+		*times = mdtimes;
+
+	return rc;
 }
 
 enum nhandles_op {
@@ -1892,6 +1871,10 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	uint64_t		sec_capas = 0;
 	uint32_t		snap_count;
 	uint32_t		nhandles;
+	struct co_md_times	mdtimes;
+	bool			mdtimes_in_reply = (cont_proto_ver >= CONT_PROTO_VER_WITH_MDTIMES);
+	const uint64_t		NOSTAT = (DAOS_COO_RO | DAOS_COO_RO_MDSTATS);
+	bool			update_otime = ((in->coi_flags & NOSTAT) == NOSTAT) ? false : true;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " flags=" DF_X64 "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
@@ -1971,28 +1954,27 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		goto out;
 	}
 
-	/* lookup metadata times (NB: before updating open time in caller cont_op_with_svc() */
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_MDTIMES) {
-		struct co_md_times	mdtimes;
+	/* lookup metadata times (and pre-update open time to reflect this open operation.
+	 * NB client/engine may have recent (protocol) versions, however the pool may not
+	 * have been upgraded to new layout yet. mdtimes will be zeros in that case.
+	 */
+	rc = get_metadata_times(tx, cont, update_otime, false /* update_mtime */, &mdtimes);
+	if (rc != 0)
+		goto out;
 
-		/* NB client/engine may have recent (protocol) versions, however the pool may not
-		 * have been upgraded to new layout yet. mdtimes will be zeros in that case.
-		 */
-		rc = get_metadata_times(tx, cont, &mdtimes);
-		if (rc != 0)
-			goto out;
+	/* include metadata times in reply if client speaks the protocol */
+	if (mdtimes_in_reply && (opc_get(rpc->cr_opc) == CONT_OPEN)) {
+		struct cont_open_v7_out *out_v7 = crt_reply_get(rpc);
 
-		if (opc_get(rpc->cr_opc) == CONT_OPEN) {
-			struct cont_open_v7_out *out_v7 = crt_reply_get(rpc);
+		out_v7->coo_md_otime = mdtimes.otime;
+		out_v7->coo_md_mtime = mdtimes.mtime;
+	}
 
-			out_v7->coo_md_otime = mdtimes.otime;
-			out_v7->coo_md_mtime = mdtimes.mtime;
-		} else {	/* CONT_OPEN_BYLABEL */
-			struct cont_open_bylabel_v7_out *out_v7 = crt_reply_get(rpc);
+	if (mdtimes_in_reply && (opc_get(rpc->cr_opc) == CONT_OPEN_BYLABEL)) {
+		struct cont_open_v7_out *out_v7 = crt_reply_get(rpc);
 
-			out_v7->coo_md_otime = mdtimes.otime;
-			out_v7->coo_md_mtime = mdtimes.mtime;
-		}
+		out_v7->coo_md_otime = mdtimes.otime;
+		out_v7->coo_md_mtime = mdtimes.mtime;
 	}
 
 	/* query the container properties from RDB and update to IV */
@@ -2817,7 +2799,8 @@ cont_info_read(struct rdb_tx *tx, struct cont *cont, int cont_proto_ver, daos_co
 		/* NB client/engine may have recent (protocol) versions, however the pool may not
 		 * have been upgraded to new layout yet. mdtimes will be zeros in that case.
 		 */
-		rc = get_metadata_times(tx, cont, &mdtimes);
+		rc = get_metadata_times(tx, cont, false /* update_otime */, false /* mtime */,
+					&mdtimes);
 		if (rc != 0)
 			goto out;
 		out.ci_md_otime = mdtimes.otime;
@@ -3789,7 +3772,8 @@ cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filt
 	switch(part->pcfp_key) {
 	case PCF_KEY_MD_OTIME:
 	case PCF_KEY_MD_MTIME:
-		rc = get_metadata_times(tx, cont, &mdtimes);
+		rc = get_metadata_times(tx, cont, false /* update_otime */, false /* mtime */,
+					&mdtimes);
 		val64 = (part->pcfp_key == PCF_KEY_MD_OTIME) ? mdtimes.otime : mdtimes.mtime;
 		break;
 	case PCF_KEY_NUM_SNAPSHOTS:
@@ -4477,7 +4461,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		 crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_open_in		*o_in = NULL;
 	struct cont_open_bylabel_in	*olbl_in = NULL;
 	struct cont_open_bylabel_out	*olbl_out = NULL;
 	struct cont_destroy_bylabel_in	*dlbl_in = NULL;
@@ -4485,8 +4468,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
 	struct cont			*cont = NULL;
 	struct cont_pool_metrics	*metrics;
-	const uint64_t			 FLAG_RO_MDSTATS = (DAOS_COO_RO | DAOS_COO_RO_MDSTATS);
-	bool				 update_otime = false;
 	bool				 update_mtime = false;
 	int				 rc;
 
@@ -4518,8 +4499,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		/* NB: call common cont_op_with_cont() same as CONT_OPEN case */
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
-		update_otime = ((olbl_in->coi_flags & FLAG_RO_MDSTATS) == FLAG_RO_MDSTATS) ?
-				false : true;
 		break;
 	case CONT_DESTROY_BYLABEL:
 		dlbl_in = crt_req_get(rpc);
@@ -4529,11 +4508,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		/* NB: call common cont_op_with_cont() same as CONT_DESTROY */
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 		break;
-	case CONT_OPEN:
-		o_in = crt_req_get(rpc);
-		update_otime = ((o_in->coi_flags & FLAG_RO_MDSTATS) == FLAG_RO_MDSTATS) ?
-				false : true;
-		/* pass through */
 	default:
 		rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
 		if (rc != 0)
@@ -4543,10 +4517,10 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	if (rc != 0)
 		goto out_contref;
 
-	/* Update container open and metadata modified times as applicable
+	/* Update container metadata modified times as applicable
 	 * NB: this is a NOOP if the pool has not been upgraded to the layout containing mdtimes.
 	 */
-	rc = update_metadata_times(&tx, cont, update_otime, update_mtime);
+	rc = get_metadata_times(&tx, cont, false /* otime */, update_mtime, NULL /* times */);
 	if (rc != 0)
 		goto out_contref;
 
