@@ -198,6 +198,7 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 	D_INIT_LIST_HEAD(&tx->tx_ar_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_free);
+	D_INIT_LIST_HEAD(&tx->tx_gp_reset);
 	D_INIT_LIST_HEAD(&tx->tx_ranges);
 
 	tx->tx_redo_act_nr	= 0;
@@ -414,7 +415,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 	return 0;
 }
 
-static int
+static uint32_t
 get_integer(void *addr, int size)
 {
 	switch (size) {

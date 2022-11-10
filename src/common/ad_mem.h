@@ -11,6 +11,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/ad_mem.h>
+#include <gurt/heap.h>
 
 typedef void (*ad_tx_cb_t)(int stage, void *data);
 
@@ -37,6 +38,7 @@ struct ad_tx {
 	d_list_t		 tx_ar_pub;
 	d_list_t		 tx_gp_pub;
 	d_list_t		 tx_gp_free;
+	d_list_t		 tx_gp_reset;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct ad_act		*tx_redo_act_pos;
@@ -88,9 +90,11 @@ struct ad_group {
 	/** address of durable format */
 	struct ad_group_df	*gp_df;
 	/** unpublished group */
-	bool			 gp_unpub;
+	unsigned int		 gp_unpub:1,
 	/** being published */
-	bool			 gp_publishing;
+				 gp_publishing:1,
+	/* group freed and being reset */
+				 gp_reset:1;
 	int			 gp_ref;
 	/** number of reserved units */
 	int			 gp_unit_rsv;
@@ -158,10 +162,8 @@ struct ad_arena_df {
 	uint32_t		ad_size;
 	/** minimum allocation unit */
 	int32_t			ad_unit;
-	/** number of groups */
-	int32_t			ad_grp_nr;
 	/** internal offset for locating */
-	int32_t			ad_pad32;
+	int64_t			ad_pad64;
 	/**
 	 * validate @ad_sort_sz_tmp, @ad_sort_ad_tmp and ad_back_ptr, because they are DRAM
 	 * pointers.
@@ -195,22 +197,17 @@ struct ad_arena {
 	/** number of groups */
 	int			  ar_grp_nr;
 	/** unpublished arena */
-	bool			  ar_unpub;
+	unsigned int		  ar_unpub:1,
 	/** being published */
-	bool			  ar_publishing;
-	/**
-	 * Arena is full, it's set to true when any type of group failed to allocate memory
-	 * and create more groups.
-	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
-	 * set arenea as full only if it encounters multiple failures.
-	 */
-	bool			  ar_full;
+				  ar_publishing:1;
 	/** pointers for size binary search, it is only used by the DRAM mirror*/
 	struct ad_group_df	**ar_size_sorter;
 	/** pointers for address binary search, it is only used by the DRAM mirror*/
 	struct ad_group_df	**ar_addr_sorter;
-	/** reserved bits for groups */
-	uint64_t		  ar_bmap_rsv[ARENA_GRP_BMSZ];
+	/** reserved bits for group space */
+	uint64_t		  ar_space_rsv[ARENA_GRP_BMSZ];
+	/** reserved bits for group index */
+	uint64_t		  ar_gpid_rsv[ARENA_GRP_BMSZ];
 	/** metrics */
 	struct ad_group_metrics   ar_grp_mtcs[ARENA_GRP_SPEC_MAX];
 };
@@ -266,6 +263,21 @@ struct ad_blob_df {
 
 #define DUMMY_BLOB	"dummy.blob"
 
+struct ad_maxheap_node {
+	struct d_binheap_node	mh_node;
+	int			mh_weight;
+	int			mh_free_size;
+	uint32_t		mh_arena_id;
+	unsigned int		mh_in_tree:1,
+	/**
+	 * Arena is inactive, it's set to true when any type of group failed to allocate memory
+	 * and create more groups.
+	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
+	 * set arenea as full only if it encounters multiple failures.
+	 */
+				mh_inactive:1;
+};
+
 /** DRAM blob open handle */
 struct ad_blob {
 	/** external umem store */
@@ -310,6 +322,10 @@ struct ad_blob {
 	struct ad_blob_df	*bb_df;
 	/** reserved bits for arena allocation */
 	uint64_t		*bb_bmap_rsv;
+	/* max heap nodes pointer */
+	struct ad_maxheap_node	*bb_mh_nodes;
+	/* max heap for free memory of arena */
+	struct d_binheap	 bb_arena_free_heap;
 };
 
 static inline void
