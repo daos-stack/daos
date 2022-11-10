@@ -22,6 +22,23 @@
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
+/* DI REMOVE me! */
+static int _wal_reserv(struct umem_store *store, uint64_t *id)
+{
+	++*id;
+	return 0;
+}
+
+static int _wal_submit(struct umem_store *store, struct umem_tx *tx)
+{
+	return 0;
+}
+
+struct umem_store_ops _store_ops = {
+	.so_wal_reserv = _wal_reserv,
+	.so_wal_submit = _wal_submit,
+};
+
 /*
  * get_uuid_lo -- (internal) evaluates XOR sum of least significant
  * 8 bytes with most significant 8 bytes.
@@ -99,10 +116,10 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path)
 		D_FREE(hdl);
 		goto out1;
 	}
-	wal_tx_init(hdl);
-	*(void **)&utx->utx_private = &hdl->do_wtx;
-	hdl->utx = utx;
+	hdl->do_utx = utx;
+	hdl->do_store.stor_ops = &_store_ops;
 	D_STRNDUP(hdl->do_path, path, strlen(path));
+	wal_tx_init(hdl);
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
@@ -164,7 +181,7 @@ out2:
 	if (hdl->do_heap)
 		D_FREE(hdl->do_heap);
 	D_FREE(hdl->do_path);
-	D_FREE(hdl->utx);
+	D_FREE(hdl->do_utx);
 	D_FREE(hdl);
 out1:
 	munmap(base, sz);
@@ -259,7 +276,7 @@ dav_obj_close(dav_obj_t *hdl)
 	close(hdl->do_fd);
 	DAV_DEBUG("pool %s is closed", hdl->do_path);
 	D_FREE(hdl->do_path);
-	D_FREE(hdl->utx);
+	D_FREE(hdl->do_utx);
 	D_FREE(hdl);
 }
 

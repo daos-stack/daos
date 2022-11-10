@@ -58,7 +58,7 @@ act_copy_payload(struct umem_action *act, void *addr, daos_size_t size)
 static int
 wal_tx_reinit(struct dav_obj *dav_hdl)
 {
-	struct wal_tx	*tx = &dav_hdl->do_wtx;
+	struct wal_tx	*tx = utx2wtx(dav_hdl->do_utx);
 	int		 rc = 0;
 
 	if (dav_hdl == NULL) {
@@ -79,7 +79,7 @@ int
 wal_tx_init(struct dav_obj *dav_hdl)
 {
 	D_ASSERT(dav_hdl != NULL);
-	memset(&dav_hdl->do_wtx, 0, sizeof(dav_hdl->do_wtx));
+	memset(utx2wtx(dav_hdl->do_utx), 0, sizeof(struct wal_tx));
 	return wal_tx_reinit(dav_hdl);
 }
 
@@ -100,8 +100,12 @@ wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 {
 	struct wal_action	*wa, *next;
 	struct umem_action	*ua;
-	char *pathname = basename(dav_hdl->do_path);
+	struct umem_store	*store = &dav_hdl->do_store;
+	struct umem_tx		*tx = dav_hdl->do_utx;
+	char	*pathname = basename(dav_hdl->do_path);
+	int	 rc;
 
+	/* id = tx->utx_id; */
 	d_list_for_each_entry_safe(wa, next, redo_list, wa_link) {
 		ua = &wa->wa_act;
 		switch (ua->ac_opc) {
@@ -135,16 +139,16 @@ wal_tx_push(struct dav_obj *dav_hdl, d_list_t *redo_list, uint64_t id)
 			ASSERT(0);
 		}
 	}
-	return 0;
+	rc = store->stor_ops->so_wal_submit(store, tx);
+	return rc;
 }
 #undef WAL_PRT_PG_OFF
 
 /** complete the wl transaction */
 int
-wal_tx_commit(void *hdl)
+wal_tx_commit(struct dav_obj *hdl)
 {
-	struct dav_obj	*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx	*tx = &dav_hdl->do_wtx;
+	struct wal_tx	*tx = utx2wtx(hdl->do_utx);
 	d_list_t	 wt_redo;
 	int		 rc = 0;
 
@@ -154,7 +158,7 @@ wal_tx_commit(void *hdl)
 	d_list_splice_init(&tx->wt_redo, &wt_redo);
 
 	/* write actions in redo list to WAL */
-	rc = wal_tx_push(dav_hdl, &wt_redo, tx->wt_id);
+	rc = wal_tx_push(hdl, &wt_redo, tx->wt_id);
 	/* FAIL the engine if commit fails */
 	D_ASSERT(rc == 0);
 	DAV_DEBUG("tx_id:%lu committed to WAL: %u bytes in %u actions",
@@ -173,7 +177,7 @@ int
 wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t flags)
 {
 	struct dav_obj		*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx		*tx = &dav_hdl->do_wtx;
+	struct wal_tx		*tx = utx2wtx(dav_hdl->do_utx);
 	struct wal_action	*wa_redo;
 
 	D_ASSERT(hdl != NULL);
@@ -197,7 +201,7 @@ int
 wal_tx_assign(void *hdl, void *addr, uint64_t val)
 {
 	struct dav_obj		*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx		*tx = &dav_hdl->do_wtx;
+	struct wal_tx		*tx = utx2wtx(dav_hdl->do_utx);
 	struct wal_action	*wa_redo;
 
 	D_ASSERT(hdl != NULL);
@@ -220,7 +224,7 @@ int
 wal_tx_set_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits)
 {
 	struct dav_obj		*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx		*tx = &dav_hdl->do_wtx;
+	struct wal_tx		*tx = utx2wtx(dav_hdl->do_utx);
 	struct wal_action	*wa_redo;
 
 	D_ASSERT(hdl != NULL);
@@ -243,7 +247,7 @@ int
 wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits)
 {
 	struct dav_obj		*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx		*tx = &dav_hdl->do_wtx;
+	struct wal_tx		*tx = utx2wtx(dav_hdl->do_utx);
 	struct wal_action	*wa_redo;
 
 	D_ASSERT(hdl != NULL);
@@ -268,7 +272,7 @@ int
 wal_tx_set(void *hdl, void *addr, char c, daos_size_t size)
 {
 	struct dav_obj		*dav_hdl = (struct dav_obj *)hdl;
-	struct wal_tx		*tx = &dav_hdl->do_wtx;
+	struct wal_tx		*tx = utx2wtx(dav_hdl->do_utx);
 	struct wal_action	*wa_redo;
 
 	D_ASSERT(hdl != NULL);

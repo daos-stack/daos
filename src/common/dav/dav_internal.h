@@ -64,10 +64,23 @@ typedef struct dav_obj {
 	int				 do_fd;
 	int				 nested_tx;
 	struct bio_meta_instance	*do_mi;
-	struct umem_tx			*utx;
-	struct wal_tx			 do_wtx;
+	struct umem_tx			*do_utx;
+	struct umem_store		 do_store;
+	/* struct wal_tx			 do_wtx; */
 
 	struct dav_clogs		 clogs __attribute__ ((aligned (CACHELINE_SIZE)));
 } dav_obj_t;
+
+static inline
+struct wal_tx *utx2wtx(struct umem_tx *utx)
+{
+	return (struct wal_tx *)&utx->utx_private;
+}
+
+static inline
+struct umem_tx *wtx2utx(struct wal_tx *wtx)
+{
+	return (struct umem_tx *)((void *)wtx - (ptrdiff_t)offsetof(struct umem_tx, utx_private));
+}
 
 #endif /* __DAOS_COMMON_DAV_INTERNAL_H */

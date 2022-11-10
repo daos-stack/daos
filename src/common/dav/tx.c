@@ -475,6 +475,8 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 		VALGRIND_START_TX;
 	} else if (tx->stage == DAV_TX_STAGE_NONE) {
+		struct umem_store *store = &pop->do_store;
+
 		DAV_DEBUG("");
 
 		VALGRIND_START_TX;
@@ -487,11 +489,15 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 		tx->ranges = ravl_new_sized(tx_range_def_cmp,
 			sizeof(struct tx_range_def));
-
-		tx->pop = pop;
-
 		tx->first_snapshot = 1;
 
+		err = store->stor_ops->so_wal_reserv(store, &pop->do_utx->utx_id);
+		if (err) {
+			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
+			tx->stage = DAV_TX_STAGE_ONABORT;
+			return err;
+		}
+		tx->pop = pop;
 	} else {
 		FATAL("Invalid stage %d to begin new transaction", tx->stage);
 	}

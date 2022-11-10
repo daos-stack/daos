@@ -28,7 +28,7 @@ struct wal_tx {
 };
 
 int wal_tx_init(struct dav_obj *dav_hdl);
-int wal_tx_commit(void *hdl);
+int wal_tx_commit(struct dav_obj *hdl);
 int wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t flags);
 int wal_tx_assign(void *hdl, void *addr, uint64_t val);
 int wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);
