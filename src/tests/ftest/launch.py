@@ -1820,7 +1820,7 @@ class Launch():
                 return
             if not create:
                 raise LaunchException(f'User {user} group not as expected')
-        elif not create:
+        if not create:
             raise LaunchException(f'Error querying user {user}')
 
         # Delete and ignore errors, in case user account is inconsistent across nodes
