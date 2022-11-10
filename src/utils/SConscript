@@ -13,7 +13,7 @@ def scons():
 
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('../client/dfs')])
 

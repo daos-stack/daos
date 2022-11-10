@@ -1610,6 +1610,7 @@ func TestControl_ListPools(t *testing.T) {
 }
 
 func TestControl_GetMaxPoolSize(t *testing.T) {
+	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
 		ScmBytes  uint64
 		NvmeBytes uint64
@@ -2076,7 +2077,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  new(storage.NvmeDevState),
+								NvmeState:  &devStateFaulty,
 							},
 							Rank: 0,
 						},
