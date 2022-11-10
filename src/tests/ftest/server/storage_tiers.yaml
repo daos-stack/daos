@@ -30,15 +30,15 @@ storage_3: &storage_nvme_wal_index
   class: nvme
   roles: [wal, index]
 
-storage_3: &storage_nvme_wal
+storage_4: &storage_nvme_wal
   class: nvme
   roles: [wal]
 
-storage_3: &storage_nvme_index
+storage_5: &storage_nvme_index
   class: nvme
   roles: [index]
 
-storage_3: &storage_nvme_data
+storage_6: &storage_nvme_data
   class: nvme
   roles: [data]
 
