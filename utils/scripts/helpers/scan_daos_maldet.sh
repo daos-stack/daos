@@ -23,9 +23,6 @@ fails=0
 errs=0
 mal_strt="!-- "
 mal_end=" --"
-# debug
-# shellcheck disable=SC2012
-ls -l /usr/bin/md5sum || true
 # fake a failure for testing
 if sudo -S -E /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
@@ -48,26 +45,29 @@ malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
 clam_strt="!-- "
 clam_end=" --"
+cdata=""
 : "${PUBLIC_DISTRO:=unknown}"
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
+  cdata="<![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>"
 elif [ "$PUBLIC_DISTRO" = "leap" ]; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
+  cdata="<![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>"
 fi
 
 cat << EOF > "$malxml"
 <testsuite skip="0" failures="$fails" errors="$errs" tests="2" name="Malware_Scan">
-  <testcase name="Maldet update" classname="Maldet"/>
+  <testcase name="Maldet update" classname="Maldet">
     <${mal_strt}failure message="Maldet signature update failed" type="warning">
     </failure${mal_end}>
   </testcase>
-  <testcase name="Malware_scan" classname="ClamAV"/>
+  <testcase name="Malware_scan" classname="ClamAV">
     <${clam_strt}error message="Malware Detected" type="error">
-      <![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>
+      $cdata
     </error${clam_end}>
   </testcase>
 </testsuite>
