@@ -383,46 +383,21 @@ update_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, b
 	return 0;
 }
 
-/* Get container number of open handles, if the key exists in rdb */
-static int
-get_nhandles(struct rdb_tx *tx, struct cont *cont, uint32_t *nhandles)
-{
-	uint32_t	result = 0;
-	d_iov_t		value;
-	int		rc;
-
-	d_iov_set(&value, &result, sizeof(result));
-	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
-	if (rc == -DER_NONEXIST)
-		goto out;		/* pool/container has old layout without nhandles */
-	else if (rc != 0) {
-		D_ERROR(DF_CONT": rdb_tx_lookup nhandles failed, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto err;
-	}
-
-	D_DEBUG(DB_MD, DF_CONT": nhandles=%u\n", DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		result);
-
-out:
-	*nhandles = result;
-	return 0;
-err:
-	return rc;
-}
-
 enum nhandles_op {
-	NHANDLES_INCREMENT = 0,
-	NHANDLES_DECREMENT
+	NHANDLES_GET = 0,
+	NHANDLES_PRE_INCREMENT,
+	NHANDLES_PRE_DECREMENT
 };
 
-/* Increment or decrement container number of open handles, if the key exists in rdb */
+
+/* Get container number of open handles, if the key exists in rdb ; optionally update based on op */
 static int
-update_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t *nhandles)
+get_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t *nhandles)
 {
 	uint32_t	result = 0;
 	uint32_t	orig_val;
 	d_iov_t		value;
+	bool		do_update = true;
 	int		rc;
 
 	d_iov_set(&value, &result, sizeof(result));
@@ -435,22 +410,39 @@ update_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint3
 		goto err;
 	}
 
-	orig_val = result;
-	result = (op == NHANDLES_INCREMENT) ? (result + 1) : (result -1 );
-
-	rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto err;
+	switch (op) {
+	case NHANDLES_GET:
+		do_update = false;
+		break;
+	case NHANDLES_PRE_INCREMENT:
+		orig_val = result;
+		result++;
+		break;
+	case NHANDLES_PRE_DECREMENT:
+		orig_val = result;
+		result--;
+		break;
+	default:
+		D_ASSERTF(0, "invalid op=%d\n", op);
+		break;
 	}
 
-	D_DEBUG(DB_MD, DF_CONT": %s nhandles %u -> %u\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		(op == NHANDLES_INCREMENT) ? "incremented" : "decremented", orig_val, result);
+	if (do_update) {
+		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto err;
+		}
+		D_DEBUG(DB_MD, DF_CONT": updated nhandles %u -> %u\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), orig_val, result);
+	} else {
+		D_DEBUG(DB_MD, DF_CONT": got nhandles=%u\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), result);
+	}
 
 out:
-	if (nhandles)
+	if (nhandles != NULL)
 		*nhandles = result;
 	return 0;
 err:
@@ -2072,9 +2064,9 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->coo_lsnapshot);
 	}
 
-	/* Get number of open handles (increment after, update not included in RPC reply) */
+	/* Get number of open handles (pre-incremented to reflect the effects of this open) */
 	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
-		rc = get_nhandles(tx, cont, &nhandles);
+		rc = get_nhandles(tx, cont, NHANDLES_PRE_INCREMENT, &nhandles);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": get_nhandles() failed: "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
@@ -2082,15 +2074,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		}
 		out->coo_nhandles = nhandles;
 	}
-
-	rc = update_nhandles(tx, cont, NHANDLES_INCREMENT, &nhandles);
-	if (rc != 0) {
-		D_ERROR(DF_CONT": update_nhandles(increment) failed: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
-		goto out;
-	}
-	D_DEBUG(DB_MD, DF_CONT": incremented nhandles %u -> %u\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), (nhandles - 1), nhandles);
 
 out:
 	if (rc == 0) {
@@ -2172,7 +2155,7 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, crt_context_t ctx, c
 		return rc;
 
 	/* Decrement number of open handles */
-	rc = update_nhandles(tx, cont, NHANDLES_DECREMENT, NULL /* nhandles */);
+	rc = get_nhandles(tx, cont, NHANDLES_PRE_DECREMENT, NULL /* nhandles */);
 	if (rc != 0)
 		goto out;
 
@@ -2841,9 +2824,9 @@ cont_info_read(struct rdb_tx *tx, struct cont *cont, int cont_proto_ver, daos_co
 		out.ci_md_mtime = mdtimes.mtime;
 	}
 
-	/* Get number of open handles */
+	/* Get number of open handles (without updating it) */
 	if (cont_proto_ver >= CONT_PROTO_VER_WITH_NHANDLES) {
-		rc = get_nhandles(tx, cont, &out.ci_nhandles);
+		rc = get_nhandles(tx, cont, NHANDLES_GET, &out.ci_nhandles);
 		if (rc != 0) {
 			D_ERROR(DF_CONT": get_nhandles failed, "DF_RC"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));

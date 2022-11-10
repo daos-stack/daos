@@ -54,7 +54,7 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
-		assert_int_equal(info.ci_nhandles, 0);
+		assert_int_equal(info.ci_nhandles, 1);
 		print_message("container opened\n");
 
 		/* Open a second time to verify num handles was incremented */
@@ -62,7 +62,7 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
-		assert_int_equal(info.ci_nhandles, 1);
+		assert_int_equal(info.ci_nhandles, 2);
 		print_message("container opened (coh2)\n");
 
 		rc = daos_cont_close(coh2, arg->async ? &ev : NULL);
