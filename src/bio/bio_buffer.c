@@ -1471,7 +1471,16 @@ out:
 int
 bio_iod_post_async(struct bio_desc *biod, int err)
 {
+	/* Async post is for UPDATE only */
+	if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
+		goto out;
+
+	/* Async post is only for MD on SSD */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto out;
+
 	biod->bd_async_post = 1;
+out:
 	return bio_iod_post(biod, err);
 }
 

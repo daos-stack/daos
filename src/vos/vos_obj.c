@@ -524,7 +524,7 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 
 	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);

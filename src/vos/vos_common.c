@@ -257,7 +257,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
-	   bool started, int err)
+	   bool started, struct bio_desc *biod, int err)
 {
 	struct dtx_handle	*dth = dth_in;
 	struct dtx_rsrvd_uint	*dru;
@@ -303,7 +303,10 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	vos_dth_set(NULL);
 
-	err = umem_tx_end(vos_cont2umm(cont), err);
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
+		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);
+	else
+		err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
 	if (err != 0) {

@@ -609,7 +609,7 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 }
 
 static int
-pmem_tx_commit(struct umem_instance *umm)
+pmem_tx_commit(struct umem_instance *umm, void *data)
 {
 	int rc;
 
@@ -906,7 +906,7 @@ bmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 }
 
 static int
-bmem_tx_commit(struct umem_instance *umm)
+bmem_tx_commit(struct umem_instance *umm, void *data)
 {
 	int rc;
 

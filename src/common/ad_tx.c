@@ -891,7 +891,7 @@ umo_tx_abort(struct umem_instance *umm, int err)
 }
 
 static int
-umo_tx_commit(struct umem_instance *umm)
+umo_tx_commit(struct umem_instance *umm, void *data)
 {
 	struct ad_tx	*tx = tx_get();
 	int		 rc = 0;
@@ -1109,7 +1109,7 @@ umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t l
 		goto failed;
 	}
 
-	rc = umo_tx_commit(umm);
+	rc = umo_tx_commit(umm, NULL);
 
 	return rc == 0 ? dest: NULL;
 
@@ -1147,7 +1147,7 @@ umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 		goto failed;
 	}
 
-	rc = umo_tx_commit(umm);
+	rc = umo_tx_commit(umm, NULL);
 
 	return rc;
 

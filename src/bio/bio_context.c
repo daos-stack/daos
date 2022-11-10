@@ -291,19 +291,19 @@ bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st
 
 	switch (st) {
 	case SMD_DEV_TYPE_WAL:
-		if (xs_ctxt->bxc_xs_blobstores[st] != NULL) {
-			bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_WAL] != NULL) {
+			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_WAL];
 			break;
 		}
 		/* fall through */
 	case SMD_DEV_TYPE_META:
-		if (xs_ctxt->bxc_xs_blobstores[st] != NULL) {
-			bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META] != NULL) {
+			bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_META];
 			break;
 		}
 		/* fall through */
 	case SMD_DEV_TYPE_DATA:
-		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		bxb = xs_ctxt->bxc_xs_blobstores[SMD_DEV_TYPE_DATA];
 		break;
 	default:
 		D_ASSERT(0);
@@ -1264,7 +1264,8 @@ bio_blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32
 int
 bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 {
-	struct smd_dev_info	*dev_info;
+	struct bio_xs_blobstore	*bxb;
+	struct bio_bdev		*d_bdev;
 	spdk_blob_id		 blob_id;
 	d_iov_t			 iov;
 	bio_addr_t		 addr = { 0 };
@@ -1297,16 +1298,11 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 
 	bio_bh->bbh_blob_id = blob_id;
 
-	/* Query per-server metadata to get device id for xs */
-	rc = smd_dev_get_by_tgt(bio_bh->bbh_vos_id, SMD_DEV_TYPE_DATA, &dev_info);
-	if (rc) {
-		D_ERROR("Not able to find device id/blobstore for tgt %d\n",
-			bio_bh->bbh_vos_id);
-		return rc;
-	}
-
-	uuid_copy(bio_bh->bbh_blobstore, dev_info->sdi_id);
-	smd_dev_free_info(dev_info);
+	bxb = bio_xs_context2xs_blobstore(ioctxt->bic_xs_ctxt, SMD_DEV_TYPE_DATA);
+	D_ASSERT(bxb != NULL);
+	d_bdev = bxb->bxb_blobstore->bb_dev;
+	D_ASSERT(d_bdev != NULL);
+	uuid_copy(bio_bh->bbh_blobstore, d_bdev->bb_uuid);
 
 	/* Create an iov to store blob header structure */
 	d_iov_set(&iov, (void *)bio_bh, sizeof(*bio_bh));
