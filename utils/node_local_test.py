@@ -1437,6 +1437,7 @@ def create_cont(conf,
                 path=None,
                 oclass=None,
                 dir_oclass=None,
+                file_oclass=None,
                 hints=None,
                 valgrind=False,
                 log_check=True,
@@ -1463,6 +1464,9 @@ def create_cont(conf,
 
     if dir_oclass:
         cmd.extend(['--dir_oclass', dir_oclass])
+
+    if file_oclass:
+        cmd.extend(['--file_oclass', file_oclass])
 
     if hints:
         cmd.extend(['--hints', hints])
@@ -1694,7 +1698,7 @@ class PosixTests():
         """Test container object class options"""
 
         container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='oclass_test',
-                                oclass='S1', dir_oclass='S2')
+                                oclass='S1', dir_oclass='S2', file_oclass='S4')
         run_daos_cmd(self.conf,
                      ['container', 'query',
                       self.pool.id(), container],
@@ -1724,7 +1728,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(rc)
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dfs_tool_output(output, 'S4', '1048576')
 
         if dfuse.stop():
             self.fatal_errors = True
