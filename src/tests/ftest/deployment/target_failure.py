@@ -20,8 +20,8 @@ class TargetFailure(IorTestBase):
 
     :avocado: recursive
     """
-    def run_ior_report_error(self, results, job_num, file_name, pool, container,
-                             namespace):
+
+    def run_ior_report_error(self, results, job_num, file_name, pool, container, namespace):
         """Run IOR command and store the results to results dictionary.
 
         Create a new IorCommand object instead of using the one in IorTestBase because
@@ -202,7 +202,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_wo_rf
+        :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
@@ -279,9 +279,9 @@ class TargetFailure(IorTestBase):
         See verify_target_failure_with_protection for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_rp
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_with_rp
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_rp/*")
 
@@ -295,9 +295,9 @@ class TargetFailure(IorTestBase):
         See verify_target_failure_with_protection for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_ec
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_with_ec
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_ec/*")
 
@@ -318,9 +318,9 @@ class TargetFailure(IorTestBase):
         10. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_parallel
+        :avocado: tags=TargetFailure,test_target_failure_parallel
         """
         self.pool = []
         self.container = []

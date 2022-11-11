@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -32,7 +31,7 @@ class DestroyRebuild(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,rebuild
-        :avocado: tags=destroy_pool_rebuild,test_destroy_while_rebuilding
+        :avocado: tags=DestroyRebuild,test_destroy_while_rebuilding
         """
         # Get the test parameters
         targets = self.server_managers[0].get_config_value("targets")
@@ -52,6 +51,7 @@ class DestroyRebuild(TestWithServers):
             "Invalid pool information detected prior to rebuild")
 
         # Start rebuild
+        self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
         self.pool.wait_for_rebuild(True)
 

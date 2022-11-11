@@ -129,6 +129,7 @@ class RebuildTestBase(TestWithServers):
     def start_rebuild(self):
         """Start the rebuild process."""
         # Exclude the rank from the pool to initiate rebuild
+        self.pool.update_map_version()
         if isinstance(self.inputs.rank.value, list):
             self.server_managers[0].stop_ranks(
                 self.inputs.rank.value, self.d_log, force=True)

@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
+
 
 class EcodOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -24,15 +24,15 @@ class EcodOfflineRebuild(ErasureCodeIor):
                   verify all IOR read data and verified.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,ec_offline_rebuild,rebuild
-        :avocado: tags=ec_offline_rebuild_array
-
+        :avocado: tags=EcodOfflineRebuild,test_ec_offline_rebuild
         """
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()
 
         # Kill the last server rank
+        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
                                            force=True)
 
@@ -44,6 +44,7 @@ class EcodOfflineRebuild(ErasureCodeIor):
         self.ior_read_dataset()
 
         # Kill the another server rank
+        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
                                            force=True)
 

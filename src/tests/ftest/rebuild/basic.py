@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
+
 
 class RbldBasic(TestWithServers):
     """Test class for rebuild tests.
@@ -16,10 +16,6 @@ class RbldBasic(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def run_rebuild_test(self, pool_quantity):
         """Run the rebuild test for the specified number of pools.
 
@@ -29,23 +25,21 @@ class RbldBasic(TestWithServers):
         # Get the test parameters
         self.pool = []
         self.container = []
-        self.daos_cmd = DaosCommand(self.bin)
+        daos_cmd = DaosCommand(self.bin)
         for _ in range(pool_quantity):
             self.pool.append(self.get_pool(create=False))
-            self.container.append(
-                self.get_container(self.pool[-1], create=False))
+            self.container.append(self.get_container(self.pool[-1], create=False))
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
 
         # Collect server configuration information
         server_count = len(self.hostlist_servers)
-        engine_count = self.server_managers[0].get_config_value(
-            "engines_per_host")
+        engine_count = self.server_managers[0].get_config_value("engines_per_host")
         engine_count = 1 if engine_count is None else int(engine_count)
         target_count = int(self.server_managers[0].get_config_value("targets"))
         self.log.info(
-            "Running with %s servers, %s engines per server, and %s targets "
-            "per engine", server_count, engine_count, target_count)
+            "Running with %s servers, %s engines per server, and %s targets per engine",
+            server_count, engine_count, target_count)
 
         # Create the pools and confirm their status
         status = True
@@ -69,22 +63,18 @@ class RbldBasic(TestWithServers):
 
         # Determine how many objects will need to be rebuilt
         for index in range(pool_quantity):
-            target_rank_lists = self.container[index].get_target_rank_lists(
-                " prior to rebuild")
-            rebuild_qty = self.container[index].get_target_rank_count(
-                rank, target_rank_lists)
+            target_rank_lists = self.container[index].get_target_rank_lists(" prior to rebuild")
+            rebuild_qty = self.container[index].get_target_rank_count(rank, target_rank_lists)
             rs_obj_nr.append(rebuild_qty)
             self.log.info(
-                "Expecting %s/%s rebuilt objects in container %s after "
-                "excluding rank %s", rs_obj_nr[-1], len(target_rank_lists),
-                self.container[index], rank)
+                "Expecting %s/%s rebuilt objects in container %s after excluding rank %s",
+                rs_obj_nr[-1], len(target_rank_lists), self.container[index], rank)
             rs_rec_nr.append(
                 rs_obj_nr[-1] * self.container[index].record_qty.value)
             self.log.info(
-                "Expecting %s/%s rebuilt records in container %s after "
-                "excluding rank %s", rs_rec_nr[-1],
-                self.container[index].object_qty.value *
-                self.container[index].record_qty.value,
+                "Expecting %s/%s rebuilt records in container %s after excluding rank %s",
+                rs_rec_nr[-1],
+                self.container[index].object_qty.value * self.container[index].record_qty.value,
                 self.container[index], rank)
 
         # Manually exclude the specified rank
@@ -116,15 +106,12 @@ class RbldBasic(TestWithServers):
 
         # Verify the data after rebuild
         for index in range(pool_quantity):
-            self.daos_cmd.container_set_prop(
-                          pool=self.pool[index].uuid,
-                          cont=self.container[index].uuid,
-                          prop="status",
-                          value="healthy")
+            daos_cmd.container_set_prop(
+                pool=self.pool[index].uuid, cont=self.container[index].uuid,
+                prop="status", value="healthy")
             if self.container[index].object_qty.value != 0:
                 self.assertTrue(
-                    self.container[index].read_objects(),
-                    "Data verification error after rebuild")
+                    self.container[index].read_objects(), "Data verification error after rebuild")
         self.log.info("Test Passed")
 
     def test_simple_rebuild(self):
@@ -138,8 +125,8 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild
-        :avocado: tags=pool,rebuild_tests,test_simple_rebuild
+        :avocado: tags=rebuild,pool,rebuild_tests
+        :avocado: tags=RbldBasic,test_simple_rebuild
         """
         self.run_rebuild_test(1)
 
@@ -154,7 +141,7 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild
-        :avocado: tags=pool,rebuild_tests,test_multipool_rebuild
+        :avocado: tags=rebuild,pool,rebuild_tests
+        :avocado: tags=RbldBasic,test_multipool_rebuild
         """
         self.run_rebuild_test(self.params.get("quantity", "/run/testparams/*"))

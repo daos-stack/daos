@@ -179,7 +179,7 @@ class OSAOfflineParallelTest(OSAUtils):
             self.pool = pool[val]
             display_string = "Pool{} space at the End".format(val)
             self.pool.display_pool_daos_space(display_string)
-            self.is_rebuild_done(3)
+            self.pool.wait_for_rebuild(False, 3)
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)

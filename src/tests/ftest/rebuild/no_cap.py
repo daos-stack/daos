@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -41,10 +40,9 @@ class RbldNoCapacity(TestWithServers):
             Full fill pool and verify pool by query after rebuild.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=pool,rebuild
-        :avocado: tags=no_cap
-
+        :avocado: tags=hw,medium
+        :avocado: tags=pool,rebuild,no_cap
+        :avocado: tags=RbldNoCapacity,test_rebuild_no_capacity
         """
         # Get the test params
         targets = self.server_managers[0].get_config_value("targets")
@@ -90,8 +88,8 @@ class RbldNoCapacity(TestWithServers):
         for payload_size in test_data_list:
             write_count = 0
             while True:
-                self.d_log.debug("writing obj {0} sz {1} to "
-                                 "container".format(write_count, payload_size))
+                self.d_log.debug(
+                    "writing obj {0} sz {1} to container".format(write_count, payload_size))
                 my_str = b"A" * payload_size
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
@@ -100,19 +98,15 @@ class RbldNoCapacity(TestWithServers):
                     self.container.written_data.append(TestContainerData(False))
                     self.container.written_data[-1].write_record(
                         self.container, akey, dkey, my_str, obj_class=oclass)
-                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
-                                                                    payload_size))
+                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count, payload_size))
                     write_count += 1
                 except DaosTestError as excep:
                     if not str(err_pool_full) in repr(excep):
-                        self.log.error("#caught exception while writing "
-                                       "object: %s", repr(excep))
+                        self.log.error("#caught exception while writing object: %s", repr(excep))
                         self.container.close()
-                        self.fail("#caught exception while writing "
-                                  "object: {}".format(repr(excep)))
+                        self.fail("#caught exception while writing object: {}".format(repr(excep)))
                     else:
-                        self.log.info("..pool is too full for %s byte "
-                                      "objects", payload_size)
+                        self.log.info("..pool is too full for %s byte objects", payload_size)
                         break
 
         # Display pool size after write
@@ -128,6 +122,7 @@ class RbldNoCapacity(TestWithServers):
         # Start rebuild
         rank = 1
         self.log.info("..(5)Stop rank for rebuild")
+        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild started
@@ -140,9 +135,8 @@ class RbldNoCapacity(TestWithServers):
         retry = 1
         start = time()
         while status != err_pool_full and (time() - start < pool_query_timeout):
-            self.pool.set_query_data()
-            status = self.pool.query_data["response"]["rebuild"]["status"]
-            state = self.pool.query_data["response"]["rebuild"]["state"]
+            status = self.pool.get_rebuild_status(True)
+            state = self.pool.get_rebuild_state(False)
             self.log.info("===>%s, qdata=%s", retry, self.pool.query_data)
             self.log.info("===>%s status=%s, state=%s", retry, status, state)
             sleep(interval)

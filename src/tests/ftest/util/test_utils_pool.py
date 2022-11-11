@@ -1,9 +1,9 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 import os
 from time import sleep, time
 import ctypes
@@ -91,7 +91,7 @@ def remove_pool(test, pool):
 
 
 class TestPool(TestDaosApiBase):
-    # pylint: disable=too-many-public-methods
+    # pylint: disable=too-many-public-methods,too-many-instance-attributes
     """A class for functional testing of DaosPools objects."""
 
     def __init__(self, context, dmg_command, cb_handler=None,
@@ -158,10 +158,14 @@ class TestPool(TestDaosApiBase):
         self._dmg = None
         self.dmg = dmg_command
 
-        self.query_data = []
+        self.query_data = {}
 
         self.scm_per_rank = None
         self.nvme_per_rank = None
+
+        # Stored pool map version to use when determining if pool rebuild is complete in addition
+        # to the rebuild state.  This can be updated via TestPool.update_map_version().
+        self._map_version = 0
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -436,28 +440,79 @@ class TestPool(TestDaosApiBase):
 
         return status
 
-    @fail_on(CommandFailure)
-    def set_property(self, prop_name=None, prop_value=None):
-        """Set Property.
-
-        It sets property for a given pool uuid using dmg.
+    def delete_acl(self, principal):
+        """Delete ACL from a DAOS pool.
 
         Args:
-            prop_name (str, optional): pool property name. Defaults to
-                None, which uses the TestPool.prop_name.value
-            prop_value (str, optional): value to be set for the property.
-                Defaults to None, which uses the TestPool.prop_value.value
-        """
-        if self.pool:
-            self.log.info("Set-prop for Pool: %s", self.identifier)
+            principal (str): principal to be deleted
 
-            # If specific values are not provided, use the class values
-            if prop_name is None:
-                prop_name = self.prop_name.value
-            if prop_value is None:
-                prop_value = self.prop_value.value
-            properties = ":".join([prop_name, prop_value])
-            self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
+        Raises:
+            CommandFailure: if the dmg pool delete-acl command fails.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+
+    @fail_on(CommandFailure)
+    def drain(self, rank, tgt_idx=None):
+        """Use dmg to drain the rank and targets from this pool.
+
+        Only supported with the dmg control method.
+
+        Args:
+            rank (str): daos server rank to drain
+            tgt_idx (str, optional): string of targets to drain on ranks
+                ex: "1,2". Defaults to None.
+        """
+        self.update_map_version()
+        self.dmg.pool_drain(self.identifier, rank, tgt_idx)
+
+    @fail_on(CommandFailure)
+    def evict(self):
+        """Evict all pool connections to a DAOS pool."""
+        if self.pool:
+            self.log.info("Evict all pool connections for pool: %s", self.identifier)
+            try:
+                self.dmg.pool_evict(self.identifier)
+            finally:
+                self.connected = False
+
+    @fail_on(CommandFailure)
+    def exclude(self, ranks, tgt_idx=None):
+        """Manually exclude a rank from this pool.
+
+        Args:
+            ranks (list): a list daos server ranks (int) to exclude
+            tgt_idx (string, optional): str of targets to exclude on ranks
+                ex: "1,2". Defaults to None.
+        """
+        self.update_map_version()
+        self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
+
+    @fail_on(CommandFailure)
+    def extend(self, ranks):
+        """Extend the pool to additional ranks.
+
+        Args:
+            ranks (list): a list daos server ranks (int) to exclude
+
+        """
+        self.update_map_version()
+        return self.dmg.pool_extend(self.identifier, ranks)
+
+    def get_acl(self):
+        """Get ACL from a DAOS pool.
+
+        Raises:
+            CommandFailure: if the dmg pool get-acl command fails.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        return self.dmg.pool_get_acl(pool=self.identifier)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
@@ -485,15 +540,111 @@ class TestPool(TestDaosApiBase):
 
         return prop_value
 
+    def overwrite_acl(self):
+        """Overwrite ACL in a DAOS pool.
+
+        Raises:
+            CommandFailure: if the dmg pool overwrite-acl command fails.
+
+        """
+        if self.acl_file.value:
+            self.dmg.pool_overwrite_acl(pool=self.identifier, acl_file=self.acl_file.value)
+        else:
+            self.log.error("self.acl_file isn't defined!")
+
     @fail_on(CommandFailure)
-    def evict(self):
-        """Evict all pool connections to a DAOS pool."""
-        if self.pool:
-            self.log.info("Evict all pool connections for pool: %s", self.identifier)
+    def query(self, show_enabled=False, show_disabled=False):
+        """Execute dmg pool query.
+
+        Args:
+            show_enabled (bool, optional): Display enabled ranks.
+            show_disabled (bool, optional): Display disabled ranks.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        end_time = None
+        if self.pool_query_timeout.value is not None:
+            self.log.info(
+                "Waiting for pool %s query to be responsive with a %s second timeout",
+                self.identifier, self.pool_query_timeout.value)
+            end_time = time() + self.pool_query_timeout.value
+
+        while True:
             try:
-                self.dmg.pool_evict(self.identifier)
-            finally:
-                self.connected = False
+                return self.dmg.pool_query(self.identifier, show_enabled, show_disabled)
+
+            except CommandFailure as error:
+                if end_time is None:
+                    raise
+
+                self.log.info("Pool %s query still non-responsive: %s", self.identifier, str(error))
+                if time() > end_time:
+                    raise CommandFailure(
+                        "TIMEOUT detected after {} seconds while waiting for pool {} query "
+                        "response. This timeout can be adjusted via the 'pool/pool_query_timeout' "
+                        "test yaml parameter.".format(
+                            self.pool_query_timeout.value, self.identifier)) from error
+
+    @fail_on(CommandFailure)
+    def reintegrate(self, rank, tgt_idx=None):
+        """Use dmg to reintegrate the rank and targets into this pool.
+
+        Only supported with the dmg control method.
+
+        Args:
+            rank (str): daos server rank to reintegrate
+            tgt_idx (str, optional): string of targets to reintegrate on ranks
+            ex: "1,2". Defaults to None.
+        """
+        self.update_map_version()
+        self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
+
+    @fail_on(CommandFailure)
+    def set_property(self, prop_name=None, prop_value=None):
+        """Set Property.
+
+        It sets property for a given pool uuid using dmg.
+
+        Args:
+            prop_name (str, optional): pool property name. Defaults to
+                None, which uses the TestPool.prop_name.value
+            prop_value (str, optional): value to be set for the property.
+                Defaults to None, which uses the TestPool.prop_value.value
+        """
+        if self.pool:
+            self.log.info("Set-prop for Pool: %s", self.identifier)
+
+            # If specific values are not provided, use the class values
+            if prop_name is None:
+                prop_name = self.prop_name.value
+            if prop_value is None:
+                prop_value = self.prop_value.value
+            properties = ":".join([prop_name, prop_value])
+            self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
+
+    def update_acl(self, use_acl, entry=None):
+        """Update ACL for a DAOS pool.
+
+        Can't use both ACL file and entry, so use_acl = True and entry != None
+        isn't allowed.
+
+        Args:
+            use_acl (bool): Whether to use the ACL file during the update.
+            entry (str, optional): entry to be updated.
+
+        Raises:
+            CommandFailure: if the dmg pool update-acl command fails.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        """
+        acl_file = None
+        if use_acl:
+            acl_file = self.acl_file.value
+        self.dmg.pool_update_acl(pool=self.identifier, acl_file=acl_file, entry=entry)
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -722,100 +873,6 @@ class TestPool(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def rebuild_complete(self):
-        """Determine if the pool rebuild is complete.
-
-        Returns:
-            bool: True if pool rebuild is complete; False otherwise
-
-        """
-        status = False
-
-        if self.control_method.value == self.USE_API:
-            self.display_pool_rebuild_status()
-            status = self.info.pi_rebuild_st.rs_state == 2
-        elif self.control_method.value == self.USE_DMG:
-            self.set_query_data()
-            self.log.info(
-                "Pool %s query data: %s\n", self.uuid, self.query_data)
-            status = self.query_data["response"]["rebuild"]["state"] == "done"
-        else:
-            self.log.error(
-                "Error: Undefined control_method: %s",
-                self.control_method.value)
-
-        return status
-
-    def get_rebuild_state(self, verbose=True):
-        """Get the rebuild state from the dmg pool query.
-
-        Args:
-            verbose (bool, optional): whether to display the rebuild data. Defaults to True.
-
-        Returns:
-            str: the rebuild state
-
-        """
-        self.set_query_data()
-        try:
-            if verbose:
-                self.log.info(
-                    "Pool %s query rebuild data: %s\n",
-                    self.uuid, self.query_data["response"]["rebuild"])
-            return self.query_data["response"]["rebuild"]["state"]
-        except KeyError as error:
-            self.log.error("Unable to detect rebuild state: %s", error)
-            return None
-
-    def wait_for_rebuild(self, to_start, interval=1):
-        """Wait for the rebuild to start or end.
-
-        Args:
-            to_start (bool): whether to wait for rebuild to start or end
-            interval (int): number of seconds to wait in between rebuild
-                completion checks
-        """
-        start = time()
-        self.log.info(
-            "Waiting for rebuild to %s%s ...",
-            "start" if to_start else "complete",
-            " with a {} second timeout".format(self.rebuild_timeout.value)
-            if self.rebuild_timeout.value is not None else "")
-
-        # Expect the state to be 'busy' or 'done' when waiting for rebuild to start or 'done' when
-        # waiting for rebuild to complete.
-        expected_states = ["busy", "done"] if to_start else ["done"]
-
-        start = time()
-        while self.get_rebuild_state() not in expected_states:
-            self.log.info(
-                "  Rebuild %s ...",
-                "has not yet started" if to_start else "in progress")
-            if self.rebuild_timeout.value is not None:
-                if time() - start > self.rebuild_timeout.value:
-                    raise DaosTestError(
-                        "TIMEOUT detected after {} seconds while for waiting "
-                        "for rebuild to {}.  This timeout can be adjusted via "
-                        "the 'pool/rebuild_timeout' test yaml "
-                        "parameter.".format(
-                            self.rebuild_timeout.value,
-                            "start" if to_start else "complete"))
-            sleep(interval)
-
-        self.log.info(
-            "Rebuild %s detected", "start" if to_start else "completion")
-
-    @fail_on(CommandFailure)
-    def exclude(self, ranks, tgt_idx=None):
-        """Manually exclude a rank from this pool.
-
-        Args:
-            ranks (list): a list daos server ranks (int) to exclude
-            tgt_idx (string, optional): str of targets to exclude on ranks
-                ex: "1,2". Defaults to None.
-        """
-        self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
-
     def check_files(self, hosts):
         """Check if pool files exist on the specified list of hosts.
 
@@ -839,6 +896,19 @@ class TestPool(TestDaosApiBase):
         self.get_info()
         keys = ("s_total", "s_free")
         return {key: getattr(self.info.pi_space.ps_space, key) for key in keys}
+
+    def get_pool_rebuild_status(self):
+        """Get the pool info rebuild status attributes as a dictionary.
+
+        Returns:
+            dict: a dictionary of lists of the rebuild status attributes
+
+        """
+        self.get_info()
+        keys = (
+            "rs_version", "rs_padding32", "rs_errno", "rs_state",
+            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
+        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
 
     def get_pool_free_space(self, device="scm"):
         """Get SCM or NVME free space.
@@ -876,6 +946,13 @@ class TestPool(TestDaosApiBase):
             "Pool %s space%s:\n  %s", self.uuid,
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
+    def display_pool_rebuild_status(self):
+        """Display the pool info rebuild status attributes."""
+        status = self.get_pool_rebuild_status()
+        self.log.info(
+            "Pool rebuild status: %s",
+            ", ".join(["{}={}".format(key, status[key]) for key in sorted(status)]))
+
     def pool_percentage_used(self):
         """Get the pool storage used % for SCM and NVMe.
 
@@ -890,65 +967,6 @@ class TestPool(TestDaosApiBase):
         }
         return pool_percent
 
-    def get_pool_rebuild_status(self):
-        """Get the pool info rebuild status attributes as a dictionary.
-
-        Returns:
-            dict: a dictionary of lists of the rebuild status attributes
-
-        """
-        self.get_info()
-        keys = (
-            "rs_version", "rs_padding32", "rs_errno", "rs_state",
-            "rs_toberb_obj_nr", "rs_obj_nr", "rs_rec_nr")
-        return {key: getattr(self.info.pi_rebuild_st, key) for key in keys}
-
-    def display_pool_rebuild_status(self):
-        """Display the pool info rebuild status attributes."""
-        status = self.get_pool_rebuild_status()
-        self.log.info(
-            "Pool rebuild status: %s",
-            ", ".join(
-                ["{}={}".format(key, status[key]) for key in sorted(status)]))
-
-    def read_data_during_rebuild(self, container):
-        """Read data from the container while rebuild is active.
-
-        Args:
-            container (TestContainer): container from which to read data
-
-        Returns:
-            bool: True if all the data is read successfully before rebuild
-                completes; False otherwise
-
-        """
-        container.open()
-        self.log.info(
-            "Reading objects in container %s during rebuild", self.uuid)
-
-        # Attempt to read all of the data from the container during rebuild
-        index = 0
-        status = read_incomplete = index < len(container.written_data)
-        while not self.rebuild_complete() and read_incomplete:
-            try:
-                status &= container.written_data[index].read_object(container)
-            except DaosTestError as error:
-                self.log.error(str(error))
-                status = False
-            index += 1
-            read_incomplete = index < len(container.written_data)
-
-        # Verify that all of the container data was read successfully
-        if read_incomplete:
-            self.log.info(
-                "Rebuild completed before all the written data could be read - "
-                "Currently not reporting this as an error.")
-            # status = False
-        elif not status:
-            self.log.error("Errors detected reading data during rebuild")
-        return status
-
-    @fail_on(CommandFailure)
     def set_query_data(self, show_enabled=False, show_disabled=False):
         """Execute dmg pool query and store the results.
 
@@ -956,137 +974,14 @@ class TestPool(TestDaosApiBase):
             show_enabled (bool, optional): Display enabled ranks.
             show_disabled (bool, optional): Display disabled ranks.
 
-        Only supported with the dmg control method.
+        Raises:
+            TestFail: if the dmg pool query command failed
+
         """
         self.query_data = {}
-        if self.pool:
-            if self.dmg:
-                end_time = None
-                if self.pool_query_timeout.value is not None:
-                    self.log.info(
-                        "Waiting for pool %s query to be responsive with a %s "
-                        "second timeout", self.identifier,
-                        self.pool_query_timeout.value)
-                    end_time = time() + self.pool_query_timeout.value
-                while True:
-                    try:
-                        self.query_data = self.dmg.pool_query(self.identifier, show_enabled,
-                                                              show_disabled)
-                        break
-                    except CommandFailure as error:
-                        if end_time is not None:
-                            self.log.info(
-                                "Pool %s query still non-responsive: %s",
-                                self.identifier, str(error))
-                            if time() > end_time:
-                                raise CommandFailure(
-                                    "TIMEOUT detected after {} seconds while "
-                                    "waiting for pool {} query response. This "
-                                    "timeout can be adjusted via the "
-                                    "'pool/pool_query_timeout' test yaml "
-                                    "parameter.".format(
-                                        self.pool_query_timeout.value,
-                                        self.identifier)) from error
-                        else:
-                            raise CommandFailure(error) from error
-            else:
-                self.log.error("Error: Undefined dmg command")
+        self.query_data = self.query(show_enabled, show_disabled)
 
-    @fail_on(CommandFailure)
-    def reintegrate(self, rank, tgt_idx=None):
-        """Use dmg to reintegrate the rank and targets into this pool.
-
-        Only supported with the dmg control method.
-
-        Args:
-            rank (str): daos server rank to reintegrate
-            tgt_idx (str, optional): string of targets to reintegrate on ranks
-            ex: "1,2". Defaults to None.
-        """
-        self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
-
-    @fail_on(CommandFailure)
-    def drain(self, rank, tgt_idx=None):
-        """Use dmg to drain the rank and targets from this pool.
-
-        Only supported with the dmg control method.
-
-        Args:
-            rank (str): daos server rank to drain
-            tgt_idx (str, optional): string of targets to drain on ranks
-                ex: "1,2". Defaults to None.
-        """
-        self.dmg.pool_drain(self.identifier, rank, tgt_idx)
-
-    def get_acl(self):
-        """Get ACL from a DAOS pool.
-
-        Returns:
-            str: dmg pool get-acl output.
-
-        """
-        return self.dmg.pool_get_acl(pool=self.identifier)
-
-    def update_acl(self, use_acl, entry=None):
-        """Update ACL for a DAOS pool.
-
-        Can't use both ACL file and entry, so use_acl = True and entry != None
-        isn't allowed.
-
-        Args:
-            use_acl (bool): Whether to use the ACL file during the update.
-            entry (str, optional): entry to be updated.
-        """
-        acl_file = None
-        if use_acl:
-            acl_file = self.acl_file.value
-        self.dmg.pool_update_acl(
-            pool=self.identifier, acl_file=acl_file, entry=entry)
-
-    def delete_acl(self, principal):
-        """Delete ACL from a DAOS pool.
-
-        Args:
-            principal (str): principal to be deleted
-        """
-        self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
-
-    def overwrite_acl(self):
-        """Overwrite ACL in a DAOS pool."""
-        if self.acl_file.value:
-            self.dmg.pool_overwrite_acl(
-                pool=self.identifier, acl_file=self.acl_file.value)
-        else:
-            self.log.error("self.acl_file isn't defined!")
-
-    def measure_rebuild_time(self, operation, interval=1):
-        """Measure rebuild time.
-
-        This method is mainly for debugging purpose. We'll analyze the output when we
-        realize that rebuild is taking too long.
-
-        Args:
-            operation (str): Type of operation to print in the log.
-            interval (int): Interval (sec) to call pool query to check the rebuild status.
-                Defaults to 1.
-        """
-        start = float(time())
-        self.wait_for_rebuild(to_start=True, interval=interval)
-        self.wait_for_rebuild(to_start=False, interval=interval)
-        duration = float(time()) - start
-        self.log.info("%s duration: %.1f sec", operation, duration)
-
-    @fail_on(CommandFailure)
-    def extend(self, ranks):
-        """Extend the pool to additional ranks.
-
-        Args:
-            ranks (list): a list daos server ranks (int) to exclude
-
-        """
-        return self.dmg.pool_extend(self.identifier, ranks)
-
-    def _get_query_data(self, *keys, refresh=False):
+    def _get_query_data_keys(self, *keys, refresh=False):
         """Get the pool version from the dmg pool query output.
 
         Args:
@@ -1120,11 +1015,14 @@ class TestPool(TestDaosApiBase):
             refresh (bool, optional): whether or not to issue a new dmg pool query before
                 collecting the data from its output. Defaults to False.
 
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
         Returns:
             int: pool version value
 
         """
-        return int(self._get_query_data("response", "version", refresh=refresh))
+        return int(self._get_query_data_keys("response", "version", refresh=refresh))
 
     def get_rebuild_status(self, refresh=False):
         """Get the pool rebuild status from the dmg pool query output.
@@ -1133,8 +1031,160 @@ class TestPool(TestDaosApiBase):
             refresh (bool, optional): whether or not to issue a new dmg pool query before
                 collecting the data from its output. Defaults to False.
 
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
         Returns:
-            str: rebuild status
+            int: rebuild status
 
         """
-        return int(self._get_query_data("response", "rebuild", "status", refresh=refresh))
+        return int(self._get_query_data_keys("response", "rebuild", "status", refresh=refresh))
+
+    def get_rebuild_state(self, refresh=True):
+        """Get the pool rebuild state from the dmg pool query output.
+
+        Args:
+            verbose (bool, optional): whether to display the rebuild data. Defaults to True.
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
+        Returns:
+            str: rebuild status or None
+
+        """
+        return self._get_query_data_keys("response", "rebuild", "state", refresh=refresh)
+
+    def update_map_version(self):
+        """Update the pool map version used to determine if rebuild is complete.
+
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
+        """
+        self._map_version = self.get_version(True)
+
+    def has_rebuild_started(self, status=None, verbose=True):
+        """Determine if rebuild has started.
+
+        Args:
+            status (list, optional): optional list of expected rebuild states. Defaults to None.
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+
+        Returns:
+            bool: True if rebuild has started
+
+        """
+        return self._check_rebuild(["busy", "done"], None, status=status, verbose=verbose)
+
+    def has_rebuild_completed(self, status=None, verbose=True):
+        """Determine if rebuild has completed.
+
+        Args:
+            status (list, optional): optional list of expected rebuild states. Defaults to None.
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+
+        Returns:
+            bool: True if rebuild has completed
+
+        """
+        return self._check_rebuild(["idle", "done"], self._map_version, status, verbose)
+
+    def _check_rebuild(self, states, version=None, status=None, verbose=True):
+        """Check if rebuild is in an expected state, status, and pool map version.
+
+        Args:
+            states (list): list of expected rebuild state strings
+            version (int, optional): optional map version to be exceeded. Defaults to None.
+            status (list, optional): optional list of expected rebuild states. Defaults to None.
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+
+        Returns:
+            bool: True if the current rebuild state is expected and the rebuild status is expected
+                (if specified), and the map version exceeds the value (if checking for rebuild
+                completion).
+
+        """
+        self.set_query_data()
+        try:
+            current_version = self.get_version(False)
+        except (CommandFailure, ValueError) as error:
+            self.log.error("Unable to detect the current pool map version: %s", error)
+            current_version = 0
+        try:
+            current_rebuild_state = self.get_rebuild_state(False)
+        except CommandFailure as error:
+            self.log.error("Unable to detect the current pool rebuild state: %s", error)
+            current_rebuild_state = "unknown"
+        try:
+            current_rebuild_status = self.get_rebuild_status(False)
+        except (CommandFailure, ValueError) as error:
+            self.log.error("Unable to detect the current pool rebuild status: %s", error)
+            current_rebuild_status = 0
+        if verbose:
+            self.log.info(
+                "Pool %s query rebuild data: {'status': %s, 'state': %s, 'version': %s}",
+                self.identifier, current_rebuild_status, current_rebuild_state, current_version)
+
+        # Determine if the current rebuild state is expected
+        status = current_rebuild_state in states
+        if version is not None:
+            # If a version is provided (required for completion check), verify that it has increased
+            status &= current_version > version
+        if status is not None:
+            # If a status is provided, verify the current status is expected
+            status &= current_rebuild_status in status
+
+        return status
+
+    def wait_for_rebuild(self, to_start, interval=1):
+        """Wait for the rebuild to start or end.
+
+        Args:
+            to_start (bool): whether to wait for rebuild to start or end
+            interval (int): number of seconds to wait in between rebuild completion checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        start = time()
+        self.log.info(
+            "Waiting for rebuild to %s%s ...",
+            "start" if to_start else "complete",
+            " with a {} second timeout".format(self.rebuild_timeout.value)
+            if self.rebuild_timeout.value is not None else "")
+
+        check_method = self.has_rebuild_started if to_start else self.has_rebuild_completed
+        start = time()
+        while not check_method():
+            self.log.info("  Rebuild %s ...", "has not yet started" if to_start else "in progress")
+            if self.rebuild_timeout.value is not None:
+                if time() - start > self.rebuild_timeout.value:
+                    raise DaosTestError(
+                        "TIMEOUT detected after {} seconds while for waiting for rebuild to {}. "
+                        "This timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
+                        "parameter.".format(
+                            self.rebuild_timeout.value, "start" if to_start else "complete"))
+            sleep(interval)
+
+        self.log.info("Rebuild %s detected", "start" if to_start else "completion")
+
+    def measure_rebuild_time(self, operation, interval=1):
+        """Measure rebuild time.
+
+        This method is mainly for debugging purpose. We'll analyze the output when we
+        realize that rebuild is taking too long.
+
+        Args:
+            operation (str): Type of operation to print in the log.
+            interval (int): Interval (sec) to call pool query to check the rebuild status.
+                Defaults to 1.
+        """
+        start = float(time())
+        self.wait_for_rebuild(to_start=True, interval=interval)
+        self.wait_for_rebuild(to_start=False, interval=interval)
+        duration = float(time()) - start
+        self.log.info("%s duration: %.1f sec", operation, duration)

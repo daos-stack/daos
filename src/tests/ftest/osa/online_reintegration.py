@@ -13,7 +13,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from apricot import skipForTicket
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -31,12 +30,10 @@ class OSAOnlineReintegration(OSAUtils):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = DaosCommand(self.bin)
-        self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
@@ -44,24 +41,19 @@ class OSAOnlineReintegration(OSAUtils):
 
     def daos_racer_thread(self):
         """Start the daos_racer thread."""
-        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
-                                           self.dmg_command)
+        self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.dmg_command)
         self.daos_racer.get_params(self)
         self.daos_racer.run()
 
-    def run_online_reintegration_test(self, num_pool, racer=False,
-                                      server_boot=False,
-                                      oclass=None):
+    def run_online_reintegration_test(self, num_pool, racer=False, server_boot=False, oclass=None):
         """Run the Online reintegration without data.
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
-            server_boot (bool) : Perform system stop/start on a rank.
-                                 Defaults to False.
-            oclass (str) : daos object class string (eg: "RP_2G8").
-                           Defaults to None.
+            data (bool) : whether pool has no data or to create some data in pool.
+                Defaults to False.
+            server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
+            oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
         """
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -107,9 +99,9 @@ class OSAOnlineReintegration(OSAUtils):
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
-                output = self.dmg_command.pool_exclude(
-                    self.pool.uuid, rank)
+                output = self.dmg_command.pool_exclude(self.pool.uuid, rank)
             else:
+                self.pool.update_map_version()
                 output = self.dmg_command.system_stop(ranks=rank, force=True)
                 self.pool.wait_for_rebuild(False)
                 self.log.info(output)
@@ -158,7 +150,6 @@ class OSAOnlineReintegration(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
@@ -166,66 +157,63 @@ class OSAOnlineReintegration(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,test_osa_online_reintegration
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration
         """
         self.log.info("Online Reintegration : Basic test")
         self.run_online_reintegration_test(1)
 
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
+
         Test Description: Validate Online Reintegration with server stop
+
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,test_osa_online_reintegration_server_stop
+        :avocado: tags=osa,checksum,online_reintegration,rebuild
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_server_stop
         """
         self.log.info("Online Reintegration : System stop/start")
         self.run_online_reintegration_test(1, server_boot=True)
 
-    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration_without_csum(self):
         """Test ID: DAOS-5075.
 
-        Test Description: Validate Online Reintegration
-        without checksum
+        Test Description: Validate Online Reintegration without checksum
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,test_osa_online_reintegration_without_csum
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_without_csum
         """
         self.log.info("Online Reintegration : No Checksum")
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
+        self.test_with_checksum = self.params.get("test_with_checksum", "/run/checksum/*")
         self.run_online_reintegration_test(1)
 
-    @skipForTicket("DAOS-7996")
     def test_osa_online_reintegration_with_aggregation(self):
-        """Test ID: DAOS-6715
-        Test Description: Reintegrate rank while aggregation
-        is happening in parallel
+        """Test ID: DAOS-6715.
+
+        Test Description: Reintegrate rank while aggregation is happening in parallel
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,test_osa_online_reintegration_with_aggregation
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_with_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.log.info("Online Reintegration : Aggregation")
         self.run_online_reintegration_test(1)
 
-    @skipForTicket("DAOS-7996")
     def test_osa_online_reintegration_oclass(self):
-        """Test ID: DAOS-6715
-        Test Description: Reintegrate rank with different
-        object class
+        """Test ID: DAOS-6715.
+
+        Test Description: Reintegrate rank with different object class
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration,test_osa_online_reintegration_oclass
+        :avocado: tags=osa,checksum,online_reintegration
+        :avocado: tags=OSAOnlineReintegration,test_osa_online_reintegration_oclass
         """
         self.log.info("Online Reintegration : Object Class")
         for oclass in self.test_oclass:

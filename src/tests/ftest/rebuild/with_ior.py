@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -31,8 +30,7 @@ class RbldWithIOR(IorTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=pool,rebuild
-        :avocado: tags=rebuildwithior
-
+        :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")
@@ -55,8 +53,7 @@ class RbldWithIOR(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1, rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
         # perform IOR write before rebuild
@@ -64,6 +61,7 @@ class RbldWithIOR(IorTestBase):
         self.run_ior_with_pool(timeout=ior_timeout)
 
         # kill the server
+        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
 
         # wait for rebuild to start
