@@ -3106,7 +3106,7 @@ co_nhandles(void **state)
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
 		rc = daos_cont_destroy(arg->pool.poh, clbl, 1 /* force */,
-				    arg->async ? &ev : NULL);
+				       arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
 		if (arg->async) {
