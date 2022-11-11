@@ -14,7 +14,7 @@ source "$mydir/distro_info.sh"
 
 # We need sudo for running the scan and git for backward
 # compatibility.
-# maldet uses which internally
+# maldet uses find and which internally
 if command -v dnf; then
   dnf install clamav clamav-devel findutils git gzip hostname sudo which
   # Some Dockerfiles missing the md5sum command by not having
