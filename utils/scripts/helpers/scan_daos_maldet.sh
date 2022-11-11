@@ -23,8 +23,8 @@ fails=0
 errs=0
 mal_strt="!-- "
 mal_end=" --"
-# fake a failure for testing
-if sudo -S -E /usr/local/sbin/maldet --update-sigs; then
+# fake a failure
+if sudo /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
    mal_strt=""
    mal_end=""
@@ -46,13 +46,7 @@ rm -f "$malxml"
 clam_strt="!-- "
 clam_end=" --"
 cdata=""
-: "${PUBLIC_DISTRO:=unknown}"
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-  clam_strt=""
-  clam_end=""
-  ((errs+=1))
-  cdata="<![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>"
-elif [ "$PUBLIC_DISTRO" = "leap" ]; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
