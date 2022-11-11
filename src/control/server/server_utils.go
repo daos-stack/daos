@@ -602,6 +602,7 @@ func registerLeaderSubscriptions(srv *server) {
 					return
 				}
 				srv.mgmtSvc.reqGroupUpdate(ctx, false)
+				srv.mgmtSvc.tryStoppingRank(ctx, ranklist.Rank(evt.Rank))
 			}
 		}))
 

@@ -792,6 +792,19 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	return resp, nil
 }
 
+// tryStoppingRank attempts to stop a rank without any interest in the result.
+func (svc *mgmtSvc) tryStoppingRank(ctx context.Context, rank ranklist.Rank) {
+	req := mgmtpb.SystemStopReq{
+		Sys:   svc.sysdb.SystemName(),
+		Prep:  false,
+		Kill:  true,
+		Force: true,
+		Ranks: rank.String(),
+	}
+	resp, err := svc.SystemStop(ctx, &req)
+	svc.log.Debugf("Attempted to stop rank %s: %v: %+v", rank, err, resp)
+}
+
 func newSystemStartFailedEvent(errs string) *events.RASEvent {
 	return events.NewGenericEvent(events.RASSystemStartFailed, events.RASSeverityError,
 		fmt.Sprintf("System startup failed, %s", errs), "")
