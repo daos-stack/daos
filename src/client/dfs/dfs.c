@@ -2830,7 +2830,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	strcpy(dfs->root.name, "/");
 	dfs->root.mode = S_IFDIR | 0755;
 
-	obj_mode = get_daos_obj_mode(flags);
+	obj_mode = get_daos_obj_mode(flags ?: dfs_params->amode);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));
@@ -3181,7 +3181,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 		cid = dfs->attr.da_dir_oclass_id;
 
 	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
@@ -3238,7 +3238,7 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 		csize = dfs->attr.da_chunk_size;
 
 	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
@@ -5320,7 +5320,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	}
 
 	/** Open parent object and fetch entry of obj from it */
-	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 

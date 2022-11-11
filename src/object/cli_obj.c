@@ -2484,6 +2484,14 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
+	if (obj_is_modification_opc(opc)) {
+		if (!(obj->cob_mode & DAOS_OBJ_UPDATE_MODE_MASK)) {
+			D_ERROR("object "DF_OID" opc %d is opened with mode 0x%x\n",
+				DP_OID(obj->cob_md.omd_id), opc, obj->cob_mode);
+			D_GOTO(out, rc = -DER_NO_PERM);
+		}
+	}
+
 	if (daos_handle_is_valid(th)) {
 		if (!obj_is_modification_opc(opc)) {
 			rc = dc_tx_hdl2epoch_and_pmv(th, epoch, &map_ver);
