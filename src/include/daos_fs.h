@@ -160,6 +160,25 @@ int
 dfs_disconnect(dfs_t *dfs);
 
 /**
+ * Evict all the container handles from the hashtable and destroy the container.
+ *
+ * \param[in]   pool    Pool label where the container is.
+ * \param[in]	sys	DAOS system name to use for the pool.
+ *			Pass NULL to use the default system.
+ * \param[in]   cont    Container label to destroy.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles from other open calls).
+ *			This parameter will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
+
+/**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
  * on the container.
  *
