@@ -19,6 +19,7 @@
 #include <spdk/bdev.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
+#include <spdk/rpc.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
