@@ -211,6 +211,7 @@ class ServerFillUp(IorTestBase):
             server (string): server hostname where it generate the NVMe fault.
             disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
+        self.pool.update_map_version()
         self.dmg.hostlist = server
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)

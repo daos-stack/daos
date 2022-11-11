@@ -39,9 +39,9 @@ class OSADmgNegativeTest(OSAUtils):
         """
         if exp_result == "Pass":
             # Check state before hand as wait for rebuild
-            state = self.get_rebuild_state()
+            state = self.pool.get_rebuild_state(True)
             if state != "done":
-                self.is_rebuild_done(3)
+                self.pool.wait_for_rebuild(False, 3)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")
             else:

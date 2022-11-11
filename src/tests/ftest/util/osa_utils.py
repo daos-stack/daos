@@ -59,60 +59,12 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.test_with_snapshot = False
 
     @fail_on(CommandFailure)
-    def get_pool_leader(self):
-        """Get the pool leader.
-
-        Returns:
-            int: pool leader value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["response"]["leader"])
-
-    @fail_on(CommandFailure)
-    def get_rebuild_status(self):
-        """Get the rebuild status.
-
-        Returns:
-            str: rebuild status
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["response"]["rebuild"]["status"]
-
-    @fail_on(CommandFailure)
-    def get_rebuild_state(self):
-        """Get the rebuild state.
-
-        Returns:
-            str: rebuild state
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["response"]["rebuild"]["state"]
-
-    @fail_on(CommandFailure)
-    def is_rebuild_done(self, time_interval,
-                        wait_for_rebuild_to_complete=False):
-        """Rebuild is completed/done.
-        Args:
-            time_interval: Wait interval between checks
-            wait_for_rebuild_to_complete: Rebuild completed
-                                          (Default: False)
-        """
-        self.pool.wait_for_rebuild(wait_for_rebuild_to_complete,
-                                   interval=time_interval)
-
-    @fail_on(CommandFailure)
     def assert_on_rebuild_failure(self):
-        """If the rebuild is not successful,
-        raise assert.
-        """
-        rebuild_status = self.get_rebuild_status()
+        """If the rebuild is not successful, raise assert."""
+        rebuild_status = self.pool.get_rebuild_status(True)
         self.log.info("Rebuild Status: %s", rebuild_status)
         rebuild_failed_string = ["failed", "scanning", "aborted", "busy"]
-        self.assertTrue(rebuild_status not in rebuild_failed_string,
-                        "Rebuild failed")
+        self.assertTrue(rebuild_status not in rebuild_failed_string, "Rebuild failed")
 
     @fail_on(CommandFailure)
     def print_and_assert_on_rebuild_failure(self, out, timeout=3):
@@ -120,7 +72,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         completion. If not, raise assert.
         """
         self.log.info(out)
-        self.is_rebuild_done(timeout)
+        self.pool.wait_for_rebuild(False, timeout)
         self.assert_on_rebuild_failure()
 
     @fail_on(CommandFailure)

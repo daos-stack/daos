@@ -137,7 +137,7 @@ class RbldBasic(TestWithServers):
             Expand on the basic test by rebuilding 2 pools at once.
 
         Use Cases:
-            multipool rebuild, single client, various object and record counts
+            multi-pool rebuild, single client, various object and record counts
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
