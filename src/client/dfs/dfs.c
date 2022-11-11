@@ -2830,7 +2830,7 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	strcpy(dfs->root.name, "/");
 	dfs->root.mode = S_IFDIR | 0755;
 
-	obj_mode = get_daos_obj_mode(flags ?: dfs_params->amode);
+	obj_mode = get_daos_obj_mode(flags ? flags : dfs_params->amode);
 	rc = daos_obj_open(coh, dfs->root.oid, obj_mode, &dfs->root.oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() failed, "DF_RC"\n", DP_RC(rc));

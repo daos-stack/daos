@@ -653,7 +653,7 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 }
 
-#define DAOS_OBJ_UPDATE_MODE_MASK 	(DAOS_OO_RW | DAOS_OO_EXCL |		\
+#define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
 					 DAOS_OO_IO_RAND | DAOS_OO_IO_SEQ)
 
 static inline bool
