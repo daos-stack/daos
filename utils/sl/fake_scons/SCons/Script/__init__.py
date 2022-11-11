@@ -362,6 +362,10 @@ class Configure():
         """Fake CheckFlag"""
         return True
 
+    def CheckGoVersion(self, *_args, **_kw):
+        """Fake CheckGoVersion"""
+        return True
+
     def Finish(self):
         """Fake finish"""
 
