@@ -1430,15 +1430,22 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		}
 
 		/* After bio_bdevs are initialized, restart SPDK JSON-RPC server if required. */
-//		if (nvme_glb.bd_persist_rpc_srv) {
-//			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
-//				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
-//
-//			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
-//			if (rc != 0)
-//				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
-//					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
-//		}
+		if (nvme_glb.bd_persist_rpc_srv) {
+			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
+				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
+
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			if (rc != 0) {
+				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
+					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
+				goto out;
+			}
+
+			/* Set SPDK JSON-RPC server state to receive and process RPCs */
+			spdk_rpc_set_state(SPDK_RPC_RUNTIME);
+			D_DEBUG(DB_MGMT, "persistent SPDK JSON-RPC server initialized at %s\n",
+				nvme_glb.bd_rpc_srv_addr);
+		}
 	}
 
 	/* Initialize per-xstream blobstore context */
