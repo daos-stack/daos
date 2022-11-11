@@ -423,11 +423,33 @@ public class DaosObject {
       log.debug(oid + " update object with description " + desc);
     }
     try {
-      client.updateObjNoDecode(objectPtr, desc.descMemoryAddress(), desc.getEqHandle(), desc.getEventId(),
+      client.updateObjAsyncNoDecode(objectPtr, desc.descMemoryAddress(), desc.getEqHandle(), desc.getEventId(),
           desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to update object with description " + desc,
           e);
+    }
+  }
+
+  /**
+   * update with {@link IODescUpdSync}.
+   *
+   * @param desc
+   * @throws DaosObjectException
+   */
+  public void updateAsync(IODescUpdSync desc)
+          throws DaosObjectException {
+    checkOpen();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description " + desc);
+    }
+    try {
+      client.updateObjSyncNoDecode(objectPtr, desc.descMemoryAddress(),
+              desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
+    } catch (DaosIOException e) {
+      throw new DaosObjectException(oid, "failed to update object with description " + desc,
+              e);
     }
   }
 
