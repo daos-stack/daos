@@ -50,7 +50,7 @@ if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   clam_strt=""
   clam_end=""
   ((errs+=1))
-  cdata="<![CDATA[ "$(cat /var/tmp/clamscan.out)" ]]>"
+  cdata="<![CDATA[ \"$(cat /var/tmp/clamscan.out)\" ]]>"
 fi
 
 cat << EOF > "$malxml"
