@@ -193,20 +193,22 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			 * as 'orphan' that will be handled via some special DAOS tools in future.
 			 */
 			rc1 = vos_dtx_set_flags(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DTE_ORPHAN);
-			D_ERROR("Hit uncertain leaked DTX "DF_DTI", mark it as orphan: "DF_RC"\n",
-				DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
-			dtx_dsp_free(dsp);
-
-			if (rc1 == -DER_NONEXIST)
+			if (rc1 == -DER_NONEXIST || rc1 == -DER_NO_PERM) {
+				dtx_dsp_free(dsp);
 				break;
+			}
 
+			D_ERROR("Hit uncertain leaked DTX "DF_DTI", mark it as orphan: "
+				DF_RC"\n", DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
+			dtx_dsp_free(dsp);
 			D_GOTO(out, rc = -DER_TX_UNCERTAIN);
 		case -DER_NONEXIST:
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
 			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
+			if (rc1 < 0 && rc1 != -DER_NONEXIST && rc1 != -DER_NO_PERM &&
+			    dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
 				dtx_dsp_free(dsp);
@@ -301,15 +303,18 @@ dtx_req_list_cb(void **args)
 					drr->drr_rank, drr->drr_tag);
 				return;
 			case -DER_EXCLUDED:
-				/* If non-leader is excluded, handle it
-				 * as 'prepared'. If other non-leaders
-				 * also 'prepared' then related DTX is
-				 * committable. Fall through.
+				/*
+				 * If non-leader is excluded, handle it as 'prepared'. If other
+				 * non-leaders are also 'prepared' then related DTX maybe still
+				 * committable or 'corrupted'. The subsequent DTX resync logic
+				 * will handle related things, see dtx_verify_groups().
+				 *
+				 * Fall through.
 				 */
 			case DTX_ST_PREPARED:
 				if (dra->dra_result == 0 ||
 				    dra->dra_result == DTX_ST_CORRUPTED)
-					dra->dra_result = drr->drr_result;
+					dra->dra_result = DTX_ST_PREPARED;
 				break;
 			case DTX_ST_CORRUPTED:
 				if (dra->dra_result == 0)
@@ -333,8 +338,8 @@ dtx_req_list_cb(void **args)
 		}
 
 		drr = args[0];
-		D_CDEBUG(dra->dra_result < 0 &&
-			 dra->dra_result != -DER_NONEXIST, DLOG_ERR, DB_TRACE,
+		D_CDEBUG(dra->dra_result < 0 && dra->dra_result != -DER_NONEXIST &&
+			 dra->dra_result != -DER_INPROGRESS, DLOG_ERR, DB_TRACE,
 			 "DTX req for opc %x ("DF_DTI") %s, count %d: %d.\n",
 			 dra->dra_opc, DP_DTI(drr->drr_dti),
 			 dra->dra_result < 0 ? "failed" : "succeed",
@@ -506,8 +511,8 @@ btr_ops_t dbtree_dtx_cf_ops = {
 #define DTX_CF_BTREE_ORDER	20
 
 static int
-dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
-		 int *length, struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
+dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *length,
+		 struct dtx_entry *dte, int count, d_rank_t my_rank, uint32_t my_tgtid)
 {
 	struct dtx_memberships		*mbs = dte->dte_mbs;
 	struct dtx_cf_rec_bundle	 dcrb;
@@ -547,7 +552,9 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 
 		/* Skip non-healthy one. */
 		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
-		    target->ta_comp.co_status != PO_COMP_ST_UPIN)
+		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+		    target->ta_comp.co_status != PO_COMP_ST_NEW &&
+		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 			continue;
 
 		/* Skip myself. */

@@ -861,8 +861,8 @@ func TestProvider_Format(t *testing.T) {
 			if tc.expMountOpts != "" {
 				mmp, ok := p.mounter.(*storage.MockMountProvider)
 				if ok {
-					reqIn := mmp.MountReqIn
-					if diff := cmp.Diff(tc.expMountOpts, reqIn.Options); diff != "" {
+					gotOpts, _ := mmp.GetMountOpts(req.Mountpoint)
+					if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
 						t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
 					}
 				}
