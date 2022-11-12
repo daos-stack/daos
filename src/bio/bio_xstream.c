@@ -139,7 +139,7 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			goto out;
 		}
-		nvme_glb.bd_enable_rpc_srv;
+		nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
 	}
 
 	rc = spdk_env_init(&opts);
