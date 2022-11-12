@@ -434,7 +434,8 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 			}
 			memcpy(traddr, value->start, value->len);
 			traddr[value->len] = '\0';
-			D_INFO("Adding transport address '%s' to SPDK allowed list", traddr);
+			D_DEBUG(DB_MGMT, "Adding transport address '%s' to SPDK allowed list",
+				traddr);
 
 			if (vmd_enabled) {
 				if (strncmp(traddr, "0", 1) != 0) {
@@ -450,7 +451,8 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 						goto free_traddr;
 					}
 
-					D_INFO("\t- VMD backing address reverted to '%s'\n", traddr);
+					D_DEBUG(DB_MGMT, "\t- VMD backing address reverted to "
+						"'%s'\n", traddr);
 				}
 			}
 
@@ -685,8 +687,6 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	}
 out:
 	free_json_config_ctx(ctx);
-	if (rc > 0)
-		rc = 0;
 	return rc;
 }
 
@@ -709,7 +709,7 @@ get_hotplug_busid_range(const char *nvme_conf)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
+	D_DEBUG(DB_MGMT, "'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
 		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	if (cfg.method != NULL)
@@ -723,16 +723,17 @@ static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
 	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
-		D_INFO("hotplug filter accept event on bus-id %X, invalid range\n", addr->bus);
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X, invalid range\n",
+			addr->bus);
 		return true; /* allow if no or invalid range specified */
 	}
 
 	if (addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
-		D_INFO("hotplug filter accept event on bus-id %X\n", addr->bus);
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X\n", addr->bus);
 		return true;
 	}
 
-	D_INFO("hotplug filter refuse event on bus-id %X\n", addr->bus);
+	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %X\n", addr->bus);
 	return false;
 }
 
@@ -783,7 +784,7 @@ bio_read_accel_props(const char *nvme_conf)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
+	D_DEBUG(DB_MGMT, "'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
 	       NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
 	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
 	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
@@ -828,8 +829,8 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	*enable = rpc_srv_settings.enable;
 	*sock_addr = rpc_srv_settings.sock_addr;
 
-	D_INFO("'%s' read from config: enabled=%d, addr %s\n", NVME_CONF_SET_SPDK_RPC_SERVER,
-		*enable, (char *)*sock_addr);
+	D_DEBUG(DB_MGMT, "'%s' read from config: enabled=%d, addr %s\n",
+		NVME_CONF_SET_SPDK_RPC_SERVER, *enable, (char *)*sock_addr);
 out:
 	if (cfg.method != NULL)
 		D_FREE(cfg.method);
