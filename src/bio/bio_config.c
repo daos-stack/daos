@@ -278,8 +278,6 @@ opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 		return rc;
 	if (rc == 1)
 		return 0;
-	else
-		return -DER_INVAL;
 
 	D_REALLOC_ARRAY(tmp2, tmp1, count, count + 1);
 	if (tmp2 == NULL)
@@ -412,13 +410,13 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 	}
 
 	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0) {
-		D_DEBUG(DB_MGMT, "skip config entry with mismatched method");
+		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
 		goto free_method;
 	}
 
 	if (cfg.params == NULL) {
-		D_DEBUG(DB_MGMT, "skip config entry with nil params");
-		goto free_method;
+		D_ERROR("bad config entry %s with nil params\n", cfg.method);
+		D_GOTO(free_method, rc = -DER_INVAL);
 	}
 
 	D_ALLOC(traddr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
