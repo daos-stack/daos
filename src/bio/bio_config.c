@@ -661,7 +661,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
 		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
-		D_GOTO(out, rc = 0); /* non-fatal */
+		D_GOTO(out, rc = 1); /* non-fatal */
 	}
 
 	while (ctx->config_it != NULL) {
@@ -681,7 +681,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 
 	if (ctx->config_it == NULL) {
 		D_DEBUG(DB_MGMT, "No '%s' entry\n", method_name);
-		rc = 0; /* non-fatal */
+		rc = 1; /* non-fatal */
 	}
 out:
 	free_json_config_ctx(ctx);
@@ -830,7 +830,6 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 
 	D_INFO("'%s' read from config: enabled=%d, addr %s\n", NVME_CONF_SET_SPDK_RPC_SERVER,
 		*enable, (char *)*sock_addr);
-
 out:
 	if (cfg.method != NULL)
 		D_FREE(cfg.method);
