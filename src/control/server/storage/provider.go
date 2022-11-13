@@ -394,6 +394,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		VMDEnabled:       vmdEnabled,
 		TierProps:        []BdevTierProperties{},
 		AccelProps:       cfg.AccelProps,
+		SpdkRpcSrvProps:  cfg.SpdkRpcServer,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {
