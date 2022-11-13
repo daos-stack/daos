@@ -98,6 +98,11 @@ type AccelPropsParams storage.AccelProps
 
 func (app AccelPropsParams) isDaosConfigParams() {}
 
+// SpdkRpcServerParams specifies details for a storage.ConfSetSpdkRpcServer method.
+type SpdkRpcServerParams storage.SpdkRpcServer
+
+func (srsp SpdkRpcServerParams) isDaosConfigParams() {}
+
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
 	Params SpdkSubsystemConfigParams `json:"params"`
@@ -278,6 +283,18 @@ func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 		data.Configs = append(data.Configs, &DaosConfig{
 			Method: storage.ConfSetAccelProps,
 			Params: AccelPropsParams(props),
+		})
+	}
+}
+
+// Add SPDK JSON-RPC server settings to DAOS config data.
+func rpcSrvSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	props := req.SpdkRpcSrvProps
+	// Add config if RPC server options have been selected.
+	if props.Enable {
+		data.Configs = append(data.Configs, &DaosConfig{
+			Method: storage.ConfSetSpdkRpcServer,
+			Params: SpdkRpcServerParams(props),
 		})
 	}
 }

@@ -47,6 +47,7 @@ const (
 	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -445,6 +446,7 @@ type (
 		Hostname          string
 		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
+		SpdkRpcSrvProps   SpdkRpcServer
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
