@@ -67,6 +67,7 @@ const (
 	NvmeStateNormal NvmeDevState = iota
 	NvmeStateNew
 	NvmeStateFaulty
+	NvmeStateUnplugged
 )
 
 func (nds NvmeDevState) String() string {

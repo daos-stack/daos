@@ -327,12 +327,9 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		uuid_unparse_lower(dev_info->bdi_dev_id, resp->devices[i]->uuid);
 
-		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
-			D_ERROR("Unexpected UNPLUGGED device state");
-			rc = -DER_INVAL;
-			break;
-		}
-		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
+		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0)
+			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
+		else if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NEW;
