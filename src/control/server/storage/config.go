@@ -763,7 +763,7 @@ type Config struct {
 	EnableHotplug    bool          `yaml:"-"`
 	NumaNodeIndex    uint          `yaml:"-"`
 	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
-	SpdkRpcServer    SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {

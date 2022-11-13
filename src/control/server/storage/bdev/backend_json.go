@@ -335,6 +335,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 	}
 
 	accelPropSet(req, sc.DaosData)
+	rpcSrvSet(req, sc.DaosData)
 
 	return sc.WithBdevConfigs(log, req), nil
 }
