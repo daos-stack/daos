@@ -759,7 +759,7 @@ vs_setup_pool(void)
 	uma.uma_id = UMEM_CLASS_PMEM;
 	if (loading_test) {
 		uma.uma_pool = umempobj_open(pool_file, "vea_stress",
-					     UMEMPOBJ_ENABLE_STATS);
+					     UMEMPOBJ_ENABLE_STATS, NULL);
 		if (uma.uma_pool == NULL) {
 			fprintf(stderr, "failed to open pobj pool\n");
 			goto error;
@@ -767,7 +767,7 @@ vs_setup_pool(void)
 	} else {
 		unlink(pool_file);
 		uma.uma_pool = umempobj_create(pool_file, "vea_stress",
-				    UMEMPOBJ_ENABLE_STATS, heap_size, 0666);
+				    UMEMPOBJ_ENABLE_STATS, heap_size, 0666, NULL);
 		if (uma.uma_pool == NULL) {
 			fprintf(stderr, "failed to create pobj pool\n");
 			goto error;

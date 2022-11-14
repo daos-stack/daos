@@ -70,30 +70,6 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits);
 int
 ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags);
 
-/**
- * query action number in redo list.
- */
-uint32_t
-ad_tx_redo_act_nr(struct ad_tx *tx);
-
-/**
- * query payload length in redo list.
- */
-uint32_t
-ad_tx_redo_payload_len(struct ad_tx *tx);
-
-/**
- * get first action pointer, NULL for list empty.
- */
-struct umem_action *
-ad_tx_redo_act_first(struct ad_tx *tx);
-
-/**
- * get next action pointer, NULL for done or list empty.
- */
-struct umem_action *
-ad_tx_redo_act_next(struct ad_tx *tx);
-
 static inline int
 ad_tx_decrease(struct ad_tx *tx, int32_t *addr)
 {

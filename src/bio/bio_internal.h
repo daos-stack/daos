@@ -393,7 +393,8 @@ struct bio_io_context {
 	uint32_t		 bic_io_unit;
 	uuid_t			 bic_pool_id;
 	unsigned int		 bic_opening:1,
-				 bic_closing:1;
+				 bic_closing:1,
+				 bic_dummy:1;
 };
 
 /* A contiguous DMA buffer region reserved by certain io descriptor */
@@ -556,6 +557,7 @@ void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
 void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
+uint32_t default_cluster_sz(void);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);

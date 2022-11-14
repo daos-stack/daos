@@ -2085,8 +2085,9 @@ tx_complete(struct ad_tx *tx, int err)
 	int		    rc;
 	struct ad_maxheap_node	*node;
 
+	/* TODO: Get umem_wal_tx from ad_tx */
 	if (!err)
-		rc = store->stor_ops->so_wal_submit(store, ad_tx2umem_tx(tx));
+		rc = store->stor_ops->so_wal_submit(store, ad_tx2umem_tx(tx), NULL);
 	else
 		rc = err;
 

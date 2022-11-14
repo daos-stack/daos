@@ -355,6 +355,12 @@ is_init_xstream(struct bio_xs_context *ctxt)
 	return ctxt->bxc_thread == nvme_glb.bd_init_thread;
 }
 
+inline uint32_t
+default_cluster_sz(void)
+{
+	return nvme_glb.bd_bs_opts.cluster_sz;
+}
+
 bool
 bio_need_nvme_poll(struct bio_xs_context *ctxt)
 {
@@ -365,11 +371,9 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 		return false;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		bxb = bio_xs_context2xs_blobstore(ctxt, st);
+		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
-		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-			return false;
 	}
 
 	return false;

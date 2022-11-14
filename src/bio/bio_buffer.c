@@ -1000,6 +1000,7 @@ rw_completion(void *cb_arg, int err)
 	biod->bd_inflights--;
 
 	bxb = biod->bd_ctxt->bic_xs_blobstore;
+	D_ASSERT(bxb != NULL);
 	D_ASSERT(bxb->bxb_blob_rw > 0);
 	bxb->bxb_blob_rw--;
 
@@ -1103,6 +1104,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	void			*payload;
 	struct bio_xs_blobstore	*bxb = biod->bd_ctxt->bic_xs_blobstore;
 
+	D_ASSERT(bxb != NULL);
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
 	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 	blob = biod->bd_ctxt->bic_blob;
