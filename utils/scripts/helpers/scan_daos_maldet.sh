@@ -21,12 +21,10 @@ else
 fi
 fails=0
 errs=0
-mal_strt="!-- "
-mal_end=" --"
+mal_fnd
 if ! sudo /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
-   mal_strt=""
-   mal_end=""
+    mal_fnd='<failure message="Maldet signature update failed" type="warning"/>'
 fi
 
 sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
@@ -42,27 +40,23 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
               --infected / | tee /var/tmp/clamscan.out
 malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
-clam_strt="!-- "
-clam_end=" --"
+clam_fnd=""
 cdata=""
 # fake a failure
 if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-  clam_strt=""
-  clam_end=""
   ((errs+=1))
   cdata="<![CDATA[ \"$(cat /var/tmp/clamscan.out)\" ]]>"
+  clam_fnd='<error message="Malware Detected" type="error">'
+  clam_fnd="\n$cdata\n</error>"
 fi
 
 cat << EOF > "$malxml"
 <testsuite skip="0" failures="$fails" errors="$errs" tests="2" name="Malware_Scan">
   <testcase name="Maldet update" classname="Maldet">
-    <${mal_strt}failure message="Maldet signature update failed" type="warning">
-    </failure${mal_end}>
+    $mal_fnd
   </testcase>
   <testcase name="Malware_scan" classname="ClamAV">
-    <${clam_strt}error message="Malware Detected" type="error">
-      $cdata
-    </error${clam_end}>
+    $clam_fnd
   </testcase>
 </testsuite>
 EOF

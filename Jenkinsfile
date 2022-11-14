@@ -873,6 +873,8 @@ pipeline {
                             junit 'maldetect_el8.xml'
                             archiveArtifacts artifacts: 'maldetect_el8.xml'
                             job_status_update()
+                            sh label 'Check if anything was found.',
+                               script: '! grep error maldetect_el8.xml'
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
@@ -906,6 +908,8 @@ pipeline {
                             junit 'maldetect_leap15.xml'
                             archiveArtifacts artifacts: 'maldetect_leap15.xml'
                             job_status_update()
+                            sh label 'Check if anything was found.',
+                               script: '! grep error maldetect_el8.xml'
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
