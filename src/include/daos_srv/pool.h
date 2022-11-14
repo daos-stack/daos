@@ -275,9 +275,6 @@ void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
 
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
-
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
 		       struct pool_map *map, d_rank_list_t *svc_list,

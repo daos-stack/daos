@@ -81,6 +81,11 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
+	/** destroy the container while it's still cached (using dfs_connect) - should fail */
+	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
+	assert_rc_equal(rc, -DER_BUSY);
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont0", 0, NULL);
+	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with an invalid label */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "invalid:-/label", NULL, &cuuid, NULL, NULL);
@@ -101,7 +106,7 @@ dfs_test_mount(void **state)
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 
 	/** Connect and disconnect to DFS container */
 	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont1", O_RDWR, NULL, &dfs);
@@ -111,22 +116,22 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, EINVAL);
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
+	/** try to destroy container without force, using the daos API, should fail */
+	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
+	assert_int_equal(rc, -DER_BUSY);
+	/** dfs_destroy will take the refcount and destroy */
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont1", 0, NULL);
+	assert_rc_equal(rc, 0);
 
 	rc = dfs_fini();
 	assert_int_equal(rc, 0);
-
-	/** destroy the containers */
-	rc = daos_cont_destroy(arg->pool.poh, "cont1", 0, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, "cont0", 0, NULL);
-	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with a valid label, no uuid out */
 	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** destroy with label */
 	rc = daos_cont_destroy(arg->pool.poh, "label1", 0, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
@@ -186,8 +191,7 @@ dfs_test_modes(void **state)
 	rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, NULL, NULL);
 	assert_int_equal(rc, 0);
 	uuid_unparse(cuuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should succeed */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
@@ -210,7 +214,7 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	/** create a DFS container in Balanced mode */
@@ -218,8 +222,7 @@ dfs_test_modes(void **state)
 	rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, NULL, NULL);
 	assert_int_equal(rc, 0);
 	uuid_unparse(cuuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should fail with EPERM */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
@@ -237,15 +240,14 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	/** create a DFS container with no mode specified */
 	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	uuid_unparse(cuuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should succeed */
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR | DFS_RELAXED, &dfs);
@@ -259,7 +261,7 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -1084,15 +1086,15 @@ dfs_test_compat(void **state)
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
 	uuid_unparse(uuid, uuid_str);
 	rc = daos_cont_open(arg->pool.poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, uuid_str, 1, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid));
 
 	print_message("creating DFS container with a NULL pointer, should fail ...\n");
@@ -1276,6 +1278,8 @@ run_chown_tests(dfs_obj_t *obj, char *name, int mode)
 	rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_UID | DFS_SET_ATTR_GID);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
 	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
@@ -2154,6 +2158,70 @@ dfs_test_oclass_hints(void **state)
 	daos_prop_free(prop);
 }
 
+static void
+dfs_test_multiple_pools(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_t			*dfs1, *dfs2;
+	uuid_t			uuid1, uuid2;
+	daos_handle_t		poh1, poh2;
+	daos_handle_t		coh1, coh2;
+	char			str1[37], str2[37];
+	int			rc;
+
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid1);
+	assert_rc_equal(rc, 0);
+	uuid_unparse_lower(uuid1, str1);
+
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL,
+			     128 * 1024 * 1024, 0, NULL, arg->pool.svc, uuid2);
+	assert_rc_equal(rc, 0);
+	uuid_unparse_lower(uuid2, str2);
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	/** try creating the same container label on different pools, should succeed */
+	rc = dfs_connect(str1, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs1);
+	assert_int_equal(rc, 0);
+	rc = dfs_connect(str2, arg->group, "cont0", O_CREAT | O_RDWR, NULL, &dfs2);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_disconnect(dfs1);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs2);
+	assert_int_equal(rc, 0);
+
+	rc = daos_pool_connect(str1, arg->group, DAOS_PC_RW, &poh1, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_pool_connect(str2, arg->group, DAOS_PC_RW, &poh2, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_open(poh1, "cont0", DAOS_COO_RW, &coh1, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_open(poh2, "cont0", DAOS_COO_RW, &coh2, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(poh1, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_pool_disconnect(poh2, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+
+	rc = dmg_pool_destroy(dmg_config_file, uuid1, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	rc = dmg_pool_destroy(dmg_config_file, uuid2, arg->group, 1);
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -2195,6 +2263,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_readdir, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST20: dfs oclass hints",
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST21: dfs multiple pools",
+	  dfs_test_multiple_pools, async_disable, test_case_teardown},
 };
 
 static int
@@ -2238,14 +2308,14 @@ dfs_teardown(void **state)
 	rc = dfs_umount(dfs_mt);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(co_hdl, NULL);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(rc, 0);
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		char str[37];
 
 		uuid_unparse(co_uuid, str);
-		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

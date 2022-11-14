@@ -2268,6 +2268,10 @@ dc_pool_list_cont(tse_task_t *task)
 			DP_UUID(pool->dp_pool), DP_RC(rc));
 		goto out_pool;
 	}
+
+	/* TODO: deprecate POOL_LIST_CONT RPC, and change list containers implementation
+	 * to use POOL_FILTER_CONT RPC and a NULL filter input.
+	 */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool list cont rpc: "
@@ -2297,9 +2301,9 @@ dc_pool_list_cont(tse_task_t *task)
 	crt_req_addref(rpc);
 
 	if ((*args->ncont > 0) && args->cont_buf) {
-		rc = list_cont_bulk_create(daos_task2ctx(task),
-					   &in->plci_cont_bulk,
-					   args->cont_buf, in->plci_ncont);
+		rc = list_cont_bulk_create(daos_task2ctx(task), &in->plci_cont_bulk,
+					   args->cont_buf,
+					   in->plci_ncont * sizeof(struct daos_pool_cont_info));
 		if (rc != 0)
 			D_GOTO(out_rpc, rc);
 	}
@@ -2320,6 +2324,155 @@ dc_pool_list_cont(tse_task_t *task)
 out_bulk:
 	if (in->plci_ncont > 0)
 		list_cont_bulk_destroy(in->plci_cont_bulk);
+
+out_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+struct pool_fc_arg {
+	crt_rpc_t			*rpc;
+	struct dc_pool			*fca_pool;
+	daos_size_t			 fca_req_ncont;
+	daos_size_t			*fca_ncont;
+	struct daos_pool_cont_info2	*fca_cont_buf;
+};
+
+static int
+pool_filter_cont_cb(tse_task_t *task, void *data)
+{
+	struct pool_fc_arg		*arg = (struct pool_fc_arg *)data;
+	struct pool_filter_cont_in	*in = crt_req_get(arg->rpc);
+	struct pool_filter_cont_out	*out = crt_reply_get(arg->rpc);
+	int				 rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(arg->fca_pool, &arg->rpc->cr_ep, rc,
+					   &out->pfco_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DB_MD, DF_UUID": filter cont rpc done: %d\n",
+		DP_UUID(arg->fca_pool->dp_pool), rc);
+
+	if (rc) {
+		D_ERROR("RPC error while filtering containers: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->pfco_op.po_rc;
+	*arg->fca_ncont = out->pfco_ncont;
+	/* arg->fca_cont_buf written by bulk transfer if buffer provided */
+
+	if (arg->fca_cont_buf && (rc == -DER_TRUNC)) {
+		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
+		       in->pfci_ncont, out->pfco_ncont);
+		D_GOTO(out, rc);
+	} else if (rc != 0) {
+		D_ERROR("failed to filter containers %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_pool_put(arg->fca_pool);
+	list_cont_bulk_destroy(in->pfci_cont_bulk);
+	return rc;
+}
+
+int
+dc_pool_filter_cont(tse_task_t *task)
+{
+	daos_pool_filter_cont_t		*args;
+	struct dc_pool			*pool;
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct pool_filter_cont_in	*in;
+	struct pool_fc_arg		 fc_cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	/* Lookup bumps pool ref ,1 */
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	D_DEBUG(DB_MD, DF_UUID": filter containers: hdl="DF_UUID", args=%p, filt=%p, ncont=%p, "
+		"*ncont="DF_U64", cont_buf=%p\n", DP_UUID(pool->dp_pool),
+		DP_UUID(pool->dp_pool_hdl), args, args->filt, args->ncont, *args->ncont,
+		args->cont_buf);
+
+	ep.ep_grp = pool->dp_sys->sy_group;
+	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool, &pool->dp_client,
+				     &pool->dp_client_lock, pool->dp_sys, &ep);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		goto out_pool;
+	}
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_FILTER_CONT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool filter cont rpc: "
+			DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(rc));
+		D_GOTO(out_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pfci_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->pfci_op.pi_hdl, pool->dp_pool_hdl);
+
+	/* filter / selection criteria */
+	if (args->filt)
+		in->pfci_filt = *args->filt;
+	else
+		memset(&in->pfci_filt, 0, sizeof(in->pfci_filt));
+
+	/* If provided cont_buf is NULL, caller needs the number of matching containers
+	 * to be returned in ncont. Set ncont=0 in the request in this case
+	 * (caller value may be uninitialized).
+	 */
+	if (args->cont_buf == NULL)
+		in->pfci_ncont = 0;
+	else
+		in->pfci_ncont = *args->ncont;
+	in->pfci_cont_bulk = CRT_BULK_NULL;
+
+	D_DEBUG(DB_MD, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
+		in->pfci_ncont, args->cont_buf, *args->ncont);
+
+	/** +1 for args */
+	crt_req_addref(rpc);
+
+	if ((*args->ncont > 0) && args->cont_buf) {
+		rc = list_cont_bulk_create(daos_task2ctx(task), &in->pfci_cont_bulk, args->cont_buf,
+					   in->pfci_ncont * sizeof(struct daos_pool_cont_info2));
+		if (rc != 0)
+			D_GOTO(out_rpc, rc);
+	}
+
+	fc_cb_args.fca_pool = pool;
+	fc_cb_args.fca_ncont = args->ncont;
+	fc_cb_args.fca_cont_buf = args->cont_buf;
+	fc_cb_args.rpc = rpc;
+	fc_cb_args.fca_req_ncont = in->pfci_ncont;
+
+	rc = tse_task_register_comp_cb(task, pool_filter_cont_cb, &fc_cb_args, sizeof(fc_cb_args));
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
+
+	return daos_rpc_send(rpc, task);
+
+out_bulk:
+	if (in->pfci_ncont > 0)
+		list_cont_bulk_destroy(in->pfci_cont_bulk);
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -3169,4 +3322,32 @@ int dc_pool_get_redunc(daos_handle_t poh)
 	daos_prop_free(prop_query);
 
 	return rf;
+}
+
+/**
+ * Get pool_target by dc pool and target index.
+ *
+ * \param pool [IN]	dc pool
+ * \param tgt_idx [IN]	target index.
+ * \param tgt [OUT]	pool target pointer.
+ *
+ * \return		0 if get the pool_target.
+ * \return		errno if it does not get the pool_target.
+ */
+int
+dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
+		    struct pool_target **tgt)
+{
+	int		 n;
+
+	/* Get map_tgt so that we can have the rank of the target. */
+	D_ASSERT(pool != NULL);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+	if (n != 1) {
+		D_ERROR("failed to find target %u\n", tgt_idx);
+		return -DER_INVAL;
+	}
+	return 0;
 }

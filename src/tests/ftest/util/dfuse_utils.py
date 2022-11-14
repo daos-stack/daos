@@ -10,7 +10,7 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
-from general_utils import check_file_exists, pcmd
+from general_utils import check_file_exists, pcmd, get_log_file
 
 
 class DfuseCommand(ExecutableCommand):
@@ -32,9 +32,7 @@ class DfuseCommand(ExecutableCommand):
         self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
-
-        # Environment variable names to export when running dfuse
-        self.update_env_names(["D_LOG_FILE"])
+        self.multi_user = FormattedParameter("--multi-user", False)
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.
@@ -52,7 +50,7 @@ class DfuseCommand(ExecutableCommand):
             pool (TestPool): DAOS test pool object
             display (bool, optional): print updated params. Defaults to True.
         """
-        self.puuid.update(pool.uuid, "puuid" if display else None)
+        self.puuid.update(pool.identifier, "puuid" if display else None)
 
     def set_dfuse_cont_param(self, cont, display=True):
         """Set dfuse cont param from Container object.
@@ -63,18 +61,14 @@ class DfuseCommand(ExecutableCommand):
         """
         self.cuuid.update(cont, "cuuid" if display else None)
 
-    def set_dfuse_exports(self, manager, log_file):
+    def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.
 
         Args:
-            manager (DaosServerManager): server manager object to use to
-                obtain the ofi and cart environmental variable settings from the
-                server yaml file
             log_file (str): name of the log file to combine with the
                 DAOS_TEST_LOG_DIR path with which to assign D_LOG_FILE
         """
-        env = self.get_environment(manager, log_file)
-        self.set_environment(env)
+        self.env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
 
 
 class Dfuse(DfuseCommand):
@@ -451,7 +445,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         dfuse.set_dfuse_cont_param(container)
     if params:
         dfuse.update_params(**params)
-    dfuse.set_dfuse_exports(test.server_managers[0], test.client_log)
+    dfuse.set_dfuse_exports(test.client_log)
 
     # Start dfuse
     try:

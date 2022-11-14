@@ -56,7 +56,7 @@ def scons():
 
     Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
 
     env.Alias('install', '$PREFIX')
 

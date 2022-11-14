@@ -1,4 +1,3 @@
-#!/bin/env python
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
 import sys
@@ -7,7 +6,6 @@ import subprocess
 from os.path import join, isdir
 from os import urandom
 from binascii import b2a_hex
-import daos_build
 
 Import('env', 'prereqs', 'daos_version', 'conf_dir')
 
@@ -111,20 +109,19 @@ def install_go_bin(denv, gosrc, libs, name, install_name):
     def go_ldflags():
         "Create the ldflags option for the Go build."
         path = 'github.com/daos-stack/daos/src/control/build'
-        return ' '.join(['-ldflags',
-                         '"-X {}.DaosVersion={}'.format(path, daos_version),
-                         '-X {}.ConfigDir={}'.format(path, conf_dir),
-                         '-B %s"' % gen_build_id()])
+        return ' '.join([f'-X {path}.DaosVersion={daos_version}',
+                         f'-X {path}.ConfigDir={conf_dir}',
+                         f'-B {gen_build_id()}'])
     # Must be run from the top of the source dir in order to
     # pick up the vendored modules.
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    target = daos_build.run_command(denv, build_bin, src, libs,
-                                    f'cd {gosrc}; {GO_BIN} build -mod vendor {go_ldflags()} '
-                                    + f'{get_build_flags(denv)} '
-                                    + f'{get_build_tags(denv)} '
-                                    + f'-o {build_bin} {install_src}')
+    target = denv.d_run_command(build_bin, src, libs,
+                                f'cd {gosrc}; {GO_BIN} build -mod vendor -ldflags "{go_ldflags()}" '
+                                + f'{get_build_flags(denv)} '
+                                + f'{get_build_tags(denv)} '
+                                + f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
     AlwaysBuild(target)
@@ -147,11 +144,11 @@ def configure_go(denv):
             context.Result(0)
             return 0
 
-        context.Display('Checking %s version... ' % GO_BIN)
+        context.Display(f'Checking {GO_BIN} version... ')
         cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, stdout=subprocess.PIPE)
         out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
-            context.Result('failed to get version from "%s"' % out)
+            context.Result(f'failed to get version from "{out}"')
             return 0
 
         # go version go1.2.3 Linux/amd64
@@ -159,10 +156,9 @@ def configure_go(denv):
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
-            context.Result('%s is too old (min supported: %s) '
-                           % (go_version, MIN_GO_VERSION))
+            context.Result(f'{go_version} is too old (min supported: {MIN_GO_VERSION}) ')
             return 0
-        context.Result('%s' % go_version)
+        context.Result(str(go_version))
         return 1
 
     conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
@@ -210,7 +206,7 @@ def scons():
     prereqs.require(denv, 'ofi', 'hwloc')
     prereqs.require(denv, 'ucx')
     # Sets CGO_LDFLAGS for rpath options
-    daos_build.add_rpaths(denv, "..", True, True)
+    denv.d_add_rpaths("..", True, True)
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
     if prereqs.client_requested():
         install_go_bin(denv, gosrc, None, "daos_agent", "daos_agent")
@@ -241,7 +237,7 @@ def scons():
 
     SConscript('lib/spdk/SConscript', exports='denv')
 
-    daos_build.add_rpaths(denv, "..", True, True)
+    denv.d_add_rpaths("..", True, True)
 
     # Copy setup_spdk.sh script to be executed at daos_server runtime.
     senv.Install(join('$PREFIX', 'share/daos/control'),
@@ -268,12 +264,11 @@ def scons():
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
     aenv.AppendENVPath("CGO_CFLAGS",
-                       senv.subst("-I$SPDK_PREFIX/include "
-                                  "-I$OFI_PREFIX/include"),
+                       senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"),
                        sep=" ")
 
     # Sets CGO_LDFLAGS for rpath
-    daos_build.add_rpaths(aenv, None, True, True)
+    aenv.d_add_rpaths(None, True, True)
     install_go_bin(aenv, gosrc, ['nvme_control'], "daos_server_helper", "daos_server_helper")
 
     if is_firmware_mgmt_build(denv):
