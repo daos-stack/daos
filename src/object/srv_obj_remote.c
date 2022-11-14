@@ -253,11 +253,14 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;
 	opi->opi_shard_tgts.ca_arrays = opi_parent->opi_shard_tgts.ca_arrays;
 	opi->opi_flags |= obj_exec_arg->flags;
+	if (shard_tgt->st_flags & DTF_DELAY_FORWARD)
+		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
 
-	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
-		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, DF_UOID" forwarding to rank:%d tag:%d st_flags %x flags %x/"DF_X64".\n",
+		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag, shard_tgt->st_flags,
+		opi->opi_flags, opi->opi_api_flags);
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
 	if (rc != 0) {
@@ -494,9 +497,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	/* It is safe to share the head with parent since we are holding reference on parent RPC. */
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-	head_dcs->dcs_type = DCST_HEAD;
+	head_dcs->dcs_type = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
 	head_dcs->dcs_nr = 1;
-	head_dcs->dcs_buf = dcsh;
+	if (head_dcs->dcs_type == DCST_BULK_HEAD)
+		head_dcs->dcs_buf = ds_obj_cpd_get_head_bulk(dca->dca_rpc, dca->dca_idx);
+	else
+		head_dcs->dcs_buf = dcsh;
 	oci->oci_sub_heads.ca_arrays = head_dcs;
 	oci->oci_sub_heads.ca_count = 1;
 

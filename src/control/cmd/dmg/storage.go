@@ -13,20 +13,19 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Scan          storageScanCmd     `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
-	Format        storageFormatCmd   `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
-	Query         storageQueryCmd    `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
-	NvmeRebind    nvmeRebindCmd      `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
-	NvmeAddDevice nvmeAddDeviceCmd   `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
-	Set           setFaultyCmd       `command:"set" description:"Manually set the device state."`
-	Replace       storageReplaceCmd  `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
-	Identify      storageIdentifyCmd `command:"identify" description:"Blink the status LED on a given VMD device for visual SSD identification."`
+	Scan          storageScanCmd    `command:"scan" description:"Scan SCM and NVMe storage attached to remote servers."`
+	Format        storageFormatCmd  `command:"format" description:"Format SCM and NVMe storage attached to remote servers."`
+	Query         storageQueryCmd   `command:"query" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
+	NvmeRebind    nvmeRebindCmd     `command:"nvme-rebind" description:"Detach NVMe SSD from kernel driver and rebind to userspace driver for use with DAOS."`
+	NvmeAddDevice nvmeAddDeviceCmd  `command:"nvme-add-device" description:"Add a hot-inserted NVMe SSD to a specific engine configuration to enable the new device to be used."`
+	Set           setFaultyCmd      `command:"set" description:"Manually set the device state."`
+	Replace       storageReplaceCmd `command:"replace" description:"Replace a storage device that has been hot-removed with a new device."`
+	LedManage     ledManageCmd      `command:"led" description:"Manage LED status for supported drives."`
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -247,91 +246,4 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	}
 
 	return resp.Errors()
-}
-
-// setFaultyCmd is the struct representing the set storage subcommand
-type setFaultyCmd struct {
-	NVMe nvmeSetFaultyCmd `command:"nvme-faulty" description:"Manually set the device state of an NVMe SSD to FAULTY."`
-}
-
-// nvmeSetFaultyCmd is the struct representing the set-faulty storage subcommand
-type nvmeSetFaultyCmd struct {
-	smdQueryCmd
-	UUID  string `short:"u" long:"uuid" description:"Device UUID to set" required:"1"`
-	Force bool   `short:"f" long:"force" description:"Do not require confirmation"`
-}
-
-// Execute is run when nvmeSetFaultyCmd activates
-// Set the SMD device state of the given device to "FAULTY"
-func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
-	cmd.Notice("This command will permanently mark the device as unusable!")
-	if !cmd.Force {
-		if cmd.jsonOutputEnabled() {
-			return errors.New("Cannot use --json without --force")
-		}
-		if !common.GetConsent(cmd.Logger) {
-			return errors.New("consent not given")
-		}
-	}
-
-	req := &control.SmdQueryReq{
-		UUID:      cmd.UUID,
-		SetFaulty: true,
-	}
-	return cmd.makeRequest(context.Background(), req)
-}
-
-// storageReplaceCmd is the struct representing the replace storage subcommand
-type storageReplaceCmd struct {
-	NVMe nvmeReplaceCmd `command:"nvme" description:"Replace an evicted/FAULTY NVMe SSD with another device."`
-}
-
-// nvmeReplaceCmd is the struct representing the replace nvme storage subcommand
-type nvmeReplaceCmd struct {
-	smdQueryCmd
-	OldDevUUID string `long:"old-uuid" description:"Device UUID of hot-removed SSD" required:"1"`
-	NewDevUUID string `long:"new-uuid" description:"Device UUID of new device" required:"1"`
-	NoReint    bool   `long:"no-reint" description:"Bypass reintegration of device and just bring back online."`
-}
-
-// Execute is run when storageReplaceCmd activates
-// Replace a hot-removed device with a newly plugged device, or reuse a FAULTY device
-func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
-	if cmd.OldDevUUID == cmd.NewDevUUID {
-		cmd.Notice("Attempting to reuse a previously set FAULTY device!")
-	}
-
-	// TODO: Implement no-reint flag option
-	if cmd.NoReint {
-		cmd.Info("NoReint is not currently implemented")
-	}
-
-	req := &control.SmdQueryReq{
-		UUID:        cmd.OldDevUUID,
-		ReplaceUUID: cmd.NewDevUUID,
-		NoReint:     cmd.NoReint,
-	}
-	return cmd.makeRequest(context.Background(), req)
-}
-
-// storageIdentifyCmd is the struct representing the identify storage subcommand.
-type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
-}
-
-// vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
-type vmdIdentifyCmd struct {
-	smdQueryCmd
-	UUID string `long:"uuid" description:"Device UUID of the VMD device to identify" required:"1"`
-}
-
-// Execute is run when vmdIdentifyCmd activates.
-//
-// Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
-func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
-	req := &control.SmdQueryReq{
-		UUID:     cmd.UUID,
-		Identify: true,
-	}
-	return cmd.makeRequest(context.Background(), req)
 }

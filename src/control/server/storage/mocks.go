@@ -6,16 +6,11 @@
 
 package storage
 
-/*
-#include "stdlib.h"
-#include "daos_srv/control.h"
-*/
-import "C"
-
 import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -24,14 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-)
-
-// NvmeDevState constant definitions to represent mock bitset flag combinations.
-const (
-	MockNvmeStateNew      NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	MockNvmeStateNormal   NvmeDevState = MockNvmeStateNew | C.NVME_DEV_FL_INUSE
-	MockNvmeStateEvicted  NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_FAULTY
-	MockNvmeStateIdentify NvmeDevState = MockNvmeStateNormal | C.NVME_DEV_FL_IDENTIFY
 )
 
 func concat(base string, idx int32, altSep ...string) string {
@@ -115,7 +102,8 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: MockNvmeStateIdentify,
+		NvmeState: NvmeStateNormal,
+		LedState:  LedStateNormal,
 		TrAddr:    parentTrAddr,
 	}
 }
@@ -270,15 +258,47 @@ type (
 		MakeMountPathErr   error
 	}
 
+	mountMap struct {
+		sync.RWMutex
+		mounts map[string]string
+	}
+
 	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
 	MockMountProvider struct {
-		cfg *MockMountProviderConfig
+		cfg    *MockMountProviderConfig
+		mounts mountMap
 	}
 )
+
+func (mm *mountMap) Add(target, opts string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	if mm.mounts == nil {
+		mm.mounts = make(map[string]string)
+	}
+	mm.mounts[target] = opts
+}
+
+func (mm *mountMap) Remove(target string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	delete(mm.mounts, target)
+}
+
+func (mm *mountMap) Get(target string) (string, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	opts, ok := mm.mounts[target]
+	return opts, ok
+}
 
 // Mount is a mock implementation.
 func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.MountErr == nil {
+		m.mounts.Add(req.Target, req.Options)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: true,
@@ -290,6 +310,7 @@ func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 // Unmount is a mock implementation.
 func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		m.mounts.Remove(req.Target)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: false,
@@ -298,10 +319,17 @@ func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	return nil, m.cfg.UnmountErr
 }
 
+// GetMountOpts returns the mount options for the given target.
+func (m *MockMountProvider) GetMountOpts(target string) (string, bool) {
+	opts, exists := m.mounts.Get(target)
+	return opts, exists
+}
+
 // IsMounted is a mock implementation.
-func (m *MockMountProvider) IsMounted(_ string) (bool, error) {
+func (m *MockMountProvider) IsMounted(target string) (bool, error) {
 	if m.cfg == nil {
-		return true, nil
+		opts, exists := m.mounts.Get(target)
+		return exists && opts != "", nil
 	}
 	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
 }

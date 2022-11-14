@@ -69,8 +69,7 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
 
@@ -123,7 +122,8 @@ class NetworkFailureTest(IorTestBase):
 
         return ip_to_host
 
-    def create_host_to_ranks(self, ip_to_host, system_query_members):
+    @staticmethod
+    def create_host_to_ranks(ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
         Args:

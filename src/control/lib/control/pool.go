@@ -1236,7 +1236,7 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, nvmeController := range nvmeControllers {
 		for _, smdDevice := range nvmeController.SmdDevices {
-			if !smdDevice.NvmeState.IsNormal() {
+			if smdDevice.NvmeState != storage.NvmeStateNormal {
 				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
 				continue
