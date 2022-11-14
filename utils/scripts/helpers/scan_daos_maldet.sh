@@ -21,8 +21,9 @@ else
 fi
 fails=0
 errs=0
-mal_fnd=0
-if ! sudo /usr/local/sbin/maldet --update-sigs; then
+mal_fnd=""
+# fake an error
+if sudo /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
     mal_fnd='<failure message="Maldet signature update failed" type="warning"/>'
 fi
@@ -45,9 +46,9 @@ cdata=""
 # fake a failure
 if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   ((errs+=1))
-  cdata="<![CDATA[ \"$(cat /var/tmp/clamscan.out)\" ]]>"
-  clam_fnd='<error message="Malware Detected" type="error">'
-  clam_fnd+="\n$cdata\n</error>"
+  clam_fnd="<error message=\"Malware Detected\" type=\"error\">
+      <![CDATA[ \"$(cat /var/tmp/clamscan.out)\" ]]>"
+    </error>"
 fi
 
 cat << EOF > "$malxml"
