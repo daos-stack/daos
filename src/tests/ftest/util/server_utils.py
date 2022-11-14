@@ -16,13 +16,13 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubprocessManager
+from dmg_utils import get_dmg_command
+from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
     stop_processes, get_display_size, run_pcmd
-from dmg_utils import get_dmg_command
-from run_utils import get_local_host
+from host_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -167,7 +167,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -807,7 +807,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("No available candidate ranks to stop.")
 
         # Stop a random rank
-        random_rank = random.choice(candidate_ranks) #nosec
+        random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def kill(self):
@@ -1089,8 +1089,7 @@ class DaosServerManager(SubprocessManager):
             # Reboot the servers if a reduced number of targets is required
             if adjusted_targets < targets:
                 self.log.info(
-                        "Updating targets per server engine: %s -> %s",
-                        targets, adjusted_targets)
+                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
                 self.set_config_value("targets", adjusted_targets)
                 self.stop()
                 self.start()
