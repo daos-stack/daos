@@ -222,7 +222,7 @@ class Dfuse(DfuseCommand):
         self.create_mount_point()
 
         if not self._fusermount_cmd:
-            self.log.info('Check which fusermount command to user')
+            self.log.info('Check which fusermount command to use')
             for fusermount in ('fusermount3', 'fusermount'):
                 if run_remote(self.log, self.hosts, f'{fusermount} --version').passed:
                     self._fusermount_cmd = fusermount
