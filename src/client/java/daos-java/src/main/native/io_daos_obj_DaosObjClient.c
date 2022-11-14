@@ -1163,8 +1163,8 @@ Java_io_daos_obj_DaosObjClient_updateObjAsyncNoDecode(JNIEnv *env,
 	desc->event->status = EVENT_IN_USE;
 	desc->event->event.ev_error = 0;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &basicDesc->dkey,
-			1, basicDesc->iods,
-			basicDesc->sgls, &desc->event->event);
+			     1, basicDesc->iods,
+			     basicDesc->sgls, &desc->event->event);
 	if (rc) {
 		throw_const_obj(env,
 				"Failed to update DAOS object",
@@ -1192,7 +1192,7 @@ Java_io_daos_obj_DaosObjClient_updateObjSyncNoDecode(JNIEnv *env,
 	int rc;
 	char *msg = "memory allocation failed";
 	data_desc_upd_sync_t *desc = (data_desc_upd_sync_t *)malloc(
-                                         sizeof(data_desc_upd_sync_t));
+					sizeof(data_desc_upd_sync_t));
 
 	if (desc == NULL) {
 		throw_const_obj(env,
