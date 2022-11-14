@@ -23,9 +23,9 @@ import (
 )
 
 type cliOptions struct {
-	Run       string    `long:"run_cmd" short:"R" description:"Execute the single command <cmd>, then exit"`
-	File      string    `long:"file_cmd" short:"f" description:"Path to a file container a list of ddb commands, one command per line, then exit."`
-	WriteMode bool      `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	Run       string `long:"run_cmd" short:"R" description:"Execute the single command <cmd>, then exit"`
+	File      string `long:"file_cmd" short:"f" description:"Path to a file container a list of ddb commands, one command per line, then exit."`
+	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 }
 
 func main() {
@@ -121,7 +121,7 @@ done:
 	runtime.UnlockOSThread()
 }
 
-func createGrumbleApp(ctx *C.struct_ddb_ctx) *grumble.App{
+func createGrumbleApp(ctx *C.struct_ddb_ctx) *grumble.App {
 	var app = grumble.New(&grumble.Config{
 		Name: "ddb",
 		Description: `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
@@ -157,7 +157,7 @@ is in the format '[i]', for example '[0]/[0]/[0]'`,
 	return app
 }
 
-func createFlagsParser(opts *cliOptions) *flags.Parser{
+func createFlagsParser(opts *cliOptions) *flags.Parser {
 	p := flags.NewParser(opts, flags.Default)
 	p.Name = "ddb"
 	p.Usage = "[OPTIONS] [<vos_file_path>]"

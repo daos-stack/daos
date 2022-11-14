@@ -14,7 +14,8 @@ import (
  #include <ddb.h>
 */
 import "C"
-func addAppCommands(app *grumble.App, ctx *C.struct_ddb_ctx) {	// Command: ls
+
+func addAppCommands(app *grumble.App, ctx *C.struct_ddb_ctx) { // Command: ls
 	app.AddCommand(&grumble.Command{
 		Name:      "ls",
 		Aliases:   nil,
@@ -34,10 +35,10 @@ func addAppCommands(app *grumble.App, ctx *C.struct_ddb_ctx) {	// Command: ls
 	})
 	// Command: open
 	app.AddCommand(&grumble.Command{
-		Name:      "open",
-		Aliases:   nil,
-		Help:      "Opens the vos file at <path>",
-		LongHelp:  `Opens the vos file at <path>. The '-w' option allows for modifying the vos file
+		Name:    "open",
+		Aliases: nil,
+		Help:    "Opens the vos file at <path>",
+		LongHelp: `Opens the vos file at <path>. The '-w' option allows for modifying the vos file
 with the rm, load, commit_ilog, etc commands. The path <path> should be an absolute path to the
 pool shard. Part of the path is used to determine what the pool uuid is.`,
 		HelpGroup: "vos",
@@ -90,10 +91,10 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 	})
 	// Command: value_dump
 	app.AddCommand(&grumble.Command{
-		Name:      "value_dump",
-		Aliases:   nil,
-		Help:      "Dump a value",
-		LongHelp:  `Dump a value to the screen or file. The vos path should be a complete
+		Name:    "value_dump",
+		Aliases: nil,
+		Help:    "Dump a value",
+		LongHelp: `Dump a value to the screen or file. The vos path should be a complete
 path, including the akey and if the value is an array value it should include
 the extent. If a path to a file was provided then the value will be written to
 the file, else it will be printed to the screen.`,
@@ -109,10 +110,10 @@ the file, else it will be printed to the screen.`,
 	})
 	// Command: rm
 	app.AddCommand(&grumble.Command{
-		Name:      "rm",
-		Aliases:   nil,
-		Help:      "Remove a branch of the VOS tree.",
-		LongHelp:  `Remove a branch of the VOS tree. The branch can be anything from a container
+		Name:    "rm",
+		Aliases: nil,
+		Help:    "Remove a branch of the VOS tree.",
+		LongHelp: `Remove a branch of the VOS tree. The branch can be anything from a container
 and everything under it, to a single value.`,
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
@@ -125,10 +126,10 @@ and everything under it, to a single value.`,
 	})
 	// Command: value_load
 	app.AddCommand(&grumble.Command{
-		Name:      "value_load",
-		Aliases:   nil,
-		Help:      "Load a value to a vos path. ",
-		LongHelp:  `Load a value to a vos path. This can be used to update
+		Name:    "value_load",
+		Aliases: nil,
+		Help:    "Load a value to a vos path. ",
+		LongHelp: `Load a value to a vos path. This can be used to update
 the value of an existing key, or create a new key. The <src> is a path to a
 file on the file system. The <dst> is a vos tree path to a value where the
 data will be loaded. If the <dst> path currently exists, then the destination

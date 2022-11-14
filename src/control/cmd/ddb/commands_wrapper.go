@@ -23,7 +23,7 @@ func ErrorString(errno int) string {
 	return fmt.Sprintf("%s(%d): %s", dErrStr, errno, dErrDesc)
 }
 
-func ls_wrapper(ctx *C.struct_ddb_ctx, path string, recursive bool ) error {
+func ls_wrapper(ctx *C.struct_ddb_ctx, path string, recursive bool) error {
 	/* Setup the options */
 	options := C.struct_ls_options{}
 	options.path = C.CString(path)
@@ -37,7 +37,7 @@ func ls_wrapper(ctx *C.struct_ddb_ctx, path string, recursive bool ) error {
 	return nil
 }
 
-func open_wrapper(ctx *C.struct_ddb_ctx, path string, write_mode bool ) error {
+func open_wrapper(ctx *C.struct_ddb_ctx, path string, write_mode bool) error {
 	/* Setup the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
@@ -160,7 +160,7 @@ func ilog_clear_wrapper(ctx *C.struct_ddb_ctx, path string) error {
 	return nil
 }
 
-func dtx_dump_wrapper(ctx *C.struct_ddb_ctx, path string, active bool , committed bool ) error {
+func dtx_dump_wrapper(ctx *C.struct_ddb_ctx, path string, active bool, committed bool) error {
 	/* Setup the options */
 	options := C.struct_dtx_dump_options{}
 	options.path = C.CString(path)
@@ -256,4 +256,3 @@ func dtx_act_abort_wrapper(ctx *C.struct_ddb_ctx, path string, dtx_id string) er
 	}
 	return nil
 }
-
