@@ -1116,12 +1116,17 @@ we_minus_re(daos_epoch_t we, daos_epoch_t re)
 		return -1;
 }
 
+static bool pp_enabled;
+
 static bool
 conflicting_rw_is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re,
 			   struct op *w, char *wp, daos_epoch_t we,
 			   bool same_tx)
 {
 	int i;
+
+	if (pp_enabled)
+		return false;
 
 	for (i = 0; i < ARRAY_SIZE(conflicting_rw_excluded_cases); i++) {
 		struct conflicting_rw_excluded_case *c;
@@ -1736,7 +1741,9 @@ run_mvcc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "MVCC Tests %s", cfg);
+	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &pp_enabled);
+
+	dts_create_config(test_name, "MVCC Tests %s%s", cfg, pp_enabled ? " pp enabled" : "");
 
 	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);
