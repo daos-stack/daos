@@ -700,7 +700,7 @@ class TestInfo():
         """Find all the users in the specified yaml file.
 
         Returns:
-            (bool, list): whether to create the users, list of users to create
+            list: list of (user, group) to create
 
         """
         yaml_data = get_yaml_data(self.yaml_file)
