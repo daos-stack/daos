@@ -1180,9 +1180,9 @@ fail:
 
 JNIEXPORT void JNICALL
 Java_io_daos_obj_DaosObjClient_updateObjSyncNoDecode(JNIEnv *env,
-		jobject clientObj, jlong objPtr,
-		jlong descBufAddress, jlong offset,
-		jint len, jlong dataBufAddress)
+					jobject clientObj, jlong objPtr,
+					jlong descBufAddress, jlong offset,
+					jint len, jlong dataBufAddress)
 {
 	daos_handle_t oh;
 	char *desc_buf = (char *)descBufAddress;
