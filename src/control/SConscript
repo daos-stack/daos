@@ -46,23 +46,20 @@ def is_release_build(benv):
 
 def get_build_flags(benv):
     """Return string of build flags"""
-    flags = ""
-    if not is_release_build(benv):
-        # enable race detector for non-release builds
-        flags += "-race"
-    else:
-        flags += '-buildmode=pie'
-    return flags
+    if is_release_build(benv):
+        return '-buildmode=pie'
+    # enable race detector for non-release builds
+    return '-race'
 
 
 def install_go_manpage(menv, name, binary):
     """
     Dynamically generate a man-page for a tool.
     """
-    gen_bin = join('$BUILD_DIR', 'src/control/bin', name)
+    gen_bin = join('$BUILD_DIR/src/control/bin', name)
     name_ver = f'{name}.8'
-    build_path = join('$BUILD_DIR', 'src/control', name_ver)
-    install_path = join(menv.subst("$PREFIX"), 'share/man/man8', name_ver)
+    build_path = join('$BUILD_DIR/src/control', name_ver)
+    install_path = join('$PREFIX/share/man/man8', name_ver)
     menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
     menv.InstallAs(install_path, build_path)
 
@@ -171,9 +168,9 @@ def scons():
         def install_dir(srcdir):
             """walk a directory and install targets"""
             for root, _dirs, files in os.walk(srcdir):
-                dest_root = os.path.relpath(root, sprefix)
+                dest_root = os.path.join(prefix, root, sprefix)
                 for fname in files:
-                    denv.Install(join(prefix, dest_root), join(root, fname))
+                    denv.Install(dest_root, join(root, fname))
 
         install_dir('share/spdk/scripts')
         install_dir('include/spdk')
