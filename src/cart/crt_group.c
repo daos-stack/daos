@@ -3150,64 +3150,65 @@ out:
 }
 
 /*
- * Helper function to return back a list of indices (into mod_membs) to add and
- * a list of ranks to remove.
+ * Helper function to return back a list of indices (into mod_membs) to add, an
+ * optional list of indices (into mod_membs) to check, and a list of ranks to
+ * remove.
  */
 static int
-crt_group_mod_get(struct crt_grp_priv *grp_priv, d_rank_list_t *mod_membs, uint64_t *incarnations,
-		  crt_group_mod_op_t op, uint32_t **ret_to_add, uint32_t *ret_n_to_add,
+crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs, crt_group_mod_op_t op,
+		  uint32_t **ret_idx_to_add, uint32_t *ret_n_idx_to_add,
+		  uint32_t **ret_idx_to_check, uint32_t *ret_n_idx_to_check,
 		  d_rank_list_t **ret_to_remove)
 
 {
-	d_rank_list_t	*grp_membs;
 	d_rank_t	rank;
 	int		rc = 0;
-	uint32_t	*to_add = NULL;
-	uint32_t	n_to_add;
+	uint32_t	*idx_to_add = NULL;
+	uint32_t	n_idx_to_add = 0;
+	uint32_t	*idx_to_check = NULL;
+	uint32_t	n_idx_to_check = 0;
 	d_rank_list_t	*to_remove = NULL;
 	int		i;
 
-	grp_membs = grp_priv_get_membs(grp_priv);
-
 	D_ASSERT(grp_membs != NULL);
 	D_ASSERT(mod_membs != NULL);
-	D_ASSERT(ret_to_add != NULL);
+	D_ASSERT(ret_idx_to_add != NULL && ret_n_idx_to_add != NULL);
+	D_ASSERT(ret_idx_to_check == NULL || ret_n_idx_to_check != NULL);
 	D_ASSERT(ret_to_remove != NULL);
 
 	/* At most we will remove all members from old group */
 	to_remove = d_rank_list_alloc(grp_membs->rl_nr);
 
-	/* At most we will add all members from new group */
-	D_ALLOC_ARRAY(to_add, mod_membs->rl_nr);
+	/* At most we will add or check all members from new group */
+	D_ALLOC_ARRAY(idx_to_add, mod_membs->rl_nr);
+	if (ret_idx_to_check != NULL)
+		D_ALLOC_ARRAY(idx_to_check, mod_membs->rl_nr);
 
-	if (to_remove == NULL || to_add == NULL) {
+	if (to_remove == NULL || idx_to_add == NULL ||
+	    (ret_idx_to_check != NULL && idx_to_check == NULL)) {
 		D_ERROR("Failed to allocate lists\n");
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 
-	n_to_add = 0;
 	to_remove->rl_nr = 0;
-	/* Build to_add and to_remove lists based on op specified */
+	/* Build idx_to_add, idx_to_check, and to_remove lists based on op specified */
 	if (op == CRT_GROUP_MOD_OP_REPLACE) {
 		/*
 		 * Replace:
 		 * If rank exists in mod_membs but not in grp_membs - add it
 		 * If rank exists in grp_membs but not in mod_membs - remove it
-		 * Otherwise leave rank unchanged (but may update its SWIM state)
+		 * Otherwise - check it (for SWIM state)
 		 */
 
-		/* Build list of new ranks to add */
+		/* Build lists of new ranks to add and existing rank to check */
 		for (i = 0; i < mod_membs->rl_nr; i++) {
 			rank = mod_membs->rl_ranks[i];
 
 			if (d_rank_in_rank_list(grp_membs, rank)) {
-				if (incarnations != NULL) {
-					rc = crt_swim_rank_check(grp_priv, rank, incarnations[i]);
-					D_ASSERTF(rc == 0, "crt_swim_rank_check(%u): "DF_RC"\n",
-						  rank, DP_RC(rc));
-				}
+				if (idx_to_check != NULL)
+					idx_to_check[n_idx_to_check++] = i;
 			} else {
-				to_add[n_to_add++] = i;
+				idx_to_add[n_idx_to_add++] = i;
 			}
 		}
 
@@ -3224,13 +3225,10 @@ crt_group_mod_get(struct crt_grp_priv *grp_priv, d_rank_list_t *mod_membs, uint6
 			rank = mod_membs->rl_ranks[i];
 
 			if (d_rank_in_rank_list(grp_membs, rank)) {
-				if (incarnations != NULL) {
-					rc = crt_swim_rank_check(grp_priv, rank, incarnations[i]);
-					D_ASSERTF(rc == 0, "crt_swim_rank_check(%u): "DF_RC"\n",
-						  rank, DP_RC(rc));
-				}
+				if (idx_to_check != NULL)
+					idx_to_check[n_idx_to_check++] = i;
 			} else {
-				to_add[n_to_add++] = i;
+				idx_to_add[n_idx_to_add++] = i;
 			}
 		}
 	} else if (op == CRT_GROUP_MOD_OP_REMOVE) {
@@ -3246,18 +3244,25 @@ crt_group_mod_get(struct crt_grp_priv *grp_priv, d_rank_list_t *mod_membs, uint6
 		D_ASSERT(0);
 	}
 
-	if (n_to_add == 0 && to_remove->rl_nr == 0)
+	if (n_idx_to_add == 0 && to_remove->rl_nr == 0)
 		D_DEBUG(DB_TRACE, "Membership unchanged\n");
 
-	*ret_to_add = to_add;
-	*ret_n_to_add = n_to_add;
+	*ret_idx_to_add = idx_to_add;
+	*ret_n_idx_to_add = n_idx_to_add;
+	if (ret_idx_to_check != NULL) {
+		*ret_idx_to_check = idx_to_check;
+		*ret_n_idx_to_check = n_idx_to_check;
+	}
 	*ret_to_remove = to_remove;
 
 	return rc;
 
 cleanup:
-	if (to_add != NULL)
-		D_FREE(to_add);
+	if (idx_to_check != NULL)
+		D_FREE(idx_to_check);
+
+	if (idx_to_add != NULL)
+		D_FREE(idx_to_add);
 
 	if (to_remove != NULL)
 		d_rank_list_free(to_remove);
@@ -3309,9 +3314,12 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 			 uint32_t version)
 {
 	struct crt_grp_priv		*grp_priv;
+	d_rank_list_t			*grp_membs;
 	d_rank_list_t			*to_remove;
-	uint32_t			*to_add;
-	uint32_t			n_to_add;
+	uint32_t			*idx_to_add;
+	uint32_t			n_idx_to_add;
+	uint32_t			*idx_to_check;
+	uint32_t			n_idx_to_check;
 	d_rank_t			rank;
 	int				i, k, cb_idx;
 	int				rc = 0;
@@ -3349,18 +3357,21 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
+	grp_membs = grp_priv_get_membs(grp_priv);
+
 	/* Get back list of nodes to add, to remove and uri index list */
-	rc = crt_group_mod_get(grp_priv, ranks, incarnations, op, &to_add, &n_to_add, &to_remove);
+	rc = crt_group_mod_get(grp_membs, ranks, op, &idx_to_add, &n_idx_to_add, &idx_to_check,
+			       &n_idx_to_check, &to_remove);
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
 	cbs_size = crt_plugin_gdata.cpg_event_size;
 	cbs_event = crt_plugin_gdata.cpg_event_cbs;
 
-	/* Add ranks based on to_add list */
-	for (i = 0; i < n_to_add; i++) {
-		uint32_t	idx = to_add[i];
-		uint64_t	incarnation = incarnations == NULL ? 0 : incarnations[idx];
+	/* Add ranks based on idx_to_add list */
+	for (i = 0; i < n_idx_to_add; i++) {
+		uint32_t	idx = idx_to_add[i];
+		uint64_t	incarnation = incarnations[idx];
 
 		rank = ranks->rl_ranks[idx];
 
@@ -3413,10 +3424,21 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 		crt_swim_rank_del(grp_priv, rank);
 	}
 
-	if (!grp_priv->gp_view && n_to_add > 0)
+	/* Check SWIM states of ranks based on idx_to_check list */
+	for (i = 0; i < n_idx_to_check; i++) {
+		uint32_t	idx = idx_to_check[i];
+		uint64_t	incarnation = incarnations[idx];
+
+		rank = ranks->rl_ranks[idx];
+		rc = crt_swim_rank_check(grp_priv, rank, incarnation);
+		D_ASSERTF(rc == 0, "crt_swim_rank_check(%u): "DF_RC"\n", rank, DP_RC(rc));
+	}
+
+	if (!grp_priv->gp_view && n_idx_to_add > 0)
 		crt_swim_rank_shuffle(grp_priv);
 
-	D_FREE(to_add);
+	D_FREE(idx_to_add);
+	D_FREE(idx_to_check);
 	d_rank_list_free(to_remove);
 
 	grp_priv->gp_membs_ver = version;
@@ -3428,12 +3450,13 @@ out:
 
 cleanup:
 
-	D_ERROR("Failure when adding node %d, rc=%d\n", ranks->rl_ranks[to_add[i]], rc);
+	D_ERROR("Failure when adding node %d, rc=%d\n", ranks->rl_ranks[idx_to_add[i]], rc);
 
 	for (k = 0; k < i; k++)
-		crt_group_rank_remove_internal(grp_priv, ranks->rl_ranks[to_add[k]]);
+		crt_group_rank_remove_internal(grp_priv, ranks->rl_ranks[idx_to_add[k]]);
 
-	D_FREE(to_add);
+	D_FREE(idx_to_add);
+	D_FREE(idx_to_check);
 	d_rank_list_free(to_remove);
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -3447,6 +3470,7 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 			   uint32_t version)
 {
 	struct crt_grp_priv	*grp_priv;
+	d_rank_list_t		*grp_membs;
 	d_rank_list_t		*to_remove;
 	uint32_t		*to_add;
 	uint32_t		n_to_add;
@@ -3494,8 +3518,11 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
+	grp_membs = grp_priv_get_membs(grp_priv);
+
 	/* Get back list of nodes to add, to remove and primary rank list */
-	rc = crt_group_mod_get(grp_priv, sec_ranks, NULL /* incarnations */, op, &to_add, &n_to_add,
+	rc = crt_group_mod_get(grp_membs, sec_ranks, op, &to_add, &n_to_add,
+			       NULL /* ret_idx_to_check */, NULL /* ret_n_idx_to_check */,
 			       &to_remove);
 	if (rc != 0)
 		D_GOTO(unlock, rc);

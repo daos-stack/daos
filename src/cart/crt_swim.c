@@ -1485,7 +1485,8 @@ crt_swim_rank_shuffle(struct crt_grp_priv *grp_priv)
 
 /**
  * If \a incarnation is greater than the incarnation of \a rank, then set the
- * status of \a rank to ALIVE.
+ * status of \a rank to ALIVE. This function only returns an error
+ * (-DER_NONEXIST) when \a rank cannot be found.
  */
 int
 crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation)
