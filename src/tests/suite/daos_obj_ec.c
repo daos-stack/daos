@@ -1717,8 +1717,8 @@ ec_rec_parity_list(void **state)
 	int		stripe_size = 4 * ec_cell_size;
 	daos_anchor_t	anchor = { 0 };
 	daos_size_t	size;
-	int		start = INT_MAX;
-	int		end = 0;
+	uint64_t	start = UINT64_MAX;
+	uint64_t	end = 0;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1757,8 +1757,8 @@ ec_rec_parity_list(void **state)
 		enumerate_rec(DAOS_TX_NONE, "d_key", "a_key", &size,
 			      &number, recxs, eprs, &anchor, true, &req);
 		for (i = 0; i < number; i++) {
-			start = min(start, (int)recxs[i].rx_idx);
-			end = max(end, (int)(recxs[i].rx_idx + recxs[i].rx_nr));
+			start = min(start, recxs[i].rx_idx);
+			end = max(end, recxs[i].rx_idx + recxs[i].rx_nr);
 		}
 	}
 	assert_rc_equal(start, 0);
