@@ -823,16 +823,16 @@ allocate_desc_update_async(char *descBuf, data_desc_upd_async_t *desc,
 		memcpy(&value16, desc_buffer, 2);
 	}
 	desc_buffer += 2;
-	d_iov_set(&desc->basicDesc->dkey, desc_buffer, value16);
+	d_iov_set(&desc->basicDesc.dkey, desc_buffer, value16);
 	desc_buffer += (desc->maxKeyLen == 0 ? value16 : desc->maxKeyLen);
 	/* entries */
 	rc = allocate_basic_desc_for_update(&desc->basicDesc);
-    if (rc) {
-        return rc;
-    }
+	if (rc) {
+		return rc;
+	}
 	/* iod */
 	/* akey */
-	iod = &desc->basicDesc->iods[0];
+	iod = &desc->basicDesc.iods[0];
 	if (!reuse) {
 		memcpy(&value16, desc_buffer, 2);
 	}
@@ -853,6 +853,8 @@ allocate_desc_update_sync(char *descBuf, data_desc_upd_sync_t *desc)
 {
 	char *desc_buffer = descBuf;
 	uint16_t value16 = 0;
+	daos_iod_t *iod;
+	int rc;
 
 	/* set dkey address */
 	memcpy(&value16, desc_buffer, 2);
@@ -861,9 +863,9 @@ allocate_desc_update_sync(char *descBuf, data_desc_upd_sync_t *desc)
 	desc_buffer += value16;
 	/* entries */
 	rc = allocate_basic_desc_for_update(desc);
-    if (rc) {
-        return rc;
-    }
+	if (rc) {
+		return rc;
+	}
 	/* iod */
 	/* akey */
 	iod = &desc->iods[0];
