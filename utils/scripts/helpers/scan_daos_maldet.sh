@@ -42,7 +42,6 @@ sudo clamscan -d /usr/local/maldetect/sigs/rfxn.ndb    \
 malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
 clam_fnd=""
-cdata=""
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   ((errs+=1))
   clam_fnd="<error message=\"Malware Detected\" type=\"error\">
