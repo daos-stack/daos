@@ -3472,8 +3472,8 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 	struct crt_grp_priv	*grp_priv;
 	d_rank_list_t		*grp_membs;
 	d_rank_list_t		*to_remove;
-	uint32_t		*to_add;
-	uint32_t		n_to_add;
+	uint32_t		*idx_to_add;
+	uint32_t		n_idx_to_add;
 	d_rank_t		rank;
 	int			k;
 	int			i;
@@ -3521,15 +3521,15 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 	grp_membs = grp_priv_get_membs(grp_priv);
 
 	/* Get back list of nodes to add, to remove and primary rank list */
-	rc = crt_group_mod_get(grp_membs, sec_ranks, op, &to_add, &n_to_add,
+	rc = crt_group_mod_get(grp_membs, sec_ranks, op, &idx_to_add, &n_idx_to_add,
 			       NULL /* ret_idx_to_check */, NULL /* ret_n_idx_to_check */,
 			       &to_remove);
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	/* Add ranks based on to_add list */
-	for (i = 0; i < n_to_add; i++) {
-		uint32_t idx = to_add[i];
+	/* Add ranks based on idx_to_add list */
+	for (i = 0; i < n_idx_to_add; i++) {
+		uint32_t idx = idx_to_add[i];
 
 		rc = crt_group_secondary_rank_add_internal(grp_priv, sec_ranks->rl_ranks[idx],
 							   prim_ranks->rl_ranks[idx]);
@@ -3543,7 +3543,7 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 		crt_group_rank_remove_internal(grp_priv, rank);
 	}
 
-	D_FREE(to_add);
+	D_FREE(idx_to_add);
 	d_rank_list_free(to_remove);
 
 	grp_priv->gp_membs_ver = version;
@@ -3555,12 +3555,12 @@ out:
 
 cleanup:
 
-	D_ERROR("Failure when adding rank %d, rc=%d\n", sec_ranks->rl_ranks[to_add[i]], rc);
+	D_ERROR("Failure when adding rank %d, rc=%d\n", sec_ranks->rl_ranks[idx_to_add[i]], rc);
 
 	for (k = 0; k < i; k++)
-		crt_group_rank_remove_internal(grp_priv, sec_ranks->rl_ranks[to_add[k]]);
+		crt_group_rank_remove_internal(grp_priv, sec_ranks->rl_ranks[idx_to_add[k]]);
 
-	D_FREE(to_add);
+	D_FREE(idx_to_add);
 	d_rank_list_free(to_remove);
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
