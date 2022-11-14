@@ -156,7 +156,8 @@ enum LedAction {
 message LedManageReq {
 	string ids = 1;			// List of Device-UUIDs and/or PCI-addresses
 	LedAction led_action = 3;	// LED action to perform
-	LedState led_state = 4;		// LED control case
+	LedState led_state = 4;		// LED state to set (used if action is SET)
+	uint32 led_duration_mins = 5;	// LED action duration (how long to blink LED in minutes)
 }
 
 message DevReplaceReq {

@@ -20,7 +20,7 @@ from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from ClusterShell.NodeSet import NodeSet
 
 from user_utils import get_chown_command, get_primary_group
 from run_utils import get_clush_command
@@ -891,70 +891,6 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
         ]
         result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
     return result
-
-
-def get_partition_hosts(partition, reservation=None):
-    """Get a list of hosts in the specified slurm partition and reservation.
-
-    Args:
-        partition (str): name of the partition
-        reservation (str): name of reservation
-
-    Returns:
-        list: list of hosts in the specified partition
-
-    """
-    log = getLogger()
-    hosts = []
-    if partition is not None:
-        # Get the partition name information
-        cmd = "scontrol show partition {}".format(partition)
-        try:
-            result = process.run(cmd, timeout=10)
-        except process.CmdError as error:
-            log.warning(
-                "Unable to obtain hosts from the %s slurm "
-                "partition: %s", partition, error)
-            result = None
-
-        if result:
-            # Get the list of hosts from the partition information
-            output = result.stdout_text
-            try:
-                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
-            except (NodeSetParseError, IndexError):
-                log.warning(
-                    "Unable to obtain hosts from the %s slurm partition "
-                    "output: %s", partition, output)
-                hosts = []
-            if hosts and reservation is not None:
-                # Get the list of hosts from the reservation information
-                cmd = "scontrol show reservation {}".format(reservation)
-                try:
-                    result = process.run(cmd, timeout=10)
-                except process.CmdError as error:
-                    log.warning(
-                        "Unable to obtain hosts from the %s slurm "
-                        "reservation: %s", reservation, error)
-                    result = None
-                    hosts = []
-                if result:
-                    # Get the list of hosts from the reservation information
-                    output = result.stdout_text
-                    try:
-                        reservation_hosts = list(
-                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
-                    except (NodeSetParseError, IndexError):
-                        log.warning(
-                            "Unable to obtain hosts from the %s slurm "
-                            "reservation output: %s", reservation, output)
-                        reservation_hosts = []
-                    is_subset = set(reservation_hosts).issubset(set(hosts))
-                    if reservation_hosts and is_subset:
-                        hosts = reservation_hosts
-                    else:
-                        hosts = []
-    return hosts
 
 
 def get_log_file(name):

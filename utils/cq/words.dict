@@ -286,6 +286,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -376,6 +377,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
