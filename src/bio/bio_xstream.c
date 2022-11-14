@@ -130,7 +130,7 @@ bio_spdk_env_init(void)
 
 		/**
 		 * Read flag to indicate whether to enable the SPDK JSON-RPC server and the
-		 * socket file address from the JSON config used to initialise SPDK subsystems.
+		 * socket file address from the JSON config used to initialize SPDK subsystems.
 		 */
 		rc = bio_read_rpc_srv_settings(nvme_glb.bd_nvme_conf, &enable_rpc_srv,
 					       &nvme_glb.bd_rpc_srv_addr);
