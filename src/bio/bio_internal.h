@@ -306,12 +306,10 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	/*
-	 * If a VMD LED event takes place, the original LED state and start
-	 * time will be saved in order to restore the LED to its original
-	 * state after allotted time.
+	 * If a VMD LED identify event takes place with a prescribed duration, the end time will be
+	 * saved and when it is reached the prior LED state will be restored.
 	 */
-	int			 bb_led_state;
-	uint64_t		 bb_led_start_time;
+	uint64_t		 bb_led_expiry_time;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;
@@ -501,6 +499,14 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
+struct bio_faulty_criteria {
+	uint32_t	fc_max_io_errs;
+	uint32_t	fc_max_csum_errs;
+	bool		fc_enabled;
+};
+
+extern struct bio_faulty_criteria	glb_criteria;
+
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
@@ -577,6 +583,7 @@ int bulk_cache_create(struct bio_dma_buffer *bdb);
 void bulk_cache_destroy(struct bio_dma_buffer *bdb);
 int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 		       struct bio_bulk_group *ex_grp);
+
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
@@ -585,6 +592,7 @@ void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
+void auto_faulty_detect(struct bio_blobstore *bbs);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
@@ -595,7 +603,6 @@ int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
-void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
