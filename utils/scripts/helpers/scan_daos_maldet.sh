@@ -21,7 +21,7 @@ else
 fi
 fails=0
 errs=0
-mal_fnd
+mal_fnd=0
 if ! sudo /usr/local/sbin/maldet --update-sigs; then
    ((fails+=1))
     mal_fnd='<failure message="Maldet signature update failed" type="warning"/>'
