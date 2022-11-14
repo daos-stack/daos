@@ -1761,8 +1761,8 @@ ec_rec_parity_list(void **state)
 			end = max(end, recxs[i].rx_idx + recxs[i].rx_nr);
 		}
 	}
-	assert_rc_equal(start, 0);
-	assert_rc_equal(end, 5 * stripe_size);
+	assert_rc_equal((int)start, 0);
+	assert_rc_equal((int)end, 5 * stripe_size);
 	free(data);
 	ioreq_fini(&req);
 }
