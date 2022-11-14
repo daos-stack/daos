@@ -47,7 +47,7 @@ if grep 'Infected files: 0$' /var/tmp/clamscan.out; then
   ((errs+=1))
   cdata="<![CDATA[ \"$(cat /var/tmp/clamscan.out)\" ]]>"
   clam_fnd='<error message="Malware Detected" type="error">'
-  clam_fnd="\n$cdata\n</error>"
+  clam_fnd+="\n$cdata\n</error>"
 fi
 
 cat << EOF > "$malxml"
