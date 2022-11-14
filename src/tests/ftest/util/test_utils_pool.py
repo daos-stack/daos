@@ -1129,15 +1129,15 @@ class TestPool(TestDaosApiBase):
                 self.identifier, current_rebuild_status, current_rebuild_state, current_version)
 
         # Determine if the current rebuild state is expected
-        status = current_rebuild_state in states
+        check_status = current_rebuild_state in states
         if version is not None:
             # If a version is provided (required for completion check), verify that it has increased
-            status &= current_version > version
+            check_status &= current_version > version
         if status is not None:
             # If a status is provided, verify the current status is expected
-            status &= current_rebuild_status in status
+            check_status &= current_rebuild_status in status
 
-        return status
+        return check_status
 
     def wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
