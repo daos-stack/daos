@@ -48,7 +48,11 @@ ior:
     client_processes:
           ppn: 32
     test_file: testFile
-    flags: "-w -r -R -C -e -g -D 30 -G 27 -k -Q 1 -v"
+    write_flags: "-w -C -e -g -G 27 -k -Q 1"
+    read_flags: "-r -R -C -e -g -G 27 -k -Q 1"
+    sw_deadline: 30
+    sw_wearout: 1
+    sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
     dfs_oclass: 'SX'
     transfer_sizes:
         - 1M

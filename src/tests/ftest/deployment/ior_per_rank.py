@@ -38,8 +38,12 @@ class IorPerRank(IorTestBase):
         for idx, _ in enumerate(self.transfer_sizes):
             try:
                 self.ior_cmd.transfer_size.update(self.transfer_sizes[idx])
+                self.ior_cmd.flags.update(self.write_flags)
                 dfs_out = self.run_ior_with_pool(fail_on_warning=self.log.info)
-                dfs_perf = IorCommand.get_ior_metrics(dfs_out)
+                dfs_perf_write = IorCommand.get_ior_metrics(dfs_out)
+                self.ior_cmd.flags.update(self.read_flags)
+                dfs_out = self.run_ior_with_pool(create_cont=False, fail_on_warning=self.log.info)
+                dfs_perf_read = IorCommand.get_ior_metrics(dfs_out)
 
                 # Destroy container, to be sure we use newly created container in next iteration
                 self.container.destroy()
@@ -47,13 +51,13 @@ class IorPerRank(IorTestBase):
 
                 # gather actual and expected perf data to be compared
                 if idx == 0:
-                    dfs_max_write = float(dfs_perf[0][IorMetrics.Max_MiB])
-                    dfs_max_read = float(dfs_perf[1][IorMetrics.Max_MiB])
+                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.Max_MiB])
+                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.Max_MiB])
                     actual_write_x = percent_change(dfs_max_write, self.expected_bw)
                     actual_read_x = percent_change(dfs_max_read, self.expected_bw)
                 else:
-                    dfs_max_write = float(dfs_perf[0][IorMetrics.Max_OPs])
-                    dfs_max_read = float(dfs_perf[1][IorMetrics.Max_OPs])
+                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.Max_OPs])
+                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.Max_OPs])
                     actual_write_x = percent_change(dfs_max_write, self.expected_iops)
                     actual_read_x = percent_change(dfs_max_read, self.expected_iops)
 
@@ -99,6 +103,8 @@ class IorPerRank(IorTestBase):
         self.failed_nodes = {}
         self.good_nodes = []
         self.transfer_sizes = self.params.get("transfer_sizes", self.ior_cmd.namespace)
+        self.write_flags = self.params.get("write_flags", '/run/ior/*')
+        self.read_flags = self.params.get("read_flags", '/run/ior/*')
 
         # Write/Read performance thresholds and expectations
         self.write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
