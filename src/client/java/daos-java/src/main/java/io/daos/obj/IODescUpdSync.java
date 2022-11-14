@@ -18,6 +18,9 @@ public class IODescUpdSync extends IODescUpdBase {
         super(dkey, akey, offset, dataBuffer, false);
     }
 
+    /**
+     * native desc released in native code
+     */
     public void release() {
         if (descBuffer != null) {
             descBuffer.release();

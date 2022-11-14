@@ -176,7 +176,7 @@ public class IODescUpdAsync extends IODescUpdBase implements DaosEventQueue.Atta
   @Override
   public void release() {
     if (descBuffer != null) {
-      if (isReusable() & nativeHdl > 0) {
+      if (isReusable() & nativeHdl > 0) { // non reusable native desc released in callback function
         DaosObjClient.releaseDescUpdAsync(nativeHdl);
       }
       descBuffer.release();

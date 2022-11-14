@@ -1580,8 +1580,6 @@ public class DaosObjectIT {
     } catch (Exception e) {
       throw e;
     } finally {
-      System.out.println(1);
-      System.out.println(2);
       if (object.isOpen()) {
         object.punch();
       }
