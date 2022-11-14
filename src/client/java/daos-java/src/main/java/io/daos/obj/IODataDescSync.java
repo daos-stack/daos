@@ -145,7 +145,7 @@ public class IODataDescSync extends IODataDescBase {
     super(dkey, updateOrFetch);
     this.maxKeyLen = -1;
     this.dkey = dkey;
-    this.dkeyBytes = DaosUtils.keyToBytes(dkey);
+    this.dkeyBytes = DaosUtils.keyToBytes8(dkey);
     if (iodType == IodType.NONE) {
       throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
         IodType.SINGLE);
@@ -269,7 +269,7 @@ public class IODataDescSync extends IODataDescBase {
     if (dkey.equals(this.dkey)) { // in case of same dkey
       return;
     }
-    byte[] dkeyBytes = DaosUtils.keyToBytes(dkey);
+    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
     this.dkey = dkey;
     this.dkeyBytes = dkeyBytes;
   }
@@ -553,7 +553,7 @@ public class IODataDescSync extends IODataDescBase {
       }
       this.key = key;
       int limit = maxKeyLen > 0 ? maxKeyLen : Short.MAX_VALUE;
-      this.keyBytes = DaosUtils.keyToBytes(key, limit);
+      this.keyBytes = DaosUtils.keyToBytes8(key, limit);
       this.offset = offset;
       this.dataSize = dataSize;
       if (offset%recordSize != 0) {
@@ -719,7 +719,7 @@ public class IODataDescSync extends IODataDescBase {
       }
       if (!akey.equals(this.key)) {
         this.key = akey;
-        this.keyBytes = DaosUtils.keyToBytes(akey, maxKeyLen);
+        this.keyBytes = DaosUtils.keyToBytes8(akey, maxKeyLen);
       }
       this.offset = offset;
       if (updateOrFetch) {
