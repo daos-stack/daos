@@ -209,6 +209,7 @@ struct bio_led_manage_info {
 	char		*tr_addr;
 	Ctl__LedAction	 action;
 	Ctl__LedState	*state;
+	uint64_t	 duration;
 };
 
 static int
@@ -232,7 +233,8 @@ bio_storage_dev_manage_led(void *arg)
 
 	/* Set the LED of the VMD device to a FAULT state, tr_addr and state may be updated */
 	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
-			    (unsigned int)led_info->action, (unsigned int *)led_info->state);
+			    (unsigned int)led_info->action, (unsigned int *)led_info->state,
+			    led_info->duration);
 	if ((rc != 0) && (rc != -DER_NOSYS))
 		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s): "
 			DF_RC"\n", DP_UUID(led_info->dev_uuid),
@@ -344,6 +346,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
+		led_info.duration = 0;
+
 		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
 				     0, 0);
 		if (rc != 0) {
@@ -605,6 +609,8 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	led_info.action = CTL__LED_ACTION__SET;
 	led_state = CTL__LED_STATE__ON;
 	led_info.state = &led_state;
+	/* Indicate infinite duration */
+	led_info.duration = 0;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
@@ -661,6 +667,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.action = req->led_action;
 	led_state = req->led_state;
 	led_info.state = &led_state;
+	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	/* Manage the VMD LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
