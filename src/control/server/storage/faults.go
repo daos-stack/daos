@@ -127,6 +127,23 @@ var FaultBdevNoIOMMU = storageFault(
 	"IOMMU capability is required to access NVMe devices but no IOMMU capability detected",
 	"enable IOMMU per the DAOS Admin Guide")
 
+// FaultTargetAlreadyMounted represents an error where the target was already mounted.
+var FaultTargetAlreadyMounted = storageFault(
+	code.StorageTargetAlreadyMounted,
+	"request included already-mounted mount target (cannot double-mount)",
+	"unmount the target and retry the operation",
+)
+
+// FaultPathAccessDenied represents an error where a mount point or device path for
+// a storage target is inaccessible because of a permissions issue.
+func FaultPathAccessDenied(path string) *fault.Fault {
+	return storageFault(
+		code.StoragePathAccessDenied,
+		fmt.Sprintf("path %q has incompatible access permissions", path),
+		"verify the path is accessible by the user running daos_server and try again",
+	)
+}
+
 func storageFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "storage",

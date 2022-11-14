@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -511,7 +512,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		csCtrlrs    *storage.NvmeControllers   // control service storage provider
 		eCtrlrs     []*storage.NvmeControllers // engine storage provider
 		smbc        *scm.MockBackendConfig
-		smsc        *scm.MockSysConfig
+		smsc        *system.MockSysConfig
 		storageCfgs []storage.TierConfigs
 		scanTwice   bool
 		junkResp    bool
@@ -782,8 +783,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockPbScmMount0.TotalBytes,
 						Avail: mockPbScmMount0.AvailBytes,
@@ -835,8 +836,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockPbScmMount0.TotalBytes,
 						Avail: mockPbScmMount0.AvailBytes,
@@ -875,8 +876,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockPbScmMount0.TotalBytes,
 						Avail: mockPbScmMount0.AvailBytes,
@@ -932,8 +933,8 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					storage.MockScmNamespace(1),
 				},
 			},
-			smsc: &scm.MockSysConfig{
-				GetfsUsageResps: []scm.GetfsUsageRetval{
+			smsc: &system.MockSysConfig{
+				GetfsUsageResps: []system.GetfsUsageRetval{
 					{
 						Total: mockPbScmMount0.TotalBytes,
 						Avail: mockPbScmMount0.AvailBytes,
@@ -1697,7 +1698,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			if tc.scmMounted {
 				getFsRetStr = "ext4"
 			}
-			msc := &scm.MockSysConfig{
+			msc := &system.MockSysConfig{
 				IsMountedBool:  tc.scmMounted,
 				MountErr:       tc.mountRet,
 				UnmountErr:     tc.unmountRet,
