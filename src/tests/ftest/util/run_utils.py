@@ -98,6 +98,7 @@ class RemoteCommandResult():
         """
         return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
 
+    @property
     def all_stdout(self):
         """Get all of the stdout from the issued command from each host.
 
