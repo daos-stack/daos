@@ -491,6 +491,7 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	uint32_t		grp_start;
 	uint32_t		tgt_ec_idx;
+	struct dc_object	*obj;
 	int			i;
 	int			rc;
 
@@ -508,7 +509,8 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 		D_GOTO(out, rc = 0);
 
 	grp_start = entry->ae_grp_idx * entry->ae_obj_layout->ol_grp_size;
-	tgt_ec_idx = obj_ec_parity_start(obj_hdl2ptr(entry->ae_obj_hdl), entry->ae_dkey_hash);
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
+	tgt_ec_idx = obj_ec_parity_start(obj, entry->ae_dkey_hash);
 	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++,
 	     tgt_ec_idx = (tgt_ec_idx + 1) % entry->ae_obj_layout->ol_grp_size) {
 		struct pl_obj_shard	*p_shard;
@@ -525,6 +527,8 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 			rc = 0;
 		}
 	}
+	obj_decref(obj);
+
 out:
 	/* NB: entry::ae_obj_hdl will be closed externally */
 	return rc;
@@ -926,6 +930,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	uint64_t	 cell_b = ec_age2cs_b(entry);
 	uint32_t	 shard  = ec_age2shard(entry);
 	uint32_t	 pidx, peer_shard;
+	struct dc_object *obj;
 	int		 i, rc = 0;
 
 	/* Only called when p > 1. */
@@ -944,12 +949,12 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++) {
 		if (i == pidx)
 			continue;
 		d_iov_set(&iov, &buf[i * cell_b], cell_b);
-		peer_shard = obj_ec_parity_shard(obj_hdl2ptr(entry->ae_obj_hdl),
-						 entry->ae_dkey_hash,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), i);
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_par_extent.ape_epoch,
@@ -964,6 +969,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	}
 
 out:
+	obj_decref(obj);
 	return rc;
 }
 
@@ -1269,6 +1275,7 @@ agg_peer_update_ult(void *arg)
 	uint64_t		 cell_b = ec_age2cs_b(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint32_t		 peer, peer_shard;
+	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
 
@@ -1280,6 +1287,7 @@ agg_peer_update_ult(void *arg)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_size = entry->ae_rsize;
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
 		/* Only update the available parities */
 		if (peer == pidx || entry->ae_peer_pshards[peer].sd_rank == DAOS_TGT_IGNORE)
@@ -1304,8 +1312,7 @@ agg_peer_update_ult(void *arg)
 		uuid_copy(ec_agg_in->ea_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_agg_in->ea_oid = entry->ae_oid;
-		peer_shard = obj_ec_parity_shard(obj_hdl2ptr(entry->ae_obj_hdl),
-						 entry->ae_dkey_hash,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
 		ec_agg_in->ea_oid.id_shard = peer_shard;
 		ec_agg_in->ea_dkey = entry->ae_dkey;
@@ -1393,6 +1400,8 @@ out_rpc:
 	if (rpc)
 		crt_req_decref(rpc);
 out:
+	if (obj)
+		obj_decref(obj);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1495,6 +1504,7 @@ agg_process_holes_ult(void *arg)
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
 	crt_rpc_t		*rpc = NULL;
 	crt_bulk_t		 bulk_hdl = NULL;
+	struct dc_object	*obj = NULL;
 	uint32_t		 len = ec_age2cs(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
 	uint64_t		 k = ec_age2k(entry);
@@ -1536,6 +1546,7 @@ agg_process_holes_ult(void *arg)
 	if (!valid_hole)
 		goto out;
 
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	if (last_ext_end < k * len) {
 		stripe_ud->asu_recxs[ext_cnt].rx_idx = ss + last_ext_end;
 		stripe_ud->asu_recxs[ext_cnt].rx_nr = k * len - last_ext_end;
@@ -1630,8 +1641,7 @@ agg_process_holes_ult(void *arg)
 		uuid_copy(ec_rep_in->er_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_rep_in->er_oid = entry->ae_oid;
-		peer_shard = obj_ec_parity_shard(obj_hdl2ptr(entry->ae_obj_hdl),
-						 entry->ae_dkey_hash,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 				entry->ae_oid.id_shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
 		ec_rep_in->er_oid.id_shard = peer_shard;
 		ec_rep_in->er_dkey = entry->ae_dkey;
@@ -1666,6 +1676,8 @@ out:
 		crt_req_decref(rpc);
 	if (bulk_hdl)
 		crt_bulk_free(bulk_hdl);
+	if (obj)
+		obj_decref(obj);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }

@@ -395,8 +395,6 @@ struct migrate_pool_tls_create_arg {
 	uuid_t  co_hdl_uuid;
 	d_rank_list_t *svc_list;
 	uint64_t max_eph;
-	uint32_t global_version;
-	uint32_t layout_version;
 	int	version;
 	uint32_t opc;
 	uint32_t new_layout_ver;
@@ -438,8 +436,6 @@ migrate_pool_tls_create_one(void *data)
 	uuid_copy(pool_tls->mpt_pool_uuid, arg->pool_uuid);
 	uuid_copy(pool_tls->mpt_poh_uuid, arg->pool_hdl_uuid);
 	uuid_copy(pool_tls->mpt_coh_uuid, arg->co_hdl_uuid);
-	pool_tls->mpt_global_version = arg->global_version;
-	pool_tls->mpt_layout_version = arg->layout_version;
 	pool_tls->mpt_version = arg->version;
 	pool_tls->mpt_rec_count = 0;
 	pool_tls->mpt_obj_count = 0;
@@ -497,14 +493,6 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, int version,
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
-	arg.global_version = 0;
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION);
-	if (entry != NULL)
-		arg.global_version = entry->dpe_val;
-
-	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION);
-	if (entry != NULL)
-		arg.layout_version = entry->dpe_val;
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
@@ -598,7 +586,8 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		daos_iod_t *iods, int iod_num, daos_epoch_t eph, uint32_t flags,
 		d_iov_t *csum_iov_fetch)
 {
-	int rc;
+	struct dc_object	*obj;
+	int			rc;
 
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
@@ -608,10 +597,12 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	 * make sure reintegration will not fetch from the original
 	 * shard, which might cause parity corruption.
 	 */
+	obj = obj_hdl2ptr(oh);
 	if (daos_oclass_is_ec(&mrone->mo_oca) &&
 	    iods[0].iod_type != DAOS_IOD_SINGLE &&
-	    is_ec_data_shard(obj_hdl2ptr(oh), mrone->mo_dkey_hash, mrone->mo_oid.id_shard))
+	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard))
 		flags |= DIOF_FOR_FORCE_DEGRADE;
+	obj_decref(obj);
 
 	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
 			   iod_num, iods, sgls, NULL,
@@ -2055,7 +2046,7 @@ struct enum_unpack_arg {
 	daos_epoch_range_t	epr;
 	d_list_t		merge_list;
 	uint32_t		version;
-	uint32_t		new_layout_ver;
+	uint32_t		new_layout_ver;	/* New layout version for upgrade */
 };
 
 static int
@@ -2072,6 +2063,7 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	int			iod_eph_total = io->ui_iods_top + 1;
 	d_sg_list_t		*sgls = io->ui_sgls;
 	uint32_t		version = io->ui_version;
+	struct dc_object	*obj = NULL;
 	struct migrate_pool_tls *tls;
 	struct migrate_one	*mrone = NULL;
 	bool			inline_copy = true;
@@ -2128,11 +2120,12 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	if (rc != 0)
 		D_GOTO(free, rc);
 
+	obj = obj_hdl2ptr(arg->oh);
 	mrone->mo_oid = oid;
 	if (tls->mpt_opc == RB_OP_UPGRADE)
 		mrone->mo_oid.id_layout_ver = tls->mpt_new_layout_ver;
 	else
-		mrone->mo_oid.id_layout_ver = obj_hdl2ptr(arg->oh)->cob_layout_version;
+		mrone->mo_oid.id_layout_ver = obj->cob_layout_version;
 
 	mrone->mo_oid.id_shard = iter_arg->shard;
 	uuid_copy(mrone->mo_cont_uuid, iter_arg->cont_uuid);
@@ -2142,8 +2135,8 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 	mrone->mo_min_epoch = DAOS_EPOCH_MAX;
 	mrone->mo_version = version;
 	mrone->mo_dkey_hash = io->ui_dkey_hash;
-	mrone->mo_layout_version = obj_hdl2ptr(arg->oh)->cob_layout_version;
-
+	mrone->mo_layout_version = obj->cob_layout_version;
+	obj_decref(obj);
 	/* only do the copy below when each with inline recx data */
 	for (i = 0; i < iod_eph_total; i++) {
 		int j;
@@ -2217,7 +2210,9 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	bool			create_migrate_one = false;
 	int			rc = 0;
 	struct migrate_pool_tls *tls;
+	struct dc_object	*obj = NULL;
 	uint32_t		parity_shard;
+	uint32_t		layout_ver;
 	int			i;
 
 	if (!daos_oclass_is_ec(&arg->oc_attr))
@@ -2238,18 +2233,22 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		D_GOTO(put, rc = 0);
 	}
 
-	migrate_tgt_off = obj_ec_shard_off_by_layout_ver(arg->new_layout_ver, io->ui_dkey_hash,
+	obj = obj_hdl2ptr(arg->oh);
+	if (tls->mpt_opc == RB_OP_UPGRADE)
+		layout_ver = arg->new_layout_ver;
+	else
+		layout_ver = obj->cob_layout_version;
+
+	migrate_tgt_off = obj_ec_shard_off_by_layout_ver(layout_ver, io->ui_dkey_hash,
 							 &arg->oc_attr, shard);
-	unpack_tgt_off = obj_ec_shard_off(obj_hdl2ptr(arg->oh), io->ui_dkey_hash,
-					  io->ui_oid.id_shard);
+	unpack_tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
 	if ((rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
 	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) ||
 	    (tls->mpt_opc == RB_OP_FAIL && io->ui_oid.id_shard == shard)) {
 		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
-			(int)obj_ec_shard_off(obj_hdl2ptr(arg->oh), io->ui_dkey_hash, 0),
-			parity_shard, rc);
+			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
 		D_GOTO(put, rc = 0);
 	}
 	rc = 0;
@@ -2283,7 +2282,7 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 		}
 
 		/* Filter the DAOS recxs to the rebuild data shard */
-		if (is_ec_data_shard_by_layout_ver(arg->new_layout_ver, io->ui_dkey_hash,
+		if (is_ec_data_shard_by_layout_ver(layout_ver, io->ui_dkey_hash,
 						   &arg->oc_attr, shard)) {
 			D_DEBUG(DB_REBUILD, DF_UOID" convert shard %u tgt %d\n",
 				DP_UOID(io->ui_oid), shard, obj_ec_data_tgt_nr(&arg->oc_attr));
@@ -2332,6 +2331,8 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	if (!merged)
 		rc = migrate_one_create(arg, io);
 put:
+	if (obj)
+		obj_decref(obj);
 	if (tls != NULL)
 		migrate_pool_tls_put(tls);
 	return rc;
@@ -2484,15 +2485,14 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	if (tls->mpt_opc != RB_OP_UPGRADE) {
-		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
-		unpack_arg.new_layout_ver = tls->mpt_layout_version;
-	} else {
+	if (tls->mpt_opc == RB_OP_UPGRADE) {
 		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
 			     DIOF_FOR_MIGRATION;
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
+	} else {
+		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+		orig_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 	}
 
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
@@ -2515,7 +2515,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
 		/* EC rotate needs to fetch from all shards */
-		if (arg->oid.id_layout_ver > 0)
+		if (obj_ec_parity_rotate_enabled_by_version(arg->oid.id_layout_ver))
 			minimum_nr = obj_ec_tgt_nr(&unpack_arg.oc_attr);
 		else
 			minimum_nr = 2;

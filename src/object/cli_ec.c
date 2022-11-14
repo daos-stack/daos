@@ -1608,9 +1608,9 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 
 		/* encode the EC parity for evenly distributed singv update */
 		ec_recx_array->oer_stripe_total = 1;
-		codec = codec_get(reasb_req, reasb_req->orr_oid);
+		codec = codec_get(reasb_req, obj->cob_md.omd_id);
 		if (codec == NULL) {
-			D_ERROR(DF_OID" can not get codec.\n", DP_OID(reasb_req->orr_oid));
+			D_ERROR(DF_OID" can not get codec.\n", DP_OID(obj->cob_md.omd_id));
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 

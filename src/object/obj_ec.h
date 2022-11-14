@@ -290,12 +290,11 @@ struct obj_reasb_req;
 	(((idx) % (stripe_rec_nr)) / (e_len))
 
 /* Get shard idx according to dkey hash within one group. logical idx -> physical idx */
-#define obj_ec_shard_idx(obj, dkey_hash, t_idx)				\
-	((obj_ec_grp_start(obj->cob_layout_version, dkey_hash, obj_ec_tgt_nr(&obj->cob_oca)) + \
-	 t_idx) % obj_ec_tgt_nr(&obj->cob_oca))
-
 #define obj_ec_shard_idx_by_layout_ver(layout_ver, dkey_hash, oca, t_idx)			\
 	((obj_ec_grp_start(layout_ver, dkey_hash, obj_ec_tgt_nr(oca)) + t_idx) % obj_ec_tgt_nr(oca))
+
+#define obj_ec_shard_idx(obj, dkey_hash, t_idx)	\
+	obj_ec_shard_idx_by_layout_ver(obj->cob_layout_version, dkey_hash, &obj->cob_oca, t_idx)
 
 /* Get shard index within the object layout */
 #define obj_ec_shard(obj, dkey_hash, grp_idx, t_idx)				\

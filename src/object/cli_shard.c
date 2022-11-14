@@ -443,9 +443,9 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 }
 
 static int
-obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
-		 uint32_t shard, uint32_t tgt_idx, const daos_iom_t *src,
-		 daos_iom_t *dst, struct daos_recx_ep_list *recov_list)
+obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
+		 uint32_t shard, uint32_t tgt_idx, const daos_iom_t *src, daos_iom_t *dst,
+		 struct daos_recx_ep_list *recov_list)
 {
 	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
 	uint64_t		 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
@@ -459,8 +459,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
 	bool			 done;
 	int			 rc = 0;
 
-	D_ASSERT(reasb_req->orr_args);
-	tgt_off = obj_ec_shard_off(obj_hdl2ptr(reasb_req->orr_args->oh), dkey_hash, tgt_idx);
+	tgt_off = obj_ec_shard_off(obj, dkey_hash, tgt_idx);
 	D_ASSERTF(tgt_off < obj_ec_data_tgt_nr(oca), "tgt_off %d, tgt_nr %d\n",
 		  tgt_off, obj_ec_data_tgt_nr(oca));
 
@@ -1141,7 +1140,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					struct obj_auxi_args	*obj_auxi;
 
 					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
-					rc = obj_ec_iom_merge(reasb_req, obj_auxi->dkey_hash,
+					rc = obj_ec_iom_merge(obj_auxi->obj, reasb_req,
+							      obj_auxi->dkey_hash,
 							      orw->orw_oid.id_shard,
 							      orw->orw_tgt_idx, reply_maps,
 							      &rw_args->maps[i], recov_list);
@@ -2000,7 +2000,6 @@ struct obj_query_key_cb_args {
 	struct dc_object	*obj;
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
-	uint64_t		dkey_hash;
 	daos_handle_t		th;
 };
 
@@ -2211,7 +2210,7 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-		       uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+		       uint32_t req_map_ver, struct dc_object *obj,
 		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
@@ -2252,7 +2251,6 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.shard		= shard;
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
-	cb_args.dkey_hash	= dkey_hash;
 	cb_args.max_epoch	= max_epoch;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));

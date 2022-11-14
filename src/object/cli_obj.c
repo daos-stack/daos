@@ -4967,7 +4967,6 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 	oca = obj_get_oca(obj);
 	/* Check if it needs to do degraded fetch.*/
 	grp_start = grp_idx * obj_get_grp_size(obj);
-	tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
 	tgt_idx = obj_ec_shard_idx(obj, obj_auxi->dkey_hash, 0);
 	D_DEBUG(DB_TRACE, DF_OID" grp idx %d shard start %u layout %u\n",
 		DP_OID(obj->cob_md.omd_id), grp_idx, tgt_idx, obj->cob_layout_version);
@@ -5855,7 +5854,7 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 	unsigned int		first;
 
 	oca = obj_get_oca(obj);
-	if (dkey == NULL && obj->cob_layout_version > 0) {
+	if (dkey == NULL && obj_ec_parity_rotate_enabled(obj)) {
 		int fail_cnt = 0;
 
 		/**
@@ -5867,7 +5866,8 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		*shard_cnt = 0;
 		grp_start = grp_idx * obj_get_grp_size(obj);
 		/* Check if each shards are in good state */
-		for (i = 0; i < obj_ec_tgt_nr(oca) && bitmaps != NULL; i++) {
+		D_ASSERT(bitmaps != NULL);
+		for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
 			int shard_idx;
 
 			shard_idx = grp_start + i;
@@ -6322,7 +6322,6 @@ shard_query_key_task(tse_task_t *task)
 	struct dc_obj_shard		*obj_shard;
 	daos_handle_t			 th;
 	struct dtx_epoch		*epoch;
-	uint64_t			dkey_hash;
 	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
@@ -6352,11 +6351,9 @@ shard_query_key_task(tse_task_t *task)
 		return rc;
 	}
 
-	dkey_hash = args->kqa_auxi.obj_auxi->dkey_hash;
-	tse_task_stack_push_data(task, &dkey_hash, sizeof(dkey_hash));
 	api_args = dc_task_get_args(args->kqa_auxi.obj_auxi->obj_task);
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
-				    args->kqa_auxi.obj_auxi->map_ver_req, dkey_hash, obj,
+				    args->kqa_auxi.obj_auxi->map_ver_req, obj,
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
@@ -6509,7 +6506,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		int j;
 
 		/* Try leader for current group */
-		if (!obj_is_ec(obj) || (obj_is_ec(obj) && obj->cob_layout_version == 0)) {
+		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
 			int leader;
 
 			leader = obj_replica_leader_select(obj, i, map_ver);

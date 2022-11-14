@@ -31,8 +31,6 @@ struct migrate_pool_tls {
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
 	unsigned int		mpt_version;
-	uint32_t		mpt_global_version;
-	uint32_t		mpt_layout_version;
 
 	/* Link to the migrate_pool_tls list */
 	d_list_t		mpt_list;
@@ -92,10 +90,9 @@ struct migrate_pool_tls {
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
-	/* This is only used for upgrade process for the new layout
-	 * version to be upgraded to
-	 */
+	/* The new layout version for upgrade job */
 	uint32_t		mpt_new_layout_ver;
+
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 				mpt_fini:1;
