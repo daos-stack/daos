@@ -332,7 +332,6 @@ vos_dedup_free_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		if (biov->bi_buf == NULL)
 			goto next;
 
-		D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 		if (!BIO_ADDR_IS_DEDUP_BUF(&biov->bi_addr))
 			goto next;
 
