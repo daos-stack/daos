@@ -57,13 +57,13 @@ class RootContainerTest(DfuseTestBase):
         self.container.append(container)
         return container
 
-    def test_rootcontainer(self):
+    def test_dfuse_root_container(self):
         """Jira ID: DAOS-3782.
 
         Test Description:
             Purpose of this test is to try and create a container and
             mount it over dfuse and use it as a root container and create
-            subcontainers underneath it and insert several files and see
+            sub containers underneath it and insert several files and see
             if they can be accessed using ls and cd. Verify the pool size
             reflects the space occupied by container. Try to remove the
             files and containers and see the space is reclaimed.
@@ -73,7 +73,7 @@ class RootContainerTest(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
         :avocado: tags=container,dfuse
-        :avocado: tags=rootcontainer
+        :avocado: tags=test_dfuse_root_container
         """
         # Create a pool and start dfuse.
         pool = self._create_pool()
@@ -89,7 +89,7 @@ class RootContainerTest(DfuseTestBase):
         self.insert_files_and_verify("")
         # Insert files into sub container
         self.insert_files_and_verify("cont0")
-        # Create 100 subcontainer and verify the temp files
+        # Create 100 sub containers and verify the temp files
         self.verify_create_delete_containers(pool, 100)
         self.verify_multi_pool_containers()
 

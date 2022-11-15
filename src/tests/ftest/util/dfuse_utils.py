@@ -292,7 +292,7 @@ class Dfuse(DfuseCommand):
         """Unmount dfuse."""
         self.update_running_hosts()
 
-        for current_try in tries:
+        for current_try in range(tries):
             if not self.running_hosts:
                 return
 
