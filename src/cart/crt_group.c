@@ -2286,6 +2286,27 @@ out_unlock:
 	return rc;
 }
 
+void
+crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+		      enum crt_event_type type)
+{
+	struct crt_event_cb_priv	*cbs_event;
+	size_t				 cbs_size;
+	int				 cb_idx;
+	crt_event_cb			 cb_func;
+	void				*cb_args;
+
+	cbs_event = crt_plugin_gdata.cpg_event_cbs;
+	cbs_size = crt_plugin_gdata.cpg_event_size;
+	for (cb_idx = 0; cb_idx < cbs_size; cb_idx++) {
+		cb_func = cbs_event[cb_idx].cecp_func;
+		cb_args = cbs_event[cb_idx].cecp_args;
+
+		if (cb_func != NULL)
+			cb_func(rank, incarnation, src, type, cb_args);
+	}
+}
+
 int
 crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 {
