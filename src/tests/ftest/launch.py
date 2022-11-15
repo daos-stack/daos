@@ -29,10 +29,16 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_handler, get_file_handler
-from util.results_utils import create_html, create_xml, Job, Results, TestResult
-from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command
+
+# Update the path to support utils files that import other utils files
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from host_utils import get_node_set, get_local_host, HostInfo, HostException    # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
+from run_utils import run_local, run_remote, RunException                       # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
+from user_utils import get_chown_command                                        # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -115,7 +121,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r", encoding="utf-8") as open_file:
             try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
             except yaml.YAMLError as error:
                 logger.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
@@ -612,25 +618,15 @@ class TestName():
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
-    class HostInfo():
-        # pylint: disable=too-few-public-methods
-        """Defines the hosts being utilized by the test."""
-
-        def __init__(self):
-            """Initialize a HostInfo object."""
-            self.all = NodeSet()
-            self.servers = NodeSet()
-            self.clients = NodeSet()
-
-        @property
-        def clients_with_localhost(self):
-            """Get the test clients including the localhost.
-
-            Returns:
-                NodeSet: test clients including the localhost
-
-            """
-            return self.clients | NodeSet(get_local_host())
+    YAML_INFO_KEYS = [
+        "test_servers",
+        "server_partition",
+        "server_reservation",
+        "test_clients",
+        "client_partition",
+        "client_reservation",
+        "client_users"
+    ]
 
     def __init__(self, test_file, order):
         """Initialize a TestInfo object.
@@ -644,7 +640,8 @@ class TestInfo():
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
         self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
-        self.hosts = self.HostInfo()
+        self.host_info = HostInfo()
+        self.yaml_info = {}
 
     def __str__(self):
         """Get the test file as a string.
@@ -655,73 +652,50 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_host_info(self, include_localhost=False):
+    def set_yaml_info(self, include_localhost=False):
+        """Set the test yaml data from the test yaml file.
+
+        Args:
+            include_localhost (bool, optional): whether or not the local host be included in the
+                set of client hosts. Defaults to False.
+        """
+        self.yaml_info = {}
+        yaml_data = get_yaml_data(self.yaml_file)
+        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+
+        logger.debug("Test yaml information for %s:", self.test_file)
+        for key in self.YAML_INFO_KEYS:
+            if key in (self.YAML_INFO_KEYS[0], self.YAML_INFO_KEYS[3]):
+                self.yaml_info[key] = get_node_set(info[key] if key in info else None)
+            else:
+                self.yaml_info[key] = info[key] if key in info else None
+            logger.debug("  %-18s = %s", key, self.yaml_info[key])
+
+        if include_localhost:
+            self.yaml_info[self.YAML_INFO_KEYS[3]].add(get_local_host())
+            logger.debug(
+                "Adding the localhost to the clients: %s", self.yaml_info[self.YAML_INFO_KEYS[3]])
+
+    def set_host_info(self, control_node):
         """Set the test host information using the test yaml file.
 
         Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-        """
-        self.hosts.all.clear()
-        self.hosts.all.update(self._get_hosts_from_yaml(include_localhost))
+            control_node (NodeSet): the slurm control node
 
-        self.hosts.servers.clear()
-        self.hosts.servers.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_servers"]))
-
-        self.hosts.clients.clear()
-        self.hosts.clients.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_clients"]))
-
-    def _get_hosts_from_yaml(self, include_localhost=False, key_match=None):
-        """Extract the list of hosts from the test yaml file.
-
-        This host will be included in the list if no clients are explicitly called
-        out in the test's yaml file.
-
-        Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-            key_match (str, optional): test yaml key used to filter which hosts to
-                find.  Defaults to None which will match all keys.
-
-        Returns:
-            NodeSet: hosts specified in the test's yaml file
+        Raises:
+            LaunchException: if there is an error getting the host from the test yaml or a problem
+            setting up a slum partition
 
         """
-        logger.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
-        local_host = NodeSet(get_local_host())
-        yaml_hosts = NodeSet()
-        if include_localhost and key_match != YAML_KEYS["test_servers"]:
-            yaml_hosts.add(local_host)
-        found_client_key = False
-        for key, value in list(self._find_yaml_hosts().items()):
-            logger.debug("  Found %s: %s", key, value)
-            if key_match is None or key == key_match:
-                logger.debug("    Adding %s", value)
-                if isinstance(value, list):
-                    yaml_hosts.add(NodeSet.fromlist(value))
-                else:
-                    yaml_hosts.add(NodeSet(value))
-            if key in YAML_KEYS["test_clients"]:
-                found_client_key = True
-
-        # Include this host as a client if no clients are specified
-        if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-            logger.debug("    Adding the localhost: %s", local_host)
-            yaml_hosts.add(local_host)
-
-        return yaml_hosts
-
-    def _find_yaml_hosts(self):
-        """Find the all the host values in the specified yaml file.
-
-        Returns:
-            dict: a dictionary of each host key and its host values
-
-        """
-        return find_values(
-            get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+        logger.debug("Using %s to define host information", self.yaml_file)
+        try:
+            self.host_info.set_hosts(
+                logger, control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
+                self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
+                self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
+                self.yaml_info[self.YAML_INFO_KEYS[5]])
+        except HostException as error:
+            raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -765,7 +739,7 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
-        self.local_host = NodeSet(get_local_host())
+        self.local_host = get_local_host()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -777,6 +751,11 @@ class Launch():
 
         # Details about the run
         self.details = OrderedDict()
+
+        # Options for creating slurm partitions
+        self.slurm_control_node = NodeSet()
+        self.slurm_partition_hosts = NodeSet()
+        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -1014,7 +993,7 @@ class Launch():
         # Modify the test yaml files to run on this cluster
         try:
             self.setup_test_files(args, yaml_dir)
-        except RunException:
+        except (RunException, LaunchException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
@@ -1027,8 +1006,12 @@ class Launch():
             logger.warning(error)
 
         # Get the core file pattern information
-        core_files = self._get_core_file_pattern(
-            args.test_servers, args.test_clients, args.process_cores)
+        try:
+            core_files = self._get_core_file_pattern(
+                args.test_servers, args.test_clients, args.process_cores)
+        except LaunchException:
+            message = "Error obtaining the core file pattern information"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
@@ -1036,8 +1019,7 @@ class Launch():
 
         # Determine if bullseye code coverage collection is enabled
         logger.debug("Checking for bullseye code coverage configuration")
-        # pylint: disable=unsupported-binary-operation
-        self.bullseye_hosts = args.test_servers | NodeSet(get_local_host())
+        self.bullseye_hosts = args.test_servers | get_local_host()
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
             logger.info(
@@ -1045,6 +1027,15 @@ class Launch():
             self.bullseye_hosts = NodeSet()
         else:
             logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+
+        # Define options for creating any slurm partitions required by the tests
+        try:
+            self.slurm_control_node = NodeSet(args.slurm_control_node)
+        except TypeError:
+            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
+        self.slurm_add_partition = args.slurm_setup
 
         # Execute the tests
         status = self.run_tests(
@@ -1099,7 +1090,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = get_local_host()
+        self.details["launch host"] = str(get_local_host())
 
     def _create_log_dir(self):
         """Create the log directory and rename it if it already exists.
@@ -1319,17 +1310,21 @@ class Launch():
         # Find the speed of each common active interface in order to be able to choose the fastest
         interface_speeds = {}
         for interface in common_interfaces:
+            # Check for a virtual interface
+            module_path = os.path.join(net_path, interface, "device", "driver", "module")
+            command = [f"readlink {module_path}", "grep 'virtio_net'"]
+            result = run_remote(logger, all_hosts, " | ".join(command))
+            if result.passed and result.homogeneous:
+                interface_speeds[interface] = 1000
+                continue
+
+            # Verify each host has the same speed for non-virtual interfaces
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
             result = run_remote(logger, all_hosts, command)
-            # Verify each host has the same interface speed
             if result.passed and result.homogeneous:
                 for line in result.output[0].stdout:
                     try:
                         interface_speeds[interface] = int(line.strip())
-                    except IOError as io_error:
-                        # KVM/Qemu/libvirt returns an EINVAL
-                        if io_error.errno == errno.EINVAL:
-                            interface_speeds[interface] = 1000
                     except ValueError:
                         # Any line not containing a speed (integer)
                         pass
@@ -1733,7 +1728,8 @@ class Launch():
             yaml_dir (str): directory in which to write the modified yaml files
 
         Raises:
-            RunException: if there is a problem updating the test ymal files
+            RunException: if there is a problem updating the test yaml files
+            LaunchException: if there is an error getting host information from the test yaml files
 
         """
         # Replace any placeholders in the extra yaml file, if provided
@@ -1752,18 +1748,7 @@ class Launch():
             run_local(logger, command, check=False)
 
             # Collect the host information from the updated test yaml
-            test.set_host_info(args.include_localhost)
-
-        # Log the test information
-        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
-        logger.debug("-" * 80)
-        logger.debug("Test information:")
-        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
-        for test in self.tests:
-            logger.debug(
-                msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
-                test.hosts.clients)
+            test.set_yaml_info(args.include_localhost)
 
     @staticmethod
     def setup_fuse_config(hosts):
@@ -2025,6 +2010,9 @@ class Launch():
             clients (NodeSet): hosts designated for the client role in testing
             process_cores (bool): whether or not to collect core files after the tests complete
 
+        Raises:
+            LaunchException: if there was an error obtaining the core file pattern information
+
         Returns:
             dict: a dictionary containing the path and pattern for the core files per NodeSet
 
@@ -2042,20 +2030,18 @@ class Launch():
 
         # Verify all the hosts have the same core file pattern
         if not result.passed:
-            message = "Error obtaining the core file pattern"
-            return self.get_exit_status(1, message, "Setup")
+            raise LaunchException("Error obtaining the core file pattern")
 
         # Get the path and pattern information from the core pattern
         for data in result.output:
             hosts = str(data.hosts)
             try:
                 info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError):
-                message = "Error obtaining the core file pattern and directory"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+            except (TypeError, IndexError) as error:
+                raise LaunchException(
+                    "Error obtaining the core file pattern and directory") from error
             if not info[0]:
-                message = "Error obtaining the core file pattern directory"
-                return self.get_exit_status(1, message, "Setup")
+                raise LaunchException("Error obtaining the core file pattern directory")
             core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
             logger.info(
                 "Collecting any '%s' core files written to %s on %s",
@@ -2111,7 +2097,6 @@ class Launch():
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
-                    self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
 
                 # Avoid counting the test execution time as part of the processing time of this test
@@ -2201,14 +2186,13 @@ class Launch():
             if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
                 host_ext = os.path.splitext(item)
                 if len(host_ext) > 1:
-                    if not os.path.exists(bullseye_dir):
-                        os.makedirs(bullseye_dir)
+                    os.makedirs(bullseye_dir, exist_ok=True)
                     for name in os.listdir(item_full):
                         old_file = os.path.join(item_full, name)
                         if os.path.isfile(old_file):
                             new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1])
-                            new_file_name = ".".join(new_name).replace("..", ".")
+                            new_name.insert(1, host_ext[-1][1:])
+                            new_file_name = ".".join(new_name)
                             new_file = os.path.join(bullseye_dir, new_file_name)
                             logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
@@ -2243,6 +2227,11 @@ class Launch():
         logger.debug("=" * 80)
         logger.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
+        # Setup the test host information, including creating any required slurm partitions
+        status = self._setup_host_information(test)
+        if status:
+            return status
+
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
         if status:
@@ -2250,6 +2239,69 @@ class Launch():
 
         # Generate certificate files for the test
         return self._generate_certs()
+
+    def _setup_host_information(self, test):
+        """Set up the test host information and any required partitions.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        logger.debug("-" * 80)
+        logger.debug("Setting up host information for %s", test)
+
+        # Verify any required partitions exist
+        if test.yaml_info["client_partition"]:
+            partition = test.yaml_info["client_partition"]
+            logger.debug("Determining if the %s client partition exists", partition)
+            exists = show_partition(logger, self.slurm_control_node, partition).passed
+            if not exists and not self.slurm_add_partition:
+                message = f"Error missing {partition} partition"
+                self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                return 128
+            if self.slurm_add_partition and exists:
+                logger.info(
+                    "Removing existing %s partition to ensure correct configuration", partition)
+                if not delete_partition(logger, self.slurm_control_node, partition).passed:
+                    message = f"Error removing existing {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+            if self.slurm_add_partition:
+                hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
+                logger.debug(
+                    "Partition hosts from '%s', excluding test servers '%s': %s",
+                    self.slurm_partition_hosts, test.yaml_info["test_servers"], hosts)
+                if not hosts:
+                    message = "Error no partition hosts exist after removing the test servers"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+                logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
+                if not create_partition(logger, self.slurm_control_node, partition, hosts).passed:
+                    message = f"Error adding the {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+
+        # Define the hosts for this test
+        try:
+            test.set_host_info(self.slurm_control_node)
+        except LaunchException:
+            message = "Error setting up host information"
+            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            return 128
+
+        # Log the test information
+        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
+        logger.debug("-" * 80)
+        logger.debug("Test information:")
+        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
+        logger.debug(
+            msg_format, test.name.order, test.test_file, test.yaml_file,
+            test.host_info.servers.hosts, test.host_info.clients.hosts)
+        return 0
 
     def _setup_test_directory(self, test):
         """Set up the common test directory on all hosts.
@@ -2263,7 +2315,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
+        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
@@ -2271,7 +2323,7 @@ class Launch():
             f"ls -al {test_dir}",
         ]
         for command in commands:
-            if not run_remote(logger, test.hosts.all, command).passed:
+            if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2424,7 +2476,7 @@ class Launch():
                 "source": os.path.join(os.sep, "etc", "daos"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
                 "pattern": "daos_*.yml",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 300,
             }
@@ -2432,7 +2484,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2440,7 +2492,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 2,
                 "timeout": 900,
             }
@@ -2448,7 +2500,7 @@ class Launch():
                 "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
                 "pattern": "daos_dump*.txt*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2456,7 +2508,7 @@ class Launch():
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
                 "pattern": "valgrind*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2493,7 +2545,8 @@ class Launch():
 
         """
         service = "daos_agent.service"
-        hosts = test.hosts.clients_with_localhost
+        # pylint: disable=unsupported-binary-operation
+        hosts = test.host_info.clients.hosts | get_local_host()
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2509,7 +2562,7 @@ class Launch():
 
         """
         service = "daos_server.service"
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2617,7 +2670,7 @@ class Launch():
             int: status code: 0 = success, 512 = failure
 
         """
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Resetting server storage after running %s", test)
         if hosts:
@@ -3061,10 +3114,10 @@ class Launch():
             2: "ERROR: Failed avocado jobs detected!",
             4: "ERROR: Failed avocado commands detected!",
             8: "Interrupted avocado jobs detected!",
-            16: "ERROR: Failed archiving files after one or more tests!",
+            16: "ERROR: Failed to archive files after one or more tests!",
             32: "ERROR: Failed log size threshold check after one or more tests!",
             64: "ERROR: Failed to create a junit xml test error file!",
-            128: "ERROR: Failed to preparing the hosts before running the test!",
+            128: "ERROR: Failed to prepare the hosts before running the one or more tests!",
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
@@ -3242,6 +3295,17 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-ss", "--slurm_setup",
+        action="store_true",
+        help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "-sc", "--slurm_control_node",
+        action="store",
+        default=str(get_local_host()),
+        type=str,
+        help="slurm control node where scontrol commands will be issued to check for the existence "
+             "of any slurm partitions required by the tests")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3299,6 +3363,7 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.slurm_setup = True
 
     # Perform the steps defined by the arguments specified
     try:
