@@ -55,10 +55,13 @@ A-key: "DFS_CHUNK_SIZE"
 single-value (uint64_t): Default chunk size for files in this container
 
 A-key: "DFS_OBJ_CLASS"
-single-value (uint16_t): Default object class for files in this container
+single-value (uint16_t): Default object class for all objects in this container
 
 A-key: "DFS_DIR_OBJ_CLASS"
 single-value (uint16_t): Default object class for directories in this container
+
+A-key: "DFS_FILE_OBJ_CLASS"
+single-value (uint16_t): Default object class for files in this container
 
 A-key: "DFS_MODE"
 single-value (uint16_t): Consistency mode of this container (Relaxed vs Balanced)
