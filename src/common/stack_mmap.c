@@ -93,7 +93,7 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	mmap_stack_desc_t *desc;
 
 	D_ASSERT(sp->sp_nb_sizes != 0 && (!d_list_empty(&sp->sp_stack_size_list) ||
-		 sp->sp_nb_sizes == 1));
+		 			  sp->sp_nb_sizes == 1));
 	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
 					stack_list)) != NULL) {
 		D_DEBUG(DB_MEM,
@@ -244,9 +244,9 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd from free list, in pool=%p/sub-pool=%p, remaining "
-			"free stacks in pool="DF_U64", on CPU=%d\n", stack, stack_size, sp_alloc, sps,
-			sp_alloc->sp_free_stacks, sched_getcpu());
+			"mmap()'ed stack %p of size %zd from free list, in pool=%p/sub-pool=%p, "
+			"remaining free stacks in pool="DF_U64", on CPU=%d\n", stack, stack_size,
+			sp_alloc, sps, sp_alloc->sp_free_stacks, sched_getcpu());
 	} else {
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
 		 * high enough it does not matter as we do not expect so many
