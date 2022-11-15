@@ -289,7 +289,8 @@ blob_init(struct ad_blob *blob)
 
 	return 0;
 failed:
-	blob_fini(blob);
+	/* NB: caller is supposed to call blob_decref()->blob_fini() */
+	D_ERROR("Failed to initialize blob, rc=%d\n", rc);
 	return rc;
 }
 
@@ -479,16 +480,21 @@ blob_close(struct ad_blob *blob)
 
 
 /**
- * API design is a little bit confusing for now, the process is like:
- * - VOS calls umem_pool_create()->blob_prep_create()
- * - VOS initialize BIO context
- * - VOS calls blob_post_create() to read blob (needs BIO context)
+ * Format superblock of the blob, create the first arena, write these metadata to storage.
+ * NB: superblock is stored in the first arena.
  */
 int
-ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh)
+ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+	       struct ad_blob_handle *bh)
 {
-	struct ad_blob	*blob;
-	bool		 is_dummy = false;
+	struct ad_blob		*blob;
+	struct ad_blob_df	*bd;
+	struct ad_arena		*arena = NULL;
+	struct umem_store_iod	 iod;
+	d_sg_list_t		 sgl;
+	d_iov_t			 iov;
+	int			 rc;
+	bool			 is_dummy = false;
 
 	if (!strcmp(path, DUMMY_BLOB)) {
 		if (dummy_blob)
@@ -501,37 +507,15 @@ ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh)
 	if (!blob)
 		return -DER_NOMEM;
 
-	blob->bb_store.stor_size = size;
-	blob->bb_fd  = -1; /* XXX, create file, falloc */
-	blob->bb_ref = 1;
-	blob->bb_dummy = is_dummy;
-
-	bh->bh_blob = blob;
-	return 0;
-}
-
-/**
- * Format superblock of the blob, create the first arena, write these metadata to storage.
- * NB: superblock is stored in the first arena.
- */
-int
-ad_blob_post_create(struct ad_blob_handle bh)
-{
-	struct ad_blob		*blob = bh.bh_blob;
-	struct umem_store	*store = &blob->bb_store;
-	struct ad_blob_df	*bd;
-	struct ad_arena		*arena;
-	struct umem_store_iod	 iod;
-	d_sg_list_t		 sgl;
-	d_iov_t			 iov;
-	int			 rc;
-
-	/* NB: store::stor_size can be changed by upper level stack */
+	blob->bb_fd	= -1; /* XXX, create file, falloc */
+	blob->bb_ref	= 1;
+	blob->bb_dummy	= is_dummy;
+	blob->bb_store	= *store;
 	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
 
 	rc = blob_init(blob);
 	if (rc)
-		return rc;
+		goto failed;
 
 	bd = blob->bb_df;
 	bd->bd_magic		= BLOB_MAGIC;
@@ -574,19 +558,27 @@ ad_blob_post_create(struct ad_blob_handle bh)
 	arena_decref(arena);
 	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
 	blob_set_opened(blob);
+	bh->bh_blob = blob;
 	return 0;
 failed:
 	if (arena)
 		arena_decref(arena);
+	blob_decref(blob);
 	/* caller should call ad_blob_close() to actually free the handle */
 	return rc;
 }
 
 int
-ad_blob_prep_open(char *path, struct ad_blob_handle *bh)
+ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+	     struct ad_blob_handle *bh)
 {
-	struct ad_blob	*blob;
-	bool		 is_dummy = false;
+	struct ad_blob		*blob;
+	struct ad_blob_df	*bd;
+	struct umem_store_iod	 iod;
+	d_sg_list_t		 sgl;
+	d_iov_t			 iov;
+	int			 rc;
+	bool			 is_dummy = false;
 
 	if (!strcmp(path, DUMMY_BLOB))
 		is_dummy = true;
@@ -609,22 +601,9 @@ ad_blob_prep_open(char *path, struct ad_blob_handle *bh)
 			blob->bb_dummy = true;
 		}
 	}
-	bh->bh_blob = blob;
-	return 0;
-}
-
-int
-ad_blob_post_open(struct ad_blob_handle bh)
-{
-	struct ad_blob		*blob  = bh.bh_blob;
-	struct umem_store	*store = &blob->bb_store;
-	struct ad_blob_df	*bd;
-	struct umem_store_iod	 iod;
-	d_sg_list_t		 sgl;
-	d_iov_t			 iov;
-	int			 rc;
 
 	if (blob->bb_opened) {
+		bh->bh_blob = blob;
 		blob->bb_opened++;
 		return 0;
 	}
@@ -634,7 +613,7 @@ ad_blob_post_open(struct ad_blob_handle bh)
 		return -DER_NOMEM;
 
 	/* blob header is stored right after header of arena[0] */
-	ad_iod_set(&iod, blob->bb_store.stor_addr + ARENA_HDR_SIZE, sizeof(*bd));
+	ad_iod_set(&iod, ARENA_HDR_SIZE, sizeof(*bd));
 	ad_sgl_set(&sgl, &iov, bd, sizeof(*bd));
 
 	/* read super block to temporary buffer */
@@ -650,11 +629,11 @@ ad_blob_post_open(struct ad_blob_handle bh)
 			bd->bd_magic, bd->bd_version);
 		goto failed;
 	}
-
 	store->stor_size = bd->bd_size;
 	store->stor_addr = bd->bd_addr;
-	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
 
+	blob->bb_store	= *store;
+	blob->bb_pgs_nr	= ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
 	rc = blob_init(blob);
 	if (rc)
 		goto failed;
@@ -664,6 +643,7 @@ ad_blob_post_open(struct ad_blob_handle bh)
 		goto failed;
 
 	blob_set_opened(blob);
+	bh->bh_blob = blob;
 	D_FREE(bd); /* free the temporary buffer */
 	return 0;
 failed:
@@ -696,13 +676,6 @@ ad_blob_destroy(struct ad_blob_handle bh)
 	blob_close(blob);
 	blob_decref(blob);
 	return 0;
-}
-
-struct umem_store *
-ad_blob_hdl2store(struct ad_blob_handle bh)
-{
-	D_ASSERT(bh.bh_blob);
-	return &bh.bh_blob->bb_store;
 }
 
 void *
@@ -1392,85 +1365,63 @@ arena_debug_sorter(struct ad_arena *arena)
 #endif
 }
 
-/**
- * add a new group to arena, this function inserts the new group into two arrays to support
- * binary search:
- * - the first array is for searching by size and available units (alloc)
- * - the second array is for searching by address (free)
- */
 static int
-arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
+group_locate_by_addr(struct ad_group_df **sorter, struct ad_group_df *gd, int grp_nr, bool adding)
 {
-	struct ad_group_df **size_sorter;
-	struct ad_group_df **addr_sorter;
-	struct ad_group_df  *gd   = grp->gp_df;
 	struct ad_group_df  *tmp  = NULL;
-	int		     weight;
 	int		     start;
 	int		     end;
 	int		     cur;
-	int		     len;
 	int		     rc;
 
-	/* no WAL, in DRAM */
-	len = arena->ar_grp_nr++;
-	D_ASSERT(arena->ar_grp_nr <= ARENA_GRP_MAX);
-	if (len == 0) {
-		arena->ar_addr_sorter[0] = gd;
-		arena->ar_size_sorter[0] = gd;
-		if (pos)
-			*pos = 0;
-		return 0;
-	}
-
-	if (arena->ar_grp_nr > arena->ar_sorter_sz) {
-		/* unlikely, unless caller always allocates 64 bytes */
-		D_ASSERTF(arena->ar_sorter_sz == ARENA_GRP_AVG, "%d\n",
-			  arena->ar_sorter_sz);
-		rc = arena_init_sorters(arena, ARENA_GRP_MAX);
-		if (rc)
-			return rc;
-	}
-	size_sorter = arena->ar_size_sorter;
-	addr_sorter = arena->ar_addr_sorter;
-
-	D_DEBUG(DB_TRACE, "Adding group to address sorter of arena=%d\n", arena2id(arena));
-	/* step-1: add the group the address sorter */
-	for (start = cur = 0, end = len - 1; start <= end; ) {
+	D_ASSERT(grp_nr >= 1);
+	for (start = cur = 0, end = grp_nr - 1; start <= end; ) {
 		cur = (start + end) / 2;
-		tmp = addr_sorter[cur];
-		if (tmp->gd_addr < gd->gd_addr) {
-			rc = -1;
-		} else if (tmp->gd_addr > gd->gd_addr) {
-			rc = 1;
-		} else {
-			arena_debug_sorter(arena);
-			D_ASSERT(0);
+		tmp = sorter[cur];
+		if (gd->gd_addr == tmp->gd_addr) {
+			D_ASSERT(gd == tmp);
+			D_ASSERT(!adding);
+			return cur;
 		}
+
+		if (tmp->gd_addr < gd->gd_addr)
+			rc = -1;
+		else
+			rc = 1;
 
 		if (rc < 0)
 			start = cur + 1;
 		else
 			end = cur - 1;
 	}
-	if (tmp->gd_addr < gd->gd_addr)
-		cur += 1;
+	D_ASSERT(adding);
+	return (tmp->gd_addr < gd->gd_addr) ? (cur + 1) : cur;
+}
 
-	if (cur < len) {
-		memmove(&addr_sorter[cur + 1], &addr_sorter[cur],
-			(len - cur) * sizeof(addr_sorter[0]));
-	}
-	addr_sorter[cur] = gd;
+static int
+group_locate_by_size(struct ad_group_df **sorter, struct ad_group_df *gd, int grp_nr, bool adding)
+{
+	struct ad_group_df  *tmp  = NULL;
+	int		     weight;
+	int		     start;
+	int		     end;
+	int		     cur;
+	int		     rc;
 
-	/* step-2: add the group the size sorter */
-	D_DEBUG(DB_TRACE, "Adding group to size sorter of arena=%d\n", arena2id(arena));
+	D_ASSERT(grp_nr >= 1);
 	weight = group_weight(gd);
-	for (start = cur = 0, end = len - 1; start <= end; ) {
+	for (start = cur = 0, end = grp_nr - 1; start <= end; ) {
 		cur = (start + end) / 2;
-		tmp = size_sorter[cur];
+		tmp = sorter[cur];
 		if (tmp->gd_unit == gd->gd_unit) {
-			int	w = group_weight(tmp);
+			int	w;
 
+			if (tmp == gd) {
+				D_ASSERT(!adding);
+				return cur;
+			}
+
+			w = group_weight(tmp);
 			if (w < weight)
 				rc = -1;
 			else if (w > weight)
@@ -1489,21 +1440,97 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 		else
 			end = cur - 1;
 	}
+	D_ASSERT(adding);
 
 	if (tmp->gd_unit < gd->gd_unit ||
 	    (tmp->gd_unit == gd->gd_unit && tmp->gd_addr < gd->gd_addr))
 		cur += 1;
 
+	return cur;
+}
+
+/**
+ * add a new group to arena, this function inserts the new group into two arrays to support
+ * binary search:
+ * - the first array is for searching by size and available units (alloc)
+ * - the second array is for searching by address (free)
+ */
+static int
+arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
+{
+	struct ad_group_df **size_sorter;
+	struct ad_group_df **addr_sorter;
+	int		     cur;
+	int		     len;
+	int		     rc;
+
+	/* no WAL, in DRAM */
+	len = arena->ar_grp_nr++;
+	D_ASSERT(arena->ar_grp_nr <= ARENA_GRP_MAX);
+	if (len == 0) {
+		arena->ar_addr_sorter[0] = arena->ar_size_sorter[0] = grp->gp_df;
+		if (pos)
+			*pos = 0;
+		return 0;
+	}
+
+	if (arena->ar_grp_nr > arena->ar_sorter_sz) {
+		/* unlikely, unless caller always allocates 64 bytes */
+		D_ASSERTF(arena->ar_sorter_sz == ARENA_GRP_AVG, "%d\n",
+			  arena->ar_sorter_sz);
+		rc = arena_init_sorters(arena, ARENA_GRP_MAX);
+		if (rc)
+			return rc;
+	}
+	size_sorter = arena->ar_size_sorter;
+	addr_sorter = arena->ar_addr_sorter;
+
+	D_DEBUG(DB_TRACE, "Adding group to address sorter of arena=%d\n", arena2id(arena));
+	cur = group_locate_by_addr(addr_sorter, grp->gp_df, len, true);
+	if (cur < len) {
+		memmove(&addr_sorter[cur + 1], &addr_sorter[cur],
+			(len - cur) * sizeof(addr_sorter[0]));
+	}
+	addr_sorter[cur] = grp->gp_df;
+
+	/* step-2: add the group the size sorter */
+	D_DEBUG(DB_TRACE, "Adding group to size sorter of arena=%d\n", arena2id(arena));
+	cur = group_locate_by_size(size_sorter, grp->gp_df, len, true);
 	if (cur < len) {
 		memmove(&size_sorter[cur + 1], &size_sorter[cur],
 			(len - cur) * sizeof(size_sorter[0]));
 	}
-
+	size_sorter[cur] = grp->gp_df;
 	if (pos)
 		*pos = cur;
-	size_sorter[cur] = gd;
+
 	arena_debug_sorter(arena);
 	return 0;
+}
+
+static void
+arena_remove_grp(struct ad_arena *arena, struct ad_group *group)
+{
+	struct ad_group_df **addr_sorter = arena->ar_addr_sorter;
+	struct ad_group_df **size_sorter = arena->ar_size_sorter;
+	int		     cur;
+
+	/* remove this group from addr sort groups */
+	cur = group_locate_by_addr(addr_sorter, group->gp_df, arena->ar_grp_nr, false);
+	D_ASSERT(cur >= 0);
+	if (cur != arena->ar_grp_nr - 1) {
+		memmove(&addr_sorter[cur], &addr_sorter[cur + 1],
+			(arena->ar_grp_nr - cur - 1) * sizeof(addr_sorter[0]));
+	}
+
+	/* remove this group from size sort groups */
+	cur = group_locate_by_size(size_sorter, group->gp_df, arena->ar_grp_nr, false);
+	D_ASSERT(cur >= 0);
+	if (cur != arena->ar_grp_nr - 1) {
+		memmove(&size_sorter[cur], &size_sorter[cur + 1],
+			(arena->ar_grp_nr - cur - 1) * sizeof(size_sorter[0]));
+	}
+	arena->ar_grp_nr--;
 }
 
 /** Find requested number of unused bits (neither set it @used or @reserved */
@@ -1854,89 +1881,6 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	return 0;
 }
 
-static void
-arena_remove_sort_group(struct ad_group *group)
-{
-	struct ad_arena		*arena = group->gp_arena;
-	struct ad_group_df	*gd;
-	struct ad_group_df	*tmp = NULL;
-	int			 start;
-	int			 end;
-	int			 cur;
-	bool			 found = false;
-	int			 weight;
-	int			 rc;
-
-	/* remove this group from addr sort groups */
-	for (start = cur = 0, end = arena->ar_grp_nr - 1; start <= end; ) {
-		cur = (start + end) / 2;
-		gd = arena->ar_addr_sorter[cur];
-
-		if (gd->gd_addr == group->gp_df->gd_addr) {
-			found = true;
-			break;
-		}
-
-		if (gd->gd_addr < group->gp_df->gd_addr) {
-			rc = -1;
-		} else {
-			rc = 1;
-		}
-
-		if (rc < 0)
-			start = cur + 1;
-		else
-			end = cur - 1;
-	}
-
-	D_ASSERT(found);
-	if (cur != arena->ar_grp_nr - 1)
-		memmove(&arena->ar_addr_sorter[cur], &arena->ar_addr_sorter[cur + 1],
-			(arena->ar_grp_nr - cur - 1) * sizeof(arena->ar_addr_sorter[0]));
-
-	weight = group_weight(group->gp_df);
-	found = false;
-	/* remove this group from size sort groups */
-	gd = group->gp_df;
-	for (start = cur = 0, end = arena->ar_grp_nr - 1; start <= end; ) {
-		cur = (start + end) / 2;
-		tmp = arena->ar_size_sorter[cur];
-		/* the same unit size */
-		if (tmp->gd_unit == gd->gd_unit) {
-			int	w;
-
-			if (tmp == gd) {
-				found = true;
-				break;
-			}
-
-			w = group_weight(tmp);
-			if (w < weight)
-				rc = -1;
-			else if (w > weight)
-				rc = 1;
-			else /* group address */
-				rc = tmp->gd_addr < gd->gd_addr ? -1 : 1;
-
-		} else if (tmp->gd_unit < gd->gd_unit) {
-			rc = -1;
-		} else {
-			rc = 1;
-		}
-
-		if (rc < 0)
-			start = cur + 1;
-		else
-			end = cur - 1;
-	}
-	D_ASSERT(found);
-	if (cur != arena->ar_grp_nr - 1)
-		memmove(&arena->ar_size_sorter[cur], &arena->ar_size_sorter[cur + 1],
-			(arena->ar_grp_nr - cur - 1) * sizeof(arena->ar_size_sorter[0]));
-
-	arena->ar_grp_nr--;
-}
-
 static inline int
 gp_df2index(struct ad_group *group)
 {
@@ -1975,7 +1919,7 @@ group_tx_reset(struct ad_tx *tx, struct ad_group *group)
 		goto failed;
 
 	group->gp_reset = 1;
-	arena_remove_sort_group(group);
+	arena_remove_grp(arena, group);
 	gd->gd_addr = 0;
 	rc = ad_tx_set(tx, gd, 0, sizeof(*gd), AD_TX_REDO | AD_TX_LOG_ONLY);
 	if (rc)

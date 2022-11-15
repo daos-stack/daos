@@ -98,19 +98,14 @@ struct umem_store_ops adt_store_ops = {
 static void
 adt_blob_create(void **state)
 {
-	struct umem_store	*store;
-	struct ad_blob_handle	 bh;
+	struct umem_store	store = {0};
+	struct ad_blob_handle	bh;
 	int	rc;
 
 	printf("prep create ad_blob\n");
-	rc = ad_blob_prep_create(DUMMY_BLOB, ADT_STORE_SIZE, &bh);
-	assert_rc_equal(rc, 0);
-
-	store = ad_blob_hdl2store(bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post create ad_blob\n");
-	rc = ad_blob_post_create(bh);
+	store.stor_size	= ADT_STORE_SIZE;
+	store.stor_ops	= &adt_store_ops;
+	rc = ad_blob_create(DUMMY_BLOB, 0, &store, &bh);
 	assert_rc_equal(rc, 0);
 
 	printf("close ad_blob\n");
@@ -819,23 +814,17 @@ adt_no_space_1(void **state)
 static int
 adt_setup(void **state)
 {
-	struct umem_store *store;
-	int		   rc;
+	struct umem_store store = {0};
+	int		  rc;
 
 	adt_blob_create(state);
 
-	printf("prep open ad_blob\n");
-	rc = ad_blob_prep_open(DUMMY_BLOB, &adt_bh);
+	printf("open ad_blob\n");
+	store.stor_ops = &adt_store_ops;
+	rc = ad_blob_open(DUMMY_BLOB, 0, &store, &adt_bh);
 	assert_rc_equal(rc, 0);
 
-	store = ad_blob_hdl2store(adt_bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post open ad_blob\n");
-	rc = ad_blob_post_open(adt_bh);
-	assert_rc_equal(rc, 0);
-	assert_int_equal(store->stor_size, ADT_STORE_SIZE);
-
+	assert_int_equal(store.stor_size, ADT_STORE_SIZE);
 	return 0;
 }
 

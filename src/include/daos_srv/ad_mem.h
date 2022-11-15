@@ -86,13 +86,12 @@ ad_tx_increase(struct ad_tx *tx, int32_t *addr)
 	return ad_tx_assign(tx, addr, sizeof(val), val + 1);
 }
 
-int ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh);
-int ad_blob_post_create(struct ad_blob_handle bh);
-int ad_blob_prep_open(char *path, struct ad_blob_handle *bh);
-int ad_blob_post_open(struct ad_blob_handle bh);
+int ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+		   struct ad_blob_handle *bh);
+int ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+		 struct ad_blob_handle *bh);
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
-struct umem_store *ad_blob_hdl2store(struct ad_blob_handle bh);
 
 #define AD_ARENA_ANY	(~0U)
 
