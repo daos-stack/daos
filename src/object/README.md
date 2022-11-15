@@ -310,3 +310,15 @@ single stripe. It will increase its stripe count as its size grows to some
 boundary, to achieve more storage space and better concurrent I/O performance.
 
 Now the dynamically Striped Object is not implemented yet.
+
+## Object Index Table (OIT)
+
+OIT is a table to store the object ID list for a container. It is only valid
+for a specific container snapshot and can be generated when creating a container
+snapshot with DAOS_SNAP_OPT_OIT flag.
+
+OIT is implemented as a special object with oid.lo as the epoch of the container snapshot.
+Each object ID is stored as an akey in this object, with a default 8 bytes length
+single value data under that akey. User can mark specific oids in this table with some data
+(marker, max length is DAOS_OIT_MARKER_MAX_LEN). This user data is appended to the
+8 byte single value under the akey of the oid.
