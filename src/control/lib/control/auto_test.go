@@ -67,7 +67,7 @@ func cmpHostErrs(t *testing.T, expErrs []*MockHostError, gotErrs *HostErrorsResp
 	}
 }
 
-func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
+func TestControl_AutoConfig_GetNetworkDetails(t *testing.T) {
 	if1PB := &ctlpb.FabricInterface{
 		Provider: "test-provider", Device: "test-device", Numanode: 42,
 	}
@@ -158,6 +158,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		netDevClass     hardware.NetDevClass
 		uErr            error
 		hostResponses   []*HostResponse
+		expGetSetErr    error
 		expHostErrs     []*MockHostError
 		expErr          error
 		expIfs          []*HostFabricInterface
@@ -166,7 +167,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		"invoker error": {
 			uErr:          errors.New("unary error"),
 			hostResponses: dualHostRespSame(fabIfs1),
-			expErr:        errors.New("unary error"),
+			expGetSetErr:  errors.New("unary error"),
 		},
 		"host network scan failed": {
 			hostResponses: hostRespRemoteFail,
@@ -174,7 +175,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				{"host2", "remote failed"},
 				{"host2", "remote failed"},
 			},
-			expErr: errors.New("1 host had errors"),
+			expGetSetErr: errors.New("1 host had errors"),
 		},
 		"host network scan failed on multiple hosts": {
 			hostResponses: hostRespRemoteFails,
@@ -182,23 +183,23 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				{"host1", "remote failed"},
 				{"host2", "remote failed"},
 			},
-			expErr: errors.New("2 hosts had errors"),
+			expGetSetErr: errors.New("2 hosts had errors"),
 		},
 		"host network scan no hosts": {
 			hostResponses: []*HostResponse{},
-			expErr:        errors.New("no host responses"),
+			expGetSetErr:  errors.New("no host responses"),
 		},
 		"host network mismatch": {
 			hostResponses: dualHostResp(fabIfs1, fabIfs2),
-			expErr:        errors.New("network hardware not consistent across hosts"),
+			expGetSetErr:  errors.New("network hardware not consistent across hosts"),
 		},
 		"engine count unset and zero numa on single host": {
 			hostResponses: dualHostResp(fabIfs1, fabIfs1wNuma),
-			expErr:        errors.New("network hardware not consistent across hosts"),
+			expGetSetErr:  errors.New("network hardware not consistent across hosts"),
 		},
 		"engine count unset and zero numa": {
 			hostResponses: dualHostRespSame(fabIfs1),
-			expErr:        errors.New("zero numa nodes reported on hosts host[1-2]"),
+			expErr:        errors.New("zero numa nodes reported on hosts"),
 		},
 		"unsupported network class in request": {
 			netDevClass:   2,
@@ -291,35 +292,38 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			if tc.netDevClass == 0 {
 				tc.netDevClass = hardware.NetDevAny
 			}
-			req := ConfigGenerateReq{
-				NrEngines: tc.engineCount,
-				NetClass:  tc.netDevClass,
-				Client:    mi,
-				Log:       log,
-			}
 
-			netDetails, gotErr := getNetworkDetails(context.TODO(), req)
-			test.CmpErr(t, tc.expErr, gotErr)
+			netSet, err := getNetworkSet(context.TODO(), log, []string{}, mi)
+			test.CmpErr(t, tc.expGetSetErr, err)
+
+			// Additionally verify any internal error details.
 			var gotHostErrs *HostErrorsResp
-			if cge, ok := gotErr.(*ConfigGenerateError); ok {
+			if cge, ok := err.(*ConfigGenerateError); ok {
 				gotHostErrs = &cge.HostErrorsResp
 			}
 			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
-			if tc.expErr != nil {
+			if tc.expGetSetErr != nil {
 				return
 			}
 			if tc.expHostErrs != nil || gotHostErrs != nil {
 				t.Fatal("expected or received host errors without outer error")
 			}
 
-			test.AssertEqual(t, len(tc.expIfs), len(netDetails.numaIfaces),
+			netDetails, gotErr := GetNetworkDetails(log, tc.engineCount,
+				tc.netDevClass, netSet.HostFabric)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, len(tc.expIfs), len(netDetails.NumaIfaces),
 				"unexpected number of network interfaces")
-			for nn, iface := range netDetails.numaIfaces {
+			for nn, iface := range netDetails.NumaIfaces {
 				if diff := cmp.Diff(tc.expIfs[nn], iface); diff != "" {
 					t.Fatalf("unexpected interfaces (-want, +got):\n%s\n", diff)
 				}
 			}
-			test.AssertEqual(t, tc.expCoresPerNuma, netDetails.numaCoreCount,
+			test.AssertEqual(t, tc.expCoresPerNuma, netDetails.NumaCoreCount,
 				"unexpected numa cores")
 		})
 	}
@@ -414,7 +418,7 @@ func (mhr *mockHostResponses) getNUMAPMEMs(t *testing.T, numa uint32) []string {
 	return pmems
 }
 
-func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
+func TestControl_AutoConfig_GetStorageDetails(t *testing.T) {
 	oneScanFail := newMockHostResponses(t, "standard", "bothFailed")
 	scanFail := newMockHostResponses(t, "bothFailed")
 	noScmNs := newMockHostResponses(t, "standard")
@@ -433,19 +437,17 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 		disableNVMe   bool
 		uErr          error
 		hostResponses []*HostResponse
+		expGetSetErr  error
 		expErr        error
 		expPMems      [][]string
 		expSSDs       [][]string
 		expHostErrs   []*MockHostError
 	}{
-		"zero engines": {
-			expErr: errors.Errorf(errInvalNrEngines, 1, 0),
-		},
 		"invoker error": {
 			engineCount:   1,
 			uErr:          errors.New("unary error"),
 			hostResponses: oneWithScmNs.resps,
-			expErr:        errors.New("unary error"),
+			expGetSetErr:  errors.New("unary error"),
 		},
 		"host storage scan; failed": {
 			engineCount:   1,
@@ -454,7 +456,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				{"host2", "scm scan failed"},
 				{"host2", "nvme scan failed"},
 			},
-			expErr: errors.New("1 host had errors"),
+			expGetSetErr: errors.New("1 host had errors"),
 		},
 		"host storage scan; failed on multiple hosts": {
 			engineCount:   1,
@@ -465,17 +467,21 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				{"host2", "scm scan failed"},
 				{"host2", "nvme scan failed"},
 			},
-			expErr: errors.New("2 hosts had errors"),
+			expGetSetErr: errors.New("2 hosts had errors"),
 		},
 		"host storage scan; no hosts": {
 			engineCount:   1,
 			hostResponses: []*HostResponse{},
-			expErr:        errors.New("no host responses"),
+			expGetSetErr:  errors.New("no host responses"),
 		},
 		"host storage scan; mismatch": {
 			engineCount:   1,
 			hostResponses: oneWithScmNs.resps,
-			expErr:        errors.New("storage hardware not consistent across hosts"),
+			expGetSetErr:  errors.New("storage hardware not consistent across hosts"),
+		},
+		"zero engines requested": {
+			hostResponses: withScmNs.resps,
+			expErr:        errors.Errorf(errInvalNrEngines, 1, 0),
 		},
 		"2 numa nodes; 0 pmems": {
 			engineCount:   1,
@@ -570,7 +576,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				diffHpSizes.getNUMASSDs(t, 0),
 				diffHpSizes.getNUMASSDs(t, 1),
 			},
-			expErr: errors.New("not consistent"),
+			expGetSetErr: errors.New("not consistent"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -591,39 +597,40 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				tc.minSSDs = 0 // user specifically requests no ssd
 			}
 
-			req := ConfigGenerateReq{
-				NrEngines: tc.engineCount,
-				MinNrSSDs: tc.minSSDs,
-				Client:    mi,
-				Log:       log,
-			}
+			storageSet, err := getStorageSet(context.TODO(), log, []string{}, mi)
+			test.CmpErr(t, tc.expGetSetErr, err)
 
-			storageDetails, gotErr := getStorageDetails(context.TODO(), req, tc.engineCount)
-			test.CmpErr(t, tc.expErr, gotErr)
-
+			// Additionally verify any internal error details.
 			var gotHostErrs *HostErrorsResp
-			if cge, ok := gotErr.(*ConfigGenerateError); ok {
+			if cge, ok := err.(*ConfigGenerateError); ok {
 				gotHostErrs = &cge.HostErrorsResp
 			}
 			cmpHostErrs(t, tc.expHostErrs, gotHostErrs)
-			if tc.expErr != nil {
+			if tc.expGetSetErr != nil {
 				return
 			}
 			if tc.expHostErrs != nil || gotHostErrs != nil {
 				t.Fatal("expected or received host errors without outer error")
 			}
 
-			test.AssertEqual(t, len(tc.expPMems), len(storageDetails.numaPMems),
+			storageDetails, gotErr := GetStorageDetails(log, tc.engineCount, tc.minSSDs,
+				storageSet.HostStorage)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, len(tc.expPMems), len(storageDetails.NumaPMems),
 				"unexpected number of pmem devices")
-			for nn, pmems := range storageDetails.numaPMems {
+			for nn, pmems := range storageDetails.NumaPMems {
 				if diff := cmp.Diff(tc.expPMems[nn], []string(pmems)); diff != "" {
 					t.Fatalf("unexpected pmem paths (-want, +got):\n%s\n", diff)
 				}
 			}
 
-			test.AssertEqual(t, len(tc.expSSDs), len(storageDetails.numaSSDs),
+			test.AssertEqual(t, len(tc.expSSDs), len(storageDetails.NumaSSDs),
 				"unexpected number of ssds")
-			for nn, ssds := range storageDetails.numaSSDs {
+			for nn, ssds := range storageDetails.NumaSSDs {
 				if diff := cmp.Diff(tc.expSSDs[nn], ssds.Strings()); diff != "" {
 					t.Fatalf("unexpected list of ssds (-want, +got):\n%s\n", diff)
 				}
@@ -632,7 +639,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	}
 }
 
-func TestControl_AutoConfig_getCPUDetails(t *testing.T) {
+func TestControl_AutoConfig_GetCPUDetails(t *testing.T) {
 	for name, tc := range map[string]struct {
 		numaCoreCount int   // physical cores per NUMA node
 		ssdListSizes  []int // size of pci-address lists, one for each I/O Engine
@@ -694,7 +701,7 @@ func TestControl_AutoConfig_getCPUDetails(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			nccs, gotErr := getCPUDetails(log, numaSSDs, tc.numaCoreCount)
+			nccs, gotErr := GetCPUDetails(log, numaSSDs, tc.numaCoreCount)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -749,7 +756,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").
 				WithNrHugePages(8192).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -773,7 +780,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(8192).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -805,7 +812,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").
 				WithNrHugePages(8192).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -838,7 +845,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(8192).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -863,7 +870,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(8192).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -897,7 +904,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(15360).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -917,7 +924,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
 					WithHelperStreamCount(6),
-				defaultEngineCfg(1).
+				DefaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(int(defaultFiPort+defaultFiPortInterval)).
@@ -951,7 +958,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{8, 2}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(4096).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -986,7 +993,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").
 				WithNrHugePages(6144).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -1006,7 +1013,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithTargetCount(6).
 					WithHelperStreamCount(0),
-				defaultEngineCfg(1).
+				DefaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
@@ -1044,7 +1051,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").
 				WithNrHugePages(22528).WithEngines(
-				defaultEngineCfg(0).
+				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
 					WithFabricInterfacePort(defaultFiPort).
@@ -1064,7 +1071,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithStorageVosEnv("NVME").
 					WithTargetCount(22).
 					WithHelperStreamCount(1),
-				defaultEngineCfg(1).
+				DefaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
 					WithFabricInterfacePort(
@@ -1107,17 +1114,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			nd := &networkDetails{
-				engineCount: tc.engineCount,
-				numaIfaces:  tc.numaIfaces,
+			nd := &NetworkDetails{
+				EngineCount: tc.engineCount,
+				NumaIfaces:  tc.numaIfaces,
 			}
-			sd := &storageDetails{
-				hugePageSize: 2048,
-				numaPMems:    tc.numaPMems,
-				numaSSDs:     tc.numaSSDs,
+			sd := &StorageDetails{
+				HugePageSize: 2048,
+				NumaPMems:    tc.numaPMems,
+				NumaSSDs:     tc.numaSSDs,
 			}
 
-			gotCfg, gotErr := genConfig(log, mockEngineCfg, tc.accessPoints, nd, sd,
+			gotCfg, gotErr := GenConfig(log, mockEngineCfg, tc.accessPoints, nd, sd,
 				tc.numaCoreCounts)
 
 			test.CmpErr(t, tc.expErr, gotErr)

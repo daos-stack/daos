@@ -32,7 +32,6 @@ const (
 	defaultControlLogFile = "/tmp/daos_server.log"
 	minDMABuffer          = 1024
 
-	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNrIfaces     = "insufficient matching %s network interfaces, want %d got %d %v"
 	errInsufNrPMemGroups = "insufficient number of pmem device numa groups %v, want %d got %d"
@@ -40,6 +39,8 @@ const (
 	errInsufNrSSDs       = "insufficient number of ssds for numa %d, want %d got %d"
 	errInvalNrCores      = "invalid number of cores for numa %d"
 )
+
+var errNoNuma = errors.New("zero numa nodes reported on hosts")
 
 type (
 	// ConfigGenerateReq contains the inputs for the request.
@@ -98,22 +99,32 @@ func ConfigGenerate(ctx context.Context, req ConfigGenerateReq) (*ConfigGenerate
 		return nil, errors.New("no access points specified")
 	}
 
-	nd, err := getNetworkDetails(ctx, req)
+	netSet, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
 		return nil, err
 	}
 
-	sd, err := getStorageDetails(ctx, req, nd.engineCount)
+	nd, err := GetNetworkDetails(req.Log, req.NrEngines, req.NetClass, netSet.HostFabric)
 	if err != nil {
 		return nil, err
 	}
 
-	ccs, err := getCPUDetails(req.Log, sd.numaSSDs, nd.numaCoreCount)
+	storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := genConfig(req.Log, defaultEngineCfg, req.AccessPoints, nd, sd, ccs)
+	sd, err := GetStorageDetails(req.Log, nd.EngineCount, req.MinNrSSDs, storageSet.HostStorage)
+	if err != nil {
+		return nil, err
+	}
+
+	ccs, err := GetCPUDetails(req.Log, sd.NumaSSDs, nd.NumaCoreCount)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := GenConfig(req.Log, DefaultEngineCfg, req.AccessPoints, nd, sd, ccs)
 	if err != nil {
 		return nil, err
 	}
@@ -242,16 +253,16 @@ func parseInterfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCo
 	return matches, false
 }
 
-// getNetIfaces scans fabric network devices and returns a NUMA keyed map for a
-// provider/class combination.
-func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount int, hfs *HostFabricSet) (numaNetIfaceMap, error) {
+// getNetIfaces scans fabric network devices and returns a NUMA keyed map for a provider/class
+// combination.
+func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount int, hf *HostFabric) (numaNetIfaceMap, error) {
 	switch reqClass {
 	case hardware.NetDevAny, hardware.Ether, hardware.Infiniband:
 	default:
 		return nil, errors.Errorf(errUnsupNetDevClass, reqClass.String())
 	}
 
-	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hfs.HostFabric.Interfaces)
+	matchIfaces, complete := parseInterfaces(log, reqClass, engineCount, hf.Interfaces)
 	if !complete {
 		class := "best-available"
 		if reqClass != hardware.NetDevAny {
@@ -266,41 +277,41 @@ func getNetIfaces(log logging.Logger, reqClass hardware.NetDevClass, engineCount
 	return matchIfaces, nil
 }
 
-type networkDetails struct {
-	engineCount   int
-	numaIfaces    numaNetIfaceMap
-	numaCoreCount int
+type NetworkDetails struct {
+	EngineCount   int
+	NumaIfaces    numaNetIfaceMap
+	NumaCoreCount int
 }
 
-// getNetworkDetails retrieves recommended network interfaces.
+// GetNetworkDetails retrieves recommended network interfaces for server config file.
 //
 // Returns map of NUMA node ID to chosen fabric interfaces, number of engines to
 // provide mappings for, per-NUMA core count and any host errors.
-func getNetworkDetails(ctx context.Context, req ConfigGenerateReq) (*networkDetails, error) {
-	netSet, err := getNetworkSet(ctx, req.Log, req.HostList, req.Client)
-	if err != nil {
-		return nil, err
+func GetNetworkDetails(log logging.Logger, nrEngines int, ndc hardware.NetDevClass, hf *HostFabric) (*NetworkDetails, error) {
+	if hf == nil {
+		return nil, errors.New("nil HostFabricSet in request")
 	}
 
-	nd := &networkDetails{
-		engineCount:   req.NrEngines,
-		numaCoreCount: int(netSet.HostFabric.CoresPerNuma),
+	nd := &NetworkDetails{
+		EngineCount:   nrEngines,
+		NumaCoreCount: int(hf.CoresPerNuma),
 	}
+
 	// set number of engines if unset based on number of NUMA nodes on hosts
-	if nd.engineCount == 0 {
-		nd.engineCount = int(netSet.HostFabric.NumaCount)
+	if nd.EngineCount == 0 {
+		nd.EngineCount = int(hf.NumaCount)
 	}
-	if nd.engineCount == 0 {
-		return nil, errors.Errorf(errNoNuma, netSet.HostSet)
+	if nd.EngineCount == 0 {
+		return nil, errNoNuma
 	}
 
-	req.Log.Debugf("engine count for generated config set to %d", nd.engineCount)
+	log.Debugf("engine count for generated config set to %d", nd.EngineCount)
 
-	numaIfaces, err := getNetIfaces(req.Log, req.NetClass, nd.engineCount, netSet)
+	numaIfaces, err := getNetIfaces(log, ndc, nd.EngineCount, hf)
 	if err != nil {
 		return nil, err
 	}
-	nd.numaIfaces = numaIfaces
+	nd.NumaIfaces = numaIfaces
 
 	return nd, nil
 }
@@ -397,10 +408,10 @@ func mapSSDs(ssds storage.NvmeControllers) (numaSSDsMap, error) {
 	return nssds, nil
 }
 
-type storageDetails struct {
-	hugePageSize int
-	numaPMems    numaPMemsMap
-	numaSSDs     numaSSDsMap
+type StorageDetails struct {
+	HugePageSize int
+	NumaPMems    numaPMemsMap
+	NumaSSDs     numaSSDsMap
 }
 
 // validate checks sufficient PMem devices and SSD NUMA groups exist for the
@@ -408,10 +419,10 @@ type storageDetails struct {
 // checked.
 //
 // TODO 9932: set bdev_class to ram if --use-tmpfs-scm is set
-func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSDs int) error {
-	log.Debugf("numa to pmem mappings: %v", sd.numaPMems)
-	if len(sd.numaPMems) < engineCount {
-		return errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, engineCount, len(sd.numaPMems))
+func (sd *StorageDetails) validate(log logging.Logger, engineCount int, minNrSSDs int) error {
+	log.Debugf("numa to pmem mappings: %v", sd.NumaPMems)
+	if len(sd.NumaPMems) < engineCount {
+		return errors.Errorf(errInsufNrPMemGroups, sd.NumaPMems, engineCount, len(sd.NumaPMems))
 	}
 
 	if minNrSSDs == 0 {
@@ -419,18 +430,18 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 		log.Debug("nvme disabled, skip validation")
 
 		for nn := 0; nn < engineCount; nn++ {
-			sd.numaSSDs[nn] = hardware.MustNewPCIAddressSet()
+			sd.NumaSSDs[nn] = hardware.MustNewPCIAddressSet()
 		}
 
 		return nil
 	}
 
 	for nn := 0; nn < engineCount; nn++ {
-		if _, exists := sd.numaSSDs[nn]; !exists {
+		if _, exists := sd.NumaSSDs[nn]; !exists {
 			// populate empty sets for missing entries
-			sd.numaSSDs[nn] = hardware.MustNewPCIAddressSet()
+			sd.NumaSSDs[nn] = hardware.MustNewPCIAddressSet()
 		}
-		ssds := sd.numaSSDs[nn]
+		ssds := sd.NumaSSDs[nn]
 		log.Debugf("ssds bound to numa %d: %v", nn, ssds)
 
 		if ssds.Len() < minNrSSDs {
@@ -441,30 +452,24 @@ func (sd *storageDetails) validate(log logging.Logger, engineCount int, minNrSSD
 	return nil
 }
 
-// getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD
-// devices.
+// GetStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.
 //
 // Returns storage details struct or host error response and outer error.
-func getStorageDetails(ctx context.Context, req ConfigGenerateReq, engineCount int) (*storageDetails, error) {
-	if engineCount < 1 {
-		return nil, errors.Errorf(errInvalNrEngines, 1, engineCount)
+func GetStorageDetails(log logging.Logger, nrEngines, minNrSSDs int, hs *HostStorage) (*StorageDetails, error) {
+	if nrEngines < 1 {
+		return nil, errors.Errorf(errInvalNrEngines, 1, nrEngines)
 	}
 
-	storageSet, err := getStorageSet(ctx, req.Log, req.HostList, req.Client)
-	if err != nil {
-		return nil, err
-	}
-
-	numaSSDs, err := mapSSDs(storageSet.HostStorage.NvmeDevices)
+	numaSSDs, err := mapSSDs(hs.NvmeDevices)
 	if err != nil {
 		return nil, errors.Wrap(err, "mapping ssd addresses to numa node")
 	}
-	sd := &storageDetails{
-		numaPMems:    mapPMems(storageSet.HostStorage.ScmNamespaces),
-		numaSSDs:     numaSSDs,
-		hugePageSize: storageSet.HostStorage.HugePageInfo.PageSizeKb,
+	sd := &StorageDetails{
+		NumaPMems:    mapPMems(hs.ScmNamespaces),
+		NumaSSDs:     numaSSDs,
+		HugePageSize: hs.HugePageInfo.PageSizeKb,
 	}
-	if err := sd.validate(req.Log, engineCount, req.MinNrSSDs); err != nil {
+	if err := sd.validate(log, nrEngines, minNrSSDs); err != nil {
 		return nil, err
 	}
 
@@ -543,11 +548,11 @@ func checkCPUs(log logging.Logger, numSSDs, numaCoreCount int) (*coreCounts, err
 	}, nil
 }
 
-// getCPUDetails retrieves recommended values for I/O service and offload
+// GetCPUDetails retrieves recommended values for I/O service and offload
 // threads suitable for the server config file.
 //
 // Returns core counts struct or error.
-func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (numaCoreCountsMap, error) {
+func GetCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (numaCoreCountsMap, error) {
 	if coresPerNuma < 1 {
 		return nil, errors.Errorf(errInvalNrCores, coresPerNuma)
 	}
@@ -566,38 +571,39 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 
 type newEngineCfgFn func(int) *engine.Config
 
-func defaultEngineCfg(idx int) *engine.Config {
+// DefaultEngineCfg is a standard baseline for the config generate to start from.
+func DefaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
 		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
-// genConfig generates server config file from details of network, storage and CPU hardware after
+// GenConfig generates server config file from details of network, storage and CPU hardware after
 // performing some basic sanity checks.
-func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *networkDetails, sd *storageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
-	if nd.engineCount == 0 {
+func GenConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []string, nd *NetworkDetails, sd *StorageDetails, ccs numaCoreCountsMap) (*config.Server, error) {
+	if nd.EngineCount == 0 {
 		return nil, errors.Errorf(errInvalNrEngines, 1, 0)
 	}
 
-	if len(nd.numaIfaces) < nd.engineCount {
-		return nil, errors.Errorf(errInsufNrIfaces, "", nd.engineCount,
-			len(nd.numaIfaces), nd.numaIfaces)
+	if len(nd.NumaIfaces) < nd.EngineCount {
+		return nil, errors.Errorf(errInsufNrIfaces, "", nd.EngineCount,
+			len(nd.NumaIfaces), nd.NumaIfaces)
 	}
 
-	if len(sd.numaPMems) < nd.engineCount {
-		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
-			len(sd.numaPMems))
+	if len(sd.NumaPMems) < nd.EngineCount {
+		return nil, errors.Errorf(errInsufNrPMemGroups, sd.NumaPMems, nd.EngineCount,
+			len(sd.NumaPMems))
 	}
 
 	// enforce consistent ssd count across engine configs
 	minSSDs := math.MaxUint32
 	numaWithMinSSDs := 0
-	if len(sd.numaSSDs) > 0 {
-		if len(sd.numaSSDs) < nd.engineCount {
+	if len(sd.NumaSSDs) > 0 {
+		if len(sd.NumaSSDs) < nd.EngineCount {
 			return nil, errors.New("invalid number of ssd groups") // should never happen
 		}
 
-		for numa, ssds := range sd.numaSSDs {
+		for numa, ssds := range sd.NumaSSDs {
 			if ssds.Len() < minSSDs {
 				minSSDs = ssds.Len()
 				numaWithMinSSDs = numa
@@ -606,7 +612,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		log.Debugf("selecting %d ssds per engine", minSSDs)
 	}
 
-	if len(ccs) < nd.engineCount {
+	if len(ccs) < nd.EngineCount {
 		return nil, errors.New("invalid number of core count groups") // should never happen
 	}
 	// enforce consistent target and helper count across engine configs
@@ -614,21 +620,21 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 	nrHlprs := ccs[numaWithMinSSDs].nrHlprs
 	log.Debugf("selecting %d targets and %d helper threads per engine", nrTgts, nrHlprs)
 
-	engines := make([]*engine.Config, 0, nd.engineCount)
-	for nn := 0; nn < nd.engineCount; nn++ {
+	engines := make([]*engine.Config, 0, nd.EngineCount)
+	for nn := 0; nn < nd.EngineCount; nn++ {
 		engineCfg := newEngineCfg(nn).
 			WithTargetCount(nrTgts).
 			WithHelperStreamCount(nrHlprs)
-		if len(sd.numaPMems) > 0 {
+		if len(sd.NumaPMems) > 0 {
 			engineCfg.WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassDcpm.String()).
 					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
-					WithScmDeviceList(sd.numaPMems[nn][0]),
+					WithScmDeviceList(sd.NumaPMems[nn][0]),
 			)
 		}
-		if len(sd.numaSSDs) > 0 && sd.numaSSDs[nn].Len() > 0 {
-			ssds := sd.numaSSDs[nn]
+		if len(sd.NumaSSDs) > 0 && sd.NumaSSDs[nn].Len() > 0 {
+			ssds := sd.NumaSSDs[nn]
 			if ssds.Len() > minSSDs {
 				log.Debugf("larger number of SSDs (%d) on NUMA-%d than the "+
 					"lowest common number across all relevant NUMA nodes "+
@@ -665,8 +671,8 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		pnn := uint(nn)
 		engineCfg.PinnedNumaNode = &pnn
 		engineCfg.Fabric = engine.FabricConfig{
-			Provider:      nd.numaIfaces[nn].Provider,
-			Interface:     nd.numaIfaces[nn].Device,
+			Provider:      nd.NumaIfaces[nn].Provider,
+			Interface:     nd.NumaIfaces[nn].Device,
 			InterfacePort: int(defaultFiPort + (nn * defaultFiPortInterval)),
 		}
 		if err := engineCfg.SetNUMAAffinity(pnn); err != nil {
@@ -681,7 +687,7 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		numTargets += e.TargetCount
 	}
 
-	reqHugePages, err := common.CalcMinHugePages(sd.hugePageSize, numTargets)
+	reqHugePages, err := common.CalcMinHugePages(sd.HugePageSize, numTargets)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to calculate minimum hugepages")
 	}
@@ -697,5 +703,5 @@ func genConfig(log logging.Logger, newEngineCfg newEngineCfgFn, accessPoints []s
 		return nil, errors.Wrap(err, "setting engine affinities")
 	}
 
-	return cfg, cfg.Validate(log, sd.hugePageSize)
+	return cfg, cfg.Validate(log, sd.HugePageSize)
 }
