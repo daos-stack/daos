@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -20,7 +19,7 @@ from dfuse_utils import Dfuse
 from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, convert_list
+    run_pcmd, convert_list, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
@@ -154,12 +153,12 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             # tagged with the hostname
             command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
                 source_dir, shared_dir_tmp)
-            try:
-                slurm_utils.srun(NodeSet.fromlist([host]), command, self.srun_params, timeout=300)
-            except DaosTestError as error:
+            result = slurm_utils.srun(
+                self.log, self.control, NodeSet.fromlist([host]), command, self.srun_params,
+                timeout=300)
+            if not result.passed:
                 raise SoakTestError(
-                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
-                        host)) from error
+                    "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(shared_dir_tmp, dest_dir)
             try:
                 run_command(command, timeout=30)
@@ -170,14 +169,14 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
 
     else:
         # copy the remote dir on all client nodes to a shared directory
-        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
-            source_dir, shared_dir)
-        try:
-            slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params, timeout=300)
-        except DaosTestError as error:
+        command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(source_dir, shared_dir)
+        result = slurm_utils.srun(
+            self.log, self.control, NodeSet.fromlist(host_list), command, self.srun_params,
+            timeout=300)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(
-                    host_list)) from error
+                "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
+
         # copy the local logs and the logs in the shared dir to avocado dir
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/cp -R -p {0}/ \'{1}\'".format(directory, dest_dir)
@@ -191,7 +190,11 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
-        slurm_utils.srun(NodeSet.fromlist(host_list), command, self.srun_params)
+        result = slurm_utils.srun(
+            self.log, self.control, NodeSet.fromlist(host_list), command, self.srun_params)
+        if not result.passed:
+            raise SoakTestError(
+                "<<FAILED: Soak logfiles removal failed>>: {} on {}".format(directory, host_list))
         # remove the local log for this pass
         for directory in [source_dir, shared_dir]:
             command = "/usr/bin/rm -rf {0}".format(directory)
@@ -797,20 +800,16 @@ def cleanup_dfuse(self):
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
-    try:
-        slurm_utils.srun(
-            NodeSet.fromlist(
-                self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params, timeout=600)
-    except slurm_utils.SlurmFailed as error:
-        self.log.info("Dfuse processes not stopped Error:%s", error)
-    try:
-        slurm_utils.srun(
-            NodeSet.fromlist(
-                self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params, timeout=600)
-    except slurm_utils.SlurmFailed as error:
-        self.log.info("Dfuse mountpoints not deleted Error:%s", error)
+    result = slurm_utils.srun(
+        self.log, self.control, NodeSet.fromlist(self.hostlist_clients), ";".join(cmd),
+        self.srun_params, timeout=600)
+    if not result.passed:
+        self.log.info("Dfuse processes not stopped Error")
+    result = slurm_utils.srun(
+        self.log, self.control, NodeSet.fromlist(self.hostlist_clients), ";".join(cmd2),
+        self.srun_params, timeout=600)
+    if not result.passed:
+        self.log.info("Dfuse mount points not deleted Error")
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -962,7 +961,9 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
-            env = macsio.get_environment("mpirun", log_file=daos_log)
+            env = macsio.env.copy()
+            env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
+
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
@@ -1096,7 +1097,7 @@ def create_racer_cmdline(self, job_spec):
 
     """
     commands = []
-    #daos_racer needs its own pool; does not run using jobs pool
+    # daos_racer needs its own pool; does not run using jobs pool
     add_pools(self, ["pool_racer"])
     add_containers(self, self.pool[-1], "SX")
     racer_namespace = os.path.join(os.sep, "run", job_spec, "*")
@@ -1110,8 +1111,7 @@ def create_racer_cmdline(self, job_spec):
         self.soaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
-    env = daos_racer.get_environment(self.server_managers[0], racer_log)
-    daos_racer.set_environment(env)
+    daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
     log_name = job_spec
     cmds = []
     cmds.append(str(daos_racer))
@@ -1216,7 +1216,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
-    app_cmd = self.params.get("cmdline", app_params, default=None)
+    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
     posix = self.params.get("posix", app_params, default=False)
     if app_cmd is None:

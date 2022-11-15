@@ -154,6 +154,30 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 }
 
 int
+dc_obj_query_max_epoch_task_create(daos_handle_t oh, daos_handle_t th, daos_epoch_t *epoch,
+				   daos_event_t *ev, tse_sched_t *tse, tse_task_t **task)
+{
+	daos_obj_query_key_t	*args;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_QUERY_KEY);
+	rc = dc_task_create(dc_obj_query_key, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->th	= th;
+	args->flags	= 0;
+	args->dkey	= NULL;
+	args->akey	= NULL;
+	args->recx	= NULL;
+	args->max_epoch = epoch;
+
+	return 0;
+}
+
+int
 dc_obj_sync_task_create(daos_handle_t oh, daos_epoch_t epoch,
 			daos_epoch_t **epochs_p, int *nr, daos_event_t *ev,
 			tse_sched_t *tse, tse_task_t **task)

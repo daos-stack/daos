@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,13 +9,6 @@
 
 #ifndef __POOL_CLIENT_INTERNAL_H__
 #define __POOL_CLIENT_INTERNAL_H__
-
-static inline void
-dc_pool2hdl(struct dc_pool *pool, daos_handle_t *hdl)
-{
-	daos_hhash_link_getref(&pool->dp_hlink);
-	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
-}
 
 void dc_pool_hdl_link(struct dc_pool *pool);
 void dc_pool_hdl_unlink(struct dc_pool *pool);

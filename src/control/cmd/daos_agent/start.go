@@ -58,7 +58,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath)
+	// Agent socket file to be readable and writable by all.
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath, 0666)
 	if err != nil {
 		cmd.Errorf("Unable to create socket server: %v", err)
 		return err

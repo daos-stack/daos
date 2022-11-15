@@ -213,7 +213,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
 	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
-	bool			sep_mode;
 	int			cur_ctx_num;
 	int			max_ctx_num;
 	d_list_t		*ctx_list;
@@ -224,14 +223,12 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	sep_mode = crt_provider_is_sep(primary, provider);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(primary, provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(primary, provider);
 
-	if (sep_mode &&
-	    cur_ctx_num >= max_ctx_num) {
-		D_WARN("Number of active contexts (%d) reached limit (%d).\n",
-			cur_ctx_num, max_ctx_num);
+	if (cur_ctx_num >= max_ctx_num) {
+		D_WARN("Provider: %d; Number of active contexts (%d) reached limit (%d).\n",
+			provider, cur_ctx_num, max_ctx_num);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}

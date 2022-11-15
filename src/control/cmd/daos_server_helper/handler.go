@@ -49,7 +49,7 @@ func (h *scmMountUnmountHandler) Handle(log logging.Logger, req *pbin.Request) *
 
 	h.setupProvider(log)
 
-	var mRes *storage.ScmMountResponse
+	var mRes *storage.MountResponse
 	var err error
 	switch req.Method {
 	case "ScmMount":
