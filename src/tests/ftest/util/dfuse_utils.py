@@ -66,7 +66,7 @@ class Dfuse(DfuseCommand):
         # hosts where dfuse is currently running
         self._running_hosts = NodeSet()
 
-        # which fusermount command to use for unmounting
+        # which fusermount command to use for unmount
         self._fusermount_cmd = ""
 
     def __del__(self):
@@ -296,7 +296,7 @@ class Dfuse(DfuseCommand):
         """Unmount dfuse.
 
         Args:
-            tries (int, optional): number of times to try unmounting. Defaults to 2
+            tries (int, optional): number of times to try unmount. Defaults to 2
 
         """
         self._update_running_hosts()
