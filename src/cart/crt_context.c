@@ -202,7 +202,7 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 	ctx = crt_ctx;
 	D_STRNDUP(*uri, ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN);
 	if (*uri == NULL)
-		return DER_NOMEM;
+		return -DER_NOMEM;
 
 	return DER_SUCCESS;
 }
@@ -228,7 +228,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	if (cur_ctx_num >= max_ctx_num) {
 		D_WARN("Provider: %d; Number of active contexts (%d) reached limit (%d).\n",
-			provider, cur_ctx_num, max_ctx_num);
+		       provider, cur_ctx_num, max_ctx_num);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
