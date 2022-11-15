@@ -2381,7 +2381,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(pack_resp, rc = -DER_INVAL);
 	}
 
-	/* TODO: Implement no-reint device replacement option */
+	/* TODO DAOS-6283: Implement no-reint device replacement option */
 
 	rc = ds_mgmt_dev_replace(old_uuid, new_uuid, resp);
 	if (rc != 0)
