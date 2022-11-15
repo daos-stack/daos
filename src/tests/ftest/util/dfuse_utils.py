@@ -62,12 +62,16 @@ class Dfuse(DfuseCommand):
         # set params
         self.hosts = hosts.copy()
         self.tmp = tmp
-        self.running_hosts = NodeSet()
+
+        # hosts where dfuse is currently running
+        self._running_hosts = NodeSet()
+
+        # which fusermount command to use for unmounting
         self._fusermount_cmd = ""
 
     def __del__(self):
         """Destruct the object."""
-        if self.running_hosts:
+        if self._running_hosts:
             self.log.error('Dfuse object deleted without shutting down')
 
     def check_mount_state(self, hosts):
@@ -237,7 +241,7 @@ class Dfuse(DfuseCommand):
         cmd += str(self)
 
         result = run_remote(self.log, self.hosts, cmd, timeout=30)
-        self.running_hosts.add(result.passed_hosts)
+        self._running_hosts.add(result.passed_hosts)
         if not result.passed:
             raise CommandFailure(
                 f"Error starting dfuse on the following hosts: {result.failed_hosts}")
@@ -271,7 +275,7 @@ class Dfuse(DfuseCommand):
             bool: whether or not dfuse is running
 
         """
-        state = self.check_mount_state(self.running_hosts)
+        state = self.check_mount_state(self._running_hosts)
         if state["unmounted"] or state["nodirectory"]:
             self.log.error(
                 "Error: dfuse not running on %s",
@@ -281,32 +285,37 @@ class Dfuse(DfuseCommand):
             return False
         return True
 
-    def update_running_hosts(self):
+    def _update_running_hosts(self):
         """Updating the hosts where dfuse is still running."""
-        if not self.running_hosts:
+        if not self._running_hosts:
             return
-        mount_state = self.check_mount_state(self.running_hosts)
-        self.running_hosts = mount_state['mounted'].copy()
+        mount_state = self.check_mount_state(self._running_hosts)
+        self._running_hosts = mount_state['mounted'].copy()
 
     def unmount(self, tries=2):
-        """Unmount dfuse."""
-        self.update_running_hosts()
+        """Unmount dfuse.
+
+        Args:
+            tries (int, optional): number of times to try unmounting. Defaults to 2
+
+        """
+        self._update_running_hosts()
 
         for current_try in range(tries):
-            if not self.running_hosts:
+            if not self._running_hosts:
                 return
 
             # Forcibly kill dfuse after the first unmount fails
             if current_try > 0:
                 kill_command = "pkill dfuse --signal KILL"
-                _ = run_remote(self.log, self.running_hosts, kill_command, timeout=30)
+                _ = run_remote(self.log, self._running_hosts, kill_command, timeout=30)
 
             # Try to unmount dfuse on each host, ignoring errors for now
             _ = run_remote(
-                self.log, self.running_hosts, self._get_umount_command(force=(current_try > 0)))
+                self.log, self._running_hosts, self._get_umount_command(force=(current_try > 0)))
             time.sleep(2)
 
-            self.update_running_hosts()
+            self._update_running_hosts()
 
     def stop(self):
         """Stop dfuse.
@@ -333,12 +342,12 @@ class Dfuse(DfuseCommand):
             return
 
         # Try to unmount on all hosts to account for mount points in any state
-        self.running_hosts.add(self.hosts)
+        self._running_hosts.add(self.hosts)
         self.unmount()
 
         error_list = []
-        if self.running_hosts:
-            error_list.append(f"Error stopping dfuse on {self.running_hosts}")
+        if self._running_hosts:
+            error_list.append(f"Error stopping dfuse on {self._running_hosts}")
 
         # Remove mount points
         try:
