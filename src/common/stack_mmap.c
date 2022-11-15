@@ -237,7 +237,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 
 	mmap_stack_desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
 					   stack_list);
-	if ((mmap_stack_desc != NULL) {
+	if (mmap_stack_desc != NULL) {
 		D_ASSERT(sp_alloc->sp_free_stacks != 0);
 		--sp_alloc->sp_free_stacks;
 		atomic_fetch_sub(&nb_free_stacks, 1);
