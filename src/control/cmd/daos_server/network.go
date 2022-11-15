@@ -18,6 +18,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
+const allProviders = "all"
+
 type networkCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on local server"`
 }
@@ -28,33 +30,6 @@ type networkScanCmd struct {
 	optCfgCmd
 	cmdutil.LogCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
-}
-
-func (cmd *networkScanCmd) Execute(_ []string) error {
-	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
-
-	results, err := fabricScanner.Scan(context.Background())
-	if err != nil {
-		return nil
-	}
-
-	if cmd.FabricProvider == "" {
-		cmd.FabricProvider = cmd.config.Fabric.Provider
-	}
-
-	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
-	hfm := make(control.HostFabricMap)
-	if err := hfm.Add("localhost", hf); err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
-		return err
-	}
-	cmd.Info(bld.String())
-
-	return nil
 }
 
 func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProvider string) *control.HostFabric {
@@ -77,7 +52,7 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 
 		for _, name := range netIFs.ToSlice() {
 			for _, provider := range fi.Providers.ToSlice() {
-				if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+				if filterProvider == allProviders || strings.HasPrefix(provider, filterProvider) {
 					hf.AddInterface(&control.HostFabricInterface{
 						Provider:    provider,
 						Device:      name,
@@ -90,4 +65,42 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 	}
 
 	return hf
+}
+
+func GetLocalHostFabric(ctx context.Context, fs *hardware.FabricScanner, filterProvider string) (*control.HostFabric, error) {
+	results, err := fs.Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return fabricInterfaceSetToHostFabric(results, filterProvider), nil
+}
+
+func (cmd *networkScanCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	fs := hwprov.DefaultFabricScanner(cmd.Logger)
+
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = cmd.config.Fabric.Provider
+	}
+	if cmd.FabricProvider == "" {
+		cmd.FabricProvider = allProviders
+	}
+
+	hf, err := GetLocalHostFabric(ctx, fs, cmd.FabricProvider)
+	if err != nil {
+		return err
+	}
+	hfm := make(control.HostFabricMap)
+	if err := hfm.Add("localhost", hf); err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintHostFabricMap(hfm, &bld); err != nil {
+		return err
+	}
+	cmd.Info(bld.String())
+
+	return nil
 }
