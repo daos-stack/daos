@@ -392,13 +392,13 @@ to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
 default. If specified during a pool create operation, this property overrides
 any `--nsvc` options. This property cannot yet be changed afterward.
 
-See [Erasure Code](../user/container/#erasure-code) for details on
+See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://docs.daos.io/v2.2/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.4/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
