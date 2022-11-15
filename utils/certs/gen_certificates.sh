@@ -50,11 +50,16 @@ function print_usage () {
 CA_HOME="${1:-.}/daosCA"
 PRIVATE="${CA_HOME}/private"
 CERTS="${CA_HOME}/certs"
+CLIENTS="${CERTS}/clients"
 CONFIGS="$(dirname "${BASH_SOURCE}")"
 
 function setup_directories () {
+    mkdir -p "${CA_HOME}"
+    chmod 700 "${CA_HOME}"
     mkdir -p "${PRIVATE}"
+    chmod 700 "${PRIVATE}"
     mkdir -p "${CERTS}"
+    mkdir -p "${CLIENTS}"
 }
 
 function generate_ca_cnf () {
@@ -116,10 +121,10 @@ function generate_ca_cert () {
     [[ $EUID -eq 0 ]] && chown root.root "${PRIVATE}/daosCA.key" 2>/dev/null
     chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
-    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 365  -sha512 \
+    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 1095  -sha512 \
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
-    [[ $EUID -eq 0 ]] && chown root.root "${CERTS}/daosCA.crt" 2>/dev/null
+    [[ $EUID -eq 0 ]] && chown root.daos_daemons "${CERTS}/daosCA.crt" 2>/dev/null
     chmod 0644 "${CERTS}/daosCA.crt"
     # Reset the the CA index
     rm -f "${CA_HOME}/index.txt" "${CA_HOME}/serial.txt"
@@ -199,21 +204,40 @@ function generate_server_cert () {
     ${CERTS}/server.crt"
 }
 
+function populate_clients_dir () {
+    cp ${CERTS}/admin.crt         ${CLIENTS}/admin.crt
+    chown daos_server.daos_server ${CLIENTS}/admin.crt
+    chmod 640                     ${CLIENTS}/admin.crt
+    cp ${CERTS}/agent.crt         ${CLIENTS}/agent.crt
+    chown daos_server.daos_server ${CLIENTS}/agetn.crt
+    chmod 640                     ${CLIENTS}/agent.crt
+
+    echo "Authorized Clients Certificate Files on DAOS Servers:
+    ${CLIENTS}/agent.crt
+    ${CLIENTS}/admin.crt"
+}
+
 function cleanup () {
-    rm -f "${CERTS}/*pem"
+    rm -f "${CERTS}/*.pem"
     rm -f "${CA_HOME}/agent.csr"
     rm -f "${CA_HOME}/admin.csr"
     rm -f "${CA_HOME}/server.csr"
-    rm -f "${CA_HOME}/ca.cnf"
+    rm -f "${CA_HOME}/ca.cnf" # TODO: keep for future use?
 }
 
 function main () {
+    if [[ -d "$CA_HOME" ]]
+    then
+      echo "$CA_HOME already exists, exiting."
+      exit 1
+    fi
     setup_directories
     generate_ca_cnf
     generate_ca_cert
     generate_server_cert
     generate_agent_cert
     generate_admin_cert
+    populate_clients_dir
     cleanup
 }
 
