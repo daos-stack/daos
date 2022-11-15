@@ -83,7 +83,8 @@ static int compare_stack_size(const void *arg1, const void *arg2)
 		return -1;
 	else if (size1->sps_stack_size > size2->sps_stack_size)
 		return 1;
-	else return 0;
+	else
+		return 0;
 }
 
 void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size *sps)
@@ -91,11 +92,14 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	void *item;
 	mmap_stack_desc_t *desc;
 
-	D_ASSERT(sp->sp_nb_sizes != 0 && (!d_list_empty(&sp->sp_stack_size_list) || sp->sp_nb_sizes == 1));
-	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
+	D_ASSERT(sp->sp_nb_sizes != 0 && (!d_list_empty(&sp->sp_stack_size_list) ||
+		 sp->sp_nb_sizes == 1));
+	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
+					stack_list)) != NULL) {
 		D_DEBUG(DB_MEM,
-			"Draining a mmap()'ed stack at %p of size %zd, pool=%p/sub-pool=%p, remaining free stacks in pool="DF_U64"\n",
-			desc->stack, desc->stack_size, sp, sps, sp->sp_free_stacks);
+			"Draining a mmap()'ed stack at %p of size %zd, pool=%p/sub-pool=%p, "
+			"remaining free stacks in pool="DF_U64"\n", desc->stack, desc->stack_size,
+			sp, sps, sp->sp_free_stacks);
 		munmap(desc->stack, desc->stack_size);
 		--sp->sp_free_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
@@ -111,7 +115,8 @@ void stack_pool_by_size_destroy(struct stack_pool *sp, struct stack_pool_by_size
 	D_FREE(sps);
 }
 
-int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_by_size **sps, size_t size)
+int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_by_size **sps,
+				      size_t size)
 {
 	void *item;
 	struct stack_pool_by_size dummy = {.sps_stack_size = size};
@@ -142,8 +147,8 @@ int stack_pool_by_size_find_or_create(struct stack_pool *sp, struct stack_pool_b
 			*sps, sp, size);
 	} else {
 		/* this should not happen, size finally exists! so no need new/same one */
-		D_DEBUG(DB_MEM, "sub-pool by-size %p of size %zu already exists in pool %p finally..., so freeing %p\n",
-			*((void **)item), size, sp, *sps);
+		D_DEBUG(DB_MEM, "sub-pool by-size %p of size %zu already exists in pool %p "
+			"finally..., so freeing %p\n", *((void **)item), size, sp, *sps);
 		D_FREE(*sps);
 		*sps = *((void **)item);
 	}
@@ -230,17 +235,18 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		D_GOTO(out_err, rc);
 	}
 
-	if ((mmap_stack_desc = d_list_pop_entry(&sps->sps_stack_free_list,
-						mmap_stack_desc_t,
-						stack_list)) != NULL) {
+	mmap_stack_desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
+					   stack_list);
+	if ((mmap_stack_desc != NULL) {
 		D_ASSERT(sp_alloc->sp_free_stacks != 0);
 		--sp_alloc->sp_free_stacks;
 		atomic_fetch_sub(&nb_free_stacks, 1);
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd from free list, in pool=%p/sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			stack, stack_size, sp_alloc, sps, sp_alloc->sp_free_stacks, sched_getcpu());
+			"mmap()'ed stack %p of size %zd from free list, in pool=%p/sub-pool=%p, remaining "
+			"free stacks in pool="DF_U64", on CPU=%d\n", stack, stack_size, sp_alloc, sps,
+			sp_alloc->sp_free_stacks, sched_getcpu());
 	} else {
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
 		 * high enough it does not matter as we do not expect so many
@@ -262,8 +268,9 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK |
 			     MAP_GROWSDOWN | MAP_NORESERVE, -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p/sub-pool=%p, on CPU=%d\n",
-				stack_size, strerror(errno), sp_alloc, sps, sched_getcpu());
+			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p/sub-pool=%p, "
+				"on CPU=%d\n", stack_size, strerror(errno), sp_alloc, sps,
+				sched_getcpu());
 			/* let's try Argobots standard way ... */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
@@ -377,8 +384,8 @@ free_stack(void *arg)
 	} else {
 		rc = stack_pool_by_size_find_or_create(sp, &sps, desc->stack_size);
 		if (rc != 0) {
-			D_ERROR("unable to find/create stack sub-pool in pool %p for size %zu : %d\n",
-				sp, desc->stack_size, rc);
+			D_ERROR("unable to find/create stack sub-pool in pool %p for "
+				"size %zu : %d\n", sp, desc->stack_size, rc);
 			/* thus munmap() it ... */
 			do_munmap = true;
 		} else {
@@ -389,9 +396,9 @@ free_stack(void *arg)
 	}
 	if (do_munmap) {
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p/sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, sps, sp->sp_free_stacks,
-			sched_getcpu());
+			"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p/sub-pool=%p, "
+			"remaining free stacks in pool="DF_U64", on CPU=%d\n", desc->stack,
+			desc->stack_size, sp, sps, sp->sp_free_stacks, sched_getcpu());
 		rc = munmap(desc->stack, desc->stack_size);
 		/* XXX
 		 * should we re-queue it on free list instead to leak it ?
@@ -403,9 +410,9 @@ free_stack(void *arg)
 			atomic_fetch_sub(&nb_mmap_stacks, 1);
 	} else {
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd on free list, in pool=%p/sub-pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, sps, sp->sp_free_stacks,
-			sched_getcpu());
+			"mmap()'ed stack %p of size %zd on free list, in pool=%p/sub-pool=%p, "
+			"remaining free stacks in pool="DF_U64", on CPU=%d\n", desc->stack,
+			desc->stack_size, sp, sps, sp->sp_free_stacks, sched_getcpu());
 	}
 }
 
@@ -436,7 +443,8 @@ void free_stack_pool_by_size(void *arg)
 	D_ERROR("orphan sub-pool %p found\n", sps);
 	/* unmapping its free stacks in pool anyway */
 
-	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t, stack_list)) != NULL) {
+	while ((desc = d_list_pop_entry(&sps->sps_stack_free_list, mmap_stack_desc_t,
+					stack_list)) != NULL) {
 		D_DEBUG(DB_MEM,
 			"Draining a mmap()'ed stack at %p of size %zd, sub-pool=%p\n",
 			desc->stack, desc->stack_size, sps);
@@ -454,13 +462,15 @@ void stack_pool_destroy(struct stack_pool *sp)
 {
 	struct stack_pool_by_size *sps;
 
-	while ((sps = d_list_pop_entry(&sp->sp_stack_size_list, struct stack_pool_by_size, sps_size_list)) != NULL)
+	while ((sps = d_list_pop_entry(&sp->sp_stack_size_list, struct stack_pool_by_size,
+				       sps_size_list)) != NULL)
 		stack_pool_by_size_destroy(sp, sps);
 	/* destroy btree, should be empty after calling stack_pool_by_size_destroy() for each
 	 * size.
 	 */
 	tdestroy(sp->sp_root, free_stack_pool_by_size);
-	D_ASSERT(sp->sp_nb_sizes == 0 && d_list_empty(&sp->sp_stack_size_list) && sp->sp_root == NULL && sp->sp_free_stacks == 0);
+	D_ASSERT(sp->sp_nb_sizes == 0 && d_list_empty(&sp->sp_stack_size_list) &&
+		 sp->sp_root == NULL && sp->sp_free_stacks == 0);
 	D_DEBUG(DB_MEM, "pool %p has been freed\n", sp);
 	D_FREE(sp);
 }
