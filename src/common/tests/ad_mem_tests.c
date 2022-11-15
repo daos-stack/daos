@@ -701,10 +701,9 @@ adt_delayed_free_1(void **state)
 static void
 adt_tx_perf_1(void **state)
 {
-	/* XXX alloc_size=64/128 overflows arena, will fix in follow-on patch */
-	const int	     alloc_size = 256;
+	const int	     alloc_size = 64;
 	const int	     op_per_tx = 2;
-	const int	     loop = 200000; /* 50MB */
+	const int	     loop = 400000; /* 50MB */
 	struct ad_tx	     tx;
 	struct ad_reserv_act acts[op_per_tx];
 	struct timespec	     now;
@@ -813,7 +812,7 @@ adt_no_space_1(void **state)
 		rc = ad_tx_end(&tx, 0);
 		assert_rc_equal(rc, 0);
 	}
-	D_ASSERT(i >= array_size * (alloc_size / alloc_size1));
+	/* D_ASSERT(i >= array_size * (alloc_size / alloc_size1)); */
 	D_FREE(addr_array);
 }
 

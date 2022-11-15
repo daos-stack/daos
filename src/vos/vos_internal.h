@@ -132,6 +132,7 @@ enum {
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
 extern unsigned int vos_agg_nvme_thresh;
+extern bool vos_dkey_punch_propagate;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
