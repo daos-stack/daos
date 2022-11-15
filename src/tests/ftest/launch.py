@@ -636,7 +636,9 @@ class TestInfo():
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
-        self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
+        parts = self.test_file.split(os.path.sep)[1:]
+        self.python_file = parts.pop()
+        self.directory = os.path.join(*parts)
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
         self.host_info = HostInfo()
         self.yaml_info = {}
@@ -650,14 +652,14 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_yaml_info(self, include_localhost=False):
+    def set_yaml_info(self, include_local_host=False):
         """Set the test yaml data from the test yaml file.
 
         Args:
-            include_localhost (bool, optional): whether or not the local host be included in the
+            include_local_host (bool, optional): whether or not the local host be included in the
                 set of client hosts. Defaults to False.
         """
-        self.yaml_info = {}
+        self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
         info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
 
@@ -668,11 +670,6 @@ class TestInfo():
             else:
                 self.yaml_info[key] = info[key] if key in info else None
             logger.debug("  %-18s = %s", key, self.yaml_info[key])
-
-        if include_localhost:
-            self.yaml_info[self.YAML_INFO_KEYS[3]].add(get_local_host())
-            logger.debug(
-                "Adding the localhost to the clients: %s", self.yaml_info[self.YAML_INFO_KEYS[3]])
 
     def set_host_info(self, control_node):
         """Set the test host information using the test yaml file.
@@ -686,12 +683,14 @@ class TestInfo():
 
         """
         logger.debug("Using %s to define host information", self.yaml_file)
+        if self.yaml_info["include_local_host"]:
+            logger.debug("  Adding the localhost to the clients: %s", get_local_host())
         try:
             self.host_info.set_hosts(
                 logger, control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
                 self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
                 self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
-                self.yaml_info[self.YAML_INFO_KEYS[5]])
+                self.yaml_info[self.YAML_INFO_KEYS[5]], self.yaml_info["include_local_host"])
         except HostException as error:
             raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
