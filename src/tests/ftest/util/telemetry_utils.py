@@ -58,6 +58,7 @@ class TelemetryUtils():
         "engine_pool_resent",
         "engine_pool_uncommitted_retry",
         "engine_pool_restarted",
+        "engine_pool_retry",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
         "engine_pool_xferred_update",
