@@ -2199,7 +2199,7 @@ class Launch():
                 test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
 
                 # Prepare the hosts to run the tests
-                step_status = self.prepare(test, repeat, user_create)
+                step_status = self._prepare(test, repeat, user_create)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
@@ -2249,7 +2249,7 @@ class Launch():
         except RunException:
             pass
 
-    def prepare(self, test, repeat, user_create):
+    def _prepare(self, test, repeat, user_create):
         """Prepare the test for execution.
 
         Args:
