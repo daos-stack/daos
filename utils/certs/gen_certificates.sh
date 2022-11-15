@@ -47,6 +47,9 @@ function print_usage () {
     >&2 echo "$__usage"
 }
 
+# validity of root CA and keys' certificates
+DAYS=1095
+
 CA_HOME="${1:-.}/daosCA"
 PRIVATE="${CA_HOME}/private"
 CERTS="${CA_HOME}/certs"
@@ -59,7 +62,7 @@ function setup_directories () {
     mkdir -p "${PRIVATE}"
     chmod 700 "${PRIVATE}"
     mkdir -p "${CERTS}"
-    mkdir -p "${CLIENTS}"
+    chmod 755 "${CERTS}"
 }
 
 function generate_ca_cnf () {
@@ -78,7 +81,7 @@ certificate             = \$dir/daosCA.crt
 private_key             = \$dir/private/daosCA.key
 
 default_md              = sha512        # SAFE Crypto Requires SHA-512
-default_days            = 1095          # how long to certify for
+default_days            = ${DAYS}       # how long to certify for
 copy_extensions         = copy
 unique_subject          = no
 
@@ -121,7 +124,7 @@ function generate_ca_cert () {
     [[ $EUID -eq 0 ]] && chown root.root "${PRIVATE}/daosCA.key" 2>/dev/null
     chmod 0400 "${PRIVATE}/daosCA.key"
     # Generate CA Certificate
-    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days 1095  -sha512 \
+    openssl req -new -x509 -config "${CA_HOME}/ca.cnf" -days ${DAYS} -sha512 \
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
     [[ $EUID -eq 0 ]] && chown root.daos_daemons "${CERTS}/daosCA.crt" 2>/dev/null
@@ -205,12 +208,15 @@ function generate_server_cert () {
 }
 
 function populate_clients_dir () {
+    mkdir -p                      "${CLIENTS}"
+    chmod 755                     "${CLIENTS}"
+    chown daos_server.daos_server "${CLIENTS}"
     cp "${CERTS}/admin.crt"       "${CLIENTS}/admin.crt"
     chown daos_server.daos_server "${CLIENTS}/admin.crt"
-    chmod 640                     "${CLIENTS}/admin.crt"
+    chmod 644                     "${CLIENTS}/admin.crt"
     cp "${CERTS}/agent.crt"       "${CLIENTS}/agent.crt"
-    chown daos_server.daos_server "${CLIENTS}/agetn.crt"
-    chmod 640                     "${CLIENTS}/agent.crt"
+    chown daos_server.daos_server "${CLIENTS}/agent.crt"
+    chmod 644                     "${CLIENTS}/agent.crt"
 
     echo "Authorized Clients Certificate Files on DAOS Servers:
     ${CLIENTS}/agent.crt
@@ -222,7 +228,7 @@ function cleanup () {
     rm -f "${CA_HOME}/agent.csr"
     rm -f "${CA_HOME}/admin.csr"
     rm -f "${CA_HOME}/server.csr"
-    rm -f "${CA_HOME}/ca.cnf" # TODO: keep for future use?
+    rm -f "${CA_HOME}/ca.cnf"
 }
 
 function main () {
