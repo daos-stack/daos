@@ -1320,7 +1320,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 	D_ASSERT(cont_tf >= 0);
 	if (obj_tf < cont_tf) {
 		rc = -DER_INVAL;
-		D_ERROR(DF_OID" obj:cont tolerate faiures %d:%d, "DF_RC"\n",
+		D_ERROR(DF_OID" obj:cont tolerate failures %d:%d, "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), obj_tf, cont_tf,
 			DP_RC(rc));
 		return rc;
@@ -5449,6 +5449,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		D_GOTO(out_task, rc);
 	}
 
+	if (args->flags & DAOS_COND_MASK)
+		obj_auxi->cond_modify = 1;
+
 	rc = obj_shards_2_fwtgts(obj, map_ver, tgt_bitmap, shard, shard_cnt, 1,
 				 OBJ_TGT_FLAG_FW_LEADER_INFO, obj_auxi);
 	if (rc != 0)
@@ -5473,9 +5476,6 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
-
-	if (args->flags & DAOS_COND_MASK)
-		obj_auxi->cond_modify = 1;
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
@@ -6176,6 +6176,9 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 			D_GOTO(out_task, rc);
 	}
 
+	if (api_args->flags & DAOS_COND_MASK)
+		obj_auxi->cond_modify = 1;
+
 	rc = obj_shards_2_fwtgts(obj, map_ver, NIL_BITMAP, shard, shard_cnt, grp_cnt,
 				 OBJ_TGT_FLAG_FW_LEADER_INFO, obj_auxi);
 	if (rc != 0)
@@ -6183,9 +6186,6 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 
 	if (daos_fail_check(DAOS_FAIL_TX_CONVERT))
 		D_GOTO(out_task, rc = -DER_NEED_TX);
-
-	if (api_args->flags & DAOS_COND_MASK)
-		obj_auxi->cond_modify = 1;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
