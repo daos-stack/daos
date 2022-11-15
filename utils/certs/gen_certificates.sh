@@ -205,12 +205,12 @@ function generate_server_cert () {
 }
 
 function populate_clients_dir () {
-    cp ${CERTS}/admin.crt         ${CLIENTS}/admin.crt
-    chown daos_server.daos_server ${CLIENTS}/admin.crt
-    chmod 640                     ${CLIENTS}/admin.crt
-    cp ${CERTS}/agent.crt         ${CLIENTS}/agent.crt
-    chown daos_server.daos_server ${CLIENTS}/agetn.crt
-    chmod 640                     ${CLIENTS}/agent.crt
+    cp "${CERTS}/admin.crt"       "${CLIENTS}/admin.crt"
+    chown daos_server.daos_server "${CLIENTS}/admin.crt"
+    chmod 640                     "${CLIENTS}/admin.crt"
+    cp "${CERTS}/agent.crt"       "${CLIENTS}/agent.crt"
+    chown daos_server.daos_server "${CLIENTS}/agetn.crt"
+    chmod 640                     "${CLIENTS}/agent.crt"
 
     echo "Authorized Clients Certificate Files on DAOS Servers:
     ${CLIENTS}/agent.crt
