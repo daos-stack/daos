@@ -33,20 +33,21 @@ mkdir -p /etc/clamd.d
 printf "LogSyslog yes\n" >> /etc/clamd.d/scan.conf
 
 lmd_tarball='maldetect-current.tar.gz'
-: "${JENKINS_URL:=https://build.hpdd.intel.com/}"
-
-lmd_url="${JENKINS_URL}job/daos-stack/job/tools/job/master/"
-lmd_url+="lastSuccessfulBuild/artifact/${lmd_tarball}"
+: "${REPO_FILE_URL:=https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/}"
+lmd_base_url="$(dirname $REPO_FILE_URL)"
+lmd_base="${lmd_base_url#*://}"
+lmd_url="${lmd_base_url}/maldetect/downloads/${lmd_tarball}"
 curl "${lmd_url}" --silent --show-error --fail -o "/var/tmp/${lmd_tarball}"
 
 lmd_src='lmd_src'
 mkdir -p "/var/tmp/${lmd_src}"
 tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
 pushd "/var/tmp/${lmd_src}"
+  sed -i "s|cdn.rfxn.com|$lmd_base/maldetect|" files/internals/internals.conf
   ./install.sh
 popd
 
-/usr/local/sbin/maldet --update-sigs || true
+/usr/local/sbin/maldet --update-sigs
 
 printf "ScriptedUpdates no\n" >> /etc/freshclam.conf
 : "${JOB_URL:=https://build.hpdd.intel.com/job/clamav_daily_update/}"
