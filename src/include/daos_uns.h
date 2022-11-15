@@ -48,7 +48,7 @@ enum {
 struct duns_attr_t {
 	/** IN/OUT: Container layout (POSIX, HDF5, Python, etc.) */
 	daos_cont_layout_t	da_type;
-	/** IN: (Optional) For a POSIX container, set a default object class for all files. */
+	/** IN: (Optional) For a POSIX container, set a default object class for all objects. */
 	daos_oclass_id_t	da_oclass_id;
 	/** IN: (Optional) For a POSIX container, set a default chunk size for all files. */
 	daos_size_t		da_chunk_size;
@@ -116,6 +116,8 @@ struct duns_attr_t {
 	uuid_t			da_cuuid;
 	/** IN: (Optional) For a POSIX container, set a default object class for all directories. */
 	daos_oclass_id_t	da_dir_oclass_id;
+	/** IN: (Optional) For a POSIX container, set a default object class for all files. */
+	daos_oclass_id_t	da_file_oclass_id;
 	/** IN: (Optional) For a POSIX container, set hints for file and dir object classes. */
 	char			da_hints[DAOS_CONT_HINT_MAX_LEN];
 };

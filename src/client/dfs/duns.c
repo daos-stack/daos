@@ -727,6 +727,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_dir_oclass_id = attrp->da_dir_oclass_id;
+		dfs_attr.da_file_oclass_id = attrp->da_file_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
 		if (attrp->da_hints[0] != 0)

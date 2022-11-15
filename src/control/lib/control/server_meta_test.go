@@ -409,26 +409,25 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 	}{
 		"no operation in request": {
 			req:    &SmdManageReq{},
-			expErr: errors.New("no operation requested"),
+			expErr: errors.New("unrecognized operation requested"),
 		},
-		"multiple operation in request": {
+		"bad operation in request": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SmdManageOpcode(99),
 				IDs:       test.MockUUID(),
-				ResetLED:  true,
 			},
-			expErr: errSmdManageMultiOpsInReq,
+			expErr: errors.New("unrecognized operation requested"),
 		},
 		"invalid UUID": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       "bad",
 			},
 			expErr: errors.New("invalid UUID"),
 		},
 		"set-faulty": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(1),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
@@ -441,12 +440,14 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"dev-replace; missing old device uuid": {
 			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
 				ReplaceUUID: test.MockUUID(1),
 			},
 			expErr: errors.New("invalid UUID"),
 		},
 		"dev-replace; bad new device uuid": {
 			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
 				IDs:         test.MockUUID(1),
 				ReplaceUUID: "bad",
 			},
@@ -454,6 +455,7 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"dev-replace; same old and new device uuids": {
 			req: &SmdManageReq{
+				Operation:   DevReplaceOp,
 				IDs:         test.MockUUID(1),
 				ReplaceUUID: test.MockUUID(1),
 			},
@@ -468,9 +470,10 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"dev-replace": {
 			req: &SmdManageReq{
-				IDs:         test.MockUUID(1),
-				ReplaceUUID: test.MockUUID(2),
-				NoReint:     true,
+				Operation:      DevReplaceOp,
+				IDs:            test.MockUUID(1),
+				ReplaceUUID:    test.MockUUID(2),
+				ReplaceNoReint: true,
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
@@ -484,8 +487,8 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"led-manage; get status": {
 			req: &SmdManageReq{
-				IDs:    fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
-				GetLED: true,
+				Operation: LedCheckOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -499,8 +502,8 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"led-manage; identify": {
 			req: &SmdManageReq{
-				IDs:      fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
-				Identify: true,
+				Operation: LedBlinkOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -514,8 +517,8 @@ func TestControl_packPBSmdManageReq(t *testing.T) {
 		},
 		"led-manage; reset": {
 			req: &SmdManageReq{
-				IDs:      fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
-				ResetLED: true,
+				Operation: LedResetOp,
+				IDs:       fmt.Sprintf(test.MockUUID(1), test.MockPCIAddr(1)),
 			},
 			expPBReq: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -578,7 +581,7 @@ func TestControl_SmdManage(t *testing.T) {
 		},
 		"local failure": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
@@ -588,7 +591,7 @@ func TestControl_SmdManage(t *testing.T) {
 		},
 		"remote failure": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
@@ -612,14 +615,14 @@ func TestControl_SmdManage(t *testing.T) {
 						HostList: mockHostList("one", "two"),
 					},
 				},
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(),
 			},
 			expErr: errors.New("> 1 host"),
 		},
 		"set-faulty": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
@@ -656,7 +659,7 @@ func TestControl_SmdManage(t *testing.T) {
 		},
 		"set-faulty; drpc failure": {
 			req: &SmdManageReq{
-				SetFaulty: true,
+				Operation: SetFaultyOp,
 				IDs:       test.MockUUID(1),
 			},
 			mic: newMockInvokerWRankResps(&ctlpb.SmdManageResp_RankResp{
