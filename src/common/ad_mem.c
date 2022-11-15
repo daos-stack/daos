@@ -158,7 +158,7 @@ blob_bmap_size(struct ad_blob *blob)
 #define ARENA_LRU_MAX	(64 << 10)
 
 static bool
-heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
+arena_free_heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 {
 	struct ad_maxheap_node *nodea, *nodeb;
 
@@ -173,7 +173,7 @@ heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 }
 
 static int
-heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
+arena_free_heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 {
 	struct ad_maxheap_node *node;
 
@@ -187,7 +187,7 @@ heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 }
 
 static int
-heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
+arena_free_heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
 {
 	struct ad_maxheap_node *node;
 
@@ -200,10 +200,10 @@ heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
 	return 0;
 }
 
-struct d_binheap_ops heap_ops = {
-	.hop_enter	= heap_node_enter,
-	.hop_exit	= heap_node_exit,
-	.hop_compare	= heap_node_cmp,
+static struct d_binheap_ops arena_free_heap_ops = {
+	.hop_enter	= arena_free_heap_node_enter,
+	.hop_exit	= arena_free_heap_node_exit,
+	.hop_compare	= arena_free_heap_node_cmp,
 };
 
 static int
@@ -222,7 +222,7 @@ blob_init(struct ad_blob *blob)
 	D_INIT_LIST_HEAD(&blob->bb_pgs_ckpt);
 	D_INIT_LIST_HEAD(&blob->bb_pgs_extern);
 
-	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &heap_ops,
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &arena_free_heap_ops,
 				      &blob->bb_arena_free_heap);
 	if (rc != 0)
 		return rc;
