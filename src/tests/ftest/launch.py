@@ -33,12 +33,13 @@ from process_core_files import CoreFileProcessing
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from host_utils import get_node_set, get_local_host, HostInfo, HostException    # noqa: E402
-from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
-from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
-from run_utils import run_local, run_remote, RunException                       # noqa: E402
-from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
-from user_utils import get_chown_command, getent, groupadd, useradd, userdel    # noqa: E402
+from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
+from run_utils import run_local, run_remote, RunException                     # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
+    get_user_groups  # noqa: E402
 
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
@@ -1764,23 +1765,29 @@ class Launch():
             str: the group's gid
 
         """
-        # Query the group and get the gid
+        # Get the group id on each node
         logger.info('Querying group %s', group)
-        result = getent(logger, hosts, 'group', group)
-        if result.passed:
-            return result.output[0].stdout[0].split(':')[2]
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
         if not create:
-            raise LaunchException(f'Error querying group {group}')
+            raise LaunchException(f'Group not setup correctly: {group}')
 
-        # Create and re-query
+        # Create the group
         logger.info('Creating group %s', group)
         if not groupadd(logger, hosts, group, True, True).passed:
             raise LaunchException(f'Error creating group {group}')
+
+        # Get the group id on each node
         logger.info('Querying group %s', group)
-        result = getent(logger, hosts, 'group', group)
-        if result.passed:
-            return result.output[0].stdout[0].split(':')[2]
-        raise LaunchException(f'Error querying group {group}')
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
+        raise LaunchException(f'Group not setup correctly: {group}')
 
     @staticmethod
     def _query_create_user(hosts, user, gid=None, create=False):
@@ -1797,15 +1804,14 @@ class Launch():
 
         """
         logger.info('Querying user %s', user)
-        result = run_remote(logger, hosts, f'id {user}')
-        if result.passed:
-            if re.findall(rf'groups={gid}\(', result.output[0].stdout[0]):
-                # Exists and in correct group
-                return
-            if not create:
-                raise LaunchException(f'User {user} group not as expected')
+        groups = get_user_groups(logger, hosts, user)
+        logger.debug('  found groups %s', groups)
+        groups = list(groups)
+        if len(groups) == 1 and groups[0] == gid:
+            # Exists and in correct group
+            return
         if not create:
-            raise LaunchException(f'Error querying user {user}')
+            raise LaunchException(f'User {user} groups not as expected')
 
         # Delete and ignore errors, in case user account is inconsistent across nodes
         logger.info('Deleting user %s', user)
