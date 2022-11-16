@@ -83,7 +83,7 @@ adt_store_wal_rsv(struct umem_store *store, uint64_t *id)
 }
 
 static int
-adt_store_wal_submit(struct umem_store *store, struct umem_tx *tx)
+adt_store_wal_submit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
 	return 0;
 }
@@ -98,19 +98,14 @@ struct umem_store_ops adt_store_ops = {
 static void
 adt_blob_create(void **state)
 {
-	struct umem_store	*store;
-	struct ad_blob_handle	 bh;
+	struct umem_store	store = {0};
+	struct ad_blob_handle	bh;
 	int	rc;
 
 	printf("prep create ad_blob\n");
-	rc = ad_blob_prep_create(DUMMY_BLOB, ADT_STORE_SIZE, &bh);
-	assert_rc_equal(rc, 0);
-
-	store = ad_blob_hdl2store(bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post create ad_blob\n");
-	rc = ad_blob_post_create(bh);
+	store.stor_size	= ADT_STORE_SIZE;
+	store.stor_ops	= &adt_store_ops;
+	rc = ad_blob_create(DUMMY_BLOB, 0, &store, &bh);
 	assert_rc_equal(rc, 0);
 
 	printf("close ad_blob\n");
@@ -691,6 +686,9 @@ adt_delayed_free_1(void **state)
 	addr2 = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
 	assert_int_not_equal(addr, addr2);
 
+	rc = ad_tx_publish(&tx, &act, 1);
+	assert_rc_equal(rc, 0);
+
 	rc = ad_tx_end(&tx, 0);
 	assert_rc_equal(rc, 0);
 }
@@ -698,8 +696,7 @@ adt_delayed_free_1(void **state)
 static void
 adt_tx_perf_1(void **state)
 {
-	/* XXX alloc_size=64/128 overflows arena, will fix in follow-on patch */
-	const int	     alloc_size = 256;
+	const int	     alloc_size = 64;
 	const int	     op_per_tx = 2;
 	const int	     loop = 400000; /* 50MB */
 	struct ad_tx	     tx;
@@ -746,6 +743,7 @@ static void
 adt_no_space_1(void **state)
 {
 	const int	     alloc_size = 4096;
+	const int	     alloc_size1 = 512;
 	struct ad_tx	     tx;
 	struct ad_reserv_act act;
 	daos_off_t	     addr;
@@ -780,6 +778,7 @@ adt_no_space_1(void **state)
 	}
 	array_size = i;
 
+	adt_addrs_shuffle(addr_array, array_size);
 	rc = ad_tx_begin(adt_bh, &tx);
 	assert_rc_equal(rc, 0);
 
@@ -793,10 +792,10 @@ adt_no_space_1(void **state)
 
 	printf("Consume all space again\n");
 	for (i = 0;; i++) {
-		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+		addr = ad_reserve(adt_bh, 0, alloc_size1, &arena, &act);
 		if (addr == 0) {
 			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
-			       (int)((alloc_size * i) >> 20), arena);
+			       (int)((alloc_size1 * i) >> 20), arena);
 			break;
 		}
 		rc = ad_tx_begin(adt_bh, &tx);
@@ -808,30 +807,24 @@ adt_no_space_1(void **state)
 		rc = ad_tx_end(&tx, 0);
 		assert_rc_equal(rc, 0);
 	}
-	printf("array_size: %d, i: %d\n", array_size, i);
+	/* D_ASSERT(i >= array_size * (alloc_size / alloc_size1)); */
 	D_FREE(addr_array);
 }
 
 static int
 adt_setup(void **state)
 {
-	struct umem_store *store;
-	int		   rc;
+	struct umem_store store = {0};
+	int		  rc;
 
 	adt_blob_create(state);
 
-	printf("prep open ad_blob\n");
-	rc = ad_blob_prep_open(DUMMY_BLOB, &adt_bh);
+	printf("open ad_blob\n");
+	store.stor_ops = &adt_store_ops;
+	rc = ad_blob_open(DUMMY_BLOB, 0, &store, &adt_bh);
 	assert_rc_equal(rc, 0);
 
-	store = ad_blob_hdl2store(adt_bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post open ad_blob\n");
-	rc = ad_blob_post_open(adt_bh);
-	assert_rc_equal(rc, 0);
-	assert_int_equal(store->stor_size, ADT_STORE_SIZE);
-
+	assert_int_equal(store.stor_size, ADT_STORE_SIZE);
 	return 0;
 }
 

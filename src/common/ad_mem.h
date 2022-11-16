@@ -11,6 +11,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/ad_mem.h>
+#include <gurt/heap.h>
 
 typedef void (*ad_tx_cb_t)(int stage, void *data);
 
@@ -37,6 +38,7 @@ struct ad_tx {
 	d_list_t		 tx_ar_pub;
 	d_list_t		 tx_gp_pub;
 	d_list_t		 tx_gp_free;
+	d_list_t		 tx_gp_reset;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct ad_act		*tx_redo_act_pos;
@@ -62,10 +64,26 @@ struct ad_free_act {
 #define GRP_SIZE_SHIFT		(15)
 #define GRP_SIZE_MASK		((1 << GRP_SIZE_SHIFT) - 1)
 
-/** durable format of group (128 bytes) */
+/** Flags for defragmentation */
+enum ad_grp_flags {
+	/** relocated group */
+	GRP_FL_RELOCATED	= (1 << 0),
+	/** sparse group, allocated address are stored in a array */
+	GRP_FL_SPARSE		= (1 << 1),
+};
+
+/** Durable format of group (128 bytes) */
 struct ad_group_df {
 	/** base address */
 	uint64_t		gd_addr;
+	/**
+	 * Real address of the group, it is set to zero for now.
+	 *
+	 * This is reserved for future defragmentation support, a group can be moved
+	 * within arena or even between arenas, @ad_addr_real is the real address of
+	 * the group, @gd_addr is the base logic address of the group.
+	 */
+	uint64_t		gd_addr_real;
 	/** DRAM address for reserve() */
 	uint64_t		gd_back_ptr;
 	/** incarnation for validity check of gd_back_ptr */
@@ -76,8 +94,9 @@ struct ad_group_df {
 	int32_t			gd_unit_nr;
 	/** number of free units in this group */
 	int32_t			gd_unit_free;
-	uint32_t		gd_pad32;
-	uint64_t		gd_reserved[3];
+	/** flags for future use, see ad_grp_flags */
+	uint32_t		gd_flags;
+	uint64_t		gd_reserved[2];
 	/** used bitmap, 512 units at most so it can fit into 128-byte */
 	uint64_t		gd_bmap[GRP_UNIT_BMSZ];
 };
@@ -88,9 +107,11 @@ struct ad_group {
 	/** address of durable format */
 	struct ad_group_df	*gp_df;
 	/** unpublished group */
-	bool			 gp_unpub;
+	unsigned int		 gp_unpub:1,
 	/** being published */
-	bool			 gp_publishing;
+				 gp_publishing:1,
+	/* group freed and being reset */
+				 gp_reset:1;
 	int			 gp_ref;
 	/** number of reserved units */
 	int			 gp_unit_rsv;
@@ -134,16 +155,22 @@ struct ad_arena_spec {
 #define ARENA_SIZE_MASK		((1ULL << ARENA_SIZE_BITS) - 1)
 #define ARENA_SIZE		(1ULL << ARENA_SIZE_BITS)
 
-/** Arena header size, 32KB */
-#define ARENA_HDR_SIZE		(32 << 10)
 #define ARENA_UNIT_SIZE		(32 << 10)
+/** Arena header size, 64KB */
+#define ARENA_HDR_SIZE		(2 * ARENA_UNIT_SIZE)
 
 /**
  * Maximum number of groups within an arena.
- * In order to Keep metadata overhead low (32K is 0.2% of default arena size (16MB)), no more
- * than 252 groups within an arena, otherwise please tune ad-hoc allocator specs,
+ * In order to keep low metadata overhead (64K is 0.4% of default arena size (16MB)), no more
+ * than 480 groups within an arena, otherwise please tune ad-hoc allocator specs,
+ *
+ * It means that if user always allocate 64 bytes, AD allocator cannot fully utilize the space
+ * because 16MB arena can be filled with 508 arenas. We reserved some space in header for the
+ * future defragmentation.
  */
-#define ARENA_GRP_MAX		252
+#define ARENA_GRP_MAX		480
+/** estimated average group numbers per arena */
+#define ARENA_GRP_AVG		256
 
 #define ARENA_MAGIC		0xcafe
 
@@ -158,10 +185,8 @@ struct ad_arena_df {
 	uint32_t		ad_size;
 	/** minimum allocation unit */
 	int32_t			ad_unit;
-	/** number of groups */
-	int32_t			ad_grp_nr;
 	/** internal offset for locating */
-	int32_t			ad_pad32;
+	int64_t			ad_pad64;
 	/**
 	 * validate @ad_sort_sz_tmp, @ad_sort_ad_tmp and ad_back_ptr, because they are DRAM
 	 * pointers.
@@ -194,23 +219,20 @@ struct ad_arena {
 	int			  ar_ref;
 	/** number of groups */
 	int			  ar_grp_nr;
+	/** sorter buffer size */
+	int			  ar_sorter_sz;
 	/** unpublished arena */
-	bool			  ar_unpub;
+	unsigned int		  ar_unpub:1,
 	/** being published */
-	bool			  ar_publishing;
-	/**
-	 * Arena is full, it's set to true when any type of group failed to allocate memory
-	 * and create more groups.
-	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
-	 * set arenea as full only if it encounters multiple failures.
-	 */
-	bool			  ar_full;
+				  ar_publishing:1;
 	/** pointers for size binary search, it is only used by the DRAM mirror*/
 	struct ad_group_df	**ar_size_sorter;
 	/** pointers for address binary search, it is only used by the DRAM mirror*/
 	struct ad_group_df	**ar_addr_sorter;
-	/** reserved bits for groups */
-	uint64_t		  ar_bmap_rsv[ARENA_GRP_BMSZ];
+	/** reserved bits for group space */
+	uint64_t		  ar_space_rsv[ARENA_GRP_BMSZ];
+	/** reserved bits for group index */
+	uint64_t		  ar_gpid_rsv[ARENA_GRP_BMSZ];
 	/** metrics */
 	struct ad_group_metrics   ar_grp_mtcs[ARENA_GRP_SPEC_MAX];
 };
@@ -266,6 +288,21 @@ struct ad_blob_df {
 
 #define DUMMY_BLOB	"dummy.blob"
 
+struct ad_maxheap_node {
+	struct d_binheap_node	mh_node;
+	int			mh_weight;
+	int			mh_free_size;
+	uint32_t		mh_arena_id;
+	unsigned int		mh_in_tree:1,
+	/**
+	 * Arena is inactive, it's set to true when any type of group failed to allocate memory
+	 * and create more groups.
+	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
+	 * set arenea as full only if it encounters multiple failures.
+	 */
+				mh_inactive:1;
+};
+
 /** DRAM blob open handle */
 struct ad_blob {
 	/** external umem store */
@@ -310,6 +347,10 @@ struct ad_blob {
 	struct ad_blob_df	*bb_df;
 	/** reserved bits for arena allocation */
 	uint64_t		*bb_bmap_rsv;
+	/* max heap nodes pointer */
+	struct ad_maxheap_node	*bb_mh_nodes;
+	/* max heap for free memory of arena */
+	struct d_binheap	 bb_arena_free_heap;
 };
 
 static inline void
@@ -356,15 +397,15 @@ daos_off_t blob_ptr2addr(struct ad_blob *blob, void *ptr);
 int tx_complete(struct ad_tx *tx, int err);
 
 static inline struct ad_tx *
-umem_tx2ad_tx(struct umem_tx *utx)
+umem_tx2ad_tx(struct umem_wal_tx *utx)
 {
 	return (struct ad_tx *)&utx->utx_private;
 }
 
-static inline struct umem_tx *
+static inline struct umem_wal_tx *
 ad_tx2umem_tx(struct ad_tx *atx)
 {
-	return container_of(atx, struct umem_tx, utx_private);
+	return container_of(atx, struct umem_wal_tx, utx_private);
 }
 
 static inline uint64_t

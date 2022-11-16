@@ -1040,6 +1040,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 {
 	struct obj_req_tgts	*req_tgts = &obj_auxi->req_tgts;
 	struct daos_shard_tgt	*tgt = NULL;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	uint32_t		 i;
 	uint32_t		 shard_idx, grp_size;
 	bool			 cli_disp = flags & OBJ_TGT_FLAG_CLI_DISPATCH;
@@ -1050,7 +1051,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
 	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
-	req_tgts->ort_start_shard = start_shard;
+	/* start_shard is the shard index, but ort_start_shard is the start shard ID.
+	 * in OSA case, possibly obj_get_grp_size > daos_oclass_grp_size so the start_shard
+	 * is different with ort_start_shard.
+	 */
+	req_tgts->ort_start_shard = (start_shard / obj_get_grp_size(obj)) *
+				    daos_oclass_grp_size(oca);
 	req_tgts->ort_srv_disp = !cli_disp && grp_size > 1;
 
 	if (shard_cnt > OBJ_TGT_INLINE_NR) {
@@ -1320,7 +1326,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 	D_ASSERT(cont_tf >= 0);
 	if (obj_tf < cont_tf) {
 		rc = -DER_INVAL;
-		D_ERROR(DF_OID" obj:cont tolerate faiures %d:%d, "DF_RC"\n",
+		D_ERROR(DF_OID" obj:cont tolerate failures %d:%d, "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), obj_tf, cont_tf,
 			DP_RC(rc));
 		return rc;
@@ -5450,6 +5456,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		D_GOTO(out_task, rc);
 	}
 
+	if (args->flags & DAOS_COND_MASK)
+		obj_auxi->cond_modify = 1;
+
 	rc = obj_shards_2_fwtgts(obj, map_ver, tgt_bitmap, shard, shard_cnt, 1,
 				 OBJ_TGT_FLAG_FW_LEADER_INFO, obj_auxi);
 	if (rc != 0)
@@ -5474,9 +5483,6 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;
-
-	if (args->flags & DAOS_COND_MASK)
-		obj_auxi->cond_modify = 1;
 
 	D_DEBUG(DB_IO, "update "DF_OID" dkey_hash "DF_U64"\n",
 		DP_OID(obj->cob_md.omd_id), obj_auxi->dkey_hash);
@@ -6177,6 +6183,9 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 			D_GOTO(out_task, rc);
 	}
 
+	if (api_args->flags & DAOS_COND_MASK)
+		obj_auxi->cond_modify = 1;
+
 	rc = obj_shards_2_fwtgts(obj, map_ver, NIL_BITMAP, shard, shard_cnt, grp_cnt,
 				 OBJ_TGT_FLAG_FW_LEADER_INFO, obj_auxi);
 	if (rc != 0)
@@ -6184,9 +6193,6 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 
 	if (daos_fail_check(DAOS_FAIL_TX_CONVERT))
 		D_GOTO(out_task, rc = -DER_NEED_TX);
-
-	if (api_args->flags & DAOS_COND_MASK)
-		obj_auxi->cond_modify = 1;
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
 		obj_auxi->flags |= ORF_DTX_SYNC;

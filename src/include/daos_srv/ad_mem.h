@@ -70,30 +70,6 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits);
 int
 ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags);
 
-/**
- * query action number in redo list.
- */
-uint32_t
-ad_tx_redo_act_nr(struct ad_tx *tx);
-
-/**
- * query payload length in redo list.
- */
-uint32_t
-ad_tx_redo_payload_len(struct ad_tx *tx);
-
-/**
- * get first action pointer, NULL for list empty.
- */
-struct umem_action *
-ad_tx_redo_act_first(struct ad_tx *tx);
-
-/**
- * get next action pointer, NULL for done or list empty.
- */
-struct umem_action *
-ad_tx_redo_act_next(struct ad_tx *tx);
-
 static inline int
 ad_tx_decrease(struct ad_tx *tx, int32_t *addr)
 {
@@ -110,13 +86,12 @@ ad_tx_increase(struct ad_tx *tx, int32_t *addr)
 	return ad_tx_assign(tx, addr, sizeof(val), val + 1);
 }
 
-int ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh);
-int ad_blob_post_create(struct ad_blob_handle bh);
-int ad_blob_prep_open(char *path, struct ad_blob_handle *bh);
-int ad_blob_post_open(struct ad_blob_handle bh);
+int ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+		   struct ad_blob_handle *bh);
+int ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+		 struct ad_blob_handle *bh);
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
-struct umem_store *ad_blob_hdl2store(struct ad_blob_handle bh);
 
 #define AD_ARENA_ANY	(~0U)
 

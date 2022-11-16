@@ -173,7 +173,7 @@ tgt_kill_pool(void *args)
 {
 	struct d_uuid	*id = args;
 
-	return vos_pool_kill(id->uuid);
+	return vos_pool_kill(id->uuid, 0);
 }
 
 /**

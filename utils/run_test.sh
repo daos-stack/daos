@@ -167,6 +167,9 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
     cmd="-c pool -x key@10-400 -i -d -o pool -a -i -d -D"
     run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    export DAOS_DKEY_PUNCH_PROPAGATE=1
+    run_test "${SL_PREFIX}/bin/vos_tests" -C
+    unset DAOS_DKEY_PUNCH_PROPAGATE
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"

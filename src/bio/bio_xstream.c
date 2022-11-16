@@ -22,6 +22,8 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
+#include "smd.pb-c.h"
+
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
@@ -83,7 +85,6 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t vmd_led_period;
 
 static int
 bio_spdk_env_init(void)
@@ -274,10 +275,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
-	env = getenv("VMD_LED_PERIOD");
-	vmd_led_period = env ? atoi(env) : 0;
-	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
-
 	if (numa_node > 0)
 		bio_numa_node = (unsigned int)numa_node;
 
@@ -355,6 +352,12 @@ is_init_xstream(struct bio_xs_context *ctxt)
 	return ctxt->bxc_thread == nvme_glb.bd_init_thread;
 }
 
+inline uint32_t
+default_cluster_sz(void)
+{
+	return nvme_glb.bd_bs_opts.cluster_sz;
+}
+
 bool
 bio_need_nvme_poll(struct bio_xs_context *ctxt)
 {
@@ -365,11 +368,9 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 		return false;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		bxb = bio_xs_context2xs_blobstore(ctxt, st);
+		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb && bxb->bxb_blob_rw > BIO_BS_POLL_WATERMARK)
 			return true;
-		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-			return false;
 	}
 
 	return false;
@@ -1782,24 +1783,22 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev         *d_bdev;
-
-	/*
-	 * Check VMD_LED_PERIOD environment variable, if not set use default
-	 * NVME_MONITOR_PERIOD of 60 seconds.
-	 */
-	if (vmd_led_period == 0)
-		vmd_led_period = NVME_MONITOR_PERIOD;
+	struct bio_bdev		*d_bdev;
+	unsigned int		 led_state;
+	int			 rc;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		if (d_bdev->bb_led_start_time != 0) {
-			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
-				continue;
+		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
+				DP_UUID(d_bdev->bb_uuid));
 
-			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
-					      true/*reset*/) != 0)
-				D_ERROR("Failed resetting LED state\n");
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
+			if (rc != 0)
+				D_ERROR("Reset LED identify state after timeout failed on device:"
+					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
 }
