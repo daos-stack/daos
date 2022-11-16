@@ -306,7 +306,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
