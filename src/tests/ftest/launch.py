@@ -1019,6 +1019,7 @@ class Launch():
 
         # Determine if bullseye code coverage collection is enabled
         logger.debug("Checking for bullseye code coverage configuration")
+        # pylint: disable=unsupported-binary-operation
         self.bullseye_hosts = args.test_servers | get_local_host()
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
