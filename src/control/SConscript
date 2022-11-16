@@ -69,6 +69,7 @@ def install_go_bin(denv, name, libs=None):
 
     gosrc = Dir('.').srcnode().abspath
     sources = Glob(f'cmd/{name}/*.go')
+    # TODO: Make this work with scons -c
     sources.append(denv.d_go_bin)
 
     install_src = f'github.com/daos-stack/daos/src/control/cmd/{name}'
@@ -88,10 +89,6 @@ def install_go_bin(denv, name, libs=None):
                                 + f'{get_build_flags(denv)} '
                                 + f'{get_build_tags(denv)} '
                                 + f'-o {build_bin} {install_src}')
-    # Use the intermediate build location in order to play nicely
-    # with --install-sandbox.
-    # AlwaysBuild(target)
-    print(type(target[0]))
     denv.Install('$PREFIX/bin', target)
     return target
 

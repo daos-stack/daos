@@ -8,16 +8,12 @@ from SCons.Script import Configure, GetOption, Scanner, Glob, Exit
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.16.0'
-
-include_re1 = re.compile(r'\#include "(\S+)"', re.M)
-
 include_re = re.compile(r'\#include [<"](\S+)[>"]', re.M)
-
 GOINC_PREFIX = '"github.com/daos-stack/daos/src/'
 
 
 def _scan_go_file(node, _env, _path):
-    """Scaner for go code"""
+    """Scanner for go code"""
     contents = node.get_contents()
     src_dir = os.path.dirname(str(node))
     includes = []
@@ -82,7 +78,6 @@ def _setup_go(env):
         Exit(1)
     conf.Finish()
     env.d_go_bin = go_bin
-    print(env.d_go_bin)
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 
