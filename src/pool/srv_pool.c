@@ -38,6 +38,8 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
+#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED 1
+
 /* Pool service crt event */
 struct pool_svc_event {
 	d_list_t		psv_link;
@@ -2582,8 +2584,8 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 static void
 ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 {
-	struct pool_connect_v4_in       *in = crt_req_get(rpc);
-	struct pool_connect_v5_out      *out = crt_reply_get(rpc);
+	struct pool_connect_v4_in      *in = crt_req_get(rpc);
+	struct pool_connect_v5_out     *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_buf		       *map_buf = NULL;
 	uint32_t			map_version;
@@ -2593,7 +2595,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	struct rdb_tx			tx;
 	d_iov_t				key;
 	d_iov_t				value;
-	struct pool_hdl			*hdl = NULL;
+	struct pool_hdl		       *hdl = NULL;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
@@ -2843,9 +2845,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
-	d_iov_set(&value, hdl, svc->ps_global_version != 0 ?
-				sizeof(struct pool_hdl) + hdl->ph_cred_len :
-				sizeof(struct pool_hdl_v0));
+	d_iov_set(&value, hdl,
+		  svc->ps_global_version >= DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED ?
+		  sizeof(struct pool_hdl) + hdl->ph_cred_len : sizeof(struct pool_hdl_v0));
 	D_DEBUG(DB_MD, "writing a pool connect handle in db, size %zu, pool version %u\n",
 		value.iov_len, svc->ps_global_version);
 	rc = rdb_tx_update(&tx, &svc->ps_handles, &key, &value);
@@ -6226,7 +6228,7 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	}
 	if (val->iov_len == sizeof(struct pool_hdl_v0)) {
 		/* old/2.0 pool handle format ? */
-		if (arg->eia_pool_svc->ps_global_version < 1) {
+		if (arg->eia_pool_svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
 			D_DEBUG(DB_MD, "2.0 pool handle format detected\n");
 			/* if looking for a specific machine, do not select this handle */
 			if (arg->eia_machine)
@@ -6240,10 +6242,11 @@ evict_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		struct pool_hdl *hdl = val->iov_buf;
 
 		if (val->iov_len != sizeof(struct pool_hdl) + hdl->ph_cred_len ||
-		    arg->eia_pool_svc->ps_global_version < 1) {
+		    arg->eia_pool_svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
 			D_ERROR("invalid value size: "DF_U64" for pool version %u, expected %zu\n",
 				val->iov_len, arg->eia_pool_svc->ps_global_version,
-				arg->eia_pool_svc->ps_global_version < 1 ?
+				arg->eia_pool_svc->ps_global_version <
+				DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED ?
 				sizeof(struct pool_hdl_v0) :
 				sizeof(struct pool_hdl) + hdl->ph_cred_len);
 			return -DER_IO;
@@ -7201,4 +7204,49 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 		*p_tgt = target;
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
+}
+
+/**
+ * A hack for cont_svc to look up the credential of a pool handle in the DB.
+ *
+ * CAUTION:
+ *
+ *   - The caller must not yield while using the credential, because we don't
+ *     take the pool metadata lock.
+ */
+int
+ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid, d_iov_t *cred)
+{
+	struct pool_svc	       *svc;
+	d_iov_t			key;
+	d_iov_t			value;
+	struct pool_hdl	       *hdl;
+	int			rc;
+
+	rc = pool_svc_lookup_leader(pool_uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		goto out;
+
+	if (svc->ps_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED) {
+		D_ERROR(DF_UUID": no credential in pool global version %u\n", DP_UUID(svc->ps_uuid),
+			svc->ps_global_version);
+		rc = -DER_NOTSUPPORTED;
+		goto out_svc;
+	}
+
+	d_iov_set(&key, pool_hdl_uuid, sizeof(uuid_t));
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_handles, &key, &value);
+	if (rc != 0)
+		goto out_svc;
+	hdl = value.iov_buf;
+
+	cred->iov_buf = hdl->ph_cred;
+	cred->iov_len = hdl->ph_cred_len;
+	cred->iov_buf_len = hdl->ph_cred_len;
+
+out_svc:
+	pool_svc_put_leader(svc);
+out:
+	return rc;
 }

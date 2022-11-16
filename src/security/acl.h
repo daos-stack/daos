@@ -51,4 +51,17 @@ int
 get_acl_permissions(struct daos_acl *acl, struct d_ownership *ownership, struct acl_user *user_info,
 		    uint64_t min_owner_perms, uint64_t *permissions);
 
+/**
+ * Is \a user_info the owner of a resource, according to \a ownership of the
+ * resource?
+ *
+ * \param[in]	user_info	User
+ * \param[in]	ownership	Owner and group to which the resource belongs
+ *
+ * \return	true	The user is the owner
+ *		false	The user is not the owner
+*/
+bool
+acl_user_is_owner(struct acl_user *user_info, struct d_ownership *ownership);
+
 #endif

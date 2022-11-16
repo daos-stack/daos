@@ -278,6 +278,19 @@ bool
 ds_sec_cont_can_read_data(uint64_t cont_capas);
 
 /**
+ * Determine if all handles of the container can be evicted based on the
+ * container security capabilities.
+ *
+ * \param	cont_capas	Capability bits acquired via
+ *				ds_sec_cont_get_capabilities
+ *
+ * \return	True		Access allowed
+ *		False		Access denied
+ */
+bool
+ds_sec_cont_can_evict_all(uint64_t cont_capas);
+
+/**
  * Get the security capabilities for a rebuild container handle created by the
  * DAOS server.
  *
@@ -294,5 +307,19 @@ ds_sec_get_rebuild_cont_capabilities(void);
  */
 uint64_t
 ds_sec_get_admin_cont_capabilities(void);
+
+/**
+ * Return a positive integer if \a cred_x and \a cred_y are of the same user,
+ * return 0 if they are not, or return an error.
+ *
+ * \param[in]	cred_x	User's security credential
+ * \param[in]	cred_y	User's security credential
+ *
+ * \return	0	Not of the same user
+ *		>0	Of the same user
+ *		<0	Error
+ */
+int
+ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y);
 
 #endif /* __DAOS_SRV_SECURITY_H__ */

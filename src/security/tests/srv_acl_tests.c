@@ -18,6 +18,7 @@
 #include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos/drpc_modules.h>
+#include <daos/pool.h>
 #include <daos_srv/security.h>
 
 #include "../srv_internal.h"
@@ -1541,6 +1542,14 @@ test_cont_get_capas_invalid_flags(void **state)
 	expect_cont_get_capas_flags_invalid(0);
 	expect_cont_get_capas_flags_invalid(1U << DAOS_COO_NBITS);
 	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_RW);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_EX);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EX);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EVICT);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RO | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_RW | DAOS_COO_EVICT_ALL);
+	expect_cont_get_capas_flags_invalid(DAOS_COO_EX | DAOS_COO_EVICT);
 }
 
 static void
@@ -1747,10 +1756,19 @@ test_cont_get_capas_success(void **state)
 				     CONT_CAPA_DELETE);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RW,
-				     CONT_CAPAS_ALL);
+				     CONT_CAPAS_ALL & ~CONT_CAPA_EVICT_ALL);
 	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
 				     DAOS_COO_RO,
-				     CONT_CAPAS_RO_MASK);
+				     CONT_CAPAS_RO_MASK & ~CONT_CAPA_EVICT_ALL);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_RW | DAOS_COO_EVICT,
+				     CONT_CAPAS_ALL & ~CONT_CAPA_EVICT_ALL);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_RO | DAOS_COO_EVICT,
+				     CONT_CAPAS_RO_MASK & ~CONT_CAPA_EVICT_ALL);
+	expect_cont_capas_with_perms(DAOS_ACL_PERM_CONT_ALL,
+				     DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+				     CONT_CAPAS_ALL & ~CONT_CAPA_EVICT_ALL);
 }
 
 static void
@@ -1819,10 +1837,16 @@ test_cont_get_capas_owner_implicit_acl_access(void **state)
 					   CONT_CAPA_SET_ACL);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RW,
-					   CONT_CAPAS_ALL);
+					   CONT_CAPAS_ALL & ~CONT_CAPA_EVICT_ALL);
 	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
 					   DAOS_COO_RO,
-					   CONT_CAPAS_RO_MASK);
+					   CONT_CAPAS_RO_MASK & ~CONT_CAPA_EVICT_ALL);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
+					   DAOS_COO_RW | DAOS_COO_EVICT,
+					   CONT_CAPAS_ALL & ~CONT_CAPA_EVICT_ALL);
+	expect_cont_capas_with_owner_perms(DAOS_ACL_PERM_CONT_ALL,
+					   DAOS_COO_EX | DAOS_COO_EVICT_ALL,
+					   CONT_CAPAS_ALL);
 }
 
 /*

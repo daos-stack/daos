@@ -94,7 +94,7 @@ get_perms_for_groups(struct daos_acl *acl, struct d_ownership *ownership,
 	return -DER_NONEXIST;
 }
 
-static bool
+bool
 acl_user_is_owner(struct acl_user *user_info, struct d_ownership *ownership)
 {
 	return strncmp(user_info->user, ownership->user,

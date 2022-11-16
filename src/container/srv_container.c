@@ -30,6 +30,7 @@
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
+#define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT 2
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -1229,8 +1230,53 @@ recs_buf_grow(struct recs_buf *buf)
 
 struct find_hdls_by_cont_arg {
 	struct rdb_tx	       *fha_tx;
+	struct cont	       *fha_cont;
 	struct recs_buf		fha_buf;
+	d_iov_t		       *fha_cred;
 };
+
+/*
+ * Does the container handle represented by key belong to the user represented
+ * by arg->fha_cred? This function may return
+ *
+ *   - a error,
+ *   - zero if "doesn't belong to", or
+ *   - a positive integer if "belongs to".
+ */
+static int
+belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
+{
+	struct cont	       *cont = arg->fha_cont;
+	struct container_hdl   *hdl;
+	d_iov_t			value;
+	d_iov_t			cred;
+	struct ds_pool_hdl     *pool_hdl;
+	int			rc;
+
+	d_iov_set(&value, NULL, sizeof(struct container_hdl));
+	rc = rdb_tx_lookup(arg->fha_tx, &cont->c_svc->cs_hdls, key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": look up container handle "DF_UUIDF": "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_UUID(key->iov_buf),
+			DP_RC(rc));
+		return rc;
+	}
+	hdl = value.iov_buf;
+
+	/* Usually we already have the pool handle in memory. */
+	pool_hdl = ds_pool_hdl_lookup(hdl->ch_pool_hdl);
+	if (pool_hdl == NULL) {
+		/* Otherwise, look it up in the pool metadata via a hack. */
+		rc = ds_pool_lookup_hdl_cred(arg->fha_tx, cont->c_svc->cs_pool_uuid,
+					     hdl->ch_pool_hdl, &cred);
+		if (rc != 0)
+			return rc;
+	} else {
+		cred = pool_hdl->sph_cred;
+	}
+
+	return ds_sec_creds_are_same_user(&cred, arg->fha_cred);
+}
 
 static int
 find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
@@ -1243,6 +1289,14 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
 			key->iov_len, val->iov_len);
 		return -DER_IO;
+	}
+
+	if (arg->fha_cred != NULL) {
+		rc = belongs_to_user(key, arg);
+		if (rc < 0)
+			return rc;
+		else if (!rc) /* doesn't belong to */
+			return 0;
 	}
 
 	rc = recs_buf_grow(buf);
@@ -1261,6 +1315,7 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			return rc;
 		}
 	}
+
 	return 0;
 }
 
@@ -1269,15 +1324,18 @@ static int cont_close_hdls(struct cont_svc *svc,
 			   crt_context_t ctx);
 
 static int
-evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
+evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, struct ds_pool_hdl *pool_hdl,
+	   crt_context_t ctx)
 {
 	struct find_hdls_by_cont_arg	arg;
 	int				rc;
 
 	arg.fha_tx = tx;
+	arg.fha_cont = cont;
 	rc = recs_buf_init(&arg.fha_buf);
 	if (rc != 0)
 		return rc;
+	arg.fha_cred = (pool_hdl == NULL ? NULL : &pool_hdl->sph_cred);
 
 	rc = rdb_tx_iterate(tx, &cont->c_hdls, false /* !backward */,
 			    find_hdls_by_cont_cb, &arg);
@@ -1344,7 +1402,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		D_GOTO(out_prop, rc = -DER_NO_PERM);
 	}
 
-	rc = evict_hdls(tx, cont, in->cdi_force, rpc->cr_ctx);
+	rc = evict_hdls(tx, cont, in->cdi_force, NULL /* pool_hdl */, rpc->cr_ctx);
 	if (rc != 0)
 		goto out_prop;
 
@@ -1871,6 +1929,52 @@ cont_status_set_unclean(daos_prop_t *prop)
 }
 
 static int
+check_hdl_compatibility(struct rdb_tx *tx, struct cont *cont, uint64_t flags)
+{
+	d_iov_t	key;
+	d_iov_t	value;
+	int	rc;
+
+	/* Is there any existing handle for the container? */
+	d_iov_set(&key, NULL, 0);
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_fetch(tx, &cont->c_hdls, RDB_PROBE_FIRST, NULL /* key_in */, &key, &value);
+	if (rc == -DER_NONEXIST) {
+		return 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_CONT": fetch first handle key: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	if (flags & DAOS_COO_EX) {
+		/* An exclusive open is incompatible with any existing handle. */
+		D_DEBUG(DB_MD, DF_CONT": found existing handle\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		return -DER_BUSY;
+	}
+
+	/*
+	 * A non-exclusive open is incompatible with an exclusive handle. We
+	 * need to look up the flags of the existing handle we've just found.
+	 */
+	d_iov_set(&value, NULL, sizeof(struct container_hdl));
+	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": look up first handle value: "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	if (((struct container_hdl *)value.iov_buf)->ch_flags & DAOS_COO_EX) {
+		D_DEBUG(DB_MD, DF_CONT": found existing exclusive handle\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		return -DER_BUSY;
+	}
+
+	return 0;
+}
+
+static int
 cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	  crt_rpc_t *rpc, int cont_proto_ver)
 {
@@ -1894,6 +1998,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	bool			mdtimes_in_reply = (cont_proto_ver >= CONT_PROTO_VER_WITH_MDTIMES);
 	const uint64_t		NOSTAT = (DAOS_COO_RO | DAOS_COO_RO_MDSTATS);
 	bool			update_otime = ((in->coi_flags & NOSTAT) == NOSTAT) ? false : true;
+	uint32_t		pool_global_version = cont->c_svc->cs_pool->sp_global_version;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " flags=" DF_X64 "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, DP_UUID(in->coi_op.ci_hdl),
@@ -1914,6 +2019,16 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			rc = -DER_EXIST;
 		}
 		D_GOTO(out, rc);
+	}
+
+	if (pool_global_version < DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT &&
+	    (in->coi_flags & (DAOS_COO_EX | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL))) {
+		D_ERROR(DF_CONT": DAOS_COO_{EX,EVICT,EVICT_ALL} not supported in pool global "
+			"version %u: pool global version >= %u required\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), pool_global_version,
+			DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	/*
@@ -1938,6 +2053,14 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		D_GOTO(out, rc);
 	}
 
+	if ((in->coi_flags & DAOS_COO_EVICT_ALL) && !ds_sec_cont_can_evict_all(sec_capas)) {
+		D_ERROR(DF_CONT": permission denied evicting all handles\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+		daos_prop_free(prop);
+		rc = -DER_NO_PERM;
+		goto out;
+	}
+
 	if (!ds_sec_cont_can_open(sec_capas)) {
 		D_ERROR(DF_CONT": permission denied opening with flags "
 			DF_X64"\n",
@@ -1945,6 +2068,22 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			in->coi_flags);
 		daos_prop_free(prop);
 		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
+	if (in->coi_flags & (DAOS_COO_EVICT | DAOS_COO_EVICT_ALL)) {
+		rc = evict_hdls(tx, cont, true /* force */,
+				(in->coi_flags & DAOS_COO_EVICT_ALL) ? NULL : pool_hdl,
+				rpc->cr_ctx);
+		if (rc != 0) {
+			daos_prop_free(prop);
+			goto out;
+		}
+	}
+
+	rc = check_hdl_compatibility(tx, cont, in->coi_flags);
+	if (rc != 0) {
+		daos_prop_free(prop);
+		goto out;
 	}
 
 	/* Determine pool meets container redundancy factor requirements */
@@ -2025,6 +2164,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	chdl.ch_flags = in->coi_flags;
 	chdl.ch_sec_capas = sec_capas;
 
+	d_iov_set(&value, &chdl, sizeof(chdl));
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		D_GOTO(out, rc);
