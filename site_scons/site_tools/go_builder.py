@@ -1,6 +1,6 @@
 """DAOS functions for building go"""
 
-import subprocess
+import subprocess  # nosec B404
 import os
 import re
 
