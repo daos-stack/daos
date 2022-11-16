@@ -11,6 +11,7 @@ POOL_LABEL="tank"
 format_storage() {
     hostlist=$1
     dmg_cmd="dmg storage format --host-list=$hostlist"
+    echo "Command: $dmg_cmd"
     eval $dmg_cmd
 }
 
@@ -18,6 +19,7 @@ create_pool() {
     pool_size=$1
     pool_label=$2
     dmg_cmd="dmg pool create --size=$pool_size --label=$pool_label"
+    echo "Command: $dmg_cmd"
     eval $dmg_cmd
 }
 
@@ -25,6 +27,7 @@ inject_fault_mgmt() {
     pool_label=$1
     fault_type=$2
     dmg_cmd="dmg faults mgmt-svc pool $pool_label $fault_type"
+    echo "Command: $dmg_cmd"
     eval $dmg_cmd
 }
 
@@ -49,25 +52,40 @@ inject_fault_mgmt $POOL_LABEL "CIC_POOL_NONEXIST_ON_MS"
 
 echo $'\n4. MS doesn\'t recognize any pool (it exists on engine). Hit enter...'
 read
+echo "Command: $dmg_pool_list"
 eval $dmg_pool_list
 
 echo $'\n5. Enable and start checker. Hit enter...'
 read
+echo "Command: $dmg_check_enable"
 eval $dmg_check_enable
+echo "Command: $dmg_check_start"
 eval $dmg_check_start
-# Wait for a few seconds for the checker to complete.
-sleep 5
 
-echo $'\n6-1. Query the checker. Wait for a few seconds and hit enter...'
-read
-eval $dmg_check_query
+echo $'\n6-1. Query the checker. Hit y to query, n to proceed to next step.'
+while :
+do
+    read input
+    if [ $input = "y" ]
+    then
+        echo "Command: $dmg_check_query"
+        eval $dmg_check_query
+    elif [ $input = "n" ]
+    then
+        break
+    else
+        echo "Please enter y or n."
+    fi
+done
 
 echo $'\n6-2. Checker shows the inconsistency that was repaired.'
 
 echo $'\n7. Disable the checker. Hit enter...'
 read
+echo "Command: $dmg_check_disable"
 eval $dmg_check_disable
 
 echo $'\n8. Verify that the missing pool was reconstructed. Hit enter...'
 read
+echo "Command: $dmg_pool_list"
 eval $dmg_pool_list
