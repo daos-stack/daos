@@ -31,14 +31,28 @@ inject_fault_mgmt() {
     eval $dmg_cmd
 }
 
-host1=$1
-host2=$2
+if [ $# == 0 ]
+then
+    echo "Please supply at least one hostname."
+    exit
+fi
+
+# Prepare hostnames separated by comma for format, etc.
+host_list=""
+for hostname in $*
+do
+    if [ -z $host_list ]
+    then
+        host_list=$hostname
+    else
+        host_list="$host_list,$hostname"
+    fi
+done
 
 # Pass 1: Pool is on ranks, but not in MS - Orphan pool
-echo "1. Format storage. Hit enter..."
+echo "1. Format storage on $host_list. Hit enter..."
 read
-hosts="$1,$2"
-format_storage $hosts
+format_storage $host_list
 # Wait for the storage to be ready before creating a pool.
 sleep 5
 
