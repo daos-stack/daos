@@ -57,8 +57,8 @@ def go_ldflags():
     Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
-                     f'-X {path}.ConfigDir={conf_dir}'])
-#                     f'-B {gen_build_id()}'])
+                     f'-X {path}.ConfigDir={conf_dir}',
+                     f'$(-B {gen_build_id()}$)'])
 
 
 def install_go_bin(denv, name, libs=None):

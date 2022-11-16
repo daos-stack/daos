@@ -20,6 +20,7 @@ def _scan_go_file(node, _env, _path):
     for my_line in contents.splitlines():
         line = my_line.decode('utf-8')
         if line.startswith('#include'):
+            # TODO: This finds util.h but what about util.c?
 
             new = include_re.findall(line)
             for dep in new:
