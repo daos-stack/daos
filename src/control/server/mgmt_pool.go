@@ -232,7 +232,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	if err := svc.PoolCreateAddSystemProps(ctx, req); err != nil {
+	if err := svc.PoolCreateAddSystemProps(req); err != nil {
 		return nil, err
 	}
 
@@ -441,22 +441,28 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	return resp, nil
 }
 
-func (svc *mgmtSvc) PoolCreateAddSystemProps(ctx context.Context, req *mgmtpb.PoolCreateReq) error {
+func (svc *mgmtSvc) PoolCreateAddSystemProps(req *mgmtpb.PoolCreateReq) error {
 	poolSysProps := make(map[uint32]*daos.PoolProperty)
 	for sp := range svc.systemProps.Iter() {
 		pp, found := sp2pp(sp)
 		if !found {
 			continue
 		}
+
+		svc.log.Debugf("Converting System Property '%+v' to Pool Property '%+v'", sp, pp)
 		poolSysProps[pp.Number] = pp
 
 		curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, sp.Key.String())
 		if err != nil {
 			return err
 		}
+		svc.log.Debugf("Current property value from system: %+v", curVal)
+
 		if err := pp.SetValue(curVal); err != nil {
 			return err
 		}
+
+		svc.log.Debugf("Pool Property Value: %s", pp.Value.String())
 	}
 
 	if len(poolSysProps) == 0 {

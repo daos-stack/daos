@@ -363,8 +363,10 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_SCRUB_MODE:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val >= DAOS_SCRUB_MODE_INVALID)
+			if (val >= DAOS_SCRUB_MODE_INVALID) {
+				D_ERROR("invalid scrub mode: "DF_U64"\n", val);
 				return false;
+			}
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:
 			/* accepting any number of seconds for now */

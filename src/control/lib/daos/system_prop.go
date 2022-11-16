@@ -8,6 +8,7 @@ package daos
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -432,7 +433,7 @@ func (ppv poolPropValue) String() string {
 		return "<nil>"
 	}
 
-	return ppv.pph.Property.String()
+	return ppv.pph.Property.valueStringer(&ppv.pph.Property.Value)
 }
 
 func (ppv poolPropValue) copy() SystemPropertyValue {
@@ -449,12 +450,20 @@ func (ppv poolPropValue) PoolProperty() *PoolProperty {
 	return &ppv.pph.Property
 }
 
-func pph2sp(key SystemPropertyKey, pph *PoolPropHandler) SystemProperty {
-	return SystemProperty{
+func pph2sp(key SystemPropertyKey, pph *PoolPropHandler, def string) SystemProperty {
+	value := &poolPropValue{pph: pph}
+	pph.GetProperty(key.String())
+	err := value.PoolProperty().SetValue(def)
+	if err != nil {
+		fmt.Printf("Unable to set default value: %s", err)
+	}
+
+	property := SystemProperty{
 		Key:         key,
-		Value:       &poolPropValue{pph: pph},
+		Value:       value,
 		Description: pph.Property.Description,
 	}
+	return property
 }
 
 // SystemProperties returns the map of standard system properties.
@@ -472,54 +481,7 @@ func SystemProperties() SystemPropertyMap {
 			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
 			Description: "DAOS system name",
 		},
-		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"]),
-		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub-thresh"]),
-		/*SystemPropertyPoolScrubMode: SystemProperty{
-			Key:          SystemPropertyPoolScrubMode,
-			Value:        NewStringPropVal("off", "off", "lazy", "timed"),
-			Description:  "Checksum scrubbing mode",
-			PoolProperty: PoolPropertyScrubMode,
-		},
-		SystemPropertyPoolScrubThresh: SystemProperty{
-			Key:          SystemPropertyPoolScrubThresh,
-			Value:        NewIntPropVal(0),
-			Description:  "Checksum scrubbing threshold",
-			PoolProperty: PoolPropertyScrubThresh,
-		},*/
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub-thresh"], "0"),
+		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
 	}
 }
-
-/*func SystemPropToPoolProp(poolProperty uint32, v string) (*mgmtpb.PoolProperty, error) {
-	switch poolProperty {
-	case PoolPropertyScrubMode :
-		// Need to convert string system prop value to int pool property
-		// todo: hmmm these strings must match
-		//   what's in system_prop.go: ...NewStringPropVal("off", "off", "lazy", "timed"),
-		value := map[string]uint64{
-			"off":   PoolScrubModeOff,
-			"lazy":  PoolScrubModeLazy,
-			"timed": PoolScrubModeTimed,
-		}[v]
-
-		return &mgmtpb.PoolProperty{
-			Number: poolProperty,
-			Value:  &mgmtpb.PoolProperty_Numval{
-				Numval: value,
-			},
-		}, nil
-	case PoolPropertyScrubThresh:
-		intValue, err := strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return &mgmtpb.PoolProperty{
-			Number: poolProperty,
-			Value:  &mgmtpb.PoolProperty_Numval{
-				Numval: intValue,
-			},
-		}, nil
-	default:
-		return nil, errors.Errorf("Pool Property %d unexpected", poolProperty)
-
-	}
-}*/

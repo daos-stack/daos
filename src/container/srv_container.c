@@ -3669,7 +3669,7 @@ cont_filter_part_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filt
 		       bool *match)
 {
 	d_iov_t			value;
-	uint64_t		val64;
+	uint64_t		val64 = 0;
 	uint32_t		val32;
 	bool			result = false;
 	struct co_md_times	mdtimes;
