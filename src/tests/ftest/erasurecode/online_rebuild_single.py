@@ -65,4 +65,4 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         # should be intact and no data corruption observed.
         self.start_online_single_operation("READ", parity=2)
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()

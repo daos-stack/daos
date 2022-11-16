@@ -80,16 +80,17 @@ class RbldBasic(TestWithServers):
         # Manually exclude the specified rank
         for index in range(pool_quantity):
             if index == 0:
+                self.pool[index].update_map_version()
                 self.server_managers[0].stop_ranks([rank], self.d_log, True)
             else:
                 self.pool[index].exclude(ranks=[rank])
 
         # Wait for recovery to start for first pool.
-        self.pool[0].wait_for_rebuild(True)
+        self.pool[0].wait_for_rebuild_to_start()
 
         # Wait for recovery to complete
         for index in range(pool_quantity):
-            self.pool[index].wait_for_rebuild(False)
+            self.pool[index].wait_for_rebuild_to_end()
 
         # Check the pool information after the rebuild
         status = True

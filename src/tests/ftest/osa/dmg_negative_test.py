@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -18,6 +17,7 @@ class OSADmgNegativeTest(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
@@ -27,11 +27,10 @@ class OSADmgNegativeTest(OSAUtils):
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
 
         # Dmg command test sequence
-        self.test_seq = self.params.get("dmg_cmd_test",
-                                        "/run/test_sequence/*")
+        self.test_seq = self.params.get("dmg_cmd_test", "/run/test_sequence/*")
 
     def validate_results(self, exp_result, dmg_output):
-        """Validate the dmg_output results with expected results
+        """Validate the dmg_output results with expected results.
 
         Args:
             exp_result (str) : Expected result (Pass or Fail string).
@@ -41,7 +40,7 @@ class OSADmgNegativeTest(OSAUtils):
             # Check state before hand as wait for rebuild
             state = self.pool.get_rebuild_state(True)
             if state != "done":
-                self.pool.wait_for_rebuild(False, 3)
+                self.pool.wait_for_rebuild_to_end(3)
             if "succeeded" in dmg_output:
                 self.log.info("Test Passed")
             else:

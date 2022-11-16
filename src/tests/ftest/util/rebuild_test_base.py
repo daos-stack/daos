@@ -138,7 +138,7 @@ class RebuildTestBase(TestWithServers):
                 [self.inputs.rank.value], self.d_log, force=True)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True, 1)
+        self.pool.wait_for_rebuild_to_start(1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
@@ -184,7 +184,7 @@ class RebuildTestBase(TestWithServers):
         self.execute_during_rebuild()
 
         # Confirm rebuild completes
-        self.pool.wait_for_rebuild(False, 1)
+        self.pool.wait_for_rebuild_to_end(1)
 
         # clear container status for the RF issue
         self.daos_cmd.container_set_prop(

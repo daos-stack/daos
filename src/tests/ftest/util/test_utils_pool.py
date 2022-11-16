@@ -167,6 +167,17 @@ class TestPool(TestDaosApiBase):
         # to the rebuild state.  This can be updated via TestPool.update_map_version().
         self._map_version = 0
 
+    def __str__(self):
+        """Return the pool label (if defined) and UUID identification.
+
+        Returns:
+            str: the pool label (if defined) and UUID identification
+
+        """
+        if self.use_label and self.label.value is not None:
+            return "Pool {} ({})".format(self.label.value, self.uuid)
+        return "Pool {}".format(self.uuid)
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -453,7 +464,7 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+        return self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
     def drain(self, rank, tgt_idx=None):
@@ -463,11 +474,14 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rank (str): daos server rank to drain
-            tgt_idx (str, optional): string of targets to drain on ranks
-                ex: "1,2". Defaults to None.
+            tgt_idx (str, optional): targets to drain on ranks, ex: "1,2". Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
         """
         self.update_map_version()
-        self.dmg.pool_drain(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
     def evict(self):
@@ -485,11 +499,14 @@ class TestPool(TestDaosApiBase):
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
-            tgt_idx (string, optional): str of targets to exclude on ranks
-                ex: "1,2". Defaults to None.
+            tgt_idx (string, optional): targets to exclude on ranks, ex: "1,2". Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
         """
         self.update_map_version()
-        self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
+        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def extend(self, ranks):
@@ -497,6 +514,9 @@ class TestPool(TestDaosApiBase):
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         """
         self.update_map_version()
@@ -516,15 +536,13 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
-        """Get Property.
-
-        It gets property for a given pool uuid using dmg.
+        """Get the pool property with the specified name.
 
         Args:
             prop_name (str): Name of the pool property.
 
         Returns:
-            prop_value (str): Return pool property value.
+            str: pool property value.
 
         """
         prop_value = ""
@@ -535,8 +553,7 @@ class TestPool(TestDaosApiBase):
             self.dmg.pool_get_prop(self.identifier, prop_name)
 
             if self.dmg.result.exit_status == 0:
-                prop_value = json.loads(
-                    self.dmg.result.stdout)['response'][0]['value']
+                prop_value = json.loads(self.dmg.result.stdout)['response'][0]['value']
 
         return prop_value
 
@@ -591,15 +608,16 @@ class TestPool(TestDaosApiBase):
     def reintegrate(self, rank, tgt_idx=None):
         """Use dmg to reintegrate the rank and targets into this pool.
 
-        Only supported with the dmg control method.
-
         Args:
             rank (str): daos server rank to reintegrate
-            tgt_idx (str, optional): string of targets to reintegrate on ranks
-            ex: "1,2". Defaults to None.
+            tgt_idx (str, optional): targets to reintegrate on ranks, ex: "1,2". Defaults to None.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
         """
         self.update_map_version()
-        self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
+        return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name=None, prop_value=None):
@@ -644,7 +662,7 @@ class TestPool(TestDaosApiBase):
         acl_file = None
         if use_acl:
             acl_file = self.acl_file.value
-        self.dmg.pool_update_acl(pool=self.identifier, acl_file=acl_file, entry=entry)
+        return self.dmg.pool_update_acl(pool=self.identifier, acl_file=acl_file, entry=entry)
 
     @fail_on(DaosApiError)
     def get_info(self):
@@ -1052,7 +1070,7 @@ class TestPool(TestDaosApiBase):
             CommandFailure: if there was error collecting the dmg pool query data or the keys
 
         Returns:
-            str: rebuild status or None
+            str: rebuild state or None
 
         """
         return self._get_query_data_keys("response", "rebuild", "state", refresh=refresh)
@@ -1114,32 +1132,35 @@ class TestPool(TestDaosApiBase):
             self.log.error("Unable to detect the current pool map version: %s", error)
             current_version = 0
         try:
-            current_rebuild_state = self.get_rebuild_state(False)
+            current_state = self.get_rebuild_state(False)
         except CommandFailure as error:
             self.log.error("Unable to detect the current pool rebuild state: %s", error)
-            current_rebuild_state = "unknown"
+            current_state = "unknown"
         try:
-            current_rebuild_status = self.get_rebuild_status(False)
+            current_status = self.get_rebuild_status(False)
         except (CommandFailure, ValueError) as error:
             self.log.error("Unable to detect the current pool rebuild status: %s", error)
-            current_rebuild_status = 0
+            current_status = 0
+
+        # Determine if the current rebuild state, version, and status is expected
+        checks = {
+            "state": current_state in states,
+            "status": status is None or current_status in status,
+            "version": version is None or current_version > version,
+        }
+
         if verbose:
             self.log.info(
-                "Pool %s query rebuild data: {'status': %s, 'state': %s, 'version': %s}",
-                self.identifier, current_rebuild_status, current_rebuild_state, current_version)
+                "Pool %s query rebuild data check: status: %s && state: %s && version: %s = %s",
+                str(self),
+                "".join([current_status, "" if status is None else " in {}".format(status)]),
+                "".join([current_state, "" if states is None else " in {}".format(states)]),
+                "".join([current_version, "" if version is None else " > {}".format(version)]),
+                all(checks.values()))
 
-        # Determine if the current rebuild state is expected
-        check_status = current_rebuild_state in states
-        if version is not None:
-            # If a version is provided (required for completion check), verify that it has increased
-            check_status &= current_version > version
-        if status is not None:
-            # If a status is provided, verify the current status is expected
-            check_status &= current_rebuild_status in status
+        return all(checks.values())
 
-        return check_status
-
-    def wait_for_rebuild(self, to_start, interval=1):
+    def _wait_for_rebuild(self, to_start, interval=1):
         """Wait for the rebuild to start or end.
 
         Args:
@@ -1150,7 +1171,6 @@ class TestPool(TestDaosApiBase):
             DaosTestError: if waiting for rebuild times out.
 
         """
-        start = time()
         self.log.info(
             "Waiting for rebuild to %s%s ...",
             "start" if to_start else "complete",
@@ -1172,6 +1192,30 @@ class TestPool(TestDaosApiBase):
 
         self.log.info("Rebuild %s detected", "start" if to_start else "completion")
 
+    def wait_for_rebuild_to_start(self, interval=1):
+        """Wait for the rebuild to start.
+
+        Args:
+            interval (int): number of seconds to wait in between rebuild completion checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild(True, interval)
+
+    def wait_for_rebuild_to_end(self, interval=1):
+        """Wait for the rebuild to end.
+
+        Args:
+            interval (int): number of seconds to wait in between rebuild completion checks
+
+        Raises:
+            DaosTestError: if waiting for rebuild times out.
+
+        """
+        self._wait_for_rebuild(False, interval)
+
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.
 
@@ -1184,7 +1228,7 @@ class TestPool(TestDaosApiBase):
                 Defaults to 1.
         """
         start = float(time())
-        self.wait_for_rebuild(to_start=True, interval=interval)
-        self.wait_for_rebuild(to_start=False, interval=interval)
+        self.wait_for_rebuild_to_start(interval=interval)
+        self.wait_for_rebuild_to_end(interval=interval)
         duration = float(time()) - start
         self.log.info("%s duration: %.1f sec", operation, duration)

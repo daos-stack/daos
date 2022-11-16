@@ -17,6 +17,7 @@ class OSAOfflineExtend(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
@@ -31,8 +32,7 @@ class OSAOfflineExtend(OSAUtils):
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_extend_test(self, num_pool, data=False,
-                                oclass=None):
+    def run_offline_extend_test(self, num_pool, data=False, oclass=None):
         """Run the offline extend without data.
 
         Args:
@@ -91,19 +91,18 @@ class OSAOfflineExtend(OSAUtils):
                 val = 0
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
+            pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Enable aggregation for multiple pool testing only.
             if self.test_during_aggregation is True and (num_pool > 1):
                 self.delete_extra_container(self.pool)
-            output = self.dmg_command.pool_extend(self.pool.uuid, rank_val)
+            output = self.pool.extend(rank_val)
             self.print_and_assert_on_rebuild_failure(output)
 
-            pver_extend = self.get_pool_version()
+            pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
-            self.assertTrue(pver_extend > pver_begin,
-                            "Pool Version Error:  After extend")
+            self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
 
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
@@ -124,71 +123,68 @@ class OSAOfflineExtend(OSAUtils):
                 self.log.info(output)
 
     def test_osa_offline_extend(self):
-        """
-        JIRA ID: DAOS-4751
+        """JIRA ID: DAOS-4751.
 
         Test Description: Validate Offline Extend
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend
         """
         self.log.info("Offline Extend Testing : With Checksum")
         self.run_offline_extend_test(1, True)
 
     def test_osa_offline_extend_without_checksum(self):
-        """Test ID: DAOS-6924
-        Test Description: Validate Offline extend without
-        Checksum.
+        """Test ID: DAOS-6924.
+
+        Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_without_checksum
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_without_checksum
         """
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
+        self.test_with_checksum = self.params.get("test_with_checksum", '/run/checksum/*')
         self.log.info("Offline Extend Testing: Without Checksum")
         self.run_offline_extend_test(1, data=True)
 
     def test_osa_offline_extend_multiple_pools(self):
-        """Test ID: DAOS-6924
-        Test Description: Validate Offline extend without
-        Checksum.
+        """Test ID: DAOS-6924.
+
+        Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_multiple_pools
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_multiple_pools
         """
         self.log.info("Offline Extend Testing: Multiple Pools")
         self.run_offline_extend_test(5, data=True)
 
     def test_osa_offline_extend_oclass(self):
-        """Test ID: DAOS-6924
-        Test Description: Validate Offline extend without
-        Checksum.
+        """Test ID: DAOS-6924.
+
+        Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_oclass
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_oclass
         """
         self.log.info("Offline Extend Testing: oclass")
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
-        self.run_offline_extend_test(4, data=True,
-                                     oclass=self.test_oclass)
+        self.run_offline_extend_test(4, data=True, oclass=self.test_oclass)
 
     def test_osa_offline_extend_during_aggregation(self):
-        """Test ID: DAOS-6294
-        Test Description: Extend rank while aggregation
-        is happening in parallel
+        """Test ID: DAOS-6294.
+
+        Test Description: Extend rank while aggregation is happening in parallel
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_during_aggregation
+        :avocado: tags=osa,checksum,,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -197,16 +193,15 @@ class OSAOfflineExtend(OSAUtils):
         self.run_offline_extend_test(3, data=True, oclass=self.test_oclass)
 
     def test_osa_offline_extend_after_snapshot(self):
-        """Test ID: DAOS-8057
-        Test Description: Validate Offline extend after
-        taking snapshot.
+        """Test ID: DAOS-8057.
+
+        Test Description: Validate Offline extend after taking snapshot.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=osa,osa_extend
-        :avocado: tags=offline_extend,test_osa_offline_extend_after_snapshot
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_after_snapshot
         """
-        self.test_with_snapshot = self.params.get("test_with_snapshot",
-                                                  '/run/snapshot/*')
+        self.test_with_snapshot = self.params.get("test_with_snapshot", '/run/snapshot/*')
         self.log.info("Offline Extend Testing: After taking snapshot")
         self.run_offline_extend_test(1, data=True)

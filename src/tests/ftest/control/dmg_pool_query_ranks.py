@@ -135,7 +135,7 @@ class DmgPoolQueryRanks(ControlTestBase):
                     disabled_ranks, data['response']['disabled_ranks']))
 
             self.log.debug("Waiting for pool to be rebuild")
-            self.pool.wait_for_rebuild(False)
+            self.pool.wait_for_rebuild_to_end()
 
         random.shuffle(all_ranks)
         self.log.info("Starting reintegrating ranks: all_ranks=%s", all_ranks)
@@ -161,4 +161,4 @@ class DmgPoolQueryRanks(ControlTestBase):
                     disabled_ranks, data['response']['disabled_ranks']))
 
             self.log.debug("Waiting for pool to be rebuild")
-            self.pool.wait_for_rebuild(False)
+            self.pool.wait_for_rebuild_to_end()

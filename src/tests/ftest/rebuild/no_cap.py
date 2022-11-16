@@ -127,7 +127,7 @@ class RbldNoCapacity(TestWithServers):
 
         # Wait for rebuild started
         self.log.info("..(6)Wait for rebuild started")
-        self.pool.wait_for_rebuild(True, interval=1)
+        self.pool.wait_for_rebuild_to_start(interval=1)
 
         # Verify for pool full error after rebuild
         self.log.info("..(7)Poll and verify pool rebuild status with error")

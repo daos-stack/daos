@@ -72,7 +72,7 @@ class RbldWithIO(TestWithServers):
         self.server_managers[0].stop_ranks([rank], self.d_log)
 
         # Wait for recovery to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
         daos_cmd = DaosCommand(self.bin)
         daos_cmd.container_set_prop(
@@ -84,7 +84,7 @@ class RbldWithIO(TestWithServers):
             self.container.execute_io(30), self.container.uuid)
 
         # Wait for recovery to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Check the pool information after the rebuild
         status = status = self.pool.check_pool_info(

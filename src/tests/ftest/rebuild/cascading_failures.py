@@ -64,7 +64,7 @@ class RbldCascadingFailures(RebuildTestBase):
             self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log)
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True, 1)
+        self.pool.wait_for_rebuild_to_start(1)
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""

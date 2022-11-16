@@ -37,7 +37,7 @@ class EcodOfflineRebuild(ErasureCodeIor):
                                            force=True)
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object and different sizes
         # written before killing the single server
@@ -49,7 +49,7 @@ class EcodOfflineRebuild(ErasureCodeIor):
                                            force=True)
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object and different sizes
         # written before killing the second server.

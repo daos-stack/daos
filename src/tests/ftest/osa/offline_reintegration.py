@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -27,11 +26,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.daos_command = DaosCommand(self.bin)
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
-        self.ior_test_repetitions = self.params.get("pool_test_repetitions",
-                                                    '/run/pool_capacity/*')
+        self.ior_test_repetitions = self.params.get("pool_test_repetitions", '/run/pool_capacity/*')
         self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -44,10 +41,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                some data in pool. Defaults to False.
-            server_boot (bool) : Perform system stop/start on a rank.
-                                 Defaults to False.
+            data (bool) : whether pool has no data or to create some data in pool. Defaults to
+                False.
+            server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8")
             pool_fillup (int) : Percentage of pool filled up with data before performing OSA
                                 operations.
@@ -96,13 +92,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             for val, _ in enumerate(rank):
                 self.pool = pool[random_pool]
                 self.pool.display_pool_daos_space("Pool space: Beginning")
-                pver_begin = self.get_pool_version()
+                pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if server_boot is False:
                     if (self.test_during_rebuild is True and val == 0):
                         # Exclude rank 5
-                        output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                               "5")
+                        output = self.pool.exclude("5")
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
@@ -110,28 +105,26 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     # For redundancy factor testing, just exclude only
                     # one target on a rank. Don't exclude a rank(s).
                     if (self.test_with_rf is True and val == 0):
-                        output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                               rank[val])
+                        output = self.pool.exclude(rank[val])
                     elif (self.test_with_rf is True and val > 0):
                         continue
                     else:
                         if pool_fillup > 0 and val > 0:
                             continue
-                        output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                               rank[val])
+                        output = self.pool.exclude(rank[val])
                 else:
-                    output = self.dmg_command.system_stop(ranks=rank[val],
-                                                          force=True)
+                    self.pool.update_map_version()
+                    output = self.dmg_command.system_stop(ranks=rank[val], force=True)
                     self.print_and_assert_on_rebuild_failure(output)
+                    self.pool.update_map_version()
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
                 if (self.test_during_rebuild is True and val == 2):
                     # Reintegrate rank 5
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               "5")
+                    output = self.pool.reintegrate("5")
                 self.print_and_assert_on_rebuild_failure(output)
 
-                pver_exclude = self.get_pool_version()
+                pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
@@ -145,26 +138,21 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
                     self.remove_pool_dir(ip_addr, p_num)
                 if (val == 2 and "RP_2G" in oclass):
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank[val],
-                                                               "0,2")
+                    output = self.pool.reintegrate(rank[val], "0,2")
                 elif (self.test_with_rf is True and val == 0):
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank[val])
+                    output = self.pool.reintegrate(rank[val])
                 elif (self.test_with_rf is True and val > 0):
                     continue
                 else:
                     if pool_fillup > 0 and val > 0:
                         continue
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank[val])
+                    output = self.pool.reintegrate(rank[val])
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
 
-                pver_reint = self.get_pool_version()
+                pver_reint = self.pool.get_version(True)
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
                 # Check pool version incremented after pool reintegrate
-                self.assertTrue(pver_reint > pver_exclude,
-                                "Pool Version Error:  After reintegrate")
+                self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
 
             display_string = "Pool{} space at the End".format(random_pool)
             self.pool = pool[random_pool]
@@ -187,30 +175,29 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.log.info(output)
 
     def test_osa_offline_reintegration_without_checksum(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        without enabling checksum in container properties.
+        """Test ID: DAOS-6923.
+
+        Test Description: Validate Offline Reintegration without enabling checksum in container
+            properties.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_daily,ior
-        :avocado: tags=offline_reintegration_without_csum
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_without_checksum
         """
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
+        self.test_with_checksum = self.params.get("test_with_checksum", '/run/checksum/*')
         self.log.info("Offline Reintegration : Without Checksum")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_multiple_pools(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        with multiple pools
+        """Test ID: DAOS-6923.
+
+        Test Description: Validate Offline Reintegration with multiple pools
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_daily,ior
-        :avocado: tags=offline_reintegration_multiple_pools
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
@@ -219,57 +206,53 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         """Test ID: DAOS-6748.
 
         Test Description: Validate Offline Reintegration with server stop
+
         :avocado: tags=all,pr,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_full,ior
-        :avocado: tags=offline_reintegration_srv_stop
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_server_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
 
     def test_osa_offline_reintegrate_during_rebuild(self):
-        """Test ID: DAOS-6923
-        Test Description: Reintegrate rank while rebuild
-        is happening in parallel
+        """Test ID: DAOS-6923.
+
+        Test Description: Reintegrate rank while rebuild is happening in parallel
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full,ior
-        :avocado: tags=offline_reintegrate_during_rebuild
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_during_rebuild
         """
-        self.loop_test_cnt = self.params.get("iterations",
-                                             '/run/loop_test/*')
-        self.test_during_rebuild = self.params.get("test_with_rebuild",
-                                                   '/run/rebuild/*')
+        self.loop_test_cnt = self.params.get("iterations", '/run/loop_test/*')
+        self.test_during_rebuild = self.params.get("test_with_rebuild", '/run/rebuild/*')
         self.log.info("Offline Reintegration : Rebuild")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_oclass(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        with different object class
+        """Test ID: DAOS-6923.
+
+        Test Description: Validate Offline Reintegration with different object class
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full,ior
-        :avocado: tags=offline_reintegration_oclass
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_oclass
         """
         self.log.info("Offline Reintegration : Object Class")
         for oclass in self.test_oclass:
-            self.run_offline_reintegration_test(1, data=True,
-                                                server_boot=False,
-                                                oclass=oclass)
+            self.run_offline_reintegration_test(1, data=True, server_boot=False, oclass=oclass)
 
     def test_osa_offline_reintegrate_during_aggregation(self):
-        """Test ID: DAOS-6923
-        Test Description: Reintegrate rank while aggregation
-        is happening in parallel
+        """Test ID: DAOS-6923.
+
+        Test Description: Reintegrate rank while aggregation is happening in parallel
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full,ior
-        :avocado: tags=offline_reintegrate_during_aggregation
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration,ior
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -277,56 +260,57 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegration_with_rf(self):
-        """Test ID: DAOS-6923
-        Test Description: Validate Offline Reintegration
-        with just redundancy factor setting.
+        """Test ID: DAOS-6923.
+
+        Test Description: Validate Offline Reintegration with just redundancy factor setting.
         Don't set the oclass during ior run.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,checksum
-        :avocado: tags=offline_reintegration_full,mpich
-        :avocado: tags=offline_reintegration_with_rf
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,offline_reintegration,mpich
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegration_with_rf
         """
         self.log.info("Offline Reintegration : RF")
-        self.test_with_rf = self.params.get("test_with_rf",
-                                            '/run/test_rf/*')
+        self.test_with_rf = self.params.get("test_with_rf", '/run/test_rf/*')
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegrate_with_blank_node(self):
-        """Test ID: DAOS-6923
+        """Test ID: DAOS-6923.
+
         Test Description: Reintegrate rank with no data.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
-        :avocado: tags=offline_reintegrate_with_blank_node
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_with_blank_node
         """
-        self.test_with_blank_node = self.params.get("test_with_blank_node",
-                                                    '/run/blank_node/*')
+        self.test_with_blank_node = self.params.get("test_with_blank_node", '/run/blank_node/*')
         self.log.info("Offline Reintegration : Test with blank node")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegrate_after_snapshot(self):
-        """Test ID: DAOS-8057
+        """Test ID: DAOS-8057.
+
         Test Description: Reintegrate rank after taking snapshot.
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
-        :avocado: tags=offline_reintegrate_after_snapshot
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_after_snapshot
         """
-        self.test_with_snapshot = self.params.get("test_with_snapshot",
-                                                  '/run/snapshot/*')
+        self.test_with_snapshot = self.params.get("test_with_snapshot", '/run/snapshot/*')
         self.log.info("Offline Reintegration : Test with snapshot")
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegrate_with_less_pool_space(self):
-        """Test ID: DAOS-7160
+        """Test ID: DAOS-7160.
+
         Test Description: Reintegrate rank will less pool space.
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
-        :avocado: tags=osa,offline_reintegration_full
-        :avocado: tags=offline_reintegrate_with_less_pool_space
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,offline_reintegration
+        :avocado: tags=OSAOfflineReintegration,test_osa_offline_reintegrate_with_less_pool_space
         """
         self.log.info("Offline Reintegration : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')

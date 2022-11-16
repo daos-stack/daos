@@ -142,7 +142,7 @@ class RbldContainerCreate(IorTestBase):
 
         # Wait for rebuild to start.
         self.log.info("..(3)Wait for rebuild to start for race condition")
-        self.pool.wait_for_rebuild(True, interval=1)
+        self.pool.wait_for_rebuild_to_start(interval=1)
 
         # Race condition, create containers write and read during rebuild.
         self.log.info("..(4)Create containers, write/read during rebuild")
@@ -151,7 +151,7 @@ class RbldContainerCreate(IorTestBase):
 
         # Wait for rebuild to complete.
         self.log.info("..(5)Wait for rebuild to finish")
-        self.pool.wait_for_rebuild(False, interval=1)
+        self.pool.wait_for_rebuild_to_end(interval=1)
 
         # Check for pool and rebuild info after rebuild
         self.log.info("..(6)Check for pool and rebuild info after rebuild")

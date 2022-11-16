@@ -72,7 +72,7 @@ class RbldWidelyStriped(MdtestBase):
         # Kill rank[6] and wait for rebuild to complete
         self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[0], self.d_log, force=True)
-        self.pool.wait_for_rebuild(False, interval=1)
+        self.pool.wait_for_rebuild_to_end(interval=1)
 
         # create 2nd container
         self.add_container(self.pool)
@@ -85,7 +85,7 @@ class RbldWidelyStriped(MdtestBase):
         time.sleep(3)
         self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[1], self.d_log, force=True)
-        self.pool.wait_for_rebuild(False, interval=1)
+        self.pool.wait_for_rebuild_to_end(interval=1)
 
         # wait for mdtest to complete successfully
         mdtest_returncode = self.job_manager.process.wait()
@@ -102,7 +102,7 @@ class RbldWidelyStriped(MdtestBase):
         time.sleep(3)
         self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[2], self.d_log, force=True)
-        self.pool.wait_for_rebuild(False, interval=1)
+        self.pool.wait_for_rebuild_to_end(interval=1)
 
         # wait for mdtest to complete successfully
         mdtest_returncode = self.job_manager.process.wait()

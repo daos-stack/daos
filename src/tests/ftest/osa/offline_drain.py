@@ -80,8 +80,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     # Create a snapshot of the container
                     # after IOR job completes.
                     self.container.create_snap()
-                    self.log.info("Created container snapshot: %s",
-                                  self.container.epoch)
+                    self.log.info("Created container snapshot: %s", self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -93,7 +92,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
                 self.pool.display_pool_daos_space("Pool space: Beginning")
-                pver_begin = self.get_pool_version()
+                pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if self.test_during_aggregation is True and index == 0:
                     self.pool.set_property("reclaim", "time")
@@ -102,27 +101,23 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                 if (self.test_during_rebuild is True and val == 0):
                     # Exclude rank 3
                     self.pool.exclude([3])
-                    self.pool.wait_for_rebuild(True)
+                    self.pool.wait_for_rebuild_to_start()
                 # If the pool is filled up just drain only a single rank.
                 if pool_fillup > 0 and index > 0:
                     continue
-                output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                     rank, t_string)
+                output = self.pool.drain(rank, t_string)
                 self.print_and_assert_on_rebuild_failure(output)
 
-                pver_drain = self.get_pool_version()
+                pver_drain = self.pool.get_version(True)
                 self.log.info("Pool Version after drain %d", pver_drain)
                 # Check pool version incremented after pool drain
-                self.assertTrue(pver_drain > (pver_begin + 1),
-                                "Pool Version Error:  After drain")
+                self.assertTrue(pver_drain > (pver_begin + 1), "Pool Version Error:  After drain")
                 if num_pool > 1:
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank, t_string)
+                    output = self.pool.reintegrate(rank, t_string)
                     self.print_and_assert_on_rebuild_failure(output)
                 if (self.test_during_rebuild is True and val == 0):
                     # Reintegrate rank 3
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               "3")
+                    output = self.pool.reintegrate("3")
                     self.print_and_assert_on_rebuild_failure(output)
 
         for val in range(0, num_pool):

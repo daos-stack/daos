@@ -220,9 +220,9 @@ class ServerFillUp(IorTestBase):
             self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""

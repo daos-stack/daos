@@ -113,7 +113,7 @@ class TargetFailure(IorTestBase):
         self.pool.exclude(ranks=[1], tgt_idx="1")
         # If we exclude back to back, it would cause an error. Wait for the rebuild to
         # start before excluding the next target.
-        self.pool.wait_for_rebuild(to_start=True)
+        self.pool.wait_for_rebuild_to_start()
         self.pool.exclude(ranks=[0], tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Exclude 2 targets", interval=5)
 

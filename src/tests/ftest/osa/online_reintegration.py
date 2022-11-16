@@ -50,7 +50,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         Args:
             num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create some data in pool.
+            racer (bool) : whether pool has no data or to create some data in pool.
                 Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank. Defaults to False.
             oclass (str) : daos object class string (eg: "RP_2G8"). Defaults to None.
@@ -96,31 +96,31 @@ class OSAOnlineReintegration(OSAUtils):
                 thrd.start()
                 time.sleep(1)
             self.pool.display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
+            pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
-                output = self.dmg_command.pool_exclude(self.pool.uuid, rank)
+                output = self.pool.exclude(rank)
+                # output = self.dmg_command.pool_exclude(self.pool.uuid, rank)
             else:
                 self.pool.update_map_version()
                 output = self.dmg_command.system_stop(ranks=rank, force=True)
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
                 self.log.info(output)
+                self.pool.update_map_version()
                 output = self.dmg_command.system_start(ranks=rank)
 
             self.print_and_assert_on_rebuild_failure(output)
-            pver_exclude = self.get_pool_version()
+            pver_exclude = self.pool.get_version(True)
 
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
             # pver_exclude should be greater than
             # pver_begin + 8 targets.
-            self.assertTrue(pver_exclude > (pver_begin + 8),
-                            "Pool Version Error:  After exclude")
-            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank)
+            self.assertTrue(pver_exclude > (pver_begin + 8), "Pool Version Error:  After exclude")
+            output = self.pool.reintegrate(rank)
             self.print_and_assert_on_rebuild_failure(output)
 
-            pver_reint = self.get_pool_version()
+            pver_reint = self.pool.get_version(True)
             self.log.info("Pool Version after reintegrate %d", pver_reint)
             # Check pool version incremented after pool reintegrate
             self.assertTrue(pver_reint > (pver_exclude + 1),

@@ -98,17 +98,16 @@ class ContRedundancyFactor(RebuildTestBase):
 
         Args:
             rd_fac (str): container redundancy factor.
-            expect_cont_status (str, optional):
-                expected container health status.
+            expect_cont_status (str, optional): expected container health status.
         """
         # Wait for rebuild to start and check for container status
-        self.pool.wait_for_rebuild(True, 1)
+        self.pool.wait_for_rebuild_to_start(1)
         self.log.info(
             "==>(4)Check for container rd_fac and health-status after ranks rebuild started: %s",
             expect_cont_status)
         self.verify_cont_rf_healthstatus(rd_fac, expect_cont_status)
         # Wait for rebuild completion and check for container status
-        self.pool.wait_for_rebuild(False, 1)
+        self.pool.wait_for_rebuild_to_end(1)
         self.log.info(
             "==>(5)Check for container rd_fac and health-status after rebuild completed: %s",
             expect_cont_status)

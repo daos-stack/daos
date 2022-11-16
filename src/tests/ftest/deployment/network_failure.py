@@ -256,8 +256,8 @@ class NetworkFailureTest(IorTestBase):
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         for disabled_rank in disabled_ranks:
             self.pool.reintegrate(rank=disabled_rank)
-            self.pool.wait_for_rebuild(to_start=True, interval=5)
-            self.pool.wait_for_rebuild(to_start=False, interval=10)
+            self.pool.wait_for_rebuild_to_start(interval=5)
+            self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 8. Run IOR again. It should work this time.
         job_num = 2

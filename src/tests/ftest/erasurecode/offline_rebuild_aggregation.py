@@ -44,7 +44,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object data still OK
         # written before killing the single server
@@ -55,7 +55,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object and different sizes
         # written before killing the second server.
@@ -151,7 +151,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
             self.fail("Aggregation failed to start..")
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object data still OK
         # written before killing the single server
@@ -162,7 +162,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
 
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Read IOR data and verify for different EC object and different sizes
         # written before killing the second server.

@@ -53,7 +53,7 @@ class DestroyRebuild(TestWithServers):
         # Start rebuild
         self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
         # Destroy the pool while rebuild is active
         self.pool.destroy()
