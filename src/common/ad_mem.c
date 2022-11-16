@@ -2684,3 +2684,12 @@ ad_root(struct ad_blob_handle bh, size_t size)
 
 	return ad_addr2ptr(bh, addr);
 }
+
+/** Query base pointer */
+void *
+ad_get_base_ptr(struct ad_blob_handle bh)
+{
+	struct ad_blob	*blob = bh.bh_blob;
+
+	return ad_addr2ptr(bh, blob_addr(blob));
+}

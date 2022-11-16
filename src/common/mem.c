@@ -338,6 +338,7 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 		rc = dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
 		if (rc == 0)
 			*curr_allocated = st.curr_allocated;
+		break;
 	case DAOS_MD_ADMEM:
 		*curr_allocated = 40960; /* TODO */
 		break;
@@ -1227,6 +1228,11 @@ static void
 set_offsets(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
+	PMEMobjpool		*pop;
+	char			*root;
+	PMEMoid			 root_oid;
+	dav_obj_t		*dav_pop;
+	struct ad_blob_handle	 bh;
 #endif
 	if (umm->umm_id == UMEM_CLASS_VMEM) {
 		umm->umm_base = 0;
@@ -1236,11 +1242,6 @@ set_offsets(struct umem_instance *umm)
 
 #ifdef DAOS_PMEM_BUILD
 	switch (umm->umm_id) {
-		PMEMobjpool		*pop;
-		char			*root;
-		PMEMoid			 root_oid;
-		dav_obj_t		*dav_pop;
-		struct ad_blob_handle	 bh;
 	case UMEM_CLASS_PMEM:
 		pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
@@ -1260,7 +1261,7 @@ set_offsets(struct umem_instance *umm)
 		break;
 	case UMEM_CLASS_ADMEM:
 		bh.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
-		umm->umm_base = (uint64_t)ad_addr2ptr(bh, 0);
+		umm->umm_base = (uint64_t)ad_get_base_ptr(bh);
 		break;
 	default:
 		D_ASSERTF(0, "bad umm->umm_id %d\n", umm->umm_id);

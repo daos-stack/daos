@@ -93,6 +93,7 @@ int ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
 void *ad_root(struct ad_blob_handle bh, size_t size);
+void *ad_get_base_ptr(struct ad_blob_handle bh);
 
 #define AD_ARENA_ANY	(~0U)
 

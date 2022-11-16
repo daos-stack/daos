@@ -162,7 +162,7 @@ struct ad_arena_spec {
 #define BLOB_HDR_SIZE		(32 << 10)
 /** Root object size */
 #define AD_ROOT_OBJ_SIZE	(32 << 10)
-#define AD_ROOT_OBJ_OFF		(ARENA_HDR_SIZE + BLOB_HDR_SIZE + AD_ROOT_OBJ_SIZE)
+#define AD_ROOT_OBJ_OFF		(ARENA_HDR_SIZE + BLOB_HDR_SIZE)
 
 /**
  * Maximum number of groups within an arena.
