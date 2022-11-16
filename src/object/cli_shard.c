@@ -256,6 +256,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct obj_reasb_req	*reasb_req;
 	struct dcs_layout	*singv_lo, *singv_los;
 	struct obj_io_desc	*oiods;
+	struct daos_oclass_attr	*oca;
 	uint32_t		 shard_idx;
 	int			 i;
 	int			 rc = 0;
@@ -296,15 +297,14 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
 	reasb_req = rw_args->shard_args->reasb_req;
+	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
 	if (obj_is_ec(rw_args->shard_args->auxi.obj_auxi->obj)) {
 		shard_idx = obj_ec_shard_off(
 				obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
 						     rw_args->shard_args->auxi.obj_auxi->dkey_hash),
-				&rw_args->shard_args->auxi.obj_auxi->obj->cob_oca,
-				orw->orw_oid.id_shard);
+				oca, orw->orw_oid.id_shard);
 	} else {
-		shard_idx = rw_args->shard_args->auxi.shard -
-			    rw_args->shard_args->auxi.start_shard;
+		shard_idx = orw->orw_oid.id_shard % daos_oclass_grp_size(oca);
 	}
 
 	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr, reasb_req);
@@ -773,8 +773,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		/* single-value, trust the size replied from first shard or parity shard,
 		 * because if overwrite those shards must be updated.
 		 */
-		shard = orw->orw_oid.id_shard %
-			obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
+		shard = orw->orw_oid.id_shard % daos_oclass_grp_size(oca);
 		dkey_hash = obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
 						 orw->orw_dkey_hash);
 		if (shard == obj_ec_singv_small_idx(oca, dkey_hash, iod) ||
