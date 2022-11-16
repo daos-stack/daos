@@ -1153,9 +1153,9 @@ class TestPool(TestDaosApiBase):
             self.log.info(
                 "Pool %s query rebuild data check: status: %s && state: %s && version: %s = %s",
                 str(self),
-                "".join([current_status, "" if status is None else " in {}".format(status)]),
-                "".join([current_state, "" if states is None else " in {}".format(states)]),
-                "".join([current_version, "" if version is None else " > {}".format(version)]),
+                "".join([str(current_status), "" if status is None else " in {}".format(status)]),
+                "".join([str(current_state), "" if states is None else " in {}".format(states)]),
+                "".join([str(current_version), "" if version is None else " > {}".format(version)]),
                 all(checks.values()))
 
         return all(checks.values())
