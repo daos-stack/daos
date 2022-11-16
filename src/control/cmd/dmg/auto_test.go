@@ -30,7 +30,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			errors.New("no access points"),
+			errors.New("required flag"),
 		},
 		{
 			"Generate with defaults",
