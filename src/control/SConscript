@@ -1,27 +1,9 @@
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
-import sys
 import os
-import subprocess
 from os.path import join
 from os import urandom
 from binascii import b2a_hex
-
-Import('env', 'prereqs', 'daos_version', 'conf_dir')
-
-GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.16.0'
-GO_BIN = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
-
-
-def get_install_src_dir(repopath, name):
-    """Get the Gopath-based directory to run 'go install' on"""
-    return join(repopath, "src", "control", "cmd", name)
-
-
-def get_install_bin_path(benv, name):
-    """Get the final installation location for a binary with a given name"""
-    return join(benv.subst("$PREFIX"), "bin", name)
 
 
 def is_firmware_mgmt_build(benv):
@@ -56,12 +38,10 @@ def install_go_manpage(menv, name, binary):
     """
     Dynamically generate a man-page for a tool.
     """
-    gen_bin = join('$BUILD_DIR/src/control/bin', name)
-    name_ver = f'{name}.8'
-    build_path = join('$BUILD_DIR/src/control', name_ver)
-    install_path = join('$PREFIX/share/man/man8', name_ver)
-    menv.Command(build_path, [gen_bin, binary], f'{gen_bin} manpage -o {build_path}')
-    menv.InstallAs(install_path, build_path)
+    gen_bin = join('$BUILD_DIR/src/control', name)
+    build_path = join('$BUILD_DIR/src/control', f'{name}.8')
+    menv.Command(build_path, [binary], f'{gen_bin} manpage -o {build_path}')
+    menv.Install('$PREFIX/share/man/man8', build_path)
 
 
 def gen_build_id():
@@ -73,10 +53,12 @@ def gen_build_id():
 
 def go_ldflags():
     "Create the ldflags option for the Go build."
+
+    Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
-                     f'-X {path}.ConfigDir={conf_dir}',
-                     f'-B {gen_build_id()}'])
+                     f'-X {path}.ConfigDir={conf_dir}'])
+#                     f'-B {gen_build_id()}'])
 
 
 def install_go_bin(denv, name, libs=None):
@@ -85,14 +67,12 @@ def install_go_bin(denv, name, libs=None):
     libs should be a list of scons-built libraries, or None if none are needed.
     """
 
-    # Repository path shared by DAOS Go package import paths
-    repopath = join("github.com", "daos-stack", "daos")
-
     gosrc = Dir('.').srcnode().abspath
-    mod_src = join("cmd", name, "main.go")  # Module src
-    install_src = get_install_src_dir(repopath, name)
-    install_bin = get_install_bin_path(denv, name)
-    build_bin = join('$BUILD_DIR/src/control/bin', name)
+    sources = Glob(f'cmd/{name}/*.go')
+    sources.append(denv.d_go_bin)
+
+    install_src = f'github.com/daos-stack/daos/src/control/cmd/{name}'
+    build_bin = join('$BUILD_DIR/src/control', name)
 
     if libs is None:
         libs = []
@@ -102,58 +82,25 @@ def install_go_bin(denv, name, libs=None):
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
         denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    target = denv.d_run_command(build_bin, [mod_src], libs,
-                                f'cd {gosrc}; {GO_BIN} build -mod vendor -ldflags "{go_ldflags()}" '
+    target = denv.d_run_command(name, sources, libs,
+                                f'cd {gosrc}; {denv.d_go_bin} build -mod vendor '
+                                + f'-ldflags "{go_ldflags()}" '
                                 + f'{get_build_flags(denv)} '
                                 + f'{get_build_tags(denv)} '
                                 + f'-o {build_bin} {install_src}')
     # Use the intermediate build location in order to play nicely
     # with --install-sandbox.
-    AlwaysBuild(target)
-    denv.InstallAs(install_bin, target)
+    # AlwaysBuild(target)
+    print(type(target[0]))
+    denv.Install('$PREFIX/bin', target)
     return target
-
-
-def configure_go(denv):
-    """Do Go compiler checks"""
-    if GetOption('help') or GetOption('clean'):
-        return
-
-    def check_go_version(context):
-        """Check GO Version"""
-        context.Display('Checking for Go compiler... ')
-        if GO_BIN:
-            context.Display(GO_BIN + '\n')
-        else:
-            context.Result(0)
-            return 0
-
-        context.Display(f'Checking {GO_BIN} version... ')
-        cmd_rc = subprocess.run([GO_BIN, 'version'], check=True, stdout=subprocess.PIPE)
-        out = cmd_rc.stdout.decode('utf-8')
-        if len(out.split(' ')) < 3:
-            context.Result(f'failed to get version from "{out}"')
-            return 0
-
-        # go version go1.2.3 Linux/amd64
-        go_version = out.split(' ')[2].replace('go', '')
-        if len([x for x, y in
-                zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
-                if int(x) < int(y)]) > 0:
-            context.Result(f'{go_version} is too old (min supported: {MIN_GO_VERSION}) ')
-            return 0
-        context.Result(str(go_version))
-        return 1
-
-    conf = Configure(denv, custom_tests={'CheckGoVersion': check_go_version})
-    if not conf.CheckGoVersion():
-        print('no usable Go compiler found (yum install golang?)')
-        sys.exit(1)
-    conf.Finish()
 
 
 def scons():
     """Execute build"""
+
+    Import('env', 'prereqs')
+
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
@@ -175,7 +122,7 @@ def scons():
         install_dir('share/spdk/scripts')
         install_dir('include/spdk')
 
-    configure_go(denv)
+    denv.d_setup_go()
 
     prereqs.require(denv, 'ofi', 'hwloc')
     prereqs.require(denv, 'ucx')

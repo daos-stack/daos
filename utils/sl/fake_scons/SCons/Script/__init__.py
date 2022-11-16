@@ -289,6 +289,14 @@ class DefaultEnvironment():
         """Fake d_configure_mpi"""
         return DefaultEnvironment()
 
+    def d_setup_go(self):
+        """Fake d_setup_go"""
+        return
+
+    def d_go_bin(self):
+        """Fake d_go_bin"""
+        return 'go'
+
     def compiler_setup(self):
         """Fake compiler_setup"""
         return

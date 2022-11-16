@@ -85,7 +85,7 @@ def _known_deps(env, **kwargs):
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
-    for item in known_libs:
+    for item in sorted(known_libs):
         shared = libraries[item].get('shared', None)
         if shared is not None:
             shared_libs.append(shared)
@@ -120,7 +120,7 @@ def _run_command(env, target, sources, daos_libs, command):
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
     # Libraries in this case are used to force rebuild, so use Depends
-    Depends(result, static_deps + shared_deps)
+    # Depends(result, static_deps + shared_deps)
     return result
 
 

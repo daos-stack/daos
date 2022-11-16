@@ -7,6 +7,7 @@ import time
 import errno
 import SCons.Warnings
 import daos_build
+import go_builder
 import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
@@ -374,6 +375,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     # Add project specific methods to SCons environments.
     daos_build.setup(env)
+    go_builder.setup(env)
     compiler_setup.setup(env)
 
     base_env = env.Clone()
