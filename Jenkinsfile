@@ -542,7 +542,7 @@ pipeline {
                                                                 qb: quickBuild()) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8') + '"' +
+                                                quickBuildDeps() + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }

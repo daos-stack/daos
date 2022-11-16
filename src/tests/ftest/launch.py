@@ -1024,7 +1024,7 @@ class Launch():
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
             logger.info(
-                "Bullseye code coverage collection not configured on %s", result.failed_hosts)
+                "Bullseye code coverage collection not configured on %s", result.bullseye_hosts)
             self.bullseye_hosts = NodeSet()
         else:
             logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
@@ -2178,8 +2178,8 @@ class Launch():
         bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
         bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
         status = self._archive_files(
-                "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
-                "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
+            "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
         # Rename bullseye_coverage_logs.host/test.cov.* to
         # bullseye_coverage_logs/test.host.cov.*
         for item in os.listdir(self.job_results_dir):
