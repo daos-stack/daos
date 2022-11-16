@@ -4,7 +4,7 @@ import subprocess
 import os
 import re
 
-from SCons.Script import Configure, GetOption, Scanner, Glob
+from SCons.Script import Configure, GetOption, Scanner, Glob, Exit
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.16.0'
@@ -79,7 +79,7 @@ def _setup_go(env):
     conf = Configure(env, custom_tests={'CheckGoVersion': _check_go_version})
     if not conf.CheckGoVersion():
         print('no usable Go compiler found (yum install golang?)')
-        sys.exit(1)
+        Exit(1)
     conf.Finish()
     env.d_go_bin = go_bin
     print(env.d_go_bin)

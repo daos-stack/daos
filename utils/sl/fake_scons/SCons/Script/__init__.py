@@ -396,6 +396,10 @@ class Dir():
         return self
 
 
+class Scanner():
+    """Fake Scanner"""
+
+
 class File():
     """Fake File"""
 
