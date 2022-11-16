@@ -43,6 +43,7 @@ class DfuseCommand(ExecutableCommand):
                 DAOS_TEST_LOG_DIR path with which to assign D_LOG_FILE
         """
         self.env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        self.env['MALLOC_CHECK_'] = 3
 
 
 class Dfuse(DfuseCommand):
