@@ -176,7 +176,10 @@ struct crt_rpc_priv {
 				/* 1 if RPC fails HLC epsilon check */
 				crp_fail_hlc:1,
 				/* RPC completed flag */
-				crp_completed:1;
+				crp_completed:1,
+				/* RPC originated from a primary provider */
+				crp_src_is_primary:1;
+
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
