@@ -2248,21 +2248,21 @@ co_rf_simple(void **state)
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2299,7 +2299,7 @@ co_rf_simple(void **state)
 
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -2676,15 +2676,15 @@ co_redun_lvl(void **state)
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2738,13 +2738,13 @@ co_redun_lvl(void **state)
 		print_message("OC_EC_4P1G1 obj layout create should fail if ndom < 5\n");
 		io_oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
 		/* grp_size > ndom, should fail in dc_obj_open()->obj_layout_create */
-		rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+		rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
