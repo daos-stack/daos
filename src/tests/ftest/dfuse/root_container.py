@@ -85,10 +85,11 @@ class RootContainerTest(DfuseTestBase):
             Test the above procedure with 100 sub containers.
             Test the above procedure with 5 pools and 50 containers
             spread across the pools.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=container,dfuse
-        :avocado: tags=rootcontainer
+        :avocado: tags=RootContainerTest,test_rootcontainer
         """
         # Create a pool and start dfuse.
         pool = self._create_pool()
