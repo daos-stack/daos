@@ -627,7 +627,7 @@ Usage:
                       (NVMe SSD) PCI addresses or device
 ```
 
-To identify a single SSDs, any of the Device-UUIDs can be used which can be found from
+To identify a single SSD, any of the Device-UUIDs can be used which can be found from
 output of the `dmg storage query list-devices` command:
 ```bash
 $ dmg -l boro-11 storage led identify 6fccb374-413b-441a-bfbe-860099ac5e8d

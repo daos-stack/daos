@@ -347,7 +347,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
 
-	if (intent == DAOS_INTENT_KILL) {
+	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
 			if (vos_obj_refcount(obj) > 2)
 				D_GOTO(failed, rc = -DER_BUSY);

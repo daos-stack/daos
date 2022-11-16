@@ -182,7 +182,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt,
 						 tgts[i].st_tgt_id, &tgt_idx))
 				continue;
 
-			D_ASSERT(tgt_idx >= start_shard);
+			D_ASSERTF(tgt_idx >= start_shard, "i %d, tgt_idx %d, start_shard %d\n",
+				  i, tgt_idx, start_shard);
 
 			tgt_idx -= start_shard;
 			if (tgt_max_idx < tgt_idx)
@@ -190,7 +191,9 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt,
 		} else {
 			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 				continue;
-			D_ASSERT(tgts[i].st_shard_id >= start_shard);
+			D_ASSERTF(tgts[i].st_shard_id >= start_shard,
+				  "i %d, st_shard_id %d, start_shard %d\n", i,
+				  tgts[i].st_shard_id, start_shard);
 			tgt_idx = tgts[i].st_shard_id - start_shard;
 			D_ASSERTF(tgt_idx <= tgt_max_idx, "tgt_idx %u tgt_max_idx %u\n",
 				  tgt_idx, tgt_max_idx);

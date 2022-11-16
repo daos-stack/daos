@@ -2660,6 +2660,7 @@ setup_led_manage_drpc_call(Drpc__Call *call, char *tr_addr)
 	req.ids = tr_addr;
 	req.led_action = CTL__LED_ACTION__SET;
 	req.led_state = CTL__LED_STATE__QUICK_BLINK;
+	req.led_duration_mins = 2;
 	pack_led_manage_req(call, &req);
 }
 
