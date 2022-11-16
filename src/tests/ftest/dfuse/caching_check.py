@@ -62,8 +62,7 @@ class CachingCheck(IorTestBase):
         max_mib = int(IorMetrics.Max_MiB)
 
         # unmount dfuse and mount again with caching enabled
-        pcmd(self.hostlist_clients,
-             self.dfuse.get_umount_command(), expect_rc=None)
+        pcmd(self.hostlist_clients, self.dfuse.get_umount_command(), expect_rc=None)
         self.dfuse.disable_caching.update(False)
         self.dfuse.run()
         # run ior to obtain first read performance after mount
@@ -74,7 +73,10 @@ class CachingCheck(IorTestBase):
         out = self.run_ior_with_pool(fail_on_warning=False)
         with_caching = IorCommand.get_ior_metrics(out)
         # verify cached read performance is multiple times greater than without caching
+        # Log all the values first, then do the assert so that failures can be checked easily.
         for base_read in base_read_arr:
             actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])
             self.log.info('assert actual_change > min_change: %f > %f', actual_change, read_x)
+        for base_read in base_read_arr:
+            actual_change = percent_change(base_read[0][max_mib], with_caching[0][max_mib])
             self.assertTrue(actual_change > read_x)
