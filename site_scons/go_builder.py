@@ -45,14 +45,14 @@ def _setup_go(env):
     def _check_go_version(context):
         """Check GO Version"""
         context.Display('Checking for Go compiler... ')
-        if go_bin:
-            context.Display(go_bin + '\n')
+        if env.d_go_bin:
+            context.Display(env.d_go_bin + '\n')
         else:
             context.Result(0)
             return 0
 
-        context.Display(f'Checking {go_bin} version... ')
-        cmd_rc = subprocess.run([go_bin, 'version'], check=True, stdout=subprocess.PIPE)
+        context.Display(f'Checking {env.d_go_bin} version... ')
+        cmd_rc = subprocess.run([env.d_go_bin, 'version'], check=True, stdout=subprocess.PIPE)
         out = cmd_rc.stdout.decode('utf-8')
         if len(out.split(' ')) < 3:
             context.Result(f'failed to get version from "{out}"')
@@ -68,17 +68,16 @@ def _setup_go(env):
         context.Result(str(go_version))
         return 1
 
+    env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
+
     if GetOption('help') or GetOption('clean'):
         return
-
-    go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
 
     conf = Configure(env, custom_tests={'CheckGoVersion': _check_go_version})
     if not conf.CheckGoVersion():
         print('no usable Go compiler found (yum install golang?)')
         Exit(1)
     conf.Finish()
-    env.d_go_bin = go_bin
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 

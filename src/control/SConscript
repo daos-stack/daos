@@ -34,16 +34,6 @@ def get_build_flags(benv):
     return '-race'
 
 
-def install_go_manpage(menv, name, binary):
-    """
-    Dynamically generate a man-page for a tool.
-    """
-    gen_bin = join('$BUILD_DIR/src/control', name)
-    build_path = join('$BUILD_DIR/src/control', f'{name}.8')
-    menv.Command(build_path, [binary], f'{gen_bin} manpage -o {build_path}')
-    menv.Install('$PREFIX/share/man/man8', build_path)
-
-
 def gen_build_id():
     """generate a unique build id per binary for use by RPM
        https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
@@ -61,7 +51,7 @@ def go_ldflags():
                      f'-B $({gen_build_id()}$)'])
 
 
-def install_go_bin(denv, name, libs=None):
+def install_go_bin(env, name, libs=None, install_man=False):
     """
     Build a Go binary whose source is under directory 'name' and install it
     libs should be a list of scons-built libraries, or None if none are needed.
@@ -69,8 +59,7 @@ def install_go_bin(denv, name, libs=None):
 
     gosrc = Dir('.').srcnode().abspath
     sources = Glob(f'cmd/{name}/*.go')
-    # TODO: Make this work with scons -c
-    sources.append(denv.d_go_bin)
+    sources.append(env.d_go_bin)
 
     install_src = f'github.com/daos-stack/daos/src/control/cmd/{name}'
     build_bin = join('$BUILD_DIR/src/control', name)
@@ -82,15 +71,19 @@ def install_go_bin(denv, name, libs=None):
     # Must be run from the top of the source dir in order to pick up the vendored modules.
     # Propagate useful GO environment variables from the caller
     if 'GOCACHE' in os.environ:
-        denv['ENV']['GOCACHE'] = os.environ['GOCACHE']
-    target = denv.d_run_command(name, sources, libs,
-                                f'cd {gosrc}; {denv.d_go_bin} build -mod vendor '
-                                + f'-ldflags "{go_ldflags()}" '
-                                + f'{get_build_flags(denv)} '
-                                + f'{get_build_tags(denv)} '
-                                + f'-o {build_bin} {install_src}')
-    denv.Install('$PREFIX/bin', target)
-    return target
+        env['ENV']['GOCACHE'] = os.environ['GOCACHE']
+    target = env.d_run_command(name, sources, libs,
+                               f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
+                               + f'-ldflags "{go_ldflags()}" '
+                               + f'{get_build_flags(env)} '
+                               + f'{get_build_tags(env)} '
+                               + f'-o {build_bin} {install_src}')
+    env.Install('$PREFIX/bin', target)
+    if install_man:
+        gen_bin = join('$BUILD_DIR/src/control', name)
+        build_path = join('$BUILD_DIR/src/control', f'{name}.8')
+        env.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
+        env.Install('$PREFIX/share/man/man8', build_path)
 
 
 def scons():
@@ -128,7 +121,7 @@ def scons():
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
     if prereqs.client_requested():
         install_go_bin(denv, "daos_agent")
-        dmgbin = install_go_bin(denv, "dmg")
+        install_go_bin(denv, "dmg", install_man=True)
         if prereqs.test_requested():
             install_go_bin(denv, "hello_drpc")
 
@@ -139,11 +132,8 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        daosbin = install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'])
-
-        menv = denv.Clone()
-        install_go_manpage(menv, "dmg", dmgbin)
-        install_go_manpage(menv, "daos", daosbin)
+        install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
+                       install_man=True)
 
     if not prereqs.server_requested():
         return
