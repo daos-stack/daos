@@ -4,7 +4,7 @@ import subprocess
 import os
 import re
 
-from SCons.Script import Configure, GetOption, Scanner, Glob, Exit
+from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.16.0'
@@ -19,21 +19,21 @@ def _scan_go_file(node, _env, _path):
     includes = []
     for my_line in contents.splitlines():
         line = my_line.decode('utf-8')
+        if line == 'import "C"':
+            # With this line present in a go file all .c and .h files from the same directory will
+            # be built.
+            # https://go.p2hp.com/src/cmd/cgo/doc.go
+            includes.extend(Glob(f'{src_dir}/*.c'))
+            includes.extend(Glob(f'{src_dir}/*.h'))
         if line.startswith('#include'):
-            # TODO: This finds util.h but what about util.c?
-
             new = include_re.findall(line)
             for dep in new:
                 if os.path.exists(os.path.join(src_dir, dep)):
-                    includes.append(dep)
+                    includes.append(File(os.path.join(src_dir, dep)))
                 else:
                     includes.append(f'../../../include/{dep}')
         elif line.strip().startswith(GOINC_PREFIX):
-            # TODO: How does this work with src/control/lib where there's an extra level of
-            # the tree?  Does go import each dir or is it implicit and therefore possibly
-            # missed here.
-            idir = line[len(GOINC_PREFIX) + 1:-1]
-            deps_dir = os.path.join('src', idir)
+            deps_dir = os.path.join('src', line[len(GOINC_PREFIX) + 1:-1])
             includes.extend(Glob(f'{deps_dir}/*.go'))
 
     return includes
@@ -78,6 +78,12 @@ def _setup_go(env):
         print('no usable Go compiler found (yum install golang?)')
         Exit(1)
     conf.Finish()
+
+    # Must be run from the top of the source dir in order to pick up the vendored modules.
+    # Propagate useful GO environment variables from the caller
+    if 'GOCACHE' in os.environ:
+        env['ENV']['GOCACHE'] = os.environ['GOCACHE']
+
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 

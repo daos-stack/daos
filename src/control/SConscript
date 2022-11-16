@@ -68,10 +68,6 @@ def install_go_bin(env, name, libs=None, install_man=False):
         libs = []
     libs.extend(['daos_common', 'cart', 'gurt'])
 
-    # Must be run from the top of the source dir in order to pick up the vendored modules.
-    # Propagate useful GO environment variables from the caller
-    if 'GOCACHE' in os.environ:
-        env['ENV']['GOCACHE'] = os.environ['GOCACHE']
     target = env.d_run_command(name, sources, libs,
                                f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
                                + f'-ldflags "{go_ldflags()}" '
@@ -90,8 +86,6 @@ def scons():
     """Execute build"""
 
     Import('env', 'prereqs')
-
-    env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
