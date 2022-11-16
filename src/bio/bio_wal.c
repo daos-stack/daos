@@ -329,12 +329,12 @@ calc_trans_blks(unsigned int act_nr, unsigned int payload_sz, unsigned int blk_s
 		left_bytes = blk_sz - (remainder * entry_sz);
 
 	/* Set payload start block */
+	bd->bd_payload_off = sizeof(struct wal_trans_head);
 	if (left_bytes > 0) {
 		bd->bd_payload_idx = entry_blks - 1;
-		bd->bd_payload_off = blk_sz - left_bytes;
+		bd->bd_payload_off += (blk_sz - left_bytes);
 	} else {
 		bd->bd_payload_idx = entry_blks;
-		bd->bd_payload_off = sizeof(struct wal_trans_head);
 	}
 
 	/* Calculates payload blocks & left bytes in the last payload block */
@@ -349,14 +349,14 @@ calc_trans_blks(unsigned int act_nr, unsigned int payload_sz, unsigned int blk_s
 	}
 
 	/* Set tail csum block & total block */
+	bd->bd_tail_off = sizeof(struct wal_trans_head);
 	if (left_bytes >= sizeof(struct wal_trans_tail)) {
 		bd->bd_blks = entry_blks + payload_blks;
-		bd->bd_tail_off = blk_sz - left_bytes;
+		bd->bd_tail_off += (blk_sz - left_bytes);
 		return;
 	}
 
 	bd->bd_blks = entry_blks + payload_blks + 1;
-	bd->bd_tail_off = sizeof(struct wal_trans_head);
 }
 
 struct wal_trans_blk {
@@ -969,7 +969,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 
 	/* Wait for WAL commit completion */
 	D_ASSERT(biod->bd_dma_done != ABT_EVENTUAL_NULL);
-	ABT_eventual_wait(biod->bd_dma_done, NULL);
+	iod_dma_wait(biod);
 	/* The completion must have been called */
 	D_ASSERT(d_list_empty(&wal_tx.td_link));
 out:
