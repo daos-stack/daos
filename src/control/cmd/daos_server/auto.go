@@ -31,7 +31,7 @@ type configGenCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
-	AccessPoints string `short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	AccessPoints string `short:"a" long:"access-points" required:"1" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
 	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
@@ -68,10 +68,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
 	cmd.Debugf("ConfigGenerate called with command parameters %+v", cmd)
 
-	hf, err := getFabric(ctx, cmd.Logger)
-	if err != nil {
-		return nil, err
-	}
+	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
 	var ndc hardware.NetDevClass
 	switch cmd.NetClass {
@@ -83,14 +80,9 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		ndc = hardware.NetDevAny
 	}
 
-	nd, err := control.GetNetworkDetails(cmd.Logger, cmd.NrEngines, ndc, hf)
+	hf, err := getFabric(ctx, cmd.Logger)
 	if err != nil {
 		return nil, err
-	}
-
-	var accessPoints []string
-	if cmd.AccessPoints != "" {
-		accessPoints = strings.Split(cmd.AccessPoints, ",")
 	}
 
 	hs, err := getStorage(ctx, cmd.Logger)
@@ -98,22 +90,23 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		return nil, err
 	}
 
-	sd, err := control.GetStorageDetails(cmd.Logger, nd.EngineCount, cmd.MinNrSSDs, hs)
+	req := control.ConfigGenerateReq{
+		Log:          cmd.Logger,
+		NrEngines:    cmd.NrEngines,
+		MinNrSSDs:    cmd.MinNrSSDs,
+		NetClass:     ndc,
+		AccessPoints: accessPoints,
+	}
+
+	cmd.Debugf("control API GenConfig called with req: %+v", req)
+
+	resp, err := control.GenConfig(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}
 
-	ccs, err := control.GetCPUDetails(cmd.Logger, sd.NumaSSDs, nd.NumaCoreCount)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg, err := control.GenConfig(cmd.Logger, control.DefaultEngineCfg, accessPoints, nd, sd, ccs)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	cmd.Debugf("control API GenConfig resp: %+v", resp)
+	return resp.ConfigOut, nil
 }
 
 // Execute is run when configGenCmd activates.
