@@ -77,7 +77,7 @@ def _add_build_rpath(env, pathin="."):
 def _known_deps(env, **kwargs):
     """Get list of known libraries
 
-    SCons is sensitive to dependency order so return a consistnet order here
+    SCons is sensitive to dependency order so return a consistent order here
     """
     shared_libs = []
     static_libs = []
