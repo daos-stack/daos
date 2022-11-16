@@ -26,12 +26,10 @@ class DetectCompiler():
         icx = os.path.join(binp, 'icx')
         self.map = {}
         sys.stdout.flush()
-        # pylint: disable=too-many-boolean-expressions
         paths = [root, binp, libp, binarch, libarch, include, icx]
         for path in paths:
             if not os.path.exists(path):
                 return
-        # pylint: enable=too-many-boolean-expressions
         self.map = {'root': root,
                     'bin': binp,
                     'lib': libp,

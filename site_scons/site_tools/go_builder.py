@@ -81,6 +81,11 @@ def _setup_go(env):
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
 
 
-def setup(env):
+def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_setup_go, 'd_setup_go')
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True

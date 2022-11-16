@@ -7,7 +7,6 @@ import time
 import errno
 import SCons.Warnings
 import daos_build
-import go_builder
 import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
@@ -323,7 +322,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile', 'go_builder'])
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
@@ -375,7 +374,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     # Add project specific methods to SCons environments.
     daos_build.setup(env)
-    go_builder.setup(env)
     compiler_setup.setup(env)
 
     base_env = env.Clone()
