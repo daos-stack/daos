@@ -43,7 +43,8 @@ lmd_src='lmd_src'
 mkdir -p "/var/tmp/${lmd_src}"
 tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
 pushd "/var/tmp/${lmd_src}"
-  sed -i "s|cdn.rfxn.com|$lmd_base/maldetect|" files/internals/internals.conf
+  sed -i -e "/^base_domain=/s|\".*\"|\"$lmd_base/maldetect\"|" \
+      files/internals/internals.conf
   ./install.sh
 popd
 

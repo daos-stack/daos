@@ -873,6 +873,7 @@ pipeline {
                             junit 'maldetect_el8.xml'
                             archiveArtifacts artifacts: 'maldetect_el8.xml'
                             job_status_update()
+                            // Force a job failure if anything was found
                             sh label: 'Check if anything was found.',
                                script: '! grep "<error " maldetect_el8.xml'
                         }
@@ -908,6 +909,7 @@ pipeline {
                             junit 'maldetect_leap15.xml'
                             archiveArtifacts artifacts: 'maldetect_leap15.xml'
                             job_status_update()
+                            // Force a job failure if anything was found
                             sh label: 'Check if anything was found.',
                                script: '! grep "<error " maldetect_leap15.xml'
                         }
