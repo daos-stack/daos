@@ -429,7 +429,7 @@ class CommandWithParameters(ObjectWithParameters):
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
-                command .append(value)
+                command.append(value)
 
         # Return the command and its parameters
         return " ".join(command)
