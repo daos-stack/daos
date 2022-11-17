@@ -8,7 +8,7 @@ from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.16.0'
-include_re = re.compile(r'\#include [<"](\S+)[>"]', re.M)
+include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 GOINC_PREFIX = '"github.com/daos-stack/daos/src/'
 
 
@@ -21,20 +21,21 @@ def _scan_go_file(node, _env, _path):
         line = my_line.decode('utf-8')
         if line == 'import "C"':
             # With this line present in a go file all .c and .h files from the same directory will
-            # be built.
+            # be built so mark them all as dependencies.
             # https://go.p2hp.com/src/cmd/cgo/doc.go
             includes.extend(Glob(f'{src_dir}/*.c'))
             includes.extend(Glob(f'{src_dir}/*.h'))
         if line.startswith('#include'):
             new = include_re.findall(line)
             for dep in new:
-                if os.path.exists(os.path.join(src_dir, dep)):
-                    includes.append(File(os.path.join(src_dir, dep)))
+                header = dep[:-1]
+                if dep[-1] == '"':
+                    includes.append(File(os.path.join(src_dir, header)))
                 else:
-                    includes.append(f'../../../include/{dep}')
+                    includes.append(f'../../../include/{header}')
         elif line.strip().startswith(GOINC_PREFIX):
-            deps_dir = os.path.join('src', line[len(GOINC_PREFIX) + 1:-1])
-            includes.extend(Glob(f'{deps_dir}/*.go'))
+            deps_dir = line[len(GOINC_PREFIX) + 1:-1]
+            includes.extend(Glob(f'src/{deps_dir}/*.go'))
 
     return includes
 

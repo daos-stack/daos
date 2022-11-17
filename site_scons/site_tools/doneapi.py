@@ -26,8 +26,7 @@ class DetectCompiler():
         icx = os.path.join(binp, 'icx')
         self.map = {}
         sys.stdout.flush()
-        paths = [root, binp, libp, binarch, libarch, include, icx]
-        for path in paths:
+        for path in [root, binp, libp, binarch, libarch, include, icx]:
             if not os.path.exists(path):
                 return
         self.map = {'root': root,
