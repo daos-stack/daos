@@ -45,16 +45,32 @@ static struct ad_group_spec grp_specs_def[] = {
 		.gs_count	= 512,
 	},	/* group size = 128K */
 	{
+		.gs_unit	= 384,
+		.gs_count	= 341,
+	},	/* group size = 128K */
+	{
 		.gs_unit	= 512,
 		.gs_count	= 512,
+	},	/* group size = 256K */
+	{
+		.gs_unit	= 768,
+		.gs_count	= 341,
 	},	/* group size = 256K */
 	{
 		.gs_unit	= 1024,
 		.gs_count	= 256,
 	},	/* group size = 256K */
 	{
+		.gs_unit	= 1536,
+		.gs_count	= 170,
+	},	/* group size = 256K */
+	{
 		.gs_unit	= 2048,
 		.gs_count	= 128,
+	},	/* group size = 256K */
+	{
+		.gs_unit	= 3072,
+		.gs_count	= 85,
 	},	/* group size = 256K */
 	{
 		.gs_unit	= 4096,
