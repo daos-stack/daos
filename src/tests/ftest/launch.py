@@ -1024,7 +1024,7 @@ class Launch():
         result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
         if not result.passed:
             logger.info(
-                "Bullseye code coverage collection not configured on %s", result.bullseye_hosts)
+                "Bullseye code coverage collection not configured on %s", self.bullseye_hosts)
             self.bullseye_hosts = NodeSet()
         else:
             logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
