@@ -183,6 +183,7 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
+int ds_cont_chk_post(struct ds_pool_child *pool_child);
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
@@ -263,6 +264,7 @@ int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
 
 int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
 
-int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in, bool for_svc);
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		      daos_prop_t *prop_old, bool for_svc);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

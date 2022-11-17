@@ -152,6 +152,8 @@ btr_ops_t chk_rank_ops = {
 bool
 chk_is_on_leader(uint64_t gen, d_rank_t leader, bool known_leader)
 {
+	D_ASSERTF(gen != 0, "Invalid gen "DF_X64"\n", gen);
+
 	if (!known_leader)
 		leader = chk_leader->ci_prop.cp_leader;
 
@@ -623,7 +625,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&uuid;
-	cru.cru_msg = "Check leader detects dangling pool";
+	cru.cru_msg = "Check leader detects dangling pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -824,7 +826,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_msg = "Check leader detects orphan pool";
+	cru.cru_msg = "Check leader detects orphan pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -1112,7 +1114,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 
 			clue = chk_leader_locate_pool_clue(cpr);
 			snprintf(suggested, CHK_MSG_BUFLEN - 1,
-				 "Start pool service under DICTATE mode from rank %d [suggested]",
+				 "Start pool service under DICTATE mode from rank %d [suggested].",
 				 clue->pc_rank);
 			strs[0] = suggested;
 			strs[1] = "Destroy the corrupted pool from related engines.";
@@ -1140,7 +1142,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_msg = "Check leader detects corrupted pool without quorum";
+	cru.cru_msg = "Check leader detects corrupted pool without quorum.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -1350,6 +1352,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	char				*strs[3];
 	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
@@ -1427,7 +1430,7 @@ try_ps:
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 			snprintf(suggested, CHK_MSG_BUFLEN - 1,
 				 "Inconsistent pool label: (null) (MS) vs %s (PS), "
-				 "Trust PS pool label [suggested]", clue->pc_label);
+				 "Trust PS pool label [suggested].", clue->pc_label);
 			strs[1] = "Trust MS pool label.";
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
@@ -1466,7 +1469,11 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_msg = "Check leader detects corrupted pool label";
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check leader detects corrupted pool label: %s (MS) vs %s (PS).\n",
+		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
+		 clue->pc_label != NULL ? clue->pc_label : "(null)");
+	cru.cru_msg = msg;
 	cru.cru_options = options;
 	cru.cru_details = details;
 	cru.cru_result = result;
@@ -1807,7 +1814,7 @@ chk_leader_pool_ult(void *arg)
 	struct chk_pool_rec	*cpr = arg;
 	struct chk_instance	*ins = cpr->cpr_ins;
 	struct chk_bookmark	*cbk = &cpr->cpr_bk;
-	static d_rank_list_t	*ranks;
+	d_rank_list_t		*ranks;
 	struct ds_pool_clue	*clue;
 	struct chk_iv		 iv = { 0 };
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
@@ -2054,8 +2061,8 @@ out:
 
 	chk_leader_exit(ins, ins_status, pool_status, bcast);
 
-	D_INFO(DF_LEADER" scheduler exit at phase %u with status %u: "DF_RC"\n",
-	       DP_LEADER(ins), cbk->cb_phase, ins_status, DP_RC(rc));
+	D_INFO(DF_LEADER" scheduler exit at phase %u with status %u: rc %d\n",
+	       DP_LEADER(ins), cbk->cb_phase, ins_status, rc);
 
 	ins->ci_sched_running = 0;
 }
@@ -2206,6 +2213,7 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 			goto out;
 	} else {
 		ctpa.ctpa_ins = ins;
+		ctpa.ctpa_gen = gen;
 		rc = chk_traverse_pools(chk_pools_load_from_db, &ctpa);
 		if (rc != 0)
 			goto out;
@@ -2278,6 +2286,13 @@ chk_leader_start_post(struct chk_instance *ins)
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
 		pool_cbk = &cpr->cpr_bk;
+
+		if (pool_cbk->cb_magic != CHK_BK_MAGIC_POOL) {
+			memset(pool_cbk, 0, sizeof(*pool_cbk));
+			pool_cbk->cb_magic = CHK_BK_MAGIC_POOL;
+			pool_cbk->cb_gen = ins_cbk->cb_gen;
+			pool_cbk->cb_version = DAOS_CHK_VERSION;
+		}
 
 		/*
 		 * No engine report shard for the pool, it is dangling pool,
@@ -2630,7 +2645,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	}
 
 	D_INFO("Leader %s check with api_flags %x, phase %d, leader %u, flags %x, gen "
-	       DF_X64": %d\n", (flags & CHK__CHECK_FLAG__CF_RESET) ? "start" : "resume",
+	       DF_X64": rc %d\n", (ins->ci_start_flags & CSF_RESET_ALL) ? "start" : "resume",
 	       flags, phase, myrank, ins->ci_start_flags, cbk->cb_gen, rc);
 
 	chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
@@ -2671,7 +2686,7 @@ out_tree:
 out_log:
 	D_CDEBUG(likely(rc < 0), DLOG_ERR, DLOG_INFO,
 		 "Leader %s to start check on %u ranks for %d pools with "
-		 "flags %x, phase %d, leader %u, gen "DF_X64": rc = %d\n",
+		 "api_flags %x, phase %d, leader %u, gen "DF_X64": rc = %d\n",
 		 rc < 0 ? "failed" : "try", rank_nr, pool_nr, flags, phase,
 		 myrank, cbk->cb_gen, rc);
 
@@ -2766,8 +2781,8 @@ out:
 	ins->ci_stopping = 0;
 
 	if (rc >= 0) {
-		D_INFO("Leader stopped check with gen "DF_X64" for %d pools\n",
-		       cbk->cb_gen, pool_nr);
+		D_INFO("Leader stopped check with gen "DF_X64" for %d pools: rc %d\n",
+		       cbk->cb_gen, pool_nr, rc);
 
 		chk_pools_dump(NULL, pool_nr, pools);
 	} else {
@@ -3229,9 +3244,9 @@ chk_leader_notify(struct chk_iv *iv)
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_NOTAPPLICABLE, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" handle notification from rank %u, for pool "
-		 DF_UUIDF", phase %u, ins_status %u, pool_status %u, gen "DF_X64": "DF_RC"\n",
-		 DP_LEADER(ins), iv->ci_rank, DP_UUID(iv->ci_uuid), iv->ci_phase,
-		 iv->ci_ins_status, iv->ci_pool_status, iv->ci_gen, DP_RC(rc));
+		 DF_UUIDF", phase %u, ins_status %u, pool_status %u, gen "DF_X64", seq "DF_X64
+		 ": "DF_RC"\n", DP_LEADER(ins), iv->ci_rank, DP_UUID(iv->ci_uuid), iv->ci_phase,
+		 iv->ci_ins_status, iv->ci_pool_status, iv->ci_gen, iv->ci_seq, DP_RC(rc));
 
 	return rc == -DER_NOTAPPLICABLE ? 0 : rc;
 }

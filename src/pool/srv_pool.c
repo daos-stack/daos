@@ -4618,6 +4618,29 @@ out_free:
 	return rc;
 }
 
+static int
+ds_pool_mark_connectable_internal(struct rdb_tx *tx, struct pool_svc *svc)
+{
+	d_iov_t		value;
+	uint32_t	connectable = 0;
+	int		rc;
+
+	d_iov_set(&value, &connectable, sizeof(connectable));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
+	if ((rc == 0 && connectable == 0) || rc == -DER_NONEXIST) {
+		connectable = 1;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_connectable, &value);
+		if (rc == 0)
+			rc = 1;
+	}
+
+	if (rc < 0)
+		D_ERROR("Failed to mark connectable of pool "DF_UUIDF": "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+
+	return rc;
+}
+
 static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 					  struct pool_svc *svc, int rc)
 {
@@ -4625,7 +4648,6 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 	d_iov_t				value;
 	uint32_t			upgrade_status;
 	uint32_t			global_version;
-	uint32_t			connectable;
 	int				rc1;
 	daos_prop_t			*prop = NULL;
 
@@ -4659,11 +4681,9 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 				"of pool, %d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
 		}
-		connectable = 1;
-		d_iov_set(&value, &connectable, sizeof(connectable));
-		rc1 = rdb_tx_update(&tx, &svc->ps_root, &ds_pool_prop_connectable,
-				    &value);
-		if (rc1) {
+
+		rc1 = ds_pool_mark_connectable_internal(&tx, svc);
+		if (rc1 < 0) {
 			D_ERROR(DF_UUID": failed to set connectable of pool "
 				"%d.\n", DP_UUID(pool_uuid), rc1);
 			D_GOTO(out_tx, rc1);
@@ -7112,6 +7132,26 @@ ds_pool_target_status_check(struct ds_pool *pool, uint32_t id, uint8_t matched_s
 		*p_tgt = target;
 
 	return target->ta_comp.co_status == matched_status ? 1 : 0;
+}
+
+int
+ds_pool_mark_connectable(struct ds_pool_svc *ds_svc)
+{
+	struct pool_svc		*svc = pool_ds2svc(ds_svc);
+	struct rdb_tx		 tx;
+	int			 rc;
+
+	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
+	if (rc != 0) {
+		ABT_rwlock_wrlock(svc->ps_lock);
+		rc = ds_pool_mark_connectable_internal(&tx, svc);
+		if (rc > 0)
+			rc = rdb_tx_commit(&tx);
+		ABT_rwlock_unlock(svc->ps_lock);
+		rdb_tx_end(&tx);
+	}
+
+	return rc;
 }
 
 int

@@ -166,6 +166,8 @@ CRT_RPC_DECLARE(chk_act, DAOS_ISEQ_CHK_ACT, DAOS_OSEQ_CHK_ACT);
  */
 #define DAOS_ISEQ_CHK_CONT_LIST							\
 	((uint64_t)		(ccli_gen)		CRT_VAR)		\
+	((d_rank_t)		(ccli_rank)		CRT_VAR)		\
+	((uint32_t)		(ccli_padding)		CRT_VAR)		\
 	((uuid_t)		(ccli_pool)		CRT_VAR)
 
 #define DAOS_OSEQ_CHK_CONT_LIST							\
@@ -499,6 +501,7 @@ struct chk_instance {
 
 struct chk_iv {
 	uint64_t		 ci_gen;
+	uint64_t		 ci_seq;
 	uuid_t			 ci_uuid;
 	d_rank_t		 ci_rank;
 	uint32_t		 ci_phase;
@@ -525,6 +528,7 @@ struct chk_pool_rec {
 	d_list_t		 cpr_shard_list;
 	uint32_t		 cpr_shard_nr;
 	uint32_t		 cpr_started:1,
+				 cpr_start_post:1,
 				 cpr_stop:1,
 				 cpr_done:1,
 				 cpr_skip:1,
@@ -612,6 +616,8 @@ void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
 void chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[]);
 
 void  chk_pool_remove_nowait(struct chk_pool_rec *cpr, bool destroy);
+
+void chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret);
 
 void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret);
 
@@ -970,6 +976,8 @@ chk_pool_shutdown(struct chk_pool_rec *cpr)
 	D_DEBUG(DB_MD, "Stop PS for "DF_UUIDF": "DF_RC"\n",
 		DP_UUID(cpr->cpr_uuid), DP_RC(rc));
 	ds_pool_stop(cpr->cpr_uuid);
+	cpr->cpr_started = 0;
+	cpr->cpr_start_post = 0;
 }
 
 static inline void
