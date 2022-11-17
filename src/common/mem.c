@@ -866,9 +866,147 @@ bmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
+/* FIXME: Fake redo actions for initial performance evaluation */
+static __thread struct umem_wal_tx	*glb_fake_tx;
+
+#define	BMEM_FAKE_ACT_NR_MAX	2
+struct bmem_fake_tx {
+	uint32_t		ft_act_nr;
+	uint32_t		ft_payload_sz;
+	uint32_t		ft_act_idx;
+	uint32_t		ft_nest;
+	struct umem_action	ft_acts[BMEM_FAKE_ACT_NR_MAX];
+	char			*ft_buffer;
+};
+
+static uint32_t
+bmem_fake_act_nr(struct umem_wal_tx *tx)
+{
+	struct bmem_fake_tx	*fake_tx = (struct bmem_fake_tx *)&tx->utx_private;
+
+	return fake_tx->ft_act_nr;
+}
+
+static uint32_t
+bmem_fake_payload_sz(struct umem_wal_tx *tx)
+{
+	struct bmem_fake_tx	*fake_tx = (struct bmem_fake_tx *)&tx->utx_private;
+
+	return fake_tx->ft_payload_sz;
+}
+
+static struct umem_action *
+bmem_fake_act_first(struct umem_wal_tx *tx)
+{
+	struct bmem_fake_tx	*fake_tx = (struct bmem_fake_tx *)&tx->utx_private;
+
+	fake_tx->ft_act_idx = 0;
+	return &fake_tx->ft_acts[fake_tx->ft_act_idx];
+}
+
+static struct umem_action *
+bmem_fake_act_next(struct umem_wal_tx *tx)
+{
+	struct bmem_fake_tx	*fake_tx = (struct bmem_fake_tx *)&tx->utx_private;
+
+	fake_tx->ft_act_idx++;
+	if (fake_tx->ft_act_idx >= fake_tx->ft_act_nr)
+		return NULL;
+	return &fake_tx->ft_acts[fake_tx->ft_act_idx];
+}
+
+static struct umem_wal_tx_ops bmem_fake_wal_tx_ops = {
+	.wtx_act_nr	= bmem_fake_act_nr,
+	.wtx_payload_sz	= bmem_fake_payload_sz,
+	.wtx_act_first	= bmem_fake_act_first,
+	.wtx_act_next	= bmem_fake_act_next,
+};
+
+static inline void
+bmem_free_fake_tx(struct umem_wal_tx *fake_wal_tx)
+{
+	struct bmem_fake_tx	*fake_tx;
+
+	fake_tx = (struct bmem_fake_tx *)&fake_wal_tx->utx_private;
+	D_FREE(fake_tx->ft_buffer);
+	D_FREE(fake_wal_tx);
+}
+
+static struct umem_wal_tx *
+bmem_alloc_fake_tx(struct umem_store *store)
+{
+	struct umem_wal_tx	*fake_wal_tx;
+	struct bmem_fake_tx	*fake_tx;
+	struct umem_action	*act;
+	int			 payload_sz[BMEM_FAKE_ACT_NR_MAX] = {2000, 20};
+	int			 rc, i;
+
+	/* Nested transaction */
+	if (glb_fake_tx != NULL) {
+		fake_wal_tx = glb_fake_tx;
+		fake_tx = (struct bmem_fake_tx *)&fake_wal_tx->utx_private;
+		fake_tx->ft_nest++;
+		return fake_wal_tx;
+	}
+
+	D_ALLOC_PTR(fake_wal_tx);
+	if (fake_wal_tx == NULL)
+		return NULL;
+
+	fake_wal_tx->utx_ops = &bmem_fake_wal_tx_ops;
+
+	fake_tx = (struct bmem_fake_tx *)&fake_wal_tx->utx_private;
+	D_ALLOC(fake_tx->ft_buffer, 4000);
+	if (fake_tx->ft_buffer == NULL) {
+		D_FREE(fake_wal_tx);
+		return NULL;
+	}
+	fake_tx->ft_nest = 1;
+	fake_tx->ft_act_nr = BMEM_FAKE_ACT_NR_MAX;
+
+	for (i = 0; i < BMEM_FAKE_ACT_NR_MAX; i++) {
+		act = &fake_tx->ft_acts[i];
+
+		act->ac_opc		= UMEM_ACT_COPY_PTR;
+		act->ac_copy_ptr.addr	= i * 10000;	/* fake blob offset */
+		act->ac_copy_ptr.size	= payload_sz[i];
+		act->ac_copy_ptr.ptr	= (uint64_t)fake_tx->ft_buffer;
+
+		fake_tx->ft_payload_sz += payload_sz[i];
+	}
+
+	if (store->stor_ops != NULL) {
+		rc = store->stor_ops->so_wal_reserv(store, &fake_wal_tx->utx_id);
+		if (rc) {
+			D_ERROR("Reserve WAL tx ID failed. "DF_RC"\n", DP_RC(rc));
+			bmem_free_fake_tx(fake_wal_tx);
+			return NULL;
+		}
+	}
+	D_ASSERTF(glb_fake_tx == NULL, "glb_fake_tx = %p", glb_fake_tx);
+	glb_fake_tx = fake_wal_tx;
+
+	return fake_wal_tx;
+}
+
 static int
 bmem_tx_abort(struct umem_instance *umm, int err)
 {
+	struct umem_wal_tx	*fake_wal_tx = glb_fake_tx;
+	struct bmem_fake_tx	*fake_tx;
+
+	if (fake_wal_tx != NULL) {
+		fake_tx = (struct bmem_fake_tx *)&glb_fake_tx->utx_private;
+		D_ASSERT(fake_tx->ft_nest > 0);
+		fake_tx->ft_nest--;
+		if (fake_tx->ft_nest == 0) {
+			glb_fake_tx = NULL;
+			bmem_free_fake_tx(fake_wal_tx);
+		}
+	} else {
+		D_ERROR("glb_fake_tx is NULL\n");
+	}
+
 	/*
 	 * obj_tx_abort() may have already been called in the error
 	 * handling code of pmemobj APIs.
@@ -885,6 +1023,12 @@ bmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 {
 	int rc;
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	struct umem_store	*store = &umm->umm_pool->up_store;
+	struct umem_wal_tx	*fake_wal_tx;
+
+	fake_wal_tx = bmem_alloc_fake_tx(store);
+	if (fake_wal_tx == NULL)
+		return -DER_NOMEM;
 
 	if (txd != NULL) {
 		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
@@ -895,6 +1039,8 @@ bmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 	}
 
 	if (rc != 0) {
+		glb_fake_tx = NULL;
+		bmem_free_fake_tx(fake_wal_tx);
 		/*
 		 * dav_tx_end() needs be called to re-initialize the
 		 * tx state when dav_tx_begin() failed.
@@ -909,11 +1055,35 @@ static int
 bmem_tx_commit(struct umem_instance *umm, void *data)
 {
 	int rc;
+	struct umem_store	*store = &umm->umm_pool->up_store;
+	struct umem_wal_tx	*fake_wal_tx = glb_fake_tx;
+	struct bmem_fake_tx	*fake_tx = NULL;
+
+	if (fake_wal_tx != NULL) {
+		fake_tx = (struct bmem_fake_tx *)&fake_wal_tx->utx_private;
+		D_ASSERT(fake_tx->ft_nest > 0);
+		fake_tx->ft_nest--;
+		/* Clear glb_fake_tx before WAL commit (which will yield) */
+		if (fake_tx->ft_nest == 0)
+			glb_fake_tx = NULL;
+	} else {
+		D_ERROR("glb_fake_tx is NULL\n");
+	}
 
 	dav_tx_commit();
 	rc = dav_tx_end();
+	if (rc)
+		return umem_tx_errno(rc);
 
-	return rc ? umem_tx_errno(rc) : 0;
+	if (fake_tx != NULL && fake_tx->ft_nest == 0 && store->stor_ops != NULL) {
+		rc = store->stor_ops->so_wal_submit(store, fake_wal_tx, data);
+		if (rc)
+			D_ERROR("Failed to commit WAL. "DF_RC"\n", DP_RC(rc));
+		bmem_free_fake_tx(fake_wal_tx);
+		return rc;
+	}
+
+	return 0;
 }
 
 static int
