@@ -115,6 +115,12 @@ struct crt_gdata {
 
 	ATOMIC uint64_t		cg_rpcid; /* rpc id */
 
+	/** Last remote tag sent */
+	uint32_t		cg_last_remote_tag;
+
+	/** Number of remote tags */
+	uint32_t		cg_num_remote_tags;
+
 	/* protects crt_gdata */
 	pthread_rwlock_t	cg_rwlock;
 
