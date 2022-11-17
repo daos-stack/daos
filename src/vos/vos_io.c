@@ -419,6 +419,8 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		if (buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
+			/* clear original/copied buffer addr */
+			biov_dup->bi_buf = NULL;
 			return -DER_NOMEM;
 		}
 		ioc->ic_dedup_bufs[*buf_idx] = buf;
