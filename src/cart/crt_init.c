@@ -199,6 +199,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
 
+	/* By default set number of secondary remote tags to 1 */
+	crt_gdata.cg_num_remote_tags = 1;
+	crt_gdata.cg_last_remote_tag = 0;
+
 	d_srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 

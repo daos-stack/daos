@@ -1107,7 +1107,6 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	crt_phy_addr_t		 uri = NULL;
 	int			 rc = 0;
 	crt_phy_addr_t		 base_addr = NULL;
-	struct crt_prov_gdata	*prov_data;
 	int			 dst_tag;
 
 	req = &rpc_priv->crp_pub;
@@ -1122,13 +1121,12 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, bool *uri_exists)
 	/* For a secondary provider round-robin between all available remote contexts */
 	if (!crt_gdata.cg_provider_is_primary) {
 
-		prov_data = &crt_gdata.cg_prov_gdata_secondary[0];
+		D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+		crt_gdata.cg_last_remote_tag++;
+		crt_gdata.cg_last_remote_tag %= crt_gdata.cg_num_remote_tags;
 
-		D_MUTEX_LOCK(&prov_data->cpg_mutex);
-		prov_data->cpg_last_remote_tag++;
-		prov_data->cpg_last_remote_tag %= prov_data->cpg_num_remote_tags;
-		dst_tag = prov_data->cpg_last_remote_tag;
-		D_MUTEX_UNLOCK(&prov_data->cpg_mutex);
+		dst_tag = crt_gdata.cg_last_remote_tag;
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	}
 
 	crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
