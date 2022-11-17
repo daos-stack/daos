@@ -5800,7 +5800,11 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 
 		/* choose one randomly from the parities */
 		p_size = obj_ec_parity_tgt_nr(oca);
-		idx = d_rand() % p_size;
+		D_ASSERT(p_size > 0);
+		if (obj_auxi->opc == DAOS_OBJ_RPC_ENUMERATE)
+			idx = p_size - 1;
+		else
+			idx = d_rand() % p_size;
 		for (i = 0; i < p_size; i++, idx = (idx + 1) % p_size) {
 			/* let's skip the rebuild shard for non-update op */
 			shard = parities[idx];

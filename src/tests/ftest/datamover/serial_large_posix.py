@@ -64,11 +64,11 @@ class DmvrSerialLargePosix(DataMoverTestBase):
             dst_pool=pool2)
 
         # Get the destination cont2 uuid
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params("DAOS", "/", pool2, cont2_uuid, flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool2, cont2_label, flags=mdtest_flags[1])
 
     def test_dm_serial_large_posix_dserialize(self):
         """

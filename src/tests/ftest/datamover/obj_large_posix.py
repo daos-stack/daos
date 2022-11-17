@@ -49,11 +49,11 @@ class DmvrObjLargePosix(DataMoverTestBase):
             self.test_id + " (cont1 to cont2)",
             src_path=format_path(pool1, cont1),
             dst_path=format_path(pool1))
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params("DAOS", "/", pool1, cont2_uuid, flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool1, cont2_label, flags=mdtest_flags[1])
 
     def test_dm_obj_large_posix_dcp(self):
         """Jira ID: DAOS-6892
