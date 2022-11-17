@@ -449,8 +449,7 @@ daos_oit_list(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 failed:
 	/* NB: OK to call with empty sgl */
 	d_sgl_fini(&oa->oa_sgl, false);
-	if (oa->oa_kds)
-		D_FREE(oa->oa_kds);
+	D_FREE(oa->oa_kds);
 	D_FREE(oa);
 	return rc;
 }
