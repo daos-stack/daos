@@ -4285,7 +4285,7 @@ def test_alloc_cont_create(server, conf, wf):
                 'container',
                 'create',
                 pool,
-                cont_id,
+                str(cont_id),
                 '--properties',
                 'srv_cksum:on']
 
