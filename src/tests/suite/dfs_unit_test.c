@@ -1850,7 +1850,7 @@ dfs_test_async_io(void **state)
 }
 
 static void
-dfs_test_readdir(void **state)
+dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 {
 	dfs_obj_t		*dir;
 	dfs_obj_t		*obj;
@@ -1865,11 +1865,13 @@ dfs_test_readdir(void **state)
 	int			num_dirs = 0;
 	int			total_entries = 0;
 	bool			check_first = true;
+	char			dir_name[24];
 	int			i;
 	int			rc;
 
-	rc = dfs_open(dfs_mt, NULL, "rd_dir", S_IFDIR | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	sprintf(dir_name, "dir_%d", obj_class);
+	rc = dfs_open(dfs_mt, NULL, dir_name, S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, obj_class, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
 
 	/** create 100 files and dirs */
@@ -1954,8 +1956,25 @@ dfs_test_readdir(void **state)
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
-	rc = dfs_remove(dfs_mt, NULL, "rd_dir", 1, NULL);
+	rc = dfs_remove(dfs_mt, NULL, dir_name, 1, NULL);
 	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_readdir(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Running readdir test with OC_SX dir..\n");
+	dfs_test_readdir_internal(state, OC_SX);
+	if (test_runable(arg, 2)) {
+		print_message("Running readdir test with OC_RP_2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_RP_2GX);
+	}
+	if (test_runable(arg, 4)) {
+		print_message("Running readdir test with OC_EC_2P2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_EC_2P2GX);
+	}
 }
 
 static int

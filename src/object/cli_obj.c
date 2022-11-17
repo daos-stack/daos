@@ -4577,8 +4577,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			break;
 		}
 
-		if (obj_auxi->req_tgts.ort_shard_tgts !=
-		    obj_auxi->req_tgts.ort_tgts_inline)
+		if (obj_auxi->req_tgts.ort_shard_tgts != obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
 
 		if (!d_list_empty(head)) {
