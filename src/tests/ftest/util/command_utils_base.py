@@ -424,15 +424,15 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         # Join all the parameters that have been assigned a value with the
-        # command to create the command string
-        params = []
+        # path and the command to create the command string
+        command = [os.path.join(self._path, self._command)]
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
-                params.append(value)
+                command .append(value)
 
-        # Return the path to the command, the command, and its parameters
-        return " ".join(os.path.join(self._path, self._command) + params)
+        # Return the command and its parameters
+        return " ".join(command)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
