@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
@@ -222,14 +223,16 @@ func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Conte
 	return context.WithDeadline(parent, rd)
 }
 
-// isTimeout returns true if the error is a context timeout error.
+// isTimeout returns true if the error is a context/connection timeout error.
 func isTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
 
 	cause := errors.Cause(err)
-	return cause == context.DeadlineExceeded || status.Code(cause) == codes.DeadlineExceeded
+	return cause == context.DeadlineExceeded ||
+		cause == os.ErrDeadlineExceeded ||
+		status.Code(cause) == codes.DeadlineExceeded
 }
 
 // wrapReqTimeout checks the error for a timeout and returns a
