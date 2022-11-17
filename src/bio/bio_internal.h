@@ -569,6 +569,7 @@ int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
 		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
+void iod_dma_wait(struct bio_desc *biod);
 
 static inline struct bio_dma_buffer *
 iod_dma_buf(struct bio_desc *biod)

@@ -346,7 +346,7 @@ typedef struct {
 	int		 (*mo_tx_begin)(struct umem_instance *umm,
 					struct umem_tx_stage_data *txd);
 	/** commit memory transaction */
-	int		 (*mo_tx_commit)(struct umem_instance *umm);
+	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
 #ifdef DAOS_PMEM_BUILD
 	/** get TX stage */
@@ -637,12 +637,18 @@ umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 }
 
 static inline int
-umem_tx_commit(struct umem_instance *umm)
+umem_tx_commit_ex(struct umem_instance *umm, void *data)
 {
 	if (umm->umm_ops->mo_tx_commit)
-		return umm->umm_ops->mo_tx_commit(umm);
+		return umm->umm_ops->mo_tx_commit(umm, data);
 	else
 		return 0;
+}
+
+static inline int
+umem_tx_commit(struct umem_instance *umm)
+{
+	return umem_tx_commit_ex(umm, NULL);
 }
 
 static inline int
@@ -655,12 +661,18 @@ umem_tx_abort(struct umem_instance *umm, int err)
 }
 
 static inline int
-umem_tx_end(struct umem_instance *umm, int err)
+umem_tx_end_ex(struct umem_instance *umm, int err, void *data)
 {
 	if (err)
 		return umem_tx_abort(umm, err);
 	else
-		return umem_tx_commit(umm);
+		return umem_tx_commit_ex(umm, data);
+}
+
+static inline int
+umem_tx_end(struct umem_instance *umm, int err)
+{
+	return umem_tx_end_ex(umm, err, NULL);
 }
 
 #ifdef DAOS_PMEM_BUILD

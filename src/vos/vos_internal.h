@@ -1101,6 +1101,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
  * \param[in]	nvme_exts	List of resreved nvme extents
  * \param[in]	started		Only applies when dth_in is invalid,
  *				indicates if vos_tx_begin was successful
+ * \param[in]	biod		bio_desc for data I/O
  * \param[in]	err		the error code
  *
  * \return	err if non-zero, otherwise 0 or appropriate error
@@ -1108,7 +1109,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
-	   int err);
+	   struct bio_desc *biod, int err);
 
 /* vos_obj.c */
 int

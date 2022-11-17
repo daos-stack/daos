@@ -1688,7 +1688,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	if (rc == -DER_CSUM)
 		obj_log_csum_err();
 post:
-	rc = bio_iod_post(biod, rc);
+	rc = bio_iod_post_async(biod, rc);
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
 	if (unlikely(dth->dth_aborted))

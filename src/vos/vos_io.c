@@ -2361,7 +2361,7 @@ abort:
 		err = vos_ioc_mark_agg(ioc);
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
-			 &ioc->ic_blk_exts, tx_started, err);
+			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {

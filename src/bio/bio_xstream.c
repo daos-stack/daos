@@ -1165,7 +1165,6 @@ find_sys_bdev(unsigned int role)
 	struct bio_bdev	*d_bdev;
 
 	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
-	D_ASSERT(role != SMD_DEV_TYPE_DATA);
 	/*
 	 * Temporarily use the first meta/WAL device, needs be improved when we support
 	 * meta/WAL device hotplug.
