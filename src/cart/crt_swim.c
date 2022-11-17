@@ -857,10 +857,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 
 	crt_swim_csm_lock(csm);
 	cst = crt_swim_membs_find(csm, id);
-	if (cst != NULL) {
-		D_ASSERTF(state->sms_incarnation >= cst->cst_state.sms_incarnation,
-			  "incarnation="DF_X64"->"DF_X64"\n", state->sms_incarnation,
-			  cst->cst_state.sms_incarnation);
+	if (cst != NULL && state->sms_incarnation >= cst->cst_state.sms_incarnation) {
 		if (cst->cst_state.sms_status != SWIM_MEMBER_ALIVE &&
 		    state->sms_status == SWIM_MEMBER_ALIVE)
 			csm->csm_alive_count++;
@@ -1064,7 +1061,7 @@ int crt_swim_init(int crt_ctx_idx)
 
 		for (i = 0; i < grp_priv->gp_size; i++) {
 			rc = crt_swim_rank_add(grp_priv, grp_membs->rl_ranks[i],
-					       0 /* incarnation */);
+					       CRT_NO_INCARNATION);
 			if (rc && rc != -DER_ALREADY) {
 				D_ERROR("crt_swim_rank_add(): "DF_RC"\n",
 					DP_RC(rc));
@@ -1356,7 +1353,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t inc
 	crt_swim_csm_lock(csm);
 	if (csm->csm_list_len == 0) {
 		cst->cst_id = (swim_id_t)self;
-		cst->cst_state.sms_incarnation = incarnation == 0 ?
+		cst->cst_state.sms_incarnation = incarnation == CRT_NO_INCARNATION ?
 						 csm->csm_incarnation : incarnation;
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		rc = crt_swim_membs_add(csm, cst);

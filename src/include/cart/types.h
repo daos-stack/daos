@@ -109,6 +109,9 @@ typedef d_string_t	crt_group_id_t;
 /** Indicates rank not being set */
 #define CRT_NO_RANK 0xFFFFFFFF
 
+/** Indicates incarnation unavailable or inapplicable */
+#define CRT_NO_INCARNATION 0
+
 typedef struct crt_group {
 	/** the group ID of this group */
 	crt_group_id_t	cg_grpid;

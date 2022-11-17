@@ -863,7 +863,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	found = d_rank_list_find(membs, ul_in->ul_rank, NULL);
 
 	if (!found) {
-		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank, 0 /* incarnation */);
+		rc = grp_add_to_membs_list(grp_priv, ul_in->ul_rank, CRT_NO_INCARNATION);
 		if (rc != 0) {
 			D_ERROR("Failed to add %d to group rc "DF_RC"\n",
 				ul_in->ul_rank, DP_RC(rc));

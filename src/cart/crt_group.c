@@ -2475,7 +2475,7 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 	/* TODO: This logic needs to be refactored as part of CART-517 */
 	if (tag == 0) {
 		D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
-		rc = grp_add_to_membs_list(grp_priv, rank, 0 /* incarnation */);
+		rc = grp_add_to_membs_list(grp_priv, rank, CRT_NO_INCARNATION);
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	}
 
@@ -2511,7 +2511,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_WRLOCK(&default_grp_priv->gp_rwlock);
 	default_grp_priv->gp_self = rank;
-	rc = grp_add_to_membs_list(default_grp_priv, rank, 0 /* incarnation */);
+	rc = grp_add_to_membs_list(default_grp_priv, rank, CRT_NO_INCARNATION);
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
 	if (rc != 0) {
@@ -3091,7 +3091,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 	}
 
 	/* Add secondary rank to membership list  */
-	rc = grp_add_to_membs_list(grp_priv, sec_rank, 0 /* incarnation */);
+	rc = grp_add_to_membs_list(grp_priv, sec_rank, CRT_NO_INCARNATION);
 	if (rc != 0) {
 		d_hash_rec_delete_at(&grp_priv->gp_p2s_table, &rm_p2s->rm_link);
 		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
@@ -3416,7 +3416,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, 0 /* incarnation */, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
+				cb_func(rank, CRT_NO_INCARNATION, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
 					cb_args);
 		}
 
@@ -3431,7 +3431,9 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 
 		rank = ranks->rl_ranks[idx];
 		rc = crt_swim_rank_check(grp_priv, rank, incarnation);
-		D_ASSERTF(rc == 0, "crt_swim_rank_check(%u): "DF_RC"\n", rank, DP_RC(rc));
+		if (rc != 0)
+			D_ERROR("Failed to check SWIM state of rank %u: "DF_RC"\n", rank,
+				DP_RC(rc));
 	}
 
 	if (!grp_priv->gp_view && n_idx_to_add > 0)
