@@ -184,6 +184,8 @@ enum obj_rpc_flags {
 	ORF_REINTEGRATING_IO	= (1 << 22),
 	/* The IO include rebuilding target */
 	ORF_REBUILDING_IO	= (1 << 23),
+	/* 'sgls' is NULL, for update sub-request of CPD RPC. */
+	ORF_EMPTY_SGL		= (1 << 24),
 };
 
 /* common for update/fetch */

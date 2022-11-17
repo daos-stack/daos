@@ -1828,8 +1828,9 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	int			rc, rc2;
 	struct daos_prop_entry  *dpe;
 	struct timespec		now;
-	uint32_t		cont_tf, cid_tf;
+	uint32_t		cid_tf;
 	uint32_t		pa_domain;
+	int			cont_tf;
 
 	if (cuuid == NULL)
 		return EINVAL;
