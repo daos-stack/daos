@@ -2432,12 +2432,12 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	struct obj_k2a_args		*k2a_args = (struct obj_k2a_args *)arg;
 	struct obj_key2anchor_in	*oki;
 	struct obj_key2anchor_out	*oko;
+	uint64_t			save_sub_anchor;
 	int				ret = task->dt_result;
 	int				rc = 0;
 
 	oki = crt_req_get(k2a_args->rpc);
 	D_ASSERT(oki != NULL);
-
 	if (ret != 0) {
 		D_ERROR("RPC %d failed: "DF_RC"\n", DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(ret));
 		D_GOTO(out, ret);
@@ -2476,7 +2476,9 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	}
 
 	*k2a_args->eaa_map_ver = obj_reply_map_version_get(k2a_args->rpc);
+	save_sub_anchor = k2a_args->anchor->da_sub_anchors;
 	enum_anchor_copy(k2a_args->anchor, &oko->oko_anchor);
+	k2a_args->anchor->da_sub_anchors = save_sub_anchor;
 	dc_obj_shard2anchor(k2a_args->anchor, k2a_args->shard);
 out:
 	if (k2a_args->eaa_obj != NULL)
