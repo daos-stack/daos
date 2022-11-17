@@ -469,7 +469,7 @@ adt_rsv_pub_4(void **state)
 	for (i = 0; i < loop; i++) {
 		for (j = 0; j < rsv_count; j++) {
 			addrs[j] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[j]);
-			if (addrs[j]== 0) {
+			if (addrs[j] == 0) {
 				fprintf(stderr, "failed allocate\n");
 				return;
 			}
@@ -643,6 +643,53 @@ adt_rsv_free_2(void **state)
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < rsv_count; i++) {
+		rc = ad_tx_free(&tx, addrs[i]);
+		assert_rc_equal(rc, 0);
+	}
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+adt_rsv_write_free(void **state)
+{
+	const int	     alloc_size = 1536; /* non-pow2 group */
+	const int	     loop = 200; /* cross group boundary (256K) */
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[loop];
+	daos_off_t	     addrs[loop];
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Non-pow2 alloc, write and free\n");
+	for (i = 0; i < loop; i++) {
+		char *ptr;
+
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed %d allocate\n", i);
+			return;
+		}
+
+		ptr = ad_addr2ptr(adt_bh, addrs[i]);
+		memset(ptr, 0xca, alloc_size);
+	}
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, loop);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+
+	adt_addrs_shuffle(addrs, loop);
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < loop; i++) {
 		rc = ad_tx_free(&tx, addrs[i]);
 		assert_rc_equal(rc, 0);
 	}
@@ -856,6 +903,7 @@ main(void)
 		cmocka_unit_test(adt_reg_arena),
 		cmocka_unit_test(adt_rsv_free_1),
 		cmocka_unit_test(adt_rsv_free_2),
+		cmocka_unit_test(adt_rsv_write_free),
 		cmocka_unit_test(adt_delayed_free_1),
 		cmocka_unit_test(adt_tx_perf_1),
 		/* Must be the last test */
