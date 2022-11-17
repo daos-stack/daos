@@ -4285,8 +4285,9 @@ def test_alloc_cont_create(server, conf, wf):
                 'container',
                 'create',
                 pool,
+                cont_id,
                 '--properties',
-                f'rd_fac:1,rd_lvl:1,srv_cksum:on,label:{cont_id}']
+                'srv_cksum:on']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
