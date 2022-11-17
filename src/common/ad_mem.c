@@ -6,6 +6,10 @@
 #define D_LOGFAC        DD_FAC(common)
 
 #include "ad_mem.h"
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #define AD_MEM_DEBUG	0
 
@@ -295,12 +299,19 @@ blob_init(struct ad_blob *blob)
 			goto failed;
 
 		blob->bb_mmap = buf;
-		for (i = 0; i < blob->bb_pgs_nr; i++) {
-			blob->bb_pages[i].pa_rpg = buf + (i << ARENA_SIZE_BITS);
-			blob->bb_pages[i].pa_cpg = NULL; /* reserved for future use */
-		}
 	} else {
-		D_ASSERT(0); /* XXX remove this while integrating with other components. */
+		blob->bb_mmap = mmap(NULL, blob_size(blob), PROT_READ|PROT_WRITE, MAP_SHARED,
+				     blob->bb_fd, 0);
+		if (blob->bb_mmap == MAP_FAILED) {
+			rc = daos_errno2der(errno);
+			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
+			goto failed;
+		}
+		buf = blob->bb_mmap;
+	}
+	for (i = 0; i < blob->bb_pgs_nr; i++) {
+		blob->bb_pages[i].pa_rpg = buf + (i << ARENA_SIZE_BITS);
+		blob->bb_pages[i].pa_cpg = NULL; /* reserved for future use */
 	}
 
 	/* NB: ad_blob_df (superblock) is stored right after header of arena[0],
@@ -449,10 +460,12 @@ blob_load(struct ad_blob *blob)
 		ad_sgl_set(&sgl, &iov, page->pa_rpg, ARENA_SIZE);
 
 		/* XXX: submit multiple pages, otherwise it's too slow */
-		rc = blob->bb_store.stor_ops->so_read(&blob->bb_store, &iod, &sgl);
-		if (rc) {
-			D_ERROR("Failed to load storage contents: %d\n", rc);
-			goto out;
+		if (blob->bb_store.stor_ops->so_read != NULL) {
+			rc = blob->bb_store.stor_ops->so_read(&blob->bb_store, &iod, &sgl);
+			if (rc) {
+				D_ERROR("Failed to load storage contents: %d\n", rc);
+				goto out;
+			}
 		}
 		if (isset64(bd->bd_bmap, i)) {
 			ad = (struct ad_arena_df *)blob->bb_pages[i].pa_rpg;
@@ -529,6 +542,69 @@ blob_close(struct ad_blob *blob)
 	}
 }
 
+static int
+blob_file_open(const char *path, size_t size, bool create)
+{
+	struct stat	stat_buf;
+	int		fd;
+	int		flags;
+	int		rc;
+
+	if (size == 0) { /* XXX possibly dead path, remove later */
+		if (create) {
+			D_ERROR("Invalid create with size 0 (path %s)\n", path);
+			return -DER_INVAL;
+		}
+
+		/* Open the file and obtain the size */
+		fd = open(path, O_RDWR);
+		if (fd == -1) {
+			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		if (fstat(fd, &stat_buf) != 0) {
+			close(fd);
+			D_ERROR("fstat %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		size = stat_buf.st_size;
+	} else {
+		flags = O_RDWR;
+		if (create)
+			flags |= (O_CREAT | O_EXCL);
+
+		fd = open(path, flags, 0600);
+		if (fd == -1) {
+			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		if (create) {
+			size = D_ALIGNUP(size, 1ULL << 12);
+			rc = fallocate(fd, 0, 0, size);
+			if (rc) {
+				rc = daos_errno2der(errno);
+				D_ERROR("fallocate blob file %s with size: "DF_U64" failed: "
+					DF_RC"\n", path, size, DP_RC(rc));
+				(void)close(fd);
+				return rc;
+			}
+
+			rc = fsync(fd);
+			fd = -1;
+			if (rc) {
+				(void)close(fd);
+				rc = daos_errno2der(errno);
+				D_ERROR("failed to sync blob file %s: "DF_RC"\n", path, DP_RC(rc));
+				return rc;
+			}
+		}
+	}
+
+	return fd;
+}
 
 /**
  * Format superblock of the blob, create the first arena, write these metadata to storage.
@@ -552,8 +628,6 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 			return -DER_EXIST;
 		is_dummy = true;
 	}
-	D_ASSERT(is_dummy); /* XXX the only thing can be supported now */
-
 	D_ALLOC_PTR(blob);
 	if (!blob)
 		return -DER_NOMEM;
@@ -563,6 +637,15 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	blob->bb_dummy	= is_dummy;
 	blob->bb_store	= *store;
 	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
+
+	if (!is_dummy) {
+		rc = blob_file_open(path, store->stor_size, true);
+		if (rc < 0) {
+			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			return rc;
+		}
+		blob->bb_fd = rc;
+	}
 
 	rc = blob_init(blob);
 	if (rc)
@@ -606,10 +689,12 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	ad_sgl_set(&sgl, &iov, arena->ar_df, ARENA_HDR_SIZE + BLOB_HDR_SIZE);
 
 	D_ASSERT(store->stor_ops);
-	rc = store->stor_ops->so_write(store, &iod, &sgl);
-	if (rc) {
-		D_ERROR("Failed to write ad_mem superblock\n");
-		goto failed;
+	if (store->stor_ops->so_write != NULL) {
+		rc = store->stor_ops->so_write(store, &iod, &sgl);
+		if (rc) {
+			D_ERROR("Failed to write ad_mem superblock\n");
+			goto failed;
+		}
 	}
 	arena_decref(arena);
 	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
@@ -633,16 +718,13 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	struct umem_store_iod	 iod;
 	d_sg_list_t		 sgl;
 	d_iov_t			 iov;
-	int			 rc;
+	int			 rc = 0;
 	bool			 is_dummy = false;
 
 	if (!strcmp(path, DUMMY_BLOB))
 		is_dummy = true;
 
-	if (!is_dummy) {
-		/* XXX dummy is the only thing can be supported now */
-		D_ASSERT(0);
-	} else {
+	if (is_dummy) {
 		if (dummy_blob) {
 			blob = dummy_blob;
 			D_DEBUG(DB_TRACE, "found dummy blob, refcount=%d\n", blob->bb_ref);
@@ -656,6 +738,19 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 			blob->bb_ref = 1;
 			blob->bb_dummy = true;
 		}
+	} else {
+		D_ALLOC_PTR(blob);
+		if (!blob)
+			return -DER_NOMEM;
+
+		blob->bb_ref = 1;
+		rc = blob_file_open(path, store->stor_size, false);
+		if (rc < 0) {
+			D_FREE(blob);
+			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			return rc;
+		}
+		blob->bb_fd = rc;
 	}
 
 	if (blob->bb_opened) {
@@ -674,10 +769,18 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 
 	/* read super block to temporary buffer */
 	D_ASSERT(store->stor_ops);
-	rc = store->stor_ops->so_read(store, &iod, &sgl);
-	if (rc) {
-		D_ERROR("Failed to read superblock of ad_mem\n");
-		goto failed;
+	if (store->stor_ops->so_read != NULL) {
+		rc = store->stor_ops->so_read(store, &iod, &sgl);
+		if (rc) {
+			D_ERROR("Failed to read superblock of ad_mem\n");
+			goto failed;
+		}
+	} else {
+		/* XXX temporary hack before so_read is ready */
+		bd->bd_magic = BLOB_MAGIC;
+		bd->bd_version = 1;
+		bd->bd_size = store->stor_size;
+		bd->bd_addr = store->stor_addr;
 	}
 
 	if (bd->bd_magic != BLOB_MAGIC || bd->bd_version == 0) {

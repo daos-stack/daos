@@ -40,7 +40,7 @@ enum {
 	DAOS_MD_ADMEM	= 2,
 };
 
-static int daos_md_backend = DAOS_MD_BMEM; /* Use BMEM by default */
+static int daos_md_backend = DAOS_MD_PMEM;
 
 /** Sets up global settings for the pmem objects.
  *
@@ -51,11 +51,11 @@ umempobj_settings_init(void)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	unsigned int				val = 0;
+	unsigned int				val = DAOS_MD_PMEM;
 
 	d_getenv_int("DAOS_MD_ON_SSD", &val);
 	switch (val) {
-	case 0:
+	case DAOS_MD_PMEM:
 		daos_md_backend = DAOS_MD_PMEM;
 		atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
 
@@ -64,11 +64,11 @@ umempobj_settings_init(void)
 			D_ERROR("Could not configure PMDK for global arena: %s\n",
 				strerror(errno));
 		return rc;
-	case 1:
+	case DAOS_MD_BMEM:
 		daos_md_backend = DAOS_MD_BMEM;
 		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
 		return 0;
-	case 2:
+	case DAOS_MD_ADMEM:
 		daos_md_backend = DAOS_MD_ADMEM;
 		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
 		return 0;
