@@ -259,7 +259,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate dedup entry\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&entry->de_link);
@@ -267,7 +266,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	D_ASSERT(csum_len != 0);
 	D_ALLOC(entry->de_csum_buf, csum_len);
 	if (entry->de_csum_buf == NULL) {
-		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
 		D_FREE(entry);
 		return;
 	}
