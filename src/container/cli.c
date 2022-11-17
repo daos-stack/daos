@@ -191,7 +191,6 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 
 		D_ALLOC_PTR(roots);
 		if (roots == NULL) {
-			D_ERROR("Failed to allocate structure for root objid\n");
 			D_GOTO(err_out, rc = -DER_NOMEM);
 		}
 

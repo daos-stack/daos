@@ -13,7 +13,7 @@
 * [ ] Githooks were used. If not, request that user install them and check copyright dates.
 * [ ] Checkpatch issues are resolved.  Pay particular attention to ones that will show up on future PRs.
 * [ ] All builds have passed.  Check non-required builds for any new compiler warnings.
-* [ ] Sufficent testing is done. Check feature pragmas and test tags and that tests skipped for the ticket are run and now pass with the changes.
+* [ ] Sufficient testing is done. Check feature pragmas and test tags and that tests skipped for the ticket are run and now pass with the changes.
 * [ ] If applicable, the PR has addressed any potential version compatibility issues.
 * [ ] Check the target branch.   If it is master branch, should the PR go to a feature branch?  If it is a release branch, does it have merge approval in the JIRA ticket.
 * [ ] Extra checks if forced landing is requested
