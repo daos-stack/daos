@@ -638,10 +638,8 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 	}
 
-	/* Check if dfuse-direct-io-disable is set to on but
-	 * dfuse-data-cache is set to off.  This combination
-	 * does not make sense, so warn in this case and set
-	 * caching to on.
+	/* Check if dfuse-direct-io-disable is set to on but dfuse-data-cache is set to off.
+	 * This combination does not make sense, so warn in this case and set caching to on.
 	 */
 	if (have_dio) {
 		if (have_cache_off)
