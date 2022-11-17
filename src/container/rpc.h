@@ -28,63 +28,63 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)				\
-	X(CONT_CREATE,							\
-		0, &CQF_cont_create,					\
-		hdlr, NULL),						\
-	X(CONT_DESTROY,							\
-		0, &CQF_cont_destroy,					\
-		hdlr, NULL),						\
-	X(CONT_OPEN,							\
-		0, ver == 7 ? &CQF_cont_open_v7 : &CQF_cont_open_v6,	\
-		hdlr, NULL),						\
-	X(CONT_CLOSE,							\
-		0, &CQF_cont_close,					\
-		hdlr, NULL),						\
-	X(CONT_QUERY,							\
-		0, ver == 7 ? &CQF_cont_query_v7 : &CQF_cont_query_v6,	\
-		hdlr, NULL),						\
-	X(CONT_OID_ALLOC,						\
-		0, &CQF_cont_oid_alloc,					\
-		ds_cont_oid_alloc_handler, NULL),			\
-	X(CONT_ATTR_LIST,						\
-		0, &CQF_cont_attr_list,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_GET,						\
-		0, &CQF_cont_attr_get,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_SET,						\
-		0, &CQF_cont_attr_set,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_DEL,						\
-		0, &CQF_cont_attr_del,					\
-		hdlr, NULL),						\
-	X(CONT_EPOCH_AGGREGATE,						\
-		0, &CQF_cont_epoch_op,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_LIST,						\
-		0, &CQF_cont_snap_list,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_CREATE,						\
-		0, &CQF_cont_epoch_op,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_DESTROY,						\
-		0, &CQF_cont_snap_destroy,				\
-		hdlr, NULL),						\
-	X(CONT_PROP_SET,						\
-		0, &CQF_cont_prop_set,					\
-		hdlr, NULL),						\
-	X(CONT_ACL_UPDATE,						\
-		0, &CQF_cont_acl_update,				\
-		hdlr, NULL),						\
-	X(CONT_ACL_DELETE,						\
-		0, &CQF_cont_acl_delete,				\
-		hdlr, NULL),						\
-	X(CONT_OPEN_BYLABEL,						\
-		0, &CQF_cont_open_bylabel,				\
-		hdlr, NULL),						\
-	X(CONT_DESTROY_BYLABEL,						\
-		0, &CQF_cont_destroy_bylabel,				\
+#define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)						\
+	X(CONT_CREATE,									\
+		0, &CQF_cont_create,							\
+		hdlr, NULL),								\
+	X(CONT_DESTROY,									\
+		0, &CQF_cont_destroy,							\
+		hdlr, NULL),								\
+	X(CONT_OPEN,									\
+		0, ver == 7 ? &CQF_cont_open_v7 : &CQF_cont_open_v6,			\
+		hdlr, NULL),								\
+	X(CONT_CLOSE,									\
+		0, &CQF_cont_close,							\
+		hdlr, NULL),								\
+	X(CONT_QUERY,									\
+		0, ver == 7 ? &CQF_cont_query_v7 : &CQF_cont_query_v6,			\
+		hdlr, NULL),								\
+	X(CONT_OID_ALLOC,								\
+		0, &CQF_cont_oid_alloc,							\
+		ds_cont_oid_alloc_handler, NULL),					\
+	X(CONT_ATTR_LIST,								\
+		0, &CQF_cont_attr_list,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_GET,								\
+		0, &CQF_cont_attr_get,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_SET,								\
+		0, &CQF_cont_attr_set,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_DEL,								\
+		0, &CQF_cont_attr_del,							\
+		hdlr, NULL),								\
+	X(CONT_EPOCH_AGGREGATE,								\
+		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_LIST,								\
+		0, &CQF_cont_snap_list,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_CREATE,								\
+		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_DESTROY,								\
+		0, &CQF_cont_snap_destroy,						\
+		hdlr, NULL),								\
+	X(CONT_PROP_SET,								\
+		0, &CQF_cont_prop_set,							\
+		hdlr, NULL),								\
+	X(CONT_ACL_UPDATE,								\
+		0, &CQF_cont_acl_update,						\
+		hdlr, NULL),								\
+	X(CONT_ACL_DELETE,								\
+		0, &CQF_cont_acl_delete,						\
+		hdlr, NULL),								\
+	X(CONT_OPEN_BYLABEL,								\
+		0, ver == 7 ? &CQF_cont_open_bylabel_v7 : &CQF_cont_open_bylabel_v6,	\
+		hdlr, NULL),								\
+	X(CONT_DESTROY_BYLABEL,								\
+		0, &CQF_cont_destroy_bylabel,						\
 		hdlr, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
