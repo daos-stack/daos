@@ -109,6 +109,8 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	if (store != NULL)
 		umm_pool->up_store = *store;
 
+	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ...\n",
+		path, poolsize, store->stor_size);
 	switch (daos_md_backend) {
 	case DAOS_MD_PMEM:
 		pop = pmemobj_create(path, layout_name, poolsize, mode);
@@ -188,6 +190,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	if (store != NULL)
 		umm_pool->up_store = *store;
 
+	D_DEBUG(DB_TRACE, "opening %s\n", path);
 	switch (daos_md_backend) {
 	case DAOS_MD_PMEM:
 		pop = pmemobj_open(path, layout_name);
@@ -404,6 +407,8 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 	int				 rc = 0;
 
 	switch (daos_md_backend) {
+	static unsigned class_id = 10;
+
 	case DAOS_MD_PMEM:
 		pop = (PMEMobjpool *)ph_p->up_priv;
 
@@ -428,6 +433,7 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		break;
 	case DAOS_MD_ADMEM:
 		/* NOOP for ADMEM now */
+		slab->class_id = class_id++;
 		break;
 	default:
 		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
@@ -1261,7 +1267,7 @@ set_offsets(struct umem_instance *umm)
 		break;
 	case UMEM_CLASS_ADMEM:
 		bh.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
-		umm->umm_base = (uint64_t)ad_get_base_ptr(bh);
+		umm->umm_base = (uint64_t)ad_base(bh);
 		break;
 	default:
 		D_ASSERTF(0, "bad umm->umm_id %d\n", umm->umm_id);

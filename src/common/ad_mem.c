@@ -300,8 +300,15 @@ blob_init(struct ad_blob *blob)
 
 		blob->bb_mmap = buf;
 	} else {
-		blob->bb_mmap = mmap(NULL, blob_size(blob), PROT_READ|PROT_WRITE, MAP_SHARED,
-				     blob->bb_fd, 0);
+		void *mmap_ptr;
+
+		/* To satisfy mmap address align with arena size, assume no other sbrk called
+		 * again before mmap.
+		 */
+		mmap_ptr = sbrk(0);
+		mmap_ptr = (void *)roundup((uintptr_t)mmap_ptr, 1 << ARENA_SIZE_BITS);
+		blob->bb_mmap = mmap(mmap_ptr, blob_size(blob), PROT_READ|PROT_WRITE,
+				     MAP_SHARED | MAP_FIXED, blob->bb_fd, 0);
 		if (blob->bb_mmap == MAP_FAILED) {
 			rc = daos_errno2der(errno);
 			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
@@ -378,7 +385,16 @@ blob_fini(struct ad_blob *blob)
 	D_FREE(blob->bb_mh_nodes);
 	D_FREE(blob->bb_bmap_rsv);
 	D_FREE(blob->bb_pages);
-	D_FREE(blob->bb_mmap);
+	if (blob->bb_dummy) {
+		D_FREE(blob->bb_mmap);
+	} else {
+		if (blob->bb_mmap != NULL)
+			munmap(blob->bb_mmap, blob_size(blob));
+		if (blob->bb_fd != -1) {
+			close(blob->bb_fd);
+			blob->bb_fd = -1;
+		}
+	}
 }
 
 static uint32_t
@@ -543,19 +559,14 @@ blob_close(struct ad_blob *blob)
 }
 
 static int
-blob_file_open(const char *path, size_t size, bool create)
+blob_file_open(const char *path, size_t *size, bool create)
 {
 	struct stat	stat_buf;
 	int		fd;
 	int		flags;
 	int		rc;
 
-	if (size == 0) { /* XXX possibly dead path, remove later */
-		if (create) {
-			D_ERROR("Invalid create with size 0 (path %s)\n", path);
-			return -DER_INVAL;
-		}
-
+	if (*size == 0) {
 		/* Open the file and obtain the size */
 		fd = open(path, O_RDWR);
 		if (fd == -1) {
@@ -569,11 +580,17 @@ blob_file_open(const char *path, size_t size, bool create)
 			return daos_errno2der(errno);
 		}
 
-		size = stat_buf.st_size;
+		*size = stat_buf.st_size;
+		D_DEBUG(DB_TRACE, "stat %s size %zu\n", path, *size);
 	} else {
+		if (create && access(path, F_OK) == 0) {
+			D_DEBUG(DB_TRACE, "path %s existed.\n", path);
+			create = false;
+		}
+
 		flags = O_RDWR;
 		if (create)
-			flags |= (O_CREAT | O_EXCL);
+			flags |= O_CREAT;
 
 		fd = open(path, flags, 0600);
 		if (fd == -1) {
@@ -582,18 +599,17 @@ blob_file_open(const char *path, size_t size, bool create)
 		}
 
 		if (create) {
-			size = D_ALIGNUP(size, 1ULL << 12);
-			rc = fallocate(fd, 0, 0, size);
+			*size = D_ALIGNUP(*size, 1ULL << 12);
+			rc = fallocate(fd, 0, 0, *size);
 			if (rc) {
 				rc = daos_errno2der(errno);
 				D_ERROR("fallocate blob file %s with size: "DF_U64" failed: "
-					DF_RC"\n", path, size, DP_RC(rc));
+					DF_RC"\n", path, *size, DP_RC(rc));
 				(void)close(fd);
 				return rc;
 			}
 
 			rc = fsync(fd);
-			fd = -1;
 			if (rc) {
 				(void)close(fd);
 				rc = daos_errno2der(errno);
@@ -635,17 +651,16 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	blob->bb_fd	= -1; /* XXX, create file, falloc */
 	blob->bb_ref	= 1;
 	blob->bb_dummy	= is_dummy;
-	blob->bb_store	= *store;
-	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
-
 	if (!is_dummy) {
-		rc = blob_file_open(path, store->stor_size, true);
+		rc = blob_file_open(path, &store->stor_size, true);
 		if (rc < 0) {
 			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
 			return rc;
 		}
 		blob->bb_fd = rc;
 	}
+	blob->bb_store	= *store;
+	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
 
 	rc = blob_init(blob);
 	if (rc)
@@ -744,7 +759,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 			return -DER_NOMEM;
 
 		blob->bb_ref = 1;
-		rc = blob_file_open(path, store->stor_size, false);
+		rc = blob_file_open(path, &store->stor_size, false);
 		if (rc < 0) {
 			D_FREE(blob);
 			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
@@ -2790,9 +2805,10 @@ ad_root(struct ad_blob_handle bh, size_t size)
 
 /** Query base pointer */
 void *
-ad_get_base_ptr(struct ad_blob_handle bh)
+ad_base(struct ad_blob_handle bh)
 {
 	struct ad_blob	*blob = bh.bh_blob;
 
-	return ad_addr2ptr(bh, blob_addr(blob));
+	D_ASSERT((uintptr_t)ad_addr2ptr(bh, blob_addr(blob) == (uintptr_t)blob->bb_mmap));
+	return blob->bb_mmap;
 }
