@@ -283,7 +283,7 @@ parse_args(int argc, char **argv)
 	ctl_gdata.cg_use_daos_agent_env = false;
 
 	if (argc <= 2) {
-		print_usage_msg("Wrong number of args\n");
+		print_usage_msg(NULL);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -577,6 +577,18 @@ ctl_register_ctl(crt_endpoint_t *ep)
 	return crt_register_proto_ctl(ep);
 }
 
+
+#define error_exit(x...)	\
+do {				\
+	fprintf(stderr, x);	\
+	exit(-1);		\
+} while (0);
+
+#define error_warn(x...) \
+do {				\
+	fprintf(stderr, x);	\
+} while (0);
+
 static int
 ctl_init()
 {
@@ -599,31 +611,30 @@ ctl_init()
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set() failed, "
-			DF_RC"\n", DP_RC(rc));
+		if (rc != 0)
+			error_exit("Failed to set config path; rc=%d\n", rc);
 	}
 
 	rc = crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
 				  &rank_list, &ctl_gdata.cg_crt_ctx,
 				  &ctl_gdata.cg_tid, 1, true, NULL,
 				  ctl_gdata.cg_use_daos_agent_env);
-	D_ASSERTF(rc == 0, "crtu_cli_start_basic() failed\n");
+	if (rc != 0)
+		error_exit("Failed to start client; rc=%d\n", rc);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
-	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
+	if (rc != 0)
+		error_exit("Semaphore init failed; rc=%d\n", rc);
 
 	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = crtu_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
 					 0 /* tag */, 1 /* num contexts to query */,
 					 wait_time, total_wait);
-		if (rc != 0) {
-			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
-			D_GOTO(out, rc);
-		}
+		if (rc != 0)
+			error_exit("Connection timeout; rc=%d\n", rc);
 	}
 
 	ctl_gdata.cg_target_group = grp;
-
 	info.cmd = ctl_gdata.cg_cmd_code;
 
 	if (ctl_gdata.cg_num_ranks == -1) {
@@ -656,10 +667,8 @@ ctl_init()
 		ep.ep_tag = 0;
 		rc = crt_req_create(ctl_gdata.cg_crt_ctx, &ep,
 				    cmd2opcode(info.cmd), &rpc_req);
-		if (rc != 0) {
-			D_ERROR("crt_req_create() failed. rc %d.\n", rc);
-			D_GOTO(out, rc);
-		}
+		if (rc != 0)
+			error_exit("Failed to create RPC; rc=%d\n", rc);
 
 		switch (info.cmd) {
 		case (CMD_ENABLE_FI):
@@ -685,76 +694,74 @@ ctl_init()
 			rpc_req, ep.ep_rank, ep.ep_tag, i);
 
 		rc = crt_req_send(rpc_req, ctl_cli_cb, &info);
-		if (rc != 0) {
-			D_ERROR("crt_req_send() failed. rpc_req %p rank %d "
-				"tag %d rc %d.\n", rpc_req, ep.ep_rank,
-				 ep.ep_tag, rc);
-			D_GOTO(out, rc);
-		}
+		if (rc != 0)
+			error_exit("Failed to send RPC; rc=%d\n", rc);
 
 		rc = crtu_sem_timedwait(&ctl_gdata.cg_num_reply, wait_time, __LINE__);
-		if (rc != 0) {
-			D_ERROR("crtu_sem_timedwait failed, rc = %d\n", rc);
-			D_GOTO(out, rc);
-		}
+		if (rc != 0)
+			error_exit("No response from the server after %d sec; rc=%d\n",
+				   wait_time, rc);
 	}
 
 	d_rank_list_free(rank_list);
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_detach(grp);
-		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+		if (rc != 0)
+			error_warn("Failed to destroy the group; rc=%d\n", rc);
 	} else {
 		rc = crt_group_view_destroy(grp);
-		D_ASSERTF(rc == 0,
-			  "crt_group_view_destroy() failed; rc=%d\n", rc);
+		if (rc != 0)
+			error_warn("Failed to destroy the view; rc=%d\n", rc);
 	}
 
 	crtu_progress_stop();
 
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
-	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
+	if (rc != 0)
+		error_warn("Failed to join the threads; rc=%d\n", rc);
 
 	rc = sem_destroy(&ctl_gdata.cg_num_reply);
-	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+	if (rc != 0)
+		error_warn("Failed to the threads; rc=%d\n", rc);
 
 	rc = crt_finalize();
-	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+	if (rc != 0)
+		error_warn("Failed to finalize; rc=%d\n", rc);
 
 	if (ctl_gdata.cg_use_daos_agent_env) {
 		dc_mgmt_fini();
 	}
 	d_log_fini();
 
-out:
 	return rc;
 }
 
 int
 main(int argc, char **argv)
 {
-	int		rc = 0;
+	int rc = 0;
 
 	rc = d_log_init();
-	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
+	if (rc != 0)
+		error_exit("Failed to init log; rc=%d\n", rc);
 
 	rc = parse_args(argc, argv);
-	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
+	if (rc != 0)
+		error_exit("Failed to parse some arguments\n");
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 40, false, false);
 
 	if (ctl_gdata.cg_use_daos_agent_env) {
 		rc = dc_agent_init();
-		if (rc != 0) {
-			fprintf(stderr, "dc_agent_init() failed. rc: %d\n", rc);
-			return rc;
-		}
+		if (rc != 0)
+			error_exit("Failed talking to DAOS Agent; rc=%d\n", rc);
 	}
 
 	rc = ctl_init();
-	if (rc)
-		D_ERROR("ctl_init() failed, rc "DF_RC"\n", DP_RC(rc));
+	if (rc != 0)
+		error_exit("Init failed; rc=%d\n", rc);
 
 	d_log_fini();
 	if (rc != 0)
