@@ -405,7 +405,6 @@ class CommandWithParameters(ObjectWithParameters):
         super().__init__(namespace)
         self._command = command
         self._path = path
-        self._pre_command = None
 
     @property
     def command(self):
@@ -432,13 +431,8 @@ class CommandWithParameters(ObjectWithParameters):
             if value != "":
                 params.append(value)
 
-        # Append the path to the command and prepend it with any other
-        # specified commands
-        command_list = [] if self._pre_command is None else [self._pre_command]
-        command_list.append(os.path.join(self._path, self._command))
-
-        # Return the command and its parameters
-        return " ".join(command_list + params)
+        # Return the path to the command, the command, and its parameters
+        return " ".join(os.path.join(self._path, self._command) + params)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
