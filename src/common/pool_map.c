@@ -1476,6 +1476,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	uint32_t		num_dom_comps;
 	uint32_t		num_grp_comps;
 	uint32_t		num_rank_comps;
+	uint32_t		num_comps;
 	uint8_t			new_status;
 	uint8_t			dom_type;
 	struct d_fd_tree	tree = {0};
@@ -1518,8 +1519,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		switch (node.fdn_type) {
 		case D_FD_NODE_TYPE_DOMAIN:
 			/* TODO DAOS-6353: Use the layer number as type */
-			dom_type = d_fd_node_is_group(&node) ? PO_COMP_TP_GRP : PO_COMP_TP_NODE;
-			fill_domain_comp(map, dom_type, &node, num_dom_comps, map_version,
+			if (d_fd_node_is_group(&node)) {
+				dom_type = PO_COMP_TP_GRP;
+				num_comps = num_grp_comps;
+			} else {
+				dom_type = PO_COMP_TP_NODE;
+				num_comps = num_dom_comps;
+			}
+			fill_domain_comp(map, dom_type, &node, num_comps, map_version,
 					 new_status, &map_comp);
 			if (map != NULL) {
 				struct pool_domain	*current;
