@@ -171,7 +171,7 @@ class ConfigGenerateOutput(TestWithServers):
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """

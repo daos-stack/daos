@@ -34,7 +34,7 @@ class ConfigGenerateRun(TestWithServers):
         Note: When running locally, use 50 sec timeout in DaosServerCommand.__init__()
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries
         :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """

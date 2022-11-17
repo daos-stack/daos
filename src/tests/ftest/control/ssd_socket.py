@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+from textwrap import wrap
 from general_utils import pcmd, run_pcmd
 from control_test_base import ControlTestBase
 
@@ -58,13 +60,14 @@ class SSDSocketTest(ControlTestBase):
             command="hwloc-ls --whole-io --verbose")
 
     def verify_ssd_sockets(self, storage_dict):
-        """Main test component.
+        """Verify SSD sockets.
 
         Args:
             storage_dict (dict): Dictionary under "storage"
 
         Returns:
             list: List of errors.
+
         """
         nvme_devices = storage_dict["nvme_devices"]
 
@@ -77,18 +80,26 @@ class SSDSocketTest(ControlTestBase):
             cmd_socket_id = nvme_device["socket_id"]
 
             # Get the PCI Address Head and construct the path to numa_node.
+            #   NVMe: "0000:86:00.0"   --> /sys/class/pci_bus/0000:86/device/numa_node
+            #   VMD:  "850505:01:00.0" --> /sys/class/pci_bus/0000:85/device/0000:85:05.5/numa_node
             pci_addr = nvme_device["pci_addr"]
             pci_addr_values = pci_addr.split(":")
-            pci_addr_head = "{}:{}".format(
-                pci_addr_values[0], pci_addr_values[1])
+            numa_node_path = os.path.join(os.sep, "sys", "class", "pci_bus")
+            if len(pci_addr_values[0]) == 6:
+                # VMD controller address
+                parts = wrap(pci_addr_values[0], 2)
+                pci_addr_base = ":".join(["0000"] + parts[0:1])
+                pci_addr_head = ".".join([":".join(["0000"] + parts[0:2]), str(int(parts[2]))])
+                numa_node_path = os.path.join(
+                    numa_node_path, pci_addr_base, "device", pci_addr_head, "numa_node")
+            else:
+                pci_addr_head = ":".join(pci_addr_values[0:2])
+                numa_node_path = os.path.join(numa_node_path, pci_addr_head, "device", "numa_node")
             pci_addr_heads.append(pci_addr_head)
-            numa_node_path = "/sys/class/pci_bus/{}/device/numa_node".format(
-                pci_addr_head)
 
             # Call cat on the server host, not necessarily the local test host.
             results = run_pcmd(
-                hosts=self.hostlist_servers[0:1],
-                command="cat {}".format(numa_node_path))
+                hosts=self.hostlist_servers[0:1], command="cat {}".format(numa_node_path))
 
             # Obtain the numa_node content.
             fs_socket_id = ""
@@ -97,8 +108,7 @@ class SSDSocketTest(ControlTestBase):
                 fs_socket_id = result["stdout"][-1]
                 if fs_socket_id != str(cmd_socket_id):
                     errors.append(
-                        "Unexpected socket ID! Cmd: {}; FS: {}".format(
-                            cmd_socket_id, fs_socket_id))
+                        "Unexpected socket ID! Cmd: {}; FS: {}".format(cmd_socket_id, fs_socket_id))
 
         if errors:
             # Since we're dealing with system files and we don't have access to
@@ -109,8 +119,7 @@ class SSDSocketTest(ControlTestBase):
         return errors
 
     def test_scan_ssd(self):
-        """
-        JIRA ID: DAOS-3584
+        """JIRA ID: DAOS-3584.
 
         Test Description: Verify NVMe NUMA socket values.
 

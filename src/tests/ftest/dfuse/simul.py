@@ -20,7 +20,7 @@ class PosixSimul(DfuseTestBase):
     "simul" is an MPI coordinated test of parallel filesystem system calls and
     library functions.  It was designed to perform filesystem operations
     simultaneously from many nodes and processes to test the correctness
-    and coherence of parallel filesystems.
+    and coherence of parallel file systems.
 
     List of tests:
         Test #0: open, shared mode.
