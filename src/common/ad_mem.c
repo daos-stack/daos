@@ -202,7 +202,7 @@ blob_decref(struct ad_blob *blob)
 static int
 blob_bmap_size(struct ad_blob *blob)
 {
-	return (blob->bb_pgs_nr + 7) >> 3;
+	return (blob->bb_pgs_nr + 63) >> 6;
 }
 
 #define GROUP_LRU_MAX	(256 << 10)
@@ -309,7 +309,7 @@ blob_init(struct ad_blob *blob)
 	blob->bb_df = (struct ad_blob_df *)&blob->bb_pages[0].pa_rpg[ARENA_HDR_SIZE];
 
 	/* bitmap for reserving arena */
-	D_ALLOC(blob->bb_bmap_rsv, blob_bmap_size(blob));
+	D_ALLOC_ARRAY(blob->bb_bmap_rsv, blob_bmap_size(blob));
 	if (!blob->bb_bmap_rsv)
 		goto failed;
 
