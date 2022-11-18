@@ -1436,11 +1436,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 }
 
 static void
-fill_domain_comp(struct pool_map *map, struct d_fd_node *domain, int idx, int map_version,
-		 uint8_t new_status, struct pool_component *map_comp)
+fill_domain_comp(struct pool_map *map, uint8_t type, struct d_fd_node *domain, int idx,
+		 int map_version, uint8_t new_status, struct pool_component *map_comp)
 {
-	/* TODO DAOS-6353: Use the layer number as type */
-	map_comp->co_type = PO_COMP_TP_NODE;
+	map_comp->co_type = type;
 	map_comp->co_status = new_status;
 	map_comp->co_index = idx;
 	map_comp->co_id = domain->fdn_val.dom->fd_id;
@@ -1474,8 +1473,11 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 {
 	int			rc;
 	uint32_t		num_dom_comps;
+	uint32_t		num_grp_comps;
 	uint32_t		num_rank_comps;
+	uint32_t		num_comps;
 	uint8_t			new_status;
+	uint8_t			dom_type;
 	struct d_fd_tree	tree = {0};
 	struct d_fd_node	node = {0};
 	bool			updated = false;
@@ -1486,11 +1488,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		new_status = PO_COMP_ST_NEW;
 		num_dom_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						     PO_COMP_ID_ALL, NULL);
+		num_grp_comps = pool_map_find_domain(map, PO_COMP_TP_GRP,
+						     PO_COMP_ID_ALL, NULL);
 		num_rank_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
 						      PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
 		num_dom_comps = 0;
+		num_grp_comps = 0;
 		num_rank_comps = 0;
 	}
 
@@ -1513,22 +1518,34 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 		switch (node.fdn_type) {
 		case D_FD_NODE_TYPE_DOMAIN:
-			fill_domain_comp(map, &node, num_dom_comps, map_version, new_status,
-					 &map_comp);
+			/* TODO DAOS-6353: Use the layer number as type */
+			if (d_fd_node_is_group(&node)) {
+				dom_type = PO_COMP_TP_GRP;
+				num_comps = num_grp_comps;
+			} else {
+				dom_type = PO_COMP_TP_NODE;
+				num_comps = num_dom_comps;
+			}
+			fill_domain_comp(map, dom_type, &node, num_comps, map_version,
+					 new_status, &map_comp);
 			if (map != NULL) {
 				struct pool_domain	*current;
 				int			already_in_map;
 
-				already_in_map = pool_map_find_domain(map, PO_COMP_TP_NODE,
+				already_in_map = pool_map_find_domain(map, dom_type,
 								      map_comp.co_id, &current);
 				if (already_in_map > 0) {
 					D_DEBUG(DB_TRACE, "domain %d/%u already in map\n",
 						map_comp.co_id, current->do_comp.co_status);
 					map_comp.co_status = current->do_comp.co_status;
 					map_comp.co_index = current->do_comp.co_index;
+				} else if (dom_type == PO_COMP_TP_GRP) {
+					num_grp_comps++;
 				} else {
 					num_dom_comps++;
 				}
+			} else if (dom_type == PO_COMP_TP_GRP) {
+				num_grp_comps++;
 			} else {
 				num_dom_comps++;
 			}
@@ -1603,7 +1620,6 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	uint32_t		num_comps;
 	uint8_t			new_status;
 	int			i, rc;
-	unsigned		num_pd = 0;
 	uint32_t		num_domain_comps = 0;
 	d_rank_list_t		*ordered_ranks;
 
@@ -1618,21 +1634,6 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	D_ASSERT(num_domain_comps > 0);
 	num_domain_comps--; /* remove the root domain - allocated separately */
 
-	if (map == NULL) {
-		/* Temporary hack to pass in the performance domain info before control plane
-		 * support available.
-		 */
-		d_getenv_int("DAOS_PD_NUM", &num_pd);
-		if (num_pd < 2)
-			num_pd = 0;
-		if (num_pd > num_domain_comps) {
-			D_ERROR("invalid num_perf_dom %d > num_fault_dom %d\n",
-				num_pd, num_domain_comps);
-			return -DER_INVAL;
-		}
-		num_domain_comps += num_pd;
-	}
-
 	ordered_ranks = d_rank_list_alloc(nnodes);
 	if (ordered_ranks == NULL)
 		return -DER_NOMEM;
@@ -1641,36 +1642,6 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 	if (map_buf == NULL)
 		D_GOTO(out_ranks, rc = -DER_NOMEM);
 
-	/* firstly add performance domain */
-	if (num_pd > 0) {
-		uint32_t	num_fdom, fdom_per_pd;
-
-		num_fdom = num_domain_comps - num_pd;
-		fdom_per_pd = num_fdom / num_pd;
-		for (i = 0; i < num_pd; i++) {
-			map_comp.co_type = PO_COMP_TP_GRP;
-			map_comp.co_status = PO_COMP_ST_UPIN;
-			map_comp.co_padding = 0;
-			map_comp.co_id = i;
-			map_comp.co_rank = i;
-			map_comp.co_ver = map_version;
-			map_comp.co_in_ver = map_version;
-			map_comp.co_fseq = 1;
-			map_comp.co_flags = PO_COMPF_NONE;
-			map_comp.co_nr = fdom_per_pd;
-			if ((num_fdom % num_pd) != 0 && i < (num_fdom % num_pd))
-				map_comp.co_nr++;
-
-			rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
-			if (rc != 0) {
-				D_ERROR("failed to attach to pool buf, "DF_RC"\n",
-					DP_RC(rc));
-				D_GOTO(out_map_buf, rc);
-			}
-		}
-	}
-
-	/* then add fault domain */
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains,
 					 domains, ordered_ranks);
 	if (rc != 0) {
