@@ -158,7 +158,7 @@ int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
 
 /* Assign a blob to a RDB pool target */
 int smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		     enum smd_dev_type smd_type, uint64_t blob_sz);
+		    enum smd_dev_type smd_type, uint64_t blob_sz);
 
 /**
  * Unassign a VOS pool target
