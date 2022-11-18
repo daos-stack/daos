@@ -28,6 +28,14 @@
 #define CRT_CTL_MAX		1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
 
+#define error_exit(x...)	\
+do {				\
+	fprintf(stderr, x);	\
+	exit(-1);		\
+} while (0)
+
+#define error_warn(x...)	fprintf(stderr, x)
+
 int crt_ctl_logfac;
 
 enum cmd_t {
@@ -576,18 +584,6 @@ ctl_register_ctl(crt_endpoint_t *ep)
 {
 	return crt_register_proto_ctl(ep);
 }
-
-
-#define error_exit(x...)	\
-do {				\
-	fprintf(stderr, x);	\
-	exit(-1);		\
-} while (0);
-
-#define error_warn(x...) \
-do {				\
-	fprintf(stderr, x);	\
-} while (0);
 
 static int
 ctl_init()
