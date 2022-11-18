@@ -13,12 +13,11 @@
 #include <daos/tests_lib.h>
 #include "../ad_mem.h"
 
-#define ADT_STORE_SIZE	(256 << 20)
-#define HDR_SIZE	(32 << 10)
+#define ADT_STORE_SIZE	(384 << 20)
 
 static struct ad_blob_handle adt_bh;
 static char	*adt_store;
-static int	 adt_arena_type = 1;
+static int	 adt_arena_type = ARENA_TYPE_BASE + 0;
 
 static void
 addr_swap(void *array, int a, int b)
@@ -489,6 +488,46 @@ adt_rsv_pub_4(void **state)
 }
 
 static void
+adt_rsv_pub_5(void **state)
+{
+	const int	     alloc_large1 = (8 << 10);
+	const int	     alloc_large2 = (1 << 20);
+	const int	     rsv_count = 16;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[rsv_count * 2];
+	daos_off_t	     addrs[rsv_count * 2];
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Reserve large space and publish\n");
+	for (i = 0; i < rsv_count * 2;) {
+		addrs[i] = ad_reserve(adt_bh, ARENA_TYPE_LARGE, alloc_large1, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed allocate size=%d\n", alloc_large1);
+			return;
+		}
+		i++;
+		addrs[i] = ad_reserve(adt_bh, ARENA_TYPE_LARGE, alloc_large2, &arena, &acts[i]);
+		if (addrs[i]== 0) {
+			fprintf(stderr, "failed allocate size=%d\n", alloc_large2);
+			return;
+		}
+		i++;
+	}
+
+	printf("Publish reserved addresses\n");
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, rsv_count * 2);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
 adt_rsv_inval(void **state)
 {
 	const int	     alloc_size = 8192; /* unsupported size */
@@ -897,6 +936,7 @@ main(void)
 		cmocka_unit_test(adt_rsv_pub_2),
 		cmocka_unit_test(adt_rsv_pub_3),
 		cmocka_unit_test(adt_rsv_pub_4),
+		cmocka_unit_test(adt_rsv_pub_5),
 		cmocka_unit_test(adt_rsv_pub_abort_1),
 		cmocka_unit_test(adt_rsv_pub_abort_2),
 		cmocka_unit_test(adt_rsv_inval),

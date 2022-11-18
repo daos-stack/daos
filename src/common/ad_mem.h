@@ -266,12 +266,6 @@ struct ad_blob_df {
 	uint32_t		bd_magic;
 	/** version number */
 	uint32_t		bd_version;
-	/** alignment */
-	int32_t			bd_unused;
-	/** number of registered arena types */
-	int32_t			bd_asp_nr;
-	/** specifications of registered arena types */
-	struct ad_arena_spec	bd_asp[ARENA_SPEC_MAX];
 	/** loading incarnation */
 	uint64_t		bd_incarnation;
 	/** it is DRAM reference of blob */
@@ -282,6 +276,10 @@ struct ad_blob_df {
 	uint64_t		bd_size;
 	/** size of each arena, default size is 16MB */
 	uint64_t		bd_arena_size;
+	/** specifications of registered arena types */
+	struct ad_arena_spec	bd_asp[ARENA_SPEC_MAX];
+	/** reserve some bytes for future usage */
+	uint64_t		bd_reserved[4];
 	/** allocated bits */
 	uint64_t		bd_bmap[0];
 };
