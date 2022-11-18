@@ -1051,6 +1051,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 {
 	struct obj_req_tgts	*req_tgts = &obj_auxi->req_tgts;
 	struct daos_shard_tgt	*tgt = NULL;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	uint32_t		 i;
 	uint32_t		 shard_idx, grp_size;
 	bool			 cli_disp = flags & OBJ_TGT_FLAG_CLI_DISPATCH;
@@ -1061,7 +1062,12 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
 	if (cli_disp || bit_map != NIL_BITMAP)
 		D_ASSERT(grp_nr == 1);
-	req_tgts->ort_start_shard = start_shard;
+	/* start_shard is the shard index, but ort_start_shard is the start shard ID.
+	 * in OSA case, possibly obj_get_grp_size > daos_oclass_grp_size so the start_shard
+	 * is different with ort_start_shard.
+	 */
+	req_tgts->ort_start_shard = (start_shard / obj_get_grp_size(obj)) *
+				    daos_oclass_grp_size(oca);
 	req_tgts->ort_srv_disp = !cli_disp && grp_size > 1;
 
 	if (shard_cnt > OBJ_TGT_INLINE_NR) {
@@ -4527,8 +4533,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			break;
 		}
 
-		if (obj_auxi->req_tgts.ort_shard_tgts !=
-		    obj_auxi->req_tgts.ort_tgts_inline)
+		if (obj_auxi->req_tgts.ort_shard_tgts != obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
 
 		if (!d_list_empty(head)) {
@@ -5592,8 +5597,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			continue;
 		}
 
-		if (sub_anchor->ssa_kds != NULL)
-			continue;
+		if (sub_anchor->ssa_kds != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_kds);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_kds, nr);
 		if (sub_anchor->ssa_kds == NULL)
@@ -5610,8 +5618,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			req_tgts->ort_shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
 		}
 
-		if (sub_anchor->ssa_recxs != NULL)
-			continue;
+		if (sub_anchor->ssa_recxs != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_recxs);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_recxs, nr);
 		if (sub_anchor->ssa_recxs == NULL)
