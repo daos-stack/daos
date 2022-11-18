@@ -123,6 +123,18 @@ struct ad_group_spec {
 	uint32_t		gs_count;
 };
 
+/** reserved arena types */
+enum {
+	ARENA_TYPE_DEF		= 0,
+	ARENA_TYPE_LARGE	= 1,
+	/**
+	 * type={0, 1, 2, 3} are for internal usage, customized arena should between
+	 * ARENA_TYPE_BASE and ARENA_TYPE_MAX.
+	 */
+	ARENA_TYPE_BASE		= 4,
+	ARENA_TYPE_MAX		= 31,
+};
+
 int ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 		      struct ad_group_spec *specs, unsigned int specs_nr);
 daos_off_t ad_reserve(struct ad_blob_handle bh, int type, daos_size_t size, uint32_t *arena_id,

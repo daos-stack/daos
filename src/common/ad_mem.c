@@ -78,6 +78,41 @@ static struct ad_group_spec grp_specs_def[] = {
 	},	/* group size = 256K */
 };
 
+static struct ad_group_spec grp_specs_large[] = {
+	{
+		.gs_unit	= (8 << 10),
+		.gs_count	= 128,
+	},	/* group size = 1M */
+	{
+		.gs_unit	= (16 << 10),
+		.gs_count	= 64,
+	},	/* group size = 1M */
+	{
+		.gs_unit	= (32 << 10),
+		.gs_count	= 32,
+	},	/* group size = 1M */
+	{
+		.gs_unit	= (64 << 10),
+		.gs_count	= 16,
+	},	/* group size = 1M */
+	{
+		.gs_unit	= (128 << 10),
+		.gs_count	= 16,
+	},	/* group size = 2M */
+	{
+		.gs_unit	= (256 << 10),
+		.gs_count	= 8,
+	},	/* group size = 2M */
+	{
+		.gs_unit	= (512 << 10),
+		.gs_count	= 4,
+	},	/* group size = 2M */
+	{
+		.gs_unit	= (1024 << 10),
+		.gs_count	= 2,
+	},	/* group size = 2M */
+};
+
 static struct ad_blob	*dummy_blob;
 
 static inline void setbits64(uint64_t *bmap, int at, int bits)
@@ -433,7 +468,7 @@ blob_load(struct ad_blob *blob)
 	/* overwrite the old incarnation */
 	bd->bd_incarnation = d_timeus_secdiff(0);
 	/* NB: @bd points to the first page, its content has been brought in by the above read.*/
-	for (i = 0; i < bd->bd_asp_nr; i++)
+	for (i = 0; i < ARENA_SPEC_MAX; i++)
 		blob->bb_arena_last[i] = bd->bd_asp[i].as_last_used;
 out:
 	return rc;
@@ -542,11 +577,16 @@ ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
 	bd->bd_incarnation	= d_timeus_secdiff(0);
 
 	/* register the default arena */
-	rc = blob_register_arena(blob, 0, grp_specs_def, ARRAY_SIZE(grp_specs_def), NULL);
+	rc = blob_register_arena(blob, ARENA_TYPE_DEF, grp_specs_def,
+				 ARRAY_SIZE(grp_specs_def), NULL);
+	D_ASSERT(rc == 0); /* no reason to fail */
+
+	rc = blob_register_arena(blob, ARENA_TYPE_LARGE, grp_specs_large,
+				 ARRAY_SIZE(grp_specs_large), NULL);
 	D_ASSERT(rc == 0); /* no reason to fail */
 
 	/* create arena 0 (ad_blob_df is stored in the first 32K of it) */
-	rc = arena_reserve(blob, 0, NULL, &arena);
+	rc = arena_reserve(blob, ARENA_TYPE_DEF, NULL, &arena);
 	D_ASSERT(rc == 0);
 	D_ASSERT(arena->ar_df);
 	D_ASSERT(arena->ar_df->ad_id == 0);
@@ -927,9 +967,14 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 		return -DER_INVAL;
 	}
 
-	if (type >= bd->bd_asp_nr) {
+	if (type >= ARENA_SPEC_MAX) {
 		D_ERROR("Invalid arena type=%d\n", type);
 		return -DER_INVAL;
+	}
+
+	if (bd->bd_asp[type].as_specs_nr == 0) {
+		D_ERROR("Unregistered arena type=%d\n", type);
+		return -DER_NONEXIST;
 	}
 
 	id = AD_ARENA_ANY;
@@ -940,7 +985,7 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	}
 	D_ASSERT(id >= 0);
 
-	D_DEBUG(DB_TRACE, "Reserved a new arena: type=%d, id=%d\n", type, id);
+	D_PRINT("Reserved a new arena: type=%d, id=%d\n", type, id);
 	blob->bb_arena_last[type] = id;
 	D_ASSERT(ad->ad_magic != ARENA_MAGIC);
 
@@ -1121,7 +1166,7 @@ group_load(struct ad_group_df *gd, struct ad_arena *arena, struct ad_group **gro
 	grp->gp_df = gd;
 
 	grp->gp_bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
-	grp->gp_bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + gd->gd_unit - 1) >> GRP_SIZE_SHIFT;
+	grp->gp_bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
 out:
 	*group_p = grp;
 	return 0;
@@ -1654,8 +1699,8 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	bits = ((gsp->gs_unit * gsp->gs_count) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
 	D_ASSERT(bits >= 1);
 
-	/* at least 8 units within a group */
-	bits_min = (gsp->gs_unit * 8) >> GRP_SIZE_SHIFT;
+	/* at least 2 units within a group */
+	bits_min = (gsp->gs_unit * 2) >> GRP_SIZE_SHIFT;
 	if (bits_min == 0)
 		bits_min = 1;
 	if (bits_min > bits)
@@ -1721,22 +1766,26 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	int			 rc;
 
 	bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
-	bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + gd->gd_unit - 1) >> GRP_SIZE_SHIFT;
+	bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
 	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
 
 	rc = ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
 	if (rc)
-		return rc;
+		goto failed;
 
 	rc = ad_tx_set(tx, gd, 0, sizeof(*gd), AD_TX_REDO | AD_TX_LOG_ONLY);
 	if (rc)
-		return rc;
+		goto failed;
 
 	rc = ad_tx_snap(tx, gd, offsetof(struct ad_group_df, gd_bmap[0]), AD_TX_REDO);
 	if (rc)
-		return rc;
+		goto failed;
 
 	return 0;
+ failed:
+	D_ERROR("Failed to publish group=%p, bit_at=%d, bits_nr=%d, rc=%d\n",
+		group, bit_at, bit_nr, rc);
+	return rc;
 }
 
 /** reserve space within a group, the reservation actions are returned to @act */
@@ -2184,8 +2233,11 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		if (arena->ar_unpub && !arena->ar_publishing) {
 			D_DEBUG(DB_TRACE, "publishing arena=%d\n", arena2id(arena));
 			rc = arena_tx_publish(arena, tx);
-			if (rc)
+			if (rc) {
+				D_ERROR("Failed to publish arena=%d, rc=%d\n",
+					arena2id(arena), rc);
 				break;
+			}
 
 			arena->ar_publishing = 1;
 			if (d_list_empty(&arena->ar_link)) {
@@ -2203,8 +2255,11 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			D_DEBUG(DB_TRACE, "publishing a new group, size=%d\n",
 				(int)group->gp_df->gd_unit);
 			rc = group_tx_publish(group, tx);
-			if (rc)
+			if (rc) {
+				D_ERROR("Failed to publish group, size=%d, rc=%d\n",
+					(int)group->gp_df->gd_unit, rc);
 				break;
+			}
 
 			group->gp_publishing = 1;
 			if (d_list_empty(&group->gp_link)) {
@@ -2218,12 +2273,17 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 
 		D_DEBUG(DB_TRACE, "publishing reserved bit=%d\n", acts[i].ra_bit);
 		rc = ad_tx_setbits(tx, gd->gd_bmap, acts[i].ra_bit, 1);
-		if (rc)
+		if (rc)  {
+			D_ERROR("Failed to publish reserved bit=%d, rc=%d\n",
+				acts[i].ra_bit, rc);
 			break;
+		}
 
 		rc = ad_tx_decrease(tx, &gd->gd_unit_free);
-		if (rc)
+		if (rc) {
+			D_ERROR("Failed to decrease free units, rc=%d\n", rc);
 			break;
+		}
 
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 		group->gp_unit_rsv--;
@@ -2368,10 +2428,6 @@ blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 	if (spec->as_specs_nr != 0)
 		return -DER_EXIST;
 
-	rc = ad_tx_increase(tx, &bd->bd_asp_nr);
-	if (rc)
-		return rc;
-
 	spec->as_type	    = arena_type;
 	spec->as_specs_nr   = specs_nr;
 	spec->as_last_used  = AD_ARENA_ANY;
@@ -2392,6 +2448,11 @@ ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 {
 	struct ad_tx	tx;
 	int		rc;
+
+	if (arena_type == ARENA_TYPE_DEF || arena_type == ARENA_TYPE_LARGE) {
+		D_ERROR("Cannot use internal type ID: %d\n", arena_type);
+		return -DER_NO_PERM;
+	}
 
 	rc = ad_tx_begin(bh, &tx);
 	if (rc)
