@@ -374,7 +374,6 @@ static int
 get_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t *nhandles)
 {
 	uint32_t	result = 0;
-	uint32_t	orig_val;
 	d_iov_t		value;
 	bool		do_update = true;
 	int		rc;
@@ -394,11 +393,9 @@ get_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t
 		do_update = false;
 		break;
 	case NHANDLES_PRE_INCREMENT:
-		orig_val = result;
 		result++;
 		break;
 	case NHANDLES_PRE_DECREMENT:
-		orig_val = result;
 		result--;
 		break;
 	default:
@@ -413,11 +410,6 @@ get_nhandles(struct rdb_tx *tx, struct cont *cont, enum nhandles_op op, uint32_t
 				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
 			goto err;
 		}
-		D_DEBUG(DB_MD, DF_CONT": updated nhandles %u -> %u\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), orig_val, result);
-	} else {
-		D_DEBUG(DB_MD, DF_CONT": got nhandles=%u\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), result);
 	}
 
 out:
