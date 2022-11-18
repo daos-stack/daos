@@ -1038,8 +1038,8 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
-				printf("Requires 1 or 2 tiers\n");
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 4) {
+				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
 			break;
