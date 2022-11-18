@@ -535,7 +535,7 @@ blob_close(struct ad_blob *blob)
  * NB: superblock is stored in the first arena.
  */
 int
-ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	       struct ad_blob_handle *bh)
 {
 	struct ad_blob		*blob;
@@ -625,7 +625,7 @@ failed:
 }
 
 int
-ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	     struct ad_blob_handle *bh)
 {
 	struct ad_blob		*blob;
@@ -1003,11 +1003,15 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	setbits64(ad->ad_bmap, 0, 2);
 
 	D_CASSERT(ARENA_UNIT_SIZE == BLOB_HDR_SIZE);
-	if (id == 0) { /* the first arena */
-		/* Blob header(superblock) is stored in arena zero, it consumes 64K.
+	if (id == 0) {
+		/* Arena 0 reserves 128KB totally -
+		 * Arena header ad_arena_df)			ARENA_HDR_SIZE (64KB)
+		 * Blob header (superblock ad_blob_df)		BLOB_HDR_SIZE (32KB)
+		 * Root obj (export to user by ad_root())	AD_ROOT_OBJ_SIZE (32KB)
 		 * NB: the first arena is written straightway, no WAL
 		 */
-		setbit64(ad->ad_bmap, 2);
+		setbit64(ad->ad_bmap, 2); /* for blob header */
+		setbit64(ad->ad_bmap, 3); /* for root obj */
 	}
 	/* DRAM only operation, mark the arena as reserved */
 	D_ASSERT(!isset64(blob->bb_bmap_rsv, id));
@@ -2360,22 +2364,22 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 daos_off_t
 ad_alloc(struct ad_blob_handle bh, int type, daos_size_t size, uint32_t *arena_id)
 {
-	struct ad_reserv_act act;
-	struct ad_tx	     tx;
-	daos_off_t	     addr;
-	int		     rc;
+	struct ad_tx		*tx;
+	struct ad_reserv_act	 act;
+	daos_off_t		 addr;
+	int			 rc;
 
 	addr = ad_reserve_addr(bh.bh_blob, type, size, arena_id, &act);
 	if (addr == 0)
 		return 0; /* no space */
 
-	rc = ad_tx_begin(bh, &tx);
+	rc = tx_begin(bh, NULL, &tx);
 	if (rc)
 		goto failed;
 
-	rc = ad_tx_publish(&tx, &act, 1);
+	rc = ad_tx_publish(tx, &act, 1);
 
-	ad_tx_end(&tx, rc);
+	rc = tx_end(tx, rc);
 	if (rc)
 		return 0;
 
@@ -2446,20 +2450,20 @@ int
 ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 		  struct ad_group_spec *specs, unsigned int specs_nr)
 {
-	struct ad_tx	tx;
-	int		rc;
+	struct ad_tx	*tx;
+	int		 rc;
 
 	if (arena_type == ARENA_TYPE_DEF || arena_type == ARENA_TYPE_LARGE) {
 		D_ERROR("Cannot use internal type ID: %d\n", arena_type);
 		return -DER_NO_PERM;
 	}
 
-	rc = ad_tx_begin(bh, &tx);
+	rc = tx_begin(bh, NULL, &tx);
 	if (rc)
 		return rc;
 
-	rc = blob_register_arena(bh.bh_blob, arena_type, specs, specs_nr, &tx);
-	rc = ad_tx_end(&tx, rc);
+	rc = blob_register_arena(bh.bh_blob, arena_type, specs, specs_nr, tx);
+	rc = tx_end(tx, rc);
 	return rc;
 }
 
@@ -2666,4 +2670,17 @@ arena_free(struct ad_arena *arena, bool force)
 	arena_unbind(arena, false);
 
 	D_FREE(arena);
+}
+
+/** Query root object pointer */
+void *
+ad_root(struct ad_blob_handle bh, size_t size)
+{
+	struct ad_blob	*blob = bh.bh_blob;
+	daos_off_t	 addr;
+
+	D_ASSERTF(size > 0 && size <= AD_ROOT_OBJ_SIZE, "invalid size %zu\n", size);
+	addr = blob_addr(blob) + AD_ROOT_OBJ_OFF;
+
+	return ad_addr2ptr(bh, addr);
 }

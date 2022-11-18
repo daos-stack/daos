@@ -86,12 +86,13 @@ ad_tx_increase(struct ad_tx *tx, int32_t *addr)
 	return ad_tx_assign(tx, addr, sizeof(val), val + 1);
 }
 
-int ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+int ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 		   struct ad_blob_handle *bh);
-int ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+int ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 		 struct ad_blob_handle *bh);
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
+void *ad_root(struct ad_blob_handle bh, size_t size);
 
 #define AD_ARENA_ANY	(~0U)
 
@@ -153,7 +154,7 @@ umm2ad_blob_hdl(struct umem_instance *umm)
 {
 	struct ad_blob_handle	hdl;
 
-	hdl.bh_blob = (struct ad_blob *)umm->umm_pool; /* FIXME */
+	hdl.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
 	return hdl;
 }
 
