@@ -7142,7 +7142,7 @@ ds_pool_mark_connectable(struct ds_pool_svc *ds_svc)
 	int			 rc;
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
-	if (rc != 0) {
+	if (rc == 0) {
 		ABT_rwlock_wrlock(svc->ps_lock);
 		rc = ds_pool_mark_connectable_internal(&tx, svc);
 		if (rc > 0)

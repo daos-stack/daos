@@ -4691,9 +4691,10 @@ ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
 		rc = check_set_prop_label(&tx, cont, prop_in, prop_old);
 	}
 
-out_cont:
 	if (rc == 0)
 		rc = rdb_tx_commit(&tx);
+
+out_cont:
 	cont_put(cont);
 out_tx:
 	ABT_rwlock_unlock(svc->cs_lock);
