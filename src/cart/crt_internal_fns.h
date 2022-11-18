@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,8 @@
 
 /** crt_init.c */
 bool crt_initialized(void);
+
+int crt_str_to_provider(const char *provider);
 
 /** crt_register.c */
 int crt_opc_map_create(void);

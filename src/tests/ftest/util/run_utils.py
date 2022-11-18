@@ -78,6 +78,19 @@ class RemoteCommandResult():
         """
         return any(data.timeout for data in self.output)
 
+    @property
+    def all_stdout(self):
+        """Get all of the stdout from the issued command from each host.
+
+        Returns:
+            dict: the stdout (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stdout = {}
+        for data in self.output:
+            stdout[str(data.hosts)] = '\n'.join(data.stdout)
+        return stdout
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 
@@ -129,6 +142,23 @@ class RemoteCommandResult():
                     log.debug("    %s", line)
 
 
+def get_switch_user(user="root"):
+    """Get the switch user command for the requested user.
+
+    Args:
+        user (str): user account. Defaults to "root".
+
+    Returns:
+        list: the sudo command as a list
+
+    """
+    command = ["sudo", "-n"]
+    if user != "root":
+        # Use runuser to avoid using a password
+        command.extend(["runuser", "-u", user, "--"])
+    return command
+
+
 def get_clush_command_list(hosts, args=None, sudo=False):
     """Get the clush command with optional sudo arguments.
 
@@ -148,8 +178,8 @@ def get_clush_command_list(hosts, args=None, sudo=False):
         command.insert(1, args)
     if sudo:
         # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
+        # command.extend(["-o", "-oStrictHostKeyChecking=no", get_switch_user()])
+        command.extend(get_switch_user())
     return command
 
 
@@ -168,15 +198,6 @@ def get_clush_command(hosts, args=None, sudo=False):
 
     """
     return " ".join(get_clush_command_list(hosts, args, sudo))
-
-
-def get_local_host():
-    """Get the local host name.
-
-    Returns:
-        str: name of the local host
-    """
-    return gethostname().split(".")[0]
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
@@ -208,20 +229,20 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
                 - stderr (not used; included in stdout)
 
     """
-    local_host = get_local_host()
+    local_host = gethostname().split(".")[0]
     command_str = " ".join(command)
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
-    if timeout:
+    if timeout and verbose:
         log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
-    else:
+    elif verbose:
         log.debug("Running on %s: %s", local_host, command_str)
 
     try:
         # pylint: disable=subprocess-run-check
-        result = subprocess.run(command, **kwargs)
+        result = subprocess.run(command, **kwargs)     # nosec
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
@@ -282,9 +303,27 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
         task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    if verbose:
+        log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
         results.log_output(log)
     return results
+
+
+def command_as_user(command, user):
+    """Adjust a command to be ran as another user.
+
+    Args:
+        command (str): the original command
+        user (str): user to run as
+
+    Returns:
+        str: command adjusted to run as another user
+
+    """
+    if not user:
+        return command
+    switch_command = " ".join(get_switch_user(user))
+    return f"{switch_command} {command}"

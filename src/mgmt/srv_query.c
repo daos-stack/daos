@@ -209,6 +209,7 @@ struct bio_led_manage_info {
 	char		*tr_addr;
 	Ctl__LedAction	 action;
 	Ctl__LedState	*state;
+	uint64_t	 duration;
 };
 
 static int
@@ -232,12 +233,14 @@ bio_storage_dev_manage_led(void *arg)
 
 	/* Set the LED of the VMD device to a FAULT state, tr_addr and state may be updated */
 	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
-			    (unsigned int)led_info->action, (unsigned int *)led_info->state);
-	if (rc != 0)
-		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s)\n",
-			DP_UUID(led_info->dev_uuid),
+			    (unsigned int)led_info->action, (unsigned int *)led_info->state,
+			    led_info->duration);
+	if ((rc != 0) && (rc != -DER_NOSYS))
+		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s): "
+			DF_RC"\n", DP_UUID(led_info->dev_uuid),
 			ctl__led_action__descriptor.values[led_info->action].name,
-			ctl__led_state__descriptor.values[*led_info->state].name);
+			ctl__led_state__descriptor.values[*led_info->state].name,
+			DP_RC(rc));
 
 	return rc;
 }
@@ -298,10 +301,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->devices, list_devs_info.dev_list_cnt);
-	if (resp->devices == NULL) {
-		D_ERROR("Failed to allocate devices for resp\n");
+	if (resp->devices == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list, bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
@@ -343,13 +344,18 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
 		led_info.state = &led_state;
+		led_info.duration = 0;
+
 		rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS,
 				     0, 0);
 		if (rc != 0) {
-			if (rc != -DER_NOSYS)
+			if (rc == -DER_NOSYS) {
+				led_state = CTL__LED_STATE__NA;
+				/* Reset rc for non-VMD case */
+				rc = 0;
+			} else {
 				break;
-			/* Reset rc for non-VMD case */
-			rc = 0;
+			}
 		}
 		resp->devices[i]->led_state = led_state;
 
@@ -357,7 +363,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			buflen = strlen(dev_info->bdi_traddr) + 1;
 			D_ALLOC(resp->devices[i]->tr_addr, buflen);
 			if (resp->devices[i]->tr_addr == NULL) {
-				D_ERROR("Failed to allocate device tr_addr");
 				rc = -DER_NOMEM;
 				break;
 			}
@@ -429,10 +434,8 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
-	if (resp->pools == NULL) {
-		D_ERROR("Failed to allocate pools for resp\n");
+	if (resp->pools == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		D_ALLOC_PTR(resp->pools[i]);
@@ -591,7 +594,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -601,15 +603,20 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	led_info.action = CTL__LED_ACTION__SET;
 	led_state = CTL__LED_STATE__ON;
 	led_info.state = &led_state;
+	/* Indicate infinite duration */
+	led_info.duration = 0;
 
 	/* Set the VMD LED to FAULTY state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
 	if (rc != 0) {
 		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
-		if (rc == -DER_NOSYS)
-			resp->device->led_state = CTL__LED_STATE__NA;
-		else
+		if (rc == -DER_NOSYS) {
+			led_state = CTL__LED_STATE__NA;
+			/* Reset rc for non-VMD case */
+			rc = 0;
+		} else {
 			goto out;
+		}
 	}
 	resp->device->led_state = led_state;
 
@@ -637,10 +644,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	resp->device->tr_addr = NULL;
 
 	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
-	if (resp->device->tr_addr == NULL) {
-		D_ERROR("Failed to allocate transport address in response");
+	if (resp->device->tr_addr == NULL)
 		return -DER_NOMEM;
-	}
 
 	if (strlen(req->ids) == 0) {
 		D_ERROR("Transport address not provided in request\n");
@@ -654,13 +659,19 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	led_info.action = req->led_action;
 	led_state = req->led_state;
 	led_info.state = &led_state;
+	led_info.duration = req->led_duration_mins * 60 * (NSEC_PER_SEC / NSEC_PER_USEC);
 
 	/* Manage the VMD LED state on init xstream */
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL, DSS_XS_VOS, 0, 0);
-	if (rc == -DER_NOSYS)
-		resp->device->led_state = CTL__LED_STATE__NA;
-	else if (rc == 0)
+	if (rc != 0) {
+		if (rc == -DER_NOSYS) {
+			resp->device->led_state = CTL__LED_STATE__NA;
+			/* Reset rc for non-VMD case */
+			rc = 0;
+		}
+	} else {
 		resp->device->led_state = (Ctl__LedState)led_state;
+	}
 
 	return rc;
 }
@@ -713,7 +724,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate new device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}

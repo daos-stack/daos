@@ -219,9 +219,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	}
 
 	/** Handle the deferred NVMe cancellations */
-	if (!publish)
-		vos_publish_blocks(cont, &dth->dth_deferred_nvme,
-				   false, VOS_IOS_GENERIC);
+	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
 
 	return 0;
 }
@@ -501,6 +499,10 @@ vos_mod_init(void)
 
 	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
+
+	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
+	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
+
 
 	return rc;
 }
