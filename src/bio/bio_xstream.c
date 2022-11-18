@@ -146,8 +146,7 @@ bio_spdk_env_init(void)
 		spdk_env_fini();
 	}
 out:
-	if (opts.pci_allowed != NULL)
-		D_FREE(opts.pci_allowed);
+	D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -587,8 +586,7 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 		d_bdev->bb_blobstore = NULL;
 	}
 
-	if (d_bdev->bb_name != NULL)
-		D_FREE(d_bdev->bb_name);
+	D_FREE(d_bdev->bb_name);
 
 	D_FREE(d_bdev);
 }
@@ -796,7 +794,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 
 	D_ALLOC_PTR(d_bdev);
 	if (d_bdev == NULL) {
-		D_ERROR("failed to allocate bio_bdev\n");
 		return -DER_NOMEM;
 	}
 
@@ -812,9 +809,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	d_bdev->bb_roles = rc;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
-		D_ERROR("Failed to allocate bdev name for %s\n", bdev_name);
-		rc = -DER_NOMEM;
-		goto error;
+		D_GOTO(error, rc = -DER_NOMEM);
 	}
 
 	/*

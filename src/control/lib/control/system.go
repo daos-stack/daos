@@ -243,8 +243,8 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		}
 		return nil
 	}
-	rpcClient.Debugf("DAOS system query request: %+v", req)
 
+	rpcClient.Debugf("DAOS system query request: %s", mgmtpb.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err

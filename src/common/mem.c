@@ -499,7 +499,6 @@ umem_process_cb_vec(struct umem_tx_stage_item *vec, unsigned int *cnt, bool noop
 	/* @vec & @cnt could be changed by other ULT while txi_fn yielding */
 	D_ALLOC_ARRAY(txi_arr, num);
 	if (txi_arr == NULL) {
-		D_ERROR("Failed to allocate txi array\n");
 		return;
 	}
 	memcpy(txi_arr, vec, sizeof(*txi) * num);
