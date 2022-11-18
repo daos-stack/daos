@@ -78,6 +78,8 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	fs_handle = fuse_req_userdata(req);
 
+	dfuse_cache_evict_dir(fs_handle, parent);
+
 	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false, &oid);
 	if (rc != 0) {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
