@@ -1,5 +1,4 @@
 """Build container library"""
-import daos_build
 
 
 def scons():
@@ -23,12 +22,12 @@ def scons():
     senv = denv.Clone()
     prereqs.require(senv, 'pmdk', headers_only=True)
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    ds_cont = daos_build.library(senv, 'cont',
-                                 ['srv.c', 'srv_container.c', 'srv_epoch.c',
-                                  'srv_target.c', 'srv_layout.c', 'oid_iv.c',
-                                  'container_iv.c', 'srv_cli.c', 'srv_oi_table.c',
-                                  'srv_metrics.c', common],
-                                 install_off="../..")
+    ds_cont = senv.d_library('cont',
+                             ['srv.c', 'srv_container.c', 'srv_epoch.c',
+                              'srv_target.c', 'srv_layout.c', 'oid_iv.c',
+                              'container_iv.c', 'srv_cli.c', 'srv_oi_table.c',
+                              'srv_metrics.c', common],
+                             install_off="../..")
     senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
 

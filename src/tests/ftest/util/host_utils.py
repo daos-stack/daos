@@ -122,7 +122,7 @@ class HostInfo():
         log.info("access_points:       %s", self.access_points)
 
     def set_hosts(self, log, control_host, server_hosts, server_partition, server_reservation,
-                  client_hosts, client_partition, client_reservation):
+                  client_hosts, client_partition, client_reservation, include_local_host=False):
         """Set the host information.
 
         Args:
@@ -134,6 +134,8 @@ class HostInfo():
             client_hosts (object): hosts to define as clients
             client_partition (str): client partition name
             client_reservation (str): client reservation name
+            include_local_host (bool, optional): option to include the local host as a client.
+                Defaults to False.
 
         Raises:
             HostException: if there is a problem obtaining the hosts
@@ -151,7 +153,8 @@ class HostInfo():
             self._clients = HostRole(
                 client_hosts, client_partition, client_reservation,
                 get_partition_hosts(log, control_host, client_partition),
-                get_reservation_hosts(log, control_host, client_reservation))
+                get_reservation_hosts(log, control_host, client_reservation),
+                include_local_host)
         except SlurmFailed as error:
             raise HostException("Error defining the server hosts") from error
 
@@ -168,7 +171,7 @@ class HostRole():
     """Defines the hosts being utilized in a specific role by the test."""
 
     def __init__(self, hosts=None, partition=None, reservation=None, partition_hosts=None,
-                 reservation_hosts=None):
+                 reservation_hosts=None, include_local_host=False):
         """Initialize a HostRole object.
 
         Args:
@@ -178,12 +181,15 @@ class HostRole():
             partition_hosts (NodeSet, optional): hosts defined in the reservation. Defaults to None.
             reservation_hosts (NodeSet, optional): hosts defined in the reservation. Defaults to
                 None.
+            include_local_host (bool): option to include the local host. Defaults to False.
         """
         self._partition = HostPartition(partition, partition_hosts, reservation, reservation_hosts)
         if self.partition.hosts:
             self._hosts = get_node_set(self.partition.hosts)
         else:
             self._hosts = get_node_set(hosts)
+        if include_local_host:
+            self._hosts.add(get_local_host())
 
     @property
     def hosts(self):

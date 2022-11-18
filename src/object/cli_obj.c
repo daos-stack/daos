@@ -4521,8 +4521,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			break;
 		}
 
-		if (obj_auxi->req_tgts.ort_shard_tgts !=
-		    obj_auxi->req_tgts.ort_tgts_inline)
+		if (obj_auxi->req_tgts.ort_shard_tgts != obj_auxi->req_tgts.ort_tgts_inline)
 			D_FREE(obj_auxi->req_tgts.ort_shard_tgts);
 
 		if (!d_list_empty(head)) {
@@ -5586,8 +5585,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			continue;
 		}
 
-		if (sub_anchor->ssa_kds != NULL)
-			continue;
+		if (sub_anchor->ssa_kds != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_kds);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_kds, nr);
 		if (sub_anchor->ssa_kds == NULL)
@@ -5604,8 +5606,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			req_tgts->ort_shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
 		}
 
-		if (sub_anchor->ssa_recxs != NULL)
-			continue;
+		if (sub_anchor->ssa_recxs != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_recxs);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_recxs, nr);
 		if (sub_anchor->ssa_recxs == NULL)

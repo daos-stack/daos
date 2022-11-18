@@ -310,3 +310,20 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     if verbose:
         results.log_output(log)
     return results
+
+
+def command_as_user(command, user):
+    """Adjust a command to be ran as another user.
+
+    Args:
+        command (str): the original command
+        user (str): user to run as
+
+    Returns:
+        str: command adjusted to run as another user
+
+    """
+    if not user:
+        return command
+    switch_command = " ".join(get_switch_user(user))
+    return f"{switch_command} {command}"
