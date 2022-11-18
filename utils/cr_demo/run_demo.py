@@ -1,3 +1,8 @@
+"""
+  (C) Copyright 2020-2022 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
 import argparse
 import subprocess
 
@@ -6,72 +11,103 @@ POOL_SIZE = "4GB"
 POOL_LABEL = "tank"
 
 def format_storage(host_list):
+    """Call dmg storage format.
+
+    Args:
+        host_list (str): List of hosts to format.
+    """
     format_cmd = ["dmg", "storage", "format", "--host-list=" + host_list]
-    subprocess.run(format_cmd)
+    print("Command: {}".format(" ".join(format_cmd)))
+    subprocess.run(format_cmd, check=False)
 
 def create_pool(pool_size, pool_label):
+    """Call dmg pool create.
+
+    Args:
+        pool_size (str): Pool size.
+        pool_label (str): Pool label.
+    """
     create_pool_cmd = ["dmg", "pool", "create", "--size=" + pool_size,
                        "--label=" + pool_label]
-    subprocess.run(create_pool_cmd)
+    print("Command: {}".format(" ".join(create_pool_cmd)))
+    subprocess.run(create_pool_cmd, check=False)
 
 def inject_fault_mgmt(pool_label, fault_type):
+    """Call dmg faults mgmt-svc to inject fault.
+
+    Args:
+        pool_label (str): Pool label.
+        fault_type (str): Fault type.
+    """
     inject_fault_cmd = ["dmg", "faults", "mgmt-svc", "pool", pool_label, fault_type]
-    subprocess.run(inject_fault_cmd)
+    print("Command: {}".format(" ".join(inject_fault_cmd)))
+    subprocess.run(inject_fault_cmd, check=False)
 
 def list_pool():
+    """Call dmg pool list"""
     list_pool_cmd = ["dmg", "pool", "list"]
-    subprocess.run(list_pool_cmd)
+    print("Command: {}".format(" ".join(list_pool_cmd)))
+    subprocess.run(list_pool_cmd, check=False)
 
 def enable_checker():
+    """Call dmg check enable"""
     check_enable_cmd = ["dmg", "check", "enable"]
-    subprocess.run(check_enable_cmd)
+    print("Command: {}".format(" ".join(check_enable_cmd)))
+    subprocess.run(check_enable_cmd, check=False)
 
 def start_checker():
+    """Call dmg check start"""
     check_start_cmd = ["dmg", "check", "start"]
-    subprocess.run(check_start_cmd)
+    print("Command: {}".format(" ".join(check_start_cmd)))
+    subprocess.run(check_start_cmd, check=False)
 
 def query_checker():
+    """Call dmg check query"""
     check_query_cmd = ["dmg", "check", "query"]
-    subprocess.run(check_query_cmd)
+    print("Command: {}".format(" ".join(check_query_cmd)))
+    subprocess.run(check_query_cmd, check=False)
 
 def disable_checker():
+    """Call dmg check disable"""
     check_disable_cmd = ["dmg", "check", "disable"]
-    subprocess.run(check_disable_cmd)
+    print("Command: {}".format(" ".join(check_disable_cmd)))
+    subprocess.run(check_disable_cmd, check=False)
 
-ap = argparse.ArgumentParser()
-ap.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
-args = vars(ap.parse_args())
+PARSER = argparse.ArgumentParser()
+PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
+ARGS = vars(PARSER.parse_args())
 
-hostlist = args["hostlist"]
-input("1. Format storage on " + hostlist + ". Hit enter...")
-format_storage(host_list=hostlist)
+HOSTLIST = ARGS["hostlist"]
+input("1. Format storage on {}. Hit enter...".format(HOSTLIST))
+format_storage(host_list=HOSTLIST)
 
-input("2. Create a 4GB pool. Hit enter...")
+input("\n2. Create a 4GB pool. Hit enter...")
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL)
 
 input("3. Remove PS entry on MS. Hit enter...")
 inject_fault_mgmt(pool_label=POOL_LABEL, fault_type="CIC_POOL_NONEXIST_ON_MS")
 
-input("4. MS doesn\'t recognize any pool (it exists on engine). Hit enter...")
+input("\n4. MS doesn\'t recognize any pool (it exists on engine). Hit enter...")
 list_pool()
 
-input("5. Enable and start checker. Hit enter...")
+input("\n5. Enable and start checker. Hit enter...")
 enable_checker()
 start_checker()
 
-user_input = input("6-1. Query the checker. Hit y to query, n to proceed to next step.")
-while():
-    if user_input == "y":
+print("\n6-1. Query the checker.")
+while True:
+    USER_INPUT = input("Hit y to query, n to proceed to next step: ")
+    if USER_INPUT == "y":
         query_checker()
-    elif user_input == "n":
+    elif USER_INPUT == "n":
         break
     else:
         print("Please enter y or n.")
 
 print("6-2. Checker shows the inconsistency that was repaired.")
 
-input("7. Disable the checker. Hit enter...")
+input("\n7. Disable the checker. Hit enter...")
 disable_checker()
 
-input("8. Verify that the missing pool was reconstructed. Hit enter...")
+input("\n8. Verify that the missing pool was reconstructed. Hit enter...")
 list_pool()
