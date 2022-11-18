@@ -8,6 +8,6 @@ fi
 
 hosts=$1
 
-clush -w $hosts "sudo systemctl stop daos_server;\
+clush -w "$hosts" "sudo systemctl stop daos_server;\
                  sudo umount /mnt/daos;\
                  sudo systemctl start daos_server;"
