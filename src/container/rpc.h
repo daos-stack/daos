@@ -199,7 +199,7 @@ CRT_RPC_DECLARE(cont_open_v7, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V7)
 
 CRT_RPC_DECLARE(cont_open_v6, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V6)
 
-/* version in which metadata open/modify times and number of handles added to open, query RPCs */
+/* version in which metadata open/modify times, number of handles were added to open, query RPCs */
 #define CONT_PROTO_VER_WITH_MDTIMES 7
 #define CONT_PROTO_VER_WITH_NHANDLES 7
 

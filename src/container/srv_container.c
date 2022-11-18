@@ -335,7 +335,7 @@ get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool
 		goto out;
 	}
 
-	if(do_update) {
+	if (do_update) {
 		uint64_t		cur_hlc;
 
 		cur_hlc = crt_hlc_get();
@@ -1971,7 +1971,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	}
 
 	if (mdtimes_in_reply && (opc_get(rpc->cr_opc) == CONT_OPEN_BYLABEL)) {
-		struct cont_open_v7_out *out_v7 = crt_reply_get(rpc);
+		struct cont_open_bylabel_v7_out *out_v7 = crt_reply_get(rpc);
 
 		out_v7->coo_md_otime = mdtimes.otime;
 		out_v7->coo_md_mtime = mdtimes.mtime;
@@ -4591,9 +4591,9 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u(%s)\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc,
-		cont_cli_opc_name(opc));
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID " opc=%u(%s)\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, cont_proto_ver,
+		DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
 
 	/*
 	 * TODO: How to map to the correct container service among those
