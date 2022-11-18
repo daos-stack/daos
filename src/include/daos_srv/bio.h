@@ -902,6 +902,7 @@ int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 
 enum bio_mc_flags {
 	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
+	BIO_MC_FL_RDB		= (1UL << 1),	/* for RDB */
 };
 
 /*

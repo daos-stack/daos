@@ -619,7 +619,7 @@ void auto_faulty_detect(struct bio_blobstore *bbs);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
-int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys,
+int bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		  enum smd_dev_type st, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);

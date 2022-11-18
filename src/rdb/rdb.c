@@ -55,7 +55,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * access protection.
 	 */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL, &pool);
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();
@@ -102,7 +102,7 @@ out_pool_hdl:
 		int rc_tmp;
 
 		vos_pool_close(pool);
-		rc_tmp = vos_pool_destroy(path, (unsigned char *)uuid);
+		rc_tmp = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 		if (rc_tmp != 0)
 			D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 				DP_UUID(uuid), path, rc_tmp);
@@ -122,7 +122,7 @@ rdb_destroy(const char *path, const uuid_t uuid)
 {
 	int rc;
 
-	rc = vos_pool_destroy(path, (unsigned char *)uuid);
+	rc = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
 			DP_UUID(uuid), path, DP_RC(rc));
@@ -370,7 +370,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	 * and VOS_POF_EXCL for concurrent access protection.
 	 */
 	rc = vos_pool_open(path, (unsigned char *)uuid,
-			   VOS_POF_SMALL | VOS_POF_EXCL, &pool);
+			   VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, &pool);
 	if (rc == -DER_ID_MISMATCH) {
 		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO, RAS_SEV_ERROR,
 				     NULL /* hwid */, NULL /* rank */, NULL /* inc */,

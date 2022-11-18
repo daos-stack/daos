@@ -90,6 +90,8 @@ enum vos_pool_open_flags {
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 	/** VOS DB pool*/
 	VOS_POF_SYSDB	= (1 << 4),
+	/** RDB pool */
+	VOS_POF_RDB	= (1 << 5),
 };
 
 enum vos_oi_attr {
