@@ -418,10 +418,14 @@ static void
 ctl_cli_cb(const struct crt_cb_info *cb_info)
 {
 	struct cb_info		*info;
-	int			cmd_rc;
-	int			i;
+	int			cmd_rc = 0;
+	int			i = 0;
 
 	info = cb_info->cci_arg;
+
+	if (cb_info->cci_rc != 0)
+		error_exit("command %s failed with rc=%d\n", cmd2str(info->cmd),
+			   cb_info->cci_rc);
 
 	switch (info->cmd) {
 	case CMD_ENABLE_FI:
@@ -513,7 +517,6 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 	}
 
-	msg("command '%s' finished with rc = %d\n", cmd2str(info->cmd), cmd_rc);
 	sem_post(&ctl_gdata.cg_num_reply);
 }
 
