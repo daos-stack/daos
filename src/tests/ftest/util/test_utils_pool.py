@@ -1083,6 +1083,7 @@ class TestPool(TestDaosApiBase):
 
         """
         self._map_version = self.get_version(True)
+        self.log.info("Updated pool %s map version for rebuild check: %s", self, self._map_version)
 
     def has_rebuild_started(self, status=None, verbose=True):
         """Determine if rebuild has started.

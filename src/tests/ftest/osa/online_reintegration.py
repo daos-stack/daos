@@ -100,7 +100,6 @@ class OSAOnlineReintegration(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
                 output = self.pool.exclude(rank)
-                # output = self.dmg_command.pool_exclude(self.pool.uuid, rank)
             else:
                 self.pool.update_map_version()
                 output = self.dmg_command.system_stop(ranks=rank, force=True)

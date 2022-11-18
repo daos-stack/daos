@@ -10,10 +10,8 @@ from test_utils_pool import add_pool
 class OSADmgNegativeTest(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
-    Test Class Description: This test
-    passes invalid parameters to dmg OSA
-    related commands and check whether
-    appropriate errors are returned.
+    Test Class Description: This test passes invalid parameters to dmg OSA related commands and
+        check whether appropriate errors are returned.
 
     :avocado: recursive
     """
@@ -29,29 +27,28 @@ class OSADmgNegativeTest(OSAUtils):
         # Dmg command test sequence
         self.test_seq = self.params.get("dmg_cmd_test", "/run/test_sequence/*")
 
-    def validate_results(self, exp_result, dmg_output):
-        """Validate the dmg_output results with expected results.
+    def validate_results(self, pool, exp_result, result):
+        """Validate the result is as expected.
 
         Args:
+            pool (TestPool): the pool to validate
             exp_result (str) : Expected result (Pass or Fail string).
-            dmg_output (str) : dmg output string.
+            result (CmdResult) : dmg output.
+
+        Returns:
+            bool: where the results validated
+
         """
         if exp_result == "Pass":
-            # Check state before hand as wait for rebuild
-            state = self.pool.get_rebuild_state(True)
-            if state != "done":
-                self.pool.wait_for_rebuild_to_end(3)
-            if "succeeded" in dmg_output:
-                self.log.info("Test Passed")
-            else:
-                self.fail("Test Failed")
+            pool.wait_for_rebuild_to_end(3)
+            if result.exit_status == 0:
+                return True
         elif exp_result == "Fail":
-            if "failed" in dmg_output:
-                self.log.info("Test Passed")
-            else:
-                self.fail("Test Failed")
+            if result.exit_status != 0:
+                return True
         else:
-            self.fail("Invalid Parameter")
+            self.fail("Invalid 'exp_result' parameter: {}".format(exp_result))
+        return False
 
     def run_osa_dmg_test(self, num_pool, extend=False):
         """Run the offline extend without data.
@@ -62,70 +59,65 @@ class OSADmgNegativeTest(OSAUtils):
         """
         # Create a pool
         self.dmg_command.exit_status_exception = False
-        pool = {}
-        pool_uuid = []
+        pool_list = []
 
-        for val in range(0, num_pool):
-            pool[val] = add_pool(self, create=False, connect=False)
+        for index in range(0, num_pool):
+            self.log.info(">> Creating pool %s", index + 1)
+            pool_list.append(add_pool(self, create=False, connect=False))
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
-            pool[val].create()
-            pool_uuid.append(pool[val].uuid)
-            self.pool = pool[val]
+            pool_list[-1].scm_size.value = int(pool_list[-1].scm_size.value / num_pool)
+            pool_list[-1].nvme_size.value = int(pool_list[-1].nvme_size.value / num_pool)
+            pool_list[-1].create()
 
         # Start the additional servers and extend the pool
         if extend is True:
-            self.log.info("Extra Servers = %s", self.extra_servers)
+            self.log.info(">> Starting additional servers on %s", self.extra_servers)
             self.start_additional_servers(self.extra_servers)
 
         # Get rank, target from the test_dmg_sequence
         # Some test_dmg_sequence data will be invalid, valid.
-        for val in range(0, num_pool):
-            for i in range(len(self.test_seq)):
-                self.pool = pool[val]
-                rank = self.test_seq[i][0]
-                target = "{}".format(self.test_seq[i][1])
-                expected_result = "{}".format(self.test_seq[i][2])
+        for pool in pool_list:
+            for index, sequence in enumerate(self.test_seq):
+                rank = sequence[0]
+                target = str(sequence[1])
+                expected_result = str(sequence[2])
+
                 # Extend the pool
                 # There is no need to extend rank 0
                 # Avoid DER_ALREADY
                 if extend is True and rank != "0":
-                    output = self.dmg_command.pool_extend(self.pool.uuid, rank)
-                    self.log.info(output)
-                    self.validate_results(expected_result, output.stdout_text)
+                    self.log.info(">> Sequence %s: Extend rank %s onto pool %s", index, rank, pool)
+                    if not self.validate_results(pool, expected_result, pool.extend(rank)):
+                        self.fail("Error extending rank {} onto pool {}".format(rank, str(pool)))
                 if (extend is False and rank in ["4", "5"]):
                     continue
+
                 # Exclude a rank, target
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank,
-                                                       target)
-                self.log.info(output)
-                self.validate_results(expected_result, output.stdout_text)
+                self.log.info(">> Sequence %s: Exclude rank %s from pool %s", index, rank, pool)
+                if not self.validate_results(pool, expected_result, pool.exclude(rank, target)):
+                    self.fail("Error excluding rank {} from pool {}".format(rank, str(pool)))
+
                 # Now reintegrate the excluded rank.
-                output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                           rank,
-                                                           target)
-                self.log.info(output)
-                self.validate_results(expected_result, output.stdout_text)
+                self.log.info(">> Sequence %s: Reintegrate rank %s into pool %s", index, rank, pool)
+                if not self.validate_results(pool, expected_result, pool.reintegrate(rank, target)):
+                    self.fail("Error reintegrating rank {} into pool {}".format(rank, str(pool)))
+
                 # Drain the data from a rank
-                output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                     rank,
-                                                     target)
-                self.log.info(output)
-                self.validate_results(expected_result, output.stdout_text)
+                self.log.info(">> Sequence %s: Drain rank %s data from pool %s", index, rank, pool)
+                if not self.validate_results(pool, expected_result, pool.drain(rank, target)):
+                    self.fail("Error draining rank {} data from pool {}".format(rank, str(pool)))
+
                 # Now reintegrate the drained rank
-                output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                           rank,
-                                                           target)
-                self.log.info(output)
-                self.validate_results(expected_result, output.stdout_text)
+                self.log.info(
+                    ">> Sequence %s: Reintegrate drained rank %s into pool %s", index, rank, pool)
+                if not self.validate_results(pool, expected_result, pool.reintegrate(rank, target)):
+                    self.fail(
+                        "Error reintegrating drained rank {} into pool {}".format(rank, str(pool)))
+
+        self.log.info("Test Passed")
 
     def test_osa_dmg_cmd_without_extend(self):
-        """
-        JIRA ID: DAOS-5866
+        """JIRA ID: DAOS-5866.
 
         Test Description: Test
 
@@ -138,8 +130,7 @@ class OSADmgNegativeTest(OSAUtils):
         self.run_osa_dmg_test(1, False)
 
     def test_osa_dmg_cmd_with_extend(self):
-        """
-        JIRA ID: DAOS-5866
+        """JIRA ID: DAOS-5866.
 
         Test Description: Test
 
