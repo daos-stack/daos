@@ -2292,8 +2292,6 @@ dfs_test_multiple_pools(void **state)
 }
 
 static const struct CMUnitTest dfs_unit_tests[] = {
-	{ "DFS_UNIT_TEST19: DFS readdir",
-	  dfs_test_readdir, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST2: DFS container modes",
