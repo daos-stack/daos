@@ -23,7 +23,7 @@
 
 /* max number of ranks that can be queried at once */
 #define CRT_CTL_MAX		1024
-#define MAX_ARG_LEN (1 << 16)
+#define MAX_ARG_LEN		(1 << 16)
 
 #define error_exit(x...)	\
 do {				\
@@ -284,7 +284,7 @@ print_usage_msg(const char *msg)
 	printf("-m 'log_message'\n");
 	printf("\tSpecify log message to be sent to remote server\n");
 	printf("--use_daos_agent_env\n");
-	printf("\tSet OFI and CRT_* vars through daos_agent\n");
+	printf("\tSet OFI and CRT_* vars through daos_agent\n\n");
 }
 
 static int
@@ -419,13 +419,15 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 {
 	struct cb_info		*info;
 	int			cmd_rc = 0;
+	char			*cmd_str = "";
 	int			i = 0;
 
 	info = cb_info->cci_arg;
 
+	cmd_str = cmd2str(info->cmd);
+
 	if (cb_info->cci_rc != 0)
-		error_exit("command %s failed with rc=%d\n", cmd2str(info->cmd),
-			   cb_info->cci_rc);
+		error_exit("command %s failed with rc=%d\n", cmd_str, cb_info->cci_rc);
 
 	switch (info->cmd) {
 	case CMD_ENABLE_FI:
@@ -433,36 +435,36 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 		cmd_rc = ((struct crt_ctl_fi_toggle_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd2str(info->cmd), cmd_rc);
+			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
 
-		msg("%s completed successfully", cmd2str(info->cmd));
+		msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_SET_FI_ATTR:
 		cmd_rc = ((struct crt_ctl_fi_attr_set_out *)
 				crt_reply_get(cb_info->cci_rpc))->fa_ret;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd2str(info->cmd), cmd_rc);
+			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
 
-		msg("%s completed successfully", cmd2str(info->cmd));
+		msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_LOG_SET:
 		cmd_rc = ((struct crt_ctl_log_set_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd2str(info->cmd), cmd_rc);
+			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
 
-		msg("%s completed successfully", cmd2str(info->cmd));
+		msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_LOG_ADD_MSG:
 		cmd_rc = ((struct crt_ctl_log_add_msg_out *)
 				crt_reply_get(cb_info->cci_rpc))->rc;
 		if (cmd_rc != 0)
-			error_exit("%s failed with rc=%d\n", cmd2str(info->cmd), cmd_rc);
+			error_exit("%s failed with rc=%d\n", cmd_str, cmd_rc);
 
-		msg("%s completed successfully", cmd2str(info->cmd));
+		msg("%s completed successfully", cmd_str);
 		break;
 
 	case CMD_GET_URI_CACHE:
