@@ -1761,15 +1761,12 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	struct ad_arena		*arena = group->gp_arena;
 	struct ad_arena_df	*ad = arena->ar_df;
 	struct ad_group_df	*gd = group->gp_df;
-	int			 bit_at;
-	int			 bit_nr;
 	int			 rc;
 
-	bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
-	bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
-	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
+	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n",
+		group, group->gp_bit_at, group->gp_bit_nr);
 
-	rc = ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
+	rc = ad_tx_setbits(tx, ad->ad_bmap, group->gp_bit_at, group->gp_bit_nr);
 	if (rc)
 		goto failed;
 
@@ -1784,7 +1781,7 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	return 0;
  failed:
 	D_ERROR("Failed to publish group=%p, bit_at=%d, bits_nr=%d, rc=%d\n",
-		group, bit_at, bit_nr, rc);
+		group, group->gp_bit_at, group->gp_bit_nr, rc);
 	return rc;
 }
 
@@ -1986,7 +1983,7 @@ group_tx_reset(struct ad_tx *tx, struct ad_group *group)
 	group->gp_reset = 1;
 	arena_remove_grp(arena, group);
 	gd->gd_addr = 0;
-	rc = ad_tx_set(tx, gd, 0, sizeof(*gd), AD_TX_REDO | AD_TX_LOG_ONLY);
+	rc = ad_tx_snap(tx, &gd->gd_addr, sizeof(gd->gd_addr), AD_TX_REDO);
 	if (rc)
 		goto failed;
 
@@ -2050,6 +2047,8 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		rc = arena_load(blob, id, &arena);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
+			if (rc != -DER_NONEXIST && rc != -DER_NOSPACE)
+				return 0;
 			/* fall through and create a new one */
 		} else if (arena2heap_node(arena)->mh_inactive) {
 			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
@@ -2061,7 +2060,6 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 	tried = false;
 	while (1) {
 		if (arena == NULL) {
-again:
 			node = d_binheap_remove_root(&blob->bb_arena_free_heap);
 			if (node == NULL) {
 				rc = arena_reserve(blob, type, NULL, &arena);
@@ -2075,7 +2073,9 @@ again:
 				if (rc) {
 					D_DEBUG(DB_TRACE, "failed to load arena %u: %d\n",
 						ad_node->mh_arena_id, rc);
-					goto again;
+					if (rc == -DER_NONEXIST || rc == -DER_NOSPACE)
+						continue;
+					return 0;
 				}
 				blob->bb_arena_last[type] = ad_node->mh_arena_id;
 			}
@@ -2203,13 +2203,14 @@ tx_complete(struct ad_tx *tx, int err)
 		group = fac->fa_group;
 		arena = group->gp_arena;
 
+		group->gp_reset = 0;
+		if (err) { /* keep the refcount and pin it */
+			d_list_add(&group->gp_link, &blob->bb_gps_rsv);
+			continue;
+		}
 		/* unlock the free bit, it can be used by future allocation */
 		clrbits64(arena->ar_space_rsv, group->gp_bit_at, group->gp_bit_nr);
 		clrbits64(arena->ar_gpid_rsv, gp_df2index(group), 1);
-		/* add it back if error */
-		if (err)
-			arena_add_grp(arena, group, NULL);
-		group->gp_reset = 0;
 		group_decref(group);
 		D_FREE(fac);
 	}
