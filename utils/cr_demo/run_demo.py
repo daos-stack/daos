@@ -17,7 +17,8 @@ def format_storage(host_list):
         host_list (str): List of hosts to format.
     """
     format_cmd = ["dmg", "storage", "format", "--host-list=" + host_list]
-    print("Command: {}".format(" ".join(format_cmd)))
+    command = " ".join(format_cmd)
+    print(f"Command: {command}")
     subprocess.run(format_cmd, check=False)
 
 def create_pool(pool_size, pool_label):
@@ -29,7 +30,8 @@ def create_pool(pool_size, pool_label):
     """
     create_pool_cmd = ["dmg", "pool", "create", "--size=" + pool_size,
                        "--label=" + pool_label]
-    print("Command: {}".format(" ".join(create_pool_cmd)))
+    command = " ".join(create_pool_cmd)
+    print(f"Command: {command}")
     subprocess.run(create_pool_cmd, check=False)
 
 def inject_fault_mgmt(pool_label, fault_type):
@@ -40,19 +42,33 @@ def inject_fault_mgmt(pool_label, fault_type):
         fault_type (str): Fault type.
     """
     inject_fault_cmd = ["dmg", "faults", "mgmt-svc", "pool", pool_label, fault_type]
-    print("Command: {}".format(" ".join(inject_fault_cmd)))
+    command = " ".join(inject_fault_cmd)
+    print(f"Command: {command}")
     subprocess.run(inject_fault_cmd, check=False)
 
 def list_pool():
     """Call dmg pool list"""
     list_pool_cmd = ["dmg", "pool", "list"]
-    print("Command: {}".format(" ".join(list_pool_cmd)))
+    command = " ".join(list_pool_cmd)
+    print(f"Command: {command}")
     subprocess.run(list_pool_cmd, check=False)
+
+def list_directory(dir_path):
+    """Print given directory path.
+
+    Args:
+        dir_path (str): Directory path.
+    """
+    ls_cmd = ["sudo", "ls", "-l", dir_path]
+    command = " ".join(ls_cmd)
+    print(f"Command: {command}")
+    subprocess.run(ls_cmd, check=False)
 
 def enable_checker():
     """Call dmg check enable"""
     check_enable_cmd = ["dmg", "check", "enable"]
-    print("Command: {}".format(" ".join(check_enable_cmd)))
+    command = " ".join(check_enable_cmd)
+    print(f"Command: {command}")
     subprocess.run(check_enable_cmd, check=False)
 
 def start_checker():
@@ -73,6 +89,7 @@ def disable_checker():
     print("Command: {}".format(" ".join(check_disable_cmd)))
     subprocess.run(check_disable_cmd, check=False)
 
+
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
 ARGS = vars(PARSER.parse_args())
@@ -87,14 +104,17 @@ create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL)
 input("3. Remove PS entry on MS. Hit enter...")
 inject_fault_mgmt(pool_label=POOL_LABEL, fault_type="CIC_POOL_NONEXIST_ON_MS")
 
-input("\n4. MS doesn\'t recognize any pool (it exists on engine). Hit enter...")
+input("\n4. MS doesn\'t recognize any pool. Hit enter...")
 list_pool()
 
-input("\n5. Enable and start checker. Hit enter...")
+input("\n5. The pool still exists on engine. Hit enter...")
+list_directory("/mnt/daos")
+
+input("\n6. Enable and start checker. Hit enter...")
 enable_checker()
 start_checker()
 
-print("\n6-1. Query the checker.")
+print("\n7-1. Query the checker.")
 while True:
     USER_INPUT = input("Hit y to query, n to proceed to next step: ")
     if USER_INPUT == "y":
@@ -104,10 +124,10 @@ while True:
     else:
         print("Please enter y or n.")
 
-print("6-2. Checker shows the inconsistency that was repaired.")
+print("7-2. Checker shows the inconsistency that was repaired.")
 
-input("\n7. Disable the checker. Hit enter...")
+input("\n8. Disable the checker. Hit enter...")
 disable_checker()
 
-input("\n8. Verify that the missing pool was reconstructed. Hit enter...")
+input("\n9. Verify that the missing pool was reconstructed. Hit enter...")
 list_pool()

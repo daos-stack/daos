@@ -8,10 +8,10 @@ import subprocess
 
 
 # Stop daos_server, unmount, and start daos_server for given hosts.
-systemctl_start_cmd = "sudo systemctl start daos_server"
-systemctl_stop_cmd = "sudo systemctl stop daos_server"
-umount_cmd = "sudo umount /mnt/daos"
-prepare_cmd = "{}; {}; {}".format(systemctl_stop_cmd, umount_cmd, systemctl_start_cmd)
+SYSTEMCTL_START_CMD = "sudo systemctl start daos_server"
+SYSTEMCTL_STOP_CMD = "sudo systemctl stop daos_server"
+UMOUNT_CMD = "sudo umount /mnt/daos"
+prepare_cmd = f"{SYSTEMCTL_STOP_CMD}; {UMOUNT_CMD}; {SYSTEMCTL_START_CMD}"
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument(
