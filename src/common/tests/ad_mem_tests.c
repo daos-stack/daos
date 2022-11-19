@@ -898,6 +898,82 @@ adt_no_space_1(void **state)
 }
 
 static int
+adt_arena_bmap_free_bits(uint64_t *bmap)
+{
+	int	i;
+	int	free_bits = 0;
+
+	/* don't hard-coded */
+	for (i = 0; i < 512; i++)
+		if (!isset((uint8_t *)bmap, i))
+			free_bits++;
+
+	return free_bits;
+}
+
+void adt_blob_print(struct ad_blob_iter_param *param)
+{
+	int			   i;
+
+	if (param->ip_arena_info_ready) {
+		struct ad_blob_arena_info *arena_info = &param->ip_arena_info;
+
+		printf("arena_id: %u ", param->ip_arena_index);
+		if (arena_info->ai_arena_uninit) {
+			printf("uninit\n");
+			goto blob_info;
+		}
+		printf("free bits: %d groups: %u, number groups for each spec:\n",
+		       adt_arena_bmap_free_bits(arena_info->ai_bmap), arena_info->ai_grp_nr);
+		for (i = 0; i < arena_info->ai_arena_spec.as_specs_nr; i++) {
+			if (arena_info->ai_num_of_each_spec[i] == 0)
+				continue;
+			printf("	type: %u, unit: %u, grp_nr: %u\n",
+			       i, arena_info->ai_arena_spec.as_specs[i].gs_unit,
+			       arena_info->ai_num_of_each_spec[i]);
+		}
+	}
+
+blob_info:
+	if (param->ip_blob_info_ready) {
+		struct ad_blob_info *blob_info = &param->ip_blob_info;
+
+		printf("total arenas: %u registered arena types: %u\n",
+		       blob_info->bi_total_arenas, blob_info->bi_asp_nr);
+
+		for (i = 0; i < ARENA_SPEC_MAX; i++) {
+			if (blob_info->bi_num_of_each_spec[i] == 0)
+				continue;
+			printf("	type: %u, arena_nr: %u\n",
+			       blob_info->bi_asp[i].as_type, blob_info->bi_num_of_each_spec[i]);
+		}
+	}
+}
+
+static void
+adt_blob_dump(void **state)
+{
+	struct ad_blob_iter_param	*param;
+	int				rc;
+
+	rc = ad_blob_iter_prep(&param, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_blob_iter_start(adt_bh, param);
+	assert_rc_equal(rc, 0);
+	adt_blob_print(param);
+
+	while (1) {
+		rc = ad_blob_iter_next(adt_bh, param);
+		if (rc > 0)
+			break;
+		assert_rc_equal(rc, 0);
+		adt_blob_print(param);
+	}
+	ad_blob_iter_finish(adt_bh, param);
+}
+
+static int
 adt_setup(void **state)
 {
 	struct umem_store store = {0};
@@ -946,6 +1022,7 @@ main(void)
 		cmocka_unit_test(adt_rsv_write_free),
 		cmocka_unit_test(adt_delayed_free_1),
 		cmocka_unit_test(adt_tx_perf_1),
+		cmocka_unit_test(adt_blob_dump),
 		/* Must be the last test */
 		cmocka_unit_test(adt_no_space_1),
 	};

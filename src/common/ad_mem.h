@@ -133,23 +133,6 @@ struct ad_group_metrics {
 	uint32_t		gm_reserved;
 };
 
-#define ARENA_GRP_SPEC_MAX	24
-#define ARENA_GRP_BMSZ		8
-
-/** Customized specs for arena. */
-struct ad_arena_spec {
-	/** arena type, default arena type is 0 */
-	uint32_t		as_type;
-	/** arena unit size, reserved for future use */
-	uint32_t		as_unit;
-	/* last active arena of this type, this is not really part of spec... */
-	uint32_t		as_last_used;
-	/** number of group specs (valid members of as_specs) */
-	uint32_t		as_specs_nr;
-	/** group sizes and number of units within each group */
-	struct ad_group_spec	as_specs[ARENA_GRP_SPEC_MAX];
-};
-
 /** Default arena size is 16MB */
 #define ARENA_SIZE_BITS		(24)
 #define ARENA_SIZE_MASK		((1ULL << ARENA_SIZE_BITS) - 1)
@@ -251,9 +234,6 @@ struct ad_page_extern {
 	d_list_t		 pa_link;
 	struct umem_store	*pa_store;
 };
-
-/* register up to 31 arenas types (type=0 is predefined) */
-#define ARENA_SPEC_MAX		32
 
 #define BLOB_HDR_SIZE		(32 << 10)
 #define BLOB_MAGIC		0xbabecafe

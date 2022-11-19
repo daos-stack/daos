@@ -93,6 +93,92 @@ int ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
 
+enum ad_blob_iter_flags {
+	AD_ITER_SORT_BY_GROUP_ADDR	= (1 << 0),
+	AD_ITER_SORT_BY_GROUP_WEIGHT	= (1 << 1),
+};
+
+struct ad_blob_group_info {
+	/** unit size in bytes, e.g., 64 bytes, 128 bytes */
+	uint32_t	gi_unit;
+	/** number of units in this group */
+	int32_t		gi_unit_nr;
+	/** number of free units in this group */
+	uint32_t	gi_unit_free;
+};
+
+/** default values of each group */
+struct ad_group_spec {
+	/** allocation minimum unit size in bytes */
+	uint32_t		gs_unit;
+	/** number of units in each group */
+	uint32_t		gs_count;
+};
+
+#define ARENA_GRP_SPEC_MAX	24
+#define ARENA_GRP_BMSZ		8
+
+/* register up to 31 arenas types (type=0 is predefined) */
+#define ARENA_SPEC_MAX		32
+
+/** Customized specs for arena. */
+struct ad_arena_spec {
+	/** arena type, default arena type is 0 */
+	uint32_t		as_type;
+	/** arena unit size, reserved for future use */
+	uint32_t		as_unit;
+	/* last active arena of this type, this is not really part of spec... */
+	uint32_t		as_last_used;
+	/** number of group specs (valid members of as_specs) */
+	uint32_t		as_specs_nr;
+	/** group sizes and number of units within each group */
+	struct ad_group_spec	as_specs[ARENA_GRP_SPEC_MAX];
+};
+
+struct ad_blob_arena_info {
+	/* arena is uninit */
+	bool			ai_arena_uninit;
+	/** number of groups */
+	int			ai_grp_nr;
+	/* customized specs for arena */
+	struct ad_arena_spec	ai_arena_spec;
+	/* number of groups for each spec */
+	uint32_t		ai_num_of_each_spec[ARENA_GRP_SPEC_MAX];
+	/** 64 bytes (512 bits) for each, each bit represents 32K(minimum group size) */
+	uint64_t		ai_bmap[ARENA_GRP_BMSZ];
+};
+
+struct ad_blob_info {
+	/* total number of arenas */
+	uint32_t		bi_total_arenas;
+	/** number of registered arena types */
+	uint32_t		bi_asp_nr;
+	/** specifications of registered arena types */
+	struct ad_arena_spec	bi_asp[ARENA_SPEC_MAX];
+	/* number of arenas for each spec */
+	uint32_t		bi_num_of_each_spec[ARENA_SPEC_MAX];
+};
+
+struct ad_blob_iter_param {
+	uint32_t			ip_arena_index;
+	uint32_t			ip_group_index;
+	enum ad_blob_iter_flags		ip_flags;
+	/* this arena information is ready to return */
+	bool				ip_arena_info_ready;
+	/* this blob information is ready to return */
+	bool				ip_blob_info_ready;
+	/* group information is ready to return */
+	bool				ip_group_info_ready;
+	struct ad_blob_group_info	ip_group_info;
+	struct ad_blob_arena_info	ip_arena_info;
+	struct ad_blob_info		ip_blob_info;
+};
+
+int ad_blob_iter_prep(struct ad_blob_iter_param **ret_param, enum ad_blob_iter_flags);
+int ad_blob_iter_start(struct ad_blob_handle bh, struct ad_blob_iter_param *param);
+int ad_blob_iter_next(struct ad_blob_handle bh, struct ad_blob_iter_param *param);
+void ad_blob_iter_finish(struct ad_blob_handle bh, struct ad_blob_iter_param *param);
+
 #define AD_ARENA_ANY	(~0U)
 
 /* XXX reserved for future use */
@@ -113,14 +199,6 @@ struct ad_reserv_act {
 	uint64_t		 ra_size;
 	/** reserved allocation bit (in group) */
 	int			 ra_bit;
-};
-
-/** default values of each group */
-struct ad_group_spec {
-	/** allocation minimum unit size in bytes */
-	uint32_t		gs_unit;
-	/** number of units in each group */
-	uint32_t		gs_count;
 };
 
 /** reserved arena types */

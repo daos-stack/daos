@@ -2667,3 +2667,138 @@ arena_free(struct ad_arena *arena, bool force)
 
 	D_FREE(arena);
 }
+
+int
+ad_blob_iter_prep(struct ad_blob_iter_param **ret_param, enum ad_blob_iter_flags flags)
+{
+	struct ad_blob_iter_param	*param;
+
+	D_ALLOC_PTR(param);
+	if (!param)
+		return -DER_NOMEM;
+
+	param->ip_flags = flags;
+	*ret_param = param;
+
+	return 0;
+}
+
+void
+ad_blob_iter_finish(struct ad_blob_handle bh, struct ad_blob_iter_param *param)
+{
+	D_FREE(param);
+}
+
+static int
+ad_blob_iter_fetch(struct ad_blob *blob, struct ad_blob_iter_param *param)
+{
+	int				 rc;
+	int				 cur;
+	struct ad_arena			*arena = NULL;
+	struct ad_group_df		*gd = NULL;
+	struct ad_blob_arena_info	*arena_info = &param->ip_arena_info;
+	struct ad_blob_group_info	*group_info = &param->ip_group_info;
+	struct ad_blob_info		*blob_info = &param->ip_blob_info;
+	struct ad_blob_df		*bd = blob->bb_df;
+	struct ad_arena_spec		*arena_spec;
+	struct ad_group_spec		*group_spec;
+
+	if (((param->ip_arena_index + 1) << ARENA_SIZE_BITS) > blob_size(blob))
+		return -DER_INVAL;
+
+	if (!isset64(bd->bd_bmap, param->ip_arena_index) &&
+	    !isset64(blob->bb_bmap_rsv, param->ip_arena_index)) {
+		memset(arena_info, 0, sizeof(*arena_info));
+		arena_info->ai_arena_uninit = true;
+		param->ip_arena_info_ready = true;
+		goto out;
+	}
+
+	rc = arena_load(blob, param->ip_arena_index, &arena);
+	if (rc)
+		return rc;
+
+	if (param->ip_arena_index == 0) {
+		blob_info->bi_asp_nr = 0;
+		for (cur = 0; cur < ARENA_SPEC_MAX; cur++) {
+			arena_spec = &bd->bd_asp[cur];
+			if (arena_spec->as_specs_nr != 0)
+				blob_info->bi_asp_nr++;
+		}
+		memcpy(blob_info->bi_asp, bd->bd_asp, sizeof(bd->bd_asp));
+	}
+
+	if (arena_info->ai_grp_nr == 0) {
+		blob_info->bi_total_arenas++;
+		arena_spec = &bd->bd_asp[arena->ar_df->ad_type];
+		arena_info->ai_grp_nr = arena->ar_grp_nr;
+		memcpy(&arena_info->ai_arena_spec, arena_spec, sizeof(*arena_spec));
+		memcpy(arena_info->ai_bmap, arena->ar_df->ad_bmap, sizeof(arena_info->ai_bmap));
+		blob_info->bi_num_of_each_spec[arena->ar_df->ad_type]++;
+	}
+
+	if (arena->ar_grp_nr == 0) {
+		param->ip_arena_info_ready = true;
+		goto out;
+	}
+
+	D_ASSERT(param->ip_group_index < arena_info->ai_grp_nr);
+	if (param->ip_flags & AD_ITER_SORT_BY_GROUP_ADDR)
+		gd = arena->ar_addr_sorter[param->ip_group_index];
+	else
+		gd = arena->ar_size_sorter[param->ip_group_index];
+
+	D_ASSERT(gd != NULL);
+	group_info->gi_unit = gd->gd_unit;
+	group_info->gi_unit_nr = gd->gd_unit_nr;
+	group_info->gi_unit_free = gd->gd_unit_free;
+
+	for (cur = 0; cur < arena_info->ai_arena_spec.as_specs_nr; cur++) {
+		group_spec = &arena_info->ai_arena_spec.as_specs[cur];
+		if (group_spec->gs_unit == group_info->gi_unit)
+			break;
+	}
+	D_ASSERT(cur != arena_info->ai_arena_spec.as_specs_nr);
+	arena_info->ai_num_of_each_spec[cur]++;
+
+	param->ip_group_info_ready = true;
+	if (param->ip_group_index == arena_info->ai_grp_nr - 1)
+		param->ip_arena_info_ready = true;
+
+out:
+	if (param->ip_arena_index == blob->bb_pgs_nr - 1)
+		param->ip_blob_info_ready = true;
+	if (arena)
+		arena_decref(arena);
+
+	return 0;
+}
+
+int
+ad_blob_iter_start(struct ad_blob_handle bh, struct ad_blob_iter_param *param)
+{
+	param->ip_arena_index = 0;
+	param->ip_group_index = 0;
+
+	return ad_blob_iter_fetch(bh.bh_blob, param);
+}
+
+int
+ad_blob_iter_next(struct ad_blob_handle bh, struct ad_blob_iter_param *param)
+{
+
+	if (param->ip_blob_info_ready)
+		return 1;
+
+	if (param->ip_arena_info_ready) {
+		param->ip_group_index = 0;
+		param->ip_arena_index++;
+		param->ip_arena_info_ready = false;
+		memset(&param->ip_arena_info, 0, sizeof(param->ip_arena_info));
+	} else {
+		param->ip_group_index++;
+	}
+	param->ip_group_info_ready = false;
+
+	return ad_blob_iter_fetch(bh.bh_blob, param);
+}
