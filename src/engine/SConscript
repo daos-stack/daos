@@ -1,5 +1,4 @@
 """Build DAOS I/O Engine"""
-import daos_build
 
 
 def scons():
@@ -38,8 +37,7 @@ def scons():
         denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     # Generate I/O Engine program
-    engine = daos_build.program(denv, 'daos_engine',
-                                sources, LIBS=libraries)
+    engine = denv.d_program('daos_engine', sources, LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 
     if prereqs.test_requested():
