@@ -416,6 +416,10 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # Otherwise max number of contexts will be limited by number of cores
+    env['CRT_CTX_NUM'] = 32
+
     return env
 
 
