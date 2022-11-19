@@ -2493,7 +2493,7 @@ do_real_fn:
 }
 
 DFUSE_PUBLIC wchar_t *
-dfuse_fgetws(const wchar_t *ws, FILE *stream)
+dfuse_fgetws(const wchar_t *ws, int n, FILE *stream)
 {
 	struct fd_entry *entry = NULL;
 	int              fd;
@@ -2520,7 +2520,7 @@ dfuse_fgetws(const wchar_t *ws, FILE *stream)
 	return NULL;
 
 do_real_fn:
-	return __real_fgetws(ws, stream);
+	return __real_fgetws(ws, n, stream);
 }
 
 DFUSE_PUBLIC int
