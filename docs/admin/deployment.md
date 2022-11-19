@@ -756,6 +756,9 @@ the list defining an individual storage tier.
 Each tier has a `class` parameter which defines the storage type.
 Typical class values are "dcpm" for PMem (Intel(R) Optane(TM) persistent
 memory) and "nvme" for NVMe SSDs.
+When persistent memory is unavailable, class may be set to "ram", which
+emulates SCM using a ramfs device, and metadata is saved to NVMe SSDs using
+logging and checkpointing.
 
 For class == "dcpm", the following parameters should be populated:
 
@@ -766,9 +769,33 @@ For class == "dcpm", the following parameters should be populated:
   for DAOS persistent storage mounted on the specified PMem device specified in
   `scm_list`.
 
+For class == "ram", `scm_list` is omitted and `scm_size` is specified
+instead.  In this case, the subsequent tiers describe the persistent storage
+used for both data and metadata.
+
+- `scm_size` specifies the amount of RAM dedicated to emulate SCM for holding
+  DAOS metadata.
+
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
+- `bdev_roles` optionally specifies a list of roles for this tier.
+
+  When "dcpm" is used for the first tier, this list should be omitted or
+  specify only "data".  Only a single NVMe tier is supported.
+
+  When class == "ram" is used, the NVMe tier roles can be one or more of
+  "wal" (for logging metadata updates), "meta" (for persistent metadata and
+  small object storage), or "data" (contents of larger objects).  Only the
+  "data" role may be assigned to multiple tiers.  If no roles are specified,
+  then the server will assign them.  Otherwise all roles must be assigned
+  to a tier.
+
+See the sample configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configuration files in the
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+directory for more details.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `disable_vfio: true` in the global section of the
@@ -901,7 +928,7 @@ this goal:
 
 ```bash
 $ dmg network scan
-$ dgm network scan -p all
+$ dmg network scan -p all
 ```
 
 Typical network scan results look as follows:
