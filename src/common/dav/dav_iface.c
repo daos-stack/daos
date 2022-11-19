@@ -81,7 +81,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz)
 		errno = ENOMEM;
 		goto out1;
 	}
-	memset(hdl, 0, sizeof(dav_obj_t));
 
 	hdl->do_fd = fd;
 	hdl->do_base = base;

@@ -26,7 +26,7 @@ clogs_extend_redo(struct ulog **redo, uint64_t gen_num)
 {
 	size_t size = SIZEOF_ALIGNED_ULOG(LANE_REDO_EXTERNAL_SIZE);
 
-	D_ALIGNED_ALLOC(*redo, CACHELINE_SIZE, size);
+	D_ALIGNED_ALLOC_NZ(*redo, CACHELINE_SIZE, size);
 	if (*redo == NULL)
 		return -1;
 
@@ -41,7 +41,7 @@ clogs_extend_undo(struct ulog **undo, uint64_t gen_num)
 {
 	size_t size = TX_DEFAULT_RANGE_CACHE_SIZE;
 
-	D_ALIGNED_ALLOC(*undo, CACHELINE_SIZE, size);
+	D_ALIGNED_ALLOC_NZ(*undo, CACHELINE_SIZE, size);
 	if (*undo == NULL)
 		return -1;
 
