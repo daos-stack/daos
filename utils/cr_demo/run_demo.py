@@ -74,19 +74,22 @@ def enable_checker():
 def start_checker():
     """Call dmg check start"""
     check_start_cmd = ["dmg", "check", "start"]
-    print("Command: {}".format(" ".join(check_start_cmd)))
+    command = " ".join(check_start_cmd)
+    print(f"Command: {command}")
     subprocess.run(check_start_cmd, check=False)
 
 def query_checker():
     """Call dmg check query"""
     check_query_cmd = ["dmg", "check", "query"]
-    print("Command: {}".format(" ".join(check_query_cmd)))
+    command = " ".join(check_query_cmd)
+    print(f"Command: {command}")
     subprocess.run(check_query_cmd, check=False)
 
 def disable_checker():
     """Call dmg check disable"""
     check_disable_cmd = ["dmg", "check", "disable"]
-    print("Command: {}".format(" ".join(check_disable_cmd)))
+    command = " ".join(check_disable_cmd)
+    print(f"Command: {command}")
     subprocess.run(check_disable_cmd, check=False)
 
 
@@ -95,7 +98,7 @@ PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to fo
 ARGS = vars(PARSER.parse_args())
 
 HOSTLIST = ARGS["hostlist"]
-input("1. Format storage on {}. Hit enter...".format(HOSTLIST))
+input(f"1. Format storage on {HOSTLIST}. Hit enter...")
 format_storage(host_list=HOSTLIST)
 
 input("\n2. Create a 4GB pool. Hit enter...")
