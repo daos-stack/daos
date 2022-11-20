@@ -259,7 +259,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate dedup entry\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&entry->de_link);
@@ -267,7 +266,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	D_ASSERT(csum_len != 0);
 	D_ALLOC(entry->de_csum_buf, csum_len);
 	if (entry->de_csum_buf == NULL) {
-		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
 		D_FREE(entry);
 		return;
 	}
@@ -421,6 +419,8 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		if (buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
+			/* clear original/copied buffer addr */
+			biov_dup->bi_buf = NULL;
 			return -DER_NOMEM;
 		}
 		ioc->ic_dedup_bufs[*buf_idx] = buf;
@@ -1411,6 +1411,12 @@ out:
 		key_tree_release(toh, false);
 
 	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+}
+
+uint64_t
+vos_get_io_size(daos_handle_t ioh)
+{
+	return vos_ioh2ioc(ioh)->ic_io_size;
 }
 
 int

@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 

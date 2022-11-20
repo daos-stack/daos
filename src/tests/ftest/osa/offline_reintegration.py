@@ -91,7 +91,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Write", oclass, test_seq)
 
         # Exclude all the ranks
-        random_pool = random.randint(0, (num_pool-1)) #nosec
+        random_pool = random.randint(0, (num_pool - 1))  # nosec
         for _ in range(0, self.loop_test_cnt):
             for val, _ in enumerate(rank):
                 self.pool = pool[random_pool]

@@ -175,6 +175,17 @@ int
 crt_context_num(int *ctx_num);
 
 /**
+ * Return URI associated with the context.
+ *
+ * \param[in] crt_ctx         CRT transport context
+ * \param[out] uri            Returned uri.
+ *
+ * \return                    DER_SUCCESS on success, negative value in error.
+ */
+int
+crt_context_uri_get(crt_context_t crt_ctx, char **uri);
+
+/**
  * Finalize CRT transport layer. Must be called on both the server side and
  * client side before exit. This function is reference counted.
  *
@@ -2085,7 +2096,7 @@ int crt_group_info_get(crt_group_t *group, d_iov_t *grp_info);
 int crt_group_info_set(d_iov_t *grp_info);
 
 /**
- * Retrieve list of ranks that belong to the specified gorup.
+ * Retrieve list of ranks that belong to the specified group.
  *
  * \param[in] group             Group identifier
  * \param[out] list             Rank list that gets filled with members

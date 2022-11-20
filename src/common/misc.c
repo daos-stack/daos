@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -545,7 +545,7 @@ static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int	daos_ht_ref;
 
 int
-daos_hhash_init(void)
+daos_hhash_init_feats(uint32_t feats)
 {
 	int rc;
 
@@ -555,8 +555,8 @@ daos_hhash_init(void)
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = d_hhash_create(D_HASH_FT_GLOCK | D_HASH_FT_LRU, D_HHASH_BITS,
-			    &daos_ht.dht_hhash);
+	/* D_HASH_FT_NO_KEYINIT_LOCK for optimized link_insert perf */
+	rc = d_hhash_create(feats | D_HASH_FT_NO_KEYINIT_LOCK, D_HHASH_BITS, &daos_ht.dht_hhash);
 	if (rc == 0) {
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
@@ -742,4 +742,27 @@ void
 daos_recx_free(daos_recx_t *recx)
 {
 	D_FREE(recx);
+}
+
+int
+daos_hlc2timespec(uint64_t hlc, struct timespec *ts)
+{
+	return crt_hlc2timespec(hlc, ts);
+}
+
+int
+daos_hlc2timestamp(uint64_t hlc, time_t *ts)
+{
+	struct timespec		tspec;
+	int			rc;
+
+	if (ts == NULL)
+		return -DER_INVAL;
+
+	rc = crt_hlc2timespec(hlc, &tspec);
+	if (rc)
+		return rc;
+
+	*ts = tspec.tv_sec;
+	return 0;
 }

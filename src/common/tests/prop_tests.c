@@ -263,14 +263,16 @@ test_daos_prop_from_str(void **state)
 	char		*DEDUP_TH	= "dedup_threshold:8192";
 	char		*COMP		= "compression:lz4";
 	char		*ENC		= "encryption:aes-xts128";
-	char		*RF		= "rf:2";
+	char		*RF		= "rd_fac:2";
+	char		*RF_OLD		= "rf:2";
 	char		*EC_CELL	= "ec_cell_sz:2021";
 	char		*EC_PDA		= "ec_pda:1";
 	char		*RP_PDA		= "rp_pda:4";
 
 	/** Valid prop entries, wrong values */
 	char		*CSUM_INV	= "cksum:crc2000";
-	char            *RF_INV		= "rf:64";
+	char            *RF_INV		= "rd_fac:64";
+	char            *RF_OLD_INV	= "rf:64";
 
 	/** Read only props, that should not be parsed */
 	char		*OID		= "alloc_oid:25";
@@ -320,7 +322,13 @@ test_daos_prop_from_str(void **state)
 	sprintf(buf, "%s;%s", CSUM_INV, RF);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM_INV, RF_OLD);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
 	sprintf(buf, "%s;%s", CSUM, RF_INV);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM, RF_OLD_INV);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 

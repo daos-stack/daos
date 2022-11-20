@@ -129,27 +129,27 @@ class WrapScript():
         newlines = 0
 
         for variable in variables:
+            outfile.write(f'{prefix}# pylint: disable-next=invalid-name\n')
+            newlines += 1
             if variable.upper() == 'PREREQS':
                 newlines += 1
                 outfile.write(
                     f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
-                variables.remove(variable)
-        for variable in variables:
-            if "ENV" in variable.upper():
+            elif "ENV" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = DefaultEnvironment()\n')
             elif "OPTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = Variables()\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = Variables()\n')
             elif "PREFIX" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ''\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ""\n')
             elif "TARGETS" in variable.upper() or "TGTS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = ["fake"]\n')
             else:
                 newlines += 1
-                outfile.write("%s%s = None\n" % (prefix, variable))
+                outfile.write(f'{prefix}{variable} = None\n')
 
         return newlines
 
@@ -267,10 +267,10 @@ class FileTypeList():
 
         Returns True if warnings issued to GitHub."""
 
-        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-branches,too-many-locals
 
         def word_is_allowed(word, code):
-            """Return True is misspelling is permitted"""
+            """Return True if misspelling is permitted"""
 
             # pylint: disable=too-many-return-statements
 
@@ -330,6 +330,11 @@ class FileTypeList():
                 vals['line'] = msg.line
             return vals
 
+        def msg_to_github(vals):
+            # pylint: disable-next=consider-using-f-string
+            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
+                **vals))
+
         failed = False
         rep = CollectingReporter()
         wrapper = None
@@ -339,7 +344,7 @@ class FileTypeList():
             target.extend(['--jobs', str(min(len(target_file), 20))])
         elif scons:
             # Do not warn on module name for SConstruct files, we don't get to pick their name.
-            ignore = ['invalid-name', 'ungrouped-imports']
+            ignore = ['ungrouped-imports']
             if target_file.endswith('__init__.py'):
                 ignore.append('relative-beyond-top-level')
             wrapper = WrapScript(target_file)
@@ -437,21 +442,32 @@ sys.path.append('site_scons')"""
                 if vals['category'] == 'warning':
                     continue
                 failed = True
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if file_warnings:
             print('Warnings from modified files:')
-        for msg in file_warnings:
-            vals = parse_msg(msg)
-            print(args.msg_template.format(**vals))
-            if args.format == 'github':
-                # Report all messages in modified files, but do it at the notice level.
+
+            # Low priority warnings, these are reported but are reported last.  As GitHub only
+            # displays 10 annotations at a given severity level this means they will only be shown
+            # to the user if there are no other warnings in modified files.
+            lp_warnings_i = []
+            lp_warnings_f = []
+            for msg in file_warnings:
+                vals = parse_msg(msg)
+                print(args.msg_template.format(**vals))
+                if args.format == 'github':
+                    if msg.symbol == 'invalid-name':
+                        lp_warnings_i.append(msg)
+                    elif msg.symbol == 'consider-using-f-string':
+                        lp_warnings_f.append(msg)
+                    else:
+                        # Report all messages in modified files, but do it at the notice level.
+                        vals['category'] = 'notice'
+                        msg_to_github(vals)
+            for msg in lp_warnings_i + lp_warnings_f:
+                vals = parse_msg(msg)
                 vals['category'] = 'notice'
-                # pylint: disable-next=consider-using-f-string
-                print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                    **vals))
+                msg_to_github(vals)
 
         if not types or args.reports == 'n':
             return failed
@@ -511,6 +527,8 @@ class OutPutRegion:
 
 def main():
     """Main program"""
+
+    # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
     parser = argparse.ArgumentParser()
@@ -573,7 +591,9 @@ def main():
             all_files = FileTypeList()
         regions = None
         file = None
+        lineno = 0
         for line in sys.stdin.readlines():
+            lineno += 1
             if line.startswith('diff --git a/'):
                 parts = line.split(' ')
                 file = parts[3][2:-1]
@@ -584,7 +604,12 @@ def main():
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
-                (post_start, post_len) = parts[2][1:].split(',')
+                if parts[2] == '+1':
+                    # Handle new, one line files.
+                    post_start = 0
+                    post_len = 1
+                else:
+                    (post_start, post_len) = parts[2][1:].split(',')
                 regions.add_region(int(post_start), int(post_len))
                 continue
         if file and regions:

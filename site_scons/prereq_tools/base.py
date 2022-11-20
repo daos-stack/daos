@@ -425,13 +425,11 @@ class WebRetriever():
             hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
 
         if hexdigest != self.md5:
-            print("Removing existing file %s: md5 %s != %s" % (filename,
-                                                               self.md5,
-                                                               hexdigest))
+            print(f'Removing existing file {filename}: md5 {self.md5} != {hexdigest}')
             os.remove(filename)
             return False
 
-        print("File %s matches md5 %s" % (filename, self.md5))
+        print(f'File {filename} matches md5 {self.md5}')
         return True
 
     def download(self, basename):
@@ -439,7 +437,7 @@ class WebRetriever():
         initial_sleep = 1
         retries = 3
         # Retry download a few times if it fails
-        for i in range(0, retries + 1):
+        for idx in range(0, retries + 1):
             command = ['curl',
                        '-sSf',
                        '--location',
@@ -449,14 +447,14 @@ class WebRetriever():
             failure_reason = "Download command failed"
             if RUNNER.run_commands(command):
                 if self.check_md5(basename):
-                    print("Successfully downloaded %s" % self.url)
+                    print(f'Successfully downloaded {self.url}')
                     return True
 
                 failure_reason = "md5 mismatch"
 
-            print("Try #%d to get %s failed: %s" % (i + 1, self.url, failure_reason))
+            print(f'Try #{idx + 1} to get {self.url} failed: {failure_reason}')
 
-            if i != retries:
+            if idx != retries:
                 time.sleep(initial_sleep)
                 initial_sleep *= 2
 
@@ -482,7 +480,26 @@ class WebRetriever():
                 with tarfile.open(basename, 'r:gz') as tfile:
                     members = tfile.getnames()
                     prefix = os.path.commonprefix(members)
-                    tfile.extractall()
+
+                    def is_within_directory(directory, target):
+
+                        abs_directory = os.path.abspath(directory)
+                        abs_target = os.path.abspath(target)
+
+                        prefix = os.path.commonprefix([abs_directory, abs_target])
+
+                        return prefix == abs_directory
+
+                    def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+
+                        for member in tar.getmembers():
+                            member_path = os.path.join(path, member.name)
+                            if not is_within_directory(path, member_path):
+                                raise Exception("Attempted Path Traversal in Tar File")
+
+                        tar.extractall(path, members, numeric_owner=numeric_owner)
+
+                    safe_extract(tfile)
                 os.rename(prefix, subdir)
             except (IOError, tarfile.TarError) as io_error:
                 print(traceback.format_exc())
@@ -570,13 +587,13 @@ def ensure_dir_exists(dirname, dry_run):
     """Ensure a directory exists"""
     if not os.path.exists(dirname):
         if dry_run:
-            print("Would create %s" % dry_run)
+            print(f'Would create {dry_run}')
             return
         try:
             os.makedirs(dirname)
-        except Exception as e:
+        except Exception as error:
             if not os.path.isdir(dirname):
-                raise e
+                raise error
 
     if not os.path.isdir(dirname):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)

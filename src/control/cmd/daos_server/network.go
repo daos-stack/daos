@@ -25,7 +25,7 @@ type networkCmd struct {
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
 // that match the given fabric provider.
 type networkScanCmd struct {
-	cfgCmd
+	optCfgCmd
 	cmdutil.LogCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }

@@ -49,8 +49,8 @@ class CartTest(TestWithoutServers):
         files_in_attach = os.listdir(self.attach_dir)
         filtered = [f for f in files_in_attach if f.endswith(".attach_info_tmp")]
 
-        for f in filtered:
-            to_del = os.path.join(self.attach_dir, f)
+        for file in filtered:
+            to_del = os.path.join(self.attach_dir, file)
             print("WARN: stale file {} found, deleting...\n".format(to_del))
             os.remove(to_del)
 
@@ -64,15 +64,13 @@ class CartTest(TestWithoutServers):
 
             while True:
                 if os.path.basename(path_dirname) == "TESTING":
-                    added_path = os.path.join(path_dirname,
-                                              test_dirs["TESTING"])
+                    added_path = os.path.join(path_dirname, test_dirs["TESTING"])
                     os.environ["PATH"] += os.pathsep + added_path
                     self.print("\nAdding {} to PATH\n".format(added_path))
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
                     self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
-                    added_path = os.path.join(path_dirname,
-                                              test_dirs["install"])
+                    added_path = os.path.join(path_dirname, test_dirs["install"])
                     if os.path.isdir(added_path):
                         os.environ["PATH"] += os.pathsep + added_path
                         self.print("\nAdding {} to PATH\n".format(added_path))
@@ -81,9 +79,8 @@ class CartTest(TestWithoutServers):
                         print("ERROR: Directory does not exist: " + added_path)
                 elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
                     if not found_path:
-                        print("ERROR: Couldn't find a directory " +
-                              "named 'TESTING' or 'install' to add " +
-                              "to your PATH.\n")
+                        print("ERROR: Couldn't find a directory named 'TESTING' or 'install' "
+                              + "to add to your PATH.\n")
                     break
 
                 path_dirname = os.path.dirname(path_dirname)
@@ -95,8 +92,8 @@ class CartTest(TestWithoutServers):
             if os.path.isdir(tests_dir):
                 os.environ["PATH"] += os.pathsep + tests_dir
             else:
-                print("WARNING: I didn't find the daos tests directory. " +
-                      "No test directories have been added to your PATH..\n")
+                print("WARNING: I didn't find the daos tests directory. "
+                      + "No test directories have been added to your PATH..\n")
 
     def tearDown(self):
         """Tear down the test case."""
@@ -113,15 +110,15 @@ class CartTest(TestWithoutServers):
     @staticmethod
     def wait_process(proc, wait_time):
         """Wait for process to terminate."""
-        i = wait_time
+        left = wait_time
         return_code = None
-        while i:
+        while left:
             proc.poll()
             return_code = proc.returncode
             if return_code is not None:
                 break
             time.sleep(1)
-            i = i - 1
+            left = left - 1
         return return_code
 
     def check_files(self, glob_pattern, count=1, retries=10):
@@ -181,15 +178,15 @@ class CartTest(TestWithoutServers):
     @staticmethod
     def stop_process(proc):
         """Wait for process to terminate."""
-        i = 60
+        left = 60
         return_code = None
-        while i:
+        while left:
             proc.poll()
             return_code = proc.returncode
             if return_code is not None:
                 break
             time.sleep(1)
-            i = i - 1
+            left = left - 1
 
         if return_code is None:
             return_code = -1
@@ -202,17 +199,17 @@ class CartTest(TestWithoutServers):
 
     def get_env(self):
         """Get the basic env setting in yaml."""
-        env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
-        env_PHY_ADDR_STR = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+        env_phy_addr_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
 
-        os.environ["CRT_PHY_ADDR_STR"] = env_PHY_ADDR_STR
+        os.environ["CRT_PHY_ADDR_STR"] = env_phy_addr_str
 
-        if env_CCSA is not None:
-            log_dir = "{}-{}".format(test_name, env_CCSA)
+        if env_ccsa is not None:
+            log_dir = "{}-{}".format(test_name, env_ccsa)
         else:
-            # Ensure we don't try to + concat None and string
-            env_CCSA = ""
+            # Ensure we don't try to + concatenate None and string
+            env_ccsa = ""
             log_dir = "{}".format(test_name)
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
@@ -223,10 +220,8 @@ class CartTest(TestWithoutServers):
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_path = log_path.replace(";", "_")
 
-        log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" +
-                                env_CCSA + "_" +
-                                env_PHY_ADDR_STR + "_cart.log").replace(";", "_")
+        log_file = os.path.join(log_path, log_dir, test_name + "_" + env_ccsa + "_"
+                                + env_phy_addr_str + "_cart.log").replace(";", "_")
 
         # Default env vars for orterun to None
         log_mask = None
@@ -252,7 +247,7 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_CCSA + "_" + env_PHY_ADDR_STR + "_" + \
+        log_filename = test_name + "_" + env_ccsa + "_" + env_phy_addr_str + "_" + \
             "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
@@ -288,7 +283,7 @@ class CartTest(TestWithoutServers):
         if not os.path.exists(log_path):
             os.makedirs(log_path)
 
-        # If the logparser is being used, make sure the log directory is empty
+        # If the log parser is being used, make sure the log directory is empty
         logparse = self.params.get("logparse", "/run/tests/*/")
         if logparse:
             for the_file in os.listdir(log_path):
@@ -330,20 +325,18 @@ class CartTest(TestWithoutServers):
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
 
-        env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
 
         # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
-        if env_CCSA is None:
-            env_CCSA = ""
+        if env_ccsa is None:
+            env_ccsa = ""
 
-        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck"
-        memcheck_xml = f.format(daos_test_shared_dir,
-                                test_name,
-                                env_CCSA)
+        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck".format(daos_test_shared_dir,
+                                                                            test_name, env_ccsa)
 
         tst_cmd = ""
         tst_cont = None
@@ -384,7 +377,7 @@ class CartTest(TestWithoutServers):
 
         tst_host = NodeSet(self.params.get("{}".format(host), "/run/hosts/*/"))
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
-        tst_processes = len(tst_host)*int(tst_ppn)
+        tst_processes = len(tst_host) * int(tst_ppn)
         logparse = self.params.get("logparse", "/run/tests/*/")
 
         if tst_slt is not None:
@@ -424,6 +417,7 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         job = Orterun(tst_cmd)
+        job.get_params(self)
         job.mca.update(mca_flags)
         job.hostfile.update(hostfile)
         job.pprnode.update(tst_ppn)
@@ -437,10 +431,7 @@ class CartTest(TestWithoutServers):
             with open('{}.xml'.format(xml_file), 'w') as ofd:
                 for line in fd:
                     if self.src_dir in line:
-                        L = re.sub(r'<dir>\/*' + self.src_dir + r'\/*',
-                                   r'<dir>',
-                                   line)
-                        ofd.write(L)
+                        ofd.write(re.sub(r'<dir>\/*' + self.src_dir + r'\/*', r'<dir>', line))
                     else:
                         ofd.write(line)
                 os.unlink(xml_file)
@@ -450,8 +441,7 @@ class CartTest(TestWithoutServers):
     def convert_xml_files(self):
         """Check valgrind memcheck log files for errors."""
 
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
 
         self.log.info("Parsing log path %s", daos_test_shared_dir)
         if not os.path.exists(daos_test_shared_dir):
@@ -512,6 +502,7 @@ class CartTest(TestWithoutServers):
         self.print("\nCMD : {}\n".format(cmd))
 
         cmd = shlex.split(cmd)
+        # pylint: disable-next=consider-using-with
         rtn = subprocess.Popen(cmd)
 
         if rtn is None:
@@ -547,8 +538,7 @@ class CartTest(TestWithoutServers):
                 continue
 
             self.log.info("Parsing %s", log_file)
-            cl = cart_logparse.LogIter(log_file)
-            c_log_test = cart_logtest.LogTest(cl)
+            c_log_test = cart_logtest.LogTest(cart_logparse.LogIter(log_file))
             c_log_test.check_log_file(strict_test)
 
     def set_other_env_vars(self):

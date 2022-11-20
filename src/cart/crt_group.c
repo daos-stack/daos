@@ -239,8 +239,7 @@ crt_ui_destroy(struct crt_uri_item *ui)
 	D_ASSERT(ui->ui_initialized == 1);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
-		if (ui->ui_uri[i])
-			D_FREE(ui->ui_uri[i]);
+		D_FREE(ui->ui_uri[i]);
 
 	D_FREE(ui);
 }
@@ -383,7 +382,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 	d_rank_t		rank;
 	int			rc = 0;
 	int			i;
-	enum crt_na_type	prov_type;
+	crt_provider_t		provider;
 
 	rank = li->li_rank;
 	grp_priv = li->li_grp_priv;
@@ -400,20 +399,20 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		ui->ui_initialized = 1;
 		ui->ui_rank = li->li_rank;
 
-		rc = crt_hg_parse_uri(uri, &prov_type, base_addr);
+		rc = crt_hg_parse_uri(uri, &provider, base_addr);
 		if (rc)
 			D_GOTO(exit, rc);
 
 		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d\n",
-			uri, base_addr, prov_type);
+			uri, base_addr, provider);
 
-		if (crt_provider_is_contig_ep(prov_type)) {
-			if (crt_provider_is_port_based(prov_type)) {
-				rc = generate_port_based_uris(prov_type, base_addr, tag, ui);
-			} else if (prov_type == CRT_NA_OFI_CXI) {
-				rc = generate_cxi_uris(prov_type, base_addr, tag, ui);
+		if (crt_provider_is_contig_ep(provider)) {
+			if (crt_provider_is_port_based(provider)) {
+				rc = generate_port_based_uris(provider, base_addr, tag, ui);
+			} else if (provider == CRT_PROV_OFI_CXI) {
+				rc = generate_cxi_uris(provider, base_addr, tag, ui);
 			} else {
-				D_ERROR("Unknown provider %d for uri='%s'\n", prov_type, uri);
+				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
 				rc = -DER_INVAL;
 			}
 
@@ -434,7 +433,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc != 0) {
 			D_ERROR("Entry already present\n");
 
-			if (crt_provider_is_contig_ep(prov_type)) {
+			if (crt_provider_is_contig_ep(provider)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 					D_FREE(ui->ui_uri[i]);
 			} else {
@@ -865,7 +864,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (crt_provider_is_sep(crt_ctx->cc_hg_ctx.chc_provider))
+	if (crt_provider_is_sep(true, crt_ctx->cc_hg_ctx.chc_provider))
 		tag = 0;
 
 	grp_priv = passed_grp_priv;
@@ -876,7 +875,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 	}
 
 	ctx_idx = crt_ctx->cc_idx;
-	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
 	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				(void *)&rank, sizeof(rank));
@@ -926,6 +925,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	struct crt_lookup_item	*li;
 	d_list_t		*rlink;
 	struct crt_grp_priv	*default_grp_priv;
+	crt_provider_t		provider;
 
 	D_ASSERT(grp_priv != NULL);
 
@@ -933,8 +933,10 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	D_ASSERT(uri != NULL || hg_addr != NULL);
 	D_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
+	provider = crt_gdata.cg_primary_prov;
+
 	/* TODO: Derive from context */
-	if (crt_provider_is_sep(crt_gdata.cg_init_prov))
+	if (crt_provider_is_sep(true, provider))
 		tag = 0;
 
 	default_grp_priv = grp_priv;
@@ -1052,7 +1054,6 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 {
 	struct crt_grp_priv	*grp_priv;
 	struct crt_swim_membs	*csm;
-	struct crt_swim_target	*cst;
 	int			 rc = 0;
 
 	D_ASSERT(grp_priv_created != NULL);
@@ -1071,7 +1072,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		D_GOTO(out_grp_priv, rc = -DER_NOMEM);
 
 	csm = &grp_priv->gp_membs_swim;
-	D_CIRCLEQ_INIT(&csm->csm_head);
+	csm->csm_target = CRT_SWIM_TARGET_INVALID;
 
 	rc = D_SPIN_INIT(&csm->csm_lock, PTHREAD_PROCESS_PRIVATE);
 	if (rc)
@@ -1087,12 +1088,6 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	return rc;
 
 out_swim_lock:
-	csm->csm_target = NULL;
-	while (!D_CIRCLEQ_EMPTY(&csm->csm_head)) {
-		cst = D_CIRCLEQ_FIRST(&csm->csm_head);
-		D_CIRCLEQ_REMOVE(&csm->csm_head, cst, cst_link);
-		D_FREE(cst);
-	}
 	D_SPIN_DESTROY(&csm->csm_lock);
 out_grpid:
 	D_FREE(grp_priv->gp_pub.cg_grpid);
@@ -1853,6 +1848,35 @@ crt_group_config_path_set(const char *path)
 	return 0;
 }
 
+int
+crt_nr_secondary_remote_tags_set(int idx, int num_tags)
+{
+	struct crt_prov_gdata *prov_data;
+
+	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d\n", idx, num_tags);
+
+	if (idx != 0) {
+		D_ERROR("Only idx=0 is currently supported\n");
+		return -DER_NONEXIST;
+	}
+
+	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
+	    (idx >= crt_gdata.cg_num_secondary_provs)) {
+		D_ERROR("Secondary providers not initialized\n");
+		return -DER_NONEXIST;
+	}
+
+	if (num_tags <= 0) {
+		D_ERROR("Invalid number of tags: %d\n", num_tags);
+		return -DER_INVAL;
+	}
+
+	prov_data = &crt_gdata.cg_prov_gdata_secondary[idx];
+	prov_data->cpg_num_remote_tags = num_tags;
+
+	return DER_SUCCESS;
+}
+
 /**
  * Save attach info to file with the name
  * "<singleton_attach_path>/grpid.attach_info_tmp".
@@ -1901,8 +1925,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	rank = grp_priv->gp_self;
 
-	/* TODO: Per provider address needs to be stored in future */
-	addr = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_addr;
+	addr = crt_gdata.cg_prov_gdata_primary.cpg_addr;
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2526,9 +2549,9 @@ crt_rank_self_set(d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
@@ -3427,6 +3450,9 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 		/* Remove rank from swim tracking */
 		crt_swim_rank_del(grp_priv, rank);
 	}
+
+	if (!grp_priv->gp_view && to_add->rl_nr > 0)
+		crt_swim_rank_shuffle(grp_priv);
 
 	d_rank_list_free(to_add);
 	d_rank_list_free(to_remove);

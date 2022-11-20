@@ -169,16 +169,16 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 	type deviceSizeStat struct {
 		clusterCount uint64 // Number of SPDK cluster for each target
-		devices      []*ctl.NvmeController_SmdDevice
+		devices      []*ctl.SmdDevice
 	}
 
 	devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
 	for _, ctlr := range resp.GetCtrlrs() {
 		for _, dev := range ctlr.GetSmdDevices() {
-			if dev.GetDevState() != "NORMAL" {
+			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("Adjusting available size of unusable SMD device %s "+
-					"(ctlr %s) to O Bytes: device state %q",
-					dev.GetUuid(), ctlr.GetPciAddr(), dev.GetDevState())
+					"(ctlr %s) to O Bytes: device state %q", dev.GetUuid(),
+					ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
 				dev.AvailBytes = 0
 				continue
 			}
@@ -453,7 +453,6 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 }
 
 // StorageNvmeAddDevice adds a newly added SSD to a DAOS engine's NVMe config to allow it to be used.
-//
 //
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {

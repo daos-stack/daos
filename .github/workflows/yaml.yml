@@ -14,15 +14,15 @@ on:
 
 jobs:
   yaml-lint:
-    runs-on: ubuntu-latest
-    name: Lint
+    runs-on: ubuntu-22.04
+    name: Yamllint check
     steps:
       - name: Check out source repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3'
       - name: Run check

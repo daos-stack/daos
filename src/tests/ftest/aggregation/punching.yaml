@@ -3,16 +3,20 @@ hosts:
   test_clients: 2
 timeout: 600
 server_config:
-    name: daos_server
-    servers:
-        log_mask: INFO
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-    mode: 146 # 146 is RW
-    name: daos_server
     scm_size: 8000000000
     nvme_size: 80000000000
     svcn: 1

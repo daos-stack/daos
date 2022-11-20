@@ -347,7 +347,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
 
-	if (intent == DAOS_INTENT_KILL) {
+	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
 			if (vos_obj_refcount(obj) > 2)
 				D_GOTO(failed, rc = -DER_BUSY);
@@ -404,8 +404,9 @@ check_object:
 	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
 		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, false);
-		D_ASSERTF(0, "Simultaneous object hold and discard detected\n");
-		goto failed;
+		/* Update request will retry with this error */
+		rc = -DER_UPDATE_AGAIN;
+		goto failed_2;
 	}
 
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)

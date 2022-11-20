@@ -3,16 +3,20 @@ hosts:
   test_clients: 1
 timeout: 130
 server_config:
-  servers:
-    targets: 8
-    nr_xs_helpers: 8
-    bdev_class: nvme
-    bdev_list: ["0000:00:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
-    interface:
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      nr_xs_helpers: 8
       fabric_iface: ib0
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
 ior:
   client_processes:
     np: 1

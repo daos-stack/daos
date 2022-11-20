@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -320,7 +320,7 @@ debug_mask_load(const char *mask_name)
 }
 
 /**
- * Create an identifier/group name for muliple debug bits
+ * Create an identifier/group name for multiple debug bits
  *
  * \param[in]	dbgmask		group mask
  * \param[in]	grpname		debug mask group name

@@ -39,10 +39,9 @@ class RbldPoolDestroyWithIO(IorTestBase):
         :avocado: tags=pooldestroywithio
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*/0/*")
+        targets = self.server_managers[0].get_config_value("targets")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
-        engines_per_host = self.params.get("engines_per_host",
-                                           "/run/server_config/*")
+        engines_per_host = self.params.get("engines_per_host", "/run/server_config/*")
 
         # create pool
         self.create_pool()

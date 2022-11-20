@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package daos
 
 import (
@@ -109,6 +110,8 @@ const (
 	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 	// PoolPropertySvcRedunFac defines redundancy factor of the pool service.
 	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
+	// PoolPropertySvcList is the list of pool service replicas.
+	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
 )
 
 const (
