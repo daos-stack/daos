@@ -1058,7 +1058,7 @@ done_item:
 			break; /* break loop if need to wait more than 100 ms. */
 		}
 	}
-	rc = (now > end) ? -DER_TIMEDOUT : -DER_CANCELED;
+	rc = -DER_TIMEDOUT;
 out:
 	ctx->sc_expect_progress_time = now + swim_period_get();
 out_err:
