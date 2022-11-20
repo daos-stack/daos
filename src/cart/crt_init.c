@@ -101,6 +101,9 @@ exit:
 	return;
 }
 
+/* Value based on default daos runs with 16 targets + 2 service contexts */
+#define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
+
 static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
@@ -125,6 +128,10 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+
+	/* To be able to run on VMs */
+	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
+		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
