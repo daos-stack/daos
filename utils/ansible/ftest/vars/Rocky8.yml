@@ -12,6 +12,8 @@ daos_base_deps:
     - python36
     - tree
     - systemd
+    - lbzip2
+    - jq
 
 daos_dev_deps:
   rpms:
@@ -40,7 +42,6 @@ daos_client_deps:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
-    - jq
     - libaec
     - libuuid
     - lz4-libs
