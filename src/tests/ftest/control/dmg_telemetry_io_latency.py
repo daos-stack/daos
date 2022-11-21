@@ -349,8 +349,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         committed_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS
-        # TODO: DAOS-9564: Verify I/O dtx committable metrics
-        # committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
 
         for transfer_size in transfer_sizes:
             # Get the initial IO dtx metrics before running
