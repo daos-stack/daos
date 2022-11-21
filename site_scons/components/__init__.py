@@ -365,7 +365,6 @@ def define_components(reqs):
                            '--without-crypto',
                            '--without-pmdk',
                            '--without-rbd',
-                           '--with-rdma',
                            '--without-iscsi-initiator',
                            '--without-isal',
                            '--without-vtune',
