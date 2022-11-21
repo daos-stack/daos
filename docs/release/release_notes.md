@@ -60,6 +60,12 @@ This release adds the following usability improvements:
 
 #### Other notable changes
 
+The `dmg` administrative command has been packaged into its own `daos-admin`
+RPM package. In earlier DAOS releases, it was part of the `daos-client` package.
+This re-packaging allows to separate the client and admin functionalities.
+When updating from DAOS 2.0, make sure to install the new `daos-admin` RPM
+on DAOS nodes with an administrative role.
+
 The default of the pool property `ec_cell_sz` was 1MiB in DAOS 2.0.
 In DAOS 2.2, the default has been changed to 64kiB.
 While this smaller EC cell size should generally improve performance,
