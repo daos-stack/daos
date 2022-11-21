@@ -349,7 +349,7 @@ chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[])
 	struct chk_pool_rec	*cpr;
 	int			 i = 0;
 
-	if (!d_list_empty(head)) {
+	if (head != NULL && !d_list_empty(head)) {
 		D_INFO("Pools List:\n");
 		d_list_for_each_entry(cpr, head, cpr_link) {
 			D_INFO(DF_UUIDF"\n", DP_UUID(cpr->cpr_uuid));
@@ -383,6 +383,37 @@ chk_pool_remove_nowait(struct chk_pool_rec *cpr, bool destroy)
 	rc = dbtree_delete(cpr->cpr_ins->ci_pool_hdl, BTR_PROBE_EQ, &kiov, NULL);
 	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_NO_HDL)
 		D_WARN("Failed to delete pool record: "DF_RC"\n", DP_RC(rc));
+}
+
+void
+chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret)
+{
+	int	rc = 0;
+
+	if (!cpr->cpr_started) {
+		rc = ds_pool_start_with_svc(cpr->cpr_uuid);
+		if (rc == 0)
+			cpr->cpr_started = 1;
+		else
+			D_WARN("Cannot start (1) the pool for "DF_UUIDF" after check: "DF_RC"\n",
+			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
+	}
+
+	if (cpr->cpr_started && !cpr->cpr_start_post) {
+		rc = ds_pool_chk_post(cpr->cpr_uuid);
+		if (rc != 0) {
+			D_WARN("Cannot post handle (1) pool start for "
+			       DF_UUIDF" after check: "DF_RC"\n",
+			       DP_UUID(cpr->cpr_uuid), DP_RC(rc));
+			/* Failed to post handle pool start, have to stop it. */
+			chk_pool_shutdown(cpr);
+		} else {
+			cpr->cpr_start_post = 1;
+		}
+	}
+
+	if (ret != NULL)
+		*ret = rc;
 }
 
 void
@@ -433,11 +464,11 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 		 *	 operations. Otherwise the pool may contain some inconsistency. Under
 		 *	 such case, close the pool to avoid further damage.
 		 */
-		if (cpr->cpr_started &&
-		    cpr->cpr_bk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
+		if (!ins->ci_is_leader &&
+		    cpr->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED)
+			chk_pool_start_svc(cpr, &rc);
+		else if (cpr->cpr_started)
 			chk_pool_shutdown(cpr);
-			cpr->cpr_started = 0;
-		}
 
 		/* Drop the reference that is held when create in chk_pool_alloc(). */
 		chk_pool_put(cpr);
@@ -582,6 +613,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 			goto out;
 	}
 
+	cbk.cb_gen = ctpa->ctpa_gen;
 	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
 				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
 
@@ -630,7 +662,6 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 	d_iov_t			 riov;
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
 	int			 rc = 0;
-	int			 rc1;
 
 	d_iov_set(&riov, NULL, 0);
 	d_iov_set(&kiov, iv->ci_uuid, sizeof(uuid_t));
@@ -664,15 +695,9 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
 
-	if (rc == 0 && !cpr->cpr_started &&
-	    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
-		rc1 = ds_pool_start_with_svc(cpr->cpr_uuid);
-		if (rc1 == 0)
-			cpr->cpr_started = 1;
-		else
-			D_WARN("Cannot start the pool for "DF_UUIDF" after check: "DF_RC"\n",
-			       DP_UUID(cpr->cpr_uuid), DP_RC(rc1));
-	}
+	if (rc == 0 && !ins->ci_is_leader &&
+	    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED)
+		chk_pool_start_svc(cpr, NULL);
 
 out:
 	if (cpr != NULL)

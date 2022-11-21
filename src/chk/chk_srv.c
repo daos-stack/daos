@@ -132,13 +132,20 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	struct chk_cont_list_in		*ccli = crt_req_get(rpc);
 	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
 	uuid_t				*conts = NULL;
+	d_rank_t			 myrank = dss_self_rank();
 	uint32_t			 count = 0;
 	int				 rc = 0;
+	bool				 remote;
+
+	if (ccli->ccli_rank != myrank)
+		remote = true;
+	else
+		remote = false;
 
 	rc = chk_engine_cont_list(ccli->ccli_gen, ccli->ccli_pool, &conts, &count);
 
 	cclo->cclo_status = rc;
-	cclo->cclo_rank = dss_self_rank();
+	cclo->cclo_rank = myrank;
 	cclo->cclo_conts.ca_arrays = conts;
 	cclo->cclo_conts.ca_count = count;
 
@@ -153,7 +160,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	 * the PS leader completed aggregating the result for the local shard. And then
 	 * the PS leader will release the buffer.
 	 */
-	if (cclo->cclo_status < 0 || !chk_is_on_leader(ccli->ccli_gen, -1, false))
+	if (cclo->cclo_status < 0 || remote)
 		D_FREE(conts);
 }
 

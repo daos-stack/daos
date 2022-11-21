@@ -340,17 +340,19 @@ pool_child_add_one(void *varg)
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
 
-	rc = start_gc_ult(child);
-	if (rc != 0)
-		goto out_eventual;
+	if (!engine_in_check()) {
+		rc = start_gc_ult(child);
+		if (rc != 0)
+			goto out_eventual;
 
-	rc = start_flush_ult(child);
-	if (rc != 0)
-		goto out_gc;
+		rc = start_flush_ult(child);
+		if (rc != 0)
+			goto out_gc;
 
-	rc = ds_start_scrubbing_ult(child);
-	if (rc != 0)
-		goto out_flush;
+		rc = ds_start_scrubbing_ult(child);
+		if (rc != 0)
+			goto out_flush;
+	}
 
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
@@ -752,6 +754,80 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
+}
+
+static int
+ds_pool_chk_post_one(void *varg)
+{
+	struct pool_child_lookup_arg	*arg = varg;
+	struct ds_pool_child		*child = NULL;
+	int				 rc = 0;
+
+	/* The pool shard must has been opened. */
+	child = ds_pool_child_lookup(arg->pla_uuid);
+	if (child == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	rc = start_gc_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = start_flush_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_start_scrubbing_ult(child);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_cont_chk_post(child);
+
+out:
+	if (child != NULL) {
+		if (rc != 0) {
+			ds_stop_scrubbing_ult(child);
+			stop_flush_ult(child);
+			stop_gc_ult(child);
+		}
+
+		ds_pool_child_put(child);
+	}
+
+	return rc;
+}
+
+int
+ds_pool_chk_post(uuid_t uuid)
+{
+	struct ds_pool			*pool = NULL;
+	struct daos_llink		*llink = NULL;
+	struct pool_child_lookup_arg	 collective_arg = { 0 };
+	int				 rc = 0;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	/* The pool must has been opened. */
+	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
+			       NULL /* create_args */, &llink);
+	if (rc != 0)
+		goto out;
+
+	pool = pool_obj(llink);
+	if (pool->sp_stopping)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
+	collective_arg.pla_uuid = uuid;
+	rc = dss_thread_collective(ds_pool_chk_post_one, &collective_arg, 0);
+
+out:
+	if (pool != NULL)
+		daos_lru_ref_release(pool_cache, &pool->sp_entry);
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "Post handle pool start for "DF_UUIDF" after DAOS check: "DF_RC"\n",
+		 DP_UUID(uuid), DP_RC(rc));
+
+	return rc;
 }
 
 /*

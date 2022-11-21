@@ -1058,6 +1058,17 @@ retry:
 			return rc;
 		}
 
+		if (rc == -DER_GRPVER && key->class_id == IV_CHK) {
+			/*
+			 * For CHK iv message, the pool (shard) on peer rank/target may
+			 * not exist, under such case, it will reply "-DER_GRPVER" that
+			 * is normal for check logic, do not need retry.
+			 */
+			D_WARN("IV for DAOS check hit unmatched GRP version, may caused "
+			       "by non-exist pool (shard), ignore it.\n");
+			return 0;
+		}
+
 		/* otherwise retry and wait for others to update the ns. */
 		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
 		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will

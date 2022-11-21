@@ -12,6 +12,7 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/common.h>
+#include <daos/pool.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_chk.h>
@@ -55,7 +56,7 @@ struct chk_cont_rec {
 	uuid_t				 ccr_uuid;
 	struct chk_cont_list_aggregator	*ccr_aggregator;
 	daos_prop_t			*ccr_label_prop;
-	d_iov_t				 ccr_label_ps;
+	d_iov_t				 ccr_label_cs;
 	uint32_t			 ccr_label_checked:1,
 					 ccr_skip:1;
 };
@@ -123,7 +124,7 @@ chk_cont_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	ccr->ccr_aggregator->ccla_count--;
 	d_list_del(&ccr->ccr_link);
 	daos_prop_free(ccr->ccr_label_prop);
-	daos_iov_free(&ccr->ccr_label_ps);
+	daos_iov_free(&ccr->ccr_label_cs);
 	D_FREE(ccr);
 
 	return 0;
@@ -323,7 +324,7 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects orphan %s entry in pool map for "
-		 DF_UUIDF", rank %u, index %d",
+		 DF_UUIDF", rank %u, index %d\n",
 		 index < 0 ? "rank" : "target", DP_UUID(cpr->cpr_uuid), rank, index);
 	cru.cru_msg = msg;
 	cru.cru_options = options;
@@ -496,9 +497,9 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects dangling %s entry in pool map for pool "
-		 DF_UUIDF", rank %u, index %u",
+		 DF_UUIDF", rank %u, index %u, (want) mark as %u\n",
 		 comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
-		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index);
+		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, status);
 	cru.cru_msg = msg;
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -509,7 +510,7 @@ report:
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects dangling %s entry in pool map for pool "
 		 DF_UUIDF" rank %u, index %u, action %u (%s), handle_rc %d, report_rc %d, "
-		 "decision %d, expected_status %u\n",
+		 "decision %d, (want) mark as %u\n",
 		 DP_ENGINE(ins), comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, act,
 		 option_nr ? "need interact" : "no interact", result, rc, decision, status);
@@ -533,7 +534,7 @@ report:
 	switch (decision) {
 	default:
 		D_ERROR(DF_ENGINE" got invalid decision %d for dangling %s entry in pool map "
-			"for pool "DF_UUIDF", rank %u, index %u, expected_status %u. Ignore.\n",
+			"for pool "DF_UUIDF", rank %u, index %u, (want) mark as %u. Ignore.\n",
 			DP_ENGINE(ins), decision,
 			comp->co_type == PO_COMP_TP_RANK ? "rank" : "target",
 			DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, status);
@@ -596,8 +597,8 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects unknown target entry in pool map for pool "
-		 DF_UUIDF", rank %u, index %u, status %u, skip.\n"
-		 "You can change its status via DAOS debug tool if it is not for downgrade case.",
+		 DF_UUIDF", rank %u, index %u, status %u, skip it. You can change "
+		 "its status via DAOS debug tool if it is not for downgraded case.\n",
 		 DP_UUID(cpr->cpr_uuid), comp->co_rank, comp->co_index, comp->co_status);
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
@@ -801,9 +802,11 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 {
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
+	daos_prop_t			*label = NULL;
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	int				 result = 0;
 	int				 rc = 0;
@@ -811,6 +814,10 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_BAD_LABEL;
 	act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 	cbk->cb_statistics.cs_total++;
+
+	rc = ds_pool_prop_fetch(ds_pool_svc2pool(svc), DAOS_PO_QUERY_PROP_LABEL, &label);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		D_GOTO(report, result = rc);
 
 	if (ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 		cbk->cb_statistics.cs_repaired++;
@@ -822,26 +829,34 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 			cbk->cb_statistics.cs_repaired++;
 	}
 
+report:
 	cru.cru_gen = cbk->cb_gen;
 	cru.cru_cla = cla;
 	cru.cru_act = act;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
-	cru.cru_msg = "Check engine detects corrupted pool label";
+	snprintf(msg, CHK_MSG_BUFLEN - 1,
+		 "Check engine detects corrupted pool label: %s (MS) vs %s (PS).\n",
+		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
+		 label != NULL ? label->dpp_entries[0].dpe_str : "(null)");
+	cru.cru_msg = msg;
 	cru.cru_result = result;
 
 	rc = chk_engine_report(&cru, NULL);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" detects corrupted label for pool "
-		 DF_UUIDF", action %u (no interact), MS label %s, handle_rc %d, report_rc %d\n",
-		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), act,
-		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)", result, rc);
+		 DF_ENGINE" detects corrupted label %s (MS) vs %s (PS) for pool "
+		 DF_UUIDF", action %u (no interact), handle_rc %d, report_rc %d\n",
+		 DP_ENGINE(ins), cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
+		 label != NULL ? label->dpp_entries[0].dpe_str : "(null)",
+		 DP_UUID(cpr->cpr_uuid), act, result, rc);
 
 	/*
 	 * It is not fatal even if failed to repair inconsistent pool label,
 	 * then do not skip current pool for subsequent DAOS check.
 	 */
+
+	daos_prop_free(label);
 
 	chk_engine_post_repair(ins, &result);
 	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
@@ -924,7 +939,7 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 	d_sg_list_t			*details = NULL;
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
-	char				 msg[CHK_MSG_BUFLEN - 1] = { 0 };
+	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
@@ -1010,7 +1025,7 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF,
+		 "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF"\n",
 		 DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
 	cru.cru_msg = msg;
 	cru.cru_options = options;
@@ -1093,23 +1108,81 @@ chk_engine_build_label_prop(d_iov_t *label)
 	return prop;
 }
 
+static inline bool
+chk_engine_cont_cs_label_empty(struct chk_cont_rec *ccr)
+{
+	if (ccr->ccr_label_prop == NULL)
+		return true;
+
+	if (strncmp(DAOS_PROP_NO_CO_LABEL, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN) == 0)
+		return true;
+
+	return false;
+}
+
+static inline bool
+chk_engine_cont_target_label_empty(struct chk_cont_rec *ccr)
+{
+	if (daos_iov_empty(&ccr->ccr_label_cs))
+		return true;
+
+	if (strncmp(DAOS_PROP_NO_CO_LABEL, ccr->ccr_label_cs.iov_buf, DAOS_PROP_LABEL_MAX_LEN) == 0)
+		return true;
+
+	return false;
+}
+
+/*
+ * Trust the label in container service or in the container property.
+ *
+ * \return	1:	trust container service.
+ * \return	0:	the same or no trustable.
+ * \return	-1:	trust container property.
+ */
+static inline int
+chk_engine_cont_choose_label(struct chk_cont_rec *ccr)
+{
+	bool	trust_cs = true;
+	bool	trust_target = true;
+
+	if (chk_engine_cont_cs_label_empty(ccr))
+		trust_cs = false;
+
+	if (chk_engine_cont_target_label_empty(ccr))
+		trust_target = false;
+
+	if (!trust_cs && !trust_target)
+		return 0;
+
+	/*
+	 * If the container label in the container service (cont_svc::cs_uuids)
+	 * exists but does not match the label in the container property, then
+	 * trust the container service and reset the one in container property
+	 * by default.
+	 */
+	if (trust_cs)
+		return 1;
+
+	return -1;
+}
+
 static int
-chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
-			  struct cont_svc *svc, d_iov_t *label)
+chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
 {
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
-	daos_prop_t			*prop_in = NULL;
+	daos_prop_t			*prop_tmp = NULL;
 	struct chk_report_unit		 cru = { 0 };
-	char				*strs[2];
-	d_iov_t				 iovs[2];
+	char				*strs[3];
+	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
-	uint32_t			 options[2];
+	uint32_t			 options[3];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
 	int				 decision = -1;
@@ -1120,135 +1193,136 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr,
 	act = prop->cp_policies[cla];
 	cbk->cb_statistics.cs_total++;
 
-	if (!daos_iov_empty(label)) {
-		switch (act) {
-		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
-			/*
-			 * If the container label in the container service (cont_svc::cs_uuids)
-			 * exists but does not match the label in the container property, then
-			 * trust the container service and reset the one in container property
-			 * by default.
-			 *
-			 * Fall through.
-			 */
-		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+	switch (act) {
+	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
+		rc = chk_engine_cont_choose_label(ccr);
+		if (rc > 0)
+			goto trust_ps;
+
+		if (rc < 0)
+			goto trust_target;
+
+		goto out;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
+		rc = chk_engine_cont_choose_label(ccr);
+		if (unlikely(rc == 0))
+			goto out;
+
+		if (rc < 0)
+			goto interact;
+
+trust_ps:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			prop_tmp = chk_engine_build_label_prop(&ccr->ccr_label_cs);
+			if (prop_tmp == NULL)
+				D_GOTO(out, result = -DER_NOMEM);
+
+			result = ds_cont_set_label(svc, ccr->ccr_uuid, prop_tmp,
+						   ccr->ccr_label_prop, false);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
 				cbk->cb_statistics.cs_repaired++;
-			} else {
-				prop_in = chk_engine_build_label_prop(label);
-				if (prop_in == NULL)
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+		rc = chk_engine_cont_choose_label(ccr);
+		if (unlikely(rc == 0))
+			goto out;
+
+		if (rc > 0 && chk_engine_cont_target_label_empty(ccr))
+			goto interact;
+
+trust_target:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			if (!daos_iov_empty(&ccr->ccr_label_cs)) {
+				prop_tmp = chk_engine_build_label_prop(&ccr->ccr_label_cs);
+				if (prop_tmp == NULL)
 					D_GOTO(out, result = -DER_NOMEM);
-
-				result = ds_cont_set_label(svc, ccr->ccr_uuid, prop_in, false);
-				if (result != 0)
-					cbk->cb_statistics.cs_failed++;
-				else
-					cbk->cb_statistics.cs_repaired++;
-			}
-			break;
-		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
-			/* Report the inconsistency without repair. */
-			cbk->cb_statistics.cs_ignored++;
-			break;
-		default:
-			/*
-			 * If the specified action is not applicable to the inconsistency,
-			 * then switch to interaction mode for the decision from admin.
-			 *
-			 * Fall through.
-			 */
-		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
-			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
-				/* Ignore the inconsistency if admin does not want interaction. */
-				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-				cbk->cb_statistics.cs_ignored++;
-				break;
 			}
 
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
-
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
-
-			strs[0] = "Repair the container label in container property [suggested].";
-			strs[1] = "Keep the inconsistent container label, repair nothing.";
-
-			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
-			d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
-
-			sgl.sg_nr = 2;
-			sgl.sg_nr_out = 0;
-			sgl.sg_iovs = iovs;
-
-			details = &sgl;
-			detail_nr = 1;
-			break;
-		}
-	} else {
-		switch (act) {
-		case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
-			/*
-			 * If the container label in the container service (cont_svc::cs_uuids)
-			 * does not exists, but the one in the container property is there, then
-			 * trust the label in container property and add it to container service
-			 * by default.
-			 *
-			 * Fall through.
-			 */
-		case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-			if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			result = ds_cont_set_label(svc, ccr->ccr_uuid,
+						   ccr->ccr_label_prop, prop_tmp, true);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
 				cbk->cb_statistics.cs_repaired++;
-			} else {
-				result = ds_cont_set_label(svc, ccr->ccr_uuid,
-							   ccr->ccr_label_prop, true);
-				if (result != 0)
-					cbk->cb_statistics.cs_failed++;
-				else
-					cbk->cb_statistics.cs_repaired++;
-			}
-			break;
-		case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
-			/* Report the inconsistency without repair. */
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		/* Report the inconsistency without repair. */
+		cbk->cb_statistics.cs_ignored++;
+		break;
+	default:
+		/*
+		 * If the specified action is not applicable to the inconsistency,
+		 * then switch to interaction mode for the decision from admin.
+		 *
+		 * Fall through.
+		 */
+	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		rc = chk_engine_cont_choose_label(ccr);
+		if (unlikely(rc == 0))
+			goto out;
+
+interact:
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
+			/* Ignore the inconsistency if admin does not want interaction. */
+			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			cbk->cb_statistics.cs_ignored++;
 			break;
-		default:
-			/*
-			 * If the specified action is not applicable to the inconsistency,
-			 * then switch to interaction mode for the decision from admin.
-			 *
-			 * Fall through.
-			 */
-		case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
-			if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
-				/* Ignore the inconsistency if admin does not want interaction. */
-				act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-				cbk->cb_statistics.cs_ignored++;
-				break;
-			}
-
-			act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
-
-			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-			option_nr = 2;
-
-			strs[0] = "Repair the container label in container service [suggested].";
-			strs[1] = "Keep the inconsistent container label, repair nothing.";
-
-			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
-			d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
-
-			sgl.sg_nr = 2;
-			sgl.sg_nr_out = 0;
-			sgl.sg_iovs = iovs;
-
-			details = &sgl;
-			detail_nr = 1;
-			break;
 		}
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
+
+		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+		strs[1] = "Keep the inconsistent container label, repair nothing.";
+		d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
+
+		if (rc > 0) {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+			strs[0] = "Repair the container label in container property [suggested].";
+			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
+
+			if (chk_engine_cont_target_label_empty(ccr)) {
+				option_nr = 2;
+				sgl.sg_nr = 2;
+			} else {
+				options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+				strs[2] = "Repair the container label in container service.";
+				d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
+				option_nr = 3;
+				sgl.sg_nr = 3;
+			}
+		} else {
+			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+			strs[0] = "Repair the container label in container service [suggested].";
+			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
+
+			if (chk_engine_cont_cs_label_empty(ccr)) {
+				option_nr = 2;
+				sgl.sg_nr = 2;
+			} else {
+				options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+				strs[2] = "Repair the container label in container property.";
+				d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
+				option_nr = 3;
+				sgl.sg_nr = 3;
+			}
+		}
+
+		sgl.sg_nr_out = 0;
+		sgl.sg_iovs = iovs;
+
+		details = &sgl;
+		detail_nr = 1;
+		break;
 	}
 
 report:
@@ -1261,8 +1335,8 @@ report:
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
-		 "Check engine detects inconsistent container label: SVC %s vs property %s",
-		 daos_iov_empty(label) ? "(null)" : (char *)label->iov_buf,
+		 "Check engine detects inconsistent container label: %s (CS) vs %s (property).\n",
+		 daos_iov_empty(&ccr->ccr_label_cs) ? "(null)" : (char *)ccr->ccr_label_cs.iov_buf,
 		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
 		 "(null)");
 	cru.cru_msg = msg;
@@ -1276,7 +1350,7 @@ report:
 		 DF_ENGINE" detects inconsistent container label for "DF_UUIDF"/"DF_UUIDF
 		 ": %s vs %s, action %u (%s), handle_rc %d, report_rc %d, decision %d\n",
 		 DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid),
-		 daos_iov_empty(label) ? "(null)" : (char *)label->iov_buf,
+		 daos_iov_empty(&ccr->ccr_label_cs) ? "(null)" : (char *)ccr->ccr_label_cs.iov_buf,
 		 ccr->ccr_label_prop != NULL ? (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str :
 		 "(null)", act, option_nr ? "need interact" : "no interact", result, rc, decision);
 
@@ -1308,25 +1382,41 @@ ignore:
 		cbk->cb_statistics.cs_ignored++;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
-		if (daos_iov_empty(label))
+		if (chk_engine_cont_cs_label_empty(ccr))
 			goto ignore;
 
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-		if (!(prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN)) {
-			prop_in = chk_engine_build_label_prop(label);
-			if (prop_in == NULL)
-				D_GOTO(out, result = -DER_NOMEM);
-		}
-
-		/* Fall through. */
-	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
-		act = decision;
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
+			prop_tmp = chk_engine_build_label_prop(&ccr->ccr_label_cs);
+			if (prop_tmp == NULL)
+				D_GOTO(out, result = -DER_NOMEM);
+
+			result = ds_cont_set_label(svc, ccr->ccr_uuid, prop_tmp,
+						   ccr->ccr_label_prop, false);
+			if (result != 0)
+				cbk->cb_statistics.cs_failed++;
+			else
+				cbk->cb_statistics.cs_repaired++;
+		}
+		break;
+	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
+		if (chk_engine_cont_target_label_empty(ccr))
+			goto ignore;
+
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
+			cbk->cb_statistics.cs_repaired++;
+		} else {
+			if (!daos_iov_empty(&ccr->ccr_label_cs)) {
+				prop_tmp = chk_engine_build_label_prop(&ccr->ccr_label_cs);
+				if (prop_tmp == NULL)
+					D_GOTO(out, result = -DER_NOMEM);
+			}
+
 			result = ds_cont_set_label(svc, ccr->ccr_uuid,
-						   prop_in != NULL ? prop_in : ccr->ccr_label_prop,
-						   prop_in != NULL ? false : true);
+						   ccr->ccr_label_prop, prop_tmp, true);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
 			else
@@ -1343,7 +1433,7 @@ out:
 	 * then do not skip current container for subsequent DAOS check.
 	 */
 
-	daos_prop_free(prop_in);
+	daos_prop_free(prop_tmp);
 	chk_engine_post_repair(ins, &result);
 
 	return result;
@@ -1358,6 +1448,10 @@ chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg
 	d_iov_t				 riov;
 	int				 rc = 0;
 
+	/* key is the label prop from CS::cs_uuids, must not be empty. */
+	D_ASSERT(key != NULL);
+	D_ASSERT(key->iov_buf != NULL);
+
 	d_iov_set(&kiov, val->iov_buf, val->iov_len);
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cclca->cclca_aggregator->ccla_toh, &kiov, &riov);
@@ -1370,17 +1464,12 @@ chk_engine_cont_label_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg
 		D_GOTO(out, rc = (rc == -DER_NONEXIST ? 0 : rc));
 
 	ccr = riov.iov_buf;
-	if (key->iov_buf == NULL) {
-		if (ccr->ccr_label_prop == NULL)
-			ccr->ccr_label_checked = 1;
-	} else {
-		if (ccr->ccr_label_prop == NULL ||
-		    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
-			    DAOS_PROP_LABEL_MAX_LEN) != 0)
-			rc = daos_iov_copy(&ccr->ccr_label_ps, key);
-		else
-			ccr->ccr_label_checked = 1;
-	}
+	if (ccr->ccr_label_prop == NULL ||
+	    strncmp(key->iov_buf, ccr->ccr_label_prop->dpp_entries[0].dpe_str,
+		    DAOS_PROP_LABEL_MAX_LEN) != 0)
+		rc = daos_iov_copy(&ccr->ccr_label_cs, key);
+	else
+		ccr->ccr_label_checked = 1;
 
 out:
 	if (!(cclca->cclca_cpr->cpr_ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
@@ -1439,7 +1528,7 @@ chk_engine_cont_cleanup(struct chk_pool_rec *cpr, struct ds_pool_svc *ds_svc,
 
 	d_list_for_each_entry(ccr, &aggregator->ccla_list, ccr_link) {
 		if (!ccr->ccr_skip && !ccr->ccr_label_checked) {
-			rc = chk_engine_cont_set_label(cpr, ccr, svc, &ccr->ccr_label_ps);
+			rc = chk_engine_cont_set_label(cpr, ccr, svc);
 			if (rc != 0)
 				goto out;
 		}
@@ -1501,6 +1590,7 @@ chk_engine_pool_ult(void *args)
 	int				 i;
 	int				 rc = 0;
 	int				 rc1 = 0;
+	int				 rc2 = 0;
 	bool				 update = true;
 
 	D_ASSERT(svc != NULL);
@@ -1649,12 +1739,22 @@ out:
 		cbk->cb_time.ct_stop_time = time(NULL);
 		if (likely(update))
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
+
+		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
+			chk_pool_start_svc(cpr, &rc2);
+			if (cpr->cpr_started && cpr->cpr_start_post)
+				/*
+				 * The pool may has been marked as non-connectable before
+				 * corruption, re-enable it to allow new connection.
+				 */
+				rc2 = ds_pool_mark_connectable(svc);
+		}
 	}
 
-	D_CDEBUG(rc != 0 || rc1 != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u exit pool ULT for "DF_UUIDF" with %s stop: %u/%u\n",
+	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DLOG_INFO,
+		 DF_ENGINE" on rank %u exit pool ULT for "DF_UUIDF" with %s stop: %u/%u/%u\n",
 		 DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
-		 cpr->cpr_stop ? "external" : "self", rc, rc1);
+		 cpr->cpr_stop ? "external" : "self", rc, rc1, rc2);
 
 	ds_pool_svc_put_leader(svc);
 	chk_pool_put(cpr);
@@ -1734,8 +1834,8 @@ out:
 	/* The pool scan ULTs will be terminated via chk_engine_exit(). */
 	chk_engine_exit(ins, ins_status, pool_status);
 
-	D_INFO(DF_ENGINE" scheduler on rank %u exit at phase %u with status %u: "DF_RC"\n",
-	       DP_ENGINE(ins), myrank, cbk->cb_phase, ins_status, DP_RC(rc));
+	D_INFO(DF_ENGINE" scheduler on rank %u exit at phase %u with status %u: rc %d\n",
+	       DP_ENGINE(ins), myrank, cbk->cb_phase, ins_status, rc);
 
 	ins->ci_sched_running = 0;
 }
@@ -1788,6 +1888,7 @@ chk_engine_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 			goto out;
 	} else {
 		ctpa.ctpa_ins = ins;
+		ctpa.ctpa_gen = gen;
 		rc = chk_traverse_pools(chk_pools_load_from_db, &ctpa);
 		if (rc != 0)
 			goto out;
@@ -2017,11 +2118,11 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 		ds_iv_ns_update(ins->ci_iv_ns, leader);
 	}
 
-	rc = ds_pool_clues_init(chk_engine_pool_filter, ins, clues);
-	if (rc != 0)
-		goto out_iv;
-
 	rc = chk_engine_start_post(ins);
+	if (rc != 0)
+		goto out_stop;
+
+	rc = ds_pool_clues_init(chk_engine_pool_filter, ins, clues);
 	if (rc != 0)
 		goto out_stop;
 
@@ -2048,7 +2149,6 @@ out_stop:
 			D_WARN(DF_ENGINE" failed to update engine bookmark: "DF_RC"\n",
 			       DP_ENGINE(ins), DP_RC(rc1));
 	}
-out_iv:
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 out_group:
 	if (ins->ci_iv_group != NULL) {
@@ -2061,7 +2161,8 @@ out_tree:
 out_log:
 	if (rc >= 0) {
 		D_INFO(DF_ENGINE" started on rank %u with api_flags %x, phase %d, leader %u, "
-		       "flags %x\n", DP_ENGINE(ins), myrank, api_flags, phase, leader, flags);
+		       "flags %x: rc %d\n",
+		       DP_ENGINE(ins), myrank, api_flags, phase, leader, flags, rc);
 
 		chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
 		chk_pools_dump(&ins->ci_pool_list, pool_nr, pools);
@@ -2084,6 +2185,7 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
 	struct chk_pool_rec	*tmp;
+	d_rank_t		 myrank = dss_self_rank();
 	int			 rc = 0;
 	int			 i;
 
@@ -2105,6 +2207,8 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 		D_GOTO(out, rc = -DER_ALREADY);
 
 	ins->ci_stopping = 1;
+
+	D_INFO(DF_ENGINE" stopping on rank %u with %d pools\n", DP_ENGINE(ins), myrank, pool_nr);
 
 	if (pool_nr == 0) {
 		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
@@ -2131,17 +2235,16 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[])
 out:
 	ins->ci_stopping = 0;
 
-	if (rc >= 0) {
+	if (rc >= 0 || rc == -DER_ALREADY) {
 		D_INFO(DF_ENGINE" stopped on rank %u with %d pools: rc %d\n", DP_ENGINE(ins),
-		       dss_self_rank(), pool_nr, rc);
+		       myrank, pool_nr, rc);
 
 		chk_pools_dump(NULL, pool_nr, pools);
-	} else if (rc == -DER_ALREADY) {
-		rc = 1;
-	} else if (rc < 0) {
+		if (rc == -DER_ALREADY)
+			rc = 1;
+	} else {
 		D_ERROR(DF_ENGINE" failed to stop on rank %u with %d pools, "
-			"gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), dss_self_rank(),
-			pool_nr, gen, DP_RC(rc));
+			"gen "DF_X64": "DF_RC"\n", DP_ENGINE(ins), myrank, pool_nr, gen, DP_RC(rc));
 	}
 
 	return rc;
@@ -2602,7 +2705,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase)
 
 	rc = ds_pool_start(uuid);
 	if (rc != 0)
-		goto put;
+		D_GOTO(put, rc = (rc == -DER_NONEXIST ? 1 : rc));
 
 	if (cbk->cb_phase < phase) {
 		cbk->cb_phase = cbk->cb_phase;
@@ -2620,9 +2723,15 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase)
 
 put:
 	if (rc != 0) {
-		chk_ins_set_fail(ins, cbk->cb_phase > phase ? cbk->cb_phase : phase);
-		chk_pool_stop_one(ins, uuid, CHK__CHECK_POOL_STATUS__CPS_FAILED,
-				  CHK_INVAL_PHASE, NULL);
+		if (rc > 0) {
+			chk_pool_stop_one(ins, uuid, CHK__CHECK_POOL_STATUS__CPS_CHECKED,
+					  CHK__CHECK_SCAN_PHASE__DSP_DONE, NULL);
+			rc = 0;
+		} else {
+			chk_ins_set_fail(ins, cbk->cb_phase > phase ? cbk->cb_phase : phase);
+			chk_pool_stop_one(ins, uuid, CHK__CHECK_POOL_STATUS__CPS_FAILED,
+					  CHK_INVAL_PHASE, NULL);
+		}
 	}
 
 	chk_pool_put(cpr);
@@ -2855,10 +2964,10 @@ chk_engine_notify(struct chk_iv *iv)
 
 out:
 	D_CDEBUG(rc != 0 && rc != -DER_NOTAPPLICABLE, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u got notification from rank %u, for pool "
-		 DF_UUIDF", phase %u, ins_status %u, pool_status %u, gen "DF_X64": "DF_RC"\n",
+		 DF_ENGINE" on rank %u got notification from rank %u, for pool " DF_UUIDF
+		 ", phase %u, ins_status %u, pool_status %u, gen "DF_X64", seq "DF_X64": "DF_RC"\n",
 		 DP_ENGINE(ins), dss_self_rank(), iv->ci_rank, DP_UUID(iv->ci_uuid), iv->ci_phase,
-		 iv->ci_ins_status, iv->ci_pool_status, iv->ci_gen, DP_RC(rc));
+		 iv->ci_ins_status, iv->ci_pool_status, iv->ci_gen, iv->ci_seq, DP_RC(rc));
 
 	return (rc == 0 || rc == -DER_NOTAPPLICABLE) ? 0 : rc;
 }
