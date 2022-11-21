@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+# pylint: disable=import-error,no-name-in-module
 
 import argparse
 import getpass
@@ -13,7 +14,7 @@ import re
 import socket
 import sys
 from ClusterShell.NodeSet import NodeSet
-from util.general_utils import pcmd, run_task
+from util.general_utils import pcmd, run_task, get_clush_command, run_command, DaosTestError
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
 
@@ -50,7 +51,7 @@ def update_config_cmdlist(args):
     """Create the command lines to update slurmd.conf file.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     Returns:
         cmd_list: list of cmdlines to update config file
@@ -114,7 +115,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     Args:
         nodes (NodeSet): nodes on which to execute the commands
         cmdlist ([type]): list of cmdlines to execute
-        sudo (str, optional): Execute cmd with sudo privs. Defaults to false.
+        sudo (str, optional): Execute cmd with sudo privileges. Defaults to false.
 
      Returns:
         ret_code: returns error code if pcmd fails;
@@ -135,7 +136,7 @@ def configuring_packages(args, action):
     """Install required slurm and munge packages.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
         action (str):  install or remove
 
     """
@@ -152,7 +153,7 @@ def start_munge(args):
     """Start munge service on all nodes.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     """
     sudo = "sudo" if args.sudo else ""
@@ -182,11 +183,17 @@ def start_munge(args):
     if execute_cluster_cmds(args.control, ["; ".join(cmd_list)]) > 0:
         return 1
     # remove any existing key from other nodes
-    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo),
-                "scp -p {}:/etc/munge/munge.key /etc/munge/munge.key".format(
-                    args.control)]
+    cmd_list = ["{} rm -f /etc/munge/munge.key".format(sudo)]
     if execute_cluster_cmds(nodes, ["; ".join(cmd_list)]) > 0:
         return 1
+
+    # copy munge.key to all hosts
+    command = "{0} --copy {1} --dest {1}".format(get_clush_command(nodes), "/etc/munge/munge.key")
+    try:
+        run_command(command)
+    except DaosTestError:
+        return 1
+
     # set the protection back to defaults
     cmd_list = [
         "{} chmod 400 /etc/munge/munge.key".format(sudo),
@@ -205,7 +212,7 @@ def start_slurm(args):
     """Start the slurm services on all nodes.
 
     Args:
-        args (Namespace): Commandline arguments
+        args (Namespace): command line arguments
 
     """
     # Setting up slurm on all nodes

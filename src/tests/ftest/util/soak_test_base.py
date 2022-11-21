@@ -12,15 +12,15 @@ import multiprocessing
 import threading
 import random
 from filecmp import cmp
+from getpass import getuser
+import socket
 from apricot import TestWithServers
 from general_utils import run_command, DaosTestError
 from exception_utils import CommandFailure
 import slurm_utils
 from ClusterShell.NodeSet import NodeSet
-from getpass import getuser
-import socket
 from agent_utils import include_local_host
-from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
+from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -43,7 +43,6 @@ class SoakTestBase(TestWithServers):
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
         self.soaktest_dir = None
-        self.exclude_slurm_nodes = NodeSet()
         self.loop = None
         self.outputsoak_dir = None
         self.test_name = None
@@ -68,6 +67,7 @@ class SoakTestBase(TestWithServers):
         self.resv_cont = None
         self.mpi_module = None
         self.sudo_cmd = None
+        self.slurm_exclude_servers = True
 
     def setUp(self):
         """Define test setup to be done."""
@@ -100,15 +100,9 @@ class SoakTestBase(TestWithServers):
         self.srun_params = {"partition": self.client_partition}
         if self.client_reservation:
             self.srun_params["reservation"] = self.client_reservation
-        # Check if the server nodes are in the client list;
-        # this will happen when only one partition is specified
-        for host_server in self.hostlist_servers:
-            if host_server in self.hostlist_clients:
-                self.hostlist_clients.remove(host_server)
-                self.exclude_slurm_nodes.add(host_server)
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
-        self.exclude_slurm_nodes.add(local_host_list)
+        self.slurm_exclude_nodes.add(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
         if not self.hostlist_clients:
@@ -152,8 +146,8 @@ class SoakTestBase(TestWithServers):
                 errors.append("<<FAILED: Soak reserved container read failed>>")
 
             if not cmp(self.initial_resv_file, final_resv_file):
-                errors.append("<<FAILED: Data verification error on reserved pool"
-                                        " after SOAK completed>>")
+                errors.append(
+                    "<<FAILED: Data verification error on reserved pool after SOAK completed>>")
 
             for file in [self.initial_resv_file, final_resv_file]:
                 os.remove(file)
@@ -585,7 +579,7 @@ class SoakTestBase(TestWithServers):
                 "<<FAILED: Soak directories not removed"
                 "from clients>>: {}".format(self.hostlist_clients))
         # cleanup test_node
-        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
+        for log_dir in [self.soak_dir, self.sharedsoaktest_dir]:
             cmd = "rm -rf {}".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)

@@ -106,6 +106,7 @@ static int
 drpc_client_test_setup(void **state)
 {
 	mock_socket_setup();
+	mock_fchmod_setup();
 	mock_connect_setup();
 	mock_sendmsg_setup();
 	mock_recvmsg_setup();
@@ -131,6 +132,27 @@ drpc_client_test_teardown(void **state)
 /*
  * Unit tests
  */
+static void
+test_drpc_call_sockfile_chmod_fails(void **state)
+{
+	Drpc__Response	*resp;
+	int		 rc;
+
+	assert_rc_equal(drpc_init(), 0);
+
+	fchmod_return = -EACCES;
+
+	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_NOTIFY_READY,
+			   NULL /* req */, 0 /* req_size */, 0 /* flags */,
+			   &resp);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/* make sure socket was closed */
+	assert_int_equal(close_call_count, 1);
+
+	drpc_fini();
+}
+
 static void
 test_drpc_call_connect_fails(void **state)
 {
@@ -490,6 +512,7 @@ int
 main(void)
 {
 	const struct CMUnitTest tests[] = {
+		UTEST(test_drpc_call_sockfile_chmod_fails),
 		UTEST(test_drpc_call_connect_fails),
 		UTEST(test_drpc_call_sendmsg_fails),
 		UTEST(test_drpc_verify_notify_ready),
