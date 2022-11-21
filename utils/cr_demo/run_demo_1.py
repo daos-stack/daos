@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -92,6 +92,8 @@ def disable_checker():
     print(f"Command: {command}")
     subprocess.run(check_disable_cmd, check=False)
 
+
+print("Pass 1: Pool is on ranks, but not in MS - Trust PS")
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
