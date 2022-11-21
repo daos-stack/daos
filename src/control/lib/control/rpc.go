@@ -411,7 +411,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		ur := &UnaryResponse{log: log, fromMS: true}
+		ur := &UnaryResponse{log: log, fromMS: true, retryCount: try}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
 			return nil, wrapReqTimeout(req, err)

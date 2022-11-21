@@ -87,6 +87,28 @@ func TestControl_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
+		"-DER_NONEXIST on first try is not retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosNonexistant, nil),
+				},
+			},
+			expErr: drpc.DaosNonexistant,
+		},
+		"-DER_NONEXIST on retry is treated as success": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", drpc.DaosTimedOut, nil),
+					MockMSResponse("host1", drpc.DaosNonexistant, nil),
+				},
+			},
+		},
 		"DataPlaneNotStarted error is retried": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
