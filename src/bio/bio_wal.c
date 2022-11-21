@@ -419,7 +419,7 @@ place_entry(struct wal_trans_blk *tb, struct wal_trans_entry *entry)
 
 static void
 place_payload(struct bio_sglist *bsgl, struct wal_blks_desc *bd, struct wal_trans_blk *tb,
-	      uint64_t addr, uint16_t len)
+	      uint64_t addr, uint32_t len)
 {
 	unsigned int	left, copy_sz;
 
@@ -1370,7 +1370,7 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 }
 
 static void
-copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uint16_t len)
+copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uint32_t len)
 {
 	unsigned int	left, copy_sz;
 
