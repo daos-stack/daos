@@ -489,18 +489,19 @@ dss_srv_handler(void *arg)
 			wait_all_exited(dx, dmi);
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
-
-		if (dx->dx_xs_id == 0) {
-			rc = vos_db_init(dss_storage_path);
-			if (rc) {
-				D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
-				D_GOTO(nvme_fini, rc);
-			}
-			smd_init(vos_db_get());
-		}
 	}
 
 	dmi->dmi_xstream = dx;
+
+	if (dx->dx_xs_id == 0) {
+		rc = vos_db_init(dss_storage_path);
+		if (rc) {
+			D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
+			D_GOTO(nvme_fini, rc);
+		}
+		smd_init(vos_db_get());
+	}
+
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);

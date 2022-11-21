@@ -63,6 +63,19 @@ vos_pool_settings_init(void)
 	return umempobj_settings_init();
 }
 
+static inline enum bio_mc_flags
+vos2mc_flags(unsigned int vos_flags)
+{
+	enum bio_mc_flags mc_flags = 0;
+
+	if (vos_flags & VOS_POF_SYSDB)
+		mc_flags |= BIO_MC_FL_SYSDB;
+	if (vos_flags & VOS_POF_RDB)
+		mc_flags |= BIO_MC_FL_RDB;
+
+	return mc_flags;
+}
+
 static int
 vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, unsigned int flags,
@@ -72,7 +85,8 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop = NULL;
-	enum bio_mc_flags	 mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
+	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
+	size_t			 meta_sz = scm_sz;
 	int			 rc, ret;
 
 	*ph = NULL;
@@ -80,11 +94,20 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
 
-	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"scm_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
-		xs_ctxt, DP_UUID(pool_id), scm_sz, nvme_sz, wal_sz);
+	if (!scm_sz) {
+		struct stat lstat;
 
-	rc = bio_mc_create(xs_ctxt, pool_id, scm_sz, wal_sz, nvme_sz, mc_flags);
+		rc = stat(path, &lstat);
+		if (rc != 0)
+			return daos_errno2der(errno);
+		meta_sz = lstat.st_size;
+	}
+
+	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
+		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
+		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
+
+	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
 	if (rc != 0) {
 		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
@@ -142,7 +165,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop;
-	enum bio_mc_flags	 mc_flags = (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0;
+	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
 	int			 rc, ret;
 
 	*ph = NULL;
@@ -223,6 +246,7 @@ static void
 vos_delete_blob(uuid_t pool_uuid, unsigned int flags)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
 	int			 rc;
 
 	/* NVMe device isn't configured */
@@ -232,7 +256,7 @@ vos_delete_blob(uuid_t pool_uuid, unsigned int flags)
 	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(pool_uuid));
 
-	rc = bio_mc_destroy(xs_ctxt, pool_uuid, (flags & VOS_POF_SYSDB) ? BIO_MC_FL_SYSDB : 0);
+	rc = bio_mc_destroy(xs_ctxt, pool_uuid, mc_flags);
 	if (rc)
 		D_ERROR("Destroying meta context blob for xs:%p pool="DF_UUID" failed: "DF_RC"\n",
 			xs_ctxt, DP_UUID(pool_uuid), DP_RC(rc));
@@ -855,6 +879,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
+	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
 		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)

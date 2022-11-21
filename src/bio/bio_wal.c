@@ -876,6 +876,14 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	uint64_t		 tx_id = tx->utx_id;
 	int			 iov_nr, rc;
 
+	/* FIXME: Skip WAL commit for sysdb for this moment */
+	if (mc->mc_is_sysdb)
+		return 0;
+
+	D_DEBUG(DB_IO, "MC:%p WAL commit ID:"DF_U64" seq:%u off:%u, biod_data:%p inflights:%u\n",
+		mc, tx_id, id2seq(tx_id), id2off(tx_id), biod_data,
+		biod_data != NULL ? biod_data->bd_inflights : 0);
+
 	rc = generate_data_csum(mc, biod_data, &dc_arr);
 	if (rc) {
 		D_ERROR("Failed to generate async data csum. "DF_RC"\n", DP_RC(rc));
