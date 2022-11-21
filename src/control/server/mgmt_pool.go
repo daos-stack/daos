@@ -101,7 +101,7 @@ func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
 		}
 	}
 
-	return uuid.Nil, errors.Errorf("unable to find pool with label %q", id)
+	return uuid.Nil, system.ErrPoolLabelNotFound(id)
 }
 
 // getPoolService returns the pool service entry for the given UUID.
@@ -275,7 +275,7 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 		return resp, nil
 	}
-	if _, ok := err.(*system.ErrPoolNotFound); !ok {
+	if !system.IsPoolNotFound(err) {
 		return nil, err
 	}
 
