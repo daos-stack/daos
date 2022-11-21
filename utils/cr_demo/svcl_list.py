@@ -5,7 +5,6 @@
 """
 import argparse
 import subprocess
-import yaml
 
 
 POOL_SIZE = "4GB"
