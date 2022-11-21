@@ -12,6 +12,7 @@ daos_base_deps:
     - python36
     - tree
     - systemd
+    - lbzip2
 
 daos_dev_deps:
   rpms:
