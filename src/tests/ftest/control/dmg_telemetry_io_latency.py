@@ -23,14 +23,14 @@ def convert_to_number(size):
 
     """
     num = 0
-    SIZE_DICT = {"B": 1,
+    size_dict = {"B": 1,
                  "K": 1024,
                  "M": 1024 * 1024,
                  "G": 1024 * 1024 * 1024,
                  "T": 1024 * 1024 * 1024 * 1024}
     # Convert string to bytes
     suffix = str(size)[-1]
-    for key, value in SIZE_DICT.items():
+    for key, value in size_dict.items():
         if suffix == key:
             num = int(value) * int(size[:-1])
     return int(num)
@@ -298,7 +298,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         dtx_value -= baseline_data["engine_io_dtx_committed"]
         max_value = metrics["engine_io_dtx_committed_max"]
         max_value -= baseline_data["engine_io_dtx_committed_max"]
-        # expected min value after the test should be 1
+        # expected min value after the test should be 2
         min_value = metrics["engine_io_dtx_committed_min"]
         # TODO: Validate stddev and mean value metrics
         # mean and std dev metrics only rely on the after test values
@@ -315,13 +315,15 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # test ops = (create dir + punch obj + punch dir) * repetitions
         test_ops *= repetitions
         num_operations += test_ops
+        # 2 DTX entries on 2 replicas
+        num_operations *= 2
 
         if dtx_value != num_operations:
             self.log.error("engine_io_dtx_committed NOT verified, %s != %s",
                            dtx_value, num_operations)
             status = False
-        if min_value != 1:
-            self.log.error("engine_io_dtx_committed_min != 1")
+        if min_value != 2:
+            self.log.error("engine_io_dtx_committed_min != 2")
             status = False
         if not max_value >= dtx_value >= min_value:
             status = False
@@ -349,8 +351,6 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         # disable verbosity
         self.telemetry.dmg.verbose = False
         committed_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS
-        # TODO: DAOS-9564: Verify I/O dtx committable metrics
-        # committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
 
         for transfer_size in transfer_sizes:
             # Get the initial IO dtx metrics before running
