@@ -1,4 +1,4 @@
-name: Self-hosted runner test
+name: RPM Build and Test
 
 on:
   workflow_dispatch:
@@ -53,6 +53,7 @@ jobs:
     outputs:
       skip-func-test-el8: ${{ steps.skip-func-test-el8.outputs.text }}
       rpm-test-version: ${{ steps.rpm-test-version.outputs.text }}
+      pr-repos: ${{ steps.pr-repos.outputs.text }}
     steps:
       - name: Set skip-func-test-el8 variable
         id: skip-func-test-el8
@@ -101,6 +102,8 @@ jobs:
       #   run: echo "${{ needs.Import-commit-message.outputs.message }}"
       # - name: Show commit pragmas
       #   run: echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}'
+      - name: Show pr-repos commit pragma
+        run: echo '${{ needs.Import-commit-pragmas2.outputs.pr-repos }}'
       - name: Import commit pragmas
         run: set -x; echo '${{ needs.Import-commit-pragmas.outputs.pragmas }}' |
              sed -e 's/^/cp_/' >> $GITHUB_ENV
