@@ -300,15 +300,8 @@ blob_init(struct ad_blob *blob)
 
 		blob->bb_mmap = buf;
 	} else {
-		void *mmap_ptr;
-
-		/* To satisfy mmap address align with arena size, assume no other sbrk called
-		 * again before mmap.
-		 */
-		mmap_ptr = sbrk(0);
-		mmap_ptr = (void *)roundup((uintptr_t)mmap_ptr, 1 << ARENA_SIZE_BITS);
-		blob->bb_mmap = mmap(mmap_ptr, blob_size(blob), PROT_READ|PROT_WRITE,
-				     MAP_SHARED | MAP_FIXED, blob->bb_fd, 0);
+		blob->bb_mmap = mmap(NULL, blob_size(blob), PROT_READ|PROT_WRITE,
+				     MAP_SHARED, blob->bb_fd, 0);
 		if (blob->bb_mmap == MAP_FAILED) {
 			rc = daos_errno2der(errno);
 			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
@@ -855,13 +848,20 @@ ad_blob_destroy(struct ad_blob_handle bh)
 void *
 blob_addr2ptr(struct ad_blob *blob, daos_off_t addr)
 {
-	struct ad_page	*pg;
 	daos_off_t	 off;
+
+#if 0
+	struct ad_page	*pg;
 
 	off  = addr & ARENA_SIZE_MASK;
 	addr = addr - blob_addr(blob);
 	pg   = &blob->bb_pages[addr >> ARENA_SIZE_BITS];
 	return &pg->pa_rpg[off];
+#else
+	off = addr - blob_addr(blob);
+
+	return (void *)((uintptr_t)blob->bb_mmap + off);
+#endif
 }
 
 /** convert storage address to mapped memory address */
@@ -874,12 +874,18 @@ ad_addr2ptr(struct ad_blob_handle bh, daos_off_t addr)
 daos_off_t
 blob_ptr2addr(struct ad_blob *blob, void *ptr)
 {
-	struct ad_arena_df *ad;
 	daos_off_t	    off;
+
+#if 0
+	struct ad_arena_df *ad;
 
 	off = (unsigned long)ptr & ARENA_SIZE_MASK;
 	ad = (struct ad_arena_df *)((unsigned long)ptr & ~ARENA_SIZE_MASK);
 	return ad->ad_addr + off;
+#else
+	off = (uintptr_t)ptr - (uintptr_t)blob->bb_mmap;
+	return blob_addr(blob) + off;
+#endif
 }
 
 /** convert mapped memory address to storage address */
@@ -2809,6 +2815,6 @@ ad_base(struct ad_blob_handle bh)
 {
 	struct ad_blob	*blob = bh.bh_blob;
 
-	D_ASSERT((uintptr_t)ad_addr2ptr(bh, blob_addr(blob) == (uintptr_t)blob->bb_mmap));
+	D_ASSERT((uintptr_t)ad_addr2ptr(bh, blob_addr(blob)) == (uintptr_t)blob->bb_mmap);
 	return blob->bb_mmap;
 }
