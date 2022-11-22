@@ -965,12 +965,13 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
 	assert_rc_equal(rc, 0);
 	/** Should be prevented because object olready held for discard */
-	expect_assert_failure(vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0],
-						   &obj2));
+	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
+	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 	/** Should prevent simultaneous hold for create as well */
-	expect_assert_failure(vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
+	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,
 					   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT,
-					   &obj2, 0));
+					   &obj2, 0);
+	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 
 	/** Need to be able to hold for read though or iteration won't work */
 	rc = vos_obj_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &epr, 0,

@@ -1,12 +1,14 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package hostlist_test
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -97,13 +99,13 @@ func TestHostList_Create(t *testing.T) {
 			expUniqCount: 3,
 		},
 		"tab delimited": {
-			startList: "node1	node2	node3",
+			startList:    fmt.Sprintf("node1\tnode2\tnode3"),
 			expRawOut:    "node[1-3]",
 			expUniqOut:   "node[1-3]",
 			expUniqCount: 3,
 		},
 		"mixed delimiters": {
-			startList: "node1	node2 node3,node4",
+			startList:    fmt.Sprintf("node1\tnode2 node3,node4"),
 			expRawOut:    "node[1-4]",
 			expUniqOut:   "node[1-4]",
 			expUniqCount: 4,

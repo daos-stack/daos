@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package server
 
 import (
@@ -101,6 +102,14 @@ func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
 		code.ServerPoolInvalidRanks,
 		fmt.Sprintf("pool request contains invalid ranks: %s", strings.Join(rs, ",")),
 		"retry the request with a valid set of ranks",
+	)
+}
+
+func FaultPoolInvalidNumRanks(req, avail int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolInvalidNumRanks,
+		fmt.Sprintf("pool request contains invalid number of ranks (requested: %d, available: %d)", req, avail),
+		"retry the request with a valid number of ranks",
 	)
 }
 

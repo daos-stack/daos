@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 )
 
 // ScmState represents the probed state of SCM modules on the system.
+//
 //go:generate stringer -type=ScmState
 type ScmState int
 

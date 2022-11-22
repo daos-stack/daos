@@ -148,6 +148,7 @@ dc_obj_query_key_task_create(daos_handle_t oh, daos_handle_t th,
 	args->dkey	= dkey;
 	args->akey	= akey;
 	args->recx	= recx;
+	args->max_epoch = NULL;
 
 	return 0;
 }

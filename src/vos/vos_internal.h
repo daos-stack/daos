@@ -326,6 +326,8 @@ struct vos_dtx_act_ent {
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
+					 /* Need validation on leader before commit/committable. */
+					 dae_need_validation:1,
 					 dae_prepared:1;
 };
 

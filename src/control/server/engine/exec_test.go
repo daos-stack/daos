@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -60,7 +59,28 @@ func TestMain(m *testing.M) {
 // the TestMain() function is used to do some simple simulation
 // of the real binary's behavior.
 func createFakeBinary(t *testing.T) {
+	t.Helper()
+
+	// stash this to restore after scrubbing the rest of the env
+	ld_library_path := os.Getenv("LD_LIBRARY_PATH")
+	// ensure that we have a clean environment for testing
+	os.Clearenv()
+	os.Setenv("LD_LIBRARY_PATH", ld_library_path)
+
 	testDir := filepath.Dir(os.Args[0])
+	fakeBin := filepath.Join(testDir, engineBin)
+
+	// Don't regenerate the test binary if it already exists.
+	// The package tests are run sequentially, but they do
+	// share a common build directory. In rare cases, the
+	// tests have stepped on each other here, most likely due
+	// the test child process from a previous test not being
+	// completely stopped before the next test starts.
+	if _, err := os.Stat(fakeBin); err == nil {
+		return
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
 
 	testSource, err := os.Open(os.Args[0])
 	if err != nil {
@@ -68,7 +88,7 @@ func createFakeBinary(t *testing.T) {
 	}
 	defer testSource.Close()
 
-	testBin, err := os.OpenFile(path.Join(testDir, engineBin), os.O_RDWR|os.O_CREATE, 0755)
+	testBin, err := os.OpenFile(fakeBin, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,9 +98,6 @@ func createFakeBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// ensure that we have a clean environment for testing
-	os.Clearenv()
 }
 
 func TestRunnerContextExit(t *testing.T) {
@@ -103,6 +120,10 @@ func TestRunnerContextExit(t *testing.T) {
 	if err := runner.Start(ctx, errOut); err != nil {
 		t.Fatal(err)
 	}
+	// Add a short sleep to avoid canceling the context before the process
+	// has launched. Would be better to do it in an onStarted() callback,
+	// but implementing that to fix this seems like overkill.
+	time.Sleep(10 * time.Millisecond)
 	cancel()
 
 	err := <-errOut

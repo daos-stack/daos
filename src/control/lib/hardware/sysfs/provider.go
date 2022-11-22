@@ -227,38 +227,16 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	}
 
 	for _, iface := range netIfaces {
-		ifacePath := filepath.Join(netPath, iface.Name())
-
-		ifaceFiles, err := ioutil.ReadDir(ifacePath)
-		if err != nil {
-			s.log.Debugf("unable to read contents of %s", ifacePath)
-			continue
-		}
-
 		virt := &hardware.VirtualDevice{
 			Name: iface.Name(),
 			Type: hardware.DeviceTypeNetInterface,
 		}
 
-		for _, f := range ifaceFiles {
-			// NB: For now we only look one level below for a link to a physical device.
-			// In theory a virtual interface could be backed by another virtual
-			// interface, which is backed by another, and so on until we reach a
-			// physical one. For now we would consider such devices not to be hardware
-			// backed.
-			if strings.HasPrefix(f.Name(), "lower_") {
-				path, err := filepath.EvalSymlinks(filepath.Join(ifacePath, f.Name()))
-				if err != nil {
-					s.log.Error(err.Error())
-					continue
-				}
+		ifacePath := filepath.Join(netPath, iface.Name())
 
-				pciDev, found := addedDevices[filepath.Base(path)]
-				if found {
-					s.log.Debugf("virtual device %q has physical backing device %q", iface.Name(), pciDev.DeviceName())
-					virt.BackingDevice = pciDev.PCIDevice()
-				}
-			}
+		if backingDev, err := s.getBackingDevice(ifacePath, addedDevices); err == nil {
+			s.log.Debugf("virtual device %q has physical backing device %q", iface.Name(), backingDev.DeviceName())
+			virt.BackingDevice = backingDev
 		}
 
 		s.log.Debugf("adding virtual device at %q", ifacePath)
@@ -270,6 +248,58 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	}
 
 	return nil
+}
+
+func (s *Provider) getBackingDevice(ifacePath string, devices map[string]hardware.Device) (*hardware.PCIDevice, error) {
+	ifaceName := filepath.Base(ifacePath)
+
+	// NB: There are a couple of different ways a parent device may be linked from its child.
+	// - File that contains the parent device name.
+	// - Symlink to the parent in the format of "lower_<something>"
+
+	parent, err := s.getParentDevName(ifaceName)
+	if err == nil {
+		pciDev, found := devices[parent]
+		if found {
+			return pciDev.PCIDevice(), nil
+		}
+	}
+
+	ifaceFiles, err := ioutil.ReadDir(ifacePath)
+	if err != nil {
+		s.log.Debugf("unable to read contents of %s", ifacePath)
+		return nil, err
+	}
+
+	for _, f := range ifaceFiles {
+		// NB: For now we only look one level below for a link to a physical device.
+		// In theory a virtual interface could be backed by another virtual
+		// interface, which is backed by another, and so on until we reach a
+		// physical one. For now we would consider such devices not to be hardware
+		// backed.
+		if strings.HasPrefix(f.Name(), "lower_") {
+			path, err := filepath.EvalSymlinks(filepath.Join(ifacePath, f.Name()))
+			if err != nil {
+				s.log.Error(err.Error())
+				continue
+			}
+
+			pciDev, found := devices[filepath.Base(path)]
+			if found {
+				return pciDev.PCIDevice(), nil
+			}
+		}
+	}
+
+	return nil, errors.Errorf("no backing device for %q", ifaceName)
+}
+
+func (s *Provider) getParentDevName(iface string) (string, error) {
+	parentBytes, err := ioutil.ReadFile(s.sysPath("class", "net", iface, "parent"))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(parentBytes)), nil
 }
 
 // GetFabricInterfaces harvests fabric interfaces from sysfs.
@@ -385,6 +415,15 @@ func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
 }
 
 func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, error) {
+	if s.isVirtualNetIface(iface) {
+		// Virtual IB devices should have a parent device whose status applies to the child.
+		parent, err := s.getParentDevName(iface)
+		if err == nil {
+			return s.getInfinibandDevState(parent)
+		}
+		// If we don't find the parent, we can try reading the status directly if available
+	}
+
 	// The best way to determine that an Infiniband interface is ready is to check the state
 	// of its ports. Ports in the "ACTIVE" state are either fully ready or will be very soon.
 	ibPath := s.sysPath("class", "net", iface, "device", "infiniband")
@@ -417,6 +456,13 @@ func (s *Provider) getInfinibandDevState(iface string) (hardware.NetDevState, er
 	}
 
 	return condenseNetDevState(ibDevState), nil
+}
+
+func (s *Provider) isVirtualNetIface(iface string) bool {
+	virtPath := s.sysPath("devices", "virtual", "net", iface)
+
+	_, err := os.Stat(virtPath)
+	return err == nil
 }
 
 // Infiniband state enum is derived from ibstat:

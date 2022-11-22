@@ -101,6 +101,8 @@ const (
 	DaosBadTarget DaosStatus = -C.DER_BAD_TARGET
 	// DaosGroupVersionMismatch indicates that group versions didn't match
 	DaosGroupVersionMismatch DaosStatus = -C.DER_GRPVER
+	// NoService indicates the pool service is not up and didn't process the pool request
+	DaosNoService = -C.DER_NO_SERVICE
 )
 
 const (

@@ -300,16 +300,21 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		// Otherwise, create the pool across the requested number of
 		// available ranks in the system (if the request does not
 		// specify a number of ranks, all are used).
-		nRanks := len(allRanks)
+		nAllRanks := len(allRanks)
+		nRanks := nAllRanks
 		if req.GetNumranks() > 0 {
 			nRanks = int(req.GetNumranks())
+
+			if nRanks > nAllRanks {
+				return nil, FaultPoolInvalidNumRanks(nRanks, nAllRanks)
+			}
 
 			// TODO (DAOS-6263): Improve rank selection algorithm.
 			// In the short term, we can just randomize the set of
 			// available ranks in order to avoid always choosing the
 			// first N ranks.
 			rand.Seed(time.Now().UnixNano())
-			rand.Shuffle(len(allRanks), func(i, j int) {
+			rand.Shuffle(nAllRanks, func(i, j int) {
 				allRanks[i], allRanks[j] = allRanks[j], allRanks[i]
 			})
 		}
@@ -409,7 +414,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 
 		switch errors.Cause(err) {
-		case errInstanceNotReady, FaultDataPlaneNotStarted:
+		case errInstanceNotReady:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
 			resp.Status = int32(drpc.DaosTryAgain)
@@ -512,14 +517,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	req.SetUUID(poolUUID)
 
 	resp := &mgmtpb.PoolDestroyResp{}
-	inCleanupMode := false
-	if ps.State == system.PoolServiceStateDestroying {
-		// If we already tried to destroy the pool but it failed for some
-		// reason, try again, but instead use the full set of storage ranks
-		// in case the MS has lost track of the actual svc ranks.
-		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
-		inCleanupMode = true
-	} else {
+	if ps.State != system.PoolServiceStateDestroying {
 		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
@@ -541,7 +539,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		// If the request is being forced, or the evict request did not fail
 		// due to the pool being busy, then transition to the destroying state
 		// and persist the update(s).
-		if req.Force || ds != drpc.DaosBusy {
+		if req.Force || (ds != drpc.DaosBusy && ds != drpc.DaosNoService) {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
@@ -556,7 +554,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
+	// Note that, here, we set req.SvcRanks to all ranks in the system, not
+	// the PS replicas, not the up ranks in the pool. Doing such a "blind"
+	// destroy avoids contacting the PS, who may have already been destroyed
+	// by a previous pool destroy attempt or otherwise unavailable at this
+	// point. Moreover, we will also clean up pool resources on ranks that
+	// are now available but have previously been excluded from the pool.
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return nil, err
+	}
+	allRanks := make([]uint32, 0, len(gm.RankURIs))
+	for i := range gm.RankURIs {
+		allRanks = append(allRanks, i.Uint32())
+	}
+	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
+	req.SvcRanks = allRanks
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -569,18 +583,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
 	ds := drpc.DaosStatus(resp.Status)
-	switch ds {
-	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
-		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
-			// If we're not cleaning up, then this is an error.
-			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
-			if !inCleanupMode {
-				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
-				break
-			}
-			// Otherwise, we've done all we can to try to recover.
-			resp.Status = int32(drpc.DaosSuccess)
-		}
+	if ds == drpc.DaosSuccess {
 		if err := svc.sysdb.RemovePoolService(poolUUID); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
 			// As we know the service entry existed when we started this handler,
@@ -590,7 +593,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 				return nil, errors.Wrapf(err, "failed to remove pool %s", poolUUID)
 			}
 		}
-	default:
+	} else {
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 

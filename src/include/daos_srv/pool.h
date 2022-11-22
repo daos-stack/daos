@@ -65,6 +65,11 @@ struct ds_pool {
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
 
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
+
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
@@ -255,9 +260,6 @@ void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
-
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

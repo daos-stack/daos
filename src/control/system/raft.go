@@ -88,18 +88,21 @@ func IsRaftLeadershipError(err error) bool {
 }
 
 // ResignLeadership causes this instance to give up its raft
-// leadership state. No-op if there is only one replica configured.
+// leadership state. No-op if there is only one replica configured
+// or the cause is a raft leadership error.
 func (db *Database) ResignLeadership(cause error) error {
+	if IsRaftLeadershipError(cause) {
+		// no-op
+		return nil
+	}
+
 	if cause == nil {
 		cause = errors.New("unknown error")
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
-	if err := db.raft.withReadLock(func(svc raftService) error {
+	return db.raft.withReadLock(func(svc raftService) error {
 		return svc.LeadershipTransfer().Error()
-	}); err != nil {
-		return errors.Wrap(err, cause.Error())
-	}
-	return cause
+	})
 }
 
 // Barrier blocks until the raft implementation has persisted all

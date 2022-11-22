@@ -36,7 +36,7 @@ typedef enum {
 			  "Unknown")
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
-			uint32_t rebuild_gen, daos_epoch_t stable_eph,
+			daos_epoch_t stable_eph,
 			struct pool_target_id_list *tgts,
 			daos_rebuild_opc_t rebuild_op, uint64_t delay_sec);
 int ds_rebuild_query(uuid_t pool_uuid,

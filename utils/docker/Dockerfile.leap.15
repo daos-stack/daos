@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM opensuse/leap:15.3
+FROM opensuse/leap:15.4
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.

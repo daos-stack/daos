@@ -73,6 +73,7 @@ daos_tests:
     test_rebuild_27: DAOS_Rebuild_27
     test_rebuild_28: DAOS_Rebuild_28
     test_rebuild_29: DAOS_Rebuild_29
+    test_rebuild_30: DAOS_Rebuild_30
   daos_test:
     test_rebuild_0to10: r
     test_rebuild_12to15: r
@@ -90,6 +91,7 @@ daos_tests:
     test_rebuild_27: r
     test_rebuild_28: r
     test_rebuild_29: r
+    test_rebuild_30: r
   args:
     test_rebuild_0to10: -s3 -u subtests="0-10"
     test_rebuild_12to15: -s3 -u subtests="12-15"
@@ -107,6 +109,7 @@ daos_tests:
     test_rebuild_27: -s6 -u subtests="27"
     test_rebuild_28: -s3 -u subtests="28"
     test_rebuild_29: -s5 -u subtests="29"
+    test_rebuild_30: -s5 -u subtests="30"
   stopped_ranks:
     test_rebuild_22: [7]
     test_rebuild_23: [7]

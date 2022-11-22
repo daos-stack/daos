@@ -92,10 +92,14 @@ func (v Version) Equals(other Version) bool {
 func (v Version) GreaterThan(other Version) bool {
 	if v.Major > other.Major {
 		return true
+	} else if v.Major < other.Major {
+		return false
 	}
 
 	if v.Minor > other.Minor {
 		return true
+	} else if v.Minor < other.Minor {
+		return false
 	}
 
 	return v.Patch > other.Patch
@@ -111,10 +115,14 @@ func (v Version) GreaterThanOrEquals(other Version) bool {
 func (v Version) LessThan(other Version) bool {
 	if v.Major < other.Major {
 		return true
+	} else if v.Major > other.Major {
+		return false
 	}
 
 	if v.Minor < other.Minor {
 		return true
+	} else if v.Minor > other.Minor {
+		return false
 	}
 
 	return v.Patch < other.Patch

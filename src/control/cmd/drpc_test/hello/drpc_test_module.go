@@ -40,10 +40,10 @@ const (
 	methodGreeting helloMethod = helloMethod(Function_GREETING)
 )
 
-//HelloModule is the RPC Handler for the Hello Module
+// HelloModule is the RPC Handler for the Hello Module
 type HelloModule struct{}
 
-//HandleCall is the handler for calls to the Hello module
+// HandleCall is the handler for calls to the Hello module
 func (m HelloModule) HandleCall(_ context.Context, session *drpc.Session, method drpc.Method, body []byte) ([]byte, error) {
 	if method != methodGreeting {
 		return nil, errors.New("attempt to call unregistered function")
@@ -67,7 +67,7 @@ func (m HelloModule) HandleCall(_ context.Context, session *drpc.Session, method
 	return responseBytes, nil
 }
 
-//ID will return Module_HELLO as a ModuleID type
+// ID will return Module_HELLO as a ModuleID type
 func (m HelloModule) ID() drpc.ModuleID {
 	return drpc.ModuleID(Module_HELLO)
 }

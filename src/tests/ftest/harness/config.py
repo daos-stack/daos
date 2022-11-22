@@ -17,13 +17,17 @@ class HarnessConfigTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_harness_config_access_points(self):
-        """Verify the TestWithServers.access_points handling.
+    def test_harness_config(self):
+        """Verify the config handling.
+
+        Verifies the following:
+            TestWithServers.access_points
+            DaosAgentYamlParameters.exclude_fabric_ifaces
 
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness
-        :avocado: tags=test_harness_config_access_points
+        :avocado: tags=harness_config,test_harness_config
         """
         self.log.info('Verify access_points_suffix set from yaml')
         access_points_suffix = self.params.get("access_points_suffix", "/run/setup/*")
@@ -68,3 +72,10 @@ class HarnessConfigTest(TestWithServers):
         with open(self.agent_managers[0].manager.job.temporary_file, 'r') as yaml_file:
             daos_agent_yaml = yaml.safe_load(yaml_file.read())
         self.assertEqual(sorted(daos_agent_yaml['access_points']), sorted(self.access_points))
+
+        self.log.info('Verify daos_agent.yaml exclude_fabric_ifaces')
+        expected = self.params.get('exclude_fabric_ifaces', '/run/agent_config/*')
+        self.assertNotIn(expected, (None, []), 'exclude_fabric_ifaces not set in yaml')
+        with open(self.agent_managers[0].manager.job.temporary_file, 'r') as yaml_file:
+            daos_agent_yaml = yaml.safe_load(yaml_file.read())
+        self.assertEqual(daos_agent_yaml['exclude_fabric_ifaces'], expected)
