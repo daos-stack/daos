@@ -122,8 +122,8 @@ class RbldNoCapacity(TestWithServers):
         # Start rebuild
         rank = 1
         self.log.info("..(5)Stop rank for rebuild")
-        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
         self.pool.update_map_version()
+        self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild started
         self.log.info("..(6)Wait for rebuild started")

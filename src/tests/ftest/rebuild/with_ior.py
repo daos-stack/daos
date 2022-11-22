@@ -61,8 +61,8 @@ class RbldWithIOR(IorTestBase):
         self.run_ior_with_pool(timeout=ior_timeout)
 
         # kill the server
-        self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
         self.pool.update_map_version()
+        self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
 
         # wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()

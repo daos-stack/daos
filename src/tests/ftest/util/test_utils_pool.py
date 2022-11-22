@@ -480,9 +480,8 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        result = self.dmg.pool_drain(self.identifier, rank, tgt_idx)
         self.update_map_version()
-        return result
+        return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
     def evict(self):
@@ -506,9 +505,8 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        result = self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
         self.update_map_version()
-        return result
+        return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
     def extend(self, ranks):
@@ -521,9 +519,8 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        result = self.dmg.pool_extend(self.identifier, ranks)
         self.update_map_version()
-        return result
+        return self.dmg.pool_extend(self.identifier, ranks)
 
     def get_acl(self):
         """Get ACL from a DAOS pool.
@@ -619,9 +616,8 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        result = self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
         self.update_map_version()
-        return result
+        return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
     def set_property(self, prop_name=None, prop_value=None):

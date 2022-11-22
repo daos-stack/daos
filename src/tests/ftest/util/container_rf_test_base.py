@@ -90,8 +90,8 @@ class ContRedundancyFactor(RebuildTestBase):
 
         # Exclude the ranks from the pool to initiate rebuild simultaneously
         self.log.info("==>(3)Start rebuild for all specified ranks simultaneously")
-        self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log)
         self.pool.update_map_version()
+        self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log)
 
     def execute_during_rebuild_cont_rf(self, rd_fac, expect_cont_status="HEALTHY"):
         """Execute test steps during rebuild.

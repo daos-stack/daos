@@ -75,14 +75,17 @@ class RbldBasic(TestWithServers):
                 container.object_qty.value * container.record_qty.value,
                 container, rank)
 
+        # Update the pool map version before performing actions that result in rebuild
+        for pool in pools:
+            pool.update_map_version()
+
         # Manually exclude the specified rank
         for index, pool in enumerate(pools):
             if index == 0:
                 self.server_managers[0].stop_ranks([rank], self.d_log, True)
-                pool.update_map_version()
             else:
                 # Use the direct dmg pool exclude command to avoid updating the pool version again
-                self.pool.exclude([rank])
+                self.get_dmg_command().pool_exclude(pool.identifier, [rank])
 
         # Wait for recovery to start for first pool.
         pools[0].wait_for_rebuild_to_start()

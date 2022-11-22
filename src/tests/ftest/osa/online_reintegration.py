@@ -101,12 +101,12 @@ class OSAOnlineReintegration(OSAUtils):
             if server_boot is False:
                 output = self.pool.exclude(rank)
             else:
-                output = self.dmg_command.system_stop(ranks=rank, force=True)
                 self.pool.update_map_version()
+                output = self.dmg_command.system_stop(ranks=rank, force=True)
                 self.pool.wait_for_rebuild_to_end()
                 self.log.info(output)
-                output = self.dmg_command.system_start(ranks=rank)
                 self.pool.update_map_version()
+                output = self.dmg_command.system_start(ranks=rank)
 
             self.print_and_assert_on_rebuild_failure(output)
             pver_exclude = self.pool.get_version(True)

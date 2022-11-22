@@ -289,8 +289,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         )
         if stop_rank_s is not None:
             time.sleep(stop_rank_s)
-            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
             self.pool.update_map_version()
+            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
         ior_returncode = self.job_manager.process.wait()
         try:
             if ior_returncode != 0:
@@ -492,8 +492,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.execute_mdtest()
         if stop_rank_s:
             time.sleep(stop_rank_s)
-            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
             self.pool.update_map_version()
+            self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
         mdtest_returncode = self.job_manager.process.wait()
         try:
             if mdtest_returncode != 0:
