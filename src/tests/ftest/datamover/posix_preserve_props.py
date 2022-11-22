@@ -1,13 +1,14 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from os.path import join
+
 from pydaos.raw import DaosApiError
 import avocado
+
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrPreserveProps(DataMoverTestBase):
@@ -83,8 +84,8 @@ class DmvrPreserveProps(DataMoverTestBase):
             "POSIX", posix_file_path, None, None,
             "DAOS", "/", pool1, None)
 
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
-        cont2 = self.get_cont(pool1, cont2_uuid)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
+        cont2 = self.get_cont(pool1, cont2_label)
         cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, True, src_props)
 
