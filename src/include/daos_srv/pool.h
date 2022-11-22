@@ -176,6 +176,7 @@ int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
+int ds_pool_chk_post(uuid_t uuid);
 int ds_pool_start_with_svc(uuid_t uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
@@ -275,6 +276,7 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
+int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
 int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
 void ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
