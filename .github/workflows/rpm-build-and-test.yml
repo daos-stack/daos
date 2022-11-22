@@ -146,7 +146,6 @@ jobs:
       # yamllint disable-line rule:line-length
       NODESTRING: wolf-240vm1,wolf-240vm2,wolf-240vm3,wolf-240vm4,wolf-240vm5,wolf-240vm6,wolf-240vm7,wolf-240vm8,wolf-240vm9
       CONFIG_POWER_ONLY: false
-      INST_REPOS: daos@PR-${{ github.event.pull_request.number }}
       INST_RPMS: daos-client daos-tests daos-server daos-serialize daos-client-tests-openmpi ndctl
                  fio patchutils ior romio-tests testmpio python3-mpi4py-tests hdf5-mpich-tests
                  hdf5-openmpi-tests hdf5-vol-daos-openmpi-tests hdf5-vol-daos-mpich-tests
@@ -217,12 +216,18 @@ jobs:
              ci/provisioning/post_provision_config.sh
       - name: Run Test
         run: |
-          . ci/gha_functions.sh;
+          . ci/gha_functions.sh
           test_tags=()
           for tag in ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}; do
               test_tag+=($tag,-hw)
           done
-          TEST_TAG=$test_tag ci/functional/test_main.sh
+          inst_repos=${{ env.cp_PR_REPOS }}
+          if [[ $inst_repos ]] != *daos@* ]]; then
+              inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
+          fi
+          INST_REPOS="$inst_repos"     \
+          TEST_TAG="$test_tag"         \
+          ci/functional/test_main.sh
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
