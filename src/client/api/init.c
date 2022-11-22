@@ -123,6 +123,9 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
+
+	/** More Pool */
+	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
 };
 
 /**
@@ -164,8 +167,11 @@ daos_init(void)
 		}
 	}
 
-	/** set up handle hash-table */
-	rc = daos_hhash_init();
+	/**
+	 * Set up handle hash-table, use RW lock instead of spinlock
+	 * improves multiple threads performance significantly.
+	 */
+	rc = daos_hhash_init_feats(D_HASH_FT_RWLOCK);
 	if (rc != 0)
 		D_GOTO(out_debug, rc);
 

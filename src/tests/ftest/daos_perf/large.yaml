@@ -1,14 +1,6 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-  test_clients:
-    - client-E
-    - client-F
-    - client-G
-    - client-H
+  test_servers: 4
+  test_clients: 4
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
 timeout: 3600
@@ -24,10 +16,14 @@ container:
   control_method: daos
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
 daos_perf:
   test_command: 'U;p F;p V O;p'
   test_type: daos

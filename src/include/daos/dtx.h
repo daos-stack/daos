@@ -252,8 +252,8 @@ dtx_alb2state(int alb)
 	case ALB_AVAILABLE_ABORTED:
 		return DTX_ST_ABORTED;
 	default:
-		D_ASSERTF(0, "Invalid alb:%d\n", alb);
-		return DTX_ST_PREPARED;
+		D_ASSERTF(alb < 0, "Invalid alb:%d\n", alb);
+		return alb;
 	}
 }
 

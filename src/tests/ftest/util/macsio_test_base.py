@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -7,6 +6,7 @@
 from apricot import TestWithServers
 from exception_utils import CommandFailure
 from macsio_util import MacsioCommand
+from general_utils import get_log_file
 
 
 class MacsioTestBase(TestWithServers):
@@ -69,15 +69,15 @@ class MacsioTestBase(TestWithServers):
         self.macsio.daos_cont = cont_uuid
 
         # Setup the job manager to run the macsio command
-        env = self.macsio.get_environment(
-            self.server_managers[0], self.client_log)
+        env = self.macsio.env.copy()
+        env["D_LOG_FILE"] = get_log_file(
+            self.client_log or "{}_daos.log".format(self.macsio.command))
         if plugin:
             # Include DAOS VOL environment settings
             env["HDF5_VOL_CONNECTOR"] = "daos"
-            env["HDF5_PLUGIN_PATH"] = "{}".format(plugin)
+            env["HDF5_PLUGIN_PATH"] = str(plugin)
         self.job_manager.job = self.macsio
-        self.job_manager.assign_hosts(
-            self.hostlist_clients, self.workdir, slots)
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, slots)
         self.job_manager.assign_processes(len(self.hostlist_clients))
         self.job_manager.assign_environment(env)
 
@@ -87,4 +87,4 @@ class MacsioTestBase(TestWithServers):
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("MACSio Failed.\n")

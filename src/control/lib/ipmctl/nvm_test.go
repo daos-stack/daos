@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+//go:build linux && amd64
+// +build linux,amd64
 
 package ipmctl
 

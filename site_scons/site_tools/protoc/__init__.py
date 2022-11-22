@@ -136,8 +136,8 @@ def generate(env, **_kwargs):
         PYTHON_SUFFIX='_pb2_grpc.py',
         GO_SUFFIX='.pb.go',
         PROTO_SUFFIX='.proto',
-        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES ' +
-        '--python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
+        PYTHON_COM='python -m grpc_tools.protoc -I$PROTO_INCLUDES '
+        + '--python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
         PYTHON_COMSTR='',
         GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
         GO_COMSTR=''

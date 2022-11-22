@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +51,7 @@ struct vs_perf_cntr {
 };
 
 enum {
-	VS_OP_RESERV	= 0,
+	VS_OP_RESERVE	= 0,
 	VS_OP_PUBLISH,
 	VS_OP_FREE,
 	VS_OP_MERGE,
@@ -319,7 +319,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 			fprintf(stderr, "failed to reserve %u blks for io\n", blk_cnt);
 			goto error;
 		}
-		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 		/*
 		 * Reserved list will be freed on publish, duplicate it to track the
@@ -468,7 +468,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 		fprintf(stderr, "failed to reserve %u blks for aggregation\n", merge_blks);
 		return rc;
 	}
-	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 	rsrvd = d_list_entry(r_list.prev, struct vea_resrvd_ext, vre_link);
 	D_ASSERT(rsrvd->vre_blk_cnt == merge_blks);
@@ -737,7 +737,7 @@ vs_setup_pool(void)
 	struct umem_attr	 uma = { 0 };
 	PMEMoid			 root;
 	void			*root_addr;
-	struct vea_unmap_context unmap_ctxt;
+	struct vea_unmap_context unmap_ctxt = { 0 };
 	struct vea_attr		 attr;
 	struct vea_stat		 stat;
 	uint64_t		 load_time;
@@ -806,8 +806,6 @@ vs_setup_pool(void)
 	}
 
 	load_time = daos_wallclock_secs();
-	unmap_ctxt.vnc_unmap = NULL;
-	unmap_ctxt.vnc_data = NULL;
 	rc = vea_load(&vs_pool->vsp_umm, &vs_pool->vsp_txd, vs_pool->vsp_vsd, &unmap_ctxt,
 		      NULL, &vs_pool->vsp_vsi);
 	if (rc) {
@@ -868,6 +866,14 @@ vs_init(void)
 		vs_fini();
 		return rc;
 	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST) {
+		fprintf(stderr, "failed to register DBTREE_CLASS_IFV\n");
+		vs_fini();
+		return rc;
+	}
 	return rc;
 }
 
@@ -915,8 +921,8 @@ static inline char *
 vs_op2str(unsigned int op)
 {
 	switch (op) {
-	case VS_OP_RESERV:
-		return "reserv";
+	case VS_OP_RESERVE:
+		return "reserve";
 	case VS_OP_PUBLISH:
 		return "tx_publish";
 	case VS_OP_FREE:
@@ -947,7 +953,7 @@ int main(int argc, char **argv)
 	char			*endp;
 	int			 i, rc;
 
-	rand_seed = time(0);
+	rand_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 	memset(pool_file, 0, sizeof(pool_file));
 	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {

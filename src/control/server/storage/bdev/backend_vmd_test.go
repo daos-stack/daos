@@ -22,9 +22,9 @@ import (
 
 func TestBackend_substituteVMDAddresses(t *testing.T) {
 	const (
-		vmdAddr         = "0000:5d:05.5"
-		vmdBackingAddr1 = "5d0505:01:00.0"
-		vmdBackingAddr2 = "5d0505:03:00.0"
+		vmdAddr         = "0000:05:05.5"
+		vmdBackingAddr1 = "050505:01:00.0"
+		vmdBackingAddr2 = "050505:03:00.0"
 	)
 
 	for name, tc := range map[string]struct {
@@ -72,6 +72,20 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 				"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
 				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
 				"850505:14:00.0"),
+		},
+		"input vmd backing devices": {
+			inAddrs: addrListFromStrings(vmdBackingAddr2, vmdBackingAddr1),
+			bdevCache: &storage.BdevScanResponse{
+				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
+					"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+					"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+					"850505:14:00.0"),
+			},
+			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
+		},
+		"input vmd backing devices; no cache": {
+			inAddrs:     addrListFromStrings(vmdBackingAddr2, vmdBackingAddr1),
+			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -374,8 +374,12 @@ int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
+int run_daos_upgrade_test(int rank, int size, int *sub_tests,
+			  int sub_tests_size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
+void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
+		       const char *grp, d_rank_list_t *svc, d_rank_t rank);
 struct daos_acl *get_daos_acl_with_owner_perms(uint64_t perms);
 daos_prop_t *get_daos_prop_with_owner_acl_perms(uint64_t perms,
 						uint32_t prop_type);
@@ -412,6 +416,7 @@ void daos_reint_server(const uuid_t pool_uuid, const char *grp,
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
+int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
 
@@ -444,16 +449,14 @@ void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
-void reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank);
+void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool restart);
 void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
 void reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
-		int failed_tgt);
-void reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
-void reintegrate_pools_ranks(test_arg_t **args, int args_cnt,
-		d_rank_t *failed_ranks,  int ranks_nr);
-
+				    int failed_tgt);
+void reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
+			     int ranks_nr, bool restart);
 void drain_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
@@ -509,6 +512,8 @@ void make_buffer(char *buffer, char start, int total);
 
 bool oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr);
 uint32_t test_ec_get_parity_off(daos_key_t *dkey, struct daos_oclass_attr *oca);
+int reintegrate_inflight_io(void *data);
+int reintegrate_inflight_io_verify(void *data);
 
 static inline void
 daos_test_print(int rank, char *message)

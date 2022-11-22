@@ -12,6 +12,9 @@ import (
 
 type gRPCAPI struct {
 	manager *Manager
+
+	// "Unsafe" to ensure compilation fails if new methods are added but not implemented
+	pb.UnsafeRaftTransportServer
 }
 
 func (g gRPCAPI) handleRPC(command interface{}, data io.Reader) (interface{}, error) {

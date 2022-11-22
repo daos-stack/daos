@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,6 +67,11 @@ func (hn *hostName) Parse(input string) error {
 		re = regexp.MustCompile(`^(\d{1,3}\.\d{1,3}\.\d{1,3}\.)(\d{1,3})(.*)`)
 		if matches = re.FindStringSubmatch(input); matches == nil {
 			return fmt.Errorf("invalid hostname %q", input)
+		} else if len(matches[3]) > 0 {
+			_, err := strconv.ParseUint(matches[3][1:], 10, 0)
+			if err != nil {
+				return fmt.Errorf("invalid hostname %q", input)
+			}
 		}
 	}
 

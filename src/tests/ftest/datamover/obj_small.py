@@ -1,12 +1,12 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from data_mover_test_base import DataMoverTestBase
 from pydaos.raw import DaosApiError
 import avocado
+
+from data_mover_test_base import DataMoverTestBase
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
@@ -62,7 +62,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         pool1.connect(2)
 
         # Create cont1
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create dataset in cont1
         obj_list = self.dataset_gen(
@@ -75,10 +75,10 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.test_id + " (cont1->cont2) (same pool)",
             "DAOS_UUID", None, pool1, cont1,
             "DAOS_UUID", None, pool1, None)
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Verify data in cont2
-        cont2 = self.get_cont(pool1, cont2_uuid)
+        cont2 = self.get_cont(pool1, cont2_label)
         self.dataset_verify(
             obj_list, cont2,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
@@ -93,9 +93,9 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.test_id + " (cont1->cont3) (different pool)",
             "DAOS_UUID", None, pool1, cont1,
             "DAOS_UUID", None, pool2, None)
-        cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont3_label = self.parse_create_cont_label(result.stdout_text)
         # Verify data in cont3
-        cont3 = self.get_cont(pool2, cont3_uuid)
+        cont3 = self.get_cont(pool2, cont3_label)
         self.dataset_verify(
             obj_list, cont3,
             self.num_objs, self.num_dkeys, self.num_akeys_single,
@@ -116,7 +116,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_obj_small,dm_obj_small_dcp
+        :avocado: tags=dm_obj_small,dm_obj_small_dcp,test_dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
 
@@ -128,6 +128,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_cont_clone
-        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone
+        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

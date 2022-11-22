@@ -90,7 +90,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(14);
+	props = daos_prop_alloc(15);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -108,6 +108,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[11].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[12].dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -340,7 +341,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
 	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
 		return 0;
 	}
 
@@ -494,7 +495,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, flags);
+	rc = vos_aggregate(cont->sc_hdl, epr, agg_rate_ctl, param, VOS_AGG_FL_FORCE_SCAN);
 
 	/* Suppress csum error and continue on other epoch ranges */
 	if (rc == -DER_CSUM)
@@ -619,6 +620,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_mutex;
 	}
+	rc = ABT_cond_create(&cont->sc_scrub_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_mutex;
+	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
@@ -675,6 +681,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
+	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -1156,6 +1163,14 @@ cont_child_destroy_one(void *vin)
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* Make sure checksum scrubbing has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_scrubbing) {
+			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		}
+		ABT_mutex_unlock(cont->sc_mutex);
 		/*
 		 * If this is the last user, ds_cont_child will be removed from
 		 * hash & freed on put.
@@ -1200,9 +1215,12 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	struct cont_tgt_destroy_in in;
 	int rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return -DER_NO_HDL;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
@@ -1229,9 +1247,8 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 
 	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
-		DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
+		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1351,8 +1368,7 @@ ds_dtx_resync(void *arg)
 	int				 rc;
 
 	rc = dtx_resync(ddra->pool->spc_hdl, ddra->pool->spc_uuid,
-			ddra->co_uuid, ddra->pool->spc_map_version,
-			false, true);
+			ddra->co_uuid, ddra->pool->spc_map_version, false);
 	if (rc != 0)
 		D_WARN("Fail to resync some DTX(s) for the pool/cont "
 		       DF_UUID"/"DF_UUID" that may affect subsequent "
@@ -1819,8 +1835,8 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
 	out->tqo_rc	= (rc == 0 ? 0 : 1);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: %d "DF_RC"\n",
-		DP_CONT(NULL, NULL), rpc, out->tqo_rc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n", DP_CONT(NULL, NULL), rpc,
+		out->tqo_rc, DP_RC(rc));
 	crt_reply_send(rpc);
 }
 
@@ -1909,8 +1925,10 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
-	pool = ds_pool_lookup(args->pool_uuid);
-	if (pool == NULL) {
+	rc = ds_pool_lookup(args->pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(args->pool_uuid), DP_RC(rc));
 		rc = -DER_NO_HDL;
 		goto out;
 	}
@@ -2016,14 +2034,13 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
 	int					 rc;
 
-	D_DEBUG(DB_MD, DF_CONT": handling rpc %p: epr (%p) [#"DF_U64"]\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		in->tai_epr_list.ca_arrays, in->tai_epr_list.ca_count);
+	D_DEBUG(DB_MD, DF_CONT ": handling rpc: %p epr (%p) [#" DF_U64 "]\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, in->tai_epr_list.ca_arrays,
+		in->tai_epr_list.ca_count);
 	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = 0;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
-		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
-		DP_RC(out->tao_rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc, DP_RC(out->tao_rc));
 	crt_reply_send(rpc);
 	if (out->tao_rc != 0)
 		return;
@@ -2167,7 +2184,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 		rg.oid, rg.num_oids);
 out:
 	out->coao_op.co_rc = rc;
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
@@ -2186,18 +2203,16 @@ ds_cont_oid_alloc_handler(crt_rpc_t *rpc)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc);
+	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p hdl=" DF_UUID " opc=%u\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc);
 
 	D_ASSERT(opc == CONT_OID_ALLOC);
 
 	rc = cont_oid_alloc(pool_hdl, rpc);
 
-	D_DEBUG(DB_MD, DF_CONT": replying rpc %p: hdl="DF_UUID
-		" opc=%u rc="DF_RC"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,
-		DP_UUID(in->ci_hdl), opc, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p hdl=" DF_UUID " opc=%u rc=" DF_RC "\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl), opc,
+		DP_RC(rc));
 
 	ds_pool_hdl_put(pool_hdl);
 out:
@@ -2466,6 +2481,11 @@ cont_rf_check(struct ds_pool *ds_pool, struct ds_cont_child *cont_child)
 		goto out;
 
 	rw_arg.csa_rw_disable = (rc == -DER_RF);
+	if (rc == -DER_RF)
+		D_ERROR(DF_CONT": RF broken, last_ver %d, rlvl %d, rf %d, "DF_RC"\n",
+			DP_CONT(cont_child->sc_pool_uuid, cont_child->sc_uuid),
+			cont_child->sc_status_pm_ver, cont_child->sc_props.dcp_redun_lvl,
+			cont_child->sc_props.dcp_redun_fac, DP_RC(rc));
 	if (rw_arg.csa_rw_disable == cont_child->sc_rw_disabled)
 		D_GOTO(out, rc = 0);
 
@@ -2554,8 +2574,7 @@ cont_rf_check_get_tgt(uuid_t pool_uuid)
 	}
 
 out:
-	if (failed_tgts != NULL)
-		D_FREE(failed_tgts);
+	D_FREE(failed_tgts);
 	return rc;
 }
 
@@ -2596,52 +2615,70 @@ out:
 	return rc;
 }
 
-static int
-cont_status_pm_ver_set(void *data)
-{
-	struct dsm_tls		*tls = dsm_tls_get();
-	struct cont_set_arg	*arg = data;
-	struct ds_cont_child	*cont_child;
-	int			 rc = 0;
+struct cont_prop_set_arg {
+	uuid_t	cpa_cont_uuid;
+	uuid_t	cpa_pool_uuid;
+	daos_prop_t *cpa_prop;
+};
 
-	rc = cont_child_lookup(tls->dt_cont_cache, arg->csa_cont_uuid,
-			       arg->csa_pool_uuid, false /* create */,
-			       &cont_child);
+static int
+cont_child_prop_update(void *data)
+{
+	struct dsm_tls		 *tls = dsm_tls_get();
+	struct cont_prop_set_arg *arg = data;
+	struct daos_prop_entry	 *iv_entry;
+	struct ds_cont_child	 *child;
+	int			 rc;
+
+	rc = cont_child_lookup(tls->dt_cont_cache, arg->cpa_cont_uuid,
+			       arg->cpa_pool_uuid, false /* create */,
+			       &child);
 	if (rc) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
 		else
 			D_ERROR(DF_CONT" cont_child_lookup failed, "DF_RC"\n",
-				DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
 				DP_RC(rc));
 		return rc;
 	}
-	D_ASSERT(cont_child != NULL);
+	D_ASSERT(child != NULL);
+	daos_props_2cont_props(arg->cpa_prop, &child->sc_props);
 
-	if (arg->csa_status_pm_ver <= cont_child->sc_status_pm_ver)
-		goto out;
-	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_DEBUG(DB_TRACE, DF_CONT" statu_pm_ver set from %d to %d.\n",
-			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
-			cont_child->sc_status_pm_ver, arg->csa_status_pm_ver);
-	cont_child->sc_status_pm_ver = arg->csa_status_pm_ver;
+	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
+	if (iv_entry != NULL) {
+		struct daos_co_status co_stat = { 0 };
+
+		daos_prop_val_2_co_status(iv_entry->dpe_val, &co_stat);
+		if (co_stat.dcs_pm_ver <= child->sc_status_pm_ver)
+			goto out;
+		if (dss_get_module_info()->dmi_tgt_id == 0)
+			D_DEBUG(DB_TRACE, DF_CONT" statu_pm_ver set from %d to %d.\n",
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+				child->sc_status_pm_ver, co_stat.dcs_pm_ver);
+		child->sc_status_pm_ver = co_stat.dcs_pm_ver;
+	}
 
 out:
-	ds_cont_child_put(cont_child);
+	ds_cont_child_put(child);
 	return rc;
 }
 
 int
-ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
-			     uint32_t pm_ver)
+ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 {
-	struct cont_set_arg	arg;
-	int			rc = 0;
+	struct cont_prop_set_arg arg;
+	int			 rc;
 
-	uuid_copy(arg.csa_cont_uuid, cont_uuid);
-	uuid_copy(arg.csa_pool_uuid, pool_uuid);
-	arg.csa_status_pm_ver = pm_ver;
-	rc = dss_task_collective(cont_status_pm_ver_set, &arg, 0);
+	/* XXX only need update status and obj_version now? */
+	if (daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) == NULL &&
+	    daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) == NULL)
+		return 0;
+
+	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
+	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
+	arg.cpa_prop = prop;
+	rc = dss_task_collective(cont_child_prop_update, &arg, 0);
 	if (rc)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));
@@ -2654,4 +2691,3 @@ ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
 {
 	cont->sc_ec_update_timestamp = crt_hlc_get();
 }
-

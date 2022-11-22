@@ -1,21 +1,24 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
+  test_servers: 6
 timeout: 900
 server_config:
   name: daos_server
-  servers:
-    targets: 2
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,rebuild
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 1G
   control_method: dmg
   pool_query_timeout: 30

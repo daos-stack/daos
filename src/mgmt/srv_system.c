@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -152,6 +152,9 @@ dup_server_list(struct server_entry *in, int in_len)
 
 	for (i = 0; i < in_len; i++) {
 		out[i].se_rank = in[i].se_rank;
+		out[i].se_flags = in[i].se_flags;
+		out[i].se_nctxs = in[i].se_nctxs;
+		out[i].se_incarnation = in[i].se_incarnation;
 		D_STRNDUP(out[i].se_uri, in[i].se_uri, ADDR_STR_MAX_LEN - 1);
 		if (out[i].se_uri == NULL) {
 			free_server_list(out, i);
@@ -179,15 +182,9 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 	if (rc != 0 && rc != -DER_NOTLEADER)
 		goto out;
 
-	D_DEBUG(DB_MGMT, "setting %d servers in map version %u\n",
-		in->gui_n_servers, in->gui_map_version);
-	rc = ds_mgmt_group_update(CRT_GROUP_MOD_OP_REPLACE, in->gui_servers,
-				  in->gui_n_servers, in->gui_map_version);
+	rc = ds_mgmt_group_update(in->gui_servers, in->gui_n_servers, in->gui_map_version);
 	if (rc != 0)
 		goto out_svc;
-
-	D_DEBUG(DB_MGMT, "set %d servers in map version %u\n",
-		in->gui_n_servers, in->gui_map_version);
 
 	map_servers = dup_server_list(in->gui_servers, in->gui_n_servers);
 	if (map_servers == NULL) {

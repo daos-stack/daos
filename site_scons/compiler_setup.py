@@ -1,6 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Exit, Configure
+from SCons.Script import GetOption, Exit
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -22,7 +22,7 @@ PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
 
-def base_setup(env, prereqs=None):
+def _base_setup(env):
     """Setup the scons environment for the compiler
 
     Include all our preferred compile options for the chosen
@@ -73,18 +73,6 @@ def base_setup(env, prereqs=None):
 
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
-    cenv = env.Clone()
-    cenv.Append(CFLAGS='-Werror')
-    config = Configure(cenv)
-    if config.CheckHeader('stdatomic.h'):
-        config.Finish()
-        env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC': '1'})
-    elif prereqs:
-        config.Finish()
-        prereqs.require(env, 'openpa', headers_only=True)
-    else:
-        config.Finish()
-
     if compiler == 'icx' and not GetOption('no_rpath'):
         # Hack to add rpaths
         for path in env['ENV']['LD_LIBRARY_PATH'].split(':'):
@@ -96,3 +84,8 @@ def base_setup(env, prereqs=None):
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
     env['BSETUP'] = compiler
+
+
+def setup(env):
+    """Add daos specific method to environment"""
+    env.AddMethod(_base_setup, 'compiler_setup')

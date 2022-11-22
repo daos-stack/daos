@@ -10,6 +10,7 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include <daos_srv/vos.h>
 #include "vos_layout.h"
 #include "vos_internal.h"
 
@@ -49,7 +50,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (oiter->oit_cont != NULL)
 		vos_cont_decref(oiter->oit_cont);
 
-	D_FREE_PTR(oiter);
+	D_FREE(oiter);
 	return rc;
 }
 
@@ -131,7 +132,8 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /
 		dae = rec_iov.iov_buf;
 	}
 
-	while (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
+	while (dae->dae_committable || dae->dae_committed || dae->dae_aborted ||
+	       dae->dae_dth != NULL) {
 		if (oiter->oit_linear) {
 			if (dae->dae_link.next ==
 			    &oiter->oit_cont->vc_dtx_act_list) {
@@ -202,7 +204,8 @@ dtx_iter_next(struct vos_iterator *iter, daos_anchor_t *anchor)
 				 sizeof(struct vos_dtx_act_ent));
 			dae = rec_iov.iov_buf;
 		}
-	} while (dae->dae_committable || dae->dae_committed || dae->dae_aborted);
+	} while (dae->dae_committable || dae->dae_committed || dae->dae_aborted ||
+		 dae->dae_dth != NULL);
 
 out:
 	return rc;
@@ -241,6 +244,16 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(!dae->dae_committable);
 	D_ASSERT(!dae->dae_committed);
 	D_ASSERT(!dae->dae_aborted);
+	D_ASSERT(dae->dae_dth == NULL);
+
+	/*
+	 * The DTX entry is returned via the iteration. The upper layer caller, for DTX resync
+	 * or DTX cleanup, may abort it sometime later. Before being aborted, it may re-attach
+	 * to some DTX handle for handling resent request. Then there is race between them. So
+	 * before become committable or being committed by RPC handler, needs to check whether
+	 * it has been aborted or not.
+	 */
+	dae->dae_need_validation = 1;
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);
@@ -276,9 +289,11 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-dtx_iter_delete(struct vos_iterator *iter, void *args)
+dtx_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 {
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
+	if (op != VOS_ITER_PROC_OP_DELETE)
+		return -DER_NOSYS;
 
 	D_WARN("NOT allow to remove DTX entry via iteration!\n");
 
@@ -291,5 +306,5 @@ struct vos_iter_ops vos_dtx_iter_ops = {
 	.iop_probe   =	dtx_iter_probe,
 	.iop_next    =  dtx_iter_next,
 	.iop_fetch   =  dtx_iter_fetch,
-	.iop_delete  =	dtx_iter_delete,
+	.iop_process  =	dtx_iter_process,
 };

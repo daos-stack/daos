@@ -10,7 +10,7 @@
 #define __CART_UTILS_H__
 #include <semaphore.h>
 #include <cart/api.h>
-#include "crt_internal.h"
+#include "../crt_internal.h"
 #include "svc.pb-c.h"
 
 #define DBG_PRINT(x...)							\
@@ -36,6 +36,7 @@ struct test_options {
 	int		num_attach_retries;
 	bool		is_server;
 	bool		assert_on_error;
+
 	volatile int	shutdown;
 	int		delay_shutdown_sec;
 	bool		is_swim_enabled;

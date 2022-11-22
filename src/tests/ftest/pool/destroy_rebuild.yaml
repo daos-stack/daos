@@ -2,27 +2,26 @@
 # required quantity is indicated by the placeholders
 timeout: 360
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-    - server-D
-    - server-E
-    - server-F
-  test_clients:
-    - client-G
+  test_servers: 6
+  test_clients: 1
 server_config:
   name: daos_server
-  servers:
-    targets: 2
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 2
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 134217728
   control_method: dmg
   pool_query_timeout: 30
 testparams:
   rank_to_kill:
-#    - 0    Skipped until DAOS-4891 is resolved
+#   - 0    Skipped until DAOS-4891 is resolved
     - "1"
     - "4"

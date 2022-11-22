@@ -39,8 +39,9 @@ class QueryAttributeTest(TestWithServers):
             Test query, set-attr, list-attr, and get-attr commands.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=pool,pool_query_attr
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_query
+        :avocado: tags=pool_query_attr,test_query_attr
         """
         errors = []
         daos_cmd = self.get_daos_command()

@@ -77,7 +77,10 @@ class ListPoolsTest(TestWithServers):
             output list matches the output returned when the pools were
             created.
 
-        :avocado: tags=all,large,pool,full_regression,list_pools
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pool
+        :avocado: tags=list_pools,test_list_pools
         """
         ranks = list(range(len(self.hostlist_servers)))
 

@@ -47,10 +47,9 @@ class RbldNoCapacity(TestWithServers):
 
         """
         # Get the test params
-        targets = self.params.get("targets", "/run/server_config/*/0/*")
+        targets = self.server_managers[0].get_config_value("targets")
         rank = self.params.get("rank_to_kill", "/run/rebuild/*")
-        engines_per_host = self.params.get("engines_per_host",
-                                           "/run/server_config/*")
+        engines_per_host = self.params.get("engines_per_host", "/run/server_config/*")
         pool_query_timeout = self.params.get('pool_query_timeout', "/run/pool/*")
         interval = self.params.get('pool_query_interval', "/run/pool/*")
         test_data_list = self.params.get('test_data_list', "/run/pool/*")

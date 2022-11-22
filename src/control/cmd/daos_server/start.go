@@ -45,7 +45,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		cmd.config.ControlPort = int(cmd.Port)
 	}
 	if cmd.MountPath != "" {
-		cmd.Info("NOTICE: -s, --storage is deprecated")
+		cmd.Notice("-s, --storage is deprecated")
 		if len(cmd.config.Engines) < 1 {
 			return errors.New("config has zero engines")
 		}

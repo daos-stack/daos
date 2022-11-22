@@ -43,7 +43,6 @@ struct vea_entry {
 
 #define VEA_LARGE_EXT_MB	64	/* Large extent threshold in MB */
 #define VEA_HINT_OFF_INVAL	0	/* Invalid hint offset */
-#define VEA_MIGRATE_INTVL	10	/* Seconds */
 
 /* Value entry of sized free extent tree (vfc_size_btr) */
 struct vea_sized_class {
@@ -128,9 +127,9 @@ struct vea_space_info {
 	uint64_t			 vsi_stat[STAT_MAX];
 	/* Metrics */
 	struct vea_metrics		*vsi_metrics;
-	/* Last aggregation time */
-	uint32_t			 vsi_agg_time;
-	bool				 vsi_agg_scheduled;
+	/* Last aging buffer flush timestamp */
+	uint32_t			 vsi_flush_time;
+	bool				 vsi_flush_scheduled;
 };
 
 static inline uint32_t
@@ -175,13 +174,16 @@ int reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 
 /* vea_free.c */
+#define MAX_FLUSH_FRAGS	256
 void free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry);
 int free_class_add(struct vea_space_info *vsi, struct vea_entry *entry);
 int compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		  unsigned int flags);
 int persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
 int aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe);
-void migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb);
+int trigger_aging_flush(struct vea_space_info *vsi, bool force,
+			uint32_t nr_flush, uint32_t *nr_flushed);
+int schedule_aging_flush(struct vea_space_info *vsi);
 
 /* vea_hint.c */
 void hint_get(struct vea_hint_context *hint, uint64_t *off);

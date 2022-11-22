@@ -55,13 +55,16 @@ class IorInterceptTestBase(IorTestBase):
         # Verify write and read performance are within the thresholds.
         # Since Min can have a lot of variance, don't check Min or Mean.
         # Ideally, we might want to look at the Std Dev to ensure the results are admissible.
+        # Log the provider for debugging.
+        server_provider = self.server_managers[0].get_config_value("provider")
+        self.log.info("Provider:           %s", server_provider)
+
         dfs_max_write = float(dfs_perf[0][IorMetrics.Max_MiB])
         dfuse_max_write = float(dfuse_perf[0][IorMetrics.Max_MiB])
         actual_write_x = percent_change(dfs_max_write, dfuse_max_write)
         self.log.info("DFS Max Write:      %.2f", dfs_max_write)
         self.log.info("DFUSE IL Max Write: %.2f", dfuse_max_write)
         self.log.info("Percent Diff:       %.2f%%", actual_write_x * 100)
-        self.assertLessEqual(abs(actual_write_x), write_x, "Max Write Diff too large")
 
         dfs_max_read = float(dfs_perf[1][IorMetrics.Max_MiB])
         dfuse_max_read = float(dfuse_perf[1][IorMetrics.Max_MiB])
@@ -69,4 +72,6 @@ class IorInterceptTestBase(IorTestBase):
         self.log.info("DFS Max Read:      %.2f", dfs_max_read)
         self.log.info("DFUSE IL Max Read: %.2f", dfuse_max_read)
         self.log.info("Percent Diff:      %.2f%%", actual_read_x * 100)
+
+        self.assertLessEqual(abs(actual_write_x), write_x, "Max Write Diff too large")
         self.assertLessEqual(abs(actual_read_x), read_x, "Max Read Diff too large")

@@ -10,7 +10,7 @@ ARG BASE_DISTRO=rockylinux/rockylinux:8
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 # Use local repo server if present
@@ -93,6 +93,8 @@ RUN if $QUICKBUILD; then                                          \
 
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then \
+      dnf install zip && \
+      dnf clean all;     \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
       mkdir -p bullseye; \
@@ -116,7 +118,7 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -149,9 +151,9 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
     }
 USER root:root
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                           \
+# force an upgrade to get any newly built RPMs, but only if CB1 is set.
+ARG CB1
+RUN [ -z "$CB1" ] || {                                                           \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
         dnf clean all;                                                                 \
     }
@@ -193,7 +195,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
+        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
         mvn clean install -T 1C                                                               \
             -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
             -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
@@ -202,4 +204,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

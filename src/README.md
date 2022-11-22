@@ -195,7 +195,7 @@ closely with the pool, container and object services to restore data
 redundancy after a DAOS server failure.
 
 While the service-based architecture offers flexibility and extensibility,
-it is combined with a set of infrastucture libraries that provide a rich
+it is combined with a set of infrastructure libraries that provide a rich
 software ecosystem (e.g. communications, persistent storage access,
 asynchronous task execution with dependency graph, accelerator support, ...)
 accessible to all the DAOS services.

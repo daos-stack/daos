@@ -88,7 +88,7 @@ class SSDSocketTest(ControlTestBase):
 
             # Call cat on the server host, not necessarily the local test host.
             results = run_pcmd(
-                hosts=[self.hostlist_servers[0]],
+                hosts=self.hostlist_servers[0:1],
                 command="cat {}".format(numa_node_path))
 
             # Obtain the numa_node content.

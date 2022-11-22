@@ -87,18 +87,31 @@ The DAOS Agent (running on the client nodes) is responsible for resolving a user
 UID/GID to user/group names, which are then added to a signed credential and sent to
 the DAOS storage nodes.
 
-## Multi-rail/NIC Setup
+## HPC Fabric setup
+
+DAOS depends on the HPC fabric software stack and drivers. Depending on the type of HPC fabric
+that is used, a supported version of the fabric stack needs to be installed.
+
+Note that for InfiniBand fabrics, DAOS is only supported with the MLNX\_OFED stack that is
+provided by NVIDIA, not with the distros' inbox drivers.
+Before installing DAOS, a supported version of MOFED needs to be installed on the DAOS servers
+and DAOS clients. If the control plane communication is set up over the InfiniBand fabric using
+IPoIB, then any dedicated DAOS admin nodes should also be installed with the same MOFED stack.
+This is typically done using the `mlnxofedinstall` command that is included with the MOFED
+distribution.
+
+### Multi-rail/NIC Setup
 
 Storage nodes can be configured with multiple network interfaces to run
 multiple engine instances.
 
-### Subnet
+#### Subnet
 
 Since all engines need to be able to communicate, the different network
 interfaces must be on the same subnet or you must configuring routing
 across the different subnets.
 
-### Interface Settings
+#### Interface Settings
 
 Some special configuration is required for the `verbs` provider to use librdmacm
 with multiple interfaces, and the same configuration is required for the `tcp` provider.
@@ -137,7 +150,7 @@ $ sysctl -w net.ipv4.conf.<ifaces>.rp_filter=2
 ```
 
 All those parameters can be made persistent in /etc/sysctl.conf by adding a new
-sysctl file under /usr/lib/sysctl.d (e.g. /usr/lib/sysctl.d/95-daos-net.conf)
+sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
@@ -224,29 +237,29 @@ To tell systemd to create the necessary directories for DAOS:
 
 ### Privileged Helper
 
-DAOS employs a privileged helper binary (`daos_admin`) to perform tasks
+DAOS employs a privileged helper binary (`daos_server_helper`) to perform tasks
 that require elevated privileges on behalf of `daos_server`.
 
 
-When DAOS is installed from RPM, the `daos_admin` helper is automatically installed
+When DAOS is installed from RPM, the `daos_server_helper` helper is automatically installed
 to the correct location with the correct permissions. The RPM creates a "daos_server"
-system group and configures permissions such that `daos_admin` may only be invoked
+system group and configures permissions such that `daos_server_helper` may only be invoked
 from `daos_server`.
 
 For non-RPM installations, there are two supported scenarios:
 
-1. `daos_server` is run as root, which means that `daos_admin` is also invoked as root,
+1. `daos_server` is run as root, which means that `daos_server_helper` is also invoked as root,
 and therefore no additional setup is necessary.
-2. `daos_server` is run as a non-root user, which means that `daos_admin` must be
+2. `daos_server` is run as a non-root user, which means that `daos_server_helper` must be
 manually installed and configured.
 
 The steps to enable the second scenario are as follows (steps are assumed to be
 running out of a DAOS source tree which may be on a NFS share):
 
 ```bash
-$ chmod -x $daospath/bin/daos_admin # prevent this copy from being executed
-$ sudo cp $daospath/bin/daos_admin /usr/bin/daos_admin
-$ sudo chmod 4755 /usr/bin/daos_admin # make this copy setuid root
+$ chmod -x $daospath/bin/daos_server_helper # prevent this copy from being executed
+$ sudo cp $daospath/bin/daos_server_helper /usr/bin/daos_server_helper
+$ sudo chmod 4755 /usr/bin/daos_server_helper # make this copy setuid root
 $ sudo mkdir -p /usr/share/daos/control # create symlinks to SPDK scripts
 $ sudo ln -sf $daospath/share/daos/control/setup_spdk.sh \
            /usr/share/daos/control
@@ -289,6 +302,31 @@ commandline (including source builds), limits should be adjusted in
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
 specific document but the instructions apply to most Linux distributions).
 
+### Memory mapped areas
+
+The DAOS engine heavily uses mmap(2) to access persistent memory and to
+allocate stacks for asynchronous request processing via Argobots.
+The Linux kernel imposes a maximum limit (i.e. vm.max_map_count) on the
+number of mmap regions that a process can create.
+
+Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
+stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
+allocation method.
+
+vm.max_map_count default value (65530) needs to be bumped to a much more higher
+value (1M) to better fit with the DAOS needs for the expected huge number of
+concurrent ULTs if we want all their stacks to be mmap()'ed.
+
+For RPM installations, vm.max_map_count is raised through installed
+`/etc/sysctl.d/10-daos_server.conf` file.
+
+For non-RPM installations, vm.max_map_count may need to be bumped (usual default
+of 65530 is too low for non-testing configurations), and the best way to do
+so is to copy `utils/rpms/10-daos_server.conf` into `/etc/sysctl.d/`
+to apply the setting automatically on boot.
+Running `/usr/lib/systemd/systemd-sysctl /etc/sysctl.d/10-daos_server.conf`
+will apply these settings immediately (avoiding the need for an immediate reboot).
+
 ## Socket receive buffer size
 
 Low socket receive buffer size can cause SPDK to fail and emit the following
@@ -305,9 +343,9 @@ will be applied automatically on install).
 
 For non-RPM installations where `daos_server` has been built from source,
 `rmem_default` and `rmem_max` settings should be set to >= 1MB.
-Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/usr/lib/sysctl.d/`
+Optionally, the `utils/rpms/10-daos_server.conf` can be copied to `/etc/sysctl.d/`
 to apply the settings automatically on boot.
-Running `/usr/lib/systemd/systemd-sysctl /usr/lib/sysctl.d/10-daos_server.conf`
+Running `/usr/lib/systemd/systemd-sysctl /etc/sysctl.d/10-daos_server.conf`
 will apply these settings immediately (avoiding the need for an immediate reboot).
 For further information see
 [this article on network kernel settings](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/5/html/tuning_and_optimizing_red_hat_enterprise_linux_for_oracle_9i_and_10g_databases/sect-oracle_9i_and_10g_tuning_guide-adjusting_network_settings-changing_network_kernel_settings)

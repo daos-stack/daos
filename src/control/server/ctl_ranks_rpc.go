@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -292,7 +293,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		return nil, err
 	}
 
-	savedRanks := make(map[uint32]system.Rank) // instance idx to system rank
+	savedRanks := make(map[uint32]ranklist.Rank) // instance idx to system rank
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
 		if err != nil {
@@ -390,6 +391,8 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New("nil request")
 	}
 
+	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, req:%+v\n", req)
+
 	var errs []string
 
 	for idx, ei := range svc.harness.Instances() {
@@ -429,5 +432,9 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		return nil, errors.New(strings.Join(errs, ", "))
 	}
 
-	return new(ctlpb.SetLogMasksResp), nil
+	resp := new(ctlpb.SetLogMasksResp)
+
+	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, resp:%+v\n", resp)
+
+	return resp, nil
 }

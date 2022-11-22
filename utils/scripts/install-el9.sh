@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/usr/bin/env bash
 
 # Install OS updates and packages as required for building DAOS on EL 9 and
 # derivatives.  Include basic tools and daos dependencies that come from the core repos.
@@ -7,6 +7,10 @@
 # interactively then these two commands can be used to set dnf into automatic mode.
 # dnf --assumeyes install dnf-plugins-core
 # dnf config-manager --save --setopt=assumeyes=True
+
+set -e
+
+#arch=$(uname -i)
 
 dnf --nodocs install \
     boost-python3-devel \
@@ -56,8 +60,16 @@ dnf --nodocs install \
     valgrind-devel \
     which \
     yasm
+
 # No packages for the one below have been
 # identified yet. Limit build to client only for now
 #    ipmctl \
 #    libipmctl-devel \
 #    Lmod \
+#
+# ipmctl is only available on x86_64
+#if [ "$arch" = x86_64 ]; then
+#    dnf --nodocs install \
+#        ipmctl \
+#        libipmctl-devel
+#fi

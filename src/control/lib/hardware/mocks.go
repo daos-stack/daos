@@ -87,6 +87,17 @@ func (n *NUMANode) WithCPUCores(cores []CPUCore) *NUMANode {
 	return n
 }
 
+// WithBlockDevices is a convenience function to add a set of block devices to a node.
+// NB: If AddBlockDevice fails, a panic will ensue.
+func (n *NUMANode) WithBlockDevices(devices []*BlockDevice) *NUMANode {
+	for _, dev := range devices {
+		if err := n.AddBlockDevice(dev); err != nil {
+			panic(err)
+		}
+	}
+	return n
+}
+
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{

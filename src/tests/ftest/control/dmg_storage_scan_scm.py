@@ -26,7 +26,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     --verbose.
     :avocado: recursive
     """
-    def verify_storage_scam_scm(self, storage_dict):
+    def verify_storage_scan_scm(self, storage_dict):
         """Main test component.
 
         Args:
@@ -79,4 +79,4 @@ class DmgStorageScanSCMTest(ControlTestBase):
         :avocado: tags=hw,small
         :avocado: tags=control,dmg_storage_scan_scm
         """
-        self.verify_dmg_storage_scan(self.verify_storage_scam_scm)
+        self.verify_dmg_storage_scan(self.verify_storage_scan_scm)

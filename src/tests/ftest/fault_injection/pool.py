@@ -5,8 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers
 from random import randint
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 from general_utils import DaosTestError
 
@@ -21,14 +21,12 @@ class PoolServicesFaultInjection(TestWithServers):
         super().__init__(*args, **kwargs)
         self.failed_requests = 0
         self.object_class = None
-        self.container_namespace = None
         self.number_servers = 0
 
     def setUp(self):
         super().setUp()
         self.failed_requests = 0
         self.object_class = self.params.get("object_class", "/run/*")
-        self.container_namespace = self.params.get("container", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
 
     def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
@@ -46,8 +44,7 @@ class PoolServicesFaultInjection(TestWithServers):
         Look for missed requests shown by daos command.
         """
         # Get and write into container
-        self.container = self.get_container(self.pool,
-                                            namespace=self.container_namespace)
+        self.container = self.get_container(self.pool)
         self.look_missed_request(self.container.daos.result.stderr)
 
         # This is done through IOR
@@ -68,7 +65,7 @@ class PoolServicesFaultInjection(TestWithServers):
         Due to the nature of how wait_for_rebuild() is coded
         we can only get the last dmg command output.
         """
-        server_to_exclude = randint(0, len(self.hostlist_servers) - 1) #nosec
+        server_to_exclude = randint(0, len(self.hostlist_servers) - 1)  # nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 
@@ -114,16 +111,16 @@ class PoolServicesFaultInjection(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=pool_with_faults,test_pool_services,faults
+        :avocado: tags=fault_injection,pool,faults
+        :avocado: tags=pool_with_faults,test_pool_services
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()
-        pool_namespace = self.params.get("pool", "/run/*")
         number_pools = self.params.get("number_pools", "/run/*")
         for _ in range(number_pools):
             try:
                 # Create pool
-                self.pool = self.get_pool(namespace=pool_namespace)
+                self.pool = self.get_pool()
                 self.look_missed_request(self.pool.dmg.result.stderr)
 
                 # Container section

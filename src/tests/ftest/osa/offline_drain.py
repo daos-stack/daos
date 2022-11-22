@@ -49,9 +49,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6) #nosec
-        target_list.append(n)
-        target_list.append(n+1)
+        exc = random.randint(0, 6)  # nosec
+        target_list.append(exc)
+        target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -136,8 +136,8 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 		if (show_meta)
 			d_tm_print_metadata(desc, units, D_TM_STANDARD,
 					    stdout);
-		D_FREE_PTR(desc);
-		D_FREE_PTR(units);
+		D_FREE(desc);
+		D_FREE(units);
 
 		if (node->dtn_type != D_TM_DIRECTORY)
 			printf("\n");

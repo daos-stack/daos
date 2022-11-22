@@ -22,6 +22,8 @@
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
+#include "smd.pb-c.h"
+
 /* These Macros should be turned into DAOS configuration in the future */
 #define DAOS_MSG_RING_SZ	4096
 /* SPDK blob parameters */
@@ -37,6 +39,8 @@
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
+/* Stop issuing new IO when queued blob IOs reach a threshold */
+#define BIO_BS_STOP_WATERMARK	(4000)
 
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
@@ -51,7 +55,9 @@ bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
 /* SPDK subsystem fini timeout */
-unsigned int bio_spdk_subsys_timeout = 9000;	/* ms */
+unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
+/* How many blob unmap calls can be called in a row */
+unsigned int bio_spdk_max_unmap_cnt = 32;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -76,7 +82,6 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
-uint64_t vmd_led_period;
 
 static int
 bio_spdk_env_init(void)
@@ -138,8 +143,7 @@ bio_spdk_env_init(void)
 		spdk_env_fini();
 	}
 out:
-	if (opts.pci_allowed != NULL)
-		D_FREE(opts.pci_allowed);
+	D_FREE(opts.pci_allowed);
 	return rc;
 }
 
@@ -153,6 +157,25 @@ bool
 bypass_health_collect()
 {
 	return nvme_glb.bd_bypass_health_collect;
+}
+
+struct bio_faulty_criteria	glb_criteria;
+
+/* TODO: Make it configurable through control plane */
+static inline void
+set_faulty_criteria(void)
+{
+	glb_criteria.fc_enabled = false;
+	glb_criteria.fc_max_io_errs = 5;
+	glb_criteria.fc_max_csum_errs = 5;
+
+	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
+	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
+
+	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
+	       glb_criteria.fc_enabled ? "enabled" : "disabled",
+	       glb_criteria.fc_max_io_errs, glb_criteria.fc_max_csum_errs);
 }
 
 int
@@ -201,6 +224,11 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
+
+	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
+	if (bio_spdk_max_unmap_cnt == 0)
+		bio_spdk_max_unmap_cnt = UINT32_MAX;
+	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
@@ -252,10 +280,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
-	env = getenv("VMD_LED_PERIOD");
-	vmd_led_period = env ? atoi(env) : 0;
-	vmd_led_period *= (NSEC_PER_SEC / NSEC_PER_USEC);
-
 	if (numa_node > 0)
 		bio_numa_node = (unsigned int)numa_node;
 
@@ -268,6 +292,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		goto fini_smd;
 	}
 	bio_spdk_inited = true;
+	set_faulty_criteria();
 
 	return 0;
 
@@ -341,6 +366,20 @@ bio_need_nvme_poll(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return false;
 	return ctxt->bxc_blob_rw > BIO_BS_POLL_WATERMARK;
+}
+
+void
+drain_inflight_ios(struct bio_xs_context *ctxt)
+{
+	if (ctxt == NULL || ctxt->bxc_blob_rw <= BIO_BS_POLL_WATERMARK)
+		return;
+
+	do {
+		if (ctxt->bxc_self_polling)
+			spdk_thread_poll(ctxt->bxc_thread, 0, 0);
+		else
+			bio_yield();
+	} while (ctxt->bxc_blob_rw >= BIO_BS_STOP_WATERMARK);
 }
 
 struct common_cp_arg {
@@ -539,8 +578,7 @@ destroy_bio_bdev(struct bio_bdev *d_bdev)
 		d_bdev->bb_blobstore = NULL;
 	}
 
-	if (d_bdev->bb_name != NULL)
-		D_FREE(d_bdev->bb_name);
+	D_FREE(d_bdev->bb_name);
 
 	D_FREE(d_bdev);
 }
@@ -725,16 +763,13 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 
 	D_ALLOC_PTR(d_bdev);
 	if (d_bdev == NULL) {
-		D_ERROR("failed to allocate bio_bdev\n");
 		return -DER_NOMEM;
 	}
 
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
-		D_ERROR("Failed to allocate bdev name for %s\n", bdev_name);
-		rc = -DER_NOMEM;
-		goto error;
+		D_GOTO(error, rc = -DER_NOMEM);
 	}
 
 	/*
@@ -1300,7 +1335,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 	/* Skip NVMe context setup if the daos_nvme.conf isn't present */
 	if (!bio_nvme_configured()) {
-		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+		ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 		if (ctxt->bxc_dma_buf == NULL) {
 			D_FREE(ctxt);
 			*pctxt = NULL;
@@ -1334,7 +1369,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 	/*
 	 * The first started xstream will scan all bdevs and create blobstores,
-	 * it's a prequisite for all per-xstream blobstore initialization.
+	 * it's a prerequisite for all per-xstream blobstore initialization.
 	 */
 	if (nvme_glb.bd_init_thread == NULL) {
 		struct common_cp_arg cp_arg;
@@ -1376,7 +1411,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	if (rc)
 		goto out;
 
-	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init);
+	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
 		D_ERROR("failed to initialize dma buffer\n");
 		rc = -DER_NOMEM;
@@ -1546,24 +1581,22 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev         *d_bdev;
-
-	/*
-	 * Check VMD_LED_PERIOD environment variable, if not set use default
-	 * NVME_MONITOR_PERIOD of 60 seconds.
-	 */
-	if (vmd_led_period == 0)
-		vmd_led_period = NVME_MONITOR_PERIOD;
+	struct bio_bdev		*d_bdev;
+	unsigned int		 led_state;
+	int			 rc;
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
-		if (d_bdev->bb_led_start_time != 0) {
-			if (d_bdev->bb_led_start_time + vmd_led_period >= now)
-				continue;
+		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
+				DP_UUID(d_bdev->bb_uuid));
 
-			if (bio_set_led_state(ctxt, d_bdev->bb_uuid, NULL,
-					      true/*reset*/) != 0)
-				D_ERROR("Failed resetting LED state\n");
+			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
+			if (rc != 0)
+				D_ERROR("Reset LED identify state after timeout failed on device:"
+					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
 }

@@ -27,18 +27,28 @@ type Runner struct {
 	Config  *Config
 	log     logging.Logger
 	running atm.Bool
-	cmd     *exec.Cmd
+	sigCh   chan os.Signal
 }
+
+type (
+	RunnerExitInfo struct {
+		Error error
+		PID   int
+	}
+
+	RunnerExitChan chan *RunnerExitInfo
+)
 
 // NewRunner returns a configured engine.Runner
 func NewRunner(log logging.Logger, config *Config) *Runner {
 	return &Runner{
 		Config: config,
 		log:    log,
+		sigCh:  make(chan os.Signal, 1),
 	}
 }
 
-func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- error) error {
+func (r *Runner) run(parent context.Context, args, env []string, exitCh RunnerExitChan) error {
 	binPath, err := common.FindBinary(engineBin)
 	if err != nil {
 		return errors.Wrapf(err, "can't start %s", engineBin)
@@ -74,26 +84,40 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 		return errors.Wrapf(common.GetExitStatus(err),
 			"%s (instance %d) failed to start", binPath, r.Config.Index)
 	}
-	r.cmd = cmd
+	r.running.SetTrue()
 
-	waitDone := make(chan struct{})
+	ctx, cancel := context.WithCancel(parent)
 	go func() {
-		r.running.SetTrue()
-		defer r.running.SetFalse()
+		// Block on cmd.Wait() and then cancel the inner context
+		// to signal that the process has completed.
+		exitInfo := &RunnerExitInfo{
+			Error: errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath),
+			PID:   cmd.Process.Pid,
+		}
+		cancel()
+		r.running.SetFalse()
 
-		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
-
-		close(waitDone)
+		// Send the exit info to the exit channel for any interested readers.
+		exitCh <- exitInfo
+		close(exitCh)
 	}()
 
 	go func() {
-		select {
-		case <-ctx.Done():
-			r.log.Infof("%s:%d context canceled; shutting down", engineBin, r.Config.Index)
-			if err := r.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-				r.log.Errorf("%s:%d failed to kill process: %s", engineBin, r.Config.Index, err)
+		for {
+			select {
+			case <-parent.Done():
+				r.log.Debugf("parent context cancelled, killing %s:%d", engineBin, r.Config.Index)
+				if err := cmd.Process.Signal(syscall.SIGKILL); err != nil && err != os.ErrProcessDone {
+					r.log.Errorf("%s:%d failed to kill pid %d: %s", engineBin, r.Config.Index, cmd.Process.Pid, err)
+				}
+			case <-ctx.Done():
+				return
+			case sig := <-r.sigCh:
+				r.log.Debugf("signalling %s:%d with %s", engineBin, r.Config.Index, sig)
+				if err := cmd.Process.Signal(sig); err != nil {
+					r.log.Errorf("%s:%d failed to send signal %s to pid %d: %s", engineBin, r.Config.Index, sig, cmd.Process.Pid, err)
+				}
 			}
-		case <-waitDone:
 		}
 	}()
 
@@ -101,18 +125,19 @@ func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- erro
 }
 
 // Start asynchronously starts the Engine instance.
-func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
+func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	args, err := r.Config.CmdLineArgs()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	env, err := r.Config.CmdLineEnv()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
-	return r.run(ctx, args, env, errOut)
+	exitCh := make(RunnerExitChan)
+	return exitCh, r.run(ctx, args, env, exitCh)
 }
 
 // IsRunning indicates whether the Runner process is running or not.
@@ -121,24 +146,13 @@ func (r *Runner) IsRunning() bool {
 }
 
 // Signal sends relevant signal to the Runner process (idempotent).
-func (r *Runner) Signal(signal os.Signal) error {
+func (r *Runner) Signal(signal os.Signal) {
 	if !r.IsRunning() {
-		return nil
+		return
 	}
 
 	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
-
-	return r.cmd.Process.Signal(signal)
-}
-
-// GetLastPid returns the PID after runner has exited, return
-// zero if no cmd or ProcessState exists.
-func (r *Runner) GetLastPid() uint64 {
-	if r.cmd == nil || r.cmd.ProcessState == nil {
-		return 0
-	}
-
-	return uint64(r.cmd.ProcessState.Pid())
+	r.sigCh <- signal
 }
 
 // GetConfig returns the runner's configuration

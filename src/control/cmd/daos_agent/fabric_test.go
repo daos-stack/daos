@@ -177,6 +177,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 		node        int
 		provider    string
 		netDevClass hardware.NetDevClass
+		ignore      []string
 		expErr      error
 		expResults  []*FabricInterface
 	}{
@@ -625,6 +626,67 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
+		"ignore interface": {
+			provider: "ofi+sockets",
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t1"),
+							Name:          "t1",
+							DeviceClass:   hardware.Ether,
+							Providers:     common.NewStringSet("ofi+sockets"),
+						})[0],
+					},
+					1: {
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t2"),
+							Name:          "t2",
+							DeviceClass:   hardware.Ether,
+							Providers:     common.NewStringSet("ofi+sockets"),
+						})[0],
+					},
+				},
+			},
+			node:        0,
+			ignore:      []string{"t1"},
+			netDevClass: hardware.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: hardware.Ether,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: hardware.Ether,
+				},
+			},
+		},
+		"ignore all interfaces": {
+			provider: "ofi+sockets",
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t1"),
+							Name:          "t1",
+							DeviceClass:   hardware.Ether,
+							Providers:     common.NewStringSet("ofi+sockets"),
+						})[0],
+						fabricInterfacesFromHardware(&hardware.FabricInterface{
+							NetInterfaces: common.NewStringSet("t2"),
+							Name:          "t2",
+							DeviceClass:   hardware.Ether,
+							Providers:     common.NewStringSet("ofi+sockets"),
+						})[0],
+					},
+				},
+			},
+			node:        0,
+			ignore:      []string{"t1", "t2"},
+			netDevClass: hardware.Ether,
+			expErr:      errors.New("no suitable fabric interface"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -634,6 +696,8 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				if tc.nf.getAddrInterface == nil {
 					tc.nf.getAddrInterface = getMockNetInterfaceSuccess
 				}
+
+				tc.nf = tc.nf.WithIgnoredDevices(common.NewStringSet(tc.ignore...))
 			}
 
 			numDevices := tc.nf.NumDevices(tc.node)

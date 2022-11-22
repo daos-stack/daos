@@ -37,7 +37,7 @@ class EcodDisabledRebuild(ErasureCodeIor):
         self.ior_write_dataset()
 
         # Verify if Aggregation is getting started
-        if not any(check_aggregation_status(self.pool).values()):
+        if not any(check_aggregation_status(self.pool, attempt=60).values()):
             self.fail("Aggregation failed to start..")
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled

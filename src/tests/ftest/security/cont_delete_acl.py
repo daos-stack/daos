@@ -18,6 +18,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -41,8 +42,10 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command performs as
             expected with invalid inputs.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_delete_acl_inputs
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container_acl
+        :avocado: tags=cont_delete_acl_inputs,test_acl_delete_invalid_inputs
         """
         # Get list of invalid ACL principal values
         invalid_principals = self.params.get("invalid_principals", "/run/*")

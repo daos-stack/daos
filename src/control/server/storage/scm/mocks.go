@@ -7,164 +7,112 @@
 package scm
 
 import (
-	"os"
-	"strings"
 	"sync"
 
+	"github.com/daos-stack/daos/src/control/common/proto"
+	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/mount"
 )
 
 type (
-	// GetfsUsageRetval encapsulates return values from a GetfsUsage call.
-	GetfsUsageRetval struct {
-		Total, Avail uint64
-		Err          error
+	mockIpmctlCfg struct {
+		initErr           error
+		getModulesErr     error
+		modules           []ipmctl.DeviceDiscovery
+		delGoalsErr       error
+		getRegionsErr     error
+		regions           []ipmctl.PMemRegion
+		getFWInfoRet      error
+		fwInfo            ipmctl.DeviceFirmwareInfo
+		updateFirmwareRet error
 	}
 
-	mountMap struct {
-		sync.RWMutex
-		mounted map[string]bool
-	}
-
-	// MockSysConfig alters mock SystemProvider behavior.
-	MockSysConfig struct {
-		IsMountedBool   bool
-		IsMountedErr    error
-		MountErr        error
-		UnmountErr      error
-		MkfsErr         error
-		ChmodErr        error
-		GetfsStr        string
-		GetfsErr        error
-		SourceToTarget  map[string]string
-		getfsIndex      int
-		GetfsUsageResps []GetfsUsageRetval
-		statErrors      map[string]error
-		realStat        bool
-	}
-
-	// MockSysProvider gives a mock SystemProvider implementation.
-	MockSysProvider struct {
-		sync.RWMutex
-		log       logging.Logger
-		cfg       MockSysConfig
-		isMounted mountMap
+	mockIpmctl struct {
+		cfg mockIpmctlCfg
 	}
 )
 
-func (mm *mountMap) Set(mount string, mounted bool) {
-	mm.Lock()
-	defer mm.Unlock()
-
-	mm.mounted[mount] = mounted
+func (m *mockIpmctl) Init(_ logging.Logger) error {
+	return m.cfg.initErr
 }
 
-func (mm *mountMap) Get(mount string) (bool, bool) {
-	mm.RLock()
-	defer mm.RUnlock()
-
-	mounted, exists := mm.mounted[mount]
-	return mounted, exists
+func (m *mockIpmctl) GetModules(_ logging.Logger) ([]ipmctl.DeviceDiscovery, error) {
+	return m.cfg.modules, m.cfg.getModulesErr
 }
 
-func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
-	err := msp.cfg.IsMountedErr
-	// hack... don't fail the format tests which also want
-	// to make sure that the device isn't already formatted.
-	if os.IsNotExist(err) && strings.HasPrefix(target, "/dev") {
-		err = nil
-	}
-
-	msp.Lock()
-	defer msp.Unlock()
-
-	// lookup target of a given source device (target actually a source
-	// device in this case)
-	mount, exists := msp.cfg.SourceToTarget[target]
-	if exists {
-		target = mount
-	}
-
-	isMounted, exists := msp.isMounted.Get(target)
-	if !exists {
-		return msp.cfg.IsMountedBool, err
-	}
-	return isMounted, err
+func (m *mockIpmctl) DeleteConfigGoals(_ logging.Logger) error {
+	return m.cfg.delGoalsErr
 }
 
-func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
-	if msp.cfg.MountErr == nil {
-		msp.Lock()
-		msp.isMounted.Set(target, true)
-		msp.Unlock()
-	}
-	return msp.cfg.MountErr
+func (m *mockIpmctl) GetRegions(_ logging.Logger) ([]ipmctl.PMemRegion, error) {
+	return m.cfg.regions, m.cfg.getRegionsErr
 }
 
-func (msp *MockSysProvider) Unmount(target string, _ int) error {
-	if msp.cfg.UnmountErr == nil {
-		msp.Lock()
-		msp.isMounted.Set(target, false)
-		msp.Unlock()
-	}
-	return msp.cfg.UnmountErr
+func (m *mockIpmctl) GetFirmwareInfo(uid ipmctl.DeviceUID) (ipmctl.DeviceFirmwareInfo, error) {
+	return m.cfg.fwInfo, m.cfg.getFWInfoRet
 }
 
-func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
-	return msp.cfg.MkfsErr
+func (m *mockIpmctl) UpdateFirmware(uid ipmctl.DeviceUID, fwPath string, force bool) error {
+	return m.cfg.updateFirmwareRet
 }
 
-func (msp *MockSysProvider) Chmod(string, os.FileMode) error {
-	return msp.cfg.ChmodErr
-}
-
-func (msp *MockSysProvider) Getfs(_ string) (string, error) {
-	return msp.cfg.GetfsStr, msp.cfg.GetfsErr
-}
-
-func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
-	msp.cfg.getfsIndex += 1
-	if len(msp.cfg.GetfsUsageResps) < msp.cfg.getfsIndex {
-		return 0, 0, nil
-	}
-	resp := msp.cfg.GetfsUsageResps[msp.cfg.getfsIndex-1]
-	return resp.Total, resp.Avail, resp.Err
-}
-
-func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
-	msp.RLock()
-	defer msp.RUnlock()
-
-	if msp.cfg.realStat {
-		return os.Stat(path)
-	}
-
-	// default return value for missing key is nil so
-	// add entries to indicate path failure e.g. perms or not-exist
-	return nil, msp.cfg.statErrors[path]
-}
-
-func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {
+func newMockIpmctl(cfg *mockIpmctlCfg) *mockIpmctl {
 	if cfg == nil {
-		cfg = &MockSysConfig{}
+		cfg = &mockIpmctlCfg{}
 	}
-	if cfg.statErrors == nil {
-		cfg.realStat = true
-	}
-	msp := &MockSysProvider{
-		log: log,
+
+	return &mockIpmctl{
 		cfg: *cfg,
-		isMounted: mountMap{
-			mounted: make(map[string]bool),
-		},
 	}
-	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
-	return msp
 }
 
-func DefaultMockSysProvider(log logging.Logger) *MockSysProvider {
-	return NewMockSysProvider(log, nil)
+// mockDiscovery returns a mock SCM module of type exported from ipmctl.
+func mockDiscovery(sockID ...int) ipmctl.DeviceDiscovery {
+	m := proto.MockScmModule()
+
+	sid := m.Socketid
+	if len(sockID) > 0 {
+		sid = uint32(sockID[0])
+	}
+
+	result := ipmctl.DeviceDiscovery{
+		Physical_id:          uint16(m.Physicalid),
+		Channel_id:           uint16(m.Channelid),
+		Channel_pos:          uint16(m.Channelposition),
+		Memory_controller_id: uint16(m.Controllerid),
+		Socket_id:            uint16(sid),
+		Capacity:             m.Capacity,
+	}
+
+	_ = copy(result.Uid[:], m.Uid)
+	_ = copy(result.Part_number[:], m.PartNumber)
+	_ = copy(result.Fw_revision[:], m.FirmwareRevision)
+
+	return result
+}
+
+// mockModule converts ipmctl type SCM module and returns storage/scm
+// internal type.
+func mockModule(dIn ...ipmctl.DeviceDiscovery) *storage.ScmModule {
+	d := mockDiscovery()
+	if len(dIn) > 0 {
+		d = dIn[0]
+	}
+
+	return &storage.ScmModule{
+		PhysicalID:       uint32(d.Physical_id),
+		ChannelID:        uint32(d.Channel_id),
+		ChannelPosition:  uint32(d.Channel_pos),
+		ControllerID:     uint32(d.Memory_controller_id),
+		SocketID:         uint32(d.Socket_id),
+		Capacity:         d.Capacity,
+		UID:              d.Uid.String(),
+		PartNumber:       d.Part_number.String(),
+		FirmwareRevision: d.Fw_revision.String(),
+	}
 }
 
 // MockBackendConfig specifies behavior for a mock SCM backend
@@ -175,8 +123,6 @@ type MockBackendConfig struct {
 	GetModulesErr        error
 	GetNamespacesRes     storage.ScmNamespaces
 	GetNamespacesErr     error
-	GetStateRes          storage.ScmState
-	GetStateErr          error
 	PrepRes              *storage.ScmPrepareResponse
 	PrepErr              error
 	PrepResetRes         *storage.ScmPrepareResponse
@@ -187,26 +133,43 @@ type MockBackendConfig struct {
 }
 
 type MockBackend struct {
-	cfg MockBackendConfig
+	sync.RWMutex
+	cfg          MockBackendConfig
+	PrepareCalls []storage.ScmPrepareRequest
+	ResetCalls   []storage.ScmPrepareRequest
 }
 
-func (mb *MockBackend) getModules() (storage.ScmModules, error) {
+func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
 	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
-func (mb *MockBackend) getNamespaces() (storage.ScmNamespaces, error) {
+func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
-func (mb *MockBackend) getRegionState() (storage.ScmState, error) {
-	return mb.cfg.GetStateRes, mb.cfg.GetStateErr
-}
+func (mb *MockBackend) prep(req storage.ScmPrepareRequest, _ *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	mb.Lock()
+	mb.PrepareCalls = append(mb.PrepareCalls, req)
+	mb.Unlock()
 
-func (mb *MockBackend) prep(storage.ScmPrepareRequest, *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	if mb.cfg.PrepErr != nil {
+		return nil, mb.cfg.PrepErr
+	} else if mb.cfg.PrepRes == nil {
+		return &storage.ScmPrepareResponse{}, nil
+	}
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
 
-func (mb *MockBackend) prepReset(*storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmScanResponse) (*storage.ScmPrepareResponse, error) {
+	mb.Lock()
+	mb.ResetCalls = append(mb.ResetCalls, req)
+	mb.Unlock()
+
+	if mb.cfg.PrepResetErr != nil {
+		return nil, mb.cfg.PrepResetErr
+	} else if mb.cfg.PrepResetRes == nil {
+		return &storage.ScmPrepareResponse{}, nil
+	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
 
@@ -231,10 +194,14 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(log, msc))
+func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
+	sysProv := system.NewMockSysProvider(log, msc)
+	mountProv := mount.NewProvider(log, sysProv)
+	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider(log))
+	sysProv := system.DefaultMockSysProvider(log)
+	mountProv := mount.NewProvider(log, sysProv)
+	return NewProvider(log, DefaultMockBackend(), sysProv, mountProv)
 }

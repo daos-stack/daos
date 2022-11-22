@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,12 +13,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
 	// MemberRankMap provides a map of Rank->*system.Member.
-	MemberRankMap map[system.Rank]*system.Member
+	MemberRankMap map[ranklist.Rank]*system.Member
 	// MemberUuidMap provides a map of UUID->*system.Member.
 	MemberUuidMap map[uuid.UUID]*system.Member
 	// MemberAddrMap provides a map of string->[]*system.Member.
@@ -39,7 +40,7 @@ type (
 // The member's UUID is used to represent the member in order to
 // avoid duplicating member details in the serialized format.
 func (mrm MemberRankMap) MarshalJSON() ([]byte, error) {
-	jm := make(map[system.Rank]uuid.UUID)
+	jm := make(map[ranklist.Rank]uuid.UUID)
 	for rank, member := range mrm {
 		jm[rank] = member.UUID
 	}
@@ -97,11 +98,11 @@ func (mdb *MemberDatabase) UnmarshalJSON(data []byte) error {
 
 	type fromJSON MemberDatabase
 	from := &struct {
-		Ranks map[system.Rank]uuid.UUID
+		Ranks map[ranklist.Rank]uuid.UUID
 		Addrs map[string][]uuid.UUID
 		*fromJSON
 	}{
-		Ranks:    make(map[system.Rank]uuid.UUID),
+		Ranks:    make(map[ranklist.Rank]uuid.UUID),
 		Addrs:    make(map[string][]uuid.UUID),
 		fromJSON: (*fromJSON)(mdb),
 	}

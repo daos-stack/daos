@@ -324,8 +324,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		create_flag = cont;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_X64"-"DF_X64"\n",
-		DP_UUID(cont->vc_id), DP_UOID(oid),
+		" layout %u create=%s epr="DF_X64"-"DF_X64"\n",
+		DP_UUID(cont->vc_id), DP_UOID(oid), oid.id_layout_ver,
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
 	/* Create the key for obj cache */
@@ -347,7 +347,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
 
-	if (intent == DAOS_INTENT_KILL) {
+	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
 			if (vos_obj_refcount(obj) > 2)
 				D_GOTO(failed, rc = -DER_BUSY);
@@ -404,8 +404,9 @@ check_object:
 	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
 		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, false);
-		D_ASSERTF(0, "Simultaneous object hold and discard detected\n");
-		goto failed;
+		/* Update request will retry with this error */
+		rc = -DER_UPDATE_AGAIN;
+		goto failed_2;
 	}
 
 	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)

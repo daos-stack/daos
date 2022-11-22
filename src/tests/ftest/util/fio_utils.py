@@ -4,8 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import pcmd
+from ClusterShell.NodeSet import NodeSet
 
+from general_utils import pcmd
 from command_utils_base import \
     BasicParameter, FormattedParameter, CommandWithParameters
 from exception_utils import CommandFailure
@@ -91,8 +92,8 @@ class FioCommand(ExecutableCommand):
         Args:
             value (list): remote host(s) on which to run the fio command
         """
-        if value is None or isinstance(value, list):
-            self._hosts = value
+        if value is None or isinstance(value, NodeSet):
+            self._hosts = value.copy()
         else:
             self.log.error("Invalid fio host list: %s (%s)", value, type(value))
             self._hosts = None
@@ -160,7 +161,7 @@ class FioCommand(ExecutableCommand):
             CommandFailure: if there is an error running the command
 
         """
-        if self._hosts is None:
+        if not self._hosts:
             # Run fio locally
             self.log.debug("Running: %s", self.__str__())
             super()._run_process()

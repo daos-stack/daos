@@ -22,7 +22,7 @@ class BadConnectTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=bad_connect
+        :avocado: tags=bad_connect,test_connect
         """
         self.add_pool(connect=False)
 

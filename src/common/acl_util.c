@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -322,7 +322,6 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	/* Will be mangling the string during processing */
 	D_STRNDUP(tmpstr, str, len);
 	if (tmpstr == NULL) {
-		D_ERROR("Couldn't allocate temporary string\n");
 		return -DER_NOMEM;
 	}
 
@@ -873,9 +872,10 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 		return -DER_INVAL;
 	}
 
-	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("ACL is not valid\n");
-		return -DER_INVAL;
+	rc = daos_acl_validate(acl);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("ACL is not valid " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
 	current = daos_acl_get_next_ace(acl, NULL);

@@ -46,8 +46,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test container query, set-attr, get-attr, and list-attrs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_query_attr
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_query_attr,test_container_query_attr
         """
         # Create a pool and a container.
         self.add_pool()
@@ -93,14 +94,14 @@ class ContainerQueryAttributeTest(TestWithServers):
         # Prepare attr-value pairs. Use the test_strings in value for the first
         # 7 and in attr for the next 7.
         attr_values = []
-        j = 0
-        for i in range(2):
+        attr_idx = 0
+        for idx in range(2):
             for test_string in test_strings:
-                if i == 0:
-                    attr_values.append(["attr" + str(j), test_string])
+                if idx == 0:
+                    attr_values.append(["attr" + str(attr_idx), test_string])
                 else:
-                    attr_values.append([test_string, "attr" + str(j)])
-                j += 1
+                    attr_values.append([test_string, "attr" + str(attr_idx)])
+                attr_idx += 1
 
         # Set and verify get-attr.
         errors = []
@@ -157,8 +158,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             Test daos container list-attrs with 50 attributes.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=small
-        :avocado: tags=container,cont_list_attrs
+        :avocado: tags=vm
+        :avocado: tags=container
+        :avocado: tags=cont_list_attrs,test_list_attrs_long
         """
         # Create a pool and a container.
         self.add_pool()
@@ -169,9 +171,9 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs = []
         vals = []
 
-        for i in range(50):
-            expected_attrs.append("attr" + str(i))
-            vals.append("val" + str(i))
+        for idx in range(50):
+            expected_attrs.append("attr" + str(idx))
+            vals.append("val" + str(idx))
 
         for expected_attr, val in zip(expected_attrs, vals):
             _ = self.daos_cmd.container_set_attr(

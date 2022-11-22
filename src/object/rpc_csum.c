@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 		return 0;
 
 	if (ENCODING(proc_op)) {
+		D_ASSERT(csum->cs_csum != NULL);
 		rc = crt_proc_memcpy(proc, proc_op,
 				     csum->cs_csum + idx * csum->cs_len,
 				     buf_len);

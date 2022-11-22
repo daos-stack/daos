@@ -32,14 +32,12 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_list_t *ranks, daos_prop_t *prop);
-
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
-
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
@@ -64,13 +62,15 @@ struct ds_cont_child {
 
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
+	ABT_cond		 sc_scrub_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
-				 sc_ec_agg_active:1;
+				 sc_ec_agg_active:1,
+				 sc_scrubbing:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;

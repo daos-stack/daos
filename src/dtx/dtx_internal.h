@@ -57,7 +57,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
-/* The time threshold for triggerring DTX cleanup of stale entries.
+/* The time threshold for triggering DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
@@ -68,7 +68,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  */
 #define DTX_CLEANUP_THD_AGE_LO	45
 
-/* The count threshold (per pool) for triggerring DTX aggregation. */
+/* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
 #define DTX_AGG_THD_CNT_MIN	(1 << 20)
 #define DTX_AGG_THD_CNT_DEF	((1 << 19) * 7)
@@ -110,9 +110,9 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_AGE_PRESERVE	3
 
 /* The threshold for yield CPU when handle DTX RPC. */
-#define DTX_RPC_YIELD_THD	64
+#define DTX_RPC_YIELD_THD	32
 
-/* The time threshold for triggerring DTX aggregation. If the oldest
+/* The time threshold for triggering DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  *
@@ -145,6 +145,13 @@ extern uint32_t dtx_batched_ult_max;
 #define DTX_RPC_HELPER_THD_MIN	18
 #define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
 
+/*
+ * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
+ * dynamically when use it to avoid holding a lot of DRAM resource for long time that
+ * may happen on some very large system.
+ */
+#define DTX_INLINE_MBS_SIZE		512
+
 extern uint32_t dtx_rpc_helper_thd;
 
 struct dtx_pool_metrics {
@@ -176,6 +183,12 @@ dtx_cont_opened(struct ds_cont_child *cont)
 	return cont->sc_open > 0;
 }
 
+static inline uint32_t
+dtx_cont2ver(struct ds_cont_child *cont)
+{
+	return cont->sc_pool->spc_pool->sp_map_version;
+}
+
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
@@ -184,6 +197,8 @@ extern btr_ops_t dtx_btr_cos_ops;
 int dtx_handle_reinit(struct dtx_handle *dth);
 void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
+int start_dtx_reindex_ult(struct ds_cont_child *cont);
+void stop_dtx_reindex_ult(struct ds_cont_child *cont);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
