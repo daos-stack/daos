@@ -24,7 +24,9 @@
 
 static int _wal_reserv(struct umem_store *store, uint64_t *id)
 {
-	++*id;
+	static uint64_t dav_wal_id;
+
+	*id = ++dav_wal_id;
 	return 0;
 }
 
@@ -107,8 +109,9 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	hdl->do_size = sz;
 	hdl->p_ops.base = hdl;
 
-	hdl->do_store = *store;
-	if (hdl->do_store.stor_ops == NULL)
+	/* REVISIT */
+	/* hdl->do_store = *store; */
+	if (hdl->do_store.stor_priv == NULL)
 		hdl->do_store.stor_ops = &_store_ops;
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 

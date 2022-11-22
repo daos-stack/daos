@@ -34,7 +34,7 @@ struct umem_tx_stage_item {
 
 #ifdef DAOS_PMEM_BUILD
 
-static int use_bmem = 1; /* Use BMEM by default */
+static int use_bmem; /* Don't use BMEM by default */
 
 /** Sets up global settings for the pmem objects.
  *
@@ -58,6 +58,7 @@ umempobj_settings_init(void)
 				strerror(errno));
 		return rc;
 	}
+	use_bmem = 1;
 	D_INFO("UMEM will use Blob Backed Memory as the backend interface\n");
 	return 0;
 }

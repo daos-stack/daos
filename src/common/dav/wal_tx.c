@@ -78,7 +78,7 @@ dav_umem_wtx_new(struct dav_obj *dav_hdl)
 		return NULL;
 
 	umem_wtx->utx_ops = &dav_wal_tx_ops;
-	umem_wtx->utx_id = ULONG_MAX;
+	umem_wtx->utx_id = ULLONG_MAX;
 	dav_wal_tx_init(umem_wtx, dav_hdl);
 	dav_hdl->do_utx = umem_wtx;
 	return umem_wtx;
