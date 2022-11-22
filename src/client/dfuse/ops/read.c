@@ -57,9 +57,15 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		mock_read = true;
 	}
 
+	/* DFuse requests a buffer size of "0" which translates to 1024*1024 at the time of writing
+	 * however this may change over time.  If the kernel ever starts requesting larger reads
+	 * then dfuse will need to be updated to pre-allocate larger buffers.  Add a warning here,
+	 * not that DFuse won't function correctly but if this value ever changes then DFuse will
+	 * need updating to make full use of larger buffer sizes.
+	 */
 	if (len > ev->de_iov.iov_buf_len) {
-		D_ERROR("Fuse read buffer not large enough %zx > %zx\n", len,
-			ev->de_iov.iov_buf_len);
+		D_WARN("Fuse read buffer not large enough %zx > %zx\n", len,
+		       ev->de_iov.iov_buf_len);
 	}
 
 	ev->de_iov.iov_len  = len;
