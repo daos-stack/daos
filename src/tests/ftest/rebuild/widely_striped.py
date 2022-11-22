@@ -76,8 +76,8 @@ class RbldWidelyStriped(MdtestBase):
 
         # Kill rank[6] and wait for rebuild to complete
         self.log.info(">> Killing rank %s", ranks_to_kill[0])
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[0], self.d_log, force=True)
+        self.pool.update_map_version()
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[0])
         self.pool.wait_for_rebuild_to_end(interval=1)
 
@@ -93,8 +93,8 @@ class RbldWidelyStriped(MdtestBase):
         # Kill rank[5] in the middle of mdtest run and wait for rebuild to complete
         time.sleep(3)
         self.log.info(">> Killing rank %s", ranks_to_kill[1])
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[1], self.d_log, force=True)
+        self.pool.update_map_version()
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[1])
         self.pool.wait_for_rebuild_to_end(interval=1)
 
@@ -115,8 +115,8 @@ class RbldWidelyStriped(MdtestBase):
         # Kill 2 server ranks [3,4] during mdtest and wait for rebuild to complete
         time.sleep(3)
         self.log.info(">> Killing rank %s", ranks_to_kill[2])
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks_to_kill[2], self.d_log, force=True)
+        self.pool.update_map_version()
         self.log.info(">> Waiting for rebuild to complete after killing rank %s", ranks_to_kill[2])
         self.pool.wait_for_rebuild_to_end(interval=1)
 

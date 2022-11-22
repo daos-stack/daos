@@ -605,13 +605,13 @@ def launch_server_stop_start(self, pools, name, results, args):
                     status = False
         if status:
             # Shutdown the server
-            for pool in pools:
-                pool.update_map_version()
             try:
                 self.dmg_command.system_stop(force=True, ranks=rank)
             except TestFail as error:
                 self.log.error("<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
+            for pool in pools:
+                pool.update_map_version()
             time.sleep(30)
             if not drain:
                 rebuild_status = True

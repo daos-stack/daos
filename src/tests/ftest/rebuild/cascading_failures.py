@@ -51,17 +51,19 @@ class RbldCascadingFailures(RebuildTestBase):
 
     def start_rebuild(self):
         """Start the rebuild process."""
-        self.pool.update_map_version()
         if self.mode == "simultaneous":
             # Exclude both ranks from the pool to initiate rebuild
             self.server_managers[0].stop_ranks(self.inputs.rank.value, self.d_log)
+            self.pool.update_map_version()
         else:
             # Exclude the first rank from the pool to initiate rebuild
             self.server_managers[0].stop_ranks([self.inputs.rank.value[0]], self.d_log)
+            self.pool.update_map_version()
 
         if self.mode == "sequential":
             # Exclude the second rank from the pool
             self.server_managers[0].stop_ranks([self.inputs.rank.value[1]], self.d_log)
+            self.pool.update_map_version()
 
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start(1)
