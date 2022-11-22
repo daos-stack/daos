@@ -222,8 +222,13 @@ jobs:
                   done;
                   exit 1"
       - name: Post-provision cluster
-        run: . ci/gha_functions.sh;
-             ci/provisioning/post_provision_config.sh
+        run: |
+          . ci/gha_functions.sh
+          inst_repos=${{ env.cp_PR_REPOS }}
+          if [[ $inst_repos ]] != *daos@* ]]; then
+              inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
+          fi
+          INST_REPOS="$inst_repos" ci/provisioning/post_provision_config.sh
       - name: Run Test
         run: |
           . ci/gha_functions.sh
@@ -231,13 +236,7 @@ jobs:
           for tag in ${{ env.cp_TEST_TAG && env.cp_TEST_TAG || 'pr' }}; do
               test_tag+=($tag,-hw)
           done
-          inst_repos=${{ env.cp_PR_REPOS }}
-          if [[ $inst_repos ]] != *daos@* ]]; then
-              inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
-          fi
-          INST_REPOS="$inst_repos"     \
-          TEST_TAG="$test_tag"         \
-          ci/functional/test_main.sh
+          TEST_TAG="$test_tag" ci/functional/test_main.sh
       - name: Job cleanup
         if: always()
         run: . ci/gha_functions.sh;
