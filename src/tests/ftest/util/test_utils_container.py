@@ -266,6 +266,8 @@ class TestContainer(TestDaosApiBase):
         self.path = BasicParameter(None)
         self.type = BasicParameter(None)
         self.oclass = BasicParameter(None)
+        self.dir_oclass = BasicParameter(None)
+        self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
@@ -359,6 +361,8 @@ class TestContainer(TestDaosApiBase):
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
+                "dir_oclass": self.dir_oclass.value,
+                "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": acl_file,

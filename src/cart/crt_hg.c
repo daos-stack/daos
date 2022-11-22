@@ -390,6 +390,11 @@ crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
 	D_ASSERT(hg_class != NULL);
 	D_ASSERT(str_size != NULL);
 
+	if (!crt_is_service()) {
+		D_ERROR("Should only be called on servers\n");
+		return -DER_INVAL;
+	}
+
 	hg_ret = HG_Addr_self(hg_class, &self_addr);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Addr_self() failed, hg_ret: %d.\n", hg_ret);
@@ -771,14 +776,13 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 			HG_Finalize(hg_class);
 			D_GOTO(out, rc);
 		}
+
+		D_DEBUG(DB_NET, "New ctx (idx:%d), address: %s.\n", idx, addr_str);
+
+		/* If address for this provider isn't filled yet*/
+		if (prov_data->cpg_addr[0] == '\0')
+			strncpy(prov_data->cpg_addr, addr_str, str_size);
 	}
-
-	D_DEBUG(DB_NET, "New context(idx:%d), listen address: %s.\n",
-		idx, addr_str);
-
-	/* If address for this provider isn't filled yet*/
-	if (prov_data->cpg_addr[0] == '\0')
-		strncpy(prov_data->cpg_addr, addr_str, str_size);
 
 	rc = crt_hg_reg_rpcid(hg_class);
 	if (rc != 0) {
