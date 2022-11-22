@@ -532,7 +532,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 			}
 			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
-			D_ERROR("container global version could be not set\n");
+		case DAOS_PROP_CO_OBJ_VERSION:
+			D_ERROR("container global/obj %u version could be not set\n",
+				entry->dpe_type);
 			return -DER_INVAL;
 		default:
 			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
@@ -578,6 +580,10 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	if (entry_def)
 		entry_def->dpe_val = pool_hdl->sph_global_ver;
 
+	/* inherit object version from pool*/
+	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
+	if (entry_def)
+		entry_def->dpe_val = pool_hdl->sph_obj_ver;
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
@@ -730,6 +736,18 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 				rc = rdb_tx_update(tx, kvs,
 						   &ds_cont_prop_cont_global_version, &value);
 				D_DEBUG(DB_MD, "wrote cont_global_version = %u\n", cont_ver);
+			} else {
+				rc = -DER_INVAL;
+			}
+			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			if (entry->dpe_val <= UINT_MAX) {
+				uint32_t obj_ver = (uint32_t)entry->dpe_val;
+
+				d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+				rc = rdb_tx_update(tx, kvs, &ds_cont_prop_cont_obj_version,
+						   &value);
+				D_DEBUG(DB_MD, "update obj_version = %u\n", obj_ver);
 			} else {
 				rc = -DER_INVAL;
 			}
@@ -2586,6 +2604,28 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		}
 		idx++;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_OBJ_VERSION) {
+		uint32_t obj_ver;
+
+		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_cont_obj_version,
+				   &value);
+		if (rc == -DER_NONEXIST)
+			obj_ver = 0;
+		else  if (rc != 0)
+			D_GOTO(out, rc);
+
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+		prop->dpp_entries[idx].dpe_val = obj_ver;
+		if (rc == -DER_NONEXIST) {
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+			negative_nr++;
+			rc = 0;
+		}
+		idx++;
+	}
+
 out:
 	if (rc == 0) {
 		if (negative_nr == nr) {
@@ -2866,6 +2906,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			case DAOS_PROP_CO_RP_PDA:
 			case DAOS_PROP_CO_GLOBAL_VERSION:
 			case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			case DAOS_PROP_CO_OBJ_VERSION:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -3114,6 +3155,12 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_GLOBAL_VERSION);
 	if (entry) {
 		D_ERROR("container global version could be not set\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	entry = daos_prop_entry_get(prop_in, DAOS_PROP_CO_OBJ_VERSION);
+	if (entry) {
+		D_ERROR("container object version could be not set\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -3982,6 +4029,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	bool				 upgraded = false;
 	uint32_t			 global_ver = 0;
 	uint32_t			 from_global_ver;
+	uint32_t			 obj_ver = 0;
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	struct co_md_times		 mdtimes;
@@ -4003,14 +4051,39 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return rc;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
+		obj_ver = DS_POOL_OBJ_VERSION;
+		d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+		rc = rdb_tx_update(ap->tx, &cont->c_prop,
+				   &ds_cont_prop_cont_obj_version, &value);
+		if (rc) {
+			D_ERROR("failed to upgrade container obj version pool/cont: "DF_CONTF"\n",
+				DP_CONT(ap->pool_uuid, cont_uuid));
+			goto out;
+		}
+		upgraded = true;
+		/* Read all props for prop IV update */
+		rc = cont_prop_read(ap->tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
+		if (rc) {
+			D_ERROR(DF_CONTF" property fetch: %d\n", DP_CONT(ap->pool_uuid, cont_uuid),
+				rc);
+			goto out;
+		}
+
+		goto out;
+	}
+
 	d_iov_set(&value, &global_ver, sizeof(global_ver));
 	rc = rdb_tx_lookup(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_cont_global_version, &value);
 	if (rc && rc != -DER_NONEXIST)
 		goto out;
 	/* latest container, nothing to update */
-	if (rc == 0 && global_ver == DAOS_POOL_GLOBAL_VERSION)
+	if (rc == 0 && global_ver == DAOS_POOL_GLOBAL_VERSION) {
+		D_DEBUG(DB_MD, DF_CONTF" ver %u do not need upgrade.\n",
+			DP_CONT(ap->pool_uuid, cont_uuid), global_ver);
 		goto out;
+	}
 
 	if (global_ver > DAOS_POOL_GLOBAL_VERSION) {
 		D_ERROR("Downgrading pool/cont: "DF_CONTF" not supported\n",
@@ -4045,6 +4118,17 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			DP_CONT(ap->pool_uuid, cont_uuid));
 		goto out;
 	}
+
+	obj_ver = DS_POOL_OBJ_VERSION;
+	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
+	rc = rdb_tx_update(ap->tx, &cont->c_prop,
+			   &ds_cont_prop_cont_obj_version, &value);
+	if (rc) {
+		D_ERROR("failed to upgrade container obj version pool/cont: "DF_CONTF"\n",
+			DP_CONT(ap->pool_uuid, cont_uuid));
+		goto out;
+	}
+
 	upgraded = true;
 
 	d_iov_set(&value, &pda, sizeof(pda));
@@ -4158,6 +4242,8 @@ out:
 		}
 	}
 out_free_prop:
+	D_DEBUG(DB_MD, "pool/cont: "DF_CONTF" upgrade: "DF_RC"\n",
+		DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
 	if (prop)
 		daos_prop_free(prop);
 	cont_put(cont);
@@ -4183,7 +4269,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 		rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
 					    NULL /* hint **/);
 		if (rc != 0)
-			return rc;
+			D_GOTO(out_svc, rc);
 		need_put_leader = true;
 	}
 
@@ -4204,6 +4290,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	rdb_tx_end(&tx);
 
 out_svc:
+	D_DEBUG(DB_MD, DF_UUID" upgrade all container: rc %d\n", DP_UUID(pool_uuid), rc);
 	if (need_put_leader)
 		cont_svc_put_leader(svc);
 
