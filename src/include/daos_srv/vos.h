@@ -75,7 +75,6 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
- * \param mbs		[OUT]	Pointer to the DTX participants information.
  * \param dck		[OUT]	Pointer to the key for CoS cache.
  * \param for_refresh	[IN]	It is for DTX_REFRESH or not.
  *
@@ -96,8 +95,7 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, struct dtx_cos_key *dck,
-	      bool for_refresh);
+	      uint32_t *pm_ver, struct dtx_cos_key *dck, bool for_refresh);
 
 /**
  * Load participants information for the given DTX.
@@ -141,13 +139,14 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param dtis	[IN]	The array for DTX identifiers to be set.
+ * \param count [IN]	The count of DTXs to be set.
  * \param flags [IN]	The flags for the DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
