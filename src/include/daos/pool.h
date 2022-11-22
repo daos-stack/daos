@@ -44,7 +44,8 @@
 #define DAOS_PO_QUERY_PROP_SCRUB_FREQ		(1ULL << (PROP_BIT_START + 16))
 #define DAOS_PO_QUERY_PROP_SCRUB_THRESH		(1ULL << (PROP_BIT_START + 17))
 #define DAOS_PO_QUERY_PROP_SVC_REDUN_FAC	(1ULL << (PROP_BIT_START + 18))
-#define DAOS_PO_QUERY_PROP_BIT_END		34
+#define DAOS_PO_QUERY_PROP_OBJ_VERSION		(1ULL << (PROP_BIT_START + 19))
+#define DAOS_PO_QUERY_PROP_BIT_END		35
 
 #define DAOS_PO_QUERY_PROP_ALL									\
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |				\
@@ -55,8 +56,7 @@
 	 DAOS_PO_QUERY_PROP_POLICY | DAOS_PO_QUERY_PROP_GLOBAL_VERSION |			\
 	 DAOS_PO_QUERY_PROP_UPGRADE_STATUS | DAOS_PO_QUERY_PROP_SCRUB_MODE |			\
 	 DAOS_PO_QUERY_PROP_SCRUB_FREQ | DAOS_PO_QUERY_PROP_SCRUB_THRESH |			\
-	 DAOS_PO_QUERY_PROP_SVC_REDUN_FAC)
-
+	 DAOS_PO_QUERY_PROP_SVC_REDUN_FAC | DAOS_PO_QUERY_PROP_OBJ_VERSION)
 /*
  * Aggregation of pool/container/object/keys disk format change.
  */
@@ -141,6 +141,7 @@ int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
+int dc_pool_filter_cont(tse_task_t *task);
 int dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 			struct pool_target **tgt);
 

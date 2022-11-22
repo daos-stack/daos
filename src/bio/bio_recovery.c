@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -555,6 +555,7 @@ bio_media_error(void *msg_arg)
 		break;
 	}
 
+	auto_faulty_detect(mem->mem_bs);
 
 	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
 		goto out;

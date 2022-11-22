@@ -114,6 +114,16 @@ class ExecutableCommand(CommandWithParameters):
         """
         return "'({})'".format("|".join(self._exe_names))
 
+    @property
+    def with_exports(self):
+        """Get the command string with any environment variable exports.
+
+        Returns:
+            str: the command string with any environment variable exports
+
+        """
+        return " ".join([self.env.to_export_str(), str(self)]).strip()
+
     def run(self):
         """Run the command.
 

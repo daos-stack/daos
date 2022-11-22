@@ -18,6 +18,8 @@ import (
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -42,6 +44,20 @@ type poolServiceReq interface {
 	SetUUID(uuid.UUID)
 	GetSvcRanks() []uint32
 	SetSvcRanks(rl []uint32)
+}
+
+func (svc *mgmtSvc) makeLockedPoolServiceCall(ctx context.Context, method drpc.Method, req poolServiceReq) (*drpc.Response, error) {
+	ps, err := svc.getPoolService(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	lock, err := svc.sysdb.TakePoolLock(ctx, ps.PoolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+
+	return svc.makePoolServiceCall(lock.InContext(ctx), method, req)
 }
 
 func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method, req poolServiceReq) (*drpc.Response, error) {
@@ -88,12 +104,12 @@ func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
 
 // getPoolService returns the pool service entry for the given UUID.
 func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
-	uuid, err := svc.resolvePoolID(id)
+	poolUUID, err := svc.resolvePoolID(id)
 	if err != nil {
 		return nil, err
 	}
 
-	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -227,20 +243,27 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 // Validate minimum SCM/NVMe pool size per VOS target, pool size request params
 // are per-engine so need to be larger than (minimum_target_allocation *
 // target_count).
-func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
+func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%s\n", mgmtpb.Debug(req))
 
-	uuid, err := uuid.Parse(req.GetUuid())
+	poolUUID, err := uuid.Parse(req.GetUuid())
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse pool UUID %q", req.GetUuid())
 	}
 
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
 	resp = new(mgmtpb.PoolCreateResp)
-	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
 		resp.Status = int32(daos.Already)
@@ -352,9 +375,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.Tierbytes, ranklist.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(poolUUID, req.Tierbytes, ranklist.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
-	if err := svc.sysdb.AddPoolService(ps); err != nil {
+	if err := svc.sysdb.AddPoolService(ctx, ps); err != nil {
 		return nil, err
 	}
 
@@ -399,7 +422,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
 		svc.log.Errorf("pool create dRPC call failed: %s", err)
-		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
+		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
 			return nil, err
 		}
 
@@ -419,7 +442,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	if resp.GetStatus() != 0 {
-		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
+		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
 			return nil, err
 		}
 
@@ -428,7 +451,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 
 	ps.Replicas = ranklist.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
-	if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+	if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
 		return nil, err
 	}
 
@@ -440,7 +463,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 // checkPools iterates over the list of pools in the system to check
 // for any that are in an unexpected state. Pools not in the Ready
 // state will be cleaned up and removed from the system.
-func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolService) error {
+func (svc *mgmtSvc) checkPools(parent context.Context, psList ...*system.PoolService) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
@@ -459,6 +482,17 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 			continue
 		}
 
+		lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
+		if err != nil {
+			if fault.IsFaultCode(err, code.SystemPoolLocked) {
+				svc.log.Noticef("skipping cleanup on pool %s: %s", ps.PoolUUID, err)
+				continue
+			}
+			return err
+		}
+		defer lock.Release()
+		ctx := lock.InContext(parent)
+
 		svc.log.Errorf("pool %s is in unexpected state %s", ps.PoolUUID, ps.State)
 
 		// Change the pool state to Destroying in order to trigger
@@ -467,7 +501,7 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 		// will be removed from the system.
 		if ps.State != system.PoolServiceStateDestroying {
 			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
 				return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
 			}
 		}
@@ -480,8 +514,9 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 			Id:        ps.PoolUUID.String(),
 		}
 
-		_, err := svc.PoolDestroy(ctx, dr)
-		if err != nil {
+		if _, err := svc.PoolDestroy(ctx, dr); err != nil {
+			// Best effort cleanup. If the pool destroy fails here,
+			// another leadership step-up should get it eventually.
 			svc.log.Errorf("error while destroying pool %s: %s", ps.PoolUUID, err)
 		}
 	}
@@ -535,7 +570,7 @@ func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDe
 }
 
 // PoolDestroy implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
+func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
@@ -546,6 +581,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		return nil, err
 	}
 
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
 	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
 	if err != nil {
 		return nil, err
@@ -555,14 +597,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 
 	resp := &mgmtpb.PoolDestroyResp{}
 
-	inCleanupMode := false
-	if ps.State == system.PoolServiceStateDestroying {
-		// If we already tried to destroy the pool but it failed for some
-		// reason, try again, but instead use the full set of storage ranks
-		// in case the MS has lost track of the actual svc ranks.
-		req.SvcRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
-		inCleanupMode = true
-	} else {
+	if ps.State != system.PoolServiceStateDestroying {
 		// If recursive flag is unset, refuse to destroy pool if resident containers exist.
 		if !req.Recursive {
 			hasContainers, err := svc.poolHasContainers(ctx, req)
@@ -592,7 +627,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		// destroying state and persist the update(s).
 		if req.Force || (evStatus != daos.Busy && evStatus != daos.NoService) {
 			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
 				return nil, errors.Wrapf(err, "failed to update pool %s", poolUUID)
 			}
 		}
@@ -605,7 +640,23 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
+	// Note that, here, we set req.SvcRanks to all ranks in the system, not
+	// the PS replicas, not the up ranks in the pool. Doing such a "blind"
+	// destroy avoids contacting the PS, who may have already been destroyed
+	// by a previous pool destroy attempt or otherwise unavailable at this
+	// point. Moreover, we will also clean up pool resources on ranks that
+	// are now available but have previously been excluded from the pool.
+	gm, err := svc.sysdb.GroupMap()
+	if err != nil {
+		return nil, err
+	}
+	allRanks := make([]uint32, 0, len(gm.RankEntries))
+	for i := range gm.RankEntries {
+		allRanks = append(allRanks, i.Uint32())
+	}
+	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i] < allRanks[j] })
+	req.SvcRanks = allRanks
+	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy: id=%s nSvcRanks=%d\n", req.Id, len(req.SvcRanks))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
@@ -618,19 +669,8 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, resp:%+v\n", resp)
 
 	ds := daos.Status(resp.Status)
-	switch ds {
-	case daos.Success, daos.NotLeader, daos.NotReplica:
-		if ds == daos.NotLeader || ds == daos.NotReplica {
-			// If we're not cleaning up, then this is an error.
-			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
-			if !inCleanupMode {
-				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
-				break
-			}
-			// Otherwise, we've done all we can to try to recover.
-			resp.Status = int32(daos.Success)
-		}
-		if err := svc.sysdb.RemovePoolService(poolUUID); err != nil {
+	if ds == daos.Success {
+		if err := svc.sysdb.RemovePoolService(ctx, poolUUID); err != nil {
 			// In rare cases, there may be a race between pool cleanup handlers.
 			// As we know the service entry existed when we started this handler,
 			// if the attempt to remove it now fails because it doesn't exist,
@@ -639,7 +679,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 				return nil, errors.Wrapf(err, "failed to remove pool %s", poolUUID)
 			}
 		}
-	default:
+	} else {
 		svc.log.Errorf("PoolDestroy dRPC call failed: %s", ds)
 	}
 
@@ -653,7 +693,7 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.PoolEvict dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
@@ -675,7 +715,7 @@ func (svc *mgmtSvc) PoolExclude(ctx context.Context, req *mgmtpb.PoolExcludeReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolExclude dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolExclude, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExclude, req)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +737,7 @@ func (svc *mgmtSvc) PoolDrain(ctx context.Context, req *mgmtpb.PoolDrainReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.PoolDrain dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolDrain, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDrain, req)
 	if err != nil {
 		return nil, err
 	}
@@ -737,7 +777,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolExtend, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolExtend, req)
 	if err != nil {
 		return nil, err
 	}
@@ -759,7 +799,7 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 	}
 	svc.log.Debugf("MgmtSvc.PoolReintegrate dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
 	}
@@ -825,7 +865,7 @@ func (svc *mgmtSvc) PoolUpgrade(ctx context.Context, req *mgmtpb.PoolUpgradeReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolUpgrade dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpgrade, req)
 	if err != nil {
 		return nil, err
 	}
@@ -893,20 +933,27 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 	// Persist the label update in the MS DB if the
 	// dRPC call succeeded.
 	ps.PoolLabel = label
-	return svc.sysdb.UpdatePoolService(ps)
+	return svc.sysdb.UpdatePoolService(ctx, ps)
 }
 
 // PoolSetProp forwards a request to the I/O Engine to set pool properties.
-func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
+func (svc *mgmtSvc) PoolSetProp(parent context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
 
-	uuid, err := svc.resolvePoolID(req.GetId())
+	poolUUID, err := svc.resolvePoolID(req.GetId())
 	if err != nil {
 		return nil, err
 	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
 
 	if len(req.GetProperties()) == 0 {
 		return nil, errors.New("PoolSetProp() request with 0 properties")
@@ -918,7 +965,7 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 		// and also to update the pool service entry. Handle it first and separately
 		// so that if it fails, none of the other props are changed.
 		if prop.GetNumber() == daos.PoolPropertyLabel {
-			if err := svc.updatePoolLabel(ctx, req.GetSys(), uuid, prop); err != nil {
+			if err := svc.updatePoolLabel(ctx, req.GetSys(), poolUUID, prop); err != nil {
 				return nil, err
 			}
 			continue
@@ -1011,7 +1058,7 @@ func (svc *mgmtSvc) PoolOverwriteACL(ctx context.Context, req *mgmtpb.ModifyACLR
 	}
 	svc.log.Debugf("MgmtSvc.PoolOverwriteACL dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolOverwriteACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -1034,7 +1081,7 @@ func (svc *mgmtSvc) PoolUpdateACL(ctx context.Context, req *mgmtpb.ModifyACLReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolUpdateACL dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolUpdateACL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -1057,7 +1104,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolDeleteACL dispatch, req:%+v\n", req)
 
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
+	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolDeleteACL, req)
 	if err != nil {
 		return nil, err
 	}

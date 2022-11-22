@@ -565,7 +565,6 @@ bulk_iod_init(struct bio_desc *biod)
 
 	D_ALLOC_ARRAY(biod->bd_bulk_hdls, max_bulks);
 	if (biod->bd_bulk_hdls == NULL) {
-		D_ERROR("Failed to allocate bulk handle array\n");
 		return -DER_NOMEM;
 	}
 	biod->bd_bulk_max = max_bulks;
@@ -750,7 +749,6 @@ bulk_cache_create(struct bio_dma_buffer *bdb)
 	D_ALLOC_ARRAY(bbc->bbc_sorted, BIO_BULK_GRPS_MAX);
 	if (bbc->bbc_sorted == NULL) {
 		D_FREE(bbc->bbc_grps);
-		bbc->bbc_grps = NULL;
 		return -DER_NOMEM;
 	}
 

@@ -1,5 +1,4 @@
 """Build rdb tests"""
-import daos_build
 
 
 def scons():
@@ -10,14 +9,13 @@ def scons():
     prereqs.require(tenv, 'isal')
 
     # rdbt server
-    librdbt = daos_build.library(tenv, 'rdbt', ['rdb_test.c', 'rpc.c'],
-                                 install_off='../..')
+    librdbt = tenv.d_library('rdbt', ['rdb_test.c', 'rpc.c'], install_off='../..')
     tenv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client
-    rdbt = daos_build.program(tenv, 'rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
-                              LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal',
-                                    'protobuf-c', 'pthread'])
+    rdbt = tenv.d_program('rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
+                          LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
+                                'pthread'])
     tenv.Install('$PREFIX/bin', rdbt)
 
 
