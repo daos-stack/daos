@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import avocado
 import re
+import avocado
 from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
