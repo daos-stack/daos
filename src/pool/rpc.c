@@ -318,6 +318,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_SVC_LIST:
 			bits |= DAOS_PO_QUERY_PROP_SVC_LIST;
 			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			bits |= DAOS_PO_QUERY_PROP_OBJ_VERSION;
+			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
