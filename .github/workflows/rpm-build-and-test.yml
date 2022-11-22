@@ -78,7 +78,7 @@ jobs:
     name: Build RPM on EL 8
     runs-on: [self-hosted, mockbuilder]
     needs: [Import-commit-message, Import-commit-pragmas, Import-commit-pragmas2]
-    if: needs.Import-commit-pragmas2.outputs.rpm-test-version == '' ||
+    if: needs.Import-commit-pragmas2.outputs.rpm-test-version == '' &&
         !contains(needs.Import-commit-pragmas2.outputs.pr-repos, 'daos@')
     env:
       ARTIFACTORY_URL: https://artifactory.dc.hpdd.intel.com/
