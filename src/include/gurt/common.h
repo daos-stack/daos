@@ -249,14 +249,6 @@ char *d_realpath(const char *path, char *resolved_path);
 			 (oldcount) * sizeof(*(oldptr)),		\
 					     sizeof(*(oldptr)), count)
 
-#define D_REALLOC_NZ(newptr, oldptr, size)				\
-	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
-
-#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
-	D_REALLOC_COMMON(newptr, oldptr,				\
-			 (count) * sizeof(*(oldptr)),			\
-			 sizeof(*(oldptr)), count)
-
 /** realloc macros that do not clear the new memory */
 #define D_REALLOC_NZ(newptr, oldptr, size)				\
 	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
@@ -273,11 +265,14 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-#define D_FREE(ptr)							\
-	do {								\
-		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		d_free(ptr);						\
-		(ptr) = NULL;						\
+/* Free a pointer. Only logs if the pointer is non-NULL. */
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
@@ -286,7 +281,6 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
 #define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
-#define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
 	do {					\
@@ -449,6 +443,7 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 }
 
 void d_getenv_bool(const char *env, bool *bool_val);
+void d_getenv_char(const char *env, char *char_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);

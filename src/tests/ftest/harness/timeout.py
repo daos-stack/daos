@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,7 +34,7 @@ class HarnessTimeoutTest(Test):
 
         This test can be run in any CI stage: vm, small, medium, large
 
-        :avocado: tags=all
+        :avocado: tags=manual
         :avocado: tags=harness,harness_timeout_test,test_timeout
         """
         sleep_timeout = self.timeout + 1
@@ -57,7 +57,7 @@ class HarnessTimeoutTest(Test):
 
         This test can be run in any CI stage: vm, small, medium, large
 
-        :avocado: tags=all
+        :avocado: tags=manual
         :avocado: tags=hw,small,medium,ib2,large
         :avocado: tags=harness,harness_timeout_test,test_timeout_hw
         """

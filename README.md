@@ -34,12 +34,12 @@ information.
 ## Documentation
 
 The DAOS documentation is available [online](https://docs.daos.io/latest).
-More information can also be found on the [wiki](http://wiki.daos.io/).
+More information can also be found on the [wiki](https://wiki.daos.io/).
 
 ## Contacts
 
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos).
-Bugs should be reported through our [issue tracker](http://jira.daos.io/)
+Bugs should be reported through our [issue tracker](https://jira.daos.io/)
 with a test case to reproduce the issue (when applicable) and [debug logs](https://docs.daos.io/latest/admin/troubleshooting/).
 
 ## Community

@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -101,6 +102,9 @@ type (
 	jsonInfo interface {
 		WithJSONOutput() InfoLogger
 	}
+	jsonNotice interface {
+		WithJSONOutput() NoticeLogger
+	}
 	jsonError interface {
 		WithJSONOutput() ErrorLogger
 	}
@@ -114,6 +118,7 @@ func (ll *LeveledLogger) WithJSONOutput() *LeveledLogger {
 
 	var debugLoggers []DebugLogger
 	var infoLoggers []InfoLogger
+	var noticeLoggers []NoticeLogger
 	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
@@ -133,6 +138,15 @@ func (ll *LeveledLogger) WithJSONOutput() *LeveledLogger {
 		}
 	}
 	ll.infoLoggers = infoLoggers
+
+	for _, l := range ll.noticeLoggers {
+		if jsonLogger, ok := l.(jsonNotice); ok {
+			if nl, ok := jsonLogger.WithJSONOutput().(NoticeLogger); ok {
+				noticeLoggers = append(noticeLoggers, nl)
+			}
+		}
+	}
+	ll.noticeLoggers = noticeLoggers
 
 	for _, l := range ll.errorLoggers {
 		if jsonLogger, ok := l.(jsonError); ok {
@@ -166,6 +180,18 @@ func (l *DefaultInfoLogger) WithJSONOutput() InfoLogger {
 			dest:   l.dest,
 			prefix: l.prefix,
 			log:    NewJSONFormatter(l.dest, "INFO", l.prefix, infoLogFlags),
+		},
+	}
+}
+
+// WithJSONOutput switches the logger's output to use structured
+// JSON formatting.
+func (l *DefaultNoticeLogger) WithJSONOutput() NoticeLogger {
+	return &DefaultNoticeLogger{
+		baseLogger{
+			dest:   l.dest,
+			prefix: l.prefix,
+			log:    NewJSONFormatter(l.dest, "NOTICE", l.prefix, noticeLogFlags),
 		},
 	}
 }

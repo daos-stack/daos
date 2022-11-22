@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright 2016-2022 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,4 +21,4 @@
 """Tools for prebuilding external components from a SCons script"""
 
 # pylint: disable=wildcard-import
-from .base import * # noqa: F403,F401
+from .base import *  # noqa: F403,F401

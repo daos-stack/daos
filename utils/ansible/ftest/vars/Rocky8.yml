@@ -15,12 +15,19 @@ daos_base_deps:
 
 daos_dev_deps:
   rpms:
+    - cmake
     - createrepo
     - dnf-plugins-core
+    - hdf5-devel
+    - hdf5-mpich-devel
+    - hdf5-mpich-static
+    - hdf5-static
     - meson
+    - mpich-devel
     - python3-clustershell
     - rpmdevtools
     - rpm-build
+    - wget
   pips:
     - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
     - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
@@ -30,15 +37,21 @@ daos_dev_deps:
     - "avocado-framework-plugin-result-html=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
     - "avocado-framework-plugin-result-upload=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
     - "avocado-framework-plugin-varianter-yaml-to-mux=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
+    - pyelftools
 
 daos_client_deps:
   rpms:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
+    - hdf5-vol-daos-mpich-tests
+    - ior
+    - jq
     - libuuid
     - lz4-libs
+    - mpich
     - systemd
+    - util-linux
 
 daos_server_deps:
   rpms:

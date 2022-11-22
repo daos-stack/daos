@@ -21,6 +21,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up each test case."""
         super().setUp()
@@ -41,8 +42,10 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             expected with invalid inputs in command line and within ACL file
             provided.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_overwrite_acl_inputs
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container_acl
+        :avocado: tags=cont_overwrite_acl_inputs,test_acl_overwrite_invalid_inputs
         """
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
@@ -77,8 +80,10 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             expected with invalid inputs in command line and within ACL file
             provided.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_overwrite_acl_file
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container_acl
+        :avocado: tags=cont_overwrite_acl_file,test_overwrite_invalid_acl_file
         """
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")

@@ -30,7 +30,6 @@ struct migrate_pool_tls {
 	/* POOL UUID and pool to be migrated */
 	uuid_t			mpt_pool_uuid;
 	struct ds_pool_child	*mpt_pool;
-	uint64_t		mpt_global_version;
 	unsigned int		mpt_version;
 
 	/* Link to the migrate_pool_tls list */
@@ -90,6 +89,10 @@ struct migrate_pool_tls {
 	ABT_mutex		mpt_inflight_mutex;
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
+
+	/* The new layout version for upgrade job */
+	uint32_t		mpt_new_layout_ver;
+
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 				mpt_fini:1;
@@ -122,6 +125,10 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_resent;
 	/** Total number of retry update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_partial;
 };
 
 struct obj_tls {
@@ -136,7 +143,33 @@ struct obj_tls {
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_tgt_update_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_bulk_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bulk_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_vos_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_vos_lat[NR_LATENCY_BUCKETS];
 };
+
+static inline unsigned int
+lat_bucket(uint64_t size)
+{
+	int nr;
+
+	if (size <= 256)
+		return 0;
+
+	/** return number of leading zero-bits */
+	nr =  __builtin_clzl(size - 1);
+
+	/** >4MB, return last bucket */
+	if (nr < 42)
+		return NR_LATENCY_BUCKETS - 1;
+
+	return 56 - nr;
+}
 
 static inline struct obj_tls *
 obj_tls_get()
@@ -184,6 +217,68 @@ struct daos_cpd_args {
 	uint32_t		 dca_idx;
 };
 
+static inline uint32_t
+ds_obj_cpd_get_head_type(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_heads.ca_count <= dtx_idx)
+		return DCST_UNKNOWN;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+
+	return dcs->dcs_type;
+}
+
+static inline struct daos_cpd_bulk *
+ds_obj_cpd_get_head_bulk(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_heads.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+	if (dcs->dcs_type != DCST_BULK_HEAD)
+		return NULL;
+
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_bulk *
+ds_obj_cpd_get_disp_bulk(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_ents.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+	if (dcs->dcs_type != DCST_BULK_DISP)
+		return NULL;
+
+	return dcs->dcs_buf;
+}
+
+static inline struct daos_cpd_bulk *
+ds_obj_cpd_get_tgts_bulk(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_tgts.ca_count <= dtx_idx)
+		return NULL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+	if (dcs->dcs_type != DCST_BULK_TGT)
+		return NULL;
+
+	return dcs->dcs_buf;
+}
+
 static inline struct daos_cpd_sub_head *
 ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
 {
@@ -194,6 +289,9 @@ ds_obj_cpd_get_dcsh(crt_rpc_t *rpc, int dtx_idx)
 		return NULL;
 
 	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+
+	if (dcs->dcs_type == DCST_BULK_HEAD)
+		return &((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_head;
 
 	/* daos_cpd_sub_head is unique for a DTX. */
 	return dcs->dcs_buf;
@@ -224,14 +322,19 @@ ds_obj_cpd_get_tgts(crt_rpc_t *rpc, int dtx_idx)
 		return NULL;
 
 	dcs = (struct daos_cpd_sg *)oci->oci_disp_tgts.ca_arrays + dtx_idx;
+
+	if (dcs->dcs_type == DCST_BULK_TGT)
+		return ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_iov.iov_buf;
+
 	return dcs->dcs_buf;
 }
 
 static inline struct daos_cpd_disp_ent *
 ds_obj_cpd_get_dcde(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
 {
-	struct obj_cpd_in	*oci = crt_req_get(rpc);
-	struct daos_cpd_sg	*dcs;
+	struct obj_cpd_in		*oci = crt_req_get(rpc);
+	struct daos_cpd_sg		*dcs;
+	struct daos_cpd_disp_ent	*dcde;
 
 	if (oci->oci_disp_ents.ca_count <= dtx_idx)
 		return NULL;
@@ -241,7 +344,12 @@ ds_obj_cpd_get_dcde(crt_rpc_t *rpc, int dtx_idx, int ent_idx)
 	if (ent_idx >= dcs->dcs_nr)
 		return NULL;
 
-	return (struct daos_cpd_disp_ent *)dcs->dcs_buf + ent_idx;
+	if (dcs->dcs_type == DCST_BULK_DISP)
+		dcde = ((struct daos_cpd_bulk *)dcs->dcs_buf)->dcb_iov.iov_buf;
+	else
+		dcde = dcs->dcs_buf;
+
+	return dcde + ent_idx;
 }
 
 static inline int
@@ -258,6 +366,32 @@ ds_obj_cpd_get_dcsr_cnt(crt_rpc_t *rpc, int dtx_idx)
 }
 
 static inline int
+ds_obj_cpd_get_dcsh_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_sub_heads.ca_count <= dtx_idx)
+		return -DER_INVAL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_sub_heads.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
+
+static inline int
+ds_obj_cpd_get_dcde_cnt(crt_rpc_t *rpc, int dtx_idx)
+{
+	struct obj_cpd_in	*oci = crt_req_get(rpc);
+	struct daos_cpd_sg	*dcs;
+
+	if (oci->oci_disp_ents.ca_count <= dtx_idx)
+		return -DER_INVAL;
+
+	dcs = (struct daos_cpd_sg *)oci->oci_disp_ents.ca_arrays + dtx_idx;
+	return dcs->dcs_nr;
+}
+
+static inline int
 ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
 {
 	struct obj_cpd_in	*oci = crt_req_get(rpc);
@@ -270,7 +404,6 @@ ds_obj_cpd_get_tgt_cnt(crt_rpc_t *rpc, int dtx_idx)
 	return dcs->dcs_nr;
 }
 
-
 static inline bool
 obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 {
@@ -280,4 +413,14 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 /* obj_enum.c */
 int
 fill_oid(daos_unit_oid_t oid, struct ds_obj_enum_arg *arg);
+
+/* srv_ec.c */
+struct obj_rw_in;
+int obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt, struct obj_iod_array *iod_array,
+			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+			uint32_t leader_id, void *tgt_map, uint32_t map_size,
+			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+			struct obj_ec_split_req **split_req, struct obj_pool_metrics *opm);
+void obj_ec_split_req_fini(struct obj_ec_split_req *req);
+
 #endif /* __DAOS_OBJ_SRV_INTENRAL_H__ */

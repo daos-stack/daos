@@ -59,6 +59,7 @@ const (
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+	StoragePathAccessDenied
 )
 
 // SCM fault codes
@@ -74,9 +75,9 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
-	ScmNotInterleaved
 	ScmNoModules
-	ScmNamespacesNrMismatch
+	ScmBadRegion
+	ScmInvalidPMem
 )
 
 // Bdev fault codes
@@ -90,12 +91,16 @@ const (
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
 	BdevAccelOptionUnknown
+	BdevConfigTypeMismatch
+	BdevNonRootVFIODisable
+	BdevNoIOMMU
 )
 
 // DAOS system fault codes
 const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
+	SystemPoolLocked
 )
 
 // client fault codes
@@ -122,6 +127,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePageMem
@@ -132,6 +138,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerPoolHasContainers
 )
 
 // server config fault codes
@@ -164,6 +171,7 @@ const (
 	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
+	ServerConfigVMDSettingDuplicate
 )
 
 // SPDK library bindings codes

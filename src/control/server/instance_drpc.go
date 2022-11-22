@@ -22,6 +22,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -90,7 +91,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 //
 // MemberResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
+func drespToMemberResult(rank ranklist.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
 	if err != nil {
 		return system.NewMemberResult(rank,
 			errors.WithMessagef(err, "rank %s dRPC failed", &rank),
@@ -200,7 +201,7 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	return resp, nil
 }
 
-func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevResp_Device) (*storage.SmdDevice, error) {
+func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevice, error) {
 	smdDev := new(storage.SmdDevice)
 	if err := convert.Types(smd, smdDev); err != nil {
 		return nil, errors.Wrap(err, "convert smd")
@@ -265,10 +266,10 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 
 		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
 		if err != nil {
-			// Only log error if error indicates non-existent health and the SMD entity
-			// has abnormal state.
+			// Log the error if it indicates non-existent health and the SMD entity has
+			// an abnormal state. Otherwise it is expected that health may be missing.
 			status, ok := errors.Cause(err).(daos.Status)
-			if ok && status == daos.Nonexistent && !smdDev.NvmeState.IsNormal() {
+			if ok && status == daos.Nonexistent && smdDev.NvmeState != storage.NvmeStateNormal {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
 					msg, smdDev.NvmeState.String())
 			} else {

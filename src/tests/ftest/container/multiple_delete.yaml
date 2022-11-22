@@ -1,45 +1,44 @@
 hosts:
-    test_servers:
-        - server-A
-        - server-B
-        - server-C
-        - server-D
-    test_clients:
-        - client-A
+  test_servers: 4
+  test_clients: 1
 
 timeout: 600
 
 server_config:
-    name: daos_server
-    servers:
-        log_mask: INFO
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-        scm_class: dcpm
-        scm_list: ["/dev/pmem0"]
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 
 pool:
-    mode: 146 # 146 is RW
-    name: daos_server
-    scm_size: 4000000000
-    nvme_size: 40000000000
-    control_method: dmg
+  size: 50%
+  control_method: dmg
 
 container:
-    type: POSIX
-    control_method: daos
+  type: POSIX
+  control_method: daos
 
 ior:
-    client_processes:
-        np_2:
-            np: 2
-    test_dir: "/"
-    test_file: /testFile
-    repetitions: 1
-    dfs_destroy: False
-    iorflags:
-        flags: "-v -w -k"
-    api: DFS
-    transfer_size: '1M'
-    block_size: '1G'
-    dfs_oclass: "EC_2P2G1"
+  client_processes:
+    np_2:
+      np: 2
+  test_dir: /
+  test_file: /testFile
+  repetitions: 1
+  dfs_destroy: false
+  iorflags:
+    flags: -v -w -k
+  api: DFS
+  transfer_size: 1M
+  block_size: 1G
+  dfs_oclass: EC_2P2G1
+  dfs_dir_oclass: EC_2P2G1

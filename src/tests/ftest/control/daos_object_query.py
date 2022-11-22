@@ -38,9 +38,11 @@ class DaosObjectQuery(TestWithServers):
     def test_object_query(self):
         """JIRA ID: DAOS-4694
         Test Description: Test daos object query.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=control
-        :avocado: tags=daos_object_query
+        :avocado: tags=daos_object_query,test_object_query
         """
         daos_cmd = DaosCommand(self.bin)
         errors = []

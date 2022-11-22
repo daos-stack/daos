@@ -52,7 +52,7 @@ directory.
 
 ### Control Service
 
-The gRPC server registers the [control service](/src/proto/ctl/control.proto)
+The gRPC server registers the [control service](/src/proto/ctl/ctl.proto)
 to handle requests from the management tool.
 
 Control service requests are operations that will be performed on one or more
@@ -203,10 +203,10 @@ A view of DAOS' software component architecture:
 ## Running
 
 For instructions on building and running DAOS see the
-[admin guide](https://daos-stack.github.io/admin/installation/).
+[admin guide](https://docs.daos.io/latest/admin/hardware/).
 
 ## Configuration
 
 For instructions on configuring the DAOS server see the
-[admin guide](https://daos-stack.github.io/admin/deployment/#server-configuration-file).
+[admin guide](https://docs.daos.io/latest/admin/deployment/#server-configuration-file).
 

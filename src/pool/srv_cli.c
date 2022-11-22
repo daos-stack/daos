@@ -17,6 +17,7 @@
 #include <daos_event.h>
 #include <daos_task.h>
 #include <daos_srv/daos_engine.h>
+#include <daos_srv/rebuild.h>
 #include "cli_internal.h"
 
 int
@@ -65,6 +66,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	ds_rebuild_running_query(pool_uuid, &pool->dp_rebuild_version);
 	D_ASSERT(svc_list != NULL);
 	rc = rsvc_client_init(&pool->dp_client, svc_list);
 	if (rc != 0)

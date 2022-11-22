@@ -1,14 +1,19 @@
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 timeout: 90
 server_config:
   name: daos_server
-  servers:
-    targets: 1
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 5
 pool:
-  createset:
-    name: daos_server
   control_method: dmg
   createsize: !mux
     size1gb:

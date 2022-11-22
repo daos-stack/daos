@@ -313,3 +313,11 @@
    ...
    fun:start_thread
 }
+{
+   getpwnam_r leak
+   Memcheck:Leak
+   ...
+   fun:_nss_systemd_getpwnam_r
+   fun:getpwnam_r*
+   fun:daos_acl_principal_to_uid
+}

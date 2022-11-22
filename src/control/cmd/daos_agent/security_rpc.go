@@ -24,7 +24,7 @@ type SecurityModule struct {
 	config *security.TransportConfig
 }
 
-//NewSecurityModule creates a new module with the given initialized TransportConfig
+// NewSecurityModule creates a new module with the given initialized TransportConfig
 func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
 	mod := SecurityModule{
 		log:    log,

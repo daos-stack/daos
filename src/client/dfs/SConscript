@@ -1,11 +1,11 @@
 """Build FUSE client"""
-import daos_build
+
 
 def configure_lustre(denv):
     """Do Lustre configure checks"""
     if GetOption('help') or GetOption('clean'):
         return denv
-    #If Lustre installed build a Lustre-aware libduns
+    # If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
     if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
@@ -25,11 +25,12 @@ def configure_lustre(denv):
         print("Not building with Lustre bindings.")
     return conf.Finish()
 
+
 def scons():
     """Execute build"""
     Import('env')
 
-    daos_build.add_build_rpath(env)
+    env.d_add_build_rpath()
 
     denv = env.Clone()
 
@@ -38,15 +39,16 @@ def scons():
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
-    dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
+    dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
+    duns = denv.d_library('duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
+
 
 if __name__ == "SCons.Script":
     scons()

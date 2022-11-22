@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,28 +33,26 @@
  * In order to minimize conflicts between patches, please:
  *   * Don't change the first and last entries in the list
  *   * Don't arbitrarily reorder entries
- *   * Do limit lines to 73 columns, wrapping as necessary
+ *   * Do limit lines to 99 columns, wrapping as necessary
  */
-#define RAS_EVENT_LIST							\
-	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")		\
-	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")	\
-	X(RAS_ENGINE_DIED,		"engine_died")			\
-	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
-	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
-	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
-	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
-	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\
-	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")	\
-	X(RAS_POOL_DF_INCOMPAT,						\
-	  "pool_durable_format_incompatible")				\
-	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")	\
-	X(RAS_CONT_DF_INCOMPAT,						\
-	  "container_durable_format_incompatible")			\
-	X(RAS_RDB_DF_INCOMPAT,						\
-	  "rdb_durable_format_incompatible")				\
-	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")		\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")		\
-	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")		\
+#define RAS_EVENT_LIST									\
+	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")				\
+	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")			\
+	X(RAS_ENGINE_DIED,		"engine_died")					\
+	X(RAS_ENGINE_ASSERTED,		"engine_asserted")				\
+	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")				\
+	X(RAS_POOL_CORRUPTION_DETECTED,	"corruption_detected")				\
+	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")				\
+	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")			\
+	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")				\
+	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")			\
+	X(RAS_POOL_DF_INCOMPAT,		"pool_durable_format_incompatible")		\
+	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")			\
+	X(RAS_CONT_DF_INCOMPAT,		"container_durable_format_incompatible")	\
+	X(RAS_RDB_DF_INCOMPAT,		"rdb_durable_format_incompatible")		\
+	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")				\
+	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")				\
+	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")				\
 	X(RAS_SYSTEM_STOP_FAILED,	"system_stop_failed")
 
 /** Define RAS event enum */
@@ -157,11 +155,12 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
  *
  * \param[in] pool	UUID of DAOS pool with updated service replicas.
  * \param[in] svcl	New list of pool service replica ranks.
+ * \param[in] version	Version of \a svcl.
  *
  * \retval		Zero on success, non-zero otherwise.
  */
 int
-ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl);
+ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version);
 
 /**
  * Notify control plane that swim has detected a dead rank.

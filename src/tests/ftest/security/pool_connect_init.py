@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -31,8 +31,9 @@ class PoolSecurityTest(TestWithServers):
            Above 3 testcases are defined in the yaml file.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=small
-        :avocado: tags=pool,sec_basic,security
+        :avocado: tags=vm
+        :avocado: tags=pool,security
+        :avocado: tags=sec_basic,test_pool_connect
         """
         der_no_permission = "RC: -1001"
         user_uid = os.geteuid()

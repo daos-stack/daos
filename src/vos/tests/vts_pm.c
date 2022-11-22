@@ -743,6 +743,19 @@ punch_model_test(void **state)
 	assert_int_equal(rex.rx_idx, 0);
 	assert_int_equal(rex.rx_nr, strlen(latest));
 	assert_int_equal(max_write, 11);
+
+	/** Just query max_write */
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, 0, 11, NULL, NULL, NULL, &max_write, 0, 0,
+			       NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(max_write, 11);
+
+	/** Invalid arguments tests */
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, DAOS_GET_MAX, 11, NULL, NULL, NULL,
+			       &max_write, 0, 0, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = vos_obj_query_key(arg->ctx.tc_co_hdl, oid, 0, 11, NULL, NULL, NULL, NULL, 0, 0, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static void
@@ -3004,14 +3017,14 @@ run_pm_tests(const char *cfg)
 	char	test_name[DTS_CFG_MAX];
 	int	rc;
 
-	dts_create_config(test_name, "VOS Universal Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Punch tests %s", cfg);
 	if (DAOS_ON_VALGRIND)
 		buf_size = 100;
 
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
 
-	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
+	dts_create_config(test_name, "Conditional tests %s", cfg);
 
 	rc += cmocka_run_group_tests_name(test_name, punch_model_tests_pmdk,
 					  setup_io, teardown_io);

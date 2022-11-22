@@ -696,28 +696,40 @@ A special aggregation ULT processes aggregation, frequently yielding to avoid bl
 
 ## VOS Checksum Management
 
-VOS is responsible for storing checksums during an object update and retrieve checksums on an object fetch.
-Checksums will be stored with other VOS metadata in storage class memory.  For Single Value types, a single checksum is stored.
+VOS is responsible for storing checksums during an object update and retrieve
+checksums on an object fetch. Checksums will be stored with other VOS metadata
+in storage class memory. For Single Value types, a single checksum is stored.
 For Array Value types, multiple checksums can be stored based on the chunk size.
 
-The **Chunk Size** is defined as the maximum number of bytes of data that a checksum is derived from.
-While extents are defined in terms of records, the chunk size is defined in terms of bytes.
-When calculating the number of checksums needed for an extent, the number of records and the record size is needed.
-Checksums should typically be derived from Chunk Size bytes, however,
-if the extent is smaller than Chunk Size or an extent is not "Chunk Aligned," then a checksum might be derived from bytes smaller than Chunk Size.
+The **Chunk Size** is defined as the maximum number of bytes of data that a
+checksum is derived from. While extents are defined in terms of records, the
+chunk size is defined in terms of bytes. When calculating the number of
+checksums needed for an extent, the number of records and the record size is
+needed. Checksums should typically be derived from Chunk Size bytes, however, if
+the extent is smaller than Chunk Size or an extent is not "Chunk Aligned," then
+a checksum might be derived from bytes smaller than Chunk Size.
 
-The **Chunk Alignment** will have an absolute offset, not an I/O offset. So even if an extent is exactly, or less than, Chunk Size bytes long, it may have more than one Chunk if it crosses the alignment barrier.
+The **Chunk Alignment** will have an absolute offset, not an I/O offset. So even
+if an extent is exactly, or less than, Chunk Size bytes long, it may have more
+than one Chunk if it crosses the alignment barrier.
 
 ### Configuration
-Checksums will be configured for a container when a container is created. Checksum specific properties can be included in the daos_cont_create API.
-This configuration has not been fully implemented yet, but properties might include checksum type, chunk size, and server side verification.
+Checksums will be configured for a container when a container is created.
+Checksum specific properties can be included in the daos_cont_create API. This
+configuration has not been fully implemented yet, but properties might include
+checksum type, chunk size, and server side verification.
 
 ### Storage
-Checksums will be stored in a record(vos_irec_df) or extent(evt_desc) structure for Single Value types and Array Value types respectfully.
-Because the checksum can be of variable size, depending on the type of checksum configured, the checksum itself will be appended to the end of the structure.
-The size needed for checksums is included while allocating memory for the persistent structures on SCM (vos_reserve_single/vos_reserve_recx).
+Checksums will be stored in a record(vos_irec_df) or extent(evt_desc) structure
+for Single Value types and Array Value types respectfully. Because the checksum
+can be of variable size, depending on the type of checksum configured, the
+checksum itself will be appended to the end of the structure. The size needed
+for checksums is included while allocating memory for the persistent structures
+on SCM (vos_reserve_single/vos_reserve_recx).
 
-The following diagram illustrates the overall VOS layout and where checksums will be stored. Note that the checksum type isn't actually stored in vos_cont_df yet.
+The following diagram illustrates the overall VOS layout and where checksums
+will be stored. Note that the checksum type isn't actually stored in vos_cont_df
+yet.
 
 ![../../docs/graph/Fig_021.png](../../docs/graph/Fig_021.png "How checksum fits into the VOS Layout")
 
@@ -735,11 +747,19 @@ end of the persistent structure.
 On a fetch, the update flow is essentially reversed.
 
 For reference, key junction points in the flows are:
-
  - SV Update: 	vos_update_end 	-> akey_update_single 	-> svt_rec_store
  - Sv Fetch: 	vos_fetch_begin -> akey_fetch_single 	-> svt_rec_load
  - EV Update: 	vos_update_end 	-> akey_update_recx 	-> evt_insert
  - EV Fetch: 	vos_fetch_begin -> akey_fetch_recx 	-> evt_fill_entry
+
+### Marking data as corrupted
+When data is discovered as being corrupted, the bio_addr will be marked with a
+corrupted flag to prevent subsequent verifications on data that is already known
+to be corrupted. Because the checksum scrubber will be iterating the vos
+objects, the vos_iter API is used to mark objects as corrupt. The
+vos_iter_process() will take the iter handle that the corruptions was discovered
+on and will call into the btree/evtree to update the durable format structure
+that contains the bio_addr.
 
 <a id="80"></a>
 

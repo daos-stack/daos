@@ -227,8 +227,7 @@ dfs_sys_setattr(dfs_sys_t *dfs_sys, const char *path, struct stat *stbuf,
 		int flags, int sflags);
 
 /**
- * Set atime and mtime of a path. This currently does not set
- * nanosecond precision.
+ * Set atime and mtime of a path. atime as of 2.2 is ignored.
  *
  * \param[in]	dfs_sys Pointer to the mounted file system.
  * \param[in]	path	Link path of object.

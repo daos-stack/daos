@@ -125,7 +125,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	int	rc;
 	daos_prop_t *props;
 
-	props = daos_prop_alloc(3);
+	props = daos_prop_alloc(4);
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	props->dpp_entries[0].dpe_val = TEST_EC_CELL_SZ;
@@ -133,6 +133,8 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	props->dpp_entries[3].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);

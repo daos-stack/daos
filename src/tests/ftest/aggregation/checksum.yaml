@@ -1,19 +1,21 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-    - server-C
-  test_clients:
-    - client-B
+  test_servers: 3
+  test_clients: 1
 timeout: 240
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 20%
   nvme_size: 50%
   svcn: 1

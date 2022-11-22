@@ -65,9 +65,9 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
         # Setup the thread manager
         thread_manager = ThreadManager(run_ior, self.timeout - 30)
         index_clients_intercept_file = [
-            (0, self.hostlist_clients[0:-1], os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            (0, list(self.hostlist_clients)[0:-1], os.path.join(self.prefix, 'lib64', 'libioil.so'),
              os.path.join(self.dfuse.mount_dir.value, "testfile_0_intercept")),
-            (1, self.hostlist_clients[-1:], None,
+            (1, list(self.hostlist_clients)[-1:], None,
              os.path.join(self.dfuse.mount_dir.value, "testfile_1")),
         ]
         self.job_manager = []
@@ -75,7 +75,7 @@ class IorInterceptVerifyDataIntegrity(DfuseTestBase):
             # Add a job manager for each ior command. Use a timeout for the ior command that leaves
             # enough time to report the summary of all the threads
             job_manager = get_job_manager(
-                self, "Mpirun", None, False, "mpich", self.get_remaining_time() - 30)
+                self, subprocess=False, timeout=self.get_remaining_time() - 30)
 
             # Define the parameters that will be used to run an ior command in this thread
             thread_manager.add(

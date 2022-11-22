@@ -1,11 +1,11 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from getpass import getuser
+import os
 import paramiko
 
 from general_utils import get_remote_file_size
@@ -57,8 +57,7 @@ class SparseFile(IorTestBase):
 
         # create large file and perform write to it so that if goes out of
         # space.
-        sparse_file = str(self.dfuse.mount_dir.value + "/" +
-                          "sparsefile.txt")
+        sparse_file = os.path.join(self.dfuse.mount_dir.value, 'sparsefile.txt')
         self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(
@@ -76,33 +75,28 @@ class SparseFile(IorTestBase):
         file_obj = sftp.open(sparse_file, 'r+')
         # set file size to max available nvme size
         sftp.truncate(sparse_file, self.space_before)
-        fsize_after_truncate = get_remote_file_size(self.hostlist_clients[0],
-                                                    sparse_file)
-        self.log.info("File size (in bytes) after truncate: %s",
-                      fsize_after_truncate)
+        fsize_after_truncate = get_remote_file_size(self.hostlist_clients[0], sparse_file)
+        self.log.info("File size (in bytes) after truncate: %s", fsize_after_truncate)
         # verifying the file size got set to desired value
         self.assertTrue(fsize_after_truncate == self.space_before)
 
         # write to the first byte of the file with char 'A'
-        dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
-                        format(sparse_file)
+        dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_first_byte)
-        fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0],
-                                                   sparse_file)
+        fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0], sparse_file)
         self.log.info("File size (in bytes) after writing first byte: %s",
                       fsize_write_1stbyte)
-        # verify file did not got overriten after dd write.
+        # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file
         dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
-        fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0],
-                                                       sparse_file)
+        fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0], sparse_file)
         self.log.info("File size (in bytes) after writing 1024th byte: %s",
                       fsize_write_1024thwrite)
-        # verify file did not got overriten after dd write.
+        # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1024thwrite == self.space_before)
 
         # Obtain the value of 1st byte and 1024th byte in the file and

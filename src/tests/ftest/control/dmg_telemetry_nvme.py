@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,8 @@ from telemetry_test_base import TestWithTelemetry
 from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 
-class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
+
+class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
     # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine NVMe metrics.

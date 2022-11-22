@@ -31,10 +31,10 @@ type HashOptions struct {
 	// Default is false (in which case the tag is used instead)
 	SlicesAsSets bool
 
-	// UseStringer will attempt to use fmt.Stringer aways. If the struct
+	// UseStringer will attempt to use fmt.Stringer always. If the struct
 	// doesn't implement fmt.Stringer, it'll fall back to trying usual tricks.
 	// If this is true, and the "string" tag is also set, the tag takes
-	// precedense (meaning that if the type doesn't implement fmt.Stringer, we
+	// precedence (meaning that if the type doesn't implement fmt.Stringer, we
 	// panic)
 	UseStringer bool
 }
@@ -323,8 +323,7 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 				}
 
 				if w.ignorezerovalue {
-					zeroVal := reflect.Zero(reflect.TypeOf(innerV.Interface())).Interface()
-					if innerV.Interface() == zeroVal {
+					if innerV.IsZero() {
 						continue
 					}
 				}

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -10,12 +9,14 @@ from ast import literal_eval
 import os
 import json
 import re
+import sys
 from time import time
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
 from avocado.core import exceptions
 from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
 from cart_ctl_utils import CartCtl
@@ -26,12 +27,13 @@ from distro_utils import detect
 from dmg_utils import get_dmg_command
 from fault_config_utils import FaultInjection
 from general_utils import \
-    get_partition_hosts, stop_processes, get_default_config_file, pcmd, get_file_listing, \
+    stop_processes, get_default_config_file, pcmd, get_file_listing, \
     DaosTestError, run_command, dump_engines_stacks, get_avocado_config_value, \
-    set_avocado_config_value
+    set_avocado_config_value, nodeset_append_suffix
+from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from server_utils import DaosServerManager
+from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
 from write_host_file import write_host_file
@@ -112,11 +114,9 @@ class Test(avocadoTest):
             self.timeout = self.timeouts
         self.log.info("self.timeout: %s", self.timeout)
 
-        item_list = self.logdir.split('/')
-        for index, item in enumerate(item_list):
-            if item == 'job-results':
-                self.job_id = item_list[index + 1]
-                break
+        # Set the job_id to the unique sub directory name of the test-results sub directory
+        self.log.debug("self.logdir: %s", self.logdir)
+        self.job_id = self.logdir.split('/')[-3]
 
         self.log.info("Job-ID: %s", self.job_id)
         self.log.info("Test PID: %s", os.getpid())
@@ -314,20 +314,6 @@ class Test(avocadoTest):
             ": {}".format(reason) if reason else "")
         self._teardown_cancel.add(ticket)
 
-    def get_test_info(self):
-        """Get the python file, class, and method from the test name.
-
-        Returns:
-            tuple: the test filename, python class, and python method
-
-        """
-        keys = ("id", "file", "class", "method", "variant")
-        info = [self.name.uid]
-        info.extend(self.name.name.split(":"))
-        info.extend(info.pop(-1).split("."))
-        info.append(self.name.variant)
-        return {key: info[index] for index, key in enumerate(keys)}
-
     def get_test_name(self):
         """Obtain the test method name from the Avocado test name.
 
@@ -335,7 +321,7 @@ class Test(avocadoTest):
             str: name of the test method
 
         """
-        return self.get_test_info()["method"]
+        return self.name.name.split(".")[-1]
 
     def get_elapsed_time(self):
         """Get the elapsed test time.
@@ -546,41 +532,35 @@ class TestWithoutServers(Test):
 
     def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
         """Get a NodeSet for the hosts to use in the test.
+
         Args:
             yaml_key (str): test yaml key used to obtain the set of hosts to test
             partition_key (str): test yaml key used to obtain the host partition name
             reservation_key (str): test yaml key used to obtain the host reservation name
             namespace (str): test yaml path to the keys
+
         Returns:
             NodeSet: the set of hosts to test obtained from the test yaml
+
         """
-        reservation_default = os.environ.get("_".join(["DAOS", reservation_key.upper()]), None)
-
-        # Collect any host information from the test yaml
-        host_data = self.params.get(yaml_key, namespace)
-        partition = self.params.get(partition_key, namespace)
-        reservation = self.params.get(reservation_key, namespace, reservation_default)
-        if partition is not None and host_data is not None:
-            self.fail(
-                "Specifying both a '{}' partition and '{}' set of hosts is not supported!".format(
-                    partition_key, yaml_key))
-
-        if partition is not None and host_data is None:
-            # If a partition is provided instead of a set of hosts get the set of hosts from the
-            # partition information
-            setattr(self, partition_key, partition)
-            setattr(self, reservation_key, reservation)
-            slurm_nodes = get_partition_hosts(partition, reservation)
-            if not slurm_nodes:
-                self.fail(
-                    "No valid nodes in {} partition with {} reservation".format(
-                        partition, reservation))
-            host_data = slurm_nodes
-
-        # Convert the set of hosts from slurm or the yaml file into a NodeSet
-        if isinstance(host_data, (list, tuple)):
-            return NodeSet.fromlist(host_data)
-        return NodeSet(host_data)
+        control = get_local_host()
+        data = list(get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace))
+        try:
+            data.append(get_partition_hosts(self.log, control, data[1]))
+        except SlurmFailed:
+            self.log.error(
+                "Error collecting hosts from the %s partition",
+                partition_key, exc_info=sys.exc_info())
+            self.fail("Unable to collect partition information")
+        try:
+            data.append(get_reservation_hosts(self.log, control, data[2]))
+        except SlurmFailed:
+            self.log.error(
+                "Error collecting hosts from the %s reservation",
+                reservation_key, exc_info=sys.exc_info())
+            self.fail("Unable to collect reservation information")
+        role = HostRole(*data)
+        return role.hosts
 
 
 class TestWithServers(TestWithoutServers):
@@ -636,13 +616,12 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = "Systemctl"
         self.setup_start_servers = True
         self.setup_start_agents = True
-        self.hostlist_servers = None
-        self.hostlist_clients = None
+        self.slurm_exclude_servers = False
+        self.slurm_exclude_nodes = NodeSet()
+        self.host_info = HostInfo()
+        self.hostlist_servers = NodeSet()
+        self.hostlist_clients = NodeSet()
         self.hostfile_clients = None
-        self.server_partition = None
-        self.client_partition = None
-        self.server_reservation = None
-        self.client_reservation = None
         self.hostfile_servers_slots = 1
         self.hostfile_clients_slots = 1
         self.pool = None
@@ -661,6 +640,9 @@ class TestWithServers(TestWithoutServers):
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         self.label_generator = LabelGenerator()
+
+        # Suffix to append to each access point name
+        self.access_points_suffix = None
 
     def setUp(self):
         """Set up each test case."""
@@ -685,6 +667,10 @@ class TestWithServers(TestWithoutServers):
         self.setup_start_agents = self.params.get(
             "start_agents", "/run/setup/*", self.setup_start_agents)
 
+        # Support removing any servers from the client list
+        self.slurm_exclude_servers = self.params.get(
+            "slurm_exclude_servers", "/run/setup/*", self.slurm_exclude_servers)
+
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
         self.server_group = self.params.get(
@@ -694,37 +680,31 @@ class TestWithServers(TestWithoutServers):
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
 
         # Determine which hosts to use as servers and optionally clients.
-        self.hostlist_servers = self.params.get("test_servers", "/run/hosts/*")
-        self.hostlist_clients = self.params.get("test_clients", "/run/hosts/*")
+        server_params = get_host_parameters(
+            self, "test_servers", "server_partition", "server_reservation", "/run/hosts/*")
+        client_params = get_host_parameters(
+            self, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
+        try:
+            self.host_info.set_hosts(self.log, get_local_host(), *server_params, *client_params)
+        except HostException:
+            self.log.error("Error collecting host information", exc_info=sys.exc_info())
+            self.fail("Unable to collect host information for the test")
+        self.hostlist_servers = NodeSet(self.host_info.servers.hosts)
+        self.hostlist_clients = NodeSet(self.host_info.clients.hosts)
 
-        # If server or client host list are defined through valid slurm
-        # partition names override any hosts specified through lists.
-        for name in ("servers", "clients"):
-            host_list_name = "_".join(["hostlist", name])
-            partition_name = "_".join([name[:-1], "partition"])
-            reservation_name = "_".join([name[:-1], "reservation"])
-            reservation_env = "_".join(["DAOS", reservation_name.upper()])
-            partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = os.environ.get(reservation_env, None)
-            self.log.info("env %s = %s", reservation_env, reservation)
-            if reservation is None:
-                reservation = self.params.get(reservation_name, "/run/hosts/*")
-            host_list = getattr(self, host_list_name)
-            if partition is not None and host_list is None:
-                # If a partition is provided instead of a list of hosts use the
-                # partition information to populate the list of hosts.
-                setattr(self, partition_name, partition)
-                setattr(self, reservation_name, reservation)
-                slurm_nodes = get_partition_hosts(partition, reservation)
-                if not slurm_nodes:
-                    self.fail(
-                        "No valid nodes in {} partition with {} "
-                        "reservation".format(partition, reservation))
-                setattr(self, host_list_name, slurm_nodes)
-            elif partition is not None and host_list is not None:
-                self.fail(
-                    "Specifying both a {} partition name and a list of hosts "
-                    "is not supported!".format(name))
+        # Access points to use by default when starting servers and agents
+        #  - for 1 or 2 servers use 1 access point
+        #  - for 3 or more servers use 3 access points
+        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points = self.hostlist_servers[:access_points_qty]
+        self.access_points = NodeSet(
+            self.params.get("access_points", "/run/setup/*", default_access_points))
+        self.access_points_suffix = self.params.get(
+            "access_points_suffix", "/run/setup/*", self.access_points_suffix)
+        if self.access_points_suffix:
+            self.access_points = nodeset_append_suffix(
+                self.access_points, self.access_points_suffix)
+        self.host_info.access_points = self.access_points
 
         # # Find a configuration that meets the test requirements
         # self.config = Configuration(
@@ -740,47 +720,34 @@ class TestWithServers(TestWithoutServers):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
-        # Access points to use by default when starting servers and agents
-        self.access_points = self.params.get(
-            "access_points", "/run/setup/*", self.hostlist_servers[:1])
-
         # Display host information
-        self.log.info("-" * 100)
-        self.log.info("--- HOST INFORMATION ---")
-        self.log.info("hostlist_servers:    %s", self.hostlist_servers)
-        self.log.info("hostlist_clients:    %s", self.hostlist_clients)
-        self.log.info("server_partition:    %s", self.server_partition)
-        self.log.info("client_partition:    %s", self.client_partition)
-        self.log.info("server_reservation:  %s", self.server_reservation)
-        self.log.info("client_reservation:  %s", self.client_reservation)
-        self.log.info("access_points:       %s", self.access_points)
+        self.host_info.display(self.log)
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         # Copy the fault injection files to the hosts.
         self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)
 
-        if not self.start_servers_once or self.get_test_info()["id"] == 1:
+        if not self.start_servers_once or self.name.uid == 1:
             # Kill commands left running on the hosts (from a previous test)
             # before starting any tests.  Currently only handles 'orterun'
             # processes, but can be expanded.
-            hosts = list(self.hostlist_servers)
+            hosts = self.hostlist_servers.copy()
             if self.hostlist_clients:
-                hosts.extend(self.hostlist_clients)
+                hosts.add(self.hostlist_clients)
             self.log.info("-" * 100)
             self.stop_leftover_processes(["orterun", "mpirun"], hosts)
 
             # Ensure write permissions for the daos command log files when
             # using systemctl
-            if (self.agent_manager_class == "Systemctl" or
-                    self.server_manager_class == "Systemctl"):
+            if "Systemctl" in (self.agent_manager_class, self.server_manager_class):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
                 self.log.info("-" * 100)
                 self.log.info(
@@ -1139,11 +1106,10 @@ class TestWithServers(TestWithoutServers):
             DaosServerManager(
                 group, self.bin, svr_cert_dir, svr_config_file, dmg_cert_dir,
                 dmg_config_file, svr_config_temp, dmg_config_temp,
-                self.server_manager_class)
+                self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
 
-    def configure_manager(self, name, manager, hosts, slots,
-                          access_points=None):
+    def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.
 
         Defines the environment variables, host list, and hostfile settings used
@@ -1152,18 +1118,19 @@ class TestWithServers(TestWithoutServers):
         Args:
             name (str): manager name
             manager (SubprocessManager): the daos agent/server process manager
-            hosts (list): list of hosts on which to start the daos agent/server
+            hosts (NodeSet): hosts on which to start the daos agent/server
             slots (int): number of slots per engine to define in the hostfile
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
+
         """
         self.log.info("-" * 100)
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_points is None:
-            access_points = self.access_points
+            access_points = NodeSet(self.access_points)
         # Calling get_params() will set the test-specific log names
         manager.get_params(self)
-        manager.set_config_value("access_points", access_points)
+        manager.set_config_value("access_points", list(access_points))
         manager.manager.assign_environment(
             EnvironmentVariables({"PATH": None}), True)
         manager.hosts = (hosts, self.workdir, slots)
@@ -1310,9 +1277,9 @@ class TestWithServers(TestWithoutServers):
 
         """
         errors = []
-        hosts = list(self.hostlist_servers)
+        hosts = self.hostlist_servers.copy()
         if self.hostlist_clients:
-            hosts.extend(self.hostlist_clients)
+            hosts.add(self.hostlist_clients)
         all_hosts = include_local_host(hosts)
         self.log.info(
             "Removing temporary test files in %s from %s",
@@ -1634,7 +1601,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_log = "{}_daos_agent.log".format(self.test_id)
         self.server_log = "{}_daos_server.log".format(self.test_id)
         self.control_log = "{}_daos_control.log".format(self.test_id)
-        self.helper_log = "{}_daos_admin.log".format(self.test_id)
+        self.helper_log = "{}_daos_server_helper.log".format(self.test_id)
         self.client_log = "{}_daos_client.log".format(self.test_id)
         self.config_file_base = "{}_".format(self.test_id)
 
@@ -1672,7 +1639,7 @@ class TestWithServers(TestWithoutServers):
 
         dmg_cmd = get_dmg_command(
             self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp)
+            dmg_config_temp, self.access_points_suffix)
         dmg_cmd.hostlist = self.access_points
         return dmg_cmd
 
@@ -1834,19 +1801,17 @@ class TestWithServers(TestWithoutServers):
             self.container.append(
                 self.get_container(pool=pool, namespace=namespace, create=create))
 
-    def start_additional_servers(self, additional_servers, index=0,
-                                 access_points=None):
+    def start_additional_servers(self, additional_servers, index=0, access_points=None):
         """Start additional servers.
 
         This method can be used to start a new daos_server during a test.
 
         Args:
-            additional_servers (list of str): List of hostnames to start
-                daos_server.
+            additional_servers (NodeSet): hosts on which to start daos_server.
             index (int): Determines which server_managers to use when creating
                 the new server.
-            access_points (list, optional): list of access point hosts. Defaults
-                to None which uses self.access_points.
+            access_points (NodeSet): access point hosts. Defaults to None which
+                uses self.access_points.
         """
         self.add_server_manager(
             self.server_managers[index].manager.job.get_config_value("name"),

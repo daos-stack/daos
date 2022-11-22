@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -34,7 +33,7 @@ class Enospace(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuseenospace
+        :avocado: tags=dfuseenospace,test_enospace
         """
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -49,7 +48,7 @@ class Enospace(DfuseTestBase):
 
             # Use a write size of 128.  On EL 8 this could be 1MiB, however older kernels
             # use 128k, and using a bigger size here than the kernel can support will lead to
-            # the kernel splitting writes, and the size check atfer ENOSPC failing due to writes
+            # the kernel splitting writes, and the size check after ENOSPC failing due to writes
             # having partially succeeded.
             write_size = 1024 * 128
             file_size = 0

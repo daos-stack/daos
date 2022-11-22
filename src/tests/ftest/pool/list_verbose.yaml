@@ -1,20 +1,23 @@
 hosts:
-  test_servers:
-    - server-A
-    - server-B
-  test_clients:
-    - client-A
+  test_servers: 2
+  test_clients: 1
 
 timeout: 300
 
 server_config:
   name: daos_server
-  servers:
-    targets: 8
-    bdev_class: nvme
-    bdev_list: ["0000:86:00.0", "0000:da:00.0"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 8
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 
 pool_basic_1:
   control_method: dmg

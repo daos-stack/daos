@@ -6,11 +6,11 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=opensuse/leap:15.3
+ARG BASE_DISTRO=opensuse/leap:15.4
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
-# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+# Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
 # Use local repo server if present
@@ -105,7 +105,7 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 COPY requirements.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install -r requirements.txt
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -133,15 +133,15 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                            \
-        scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos   \
-              TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only &&          \
+        scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos  \
+              TARGET_TYPE=$DAOS_TARGET_TYPE &&                      \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); \
     }
 USER root:root
 
 # select compiler to use
 # Load the COMPILER arg early, and optionally install the Intel compiler
-# Do this before the CACHEBUST to make best use of cache as this is a big
+# Do this before the CB1 to make best use of cache as this is a big
 # download, and make it optional on the value of COMPILER for the same
 # reason.  Tell zypper to only consider the oneAPI repo here using the
 # discouraged --repo flag, however this prevents an update of the entire
@@ -158,9 +158,9 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
         dnf clean all;                                                                                   \
     fi
 
-# force an upgrade to get any newly built RPMs, but only if CACHEBUST is set.
-ARG CACHEBUST
-RUN [ -z "$CACHEBUST" ] || {                                                                         \
+# force an upgrade to get any newly built RPMs, but only if CB1 is set.
+ARG CB1
+RUN [ -z "$CB1" ] || {                                                                         \
         dnf upgrade --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel && \
         dnf clean all;                                                                               \
     }
@@ -200,12 +200,11 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/scripts/maven-settings.xml.in /home/daos/.m2/settings.xml && \
-        mvn clean install -ntp -T 1C                                                          \
-            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
+        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
     }
 WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

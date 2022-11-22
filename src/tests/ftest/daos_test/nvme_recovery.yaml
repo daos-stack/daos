@@ -1,9 +1,7 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
 hosts:
-  test_servers:
-    - server-A
-    - server-B
+  test_servers: 2
 timeout: 600
 #Remove this once DAOS-5134 is resolved
 setup:
@@ -12,9 +10,9 @@ pool:
   scm_size: 8G
   nvme_size: 16G
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
@@ -22,13 +20,16 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -36,13 +37,16 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
     allow_insecure: True
 agent_config:

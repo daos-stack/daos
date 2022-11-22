@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,6 +54,8 @@ class RbldReadArrayTest(RebuildTestBase):
             numbers of rebuild targets and no available rebuild targets.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm,large,rebuild,rebuildreadarray
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=rebuildreadarray,test_read_array_during_rebuild
         """
         self.execute_rebuild_test()

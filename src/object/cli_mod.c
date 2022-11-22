@@ -67,17 +67,8 @@ dc_obj_init(void)
 	struct dc_mgmt_sys	*sys;
 	struct obj_proto	*oproto = NULL;
 	crt_context_t		ctx = daos_get_crt_ctx();
+	int			num_ranks;
 	int			rc;
-
-	d_getenv_int("DAOS_IO_MODE", &srv_io_mode);
-	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
-		D_DEBUG(DB_IO, "Client dispatch.\n");
-	} else if (srv_io_mode == DIM_SERVER_DISPATCH) {
-		D_DEBUG(DB_IO, "Server dispatch but without dtx.\n");
-	} else {
-		srv_io_mode = DIM_DTX_FULL_ENABLED;
-		D_DEBUG(DB_IO, "Full dtx mode by default\n");
-	}
 
 	rc = obj_utils_init();
 	if (rc)
@@ -106,11 +97,11 @@ dc_obj_init(void)
 	}
 
 	oproto->ep.ep_grp = sys->sy_group;
-	rc = rsvc_client_choose(&oproto->cli, &oproto->ep);
-	if (rc) {
-		D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
-	}
+
+	oproto->ep.ep_tag = 0;
+
+	num_ranks = dc_mgmt_net_get_num_srv_ranks();
+	oproto->ep.ep_rank = rand() % num_ranks;
 
 	rc = crt_proto_query_with_ctx(&oproto->ep, obj_proto_fmt_0.cpf_base, ver_array, 2, query_cb,
 				      oproto, ctx);

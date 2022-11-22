@@ -48,7 +48,7 @@ class RbldWidelyStriped(MdtestBase):
         :avocado: tags=rebuild_widely_striped
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.server_managers[0].get_config_value("targets")
         ranks_to_kill = self.params.get("ranks_to_kill", "/run/testparams/*")
 
         # create pool

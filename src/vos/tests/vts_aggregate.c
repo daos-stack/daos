@@ -2982,7 +2982,7 @@ run_discard_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS Discard Tests %s", cfg);
+	dts_create_config(test_name, "Discard Tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, discard_tests,
 					   setup_io, teardown_io);
 }
@@ -2992,7 +2992,7 @@ run_aggregate_tests(bool slow, const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS Aggregate Tests %s", cfg);
+	dts_create_config(test_name, "Aggregate Tests %s", cfg);
 
 	slow_test = slow;
 	return cmocka_run_group_tests_name(test_name,

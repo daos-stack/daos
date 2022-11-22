@@ -7,6 +7,7 @@
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 
+
 class RbldWithIO(TestWithServers):
     """Test class for pool rebuild during I/O.
 
@@ -31,12 +32,15 @@ class RbldWithIO(TestWithServers):
             single pool, single client performing continuous read/write/verify
             sequence while failure/rebuild is triggered in another process
 
-        :avocado: tags=all,pool,rebuild,daily_regression,medium,rebuildwithio
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,rebuild
+        :avocado: tags=rebuildwithio,test_rebuild_with_io
         """
         # Get the test params
         self.add_pool(create=False)
         self.add_container(self.pool, create=False)
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.server_managers[0].get_config_value("targets")
         # data = self.params.get("datasize", "/run/testparams/*")
         rank = self.params.get("rank", "/run/testparams/*")
         obj_class = self.params.get("object_class", "/run/testparams/*")
@@ -76,11 +80,10 @@ class RbldWithIO(TestWithServers):
         self.pool.wait_for_rebuild(True)
 
         self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
+                                         cont=self.container.uuid,
+                                         prop="status",
+                                         value="healthy")
 
         # Write data to the container for another 30 seconds
         self.log.info(

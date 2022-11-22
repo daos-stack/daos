@@ -69,7 +69,7 @@ Note that Intel MPI uses `libfabric` and includes it as part of the Intel MPI in
 Care must be taken to ensure that the version of libfabric that is used
 is at a level that includes the patches that are critical for DAOS.
 DAOS 1.0.1 includes `libfabric-1.9.0`, DAOS 1.2 includes `libfabric-1.12`,
-and DAOS 2.0 includes `libfabric-1.14`.
+DAOS 2.0 includes `libfabric-1.14`, and DAOS 2.2 includes `libfabric-1.15`.
 
 To use DAOS with Intel MPI, the `libfabric` that is supplied by DAOS
 (and that is installed into `/usr/lib64` by default) must be used.

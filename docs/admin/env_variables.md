@@ -46,6 +46,10 @@ Environment variables in this section only apply to the server side.
 |DAOS\_SCHED\_RELAX\_MODE|The mode of CPU relaxing on idle. "disabled":disable relaxing; "net":wait on network request for INTVL; "sleep":sleep for INTVL. STRING. Default to "net"|
 |DAOS\_SCHED\_RELAX\_INTVL|CPU relax interval in milliseconds. INTEGER. Default to 1 ms.|
 |DAOS\_STRICT\_SHUTDOWN|Use the strict mode when shutting down engines. BOOL. Default to 0. In the strict mode, when certain resource leaks are detected, for instance, the engine will raise an assertion failure.|
+|DAOS\_DTX\_AGG\_THD\_CNT|DTX aggregation count threshold. The valid range is [2^20, 2^24]. The default value is 2^19*7.|
+|DAOS\_DTX\_AGG\_THD\_AGE|DTX aggregation age threshold in seconds. The valid range is [210, 1830]. The default value is 630.|
+|DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
+|DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
 
 ## Server and Client environment variables
 

@@ -216,15 +216,14 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
-		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithDisableVMD(true).    // vmd enabled by default
 		WithEnableHotplug(true). // hotplug disabled by default
 		WithControlLogMask(common.ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
-		WithHelperLogFile("/tmp/daos_admin.log").
-		WithFirmwareHelperLogFile("/tmp/daos_firmware.log").
+		WithHelperLogFile("/tmp/daos_server_helper.log").
+		WithFirmwareHelperLogFile("/tmp/daos_firmware_helper.log").
 		WithTelemetryPort(9191).
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
@@ -249,6 +248,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 				storage.NewTierConfig().
 					WithScmMountPoint("/mnt/daos/1").
 					WithStorageClass("ram").
+					WithScmDisableHugepages().
 					WithScmRamdiskSize(16),
 				storage.NewTierConfig().
 					WithStorageClass("nvme").
@@ -471,14 +471,14 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadTelemetryPort,
 		},
-		"different number of ssds": {
+		"different number of bdevs": {
 			extraConfig: func(c *Server) *Server {
 				// add multiple bdevs for engine 0 to create mismatch
 				c.Engines[0].Storage.Tiers.BdevConfigs()[0].
 					WithBdevDeviceList("0000:10:00.0", "0000:11:00.0", "0000:12:00.0")
 				return c
 			},
-			expErr: FaultConfigBdevCountMismatch(1, 2, 0, 3),
+			// No failure because validation now occurs on server start-up.
 		},
 		"different number of targets": {
 			extraConfig: func(c *Server) *Server {
@@ -821,9 +821,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 
 		lcp := strings.Split(legacyConfig, "/")
 		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
-		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
-			return nil, err
-		}
+		CopyFile(t, legacyConfig, testLegacyConfigFile)
 
 		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
 	}
@@ -978,6 +976,31 @@ func TestServerConfig_Parsing(t *testing.T) {
 				"    bdev_list: [0000:80:00.0]", "disable_hugepages: true",
 			},
 			expValidateErr: FaultConfigHugepagesDisabled,
+		},
+		"legacy vmd enable": {
+			inTxt:  "disable_vmd: true",
+			outTxt: "enable_vmd: true",
+			expCheck: func(c *Server) error {
+				if *c.DisableVMD != false {
+					return errors.Errorf("expected vmd to be not disabled")
+				}
+				return nil
+			},
+		},
+		"legacy vmd disable": {
+			inTxt:  "disable_vmd: true",
+			outTxt: "enable_vmd: false",
+			expCheck: func(c *Server) error {
+				if *c.DisableVMD != true {
+					return errors.Errorf("expected vmd to be disabled")
+				}
+				return nil
+			},
+		},
+		"legacy vmd disable; current vmd enable": {
+			inTxt:       "disable_vfio: true",
+			outTxt:      "enable_vmd: true",
+			expParseErr: FaultConfigVMDSettingDuplicate,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1321,20 +1344,21 @@ func TestConfig_detectEngineAffinity(t *testing.T) {
 	}
 }
 
-func TestConfig_setEngineAffinity(t *testing.T) {
+func TestConfig_SetNUMAAffinity(t *testing.T) {
 	for name, tc := range map[string]struct {
 		cfg     *engine.Config
 		setNUMA uint
 		expErr  error
 		expNUMA uint
 	}{
-		"pinned_numa_node set in config overrides detected affinity": {
+		"pinned_numa_node set in config conflicts with detected affinity": {
 			cfg: engine.MockConfig().
 				WithPinnedNumaNode(2).
 				WithFabricInterface("ib1").
 				WithFabricProvider("ofi+verbs"),
 			setNUMA: 1,
 			expNUMA: 2,
+			expErr:  errors.New("configured NUMA node"),
 		},
 		"pinned_numa_node not set in config; detected affinity used": {
 			cfg: engine.MockConfig().
@@ -1353,10 +1377,7 @@ func TestConfig_setEngineAffinity(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer ShowBufferOnFailure(t, buf)
-
-			err := setEngineAffinity(log, tc.cfg, tc.setNUMA)
+			err := tc.cfg.SetNUMAAffinity(tc.setNUMA)
 			CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

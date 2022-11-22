@@ -84,7 +84,7 @@ cont_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-cont_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+cont_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }
@@ -337,6 +337,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_global_version = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			iv_prop->cip_obj_version = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
@@ -368,6 +372,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			daos_prop_val_2_co_status(prop_entry->dpe_val,
 						  &iv_prop->cip_co_status);
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
+			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -431,9 +438,9 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
+again:
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	d_iov_set(&val_iov, NULL, 0);
-again:
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
 	if (rc < 0) {
 		if (rc == -DER_NONEXIST && is_master(entry)) {
@@ -453,8 +460,29 @@ again:
 				D_ERROR("create cont prop iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_CAPA) {
-				/* Can not find the handle on leader */
-				rc = -DER_NONEXIST;
+				struct container_hdl	chdl;
+				int			rc1;
+
+				/* If PS leader switches, it may not in IV cache,
+				 * let's lookup RDB then.
+				 **/
+				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
+							     civ_key->cont_uuid, &chdl);
+				if (rc1 == 0) {
+					struct cont_iv_entry	iv_entry = { 0 };
+
+					/* Only happens on xstream 0 */
+					D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+					iv_entry.iv_capa.flags = chdl.ch_flags;
+					iv_entry.iv_capa.sec_capas = chdl.ch_sec_capas;
+					uuid_copy(iv_entry.cont_uuid, chdl.ch_cont);
+					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
+					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+					if (rc == 0)
+						goto again;
+				} else {
+					rc = -DER_NONEXIST;
+				}
 			}
 		}
 		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
@@ -533,8 +561,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_PROP) {
 			daos_prop_t		*prop = NULL;
-			struct daos_prop_entry	*iv_entry;
-			struct daos_co_status	 co_stat = {0};
 
 			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
@@ -543,20 +569,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 			}
 
-			iv_entry = daos_prop_entry_get(prop,
-						       DAOS_PROP_CO_STATUS);
-			if (iv_entry != NULL) {
-				daos_prop_val_2_co_status(iv_entry->dpe_val,
-							  &co_stat);
-				rc = ds_cont_status_pm_ver_update(
-					entry->ns->iv_pool_uuid,
-					civ_ent->cont_uuid,
-					co_stat.dcs_pm_ver);
-				if (rc) {
-					daos_prop_free(prop);
-					goto out;
-				}
-			}
+			rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid,
+						     civ_ent->cont_uuid, prop);
 			daos_prop_free(prop);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP &&
 			   civ_ent->iv_snap.snap_cnt != (uint64_t)(-1)) {
@@ -899,10 +913,11 @@ cont_iv_capa_refresh_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1228,6 +1243,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = iv_prop->cip_global_version;
 		prop_entry->dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_OBJ_VERSION) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_obj_version;
+		prop_entry->dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
 		prop_entry = &prop->dpp_entries[i++];
 		acl = &iv_prop->cip_acl;
@@ -1276,6 +1296,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = daos_prop_co_status_2_val(
 					&iv_prop->cip_co_status);
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+	}
+	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_scrubbing_disabled;
+		prop_entry->dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
 	}
 out:
 	if (rc)
@@ -1330,10 +1355,11 @@ cont_iv_prop_fetch_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
 	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)

@@ -1,17 +1,24 @@
-server_config:
-  name: daos_server
-
 hosts:
-  test_servers:
-    - server-A
+  test_servers: 1
 
 timeout: 700
 
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
+
 pool:
   control_method: dmg
-  mode: 511
   scm_size: 1GB
-  name: daos_server
 
 uuids: !mux
   good_uuid:

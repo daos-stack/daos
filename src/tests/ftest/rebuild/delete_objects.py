@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -87,8 +87,9 @@ class RbldDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,full_regression
-        :avocado: tags=large
-        :avocado: tags=rebuild,delete_objects,rebuilddeleteobject
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=delete_objects,rebuilddeleteobject,test_rebuild_delete_objects
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -106,8 +107,9 @@ class RbldDeleteObjects(RebuildTestBase):
             foo
 
         :avocado: tags=all,full_regression
-        :avocado: tags=large
-        :avocado: tags=rebuild,delete_objects,rebuilddeleterecord
+        :avocado: tags=vm
+        :avocado: tags=rebuild
+        :avocado: tags=delete_objects,rebuilddeleterecord,test_rebuild_delete_records
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

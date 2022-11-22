@@ -120,6 +120,18 @@ int crt_hlc2timespec(uint64_t hlc, struct timespec *ts)
 	return 0;
 }
 
+int crt_timespec2hlc(struct timespec ts, uint64_t *hlc)
+{
+	uint64_t nsec;
+
+	if (hlc == NULL)
+		return -DER_INVAL;
+
+	nsec = (ts.tv_sec - CRT_HLC_START_SEC) * NSEC_PER_SEC + ts.tv_nsec;
+	*hlc = crt_nsec2hlc(nsec);
+	return 0;
+}
+
 uint64_t crt_unixnsec2hlc(uint64_t unixnsec)
 {
 	uint64_t start = CRT_HLC_START_SEC * NSEC_PER_SEC;

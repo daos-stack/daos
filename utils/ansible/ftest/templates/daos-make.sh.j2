@@ -3,7 +3,7 @@
 
 set -o pipefail
 
-VERSION=0.1
+VERSION=0.2
 CWD="$(realpath "$(dirname $0)")"
 declare -A VALID_CMDS=([install]=true [update]=true)
 
@@ -17,6 +17,12 @@ CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
 JOBS_NB=1
 SCONS_EXE=scons-3
 CLUSH_EXE=clush
+MODULE_EXE=module
+
+MPI_FILE_UTILS_DEPS=("https://github.com/hpc/libcircle/releases/download/v0.3/libcircle-0.3.0.tar.gz"
+	"https://github.com/llnl/lwgrp/releases/download/v1.0.4/lwgrp-1.0.4.tar.gz"
+	"https://github.com/llnl/dtcmp/releases/download/v1.1.4/dtcmp-1.1.4.tar.gz"
+	"https://github.com/libarchive/libarchive/releases/download/v3.5.1/libarchive-3.5.1.tar.gz")
 
 ANSI_COLOR_BLACK=30
 ANSI_COLOR_RED=31
@@ -99,17 +105,18 @@ function usage
 		Build and install DAOS for running avocado functional tests
 
 		Options:
-		   -j, --jobs <job>         Allow N jobs at once; one job with no arg
-		   -f, --force              Overwrite the current install of DAOS
-		   -h, --help               show this help message and exit
-		   -V, --version            show version number
-		   -q, --quiet              quiet mode
-		   -v, --verbose            verbose mode
-		   -D, --debug              debug mode
+		   -m, --mpifileutils <path>    Path of mpi file utils source tree
+		   -j, --jobs <job>             Allow N jobs at once; one job with no arg
+		   -f, --force                  Overwrite the current install of DAOS
+		   -h, --help                   Show this help message and exit
+		   -V, --version                Show version number
+		   -q, --quiet                  Quiet mode
+		   -v, --verbose                Verbose mode
+		   -D, --debug                  Debug mode
 
 		Commands:
-		   install                  Build and install DAOS
-		   update                   Update current install of DAOS
+		   install                      Build and install DAOS
+		   update                       Update current install of DAOS
 	EOF
 }
 
@@ -123,11 +130,12 @@ function run
 	fi
 }
 
-OPTIONS=$(getopt -o "j:fhVvDq" --long "jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+OPTIONS=$(getopt -o "m:j:fhVvDq" --long "mpifileutils:,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
 	case "$1" in
+		-m|--mpifileutils) MPI_FILE_UTILS_PATH="$2" ; shift 2 ;;
 		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
 		-f|--force) FORCE_INSTALL=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
@@ -144,15 +152,15 @@ done
 CMD="$1"
 [[ ${VALID_CMDS[$CMD]} == true ]] || fatal "Invalid command \"$CMD\": use install or update"
 
-check_cmds $SCONS_EXE
+check_cmds $SCONS_EXE $MODULE_EXE $CLUSH_EXE
 
 set -e
 
 info "Mount of home partition"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-run $CLUSH_EXE -l root -w $CLIENTS_LIST -w $SERVERS_LIST  mountpoint "$HOME"
+run $CLUSH_EXE -l root -w $CLIENTS_LIST -w $SERVERS_LIST mountpoint --quiet "$HOME"
 {% else %}
-run $CLUSH_EXE -w $SERVERS_LIST ldcondig mountpoint "$HOME"
+run $CLUSH_EXE -w $SERVERS_LIST mountpoint --quiet "$HOME"
 {% endif %}
 
 for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
@@ -174,6 +182,8 @@ if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	fi
 fi
 
+module load mpi/mpich-x86_64
+
 cd "$DAOS_SOURCE_DIR"
 SCONS_OPTS="-j $JOBS_NB"
 case $CMD in
@@ -181,10 +191,61 @@ case $CMD in
 	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
 	*) fatal "Unexpected case" ;;
 esac
+
 info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE=debug PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi
+
+if [[ $MPI_FILE_UTILS_PATH ]] ; then
+	if [[ ! -f "$MPI_FILE_UTILS_PATH/mpifileutils.spec" ]] ; then
+		fatal "Invalid MPI File Utils directory: path=$MPI_FILE_UTILS_PATH"
+	fi
+	run rm -fr "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build"
+	run mkdir -p "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build"
+
+	for dep_uri in "${MPI_FILE_UTILS_DEPS[@]}" ; do
+		pushd "$MPI_FILE_UTILS_PATH/deps" > /dev/null
+		file_name=$(basename "$dep_uri")
+		dep_name=$(basename "$dep_uri" .tar.gz)
+		info "Building and installing MPI File Utils dependency $dep_name"
+		run wget "$dep_uri"
+		run tar xzf "$file_name"
+		cd $dep_name
+		opts="--prefix=$DAOS_INSTALL_DIR"
+		if [[ $dep_name =~ dtcmp ]] ; then
+			opts="$opts --with-lwgrp=$DAOS_INSTALL_DIR"
+		fi
+		run ./configure $opts
+		run make -j $JOBS_NB install
+		popd > /dev/null
+	done
+
+	pushd "$MPI_FILE_UTILS_PATH/build" > /dev/null
+	run cmake .. \
+		-DCMAKE_BUILD_TYPE=Debug \
+		-DENABLE_DAOS=ON \
+		-DENABLE_HDF5=ON \
+		-DENABLE_LIBARCHIVE=ON \
+		-DCMAKE_INSTALL_PREFIX=$DAOS_INSTALL_DIR \
+		-DWITH_DAOS_PREFIX=$DAOS_INSTALL_DIR \
+		-DWITH_HDF5_PREFIX=/usr \
+		-DWITH_DTCMP_PREFIX=$DAOS_INSTALL_DIR \
+		-DWITH_LibCircle_PREFIX=$DAOS_INSTALL_DIR \
+		-DWITH_LibArchive_PREFIX=$DAOS_INSTALL_DIR
+	run make -j $JOBS_NB install
+	popd > /dev/null
+fi
+
+info "Updating DAOS libraries install"
+for filepath in $(find "$DAOS_INSTALL_DIR/lib64" -maxdepth 1 -type l)
+do
+	filename=$(basename $filepath)
+	run $CLUSH_EXE -l root -w $SERVERS_LIST -w $CLIENTS_LIST ln -fvs "$(readlink -f "$filepath")" "/lib64/$filename"
+done
+
+info "Updating dynamic linker configuration"
+run $CLUSH_EXE -l root -w $SERVERS_LIST -w $CLIENTS_LIST ldconfig
 
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
@@ -193,20 +254,9 @@ do
         run $CLUSH_EXE -l root -w $SERVERS_LIST install -v -D -o root -g root -m 755 "$item" "$dest"
 done
 
-info "Finalizing daos-admin install"
-run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_admin"
-run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_admin" /usr/bin
-run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_admin
-run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_admin
-run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_admin"
-
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-info "Finalizing dfuse install"
-run $CLUSH_EXE -l root -w $CLIENTS_LIST cp -f "$DAOS_INSTALL_DIR/bin/dfuse" /usr/bin
-run $CLUSH_EXE -l root -w $CLIENTS_LIST chown root:root /usr/bin/dfuse
-run $CLUSH_EXE -l root -w $CLIENTS_LIST chmod 755 /usr/bin/dfuse
-run $CLUSH_EXE -w $CLIENTS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/dfuse"
-
-info "Updating dynamic linker configuration"
-run $CLUSH_EXE -l root -w $CLIENTS_LIST ldconfig
-{% endif %}
+info "Finalizing daos_server_helper install"
+run chmod 0446 "$DAOS_INSTALL_DIR/bin/daos_server_helper"
+run $CLUSH_EXE -l root -w $SERVERS_LIST cp -f "$DAOS_INSTALL_DIR/bin/daos_server_helper" /usr/bin
+run $CLUSH_EXE -l root -w $SERVERS_LIST chown root:daos_server /usr/bin/daos_server_helper
+run $CLUSH_EXE -l root -w $SERVERS_LIST chmod 4755 /usr/bin/daos_server_helper
+run $CLUSH_EXE -w $SERVERS_LIST chmod a-x  "$DAOS_INSTALL_DIR/bin/daos_server_helper"

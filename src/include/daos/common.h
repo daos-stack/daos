@@ -42,8 +42,8 @@
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
-#define DF_UOID		DF_OID".%u"
-#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+#define DF_UOID		DF_OID".%u.%u"
+#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard, (uo).id_layout_ver
 #define DF_BOOL "%s"
 #define DP_BOOL(b) ((b) ? "true" : "false")
 #define DF_IOV "<%p, %zu/%zu>"
@@ -599,9 +599,7 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
-	       err == -DER_PMIX || err == -DER_UNREG ||
-	       err == -DER_UNREACH || err == -DER_CANCELED ||
+	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
 	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
@@ -775,6 +773,8 @@ enum {
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
 #define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
+#define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
+#define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -790,12 +790,16 @@ enum {
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
+#define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
-
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
+#define DAOS_POOL_UPGRADE_CONT_ABORT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
+
+#define DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY \
+					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
@@ -815,6 +819,9 @@ enum {
 #define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
 #define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
 #define DAOS_FAIL_TX_CONVERT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9b)
+#define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
+#define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
+#define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -837,7 +844,12 @@ struct daos_hhash_table {
 extern struct daos_hhash_table daos_ht;
 
 /* daos handle hash table helpers */
-int daos_hhash_init(void);
+int daos_hhash_init_feats(uint32_t feats);
+static inline int
+daos_hhash_init(void)
+{
+	return daos_hhash_init_feats(D_HASH_FT_GLOCK | D_HASH_FT_LRU);
+}
 int daos_hhash_fini(void);
 struct d_hlink *daos_hhash_link_lookup(uint64_t key);
 void daos_hhash_link_insert(struct d_hlink *hlink, int type);

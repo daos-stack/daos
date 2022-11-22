@@ -35,7 +35,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dmg,control,pool_query,pool_query_ranks
-        :avocado: tags=pool_query_ranks_basic
+        :avocado: tags=pool_query_ranks_basic,test_pool_query_ranks_basic
         """
         self.log.info("Basic tests of pool query with ranks state")
 
@@ -75,7 +75,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dmg,control,pool_query,pool_query_ranks
-        :avocado: tags=pool_query_ranks_error
+        :avocado: tags=pool_query_ranks_error,test_pool_query_ranks_error
         """
         self.log.info("Tests of pool query with incompatible options")
 
@@ -99,7 +99,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dmg,control,pool_query,pool_query_ranks
-        :avocado: tags=pool_query_ranks_mgmt
+        :avocado: tags=pool_query_ranks_mgmt,test_pool_query_ranks_mgmt
         """
         self.log.info("Tests of pool query with ranks state when playing with ranks")
 

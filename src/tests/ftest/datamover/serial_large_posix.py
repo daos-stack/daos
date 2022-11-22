@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from duns_utils import format_path
 
 
 # pylint: disable=too-many-ancestors
@@ -43,36 +43,32 @@ class DmvrSerialLargePosix(DataMoverTestBase):
 
         # Create pool1 and cont1
         pool1 = self.create_pool()
-        cont1 = self.create_cont(pool1)
+        cont1 = self.get_container(pool1)
 
         # Create a large directory in cont1
         self.mdtest_cmd.write_bytes.update(file_size)
-        self.run_mdtest_with_params(
-            "DAOS", "/", pool1, cont1,
-            flags=mdtest_flags[0])
+        self.run_mdtest_with_params("DAOS", "/", pool1, cont1, flags=mdtest_flags[0])
 
         # Create pool2
         pool2 = self.create_pool()
 
         # Use dfuse as a shared intermediate for serialize + deserialize
-        dfuse_cont = self.create_cont(pool1)
+        dfuse_cont = self.get_container(pool1)
         self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
         self.serial_tmp_dir = self.dfuse.mount_dir.value
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(
             self.test_id + " (cont1->HDF5->cont2)",
-            "DAOS_UUID", None, pool1, cont1,
-            "DAOS_UUID", None, pool2, None)
+            src_path=format_path(pool1, cont1),
+            dst_pool=pool2)
 
         # Get the destination cont2 uuid
-        cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
+        cont2_label = self.parse_create_cont_label(result.stdout_text)
 
         # Update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
-        self.run_mdtest_with_params(
-            "DAOS", "/", pool2, cont2_uuid,
-            flags=mdtest_flags[1])
+        self.run_mdtest_with_params("DAOS", "/", pool2, cont2_label, flags=mdtest_flags[1])
 
     def test_dm_serial_large_posix_dserialize(self):
         """

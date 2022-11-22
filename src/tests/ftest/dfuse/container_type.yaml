@@ -1,14 +1,20 @@
 hosts:
-  test_servers:
-    - server-A
-  test_clients:
-    - client-B
+  test_servers: 1
+  test_clients: 1
 timeout: 240
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 500000000
   control_method: dmg
 container:

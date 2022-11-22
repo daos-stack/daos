@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2021 Intel Corporation.
+// (C) Copyright 2018-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ message GroupUpdateReq {
 	message Engine {
 		uint32 rank = 1;
 		string uri = 2;
+		uint64 incarnation = 3;
 	}
 	uint32 map_version = 1;
 	repeated Engine engines = 2;

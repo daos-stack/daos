@@ -20,6 +20,7 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -446,21 +447,21 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		},
 		"successful result": {
 			results: system.MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0)},
 			},
 			expRankErrs: make(map[string][]string),
 			expHosts:    []string{"10.0.0.1:10001"},
 		},
 		"successful result missing address": {
 			results: system.MemberResults{
-				{Addr: "", Rank: system.Rank(0)},
+				{Addr: "", Rank: ranklist.Rank(0)},
 			},
 			expErrMsg: "host address missing for rank 0 result",
 		},
 		"failed result": {
 			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
+					Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0),
 					Errored: true, Msg: "didn't start",
 				},
 			},
@@ -470,7 +471,7 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		"failed result missing error message": {
 			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
+					Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0),
 					Errored: true, Msg: "",
 				},
 			},
@@ -481,29 +482,29 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		},
 		"mixed results": {
 			results: system.MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(1)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(1)},
 				{
-					Addr: "10.0.0.2:10001", Rank: system.Rank(2),
+					Addr: "10.0.0.2:10001", Rank: ranklist.Rank(2),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.2:10001", Rank: system.Rank(3),
+					Addr: "10.0.0.2:10001", Rank: ranklist.Rank(3),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: system.Rank(4),
+					Addr: "10.0.0.3:10001", Rank: ranklist.Rank(4),
 					Errored: true, Msg: "something bad",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: system.Rank(5),
+					Addr: "10.0.0.3:10001", Rank: ranklist.Rank(5),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.4:10001", Rank: system.Rank(6),
+					Addr: "10.0.0.4:10001", Rank: ranklist.Rank(6),
 					Errored: true, Msg: "something bad",
 				},
-				{Addr: "10.0.0.4:10001", Rank: system.Rank(7)},
+				{Addr: "10.0.0.4:10001", Rank: ranklist.Rank(7)},
 			},
 			expRankErrs: map[string][]string{
 				"didn't start": {
@@ -534,7 +535,7 @@ func TestControl_SystemQuery(t *testing.T) {
 	testRespHS := new(SystemQueryResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemQueryReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemQueryResp)
@@ -694,7 +695,7 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 			resp := new(SystemQueryResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
@@ -709,7 +710,7 @@ func TestControl_SystemStart(t *testing.T) {
 	testRespHS := new(SystemStartResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStartResp)
@@ -864,7 +865,7 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 			resp := new(SystemStartResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
@@ -880,7 +881,7 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespHS := new(SystemStopResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStopReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStopResp)
@@ -1035,11 +1036,90 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 			resp := new(SystemStopResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
+		})
+	}
+}
+
+func TestControl_SystemExclude(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *SystemExcludeReq
+		uErr    error
+		uResp   *UnaryResponse
+		expResp *SystemExcludeResp
+		expErr  error
+	}{
+		"nil req": {
+			req:    nil,
+			expErr: errors.New("nil *control.SystemExcludeReq request"),
+		},
+		"local failure": {
+			req:    new(SystemExcludeReq),
+			uErr:   errors.New("local failed"),
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			req:    new(SystemExcludeReq),
+			uResp:  MockMSResponse("host1", errors.New("remote failed"), nil),
+			expErr: errors.New("remote failed"),
+		},
+		"dual host dual rank": {
+			req: new(SystemExcludeReq),
+			uResp: MockMSResponse("10.0.0.1:10001", nil,
+				&mgmtpb.SystemExcludeResp{
+					Results: []*sharedpb.RankResult{
+						{
+							Rank:  1,
+							State: system.MemberStateReady.String(),
+						},
+						{
+							Rank:  2,
+							State: system.MemberStateReady.String(),
+						},
+						{
+							Rank:  0,
+							State: system.MemberStateStopped.String(),
+						},
+						{
+							Rank:  3,
+							State: system.MemberStateStopped.String(),
+						},
+					},
+				},
+			),
+			expResp: &SystemExcludeResp{
+				Results: system.MemberResults{
+					system.NewMemberResult(1, nil, system.MemberStateReady),
+					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(0, nil, system.MemberStateStopped),
+					system.NewMemberResult(3, nil, system.MemberStateStopped),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mi := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryError:    tc.uErr,
+				UnaryResponse: tc.uResp,
+			})
+
+			gotResp, gotErr := SystemExclude(context.TODO(), mi, tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemExcludeResp{}, system.MemberResult{})}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

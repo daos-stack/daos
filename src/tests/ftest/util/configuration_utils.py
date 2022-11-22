@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -250,7 +250,7 @@ class Configuration():
             self._active_name = None
             self._inactive_names = list(self._all_names)
 
-            # Report errors for invalid configutaion names
+            # Report errors for invalid configuration names
             if value is not None:
                 self.log.error("Invalid configuration name: %s", value)
 
@@ -325,7 +325,7 @@ class Configuration():
         """
         self.available_names = []
         for name in self._all_names:
-            # Get each configuration's requirements and determine its viablity
+            # Get each configuration's requirements and determine its viability
             self.log.info("Verifying the %s configuration", name)
             config_params = ConfigurationParameters(
                 self.namespace, name, self._data)
@@ -405,7 +405,7 @@ class Configuration():
             # Remove the trailing "*"
             re_path = "/".join(path.split("/")[:-1])
         else:
-            # Without a trailing "*", only match the path specifified
+            # Without a trailing "*", only match the path specified
             re_path = "".join([path, "$"])
         # Replace any "*" not at the end of the path
         search_path = re.compile(re_path.replace('*', '[^/]*'))

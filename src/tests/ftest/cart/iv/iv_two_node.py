@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -10,7 +10,7 @@ import json
 import os
 import struct
 import codecs
-import subprocess #nosec
+import subprocess  # nosec
 import shlex
 
 from cart_utils import CartTest
@@ -74,9 +74,7 @@ class CartIvTwoNodeTest(CartTest):
 
     def _verify_action(self, action):
         """Verify the action."""
-        if (('operation' not in action) or
-                ('rank' not in action) or
-                ('key' not in action)):
+        if (('operation' not in action) or ('rank' not in action) or ('key' not in action)):
             self.print("Error happened during action check")
             raise ValueError(
                 "Each action must contain an operation, rank, and key")
@@ -87,8 +85,7 @@ class CartIvTwoNodeTest(CartTest):
 
     def _verify_fetch_operation(self, action):
         """Verify fetch operation."""
-        if (('return_code' not in action) or
-                ('expected_value' not in action)):
+        if (('return_code' not in action) or ('expected_value' not in action)):
             self.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
@@ -131,9 +128,8 @@ class CartIvTwoNodeTest(CartTest):
                             cli_rtn, command))
 
                 # Read the result into test_result and remove the temp file
-                log_file = open(log_path)
-                test_result = json.load(log_file)
-                log_file.close()
+                with open(log_path) as log_file:
+                    test_result = json.load(log_file)
                 os.close(log_fd)
                 os.remove(log_path)
 
@@ -199,8 +195,8 @@ class CartIvTwoNodeTest(CartTest):
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as error:
+            self.print("Exception in launching server : {}".format(error))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -225,7 +221,7 @@ class CartIvTwoNodeTest(CartTest):
              "expected_value": ""},
         ]
 
-        ###### Wait for servers to come up ######
+        # Wait for servers to come up
         # Only 32 retries allowed. May exceed this limit
         # Not required but results in cleaner log files.
         # Don't see the client retries
@@ -235,14 +231,14 @@ class CartIvTwoNodeTest(CartTest):
 
         clicmd = self.build_cmd(self.env, "test_clients")
 
-        ########## Launch Client Actions ##########
+        # Launch Client Actions
         try:
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
             self.print("TEST FAILED: {}".format(exception))
 
-        ########## Shutdown Servers ##########
+        # Shutdown Servers
         num_servers = self.get_srv_cnt("test_servers")
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
@@ -255,9 +251,9 @@ class CartIvTwoNodeTest(CartTest):
             try:
                 subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
-            except Exception as e:
+            except Exception as error:
                 failed = True
-                self.print("Exception in launching client : {}".format(e))
+                self.print("Exception in launching client : {}".format(error))
 
         time.sleep(1)
 
@@ -267,9 +263,9 @@ class CartIvTwoNodeTest(CartTest):
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
-        except Exception as e:
+        except Exception as error:
             failed = True
-            self.print("Exception in launching client : {}".format(e))
+            self.print("Exception in launching client : {}".format(error))
 
         # Give some time for completion before forcing servers shut down
         time.sleep(2)
