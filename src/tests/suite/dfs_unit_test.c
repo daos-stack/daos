@@ -1850,7 +1850,7 @@ dfs_test_async_io(void **state)
 }
 
 static void
-dfs_test_readdir(void **state)
+dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 {
 	dfs_obj_t		*dir;
 	dfs_obj_t		*obj;
@@ -1862,11 +1862,13 @@ dfs_test_readdir(void **state)
 	struct stat		stbufs[10];
 	int			num_files = 0;
 	int			num_dirs = 0;
+	char			dir_name[24];
 	int			i;
 	int			rc;
 
-	rc = dfs_open(dfs_mt, NULL, "dir", S_IFDIR | S_IWUSR | S_IRUSR,
-		      O_RDWR | O_CREAT, OC_SX, 0, NULL, &dir);
+	sprintf(dir_name, "dir_%d", obj_class);
+	rc = dfs_open(dfs_mt, NULL, dir_name, S_IFDIR | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, obj_class, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
 
 	/** create 100 files and dirs */
@@ -1906,6 +1908,16 @@ dfs_test_readdir(void **state)
 
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_readdir(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	dfs_test_readdir_internal(state, OC_SX);
+	if (test_runable(arg, 4))
+		dfs_test_readdir_internal(state, OC_EC_2P2GX);
 }
 
 static int
