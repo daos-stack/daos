@@ -627,7 +627,8 @@ class TestInfo():
         "test_clients",
         "client_partition",
         "client_reservation",
-        "client_users"
+        "client_users",
+        "test_log_threshold"
     ]
 
     def __init__(self, test_file, order):
@@ -2666,7 +2667,8 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], test.yaml_info["test_log_threshold"],
+                    data["timeout"])
 
         # Optionally rename the test results directory for this test
         if rename:

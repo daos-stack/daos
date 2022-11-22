@@ -3,6 +3,7 @@
 hosts:
   test_servers: 4
   test_clients: 4
+  test_log_threshold: 8G
 timeout: 4000
 timeouts:
   test_daos_dfs_unit: 2000
