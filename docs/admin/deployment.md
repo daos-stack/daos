@@ -769,27 +769,35 @@ For class == "dcpm", the following parameters should be populated:
   for DAOS persistent storage mounted on the specified PMem device specified in
   `scm_list`.
 
-For class == "ram", `scm_list` is omitted and `scm_size` is specified
-instead.  In this case, the subsequent tiers describe the persistent storage
-used for both data and metadata.
+For class == "ram", `scm_list` is omitted and `scm_size` is specified instead.
+In this case, the subsequent bdev tiers describe the persistent storage used
+for both data and metadata.
 
 - `scm_size` specifies the amount of RAM dedicated to emulate SCM for holding
-  DAOS metadata.
+  DAOS metadata.  As with SCM, the RAM size must be sufficient to hold metadata
+  to accommodate the size of data tiers.  Required metadata to data ratios vary
+  by usage, but typically metadata size will only be a few percent of data.
+  The [storage requirements](hardware.md#storage-requirements) discussion of
+  the ratio between SCM size and the size of NVMe data tiers is relevant, as
+  the required RAM / NVMe ratio will be similar.
 
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
 - `bdev_roles` optionally specifies a list of roles for this tier.
+  By default, the DAOS server will assign roles to bdev tiers
+  automatically, so the bdev_roles directive is only needed when that
+  assignment is doesn't match your use case.
 
   When "dcpm" is used for the first tier, this list should be omitted or
   specify only "data".  Only a single NVMe tier is supported.
 
   When class == "ram" is used, the NVMe tier roles can be one or more of
-  "wal" (for logging metadata updates), "meta" (for persistent metadata and
-  small object storage), or "data" (contents of larger objects).  Only the
-  "data" role may be assigned to multiple tiers.  If no roles are specified,
-  then the server will assign them.  Otherwise all roles must be assigned
-  to a tier.
+  "wal" (write-ahead-log for tracking the changes made by local
+  transactions), "meta" (for persistent metadata and small object storage),
+  or "data" (contents of larger objects).  Only the "data" role may be
+  assigned to multiple tiers.  If no roles are specified, then the server
+  will assign them.  Otherwise all roles must be assigned to a tier.
 
 See the sample configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
