@@ -324,8 +324,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		create_flag = cont;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_X64"-"DF_X64"\n",
-		DP_UUID(cont->vc_id), DP_UOID(oid),
+		" layout %u create=%s epr="DF_X64"-"DF_X64"\n",
+		DP_UUID(cont->vc_id), DP_UOID(oid), oid.id_layout_ver,
 		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
 	/* Create the key for obj cache */
