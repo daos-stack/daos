@@ -86,6 +86,10 @@ struct rebuild_tgt_pool_tracker {
 
 	/* Global dtx resync version */
 	uint32_t		rt_global_dtx_resync_version;
+
+	/* new layout version for upgrade rebuild */
+	uint32_t		rt_new_layout_ver;
+
 	unsigned int		rt_lead_puller_running:1,
 				rt_abort:1,
 				/* re-report #rebuilt cnt per master change */
@@ -217,6 +221,7 @@ struct rebuild_task {
 	daos_epoch_t			dst_reclaim_eph;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
+	uint32_t			dst_new_layout_version;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
