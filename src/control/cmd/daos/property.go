@@ -103,8 +103,11 @@ var propHdlrs = propHdlrMap{
 			}
 			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
-			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
-			freeString(cStr)
+			defer freeString(cStr)
+			rc := C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
+			if err := daosError(rc); err != nil {
+				return err
+			}
 			return nil
 		},
 		nil,
@@ -590,6 +593,23 @@ var propHdlrs = propHdlrMap{
 	C.DAOS_PROP_ENTRY_GLOBAL_VERSION: {
 		C.DAOS_PROP_CO_GLOBAL_VERSION,
 		"Global Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
+		true,
+	},
+	C.DAOS_PROP_ENTRY_OBJ_VERSION: {
+		C.DAOS_PROP_CO_OBJ_VERSION,
+		"Object Version",
 		nil, nil,
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {

@@ -25,6 +25,17 @@
 #include <daos_srv/policy.h>
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+#define DS_POOL_OBJ_VERSION		1
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -89,7 +100,7 @@ struct ds_pool {
 	uint64_t		sp_scrub_thresh;
 };
 
-struct ds_pool *ds_pool_lookup(const uuid_t uuid);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
 void ds_pool_put(struct ds_pool *pool);
 void ds_pool_get(struct ds_pool *pool);
 
@@ -105,6 +116,7 @@ struct ds_pool_hdl {
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
 	uint32_t		sph_global_ver; /* pool global version */
+	uint32_t		sph_obj_ver;	/* pool obj layout version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -275,15 +287,15 @@ void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
 
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
-
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,
 		       struct pool_map *map, d_rank_list_t *svc_list,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking

@@ -785,7 +785,7 @@ physical NVMe devices only.
 
 !!! warning
     If upgrading from DAOS 2.0 to a greater version, the old 'enable_vmd' server config file
-    parameter is no longer honoured and instead should be removed (or replaced by
+    parameter is no longer honored and instead should be removed (or replaced by
     `disable_vmd: true` if VMD is to be explicitly disabled).
 
     Otherwise 'daos_server' may fail config validation and not start after an update from 2.0 to a

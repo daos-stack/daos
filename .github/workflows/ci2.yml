@@ -78,8 +78,8 @@ jobs:
         compiler: [clang, gcc]
         include:
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
             with: fedora:36
