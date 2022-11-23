@@ -48,8 +48,7 @@ class ServerRankFailure(IorTestBase):
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", namespace)
@@ -247,7 +246,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_with_rp
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_with_rp
         """
         self.verify_rank_failure(ior_namespace="/run/ior_with_rp/*")
 
@@ -260,7 +259,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_with_ec
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_with_ec
         """
         self.verify_rank_failure(ior_namespace="/run/ior_with_ec/*")
 
@@ -288,7 +287,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_isolation
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_isolation
         """
         # 1. Determine the two ranks to create the pool and a node to kill the engines.
         # We'll create a pool on rank 0 and the other rank that's on the same node. Find
@@ -320,9 +319,7 @@ class ServerRankFailure(IorTestBase):
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
-        self.add_pool(namespace="/run/pool_size_value/*", create=False)
-        self.pool.target_list.update([0, rank_r])
-        self.pool.create()
+        self.add_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
 
         # 3. Create a container without redundancy factor.
         self.container = []

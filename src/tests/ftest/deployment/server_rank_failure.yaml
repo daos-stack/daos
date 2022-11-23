@@ -10,7 +10,7 @@ server_config:
   name: daos_server
   crt_timeout: 60
   engines_per_host: 2
-  servers:
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
@@ -18,11 +18,14 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG
-      bdev_class: nvme
-      bdev_list: ["0000:00:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["0000:00:00.0"]
       targets: 16
       env_vars:
         - SWIM_PROTOCOL_PERIOD_LEN=2000
@@ -36,11 +39,14 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG
-      bdev_class: nvme
-      bdev_list: ["0000:00:00.1"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["0000:00:00.1"]
       targets: 16
       env_vars:
         - SWIM_PROTOCOL_PERIOD_LEN=2000
