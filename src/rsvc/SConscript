@@ -3,15 +3,15 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     # rsvc-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.d_add_requires('argobots', 'protobufc', 'hwloc')
 
     # ds_rsvc
     ds_rsvc = denv.d_library('rsvc', ['srv.c', 'srv_common.c', 'rpc.c'], install_off="../..")

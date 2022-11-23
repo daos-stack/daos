@@ -10,8 +10,8 @@ def scons():
     env = denv.Clone()
 
     env.AppendUnique(LIBPATH=[Dir('..')])
-    vea_ut = env.d_test_program('vea_ut', 'vea_ut.c', LIBS=libraries)
-    vea_stress = env.d_test_program('vea_stress', 'vea_stress.c', LIBS=libraries)
+    vea_ut = env.d_test_program('vea_ut.c', LIBS=libraries)
+    vea_stress = env.d_test_program('vea_stress.c', LIBS=libraries)
     env.Install('$PREFIX/bin/', vea_ut)
     env.Install('$PREFIX/bin/', vea_stress)
 

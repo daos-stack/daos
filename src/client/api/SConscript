@@ -10,20 +10,15 @@ def scons():
 
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
-    denv = env.Clone()
-    prereqs.require(denv, 'protobufc')
-    libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
+    libdaos_tgts[:0] = env.SharedObject(LIBDAOS_SRC)
 
     if prereqs.client_requested():
         libdaos = env.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
                                 LIBS=['daos_common'])
-        if hasattr(env, 'InstallVersionedLib'):
-            env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
-        else:
-            env.Install('$PREFIX/lib64/', libdaos)
+        env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
 
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports='denv')
+        SConscript('tests/SConscript')
 
 
 if __name__ == "SCons.Script":

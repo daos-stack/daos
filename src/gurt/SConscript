@@ -11,7 +11,7 @@ SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs', 'CART_VERSION')
+    Import('env', 'CART_VERSION')
 
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
@@ -20,7 +20,7 @@ def scons():
     denv = env.Clone()
 
     denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
-    prereqs.require(denv, 'uuid')
+    denv.d_add_requires('uuid')
 
     gurt_targets = denv.SharedObject(SRC)
     gurt_lib = denv.d_library('gurt', gurt_targets, SHLIBVERSION=CART_VERSION)

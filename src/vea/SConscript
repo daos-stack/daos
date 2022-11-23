@@ -5,20 +5,20 @@ FILES = ['vea_alloc.c', 'vea_api.c', 'vea_free.c', 'vea_hint.c', 'vea_init.c', '
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     denv = env.Clone()
-    prereqs.require(denv, 'pmdk')
+    denv.d_add_requires('pmdk')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     denv.d_static_library('vea', FILES, LIBS=['daos_common_pmem'])
 
-    if prereqs.test_requested():
+    if env.d_tests_requested():
         SConscript('tests/SConscript', exports='denv')
 
 

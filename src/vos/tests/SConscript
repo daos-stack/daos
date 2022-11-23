@@ -3,13 +3,13 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
+    Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'cart', 'uuid', 'pthread',
                  'pmemobj', 'cmocka', 'gomp']
 
-    prereqs.require(denv, 'argobots')
+    denv.d_add_requires('argobots')
 
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -32,8 +32,7 @@ def scons():
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
-    test = unit_env.d_test_program('pool_scrubbing_tests',
-                                   ['pool_scrubbing_tests.c', '../vos_pool_scrub.c'],
+    test = unit_env.d_test_program(['pool_scrubbing_tests.c', '../vos_pool_scrub.c'],
                                    LIBS=libraries)
     unit_env.Install('$PREFIX/bin/', test)
 

@@ -1104,7 +1104,7 @@ class PreReqComponent():
             reqs = self.__env.get('DEPS')
         self.load_definitions(prebuild=reqs)
 
-    def server_requested(self):
+    def server_requested(self, *_args):
         """return True if server build is requested"""
         return "server" in self._build_targets
 
@@ -1112,7 +1112,7 @@ class PreReqComponent():
         """return True if client build is requested"""
         return "client" in self._build_targets
 
-    def test_requested(self):
+    def test_requested(self, *_args):
         """return True if test build is requested"""
         return "test" in self._build_targets
 

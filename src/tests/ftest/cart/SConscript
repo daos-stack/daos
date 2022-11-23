@@ -32,8 +32,7 @@ FAULT_STATUS_TEST = 'fault_status.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs')
-    Import('cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     ##############################
     # Create test programs
@@ -43,7 +42,7 @@ def scons():
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     tenv.AppendUnique(LIBS=['daos', 'daos_common'])
     tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
-    prereqs.require(tenv, 'crypto', 'mercury')
+    tenv.d_add_requires('crypto', 'mercury')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests

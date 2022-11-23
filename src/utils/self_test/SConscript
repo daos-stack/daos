@@ -6,22 +6,19 @@
 """Build self test"""
 
 
-SELF_TEST = 'self_test.c'
-
-
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common'])
-    prereqs.require(tenv, 'mercury', 'protobufc')
+    tenv.d_add_requires('mercury', 'protobufc')
     tenv.AppendUnique(FLAGS='-pthread')
     tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
-    self_test = tenv.d_program([SELF_TEST, cart_utils_objs])
+    self_test = tenv.d_program(['self_test.c', cart_utils_objs])
     tenv.Install('$PREFIX/bin', self_test)
 
 

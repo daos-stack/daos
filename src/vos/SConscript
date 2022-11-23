@@ -47,16 +47,16 @@ def build_vos_internal(env):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc', 'hwloc')
+    denv.d_add_requires('pmdk', 'argobots', 'protobufc', 'hwloc')
 
     # Compiler options
     denv.Append(CPPPATH=[Dir('.').srcnode()])
@@ -65,7 +65,7 @@ def scons():
     build_vos(denv, True)
     build_vos_internal(denv)
 
-    if prereqs.test_requested():
+    if env.d_tests_requested():
         SConscript('tests/SConscript', exports='denv')
     SConscript('storage_estimator/SConscript')
 

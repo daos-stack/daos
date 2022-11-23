@@ -14,9 +14,7 @@ def scons():
     if GetOption('help'):
         return
 
-    # pylint: disable=too-many-locals
     Import('env', 'prereqs', 'gurt_targets')
-    # pylint: enable=too-many-locals
 
     # Use full path to wrap_cmocka.h for configure test.  Since standalone
     # cmocka header can't be included without including other headers,
@@ -33,22 +31,13 @@ def scons():
         return
 
     test_env = env.Clone()
-    prereqs.require(test_env, "mercury", "uuid", "cmocka")
-    test_env.AppendUnique(LIBS=['pthread', 'm'])
+    test_env.d_add_requires("mercury", "uuid", "cmocka")
+    test_env.AppendUnique(LIBS=['pthread', 'm', 'yaml'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
-    tests = []
+    test_env['LINKFLAGS'] = []
 
     for test in TEST_SRC:
-        flags = []
-        testobj = test_env.Object(test)
-        testname = os.path.splitext(test)[0]
-        testprog = test_env.d_test_program(target=testname,
-                                           source=testobj + gurt_targets,
-                                           LIBS=test_env["LIBS"] + ['yaml'],
-                                           LINKFLAGS=flags)
-        tests.append(testprog)
-
-    Default(tests)
+        Default(test_env.d_test_program([File(test)] + gurt_targets))
 
 
 if __name__ == "SCons.Script":

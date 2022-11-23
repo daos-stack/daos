@@ -3,16 +3,11 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'pb')
+    Import('senv', 'pb_objs')
 
-    prereqs.require(denv, 'protobufc')
-
-    mocks = denv.Object("mocks.c")
-
-    denv.Append(CPPDEFINES={'DRPC_TEST': '1'})
+    senv.Append(CPPDEFINES={'DRPC_TEST': '1'})
     # Isolated unit tests
-    denv.d_test_program('srv_drpc_tests',
-                        source=[pb, mocks, 'srv_drpc_tests.c', '../srv_drpc.c'],
+    senv.d_test_program(source=['srv_drpc_tests.c', pb_objs, 'mocks.c', '../srv_drpc.c'],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common_pmem', 'gurt', 'uuid'])
 
 

@@ -12,7 +12,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'policy.c']
 
 
-def build_daos_common(denv, client, prereqs):
+def build_daos_common(denv, client):
     """ Building non-pmem version for client's common lib"""
     benv = denv.Clone()
     stack_mmap_files = []
@@ -25,12 +25,12 @@ def build_daos_common(denv, client, prereqs):
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         benv.Append(OBJPREFIX="v_")
         libname = 'daos_common_pmem'
-        prereqs.require(benv, 'pmdk')
+        benv.d_add_requires('pmdk')
 
     if benv["STACK_MMAP"] == 1:
         common_libs.extend(['abt'])
         stack_mmap_files = ['stack_mmap.c']
-        prereqs.require(benv, 'argobots')
+        benv.d_add_requires('argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = benv.d_library(libname, COMMON_FILES + stack_mmap_files, LIBS=common_libs)
@@ -40,7 +40,7 @@ def build_daos_common(denv, client, prereqs):
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'prereqs')
+    Import('env', 'base_env')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -50,43 +50,43 @@ def scons():
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
     # is correct, but set _libs to [] so that the library isn't
-    # linked in.
-    prereqs.require(env, 'argobots')
+    # linked in.  TODO: Verify this fix is correct and remove comment.
+    env.d_add_requires('argobots', headers_only=True)
 
     # Arm can build ISA-L
-    prereqs.require(env, 'isal')
-    prereqs.require(env, 'isal_crypto')
+    env.d_add_requires('isal')
+    env.d_add_requires('isal_crypto')
 
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone()
     # generated protoc header should really move to this directory.
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
-    prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
+    denv.d_add_requires('isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    build_daos_common(denv, True, prereqs)
+    build_daos_common(denv, True)
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
 
-    cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    cmd_parser = denv.SharedObject([File('cmd_parser.c')])
     Export('cmd_parser')
-    dc_credit = denv.SharedObject(['credit.c'])
+    dc_credit = denv.SharedObject([File('credit.c')])
     Export('dc_credit')
 
-    if prereqs.server_requested():
-        build_daos_common(denv, False, prereqs)
+    if denv.d_server_requested():
+        build_daos_common(denv, False)
 
-    if not prereqs.test_requested():
+    if not denv.d_tests_requested():
         return
 
     tlibenv = env.Clone(LIBS=[])
-    prereqs.require(tlibenv, 'isal', 'isal_crypto', 'protobufc')
+    tlibenv.d_add_requires('isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
     tenv = denv.Clone()
-    prereqs.require(tenv, 'pmdk')
+    tenv.d_add_requires('pmdk')
 
     tenv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     utest_utils = tenv.SharedObject('tests/utest_common.c')

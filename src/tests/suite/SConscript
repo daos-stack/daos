@@ -22,8 +22,7 @@ int main(int argc, char **argv)
 """
 
 
-# pylint: disable-next=invalid-name
-def CheckCmockaSkip(context):
+def _check_cmocka_skip(context):
     """Configure check for cmocka bug"""
     context.Message('Checking if cmocka skip() bug is present ... ')
     rc = context.TryCompile(TEST_CMOCKA_SKIP, '.c')
@@ -53,12 +52,11 @@ def CheckCmockaSkip(context):
     return not rc
 
 
-# pylint: disable=no-member
 def configure_cmocka(nenv):
     """configure cmocka environment"""
     if GetOption('help') or GetOption('clean'):
         return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
+    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': _check_cmocka_skip})
     conf.env.AppendUnique(LIBS=['cmocka'])
     if not conf.CheckCmockaSkip():
         # it would be cool to be able to check exit code is effectively 134

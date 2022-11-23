@@ -6,21 +6,20 @@ FILES = ['bio_buffer.c', 'bio_bulk.c', 'bio_config.c', 'bio_context.c', 'bio_dev
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'control_tgts')
+    Import('env', 'control_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('smd')])
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
+    denv.d_add_requires('pmdk', 'spdk', 'argobots', 'protobufc', 'hwloc')
 
     SConscript('smd/SConscript')
-    denv.AppendUnique(OBJPREFIX='b_')
 
     # SPDK related libs
     libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']

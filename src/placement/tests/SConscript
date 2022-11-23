@@ -3,23 +3,21 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
-    if not prereqs.test_requested():
+    if not env.d_tests_requested():
         return
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'isal')
+    denv.d_add_requires('isal')
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
 
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    ring_test_tgt = denv.SharedObject(['ring_map_place_obj.c',
-                                       'place_obj_common.c'])
-    jump_test_tgt = denv.SharedObject(['jump_map_place_obj.c',
-                                       'place_obj_common.c',
+    ring_test_tgt = denv.SharedObject(['ring_map_place_obj.c', 'place_obj_common.c'])
+    jump_test_tgt = denv.SharedObject(['jump_map_place_obj.c', 'place_obj_common.c',
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 

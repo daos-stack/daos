@@ -5,21 +5,13 @@
 #
 """Build swim src"""
 
-SRC = ['swim.c']
-
 
 def scons():
     """Scons function"""
 
     Import('env')
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
-    denv = env.Clone()
-
-    denv.AppendUnique(LIBS=['gurt'])
-
-    swim_targets = denv.SharedObject(SRC)
+    swim_targets = env.SharedObject('swim.c')
 
     Default(swim_targets)
     Export('swim_targets')

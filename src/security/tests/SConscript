@@ -7,12 +7,10 @@ def scons():
 
     mocks = denv.Object('drpc_mocks.c')
     # Isolated unit tests
-    denv.d_test_program('cli_security_tests',
-                        source=['cli_security_tests.c', dc_security_tgts, mocks],
+    denv.d_test_program(source=['cli_security_tests.c', dc_security_tgts, mocks],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
-    denv.d_test_program('srv_acl_tests',
-                        source=['srv_acl_tests.c', acl_tgts, mocks],
+    denv.d_test_program(source=['srv_acl_tests.c', acl_tgts, mocks],
                         LIBS=['cmocka', 'protobuf-c', 'daos_common', 'gurt'])
 
 

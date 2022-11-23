@@ -1,5 +1,6 @@
 """Common DAOS build functions"""
 import os
+from inspect import getframeinfo, stack
 
 from SCons.Subst import Literal
 from SCons.Script import Dir
@@ -7,6 +8,8 @@ from SCons.Script import GetOption
 from SCons.Script import WhereIs
 from SCons.Script import Depends
 from SCons.Script import Exit
+from SCons.Node import NodeList
+from SCons.Node.FS import File
 from env_modules import load_mpi
 
 libraries = {}
@@ -175,8 +178,96 @@ def _program(env, *args, **kwargs):
     return prog
 
 
+def _report_fault(message):
+    idx = 0
+    while True:
+        caller = getframeinfo(stack()[idx][0])
+        base = os.path.basename(caller.filename)
+        if base not in ('SConscript', 'SConstruct'):
+            idx += 1
+            continue
+        print(f'{caller.filename}:{caller.lineno} - {message}')
+        return
+
+
 def _test_program(env, *args, **kwargs):
     """build Program with fixed RPATH"""
+
+    target = None
+    source = kwargs.get('source')
+
+    passed_keys = set(kwargs.keys())
+
+    for known in ('source', 'target', 'LIBS', 'install_off'):
+        if known in passed_keys:
+            passed_keys.remove(known)
+
+    if passed_keys:
+        print(passed_keys)
+        _report_fault('key passed')
+        assert False
+
+    libs = kwargs.get('LIBS')
+    if libs and 'LIBS' in env:
+        env_libs = env['LIBS']
+        if sorted(libs) == sorted(env_libs):
+            _report_fault('Libs are duplicated')
+            assert False
+        else:
+            missing_libs = False
+            for lib in env_libs:
+                if lib not in libs:
+                    missing_libs = True
+            if not missing_libs:
+                _report_fault('Libs added to')
+                assert False
+
+    if 'target' in kwargs:
+        target = kwargs['target']
+    else:
+        if len(args) == 2:
+            target = args[0]
+            source = args[1]
+        elif len(args) == 1:
+            if source:
+                target = args[0]
+            else:
+                source = args[0]
+        elif len(args) == 0:
+            assert source
+        else:
+            assert False
+
+    if isinstance(source, (list, NodeList)):
+        first_source = source[0]
+    else:
+        first_source = source
+
+    if isinstance(first_source, File):
+        first_source = str(first_source)
+
+    if target:
+        have_target = True
+    else:
+        have_target = False
+        target = first_source
+        if not target.endswith('.c') and not target.endswith('.cpp'):
+            _report_fault('Unable to infer target')
+        assert target.endswith('.c') or target.endswith('.cpp')
+        target = target[:-2]
+
+    if have_target and f'{target}.c' == first_source:
+        _report_fault('Target superflous')
+
+    if have_target and f'{target}.c' in source:
+        _report_fault('Target superflous but order wrong')
+
+    if isinstance(source, list) and len(source) == 1:
+        _report_fault('Souce is list of length 1')
+
+    if not isinstance(target, str):
+        _report_fault('Incorrect type')
+
     denv = env.Clone()
     denv.AppendUnique(LINKFLAGS=['-pie'])
     denv.Replace(RPATH=[])

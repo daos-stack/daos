@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,7 @@
  * to set it ourselves
  */
 char *ds_sec_server_socket_path = "/var/run/daos_server/daos_server.sock";
+
 
 static int
 check_valid_pointers(void *p1, void *p2)

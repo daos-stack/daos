@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'libdaos_tgts')
+    Import('env', 'libdaos_tgts')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -11,23 +11,21 @@ def scons():
 
     denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
-    prereqs.require(denv, 'protobufc', 'hwloc')
+    denv.d_add_requires('protobufc', 'hwloc')
 
-    # pylint: disable=invalid-name
-    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
-                            'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
-    # pylint: enable=invalid-name
-    common = denv.SharedObject(['rpc.c']) + pb
+    pb_objs = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
+                                 'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
+    common = denv.SharedObject(['rpc.c']) + pb_objs
 
     # Management client library
     libdaos_tgts.extend(common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     senv = denv.Clone()
-    prereqs.require(senv, 'protobufc', 'hwloc')
-    prereqs.require(senv, 'argobots', 'pmdk', headers_only=True)
+    senv.d_add_requires('protobufc', 'hwloc')
+    senv.d_add_requires('argobots', 'pmdk', headers_only=True)
     # Management server module
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     mgmt_srv = senv.d_library('mgmt',
@@ -39,8 +37,7 @@ def scons():
                               install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
-    denv = senv
-    SConscript('tests/SConscript', exports=['denv', 'pb'])
+    SConscript('tests/SConscript', exports=['senv', 'pb_objs'])
 
 
 if __name__ == "SCons.Script":

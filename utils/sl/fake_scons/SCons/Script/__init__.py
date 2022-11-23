@@ -291,13 +291,23 @@ class DefaultEnvironment():
 
     def d_program(self, *_args, **_kw):
         """Fake d_program"""
-
         return self.Program(*_args, **_kw)
 
     def d_test_program(self, *_args, **_kw):
         """Fake d_test_program"""
-
         return self.d_program(*_args, **_kw)
+
+    def d_add_requires(self, *reqs, headers_only=True):
+        """Fake d_add_requires"""
+        return True
+
+    def d_server_requested(self):
+        """Fake d_server_requested"""
+        return True
+
+    def d_tests_requested(self):
+        """Fake d_tests_requested"""
+        return True
 
     def d_static_library(self, *_args, **_kw):
         """Fake d_static_library"""

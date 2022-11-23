@@ -3,9 +3,9 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
-    if not prereqs.server_requested():
+    if not env.d_server_requested():
         return
 
     # raft
@@ -16,7 +16,7 @@ def scons():
     # rdb-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.d_add_requires('argobots', 'protobufc', 'hwloc')
 
     denv.AppendUnique(CPPPATH=[Dir('raft/include').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('raft/src')])
@@ -30,7 +30,7 @@ def scons():
     denv.Install('$PREFIX/lib64/daos_srv', rdb)
 
     # tests
-    if prereqs.test_requested():
+    if env.d_tests_requested():
         SConscript('tests/SConscript', exports='denv')
 
 
