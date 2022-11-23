@@ -4,6 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 
 from dfuse_test_base import DfuseTestBase
 from command_utils_base import EnvironmentVariables
@@ -39,6 +40,11 @@ class VolTestBase(DfuseTestBase):
         #  to create a dfuse dir and run vol tests from there.
         # create dfuse container
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+
+        # Force a timeout
+        test_name = self.params.get("testname")
+        if test_name == "h5vl_test_parallel":
+            time.sleep(2000)
 
         # Assign the test to run
         job_manager.job = ExecutableCommand(
