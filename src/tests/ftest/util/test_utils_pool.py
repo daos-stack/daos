@@ -1075,7 +1075,7 @@ class TestPool(TestDaosApiBase):
         """Reset the rebuild data."""
         self._rebuild_data = {
             "state": None,
-            "map_version": None,
+            "version": None,
             "status": None,
             "check": None,
             "version_increase": False,
