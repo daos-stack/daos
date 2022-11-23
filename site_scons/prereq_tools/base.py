@@ -1108,7 +1108,7 @@ class PreReqComponent():
         """return True if server build is requested"""
         return "server" in self._build_targets
 
-    def client_requested(self):
+    def client_requested(self, *_args):
         """return True if client build is requested"""
         return "client" in self._build_targets
 

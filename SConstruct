@@ -363,6 +363,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     env.AddMethod(prereqs.require, 'd_add_requires')
     env.AddMethod(prereqs.server_requested, 'd_server_requested')
+    env.AddMethod(prereqs.client_requested, 'd_client_requested')
     env.AddMethod(prereqs.test_requested, 'd_tests_requested')
 
     if GetOption('build_deps') == 'only':

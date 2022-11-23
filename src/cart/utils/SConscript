@@ -10,13 +10,15 @@ def scons():
 
     Import('env', 'conf_dir')
 
-    env.d_add_build_rpath()
+    denv = env.Clone()
+    denv.d_add_requires('protobufc')
+    denv.d_add_build_rpath()
 
     # Generate cart utility shared objects
-    cart_utils_objs = env.SharedObject('crt_utils.c')
+    cart_utils_objs = denv.SharedObject('crt_utils.c', SHOBJPREFIX='s_')
     Export('cart_utils_objs')
 
-    env.Install(conf_dir, ['memcheck-cart.supp', 'fault-inject-cart.yaml'])
+    denv.Install(conf_dir, ['memcheck-cart.supp', 'fault-inject-cart.yaml'])
 
 
 if __name__ == "SCons.Script":

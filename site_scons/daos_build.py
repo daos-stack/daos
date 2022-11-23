@@ -257,10 +257,10 @@ def _test_program(env, *args, **kwargs):
         target = target[:-2]
 
     if have_target and f'{target}.c' == first_source:
-        _report_fault('Target superflous')
+        _report_fault('Target superfluous')
 
     if have_target and f'{target}.c' in source:
-        _report_fault('Target superflous but order wrong')
+        _report_fault('Target superfluous but order wrong')
 
     if isinstance(source, list) and len(source) == 1:
         _report_fault('Souce is list of length 1')

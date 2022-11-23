@@ -5,7 +5,6 @@ def scons():
     """Execute build"""
     Import('denv')
 
-    print(denv['LIBS'])
     libs = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     denv.Install('$PREFIX/bin/', denv.d_test_program('smd_ut.c', LIBS=libs))
 

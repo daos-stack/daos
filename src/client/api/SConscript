@@ -6,19 +6,22 @@ LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c'
 
 def scons():
     """Execute build"""
-    Import('env', 'API_VERSION', 'prereqs', 'libdaos_tgts')
+    Import('env', 'API_VERSION', 'libdaos_tgts')
 
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
-    libdaos_tgts[:0] = env.SharedObject(LIBDAOS_SRC)
 
-    if prereqs.client_requested():
-        libdaos = env.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
-                                LIBS=['daos_common'])
-        env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
+    denv = env.Clone()
+    denv.d_add_requires('protobufc')
+    libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
-    if prereqs.test_requested():
-        SConscript('tests/SConscript')
+    if env.d_client_requested():
+        libdaos = denv.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
+                                 LIBS=['daos_common'])
+        denv.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
+
+    if env.d_tests_requested():
+        SConscript('tests/SConscript', 'denv')
 
 
 if __name__ == "SCons.Script":

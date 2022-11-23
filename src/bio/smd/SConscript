@@ -7,7 +7,7 @@ def scons():
 
     denv = env.Clone()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    denv.d_add_requires('pmdk', 'argobots')
+    denv.d_add_requires('pmdk', 'argobots', 'protobufc')
 
     denv.d_static_library('smd', ['smd_device.c', 'smd_pool.c', 'smd_store.c'], LIBS=[])
 

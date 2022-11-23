@@ -3,12 +3,12 @@
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('denv')
 
     libs = ['daos', 'daos_common', 'gurt', 'cart', 'pthread', 'cmocka']
 
     for test in ('eq_tests.c', 'agent_tests.c', 'job_tests.c'):
-        env.Install('$PREFIX/bin', env.d_test_program(test, LIBS=libs))
+        denv.Install('$PREFIX/bin', denv.d_test_program(test, LIBS=libs))
 
 
 if __name__ == "SCons.Script":
