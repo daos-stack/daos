@@ -97,6 +97,7 @@ class NvmePoolExtend(OSAUtils):
             output = pool.extend(ranks_extended)
 
             # Wait for rebuild to complete
+            pool.wait_for_rebuild_to_start()
             pool.wait_for_rebuild_to_end(interval=3)
             rebuild_status = pool.get_rebuild_status()
             self.log.info("Rebuild Status: %s", rebuild_status)

@@ -400,7 +400,6 @@ class ErasureCodeSingle(TestWithServers):
             time.sleep(10)
             # Kill the server rank
             if self.rank_to_kill is not None:
-                self.pool.update_map_version()
                 self.server_managers[0].stop_ranks([self.rank_to_kill], self.d_log, force=True)
 
         # Wait to finish the thread

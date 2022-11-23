@@ -33,20 +33,20 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         self.write_single_type_dataset()
 
         # Kill the last server rank
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log, force=True)
 
         # Wait for rebuild to complete
+        self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end()
 
         # Read data set and verify for different EC object for parity 1 and 2.
         self.read_single_type_dataset()
 
         # Kill the another server rank
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
 
         # Wait for rebuild to complete
+        self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end()
 
         # Read data set and verify for different EC object for 2 only.

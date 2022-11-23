@@ -212,7 +212,6 @@ class ServerFillUp(IorTestBase):
             disk_id (string): NVMe disk ID where it will be changed to faulty.
         """
         self.dmg.hostlist = server
-        self.pool.update_map_version()
         self.dmg.storage_set_faulty(disk_id)
         result = self.dmg.storage_query_device_health(disk_id)
         # Check if device state changed to EVICTED.
@@ -288,7 +287,6 @@ class ServerFillUp(IorTestBase):
         Args:
             rank: Rank number to kill the daos server
         """
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
     def exclude_target_thread(self, rank, target):

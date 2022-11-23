@@ -40,11 +40,16 @@ class OSADmgNegativeTest(OSAUtils):
 
         """
         if exp_result == "Pass":
+            pool.wait_for_rebuild_to_start()
             pool.wait_for_rebuild_to_end(3)
             if result.exit_status == 0:
+                self.log.info(
+                    "=> '%s' passed as expected (rc=%s)", result.command, result.exit_status)
                 return True
         elif exp_result == "Fail":
             if result.exit_status != 0:
+                self.log.info(
+                    "=> '%s' failed as expected (rc=%s)", result.command, result.exit_status)
                 return True
         else:
             self.fail("Invalid 'exp_result' parameter: {}".format(exp_result))
@@ -62,7 +67,7 @@ class OSADmgNegativeTest(OSAUtils):
         pool_list = []
 
         for index in range(0, num_pool):
-            self.log.info(">> Creating pool %s", index + 1)
+            self.log.info("=> Creating pool %s", index + 1)
             pool_list.append(add_pool(self, create=False, connect=False))
             # Split total SCM and NVME size for creating multiple pools.
             pool_list[-1].scm_size.value = int(pool_list[-1].scm_size.value / num_pool)
@@ -71,7 +76,7 @@ class OSADmgNegativeTest(OSAUtils):
 
         # Start the additional servers and extend the pool
         if extend is True:
-            self.log.info(">> Starting additional servers on %s", self.extra_servers)
+            self.log.info("=> Starting additional servers on %s", self.extra_servers)
             self.start_additional_servers(self.extra_servers)
 
         # Get rank, target from the test_dmg_sequence
@@ -86,30 +91,30 @@ class OSADmgNegativeTest(OSAUtils):
                 # There is no need to extend rank 0
                 # Avoid DER_ALREADY
                 if extend is True and rank != "0":
-                    self.log.info(">> Sequence %s: Extend rank %s onto pool %s", index, rank, pool)
+                    self.log.info("=> Sequence %s: Extend rank %s onto pool %s", index, rank, pool)
                     if not self.validate_results(pool, expected_result, pool.extend(rank)):
                         self.fail("Error extending rank {} onto pool {}".format(rank, str(pool)))
                 if (extend is False and rank in ["4", "5"]):
                     continue
 
                 # Exclude a rank, target
-                self.log.info(">> Sequence %s: Exclude rank %s from pool %s", index, rank, pool)
+                self.log.info("=> Sequence %s: Exclude rank %s from pool %s", index, rank, pool)
                 if not self.validate_results(pool, expected_result, pool.exclude(rank, target)):
                     self.fail("Error excluding rank {} from pool {}".format(rank, str(pool)))
 
                 # Now reintegrate the excluded rank.
-                self.log.info(">> Sequence %s: Reintegrate rank %s into pool %s", index, rank, pool)
+                self.log.info("=> Sequence %s: Reintegrate rank %s into pool %s", index, rank, pool)
                 if not self.validate_results(pool, expected_result, pool.reintegrate(rank, target)):
                     self.fail("Error reintegrating rank {} into pool {}".format(rank, str(pool)))
 
                 # Drain the data from a rank
-                self.log.info(">> Sequence %s: Drain rank %s data from pool %s", index, rank, pool)
+                self.log.info("=> Sequence %s: Drain rank %s data from pool %s", index, rank, pool)
                 if not self.validate_results(pool, expected_result, pool.drain(rank, target)):
                     self.fail("Error draining rank {} data from pool {}".format(rank, str(pool)))
 
                 # Now reintegrate the drained rank
                 self.log.info(
-                    ">> Sequence %s: Reintegrate drained rank %s into pool %s", index, rank, pool)
+                    "=> Sequence %s: Reintegrate drained rank %s into pool %s", index, rank, pool)
                 if not self.validate_results(pool, expected_result, pool.reintegrate(rank, target)):
                     self.fail(
                         "Error reintegrating drained rank {} into pool {}".format(rank, str(pool)))

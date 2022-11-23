@@ -123,7 +123,6 @@ class PoolSvc(TestWithServers):
 
                 # Stop the pool leader
                 self.log.info("Stopping the pool leader: %s", pool_leader)
-                self.pool.update_map_version()
                 try:
                     self.server_managers[-1].stop_ranks([pool_leader], self.test_log)
                 except TestFail as error:
@@ -143,7 +142,6 @@ class PoolSvc(TestWithServers):
                     non_leader = non_leader_ranks[-1]
                     self.log.info(
                         "Stopping a pool non-leader (%s): %s", non_leader_ranks, non_leader)
-                    self.pool.update_map_version()
                     try:
                         self.server_managers[-1].stop_ranks([non_leader], self.test_log)
                     except TestFail as error:

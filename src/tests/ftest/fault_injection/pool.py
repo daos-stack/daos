@@ -65,17 +65,23 @@ class PoolServicesFaultInjection(TestWithServers):
         Reintegrate the server back
         Wait for rebuild
 
-        Due to the nature of how wait_for_rebuild_to_end() is coded
+        Due to the nature of how wait_for_rebuild_to_start/end() is coded
         we can only get the last dmg command output.
         """
         server_to_exclude = randint(0, len(self.hostlist_servers) - 1)  # nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 
+        self.pool.wait_for_rebuild_to_start()
+        self.look_missed_request(self.pool.dmg.result.stderr)
+
         self.pool.wait_for_rebuild_to_end()
         self.look_missed_request(self.pool.dmg.result.stderr)
 
         self.pool.reintegrate(str(server_to_exclude))
+        self.look_missed_request(self.pool.dmg.result.stderr)
+
+        self.pool.wait_for_rebuild_to_start()
         self.look_missed_request(self.pool.dmg.result.stderr)
 
         self.pool.wait_for_rebuild_to_end()

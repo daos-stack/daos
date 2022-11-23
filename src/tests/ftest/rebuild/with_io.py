@@ -68,7 +68,6 @@ class RbldWithIO(TestWithServers):
         self.container.get_target_rank_lists(" prior to rebuild")
 
         # Trigger rebuild
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([rank], self.d_log)
 
         # Wait for recovery to start

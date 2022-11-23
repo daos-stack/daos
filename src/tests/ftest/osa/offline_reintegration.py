@@ -113,10 +113,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                             continue
                         output = self.pool.exclude(rank[val])
                 else:
-                    self.pool.update_map_version()
                     output = self.dmg_command.system_stop(ranks=rank[val], force=True)
                     self.print_and_assert_on_rebuild_failure(output)
-                    self.pool.update_map_version()
                     output = self.dmg_command.system_start(ranks=rank[val])
                 # Just try to reintegrate rank 5
                 if (self.test_during_rebuild is True and val == 2):

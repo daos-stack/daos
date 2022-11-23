@@ -71,6 +71,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         If rebuild does not complete, raise an assertion.
         """
         self.log.info(out)
+        self.pool.wait_for_rebuild_to_start()
         self.pool.wait_for_rebuild_to_end(timeout)
         self.assert_on_rebuild_failure()
 

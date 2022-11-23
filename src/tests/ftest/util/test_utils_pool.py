@@ -163,9 +163,9 @@ class TestPool(TestDaosApiBase):
         self.scm_per_rank = None
         self.nvme_per_rank = None
 
-        # Stored pool map version to use when determining if pool rebuild is complete in addition
-        # to the rebuild state.  This can be updated via TestPool.update_map_version().
-        self._map_version = 0
+        # Current rebuild data used when determining if pool rebuild is running or complete
+        self._rebuild_data = {}
+        self._reset_rebuild_data()
 
     def __str__(self):
         """Return the pool label (if defined) and UUID identification.
@@ -480,7 +480,6 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        self.update_map_version()
         return self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
@@ -505,7 +504,6 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        self.update_map_version()
         return self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
 
     @fail_on(CommandFailure)
@@ -519,7 +517,6 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        self.update_map_version()
         return self.dmg.pool_extend(self.identifier, ranks)
 
     def get_acl(self):
@@ -616,7 +613,6 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        self.update_map_version()
         return self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
     @fail_on(CommandFailure)
@@ -1075,97 +1071,74 @@ class TestPool(TestDaosApiBase):
         """
         return self._get_query_data_keys("response", "rebuild", "state", refresh=refresh)
 
-    def update_map_version(self):
-        """Update the pool map version used to determine if rebuild is complete.
-
-        Raises:
-            CommandFailure: if there was error collecting the dmg pool query data or the keys
-
-        """
-        self._map_version = self.get_version(True)
-        self.log.info("Updated pool %s map version for rebuild check: %s", self, self._map_version)
-
-    def has_rebuild_started(self, status=None, verbose=True):
-        """Determine if rebuild has started.
-
-        Args:
-            status (list, optional): optional list of expected rebuild states. Defaults to None.
-            verbose (bool, optional): whether to display the pool query info. Defaults to True.
-
-        Returns:
-            bool: True if rebuild has started
-
-        """
-        return self._check_rebuild(["busy", "done"], None, status=status, verbose=verbose)
-
-    def has_rebuild_completed(self, status=None, verbose=True):
-        """Determine if rebuild has completed.
-
-        Args:
-            status (list, optional): optional list of expected rebuild states. Defaults to None.
-            verbose (bool, optional): whether to display the pool query info. Defaults to True.
-
-        Returns:
-            bool: True if rebuild has completed
-
-        """
-        return self._check_rebuild(["idle", "done"], self._map_version, status, verbose)
-
-    def _check_rebuild(self, states, version=None, status=None, verbose=True):
-        """Check if rebuild is in an expected state, status, and pool map version.
-
-        Args:
-            states (list): list of expected rebuild state strings
-            version (int, optional): optional map version to be exceeded. Defaults to None.
-            status (list, optional): optional list of expected rebuild states. Defaults to None.
-            verbose (bool, optional): whether to display the pool query info. Defaults to True.
-
-        Returns:
-            bool: True if the current rebuild state is expected and the rebuild status is expected
-                (if specified), and the map version exceeds the value (if checking for rebuild
-                completion).
-
-        """
-        self.set_query_data()
-        try:
-            current_version = self.get_version(False)
-        except (CommandFailure, ValueError) as error:
-            self.log.error("Unable to detect the current pool map version: %s", error)
-            current_version = 0
-        try:
-            current_state = self.get_rebuild_state(False)
-        except CommandFailure as error:
-            self.log.error("Unable to detect the current pool rebuild state: %s", error)
-            current_state = "unknown"
-        try:
-            current_status = self.get_rebuild_status(False)
-        except (CommandFailure, ValueError) as error:
-            self.log.error("Unable to detect the current pool rebuild status: %s", error)
-            current_status = 0
-
-        # Determine if the current rebuild state, version, and status is expected
-        checks = {
-            "state": current_state in states,
-            "status": status is None or current_status in status,
-            "version": version is None or current_version > version,
+    def _reset_rebuild_data(self):
+        """Reset the rebuild data."""
+        self._rebuild_data = {
+            "state": None,
+            "map_version": None,
+            "status": None,
+            "check": None,
+            "version_increase": False,
         }
 
+    def _update_rebuild_data(self, verbose=True):
+        """Update the rebuild data.
+
+        Args:
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+        """
+        # Reset the rebuild data if rebuild completion was previously detected
+        if self._rebuild_data["state"] == "completed":
+            self._reset_rebuild_data()
+
+        # Use the current rebuild data to define the previous rebuild data
+        previous_data = dict(self._rebuild_data.items())
+
+        # Update the current rebuild data
+        self.set_query_data()
+        try:
+            self._rebuild_data["version"] = self.get_version(False)
+        except (CommandFailure, ValueError) as error:
+            self.log.error("Unable to detect the current pool map version: %s", error)
+            self._rebuild_data["version"] = None
+        try:
+            self._rebuild_data["state"] = self.get_rebuild_state(False)
+        except CommandFailure as error:
+            self.log.error("Unable to detect the current pool rebuild state: %s", error)
+            self._rebuild_data["state"] = None
+        try:
+            self._rebuild_data["status"] = self.get_rebuild_status(False)
+        except (CommandFailure, ValueError) as error:
+            self.log.error("Unable to detect the current pool rebuild status: %s", error)
+            self._rebuild_data["status"] = None
+
+        # Keep track of any map version increases
+        if self._rebuild_data["version"] > previous_data["version"]:
+            self._rebuild_data["version_increase"] = True
+
+        # Determine if rebuild is running or completed
+        if self._rebuild_data["state"] == "done":
+            # If the current state is done, rebuild is complete
+            self._rebuild_data["check"] = "completed"
+        elif self._rebuild_data["state"] == "idle" and self._rebuild_data["version_increase"]:
+            # If the current state is idle and the map version has increased, rebuild is done
+            self._rebuild_data["check"] = "completed"
+        elif self._rebuild_data["busy"] == "busy" or previous_data["state"] == "busy":
+            # If the current state is busy or idle w/o a version increase after previously being
+            # busy, rebuild is running
+            self._rebuild_data["check"] = "running"
+        else:
+            # Otherwise rebuild has yet to start
+            self._rebuild_data["check"] = "not yet started"
+
         if verbose:
-            self.log.info(
-                "Pool %s query rebuild data check: status: %s && state: %s && version: %s = %s",
-                str(self),
-                "".join([str(current_status), "" if status is None else " in {}".format(status)]),
-                "".join([str(current_state), "" if states is None else " in {}".format(states)]),
-                "".join([str(current_version), "" if version is None else " > {}".format(version)]),
-                all(checks.values()))
+            self.log.info("%s query rebuild data: %s", str(self), self._rebuild_data)
 
-        return all(checks.values())
-
-    def _wait_for_rebuild(self, to_start, interval=1):
+    def _wait_for_rebuild(self, expected, interval=1):
         """Wait for the rebuild to start or end.
 
         Args:
-            to_start (bool): whether to wait for rebuild to start or end
+            expected (str): which rebuild data check to wait for: 'running' or 'completed'
             interval (int): number of seconds to wait in between rebuild completion checks
 
         Raises:
@@ -1173,25 +1146,56 @@ class TestPool(TestDaosApiBase):
 
         """
         self.log.info(
-            "Waiting for rebuild to %s%s ...",
-            "start" if to_start else "complete",
+            "Waiting for rebuild to be %s%s ...",
+            expected,
             " with a {} second timeout".format(self.rebuild_timeout.value)
             if self.rebuild_timeout.value is not None else "")
 
-        check_method = self.has_rebuild_started if to_start else self.has_rebuild_completed
+        # If waiting for rebuild to start and it is detected as completed, stop waiting
+        expected_set = set()
+        expected_set.add(expected)
+        expected_set.add("completed")
+
         start = time()
-        while not check_method():
-            self.log.info("  Rebuild %s ...", "has not yet started" if to_start else "in progress")
+        self._update_rebuild_data()
+        while self._rebuild_data["check"] not in expected_set:
+            self.log.info("  Rebuild is %s ...", self._rebuild_data["check"])
             if self.rebuild_timeout.value is not None:
                 if time() - start > self.rebuild_timeout.value:
                     raise DaosTestError(
-                        "TIMEOUT detected after {} seconds while for waiting for rebuild to {}. "
+                        "TIMEOUT detected after {} seconds while for waiting for rebuild to be {}. "
                         "This timeout can be adjusted via the 'pool/rebuild_timeout' test yaml "
-                        "parameter.".format(
-                            self.rebuild_timeout.value, "start" if to_start else "complete"))
+                        "parameter.".format(self.rebuild_timeout.value, expected))
             sleep(interval)
+            self._update_rebuild_data()
 
-        self.log.info("Rebuild %s detected", "start" if to_start else "completion")
+        self.log.info("Wait for rebuild complete; rebuild is %s", self._rebuild_data["check"])
+
+    def has_rebuild_started(self, verbose=True):
+        """Determine if rebuild has started.
+
+        Args:
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+
+        Returns:
+            bool: True if rebuild has started
+
+        """
+        self._update_rebuild_data(verbose)
+        return self._rebuild_data["check"] == "running"
+
+    def has_rebuild_completed(self, verbose=True):
+        """Determine if rebuild has completed.
+
+        Args:
+            verbose (bool, optional): whether to display the pool query info. Defaults to True.
+
+        Returns:
+            bool: True if rebuild has completed
+
+        """
+        self._update_rebuild_data(verbose)
+        return self._rebuild_data["check"] == "completed"
 
     def wait_for_rebuild_to_start(self, interval=1):
         """Wait for the rebuild to start.
@@ -1203,7 +1207,7 @@ class TestPool(TestDaosApiBase):
             DaosTestError: if waiting for rebuild times out.
 
         """
-        self._wait_for_rebuild(True, interval)
+        self._wait_for_rebuild("running", interval)
 
     def wait_for_rebuild_to_end(self, interval=1):
         """Wait for the rebuild to end.
@@ -1215,7 +1219,7 @@ class TestPool(TestDaosApiBase):
             DaosTestError: if waiting for rebuild times out.
 
         """
-        self._wait_for_rebuild(False, interval)
+        self._wait_for_rebuild("completed", interval)
 
     def measure_rebuild_time(self, operation, interval=1):
         """Measure rebuild time.

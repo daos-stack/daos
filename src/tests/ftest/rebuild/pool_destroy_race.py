@@ -64,7 +64,6 @@ class RbldPoolDestroyWithIO(IorTestBase):
 
         # Kill the server and trigger rebuild
         self.log.info("Starting rebuild by killing rank %s", rank)
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
         # Wait for rebuild to start.

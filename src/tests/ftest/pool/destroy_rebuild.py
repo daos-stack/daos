@@ -51,7 +51,6 @@ class DestroyRebuild(TestWithServers):
             "Invalid pool information detected prior to rebuild")
 
         # Start rebuild
-        self.pool.update_map_version()
         self.server_managers[0].stop_ranks(ranks, self.d_log, force=True)
         self.pool.wait_for_rebuild_to_start()
 
