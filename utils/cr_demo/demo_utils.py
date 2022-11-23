@@ -42,18 +42,33 @@ def inject_fault_mgmt(pool_label, fault_type):
     print(f"Command: {command}")
     subprocess.run(inject_fault_cmd, check=False)
 
-def list_pool(verbose=False):
-    """Call dmg pool list
+def list_pool(verbose=False, json=False):
+    """Call dmg pool list.
 
     Args:
         verbose (bool): Whether to use --verbose. Defaults to False.
+        json (bool): Whether to use --json. If used, verbose value would be irrelevant.
+            Defaults to False.
+
+    Returns:
+        str: If --json is used, return stdout. Otherwise None.
     """
-    list_pool_cmd = ["dmg", "pool", "list"]
+    if json:
+        list_pool_cmd = ["dmg", "--json", "pool", "list"]
+    else:
+        list_pool_cmd = ["dmg", "pool", "list"]
     if verbose:
         list_pool_cmd.append("--verbose")
     command = " ".join(list_pool_cmd)
     print(f"Command: {command}")
-    subprocess.run(list_pool_cmd, check=False)
+
+    if json:
+        result = subprocess.run(
+            list_pool_cmd, stdout=subprocess.PIPE, universal_newlines=True, check=False)
+        return result.stdout
+    else:
+        subprocess.run(list_pool_cmd, check=False)
+        return None
 
 def enable_checker():
     """Call dmg check enable"""
@@ -75,12 +90,29 @@ def start_checker(policies=None):
     print(f"Command: {command}")
     subprocess.run(check_start_cmd, check=False)
 
-def query_checker():
-    """Call dmg check query"""
-    check_query_cmd = ["dmg", "check", "query"]
+def query_checker(json=False):
+    """Call dmg check query
+
+    Args:
+        json (bool): Whether to use --json. Defaults to False.
+
+    Returns:
+        str: If --json is used, return stdout. Otherwise None.
+    """
+    if json:
+        check_query_cmd = ["dmg", "--json", "check", "query"]
+    else:
+        check_query_cmd = ["dmg", "check", "query"]
     command = " ".join(check_query_cmd)
     print(f"Command: {command}")
+
+    if json:
+        result = subprocess.run(
+            check_query_cmd, stdout=subprocess.PIPE, universal_newlines=True, check=False)
+        return result.stdout
+
     subprocess.run(check_query_cmd, check=False)
+    return None
 
 def disable_checker():
     """Call dmg check disable"""
@@ -99,3 +131,15 @@ def repeat_check_query():
             break
         else:
             print("Please enter y or n.")
+
+def repair_checker(sequence_num, action):
+    """Call dmg check repair
+
+    Args:
+        sequence_num (str): Sequence number for repair action.
+        action (str): Repair action number.
+    """
+    check_repair_cmd = ["dmg", "check", "repair", sequence_num, action]
+    command = " ".join(check_repair_cmd)
+    print(f"Command: {command}")
+    subprocess.run(check_repair_cmd, check=False)

@@ -5,25 +5,15 @@
 """
 import argparse
 import subprocess
+import time
 import yaml
 from demo_utils import format_storage, create_pool, inject_fault_mgmt, list_pool,\
-    enable_checker, start_checker, query_checker, disable_checker, repeat_check_query
+    enable_checker, start_checker, query_checker, disable_checker, repeat_check_query,\
+    repair_checker
 
 
 POOL_SIZE = "4GB"
 POOL_LABEL = "tank"
-
-def repair_checker(sequence_num, action):
-    """Call dmg check repair
-
-    Args:
-        sequence_num (str): Sequence number for repair action.
-        action (str): Repair action number.
-    """
-    check_repair_cmd = ["dmg", "check", "repair", sequence_num, action]
-    command = " ".join(check_repair_cmd)
-    print(f"Command: {command}")
-    subprocess.run(check_repair_cmd, check=False)
 
 def get_query_result():
     """Call dmg check query with --json and return the output. """
@@ -44,6 +34,9 @@ ARGS = vars(PARSER.parse_args())
 HOSTLIST = ARGS["hostlist"]
 input(f"\n1. Format storage on {HOSTLIST}. Hit enter...")
 format_storage(host_list=HOSTLIST)
+
+print("\nWait for 5 sec before creating pools...")
+time.sleep(5)
 
 input("\n2. Create a 4GB pool. Hit enter...")
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL)
