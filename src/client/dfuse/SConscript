@@ -1,6 +1,5 @@
 """Build DFuse"""
 import os
-import daos_build
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h', 'ioil_api.h', 'ioil.h']
 COMMON_SRC = ['dfuse_obj_da.c', 'dfuse_vector.c']
@@ -65,11 +64,11 @@ def build_client_libs_shared(env, prereqs):
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
-    il_lib = daos_build.library(ilenv, 'il/libioil', il_obj + common)
+    il_lib = ilenv.d_library('il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
-    dfuse_lib = daos_build.library(ilenv, 'dfuse', common)
+    dfuse_lib = ilenv.d_library('dfuse', common)
 
-    gen_script = daos_build.program(ilenv, 'il/gen_script', ['il/gen_script.c'], LIBS=[])
+    gen_script = ilenv.d_program('il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
         script = ilenv.Command('il/check_ioil_syms', gen_script,
                                "$SOURCE -s $TARGET")
@@ -79,7 +78,7 @@ def build_client_libs_shared(env, prereqs):
     env.Install('$PREFIX/share/daos', script)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), dfuse_lib)
 
-    return dfuse_lib + il_lib
+    Default(dfuse_lib, il_lib)
 
 
 def build_client_libs_static(env, common):
@@ -92,21 +91,14 @@ def build_client_libs_static(env, common):
         il_obj += ilenv.Object(os.path.join('il', src))
 
     # Now build the interception library
-    il_lib_src = daos_build.static_library(ilenv, 'il/libioil_source', il_obj + common)
-    il_lib = ilenv.Command('il/libioil.a', il_lib_src,
-                           'objcopy --localize-hidden $SOURCE $TARGET')
-    daos_build.add_static_library('ioil', il_lib)
-
+    il_lib = ilenv.d_static_library(target='il/libioil.a', source=il_obj + common, hide_syms=True)
     env.Install('$PREFIX/lib64', il_lib)
 
     # Now build the dfuse library
-    dfuse_lib_src = daos_build.static_library(ilenv, 'common/libdfuse_source', common)
-    dfuse_lib = ilenv.Command('common/libdfuse.a', dfuse_lib_src,
-                              'objcopy --localize-hidden $SOURCE $TARGET')
-    daos_build.add_static_library('dfuse', dfuse_lib)
+    dfuse_lib = ilenv.d_static_library(target='libdfuse.a', source=common, hide_syms=True)
     env.Install('$PREFIX/lib64', dfuse_lib)
 
-    return il_lib + dfuse_lib
+    Default(il_lib, dfuse_lib)
 
 
 def check_struct_member(context, text, struct, member):
@@ -136,7 +128,19 @@ def check_ioctl_def(context, ctype):
 
     context.Message(f'Checking if fuse ioctl is type {ctype} ')
 
-    rc = context.TryCompile(_src(), '.c')
+    # pylint: disable-next=consider-using-f-string
+    src = """#include <fuse3/fuse_lowlevel.h>
+
+extern void
+my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
+    void *arg, struct fuse_file_info *fi, unsigned flags,
+    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+
+struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
+
+""" % ctype
+
+    rc = context.TryCompile(src, '.c')
     context.Result(rc)
     return rc
 
@@ -191,13 +195,13 @@ def scons():
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
-    libs = build_client_libs_shared(gcc_env, prereqs)
+    build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
 
     # Build a static library of the common parts.
     common = build_common(dfuse_env, COMMON_SRC, False)
-    libs += build_client_libs_static(static_env, common)
+    build_client_libs_static(static_env, common)
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
@@ -219,14 +223,12 @@ def scons():
     dfuse_th = cenv.Object('dfuse_test_helper.c')
 
     cenv.AppendUnique(LIBS=['gurt'])
-    progs = daos_build.program(cenv, 'dfuse/dfuse', common + dfuse_obj + dfuse_main)
-    progs += daos_build.program(cenv, 'dfuse/dfuse_th', common + dfuse_obj + dfuse_th)
+    progs = cenv.d_program(cenv, 'dfuse/dfuse', common + dfuse_obj + dfuse_main)
+    progs += cenv.d_program(cenv, 'dfuse/dfuse_th', common + dfuse_obj + dfuse_th)
 
-    Default(progs + libs)
+    Default(dfuse_bin)
 
-    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
-
-    Export('dfuse_env')
+    cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
 
 
 if __name__ == "SCons.Script":

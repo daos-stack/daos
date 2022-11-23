@@ -157,9 +157,10 @@ func (hem HostErrorsMap) Keys() []string {
 // UnaryResponse contains a slice of *HostResponse items returned
 // from synchronous unary RPC invokers.
 type UnaryResponse struct {
-	Responses []*HostResponse
-	fromMS    bool
-	log       debugLogger
+	Responses  []*HostResponse
+	fromMS     bool
+	retryCount uint
+	log        debugLogger
 }
 
 func (ur *UnaryResponse) debugf(format string, args ...interface{}) {
