@@ -39,7 +39,7 @@ class DaosRacerTest(TestWithServers):
         # Create the orterun command
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(len(self.hostlist_clients))
-        self.job_manager.assign_environment(daos_racer.get_environment(self.server_managers[0]))
+        self.job_manager.assign_environment(daos_racer.env)
         self.job_manager.job = daos_racer
         self.job_manager.check_results_list = ["<stderr>"]
         self.job_manager.timeout = daos_racer.clush_timeout.value

@@ -88,6 +88,28 @@ func TestControl_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
+		"-DER_NONEXIST on first try is not retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.Nonexistent, nil),
+				},
+			},
+			expErr: daos.Nonexistent,
+		},
+		"-DER_NONEXIST on retry is treated as success": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TimedOut, nil),
+					MockMSResponse("host1", daos.Nonexistent, nil),
+				},
+			},
+		},
 		"DataPlaneNotStarted error is retried": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
@@ -1610,6 +1632,7 @@ func TestControl_ListPools(t *testing.T) {
 }
 
 func TestControl_GetMaxPoolSize(t *testing.T) {
+	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
 		ScmBytes  uint64
 		NvmeBytes uint64
@@ -2076,7 +2099,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 							MockStorageConfig: MockStorageConfig{
 								TotalBytes: uint64(1) * uint64(humanize.TByte),
 								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  new(storage.NvmeDevState),
+								NvmeState:  &devStateFaulty,
 							},
 							Rank: 0,
 						},

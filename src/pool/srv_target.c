@@ -1269,6 +1269,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	hdl->sph_flags = pic->pic_flags;
 	hdl->sph_sec_capas = pic->pic_capas;
 	hdl->sph_global_ver = pic->pic_global_ver;
+	hdl->sph_obj_ver = pic->pic_obj_ver;
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 
@@ -1366,7 +1367,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 		pool_map_get_version(map));
 
 	rc = map_ranks_init(map, PO_COMP_ST_UP | PO_COMP_ST_UPIN |
-				 PO_COMP_ST_DRAIN | PO_COMP_ST_NEW, &ranks);
+			    PO_COMP_ST_DRAIN, &ranks);
 	if (rc != 0)
 		return rc;
 

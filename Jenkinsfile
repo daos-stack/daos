@@ -295,7 +295,7 @@ pipeline {
                             if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
                                 error('Your PR branch name does not follow the rules. Please rename it ' +
                                       'according to the rules described here: ' +
-                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
                                       'Once you have renamed your branch locally to match the ' +
                                       'format, close this PR and open a new one using the newly renamed ' +
                                       'local branch.')
@@ -577,19 +577,23 @@ pipeline {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: true) +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8', true) + '"' +
-                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quickBuildDeps('el8', true) + '"' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
+                        sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   build_deps: 'no',
-                                   scons_args: sconsFaultsArgs()
+                                   build_deps: 'yes',
+                                   stash_opt: true,
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
@@ -654,7 +658,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -710,10 +714,11 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -737,7 +742,7 @@ pipeline {
                       expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         unitTest timeout_time: 60,
@@ -849,7 +854,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
@@ -868,7 +873,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_UNIT_VM1_LABEL
+                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),

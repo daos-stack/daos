@@ -569,6 +569,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_id = 0;
 		attr.da_oclass_id = ap->oclass;
 		attr.da_dir_oclass_id = ap->dir_oclass;
+		attr.da_file_oclass_id = ap->file_oclass;
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
@@ -615,6 +616,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_dir_oclass_id = ap->dir_oclass;
+	dattr.da_file_oclass_id = ap->file_oclass;
 	dattr.da_chunk_size = ap->chunk_size;
 	if (ap->hints)
 		strncpy(dattr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
