@@ -231,7 +231,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with single AP with and without port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_single
         """
@@ -249,7 +249,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with odd number of APs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_odd
         """
@@ -267,7 +267,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with invalid port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
         """
@@ -291,7 +291,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with the same APs repeated.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
         """
@@ -312,7 +312,7 @@ class ConfigGenerateOutput(TestWithServers):
         3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
@@ -360,7 +360,7 @@ class ConfigGenerateOutput(TestWithServers):
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries
         :avocado: tags=ConfigGenerateOutput,test_min_ssds
         """
@@ -428,7 +428,7 @@ class ConfigGenerateOutput(TestWithServers):
         "fabric_iface".
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,config_generate_entries
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
