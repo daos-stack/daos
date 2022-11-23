@@ -36,7 +36,7 @@ class DaosVol(VolTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
         :avocado: tags=hdf5,vol,volunit,volmpich
-        :avocado: tags=DAOS_5610,test_daos_vol_mpich
+        :avocado: tags=DAOS_5610
         """
         manager = get_job_manager(self, mpi_type="mpich")
         self.run_test(manager, "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")
