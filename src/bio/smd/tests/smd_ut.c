@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,7 +20,6 @@
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
 #define DB_LIST_NR	3
-
 
 struct ut_db {
 	struct sys_db	ud_db;
