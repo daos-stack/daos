@@ -223,12 +223,12 @@ def scons():
     dfuse_th = cenv.Object('dfuse_test_helper.c')
 
     cenv.AppendUnique(LIBS=['gurt'])
-    progs = cenv.d_program(cenv, 'dfuse/dfuse', common + dfuse_obj + dfuse_main)
-    progs += cenv.d_program(cenv, 'dfuse/dfuse_th', common + dfuse_obj + dfuse_th)
+    progs = cenv.d_program('dfuse/dfuse', common + dfuse_obj + dfuse_main)
+    progs += cenv.d_program('dfuse/dfuse_th', common + dfuse_obj + dfuse_th)
 
-    Default(dfuse_bin)
+    Default(progs)
 
-    cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
+    cenv.Install(os.path.join("$PREFIX", 'bin'), progs)
 
 
 if __name__ == "SCons.Script":
