@@ -1113,8 +1113,9 @@ class TestPool(TestDaosApiBase):
             self._rebuild_data["status"] = None
 
         # Keep track of any map version increases
-        if self._rebuild_data["version"] > previous_data["version"]:
-            self._rebuild_data["version_increase"] = True
+        if self._rebuild_data["version"] is not None and previous_data["version"] is not None:
+            if self._rebuild_data["version"] > previous_data["version"]:
+                self._rebuild_data["version_increase"] = True
 
         # Determine if rebuild is running or completed
         if self._rebuild_data["state"] == "done":
