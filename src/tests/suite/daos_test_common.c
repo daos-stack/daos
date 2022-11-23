@@ -903,6 +903,28 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
+static int
+daos_dmg_pool_upgrade(const uuid_t pool_uuid, const char *dmg_config)
+{
+	char		dmg_cmd[DTS_CFG_MAX];
+	int		rc;
+
+	/* build and invoke dmg cmd */
+	dts_create_config(dmg_cmd, "dmg pool upgrade " DF_UUIDF, DP_UUID(pool_uuid));
+
+	dts_append_config(dmg_cmd, " -o %s", dmg_config);
+	rc = system(dmg_cmd);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
+	assert_int_equal(rc, 0);
+	return rc;
+}
+
+int
+daos_pool_upgrade(const uuid_t pool_uuid)
+{
+	return daos_dmg_pool_upgrade(pool_uuid, dmg_config_file);
+}
+
 int
 daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		   const char *value)

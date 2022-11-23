@@ -14,6 +14,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos/task.h>
+#include "obj_rpc.h"
 #include "obj_internal.h"
 
 int
