@@ -109,17 +109,19 @@ def scons():
     # Build DAOS client libraries
     SConscript('client/SConscript')
 
+    # Build utilities
+    SConscript('utils/SConscript')
+
+    # Build the control plane components.
+    # This build takes a long time so it's best to start it as early as possible to improve
+    # build times when parallel building.
+    SConscript('control/SConscript')
+
     # rdb unit test rdbt depends on libdaos
     SConscript('rdb/SConscript')
 
     # Then the DAOS I/O Engine executable
     SConscript('engine/SConscript')
-
-    # Build utilities
-    SConscript('utils/SConscript')
-
-    # Build the control plane components
-    SConscript('control/SConscript')
 
     # Build test
     SConscript('placement/tests/SConscript')

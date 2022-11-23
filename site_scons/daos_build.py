@@ -112,6 +112,7 @@ def _add_lib(libtype, libname, target):
     """Add library to our db"""
     if libname in missing:
         print(f"Detected that build of {libname} happened after use")
+        _report_fault("Here")
         Exit(1)
     if libname not in libraries:
         libraries[libname] = {}

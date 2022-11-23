@@ -305,6 +305,10 @@ class DefaultEnvironment():
         """Fake d_server_requested"""
         return True
 
+    def d_client_requested(self):
+        """Fake d_client_requested"""
+        return True
+
     def d_tests_requested(self):
         """Fake d_tests_requested"""
         return True
