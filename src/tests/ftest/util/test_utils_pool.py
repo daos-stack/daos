@@ -1124,7 +1124,7 @@ class TestPool(TestDaosApiBase):
         elif self._rebuild_data["state"] == "idle" and self._rebuild_data["version_increase"]:
             # If the current state is idle and the map version has increased, rebuild is done
             self._rebuild_data["check"] = "completed"
-        elif self._rebuild_data["busy"] == "busy" or previous_data["state"] == "busy":
+        elif self._rebuild_data["state"] == "busy" or previous_data["state"] == "busy":
             # If the current state is busy or idle w/o a version increase after previously being
             # busy, rebuild is running
             self._rebuild_data["check"] = "running"
