@@ -46,6 +46,9 @@ class DaosRacerCommand(ExecutableCommand):
         # of None will result in no timeout being used.
         self.clush_timeout = BasicParameter(None)
 
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
 
@@ -86,9 +89,6 @@ class DaosRacerCommand(ExecutableCommand):
 
         self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
-        # Include exports prior to the daos_racer command
-        self._pre_command = self.env.to_export_str()
-
     def run(self):
         """Run the daos_racer command remotely.
 
@@ -102,7 +102,7 @@ class DaosRacerCommand(ExecutableCommand):
             str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(self.host, str(self), True, self.clush_timeout.value)
+        return_codes = pcmd(self.host, self.with_exports, True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
