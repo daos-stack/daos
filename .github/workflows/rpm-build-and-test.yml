@@ -14,6 +14,16 @@ concurrency:
 
 jobs:
 
+  Show-inputs:
+    name: Show inputs
+    runs-on: [self-hosted, mockbuilder]
+    steps:
+      - name: Show inputs
+        run: |
+          set -x
+          echo "${{ github.event.inputs.pr-repos }}"
+          echo "${{ inputs.pr-repos }}"
+
   Show-client-paylod:
     name: Show client_paylod
     runs-on: [self-hosted, mockbuilder]
@@ -21,7 +31,7 @@ jobs:
       - name: Show client_payload
         run: |
           echo "payload raw: ${{ github.event.client_payload }}"
-          echo "payload as json: ${{ toJson(github.event.client_payload) }}"
+          echo "payload as json: ${{ toJson(github-.event.client_payload) }}"
 
   Import-commit-message:
     name: Get commit message
@@ -237,7 +247,7 @@ jobs:
       - name: Post-provision cluster
         run: |
           . ci/gha_functions.sh
-          inst_repos=${{ env.cp_PR_REPOS }}
+          inst_repos="${{ env.cp_PR_REPOS }} ${{ github.event.inputs.pr-repos }}"
           if [[ $inst_repos != *daos@* ]]; then
               inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
           fi
