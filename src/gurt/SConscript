@@ -24,10 +24,9 @@ def scons():
 
     gurt_targets = denv.SharedObject(SRC)
     gurt_lib = denv.d_library('gurt', gurt_targets, SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
-                             SHLIBVERSION=CART_VERSION)
+    denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib, SHLIBVERSION=CART_VERSION)
 
-    Export('gurt_targets')
+    Export('gurt_targets', 'gurt_lib')
 
     SConscript('examples/SConscript')
     SConscript('tests/SConscript')
