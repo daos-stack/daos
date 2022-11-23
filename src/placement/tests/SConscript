@@ -1,5 +1,4 @@
 """Build object tests"""
-import daos_build
 
 
 def scons():
@@ -26,12 +25,12 @@ def scons():
 
     libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal']
 
-    ring_pl_test = daos_build.program(denv, 'ring_pl_map', ring_test_tgt, LIBS=libraries)
+    ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 
-    jump_pl_test = daos_build.program(denv, 'jump_pl_map',
-                                      jump_test_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
+    jump_pl_test = denv.d_program('jump_pl_map',
+                                  jump_test_tgt + ['../../pool/srv_pool_map.c'], LIBS=libraries)
 
-    pl_bench = daos_build.program(denv, 'pl_bench', pl_bench_tgt, LIBS=libraries)
+    pl_bench = denv.d_program('pl_bench', pl_bench_tgt, LIBS=libraries)
 
     denv.Install('$PREFIX/bin/', ring_pl_test)
     denv.Install('$PREFIX/bin/', jump_pl_test)
