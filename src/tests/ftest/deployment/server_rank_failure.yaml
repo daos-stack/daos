@@ -2,7 +2,7 @@ hosts:
   test_servers: 3
   test_clients: 1
 
-timeout: 1020
+timeout: 2000
 daos_server:
   pattern_timeout: 60
 
@@ -57,7 +57,7 @@ server_config:
 pool_size_ratio_80:
   size: 80%
   control_method: dmg
-  rebuild_timeout: 480
+  rebuild_timeout: 960
   svcn: 5
 pool_size_value:
   size: 500G
