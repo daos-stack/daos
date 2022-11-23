@@ -10,6 +10,15 @@ concurrency:
 
 jobs:
 
+  Show-client-paylod:
+    name: Show client_paylod
+    runs-on: [self-hosted, mockbuilder]
+    steps:
+      - name: Show client_payload
+        run: |
+          'echo "payload raw: ${{ github.event.client_payload }}"'
+          'echo "payload as json: ${{ toJson(github.event.client_payload) }}"'
+
   Import-commit-message:
     name: Get commit message
     runs-on: [self-hosted, mockbuilder]
