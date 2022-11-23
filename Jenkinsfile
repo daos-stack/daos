@@ -73,11 +73,9 @@ pipeline {
                description: 'Test-tag to use for the weekly Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
         string(name: 'TestRepeat',
                defaultValue: '',
-               description: 'Test-repeat to use for this run.  Specifies the ' +
-                            'number of times to repeat each functional test. ' +
-                            'CAUTION: only use in combination with a reduced ' +
-                            'number of tests specified with the TestTag ' +
-                            'parameter.')
+               description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
+                            'repeat each functional test. CAUTION: only use in combination with ' +
+                            'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
                description: 'Test-provider to use for this run.  Specifies the default provider ' +
@@ -90,6 +88,10 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Repository to include for packages used to the build and test ' +
+                            'nodes, in the project@PR-number[:build] format')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
@@ -126,10 +128,6 @@ pipeline {
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large stage')
-        string(name: 'CI_PR_REPOS',
-               defaultValue: '',
-               description: 'Repository to include for packages used to the build and test ' +
-                            'nodes, in the project@PR-number[:build] format')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
