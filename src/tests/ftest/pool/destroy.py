@@ -498,3 +498,86 @@ class DestroyTests(TestWithServers):
             self.pool.pool = None
             if exception_detected:
                 self.fail("Force destroying connected pool failed")
+
+    def test_destroy_with_containers(self):
+        """Destroy pool with existing containers.
+
+        Test destroying a pool that has existing containers with recursive == false.
+        Should fail.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_destroy_with_containers,test_destroy_with_containers
+        """
+        hostlist_servers = self.hostlist_servers[0:1]
+
+        # Start servers
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
+
+        # Create the pool
+        self.add_pool()
+
+        # Create pool container
+        self.add_container(pool=self.pool)
+
+        # Destroy pool with recursive unset
+        self.log.info("Attempting to destroy a pool with containers")
+        exception_detected = False
+        self.pool.dmg.exit_status_exception = False
+        result = self.get_dmg_command().pool_destroy(
+            pool=self.pool.identifier, recursive=False)
+        self.pool.dmg.exit_status_exception = True
+
+        if result.exit_status == 0:
+            # The pool-destroy did not raise an exception as expected
+            self.log.error("Exception did not occur - destroying pool with containers")
+        else:
+            exception_detected = True
+            self.log.info("Expected exception - destroying pool with containers")
+
+        self.log.info("Check if files still exist")
+        self.assertTrue(
+            self.pool.check_files(hostlist_servers),
+            "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
+
+        self.assertTrue(
+            exception_detected, "No exception when deleting a pool with containers")
+
+    def test_recursivedestroy_with_containers(self):
+        """Recursively destroy pool with existing containers.
+
+        Test destroying a pool that has existing containers with recursive == true.
+        Should pass.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,pool_destroy
+        :avocado: tags=pool_recursive_destroy_with_containers,test_recursivedestroy_with_containers
+        """
+        hostlist_servers = self.hostlist_servers[0:1]
+
+        # Start servers
+        self.start_servers(self.get_group(self.server_group, hostlist_servers))
+
+        # Create the pool
+        self.add_pool()
+
+        # Create pool container
+        self.add_container(pool=self.pool)
+
+        # Destroy pool with recursive set
+        self.log.info("Attempting to recursively destroy a pool with containers")
+        exception_detected = False
+        try:
+            self.pool.destroy(disconnect=0, recursive=1)
+        except TestFail as result:
+            exception_detected = True
+            self.log.info(
+                "Unexpected exception - destroying pool with containers: %s",
+                str(result))
+        finally:
+            # Prevent attempting to delete container in tearDown() after pool has been destroyed.
+            self.container = None
+            if exception_detected:
+                self.fail("recursive destroy on pool with containers failed")

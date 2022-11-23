@@ -23,8 +23,6 @@ import (
 const (
 	// bdevPciAddrSep defines the separator used between PCI addresses in string sets.
 	bdevPciAddrSep = " "
-	// vmdDomainLen defines the expected length of a VMD backing devices address domain.
-	vmdDomainLen = 6
 	// PCIAddrBusBitSize defines the number of bits used to represent bus in address.
 	PCIAddrBusBitSize = 8
 )
@@ -33,10 +31,8 @@ var ErrNotVMDBackingAddress = errors.New("not a vmd backing device address")
 
 // parseVMDAddress returns the domain string interpreted as the VMD address.
 func parseVMDAddress(addr string) (*PCIAddress, error) {
-	if len(addr) != vmdDomainLen {
-		return nil, errors.Errorf("unexpected length of vmd domain: %q", addr)
-	}
-
+	// Left-pad domain string as necessary make it a valid PCI address.
+	addr = fmt.Sprintf("%06s", addr)
 	return NewPCIAddress(fmt.Sprintf("0000:%s:%s.%s", addr[:2], addr[2:4], addr[4:]))
 }
 

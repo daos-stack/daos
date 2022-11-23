@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import subprocess #nosec
+import subprocess  # nosec
 
 from cart_utils import CartTest
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -781,7 +781,7 @@ run_ts_tests(const char *cfg)
 {
 	char	suite[DTS_CFG_MAX];
 
-	dts_create_config(suite, "VOS Timestamp table tests %s", cfg);
+	dts_create_config(suite, "Timestamp table tests %s", cfg);
 
 	return cmocka_run_group_tests_name(suite, ts_tests, NULL, NULL);
 }

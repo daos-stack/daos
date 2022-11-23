@@ -78,7 +78,7 @@ def remove_pool(test, pool):
 
     # Attempt to destroy the pool
     try:
-        pool.destroy(force=1, disconnect=1)
+        pool.destroy(force=1, disconnect=1, recursive=1)
     except (DaosApiError, TestFail) as error:
         test.test_log.info("  {}".format(error))
         error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
@@ -402,7 +402,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1, disconnect=1):
+    def destroy(self, force=1, disconnect=1, recursive=1):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -411,6 +411,7 @@ class TestPool(TestDaosApiBase):
         Args:
             force (int, optional): force flag. Defaults to 1.
             disconnect (int, optional): disconnect flag. Defaults to 1.
+            recursive (int, optional): recursive flag. Defaults to 1.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -420,12 +421,13 @@ class TestPool(TestDaosApiBase):
         status = False
         if self.pool:
             if disconnect:
+                self.log.info("Disconnecting from pool %s", self.identifier)
                 self.disconnect()
             if self.pool.attached:
                 self.log.info("Destroying pool %s", self.identifier)
 
                 # Destroy the pool with the dmg command.
-                self.dmg.pool_destroy(pool=self.identifier, force=force)
+                self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
                 status = True
 
             self.pool = None
@@ -454,7 +456,8 @@ class TestPool(TestDaosApiBase):
                 prop_name = self.prop_name.value
             if prop_value is None:
                 prop_value = self.prop_value.value
-            self.dmg.pool_set_prop(self.identifier, prop_name, prop_value)
+            properties = ":".join([prop_name, prop_value])
+            self.dmg.pool_set_prop(pool=self.identifier, properties=properties)
 
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
@@ -625,11 +628,13 @@ class TestPool(TestDaosApiBase):
 
     def check_free_space(self, expected_scm=None, expected_nvme=None, timeout=30):
         """Check pool free space with expected value.
+
         Args:
             expected_scm (int, optional): pool expected SCM free space.
             expected_nvme (int, optional): pool expected NVME free space.
             timeout(int, optional): time to fail test if it could not match
                 expected values.
+
         Note:
             Arguments may also be provided as a string with a number preceded
             by '<', '<=', '>', or '>=' for other comparisons besides the
@@ -879,10 +884,10 @@ class TestPool(TestDaosApiBase):
 
         """
         daos_space = self.get_pool_daos_space()
-        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
-                                     float(daos_space["s_total"][0]) * 100, 2),
-                        'nvme': round(float(daos_space["s_free"][1]) /
-                                      float(daos_space["s_total"][1]) * 100, 2)}
+        pool_percent = {
+            'scm': round(float(daos_space["s_free"][0]) / float(daos_space["s_total"][0]) * 100, 4),
+            'nvme': round(float(daos_space["s_free"][1]) / float(daos_space["s_total"][1]) * 100, 4)
+        }
         return pool_percent
 
     def get_pool_rebuild_status(self):
@@ -1070,3 +1075,66 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild(to_start=False, interval=interval)
         duration = float(time()) - start
         self.log.info("%s duration: %.1f sec", operation, duration)
+
+    @fail_on(CommandFailure)
+    def extend(self, ranks):
+        """Extend the pool to additional ranks.
+
+        Args:
+            ranks (list): a list daos server ranks (int) to exclude
+
+        """
+        return self.dmg.pool_extend(self.identifier, ranks)
+
+    def _get_query_data(self, *keys, refresh=False):
+        """Get the pool version from the dmg pool query output.
+
+        Args:
+            keys (list): dmg pool query dictionary keys to use to access the data
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Raises:
+            CommandFailure: if there was error collecting the dmg pool query data or the keys
+
+        Returns:
+            object: the requested dmg pool query data subset
+
+        """
+        if not self.query_data or refresh:
+            self.set_query_data()
+        try:
+            value = self.query_data.copy()
+            for key in keys:
+                value = value[key]
+            return value
+        except KeyError as error:
+            keys_str = ".".join(map(str, keys))
+            raise CommandFailure(
+                "The dmg pool query key does not exist: {}".format(keys_str)) from error
+
+    def get_version(self, refresh=False):
+        """Get the pool version from the dmg pool query output.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+            int: pool version value
+
+        """
+        return int(self._get_query_data("response", "version", refresh=refresh))
+
+    def get_rebuild_status(self, refresh=False):
+        """Get the pool rebuild status from the dmg pool query output.
+
+        Args:
+            refresh (bool, optional): whether or not to issue a new dmg pool query before
+                collecting the data from its output. Defaults to False.
+
+        Returns:
+            str: rebuild status
+
+        """
+        return int(self._get_query_data("response", "rebuild", "status", refresh=refresh))

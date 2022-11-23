@@ -54,9 +54,15 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 
 static void
 rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
-		int tgt_idx)
+		  int tgt_idx, bool restart)
 {
 	int i;
+
+	if (restart) {
+		daos_start_server(args[0], args[0]->pool.pool_uuid,
+				  args[0]->group, args[0]->pool.alive_svc, rank);
+		sleep(10);
+	}
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed)
@@ -136,8 +142,8 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 						kill);
 				break;
 			case RB_OP_TYPE_REINT:
-				rebuild_reint_tgt(args, args_cnt, ranks[i],
-						tgts ? tgts[i] : -1);
+				rebuild_reint_tgt(args, args_cnt, ranks[i], tgts ? tgts[i] : -1,
+						  kill);
 				break;
 			case RB_OP_TYPE_ADD:
 				rebuild_extend_tgt(args, args_cnt, ranks[i],
@@ -185,9 +191,9 @@ rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 }
 
 void
-reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank)
+reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool restart)
 {
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_REINT);
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, restart, RB_OP_TYPE_REINT);
 }
 
 void
@@ -333,58 +339,16 @@ void
 reintegrate_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 			       int failed_tgt)
 {
-	/* XXX: Disconnecting and reconnecting is necessary for the time being
-	 * while reintegration only supports "offline" mode and without
-	 * incremental reintegration. Disconnecting from the pool allows the
-	 * containers to be deleted before reintegration occurs
-	 *
-	 * Once incremental reintegration support is added, this should be
-	 * removed
-	 */
-	rebuild_pool_disconnect_internal(arg);
 	rebuild_targets(&arg, 1, &failed_rank, &failed_tgt, 1, false,
 			RB_OP_TYPE_REINT);
-	rebuild_pool_connect_internal(arg);
-}
-
-void
-reintegrate_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
-{
-
-	/* XXX: Disconnecting and reconnecting is necessary for the time being
-	 * while reintegration only supports "offline" mode and without
-	 * incremental reintegration. Disconnecting from the pool allows the
-	 * containers to be deleted before reintegration occurs
-	 *
-	 * Once incremental reintegration support is added, this should be
-	 * removed
-	 */
-	rebuild_pool_disconnect_internal(arg);
-	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false,
-			RB_OP_TYPE_REINT);
-	rebuild_pool_connect_internal(arg);
 }
 
 void
 reintegrate_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
-			int ranks_nr)
+			int ranks_nr, bool restart)
 {
-	int i;
-
-	/* XXX: Disconnecting and reconnecting is necessary for the time being
-	 * while reintegration only supports "offline" mode and without
-	 * incremental reintegration. Disconnecting from the pool allows the
-	 * containers to be deleted before reintegration occurs
-	 *
-	 * Once incremental reintegration support is added, this should be
-	 * removed
-	 */
-	for (i = 0; i < args_cnt; i++)
-		rebuild_pool_disconnect_internal(args[i]);
 	rebuild_targets(args, args_cnt, failed_ranks, NULL, ranks_nr,
-			false, RB_OP_TYPE_REINT);
-	for (i = 0; i < args_cnt; i++)
-		rebuild_pool_connect_internal(args[i]);
+			restart, RB_OP_TYPE_REINT);
 }
 
 
@@ -827,10 +791,12 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 
 	dfs_attr_t attr = {};
 
-	attr.da_props = daos_prop_alloc(1);
+	attr.da_props = daos_prop_alloc(2);
 	assert_non_null(attr.da_props);
 	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	attr.da_props->dpp_entries[0].dpe_val = 1 << 15;
+	attr.da_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+	attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 	rc = dfs_cont_create(arg->pool.poh, &co_uuid, &attr, &co_hdl,
 			     &dfs_mt);
@@ -915,6 +881,110 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 #endif
 }
 
+int
+reintegrate_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	struct ioreq	req;
+	int		i;
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[64];
+		daos_recx_t recx;
+		char	buf[DATA_SIZE];
+
+		req.iod_type = DAOS_IOD_SINGLE;
+		sprintf(key, "d_inflight_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(buf, 'a' + i, DATA_SIZE);
+		req.iod_type = DAOS_IOD_ARRAY;
+		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+
+		req.iod_type = DAOS_IOD_SINGLE;
+		memset(single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "d_inflight_single_small_%d", i);
+		insert_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_single_large_%d",  i);
+		insert_single(key, "a_key", 0, single_data,
+			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+
+	}
+	ioreq_fini(&req);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
+				      NULL);
+	return 0;
+}
+
+int
+reintegrate_inflight_io_verify(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid;
+	char		single_data[LARGE_SINGLE_VALUE_SIZE];
+	char		verify_single_data[LARGE_SINGLE_VALUE_SIZE];
+	char		*buf;
+	char		*verify_buf;
+	struct ioreq	req;
+	int		i;
+
+	buf = malloc(DATA_SIZE);
+	verify_buf = malloc(DATA_SIZE);
+	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[64];
+		daos_recx_t recx;
+
+		sprintf(key, "d_inflight_%d", i);
+		memset(buf, 0, DATA_SIZE);
+		req.iod_type = DAOS_IOD_SINGLE;
+		lookup_single(key, "a_key", 0, buf, strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		assert_memory_equal(buf, "data", strlen("data"));
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(verify_buf, 'a' + i, DATA_SIZE);
+		memset(buf, 0, DATA_SIZE);
+		req.iod_type = DAOS_IOD_ARRAY;
+		lookup_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+		assert_memory_equal(buf, verify_buf, DATA_SIZE);
+
+		req.iod_type = DAOS_IOD_SINGLE;
+		memset(verify_single_data, 'a' + i, LARGE_SINGLE_VALUE_SIZE);
+		memset(single_data, 0, LARGE_SINGLE_VALUE_SIZE);
+		sprintf(key, "d_inflight_single_small_%d", i);
+		lookup_single(key, "a_key", 0, single_data,
+			      SMALL_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+		assert_memory_equal(single_data, verify_single_data, SMALL_SINGLE_VALUE_SIZE);
+
+		sprintf(key, "d_inflight_single_large_%d",  i);
+		memset(single_data, 0, LARGE_SINGLE_VALUE_SIZE);
+		lookup_single(key, "a_key", 0, single_data,
+			      LARGE_SINGLE_VALUE_SIZE, DAOS_TX_NONE, &req);
+		assert_memory_equal(single_data, verify_single_data, LARGE_SINGLE_VALUE_SIZE);
+
+	}
+	ioreq_fini(&req);
+	free(buf);
+	free(verify_buf);
+	return 0;
+}
+
 /* Create a new pool for the sub_test */
 int
 rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
@@ -953,14 +1023,17 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	uint32_t		grp_idx;
 	uint32_t		idx;
 	d_rank_t		rank;
+	int			rc;
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
 	rank = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_rank;
 
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
-	daos_obj_layout_free(layout);
+	rc = daos_obj_layout_free(layout);
+	assert_rc_equal(rc, 0);
 	return rank;
 }
 
@@ -972,14 +1045,17 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	uint32_t		grp_idx;
 	uint32_t		idx;
 	uint32_t		tgt_idx;
+	int			rc;
 
-	daos_obj_layout_get(arg->coh, oid, &layout);
+	rc = daos_obj_layout_get(arg->coh, oid, &layout);
+	assert_rc_equal(rc, 0);
 	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
 	idx = shard % layout->ol_shards[0]->os_replica_nr;
 	tgt_idx = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_tgt_idx;
 
 	print_message("idx %u grp %u tgt_idx %d\n", idx, grp_idx, tgt_idx);
-	daos_obj_layout_free(layout);
+	rc = daos_obj_layout_free(layout);
+	assert_rc_equal(rc, 0);
 	return tgt_idx;
 }
 

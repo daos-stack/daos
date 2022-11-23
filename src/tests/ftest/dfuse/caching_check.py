@@ -1,13 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import pcmd, percent_change
+from general_utils import percent_change
 
 
 class CachingCheck(IorTestBase):
@@ -19,7 +18,7 @@ class CachingCheck(IorTestBase):
     :avocado: recursive
     """
 
-    def test_caching_check(self):
+    def test_dfuse_caching_check(self):
         """Jira ID: DAOS-4874.
 
         Test Description:
@@ -35,9 +34,9 @@ class CachingCheck(IorTestBase):
             higher than with caching disabled.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusecachingcheck
+        :avocado: tags=test_dfuse_caching_check
         """
         # get params
         flags = self.params.get("iorflags", '/run/ior/*')
@@ -63,8 +62,7 @@ class CachingCheck(IorTestBase):
         max_mib = int(IorMetrics.Max_MiB)
 
         # unmount dfuse and mount again with caching enabled
-        pcmd(self.hostlist_clients,
-             self.dfuse.get_umount_command(), expect_rc=None)
+        self.dfuse.unmount(tries=1)
         self.dfuse.disable_caching.update(False)
         self.dfuse.run()
         # run ior to obtain first read performance after mount

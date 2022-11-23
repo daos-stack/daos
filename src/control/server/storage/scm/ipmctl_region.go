@@ -134,8 +134,8 @@ func (rh regionHealth) MarshalXML(e *xml.Encoder, start xml.StartElement) error 
 const (
 	cmdShowIpmctlVersion = "ipmctl version"
 	cmdShowRegions       = "ipmctl show -o nvmxml -region" // returns region info in xml
-	cmdCreateRegions     = "ipmctl create -f -goal PersistentMemoryType=AppDirect"
-	cmdRemoveRegions     = "ipmctl create -f -goal MemoryMode=100"
+	cmdCreateRegions     = "ipmctl create -f -goal%sPersistentMemoryType=AppDirect"
+	cmdRemoveRegions     = "ipmctl create -f -goal%sMemoryMode=100"
 	cmdDeleteGoals       = "ipmctl delete -goal"
 
 	outNoCLIPerms    = "ipmctl command you have attempted to execute requires root privileges"
@@ -204,7 +204,7 @@ func (cr *cmdRunner) showRegions(sockID int) (string, error) {
 
 	cmd := cmdShowRegions
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	out, err := cr.runCmd(cmd)
@@ -224,9 +224,11 @@ func (cr *cmdRunner) createRegions(sockID int) error {
 	cr.log.Debug("set interleaved appdirect goal to create regions")
 
 	cmd := cmdCreateRegions
+	opt := " "
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		opt = fmt.Sprintf(" -socket %d ", sockID)
 	}
+	cmd = fmt.Sprintf(cmd, opt)
 
 	out, err := cr.runCmd(cmd)
 	if err != nil {
@@ -245,9 +247,11 @@ func (cr *cmdRunner) removeRegions(sockID int) error {
 	cr.log.Debug("set memory mode goal to remove regions")
 
 	cmd := cmdRemoveRegions
+	opt := " "
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		opt = fmt.Sprintf(" -socket %d ", sockID)
 	}
+	cmd = fmt.Sprintf(cmd, opt)
 
 	out, err := cr.runCmd(cmd)
 	if err != nil {
@@ -267,7 +271,7 @@ func (cr *cmdRunner) deleteGoals(sockID int) error {
 
 	cmd := cmdDeleteGoals
 	if sockID != sockAny {
-		cmd = fmt.Sprintf("%s --socket %d", cmd, sockID)
+		cmd = fmt.Sprintf("%s -socket %d", cmd, sockID)
 	}
 
 	if _, err := cr.runCmd(cmd); err != nil {

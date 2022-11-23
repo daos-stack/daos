@@ -32,10 +32,13 @@ validated on a regular basis.
 
 ## Network Requirements
 
-The DAOS data plane relies on [OFI libfabrics](https://ofiwg.github.io/libfabric/)
-and supports OFI
-providers for Ethernet/tcp and InfiniBand/verbs. An RDMA-capable
-fabric is preferred for better performance.
+An RDMA-capable fabric is preferred for best performance.
+The DAOS data plane relies on [OFI libfabric](https://ofiwg.github.io/libfabric/)
+and supports OFI providers for Ethernet/tcp and InfiniBand/verbs.
+Starting with a Technology Preview in DAOS 2.2, [UCX](https://www.openucx.org/)
+is also supported as an alternative network stack for DAOS.
+Refer to [UCX Fabric Support (DAOS 2.2 Technology Preview)](./ucx.md)
+for details on setting up DAOS with UCX support.
 
 DAOS supports multiple network interfaces on the servers
 by binding different instances of the DAOS engine to individual

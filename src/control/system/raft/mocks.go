@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
@@ -25,9 +26,10 @@ type (
 		response interface{}
 	}
 	mockRaftServiceConfig struct {
-		LeaderCh      <-chan bool
-		ServerAddress raft.ServerAddress
-		State         raft.RaftState
+		LeaderCh              <-chan bool
+		ServerAddress         raft.ServerAddress
+		State                 raft.RaftState
+		LeadershipTransferErr error
 	}
 	mockRaftService struct {
 		cfg mockRaftServiceConfig
@@ -66,7 +68,10 @@ func (mrs *mockRaftService) LeaderCh() <-chan bool {
 }
 
 func (mrs *mockRaftService) LeadershipTransfer() raft.Future {
-	return &mockRaftFuture{}
+	if mrs.cfg.LeadershipTransferErr == nil {
+		mrs.cfg.State = raft.Follower
+	}
+	return &mockRaftFuture{err: mrs.cfg.LeadershipTransferErr}
 }
 
 func (mrs *mockRaftService) Shutdown() raft.Future {
@@ -76,6 +81,10 @@ func (mrs *mockRaftService) Shutdown() raft.Future {
 
 func (mrs *mockRaftService) State() raft.RaftState {
 	return mrs.cfg.State
+}
+
+func (mrs *mockRaftService) Barrier(time.Duration) raft.Future {
+	return &mockRaftFuture{}
 }
 
 func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftService {
@@ -102,7 +111,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	}
 
 	db := MockDatabaseWithCfg(t, log, dbCfg)
-	db.replicaAddr.Addr = addr
+	db.replicaAddr = addr
 	return db
 }
 
@@ -128,6 +137,13 @@ func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
 }
 
+// MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
+func MockDatabaseWithFaultDomainTree(t *testing.T, log logging.Logger, tree *system.FaultDomainTree) *Database {
+	db := MockDatabase(t, log)
+	db.data.Members.FaultDomains = tree
+	return db
+}
+
 // TestDatabase returns a database that is backed by temporary storage
 // and can be started. Uses an in-memory transport. Much heavier-weight
 // implementation and should only be used by tests that require it.
@@ -147,7 +163,7 @@ func TestDatabase(t *testing.T, log logging.Logger, replicas ...*net.TCPAddr) (*
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, db.raftTransport = raft.NewInmemTransport(raft.ServerAddress(db.replicaAddr.String()))
+	_, db.raftTransport = raft.NewInmemTransport(db.serverAddress())
 
 	return db, cleanup
 }

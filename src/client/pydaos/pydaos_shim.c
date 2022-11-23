@@ -232,7 +232,6 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	/** Track all handles */
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
-		D_ERROR("failed to allocate internal handle to open container\n");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -536,13 +535,12 @@ cont_prop_define(PyObject *module)
 	DEFINE_CONT(CO_LAYOUT_HDF5);
 }
 
-
 /**
  * Anchor management
  * The anchor is a 128-byte structure which isn't straightforward to serialize
  * between the shim and pydaoos modules. We thus use the PyCapsule abstraction
  * that provides us with the ability to return an anchor pointer as an opaq
- * void * with its own destuctor to free up the data structure when not
+ * void * with its own destructor to free up the data structure when not
  * referenced any longer. That's useful when implementing python iterator
  * since pydaos needs to store the anchor returned by one iteration and
  * pass it back on the subsequent call.
@@ -1116,10 +1114,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	}
 
 out:
-	if (kds)
-		D_FREE(kds);
-	if (enum_buf)
-		D_FREE(enum_buf);
+	D_FREE(kds);
+	D_FREE(enum_buf);
 
 	/* Populate return list */
 	return_list = PyList_New(4);

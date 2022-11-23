@@ -36,14 +36,14 @@ else
         if command -v gh > /dev/null 2>&1
         then
                 # If there is no PR created yet then do not check anything.
-                if ! TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
+                if ! TARGET=origin/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
                 then
                        TARGET=HEAD
                 fi
         else
                 # With no 'gh' command installed then check against master.
                 echo "Install gh command to auto-detect target branch, assuming master."
-                TARGET=master
+                TARGET=origin/master
         fi
 
         if [ $TARGET = "HEAD" ]

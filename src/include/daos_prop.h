@@ -121,6 +121,8 @@ enum daos_pool_props {
 	 * Pool service redundancy factor.
 	 */
 	DAOS_PROP_PO_SVC_REDUN_FAC,
+	/** object global version */
+	DAOS_PROP_PO_OBJ_VERSION,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -190,6 +192,11 @@ enum {
 	DAOS_SCRUB_MODE_TIMED = 2,
 	DAOS_SCRUB_MODE_INVALID = 3,
 };
+
+/* Checksum Scrubbing Defaults */
+#define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+#define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
+#define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
@@ -310,6 +317,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_GLOBAL_VERSION,
 	/** Override the pool scrubbing property. */
 	DAOS_PROP_CO_SCRUBBER_DISABLED,
+	/** immutable container object global version */
+	DAOS_PROP_CO_OBJ_VERSION,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -410,6 +419,9 @@ enum {
 	DAOS_PROP_CO_REDUN_NODE	= 2,
 	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
+
+/** default fault domain level */
+#define DAOS_PROP_CO_REDUN_DEFAULT	DAOS_PROP_CO_REDUN_NODE
 
 /** container status flag */
 enum {

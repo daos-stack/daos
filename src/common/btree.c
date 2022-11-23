@@ -4183,8 +4183,12 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_INVAL;
 
 	/* XXX should be multi-thread safe */
-	if (btr_class_registered[tree_class].tc_ops != NULL)
-		return -DER_EXIST;
+	if (btr_class_registered[tree_class].tc_ops != NULL) {
+		if (btr_class_registered[tree_class].tc_ops != ops ||
+		    btr_class_registered[tree_class].tc_feats != tree_feats)
+			return -DER_EXIST;
+		return 0;
+	}
 
 	/* These are mandatory functions */
 	D_ASSERT(ops != NULL);

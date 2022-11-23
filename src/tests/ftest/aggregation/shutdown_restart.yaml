@@ -4,21 +4,22 @@ hosts:
 timeout: 600
 server_config:
   name: daos_server
-  servers:
-    log_mask: ERR
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: ERR
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-  createmode:
-    mode_RW:
-      mode: 146
-  createset:
-    setname: daos_server
-  createsize:
-    scm_size: 20%
-    nvme_size: 50%
-  createsvc:
-    svcn: 1
+  scm_size: 20%
+  nvme_size: 50%
+  svcn: 1
   control_method: dmg
 container:
   type: POSIX

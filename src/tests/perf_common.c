@@ -853,6 +853,10 @@ perf_parse_opts(int rc, char **cmds)
 	case 'o':
 		ts_obj_p_cont = strtoul(optarg, &endp, 0);
 		ts_obj_p_cont = val_unit(ts_obj_p_cont, *endp);
+		if (ts_obj_p_cont == 0) {
+			D_PRINT("bad -o arg '%s', set ts_obj_p_cont as 1\n", optarg);
+			ts_obj_p_cont = 1;
+		}
 		break;
 	case 'd':
 		ts_dkey_p_obj = strtoul(optarg, &endp, 0);

@@ -88,9 +88,7 @@ class CartIvOneNodeTest(CartTest):
 
     def _verify_action(self, action):
         """Verify the action."""
-        if (('operation' not in action) or
-                ('rank' not in action) or
-                ('key' not in action)):
+        if (('operation' not in action) or ('rank' not in action) or ('key' not in action)):
             self.print("Error happened during action check")
             raise ValueError(
                 "Each action must contain an operation, rank, and key")
@@ -101,8 +99,7 @@ class CartIvOneNodeTest(CartTest):
 
     def _verify_fetch_operation(self, action):
         """Verify the fetch operation."""
-        if (('return_code' not in action) or
-                ('expected_value' not in action)):
+        if (('return_code' not in action) or ('expected_value' not in action)):
             self.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
@@ -230,8 +227,7 @@ class CartIvOneNodeTest(CartTest):
 
             if "set_grp_version" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -v '{!s}' "\
-                        .format(command, operation, rank,
-                                action['version'])
+                    .format(command, operation, rank, action['version'])
 
                 if 'time' in action:
                     command = " {!s} -m '{!s}'"\
@@ -250,8 +246,7 @@ class CartIvOneNodeTest(CartTest):
                             cli_rtn, command))
 
             if "get_grp_version" in operation:
-                command = " {!s} -o '{!s}' -r '{!s}' " \
-                        .format(command, operation, rank)
+                command = " {!s} -o '{!s}' -r '{!s}' ".format(command, operation, rank)
                 clicmd += command
 
                 self.print("\nClient cmd : %s\n" % clicmd)
@@ -480,7 +475,7 @@ class CartIvOneNodeTest(CartTest):
 
         clicmd = self.build_cmd(self.env, "test_clients")
 
-        ########## Launch Client Actions ##########
+        # Launch Client Actions
 
         try:
             self._iv_test_actions(clicmd, actions)
@@ -489,7 +484,7 @@ class CartIvOneNodeTest(CartTest):
             traceback.print_stack()
             self.print("TEST FAILED: %s" % str(exception))
 
-        ########## Shutdown Servers ##########
+        # Shutdown Servers
 
         num_servers = self.get_srv_cnt("test_servers")
 

@@ -7,13 +7,19 @@ hosts:
 server_config:
   name: daos_server
   port: 10001
-  servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-    mode: 511
-    name: daos_server
-    scm_size: 3000000000
-    nvme_size: 9000000000
-    svcn: 1
-    control_method: dmg
+  scm_size: 3000000000
+  nvme_size: 9000000000
+  svcn: 1
+  control_method: dmg

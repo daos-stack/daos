@@ -1,6 +1,6 @@
 setup:
-    start_agents_once: False
-    start_servers_once: False
+  start_agents_once: False
+  start_servers_once: False
 hosts:
   test_servers: 7
 timeouts:
@@ -9,7 +9,8 @@ timeouts:
   test_recycle_pools: 640
 server_config:
   name: daos_server
-  servers:
+  engines_per_host: 1
+  engines:
     0:
       targets_count: !mux
         1_target:
@@ -20,11 +21,13 @@ server_config:
           targets: 3
         4_targets:
           targets: 4
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
-  name: daos_server
   control_method: dmg
