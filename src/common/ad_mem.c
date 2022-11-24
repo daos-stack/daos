@@ -1639,6 +1639,8 @@ find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bi
 				goto out;
 
 			if (isset64(&free_bits, j)) {
+				if (at < 0)
+					at = i * 64 + j;
 				nr++;
 				continue;
 			}
