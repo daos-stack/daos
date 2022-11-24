@@ -217,7 +217,9 @@ def _test_program(env, *args, **kwargs):
     libs = kwargs.get('LIBS')
     if libs and 'LIBS' in env:
         env_libs = env['LIBS']
-        if sorted(libs) == sorted(env_libs):
+        if False:
+            # This doesn't work as some libs are File and some are str.
+            # if sorted(libs) == sorted(env_libs):
             _report_fault('Libs are duplicated')
             assert False
         else:

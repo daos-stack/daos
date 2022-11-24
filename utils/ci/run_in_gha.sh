@@ -59,6 +59,9 @@ echo "::group::Build all"
 scons
 echo "::endgroup::"
 
+# TODO: Remove this.
+exit 1
+
 echo "::group::Re-build all"
 scons --debug=explain
 echo "::endgroup::"
