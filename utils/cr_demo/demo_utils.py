@@ -66,9 +66,9 @@ def list_pool(verbose=False, json=False):
         result = subprocess.run(
             list_pool_cmd, stdout=subprocess.PIPE, universal_newlines=True, check=False)
         return result.stdout
-    else:
-        subprocess.run(list_pool_cmd, check=False)
-        return None
+
+    subprocess.run(list_pool_cmd, check=False)
+    return None
 
 def enable_checker():
     """Call dmg check enable"""
@@ -124,10 +124,10 @@ def disable_checker():
 def repeat_check_query():
     """Allow user to repeatedly call dmg check query."""
     while True:
-        USER_INPUT = input("Hit y to query, n to proceed to next step: ")
-        if USER_INPUT == "y":
+        user_input = input("Hit y to query, n to proceed to next step: ")
+        if user_input == "y":
             query_checker()
-        elif USER_INPUT == "n":
+        elif user_input == "n":
             break
         else:
             print("Please enter y or n.")

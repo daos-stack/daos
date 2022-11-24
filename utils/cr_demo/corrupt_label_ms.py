@@ -60,7 +60,7 @@ query_checker()
 stdout = get_query_result()
 generated_yaml = yaml.safe_load(stdout)
 seq_num = generated_yaml["response"]["reports"][0]["seq"]
-print("Sequence Number: {}".format(seq_num))
+print(f"Sequence Number: {seq_num}")
 
 input("\n7. Repair checker with option 2, trust PS pool entry. Hit enter...")
 repair_checker(sequence_num=str(seq_num), action="2")

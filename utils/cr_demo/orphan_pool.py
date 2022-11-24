@@ -42,12 +42,12 @@ print("\nWait for 5 sec before creating pools...")
 time.sleep(5)
 
 input(f"\n2. Create three {POOL_SIZE} pools. Hit enter...")
-pool_label_1 = "{}_1".format(POOL_LABEL)
-pool_label_2 = "{}_2".format(POOL_LABEL)
-pool_label_3 = "{}_3".format(POOL_LABEL)
-create_pool(pool_size=POOL_SIZE, pool_label=pool_label_1)
-create_pool(pool_size=POOL_SIZE, pool_label=pool_label_2)
-create_pool(pool_size=POOL_SIZE, pool_label=pool_label_3)
+POOL_LABEL_1 = f"{POOL_LABEL}_1"
+POOL_LABEL_2 = f"{POOL_LABEL}_2"
+POOL_LABEL_3 = f"{POOL_LABEL}_3"
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_3)
 
 print("(Create label to UUID mapping.)")
 label_to_uuid = {}
@@ -57,9 +57,9 @@ for pool in generated_yaml["response"]["pools"]:
     label_to_uuid[pool["label"]] = pool["uuid"]
 
 input("3. Remove PS entry on MS. Hit enter...")
-inject_fault_mgmt(pool_label=pool_label_1, fault_type="CIC_POOL_NONEXIST_ON_MS")
-inject_fault_mgmt(pool_label=pool_label_2, fault_type="CIC_POOL_NONEXIST_ON_MS")
-inject_fault_mgmt(pool_label=pool_label_3, fault_type="CIC_POOL_NONEXIST_ON_MS")
+inject_fault_mgmt(pool_label=POOL_LABEL_1, fault_type="CIC_POOL_NONEXIST_ON_MS")
+inject_fault_mgmt(pool_label=POOL_LABEL_2, fault_type="CIC_POOL_NONEXIST_ON_MS")
+inject_fault_mgmt(pool_label=POOL_LABEL_3, fault_type="CIC_POOL_NONEXIST_ON_MS")
 
 input("\n4. MS doesn\'t recognize any pool. Hit enter...")
 list_pool()
@@ -83,15 +83,15 @@ generated_yaml = yaml.safe_load(stdout)
 for report in generated_yaml["response"]["reports"]:
     uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
 
-input(f"\n8-1. Select 0 (Ignore) for {pool_label_1}. Hit enter...")
-seq_num_1 = str(uuid_to_seqnum[label_to_uuid[pool_label_1]])
-seq_num_2 = str(uuid_to_seqnum[label_to_uuid[pool_label_2]])
-seq_num_3 = str(uuid_to_seqnum[label_to_uuid[pool_label_3]])
-repair_checker(sequence_num=seq_num_1, action="0")
-input(f"\n8-2. Select 1 (Discard pool) for {pool_label_2}. Hit enter...")
-repair_checker(sequence_num=seq_num_2, action="1")
-input(f"\n8-3. Select 2 (Re-add) for {pool_label_3}. Hit enter...")
-repair_checker(sequence_num=seq_num_3, action="2")
+input(f"\n8-1. Select 0 (Ignore) for {POOL_LABEL_1}. Hit enter...")
+SEQ_NUM_1 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]])
+SEQ_NUM_2 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]])
+SEQ_NUM_3 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]])
+repair_checker(sequence_num=SEQ_NUM_1, action="0")
+input(f"\n8-2. Select 1 (Discard pool) for {POOL_LABEL_2}. Hit enter...")
+repair_checker(sequence_num=SEQ_NUM_2, action="1")
+input(f"\n8-3. Select 2 (Re-add) for {POOL_LABEL_3}. Hit enter...")
+repair_checker(sequence_num=SEQ_NUM_3, action="2")
 
 print("\n9. Query the checker.")
 repeat_check_query()
