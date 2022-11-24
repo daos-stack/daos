@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 
 
 class RbldBasic(TestWithServers):
@@ -25,7 +24,7 @@ class RbldBasic(TestWithServers):
         # Get the test parameters
         pools = []
         self.container = []
-        daos_cmd = DaosCommand(self.bin)
+        daos_cmd = self.get_daos_command()
         for _ in range(pool_quantity):
             pools.append(self.get_pool(create=False))
             self.container.append(self.get_container(pools[-1], create=False))
@@ -81,7 +80,7 @@ class RbldBasic(TestWithServers):
                 self.server_managers[0].stop_ranks([rank], self.d_log, True)
             else:
                 # Use the direct dmg pool exclude command to avoid updating the pool version again
-                self.pool.exclude([rank])
+                pool.exclude([rank])
 
         # Wait for recovery to start for first pool.
         pools[0].wait_for_rebuild_to_start()
