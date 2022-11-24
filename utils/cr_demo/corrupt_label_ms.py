@@ -11,21 +11,25 @@ from demo_utils import format_storage, create_pool, inject_fault_mgmt, list_pool
     enable_checker, start_checker, query_checker, disable_checker, repeat_check_query,\
     repair_checker
 
-
-POOL_SIZE = "4GB"
+POOL_SIZE = "1GB"
 POOL_LABEL = "tank"
 
-def get_query_result():
-    """Call dmg check query with --json and return the output. """
-    check_query_cmd = ["dmg", "--json", "check", "query"]
-    command = " ".join(check_query_cmd)
-    print(f"Calling {command}")
-    result = subprocess.run(
-        check_query_cmd, stdout=subprocess.PIPE, universal_newlines=True, check=False)
-    return result.stdout
+
+def pool_get_prop(pool_label, properties):
+    """Call dmg pool get-prop <pool_label> <properties>
+
+    Args:
+        pool_label (str): Pool label.
+        properties (str): Properties to query. Separate them with comma if there are
+            multiple properties.
+    """
+    get_prop_cmd = ["dmg", "pool", "get-prop", pool_label, properties]
+    command = " ".join(get_prop_cmd)
+    print(f"Command: {command}")
+    subprocess.run(get_prop_cmd, check=False)
 
 
-print("Pass 3: Corrupt label in MS")
+print("Pass 3: Corrupt label in MS - trust PS, trust MS, ignore")
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
@@ -38,40 +42,71 @@ format_storage(host_list=HOSTLIST)
 print("\nWait for 5 sec before creating pools...")
 time.sleep(5)
 
-input("\n2. Create a 4GB pool. Hit enter...")
-create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL)
+input(f"\n2. Create three {POOL_SIZE} pools. Hit enter...")
+POOL_LABEL_1 = f"{POOL_LABEL}_1"
+POOL_LABEL_2 = f"{POOL_LABEL}_2"
+POOL_LABEL_3 = f"{POOL_LABEL}_3"
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_3)
 
-input("3. Corrupt label in MS. Hit enter...")
-inject_fault_mgmt(pool_label=POOL_LABEL, fault_type="CIC_POOL_BAD_LABEL")
+print("(Create label to UUID mapping.)")
+label_to_uuid = {}
+stdout = list_pool(json=True)
+generated_yaml = yaml.safe_load(stdout)
+for pool in generated_yaml["response"]["pools"]:
+    label_to_uuid[pool["label"]] = pool["uuid"]
 
-input("\n4. Label in MS is corrupted with -fault added. Hit enter...")
+input("\n3. Corrupt label in MS. Hit enter...")
+inject_fault_mgmt(pool_label=POOL_LABEL_1, fault_type="CIC_POOL_BAD_LABEL")
+inject_fault_mgmt(pool_label=POOL_LABEL_2, fault_type="CIC_POOL_BAD_LABEL")
+inject_fault_mgmt(pool_label=POOL_LABEL_3, fault_type="CIC_POOL_BAD_LABEL")
+
+input("\n4. Labels in MS are corrupted with -fault added. Hit enter...")
 list_pool()
 
 input("\n5. Enable checker. Hit enter...")
 enable_checker()
 
-input("\n6. Start checker with interactive mode. Hit enter...")
+input("\n6. Start interactive mode. Hit enter...")
 start_checker(policies="POOL_BAD_LABEL:CIA_INTERACT")
 
-input("\n6-1. Call dmg check query to obtain the seq-num. Hit enter...")
-# Print the query result.
+input("\n7. Show repair options. Hit enter...")
 query_checker()
-# To obtain the seq-num from JSON output. Don't print the output.
-stdout = get_query_result()
+
+print("(Create UUID to sequence number mapping.)")
+uuid_to_seqnum = {}
+stdout = query_checker(json=True)
 generated_yaml = yaml.safe_load(stdout)
-seq_num = generated_yaml["response"]["reports"][0]["seq"]
-print(f"Sequence Number: {seq_num}")
+for report in generated_yaml["response"]["reports"]:
+    uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
 
-input("\n7. Repair checker with option 2, trust PS pool entry. Hit enter...")
-repair_checker(sequence_num=str(seq_num), action="2")
+input(f"\n8-1. Select 0 (Ignore) for {POOL_LABEL_1}. Hit enter...")
+SEQ_NUM_1 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]])
+SEQ_NUM_2 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]])
+SEQ_NUM_3 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]])
+repair_checker(sequence_num=SEQ_NUM_1, action="0")
+input(f"\n8-2. Select 1 (Discard pool) for {POOL_LABEL_2}. Hit enter...")
+repair_checker(sequence_num=SEQ_NUM_2, action="1")
+input(f"\n8-3. Select 2 (Re-add) for {POOL_LABEL_3}. Hit enter...")
+repair_checker(sequence_num=SEQ_NUM_3, action="2")
 
-print("\n8-1. Query the checker.")
+print("\n9-1. Query the checker.")
 repeat_check_query()
 
-print("8-2. Checker shows the label inconsistency that was repaired.")
+print("9-2. Checker shows the repair result for each pool.")
 
-input("\n9. Disable the checker. Hit enter...")
+input("\n10. Disable the checker. Hit enter...")
 disable_checker()
 
-input("\n10. Verify that the original pool label was retrieved. Hit enter...")
+input("\n11. Show repaired labels in MS and PS. Hit enter...")
+print("(Get current labels.)")
+pool_labels = []
+stdout = list_pool(json=True)
+generated_yaml = yaml.safe_load(stdout)
+for pool in generated_yaml["response"]["pools"]:
+    pool_labels.append(pool["label"])
+
 list_pool()
+for label in pool_labels:
+    pool_get_prop(pool_label=label, properties="label")

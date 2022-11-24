@@ -67,7 +67,7 @@ list_pool()
 input("\n5. The pools still exist on engine. Hit enter...")
 list_directory("/mnt/daos")
 
-input("\n6. Enable the checker. Hit enter...")
+input("\n6. Enable checker. Hit enter...")
 enable_checker()
 
 input("\n7. Start interactive mode. Hit enter...")
@@ -93,10 +93,10 @@ repair_checker(sequence_num=SEQ_NUM_2, action="1")
 input(f"\n8-3. Select 2 (Re-add) for {POOL_LABEL_3}. Hit enter...")
 repair_checker(sequence_num=SEQ_NUM_3, action="2")
 
-print("\n9. Query the checker.")
+print("\n9-1. Query the checker.")
 repeat_check_query()
 
-print("9-1. Checker shows the result for each pool.")
+print("9-1. Checker shows the repair result for each pool.")
 
 input("\n10. Disable the checker. Hit enter...")
 disable_checker()
