@@ -2294,20 +2294,21 @@ int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 {
 	struct dc_pool *pool;
+	int		rc = 0;
 
 	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	if (pool->dp_map == NULL) {
-		dc_pool_put(pool);
-		return -DER_NO_HDL;
-	}
-
-	*map_ver = dc_pool_get_version(pool);
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	if (pool->dp_map == NULL)
+		rc = -DER_NO_HDL;
+	else
+		*map_ver = pool_map_get_version(pool->dp_map);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	dc_pool_put(pool);
 
-	return 0;
+	return rc;
 }
 
 struct pool_query_target_arg {
