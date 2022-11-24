@@ -782,9 +782,9 @@ adt_delayed_free_1(void **state)
 static void
 adt_tx_perf_1(void **state)
 {
-	const int	     alloc_size = 64;
+	const int	     alloc_sizes[2] = {64, 128};
 	const int	     op_per_tx = 2;
-	const int	     loop = 400000; /* 50MB */
+	const int	     loop = 400000;
 	struct ad_tx	     tx;
 	struct ad_reserv_act acts[op_per_tx];
 	struct timespec	     now;
@@ -802,7 +802,7 @@ adt_tx_perf_1(void **state)
 	for (i = 0; i < loop; i++) {
 		/* NB: two reservations per transaction */
 		for (j = 0; j < op_per_tx; j++) {
-			addrs[j] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[j]);
+			addrs[j] = ad_reserve(adt_bh, 0, alloc_sizes[j], &arena, &acts[j]);
 			if (addrs[j] == 0) {
 				fprintf(stderr, "failed allocate\n");
 				return;

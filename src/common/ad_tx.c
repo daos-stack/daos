@@ -977,6 +977,9 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 				D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
 			return 0;
 		}
+
+		if (flags & UMEM_FLAG_ZERO)
+			memset(ad_addr2ptr(bh, off), 0, size);
 	}
 
 	return off;
