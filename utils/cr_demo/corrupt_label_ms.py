@@ -8,8 +8,8 @@ import subprocess
 import time
 import yaml
 from demo_utils import format_storage, create_pool, inject_fault_mgmt, list_pool,\
-    enable_checker, start_checker, query_checker, disable_checker, repeat_check_query,\
-    repair_checker
+    check_enable, check_start, check_query, check_disable, repeat_check_query,\
+    check_repair
 
 POOL_SIZE = "1GB"
 POOL_LABEL = "tank"
@@ -66,17 +66,17 @@ input("\n4. Labels in MS are corrupted with -fault added. Hit enter...")
 list_pool()
 
 input("\n5. Enable checker. Hit enter...")
-enable_checker()
+check_enable()
 
 input("\n6. Start interactive mode. Hit enter...")
-start_checker(policies="POOL_BAD_LABEL:CIA_INTERACT")
+check_start(policies="POOL_BAD_LABEL:CIA_INTERACT")
 
 input("\n7. Show repair options. Hit enter...")
-query_checker()
+check_query()
 
 print("(Create UUID to sequence number mapping.)")
 uuid_to_seqnum = {}
-stdout = query_checker(json=True)
+stdout = check_query(json=True)
 generated_yaml = yaml.safe_load(stdout)
 for report in generated_yaml["response"]["reports"]:
     uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
@@ -85,11 +85,11 @@ input(f"\n8-1. Select 0 (Ignore) for {POOL_LABEL_1}. Hit enter...")
 SEQ_NUM_1 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]])
 SEQ_NUM_2 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]])
 SEQ_NUM_3 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]])
-repair_checker(sequence_num=SEQ_NUM_1, action="0")
+check_repair(sequence_num=SEQ_NUM_1, action="0")
 input(f"\n8-2. Select 1 (Discard pool) for {POOL_LABEL_2}. Hit enter...")
-repair_checker(sequence_num=SEQ_NUM_2, action="1")
+check_repair(sequence_num=SEQ_NUM_2, action="1")
 input(f"\n8-3. Select 2 (Re-add) for {POOL_LABEL_3}. Hit enter...")
-repair_checker(sequence_num=SEQ_NUM_3, action="2")
+check_repair(sequence_num=SEQ_NUM_3, action="2")
 
 print("\n9-1. Query the checker.")
 repeat_check_query()
@@ -97,7 +97,7 @@ repeat_check_query()
 print("9-2. Checker shows the repair result for each pool.")
 
 input("\n10. Disable the checker. Hit enter...")
-disable_checker()
+check_disable()
 
 input("\n11. Show repaired labels in MS and PS. Hit enter...")
 print("(Get current labels.)")

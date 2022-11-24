@@ -6,7 +6,7 @@
 import argparse
 import subprocess
 from demo_utils import format_storage, create_pool, inject_fault_mgmt, list_pool,\
-    enable_checker, start_checker, disable_checker, repeat_check_query
+    check_enable, check_start, check_disable, repeat_check_query
 
 
 POOL_SIZE = "4GB"
@@ -49,10 +49,10 @@ pool_get_prop(pool_label=POOL_LABEL, properties="svc_list")
 print("\n4-2. SvcReps from MS shows 0 while PS shows [0-1].")
 
 input("\n5. Enable checker. Hit enter...")
-enable_checker()
+check_enable()
 
 input("\n6. Start checker. Hit enter...")
-start_checker()
+check_start()
 
 print("\n7-1. Query the checker.")
 repeat_check_query()
@@ -60,7 +60,7 @@ repeat_check_query()
 print("\n7-2. Checker shows the svcl inconsistency was repaired.")
 
 input("\n8. Disable the checker. Hit enter...")
-disable_checker()
+check_disable()
 
 input("\n9. Verify that the svcl in MS is fixed. Hit enter...")
 list_pool(verbose=True)

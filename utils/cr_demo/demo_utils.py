@@ -70,14 +70,14 @@ def list_pool(verbose=False, json=False):
     subprocess.run(list_pool_cmd, check=False)
     return None
 
-def enable_checker():
+def check_enable():
     """Call dmg check enable"""
     check_enable_cmd = ["dmg", "check", "enable"]
     command = " ".join(check_enable_cmd)
     print(f"Command: {command}")
     subprocess.run(check_enable_cmd, check=False)
 
-def start_checker(policies=None):
+def check_start(policies=None):
     """Call dmg check start
 
     Args:
@@ -90,7 +90,7 @@ def start_checker(policies=None):
     print(f"Command: {command}")
     subprocess.run(check_start_cmd, check=False)
 
-def query_checker(json=False):
+def check_query(json=False):
     """Call dmg check query
 
     Args:
@@ -114,7 +114,7 @@ def query_checker(json=False):
     subprocess.run(check_query_cmd, check=False)
     return None
 
-def disable_checker():
+def check_disable():
     """Call dmg check disable"""
     check_disable_cmd = ["dmg", "check", "disable"]
     command = " ".join(check_disable_cmd)
@@ -126,13 +126,13 @@ def repeat_check_query():
     while True:
         user_input = input("Hit y to query, n to proceed to next step: ")
         if user_input == "y":
-            query_checker()
+            check_query()
         elif user_input == "n":
             break
         else:
             print("Please enter y or n.")
 
-def repair_checker(sequence_num, action):
+def check_repair(sequence_num, action):
     """Call dmg check repair
 
     Args:
