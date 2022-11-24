@@ -1298,7 +1298,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
+		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));

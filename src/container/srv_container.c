@@ -3135,6 +3135,9 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 	if (rc != 0)
 		goto out;
 
+	if (DAOS_FAIL_CHECK(DAOS_CHK_CONT_BAD_LABEL))
+		goto out;
+
 	rc = cont_prop_write(tx, &cont->c_prop, prop_in, false);
 	if (rc != 0)
 		D_GOTO(out, rc);
