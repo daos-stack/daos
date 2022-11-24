@@ -8,6 +8,7 @@
 #define __INTERCEPT_H__
 #include <unistd.h>
 #include <stdlib.h>
+#include <wchar.h>
 #include <sys/uio.h>
 #include "dfuse_log.h"
 #include "ioil_io.h"
