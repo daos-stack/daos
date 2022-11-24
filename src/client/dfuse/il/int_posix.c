@@ -2465,6 +2465,110 @@ do_real_fn:
 	return __real_getc_unlocked(stream);
 }
 
+DFUSE_PUBLIC wint_t
+dfuse_getwc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getwc(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_getwc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getwc_unlocked(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_fgetwc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgetwc(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_fgetwc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgetwc_unlocked(stream);
+}
+
 DFUSE_PUBLIC char *
 dfuse_fgets(char *str, int n, FILE *stream)
 {
