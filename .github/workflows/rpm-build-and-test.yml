@@ -290,3 +290,5 @@ jobs:
         with:
           name: Functional on EL 8 artifacts
           path: Functional on EL 8/**
+      - name: Exit with failure
+        run: exit 1
