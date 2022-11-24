@@ -86,6 +86,12 @@ def _known_deps(env, **kwargs):
     else:
         libs = set(env.get('LIBS', []))
 
+    for lib in libs:
+        if isinstance(lib, File):
+            continue
+        if lib in libraries.keys():
+            _report_fault(f'Lib {lib} not defined correctly')
+
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
     for item in known_libs:
@@ -161,7 +167,7 @@ def _library(env, *args, **kwargs):
     libname = _get_libname(*args, **kwargs)
     _add_lib('shared', libname, lib)
     static_deps, shared_deps = _known_deps(denv, **kwargs)
-    Depends(lib, static_deps)
+    Depends(lib, shared_deps + static_deps)
     env.Requires(lib, shared_deps)
     return lib
 
@@ -220,6 +226,8 @@ def _test_program(env, *args, **kwargs):
                 if lib not in libs:
                     missing_libs = True
             if not missing_libs:
+                print(libs)
+                print(env_libs)
                 _report_fault('Libs added to')
                 assert False
 

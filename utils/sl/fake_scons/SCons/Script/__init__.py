@@ -121,6 +121,10 @@ class DefaultEnvironment():
         """Fake Command"""
         return []
 
+    def AddMethod(self, method, name):
+        """Fake AddMethod"""
+        return
+
     def CopyAs(self, *_args, **_kw):
         """Fake CopyAs"""
         return []

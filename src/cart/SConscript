@@ -88,7 +88,7 @@ def scons():
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib, SHLIBVERSION=CART_VERSION)
 
     Default(cart_lib)
-    Export('cart_targets')
+    Export('cart_targets', 'cart_lib')
 
 
 if __name__ == "SCons.Script":

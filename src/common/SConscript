@@ -17,9 +17,10 @@ def build_daos_common(denv, client):
     benv = denv.Clone()
     stack_mmap_files = []
 
-    Import('gurt_lib')
+    Import('gurt_lib', 'cart_lib')
 
-    common_libs = gurt_lib + ['isal', 'isal_crypto', 'cart', 'lz4', 'protobuf-c', 'uuid', 'pthread']
+    common_libs = gurt_lib + cart_lib + ['isal', 'isal_crypto', 'lz4', 'protobuf-c', 'uuid',
+                                         'pthread']
     if client:
         libname = 'daos_common'
     else:
