@@ -955,7 +955,10 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 	umem_off_t		 off;
 
 	off = ad_alloc(bh, 0, size, NULL);
-	if (!UMOFF_IS_NULL(off) && !(flags & UMEM_FLAG_NO_FLUSH)) {
+	if (UMOFF_IS_NULL(off))
+		return off;
+
+	if (!(flags & UMEM_FLAG_NO_FLUSH)) {
 		int	rc;
 
 		rc = tx_range_add(tx, off, size, true);
@@ -967,6 +970,9 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 			return 0;
 		}
 	}
+
+	if (flags & UMEM_FLAG_ZERO)
+		memset(ad_addr2ptr(bh, off), 0, size);
 
 	return off;
 }
