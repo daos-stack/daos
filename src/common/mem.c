@@ -34,7 +34,13 @@ struct umem_tx_stage_item {
 
 #ifdef DAOS_PMEM_BUILD
 
-static int use_bmem = 1; /* Use BMEM by default */
+enum {
+	DAOS_MD_PMEM	= 0,
+	DAOS_MD_BMEM	= 1,
+	DAOS_MD_ADMEM	= 2,
+};
+
+static int daos_md_backend = DAOS_MD_PMEM;
 
 /** Sets up global settings for the pmem objects.
  *
@@ -45,11 +51,12 @@ umempobj_settings_init(void)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	bool val = false;
+	unsigned int				val = DAOS_MD_PMEM;
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &val);
-	if (val == false) {
-		use_bmem = 0;
+	d_getenv_int("DAOS_MD_ON_SSD", &val);
+	switch (val) {
+	case DAOS_MD_PMEM:
+		daos_md_backend = DAOS_MD_PMEM;
 		atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
 
 		rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
@@ -57,8 +64,18 @@ umempobj_settings_init(void)
 			D_ERROR("Could not configure PMDK for global arena: %s\n",
 				strerror(errno));
 		return rc;
-	}
-	D_INFO("UMEM will use Blob Backed Memory as the backend interface\n");
+	case DAOS_MD_BMEM:
+		daos_md_backend = DAOS_MD_BMEM;
+		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
+		return 0;
+	case DAOS_MD_ADMEM:
+		daos_md_backend = DAOS_MD_ADMEM;
+		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
+		return 0;
+	default:
+		D_ERROR("invalid DAOS_MD_ON_SSD value %d\n", val);
+		return -DER_INVAL;
+	};
 	return 0;
 }
 
@@ -79,17 +96,23 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		size_t poolsize, mode_t mode, struct umem_store *store)
 {
 	struct umem_pool	*umm_pool;
+	PMEMobjpool		*pop;
 	dav_obj_t		*dav_hdl;
+	struct ad_blob_handle	 bh;
+	int			 enabled = 1;
+	int			 rc;
 
 	D_ALLOC_PTR(umm_pool);
 	if (umm_pool == NULL)
 		return NULL;
 
-	if (!use_bmem) {
-		PMEMobjpool     *pop;
-		int              enabled = 1;
-		int              rc;
+	if (store != NULL)
+		umm_pool->up_store = *store;
 
+	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ...\n",
+		path, poolsize, store->stor_size);
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
 		pop = pmemobj_create(path, layout_name, poolsize, mode);
 		if (!pop) {
 			D_ERROR("Failed to create pool %s, size="DF_U64": %s\n",
@@ -109,25 +132,36 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 			}
 		}
 
-		if (store != NULL)
-			umm_pool->up_store = *store;
 		umm_pool->up_priv = pop;
 		return umm_pool;
-	}
+	case DAOS_MD_BMEM:
+		dav_hdl = dav_obj_create(path, 0, poolsize, mode);
+		if (!dav_hdl) {
+			D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
+				path, poolsize, errno);
+			D_FREE(umm_pool);
+			return NULL;
+		}
+		umm_pool->up_priv = dav_hdl;
 
-	dav_hdl = dav_obj_create(path, 0, poolsize, mode);
-	if (!dav_hdl) {
-		D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
-			path, poolsize, errno);
-		D_FREE(umm_pool);
-		return NULL;
-	}
-	if (store != NULL)
-		umm_pool->up_store = *store;
-	umm_pool->up_priv = dav_hdl;
+		/* TODO: Do checkpoint here to write back allocator heap */
+		return umm_pool;
+	case DAOS_MD_ADMEM:
+		rc = ad_blob_create(path, 0, store, &bh);
+		if (rc) {
+			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
+			D_FREE(umm_pool);
+			return NULL;
+		}
 
-	/* TODO: Do checkpoint here to write back allocator heap */
-	return umm_pool;
+		umm_pool->up_priv = bh.bh_blob;
+		return umm_pool;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
+	};
+
+	return NULL;
 }
 
 /** Open the given persistent memory object.
@@ -143,17 +177,22 @@ struct umem_pool *
 umempobj_open(const char *path, const char *layout_name, int flags, struct umem_store *store)
 {
 	struct umem_pool	*umm_pool;
+	PMEMobjpool		*pop;
 	dav_obj_t		*dav_hdl;
+	struct ad_blob_handle	 bh;
+	int			 enabled = 1;
+	int			 rc;
 
 	D_ALLOC_PTR(umm_pool);
 	if (umm_pool == NULL)
 		return NULL;
 
-	if (!use_bmem) {
-		PMEMobjpool     *pop;
-		int              enabled = 1;
-		int              rc;
+	if (store != NULL)
+		umm_pool->up_store = *store;
 
+	D_DEBUG(DB_TRACE, "opening %s\n", path);
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
 		pop = pmemobj_open(path, layout_name);
 		if (!pop) {
 			D_ERROR("Error in opening the pool %s: %s\n",
@@ -173,28 +212,39 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 			}
 		}
 
-		if (store != NULL)
-			umm_pool->up_store = *store;
 		umm_pool->up_priv = pop;
 		return umm_pool;
+	case DAOS_MD_BMEM:
+		/* TODO mmap tmpfs file */
+		/* TODO Load all meta pages from SSD */
+		/* TODO Replay WAL */
+
+		dav_hdl = dav_obj_open(path, 0);
+		if (!dav_hdl) {
+			D_ERROR("Error in opening the pool %s: errno =%d\n",
+				path, errno);
+			D_FREE(umm_pool);
+			return NULL;
+		}
+
+		umm_pool->up_priv = dav_hdl;
+		return umm_pool;
+	case DAOS_MD_ADMEM:
+		rc = ad_blob_open(path, 0, store, &bh);
+		if (rc) {
+			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
+			D_FREE(umm_pool);
+			return NULL;
+		}
+
+		umm_pool->up_priv = bh.bh_blob;
+		return umm_pool;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
 
-	/* TODO mmap tmpfs file */
-	/* TODO Load all meta pages from SSD */
-	/* TODO Replay WAL */
-
-	dav_hdl = dav_obj_open(path, 0);
-	if (!dav_hdl) {
-		D_ERROR("Error in opening the pool %s: errno =%d\n",
-			path, errno);
-		D_FREE(umm_pool);
-		return NULL;
-	}
-
-	if (store != NULL)
-		umm_pool->up_store = *store;
-	umm_pool->up_priv = dav_hdl;
-	return umm_pool;
+	return NULL;
 }
 
 /** Close the pmem object.
@@ -204,12 +254,25 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 void
 umempobj_close(struct umem_pool *ph_p)
 {
-	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
+	PMEMobjpool		*pop;
+	struct ad_blob_handle	 bh;
+
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemobj_close(pop);
-	} else {
+		break;
+	case DAOS_MD_BMEM:
 		dav_obj_close((dav_obj_t *)ph_p->up_priv);
+		break;
+	case DAOS_MD_ADMEM:
+		bh.bh_blob = (struct ad_blob *)ph_p->up_priv;
+		ad_blob_close(bh);
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
 
 	D_FREE(ph_p);
@@ -226,20 +289,31 @@ umempobj_close(struct umem_pool *ph_p)
 void *
 umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 {
-	uint64_t off;
+	PMEMobjpool		*pop;
+	void			*rootp;
+	PMEMoid			 root;
+	struct ad_blob_handle	 bh;
+	uint64_t		 off;
 
-	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
-		PMEMoid root;
-		void *rootp;
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
 
 		root = pmemobj_root(pop, size);
 		rootp = pmemobj_direct(root);
 		return rootp;
+	case DAOS_MD_BMEM:
+		off = dav_root((dav_obj_t *)ph_p->up_priv, size);
+		return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
+	case DAOS_MD_ADMEM:
+		bh.bh_blob = (struct ad_blob *)ph_p->up_priv;
+		return ad_root(bh, size);
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
 
-	off = dav_root((dav_obj_t *)ph_p->up_priv, size);
-	return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
+	return NULL;
 }
 
 /** Obtain the usage statistics for the pmem object
@@ -252,20 +326,30 @@ umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 int
 umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 {
-	int rc;
+	PMEMobjpool		*pop;
+	struct dav_heap_stats	 st;
+	int			 rc = 0;
 
-	if (!use_bmem) {
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
 
 		rc = pmemobj_ctl_get(pop, "stats.heap.curr_allocated",
 			     curr_allocated);
-	} else {
-		struct dav_heap_stats st;
-
+		break;
+	case DAOS_MD_BMEM:
 		rc = dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
 		if (rc == 0)
 			*curr_allocated = st.curr_allocated;
+		break;
+	case DAOS_MD_ADMEM:
+		*curr_allocated = 40960; /* TODO */
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
+
 	return rc;
 }
 
@@ -277,22 +361,33 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 void
 umempobj_log_fraginfo(struct umem_pool *ph_p)
 {
-	if (!use_bmem) {
-		daos_size_t scm_used, scm_active;
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
+	PMEMobjpool		*pop;
+	daos_size_t		 scm_used, scm_active;
+	struct dav_heap_stats	 st;
+
+	switch (daos_md_backend) {
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemobj_ctl_get(pop, "stats.heap.run_allocated", &scm_used);
 		pmemobj_ctl_get(pop, "stats.heap.run_active", &scm_active);
 
 		D_ERROR("Fragmentation info, run_allocated: "
 		  DF_U64", run_active: "DF_U64"\n", scm_used, scm_active);
-	} else {
-		struct dav_heap_stats st;
-
+		break;
+	case DAOS_MD_BMEM:
 		dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
 		D_ERROR("Fragmentation info, run_allocated: "
 		  DF_U64", run_active: "DF_U64"\n",
 		  st.run_allocated, st.run_active);
+		break;
+	case DAOS_MD_ADMEM:
+		/* TODO */
+		D_ERROR("Fragmentation info, not implemented in ADMEM yet.\n");
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
 }
 
@@ -306,11 +401,16 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 int
 umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 {
-	int rc;
+	PMEMobjpool			*pop;
+	struct pobj_alloc_class_desc	 pmemslab;
+	struct dav_alloc_class_desc	 davslab;
+	int				 rc = 0;
 
-	if (!use_bmem) {
-		struct pobj_alloc_class_desc pmemslab;
-		PMEMobjpool *pop = (PMEMobjpool *)ph_p->up_priv;
+	switch (daos_md_backend) {
+	static unsigned class_id = 10;
+
+	case DAOS_MD_PMEM:
+		pop = (PMEMobjpool *)ph_p->up_priv;
 
 		pmemslab.unit_size = slab->unit_size;
 		pmemslab.alignment = 0;
@@ -320,9 +420,8 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		rc = pmemobj_ctl_set(pop, "heap.alloc_class.new.desc", &pmemslab);
 		/* update with the new slab id */
 		slab->class_id = pmemslab.class_id;
-	} else {
-		struct dav_alloc_class_desc davslab;
-
+		break;
+	case DAOS_MD_BMEM:
 		davslab.unit_size = slab->unit_size;
 		davslab.alignment = 0;
 		davslab.units_per_block = 1000;
@@ -331,6 +430,14 @@ umempobj_set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		rc = dav_class_register((dav_obj_t *)ph_p->up_priv, &davslab);
 		/* update with the new slab id */
 		slab->class_id = davslab.class_id;
+		break;
+	case DAOS_MD_ADMEM:
+		/* NOOP for ADMEM now */
+		slab->class_id = class_id++;
+		break;
+	default:
+		D_ASSERTF(0, "bad daos_md_backend %d\n", daos_md_backend);
+		break;
 	}
 	return rc;
 }
@@ -339,7 +446,7 @@ static inline uint64_t
 umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
 {
 	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return (!use_bmem) ?
+	return (daos_md_backend == DAOS_MD_PMEM) ?
 		POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id) :
 		DAV_CLASS_ID(umm->umm_slabs[slab_id].class_id);
 }
@@ -1127,6 +1234,11 @@ static void
 set_offsets(struct umem_instance *umm)
 {
 #ifdef DAOS_PMEM_BUILD
+	PMEMobjpool		*pop;
+	char			*root;
+	PMEMoid			 root_oid;
+	dav_obj_t		*dav_pop;
+	struct ad_blob_handle	 bh;
 #endif
 	if (umm->umm_id == UMEM_CLASS_VMEM) {
 		umm->umm_base = 0;
@@ -1135,10 +1247,9 @@ set_offsets(struct umem_instance *umm)
 	}
 
 #ifdef DAOS_PMEM_BUILD
-	if (!use_bmem) {
-		char		*root;
-		PMEMoid		 root_oid;
-		PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
+	switch (umm->umm_id) {
+	case UMEM_CLASS_PMEM:
+		pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
 		root_oid = pmemobj_root(pop, 0);
 		D_ASSERTF(!OID_IS_NULL(root_oid),
@@ -1148,10 +1259,19 @@ set_offsets(struct umem_instance *umm)
 
 		umm->umm_pool_uuid_lo = root_oid.pool_uuid_lo;
 		umm->umm_base = (uint64_t)root - root_oid.off;
-	} else {
-		dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+		break;
+	case UMEM_CLASS_BMEM:
+		dav_pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
-		umm->umm_base = (uint64_t)dav_get_base_ptr(pop);
+		umm->umm_base = (uint64_t)dav_get_base_ptr(dav_pop);
+		break;
+	case UMEM_CLASS_ADMEM:
+		bh.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
+		umm->umm_base = (uint64_t)ad_base(bh);
+		break;
+	default:
+		D_ASSERTF(0, "bad umm->umm_id %d\n", umm->umm_id);
+		break;
 	}
 #endif
 }
@@ -1170,8 +1290,15 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 
 	found = false;
 #ifdef DAOS_PMEM_BUILD
-	if ((use_bmem) && (uma->uma_id == UMEM_CLASS_PMEM))
-		uma->uma_id = UMEM_CLASS_BMEM;
+	if (uma->uma_id == UMEM_CLASS_PMEM) {
+		if (daos_md_backend == DAOS_MD_BMEM)
+			uma->uma_id = UMEM_CLASS_BMEM;
+		else if (daos_md_backend == DAOS_MD_ADMEM)
+			uma->uma_id = UMEM_CLASS_ADMEM;
+		else
+			D_ASSERTF(daos_md_backend == DAOS_MD_PMEM,
+				  "bad daos_md_backend %d\n", daos_md_backend);
+	}
 #endif
 	for (umc = &umem_class_defined[0];
 	     umc->umc_id != UMEM_CLASS_UNKNOWN; umc++) {
