@@ -49,11 +49,13 @@ static inline void
 act_item_add(struct ad_tx *tx, struct ad_act *it, int undo_or_redo)
 {
 	if (undo_or_redo == ACT_UNDO) {
-		D_DEBUG(DB_TRACE, "Add to undo %s\n", act_opc2str(it->it_act.ac_opc));
+		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p undo\n",
+			act_opc2str(it->it_act.ac_opc), &it->it_act, tx);
 		d_list_add(&it->it_link, &tx->tx_undo);
 
 	} else {
-		D_DEBUG(DB_TRACE, "Add to redo %s\n", act_opc2str(it->it_act.ac_opc));
+		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p redo\n",
+			act_opc2str(it->it_act.ac_opc), &it->it_act, tx);
 		d_list_add_tail(&it->it_link, &tx->tx_redo);
 		tx->tx_redo_act_nr++;
 
@@ -125,7 +127,7 @@ ad_tx_redo_act_first(struct umem_wal_tx *wal_tx)
 		return NULL;
 	}
 
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
+	tx->tx_redo_act_pos = d_list_entry(tx->tx_redo.next, struct ad_act, it_link);
 	return &tx->tx_redo_act_pos->it_act;
 }
 
@@ -140,12 +142,12 @@ ad_tx_redo_act_next(struct umem_wal_tx *wal_tx)
 	if (tx->tx_redo_act_pos == NULL) {
 		if (d_list_empty(&tx->tx_redo))
 			return NULL;
-		tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo.next, struct ad_act, it_link);
+		tx->tx_redo_act_pos = d_list_entry(tx->tx_redo.next, struct ad_act, it_link);
 		return &tx->tx_redo_act_pos->it_act;
 	}
 
 	D_ASSERT(!d_list_empty(&tx->tx_redo));
-	tx->tx_redo_act_pos = d_list_entry(&tx->tx_redo_act_pos->it_link.next,
+	tx->tx_redo_act_pos = d_list_entry(tx->tx_redo_act_pos->it_link.next,
 					   struct ad_act, it_link);
 	if (&tx->tx_redo_act_pos->it_link == &tx->tx_redo) {
 		tx->tx_redo_act_pos = NULL;
@@ -154,8 +156,7 @@ ad_tx_redo_act_next(struct umem_wal_tx *wal_tx)
 	return &tx->tx_redo_act_pos->it_act;
 }
 
-/* TODO: Assign ad_wal_tx_ops to umem_wal_tx->utx_ops on TX begin */
-struct umem_wal_tx_ops ad_wal_tx_ops = {
+static struct umem_wal_tx_ops ad_wal_tx_ops = {
 	.wtx_act_nr	= ad_tx_redo_act_nr,
 	.wtx_payload_sz	= ad_tx_redo_payload_len,
 	.wtx_act_first	= ad_tx_redo_act_first,
@@ -375,6 +376,11 @@ int
 ad_tx_end(struct ad_tx *tx, int err)
 {
 	int	rc = 0;
+
+	if (err == 0)
+		err = tx->tx_last_errno;
+	if (err == 0)
+		err = tx_range_post(tx);
 
 	rc = tx_complete(tx, err);
 	if (rc)
@@ -757,23 +763,22 @@ tx_callback(struct ad_tx *tx)
 	tx->tx_stage_cb(ad_tx_stage(tx), tx->tx_stage_cb_arg);
 }
 
-static int
+int
 tx_end(struct ad_tx *tx, int err)
 {
 	struct umem_wal_tx	*utx;
 	int			 rc;
 
-	if (err == 0)
-		err = tx->tx_last_errno;
-	else
+	if (err)
 		tx->tx_last_errno = err;
 
+	tx->tx_layer--;
 	D_ASSERTF(tx->tx_layer >= 0, "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
 	if (tx->tx_layer != 0)
 		return 0;
 
-	if (err == 0)
-		err = tx_range_post(tx);
+	/* possibly yield in ad_tx_end() -> tx_complete() -> so_wal_submit */
+	tx_set(NULL);
 
 	rc = ad_tx_end(tx, err);
 	if (rc == 0) {
@@ -783,15 +788,14 @@ tx_end(struct ad_tx *tx, int err)
 		tx->tx_last_errno = rc;
 		ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 	}
-
 	tx_callback(tx);
-	if (tx_get() == tx)
-		tx_set(NULL);
+
 	/* trigger UMEM_STAGE_NONE callback, this TX is finished but possibly with other WIP TX */
 	ad_tx_stage_set(tx, UMEM_STAGE_NONE);
 	tx_callback(tx);
 	rc = tx->tx_last_errno;
 	utx = ad_tx2umem_tx(tx);
+	D_DEBUG(DB_TRACE, "Freeing tx %p\n", tx);
 	D_FREE(utx);
 
 	return rc;
@@ -808,25 +812,25 @@ tx_abort(struct ad_tx *tx, int err)
 	return tx_end(tx, err);
 }
 
-static int
-umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
+int
+tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx **tx_pp)
 {
+	struct ad_blob		*blob = bh.bh_blob;
 	struct umem_wal_tx	*utx = NULL;
 	struct ad_tx		*tx;
-	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
-	struct ad_blob		*blob;
 	struct umem_store	*store;
 	uint64_t		 tx_id;
 	int			 rc = 0;
 
-	blob = bh.bh_blob;
 	tx = tx_get();
 	if (tx == NULL) {
 		D_ALLOC_PTR(utx);
 		if (utx == NULL)
 			return -DER_NOMEM;
 
+		utx->utx_ops = &ad_wal_tx_ops;
 		tx = umem_tx2ad_tx(utx);
+		D_DEBUG(DB_TRACE, "Allocated tx %p\n", tx);
 		rc = ad_tx_begin(bh, tx);
 		if (rc) {
 			D_ERROR("ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
@@ -845,8 +849,10 @@ umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 
 		/* possibly yield in so_wal_reserv, but tls_tx should be NULL when it get back */
 		D_ASSERT(tx_get() == NULL);
-		tx->tx_stage_cb = umem_stage_callback;
-		tx->tx_stage_cb_arg = txd;
+		if (txd != NULL) {
+			tx->tx_stage_cb = umem_stage_callback;
+			tx->tx_stage_cb_arg = txd;
+		}
 		ad_tx_id_set(tx, tx_id);
 		ad_tx_stage_set(tx, UMEM_STAGE_WORK);
 		tx_set(tx);
@@ -855,6 +861,7 @@ umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 		D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
 			  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
+		tx->tx_layer++;
 		if (blob != tx->tx_blob) {
 			D_ERROR("Nested TX for different blob\n");
 			rc = -DER_INVAL;
@@ -865,10 +872,10 @@ umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 			rc = -DER_CANCELED;
 			goto err_abort;
 		}
-		tx->tx_layer++;
 		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
 	}
 
+	*tx_pp = tx;
 	return 0;
 
 err_abort:
@@ -879,13 +886,21 @@ err_abort:
 }
 
 static int
+umo_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
+{
+	struct ad_tx		*tx;
+	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
+
+	return tx_begin(bh, txd, &tx);
+}
+
+static int
 umo_tx_abort(struct umem_instance *umm, int err)
 {
 	struct ad_tx	*tx = tx_get();
 
 	D_ASSERTF(tx->tx_layer > 0,
 		  "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
-	tx->tx_layer--;
 
 	return tx_abort(tx, err);
 }
@@ -894,18 +909,11 @@ static int
 umo_tx_commit(struct umem_instance *umm, void *data)
 {
 	struct ad_tx	*tx = tx_get();
-	int		 rc = 0;
 
 	D_ASSERTF(tx->tx_layer > 0,
 		  "TX "DF_U64", bad layer %d\n", ad_tx_id(tx), tx->tx_layer);
-	tx->tx_layer--;
-	if (tx->tx_layer == 0) {
-		/* possibly yield when tx_end() -> ad_tx_end() -> tx_complete() -> so_wal_submit */
-		tx_set(NULL);
-		rc = tx_end(tx, 0);
-	}
 
-	return rc;
+	return tx_end(tx, 0);
 }
 
 static int
@@ -953,9 +961,12 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 	struct ad_tx		*tx = tx_get();
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 	umem_off_t		 off;
+	int			 type;
 
-	off = ad_alloc(bh, 0, size, NULL);
-	if (!UMOFF_IS_NULL(off) && !(flags & UMEM_FLAG_NO_FLUSH)) {
+	D_ASSERT(!(flags & UMEM_FLAG_NO_FLUSH));
+	type = size > 4096 ? ARENA_TYPE_LARGE : 0;
+	off = ad_alloc(bh, type, size, NULL);
+	if (!UMOFF_IS_NULL(off)) {
 		int	rc;
 
 		rc = tx_range_add(tx, off, size, true);
@@ -966,6 +977,9 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, int slab_id, uint64_t flags
 				D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
 			return 0;
 		}
+
+		if (flags & UMEM_FLAG_ZERO)
+			memset(ad_addr2ptr(bh, off), 0, size);
 	}
 
 	return off;
@@ -1016,10 +1030,10 @@ umo_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset, size_t
 	void			*ptr;
 	uint32_t		 ad_flags = 0;
 
+	D_ASSERT(!(flags & UMEM_FLAG_NO_FLUSH));
+	ad_flags |= AD_TX_REDO;
 	if (!(flags & UMEM_XADD_NO_SNAPSHOT))
 		ad_flags |= AD_TX_UNDO;
-	if (!(flags & UMEM_FLAG_NO_FLUSH))
-		ad_flags |= AD_TX_REDO;
 
 	D_ASSERT(offset == 0);
 	ptr = blob_addr2ptr(blob, umoff);
@@ -1041,8 +1055,10 @@ umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 	struct ad_reserv_act	*ract = act;
 	umem_off_t		 off;
+	int			 type;
 
-	off = ad_reserve(bh, 0, size, NULL, ract);
+	type = size > 4096 ? ARENA_TYPE_LARGE : 0;
+	off = ad_reserve(bh, type, size, NULL, ract);
 
 	if (!UMOFF_IS_NULL(off)) {
 		ract->ra_off = off;

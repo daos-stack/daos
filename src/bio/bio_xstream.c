@@ -226,7 +226,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_bool("DAOS_MD_ON_SSD_ENABLED", &md_on_ssd_enabled);
+	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
 
 	/* Hugepages disabled */

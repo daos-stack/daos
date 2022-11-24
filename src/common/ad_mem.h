@@ -158,6 +158,11 @@ struct ad_arena_spec {
 #define ARENA_UNIT_SIZE		(32 << 10)
 /** Arena header size, 64KB */
 #define ARENA_HDR_SIZE		(2 * ARENA_UNIT_SIZE)
+/** Blob header size */
+#define BLOB_HDR_SIZE		(32 << 10)
+/** Root object size */
+#define AD_ROOT_OBJ_SIZE	(32 << 10)
+#define AD_ROOT_OBJ_OFF		(ARENA_HDR_SIZE + BLOB_HDR_SIZE)
 
 /**
  * Maximum number of groups within an arena.
@@ -255,7 +260,6 @@ struct ad_page_extern {
 /* register up to 31 arenas types (type=0 is predefined) */
 #define ARENA_SPEC_MAX		32
 
-#define BLOB_HDR_SIZE		(32 << 10)
 #define BLOB_MAGIC		0xbabecafe
 
 #define AD_MEM_VERSION		1
@@ -393,6 +397,8 @@ void *blob_addr2ptr(struct ad_blob *blob, daos_off_t addr);
 daos_off_t blob_ptr2addr(struct ad_blob *blob, void *ptr);
 
 int tx_complete(struct ad_tx *tx, int err);
+int tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx **tx_pp);
+int tx_end(struct ad_tx *tx, int err);
 
 static inline struct ad_tx *
 umem_tx2ad_tx(struct umem_wal_tx *utx)

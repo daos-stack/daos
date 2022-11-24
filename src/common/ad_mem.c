@@ -6,6 +6,10 @@
 #define D_LOGFAC        DD_FAC(common)
 
 #include "ad_mem.h"
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #define AD_MEM_DEBUG	0
 
@@ -295,12 +299,19 @@ blob_init(struct ad_blob *blob)
 			goto failed;
 
 		blob->bb_mmap = buf;
-		for (i = 0; i < blob->bb_pgs_nr; i++) {
-			blob->bb_pages[i].pa_rpg = buf + (i << ARENA_SIZE_BITS);
-			blob->bb_pages[i].pa_cpg = NULL; /* reserved for future use */
-		}
 	} else {
-		D_ASSERT(0); /* XXX remove this while integrating with other components. */
+		blob->bb_mmap = mmap(NULL, blob_size(blob), PROT_READ|PROT_WRITE,
+				     MAP_SHARED, blob->bb_fd, 0);
+		if (blob->bb_mmap == MAP_FAILED) {
+			rc = daos_errno2der(errno);
+			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
+			goto failed;
+		}
+		buf = blob->bb_mmap;
+	}
+	for (i = 0; i < blob->bb_pgs_nr; i++) {
+		blob->bb_pages[i].pa_rpg = buf + (i << ARENA_SIZE_BITS);
+		blob->bb_pages[i].pa_cpg = NULL; /* reserved for future use */
 	}
 
 	/* NB: ad_blob_df (superblock) is stored right after header of arena[0],
@@ -367,7 +378,16 @@ blob_fini(struct ad_blob *blob)
 	D_FREE(blob->bb_mh_nodes);
 	D_FREE(blob->bb_bmap_rsv);
 	D_FREE(blob->bb_pages);
-	D_FREE(blob->bb_mmap);
+	if (blob->bb_dummy) {
+		D_FREE(blob->bb_mmap);
+	} else {
+		if (blob->bb_mmap != NULL)
+			munmap(blob->bb_mmap, blob_size(blob));
+		if (blob->bb_fd != -1) {
+			close(blob->bb_fd);
+			blob->bb_fd = -1;
+		}
+	}
 }
 
 static uint32_t
@@ -449,10 +469,12 @@ blob_load(struct ad_blob *blob)
 		ad_sgl_set(&sgl, &iov, page->pa_rpg, ARENA_SIZE);
 
 		/* XXX: submit multiple pages, otherwise it's too slow */
-		rc = blob->bb_store.stor_ops->so_read(&blob->bb_store, &iod, &sgl);
-		if (rc) {
-			D_ERROR("Failed to load storage contents: %d\n", rc);
-			goto out;
+		if (blob->bb_store.stor_ops->so_read != NULL) {
+			rc = blob->bb_store.stor_ops->so_read(&blob->bb_store, &iod, &sgl);
+			if (rc) {
+				D_ERROR("Failed to load storage contents: %d\n", rc);
+				goto out;
+			}
 		}
 		if (isset64(bd->bd_bmap, i)) {
 			ad = (struct ad_arena_df *)blob->bb_pages[i].pa_rpg;
@@ -529,13 +551,76 @@ blob_close(struct ad_blob *blob)
 	}
 }
 
+static int
+blob_file_open(const char *path, size_t *size, bool create)
+{
+	struct stat	stat_buf;
+	int		fd;
+	int		flags;
+	int		rc;
+
+	if (*size == 0) {
+		/* Open the file and obtain the size */
+		fd = open(path, O_RDWR);
+		if (fd == -1) {
+			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		if (fstat(fd, &stat_buf) != 0) {
+			close(fd);
+			D_ERROR("fstat %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		*size = stat_buf.st_size;
+		D_DEBUG(DB_TRACE, "stat %s size %zu\n", path, *size);
+	} else {
+		if (create && access(path, F_OK) == 0) {
+			D_DEBUG(DB_TRACE, "path %s existed.\n", path);
+			create = false;
+		}
+
+		flags = O_RDWR;
+		if (create)
+			flags |= O_CREAT;
+
+		fd = open(path, flags, 0600);
+		if (fd == -1) {
+			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			return daos_errno2der(errno);
+		}
+
+		if (create) {
+			*size = D_ALIGNUP(*size, 1ULL << 12);
+			rc = fallocate(fd, 0, 0, *size);
+			if (rc) {
+				rc = daos_errno2der(errno);
+				D_ERROR("fallocate blob file %s with size: "DF_U64" failed: "
+					DF_RC"\n", path, *size, DP_RC(rc));
+				(void)close(fd);
+				return rc;
+			}
+
+			rc = fsync(fd);
+			if (rc) {
+				(void)close(fd);
+				rc = daos_errno2der(errno);
+				D_ERROR("failed to sync blob file %s: "DF_RC"\n", path, DP_RC(rc));
+				return rc;
+			}
+		}
+	}
+
+	return fd;
+}
 
 /**
  * Format superblock of the blob, create the first arena, write these metadata to storage.
  * NB: superblock is stored in the first arena.
  */
 int
-ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
+ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	       struct ad_blob_handle *bh)
 {
 	struct ad_blob		*blob;
@@ -552,8 +637,6 @@ ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
 			return -DER_EXIST;
 		is_dummy = true;
 	}
-	D_ASSERT(is_dummy); /* XXX the only thing can be supported now */
-
 	D_ALLOC_PTR(blob);
 	if (!blob)
 		return -DER_NOMEM;
@@ -561,6 +644,14 @@ ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
 	blob->bb_fd	= -1; /* XXX, create file, falloc */
 	blob->bb_ref	= 1;
 	blob->bb_dummy	= is_dummy;
+	if (!is_dummy) {
+		rc = blob_file_open(path, &store->stor_size, true);
+		if (rc < 0) {
+			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			return rc;
+		}
+		blob->bb_fd = rc;
+	}
 	blob->bb_store	= *store;
 	blob->bb_pgs_nr = ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
 
@@ -606,10 +697,12 @@ ad_blob_create(char *path, unsigned int flags, struct umem_store *store,
 	ad_sgl_set(&sgl, &iov, arena->ar_df, ARENA_HDR_SIZE + BLOB_HDR_SIZE);
 
 	D_ASSERT(store->stor_ops);
-	rc = store->stor_ops->so_write(store, &iod, &sgl);
-	if (rc) {
-		D_ERROR("Failed to write ad_mem superblock\n");
-		goto failed;
+	if (store->stor_ops->so_write != NULL) {
+		rc = store->stor_ops->so_write(store, &iod, &sgl);
+		if (rc) {
+			D_ERROR("Failed to write ad_mem superblock\n");
+			goto failed;
+		}
 	}
 	arena_decref(arena);
 	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
@@ -625,7 +718,7 @@ failed:
 }
 
 int
-ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
+ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	     struct ad_blob_handle *bh)
 {
 	struct ad_blob		*blob;
@@ -633,16 +726,13 @@ ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
 	struct umem_store_iod	 iod;
 	d_sg_list_t		 sgl;
 	d_iov_t			 iov;
-	int			 rc;
+	int			 rc = 0;
 	bool			 is_dummy = false;
 
 	if (!strcmp(path, DUMMY_BLOB))
 		is_dummy = true;
 
-	if (!is_dummy) {
-		/* XXX dummy is the only thing can be supported now */
-		D_ASSERT(0);
-	} else {
+	if (is_dummy) {
 		if (dummy_blob) {
 			blob = dummy_blob;
 			D_DEBUG(DB_TRACE, "found dummy blob, refcount=%d\n", blob->bb_ref);
@@ -656,6 +746,19 @@ ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
 			blob->bb_ref = 1;
 			blob->bb_dummy = true;
 		}
+	} else {
+		D_ALLOC_PTR(blob);
+		if (!blob)
+			return -DER_NOMEM;
+
+		blob->bb_ref = 1;
+		rc = blob_file_open(path, &store->stor_size, false);
+		if (rc < 0) {
+			D_FREE(blob);
+			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			return rc;
+		}
+		blob->bb_fd = rc;
 	}
 
 	if (blob->bb_opened) {
@@ -674,10 +777,18 @@ ad_blob_open(char *path, unsigned int flags, struct umem_store *store,
 
 	/* read super block to temporary buffer */
 	D_ASSERT(store->stor_ops);
-	rc = store->stor_ops->so_read(store, &iod, &sgl);
-	if (rc) {
-		D_ERROR("Failed to read superblock of ad_mem\n");
-		goto failed;
+	if (store->stor_ops->so_read != NULL) {
+		rc = store->stor_ops->so_read(store, &iod, &sgl);
+		if (rc) {
+			D_ERROR("Failed to read superblock of ad_mem\n");
+			goto failed;
+		}
+	} else {
+		/* XXX temporary hack before so_read is ready */
+		bd->bd_magic = BLOB_MAGIC;
+		bd->bd_version = 1;
+		bd->bd_size = store->stor_size;
+		bd->bd_addr = store->stor_addr;
 	}
 
 	if (bd->bd_magic != BLOB_MAGIC || bd->bd_version == 0) {
@@ -737,13 +848,20 @@ ad_blob_destroy(struct ad_blob_handle bh)
 void *
 blob_addr2ptr(struct ad_blob *blob, daos_off_t addr)
 {
-	struct ad_page	*pg;
 	daos_off_t	 off;
+
+#if 0
+	struct ad_page	*pg;
 
 	off  = addr & ARENA_SIZE_MASK;
 	addr = addr - blob_addr(blob);
 	pg   = &blob->bb_pages[addr >> ARENA_SIZE_BITS];
 	return &pg->pa_rpg[off];
+#else
+	off = addr - blob_addr(blob);
+
+	return (void *)((uintptr_t)blob->bb_mmap + off);
+#endif
 }
 
 /** convert storage address to mapped memory address */
@@ -756,12 +874,18 @@ ad_addr2ptr(struct ad_blob_handle bh, daos_off_t addr)
 daos_off_t
 blob_ptr2addr(struct ad_blob *blob, void *ptr)
 {
-	struct ad_arena_df *ad;
 	daos_off_t	    off;
+
+#if 0
+	struct ad_arena_df *ad;
 
 	off = (unsigned long)ptr & ARENA_SIZE_MASK;
 	ad = (struct ad_arena_df *)((unsigned long)ptr & ~ARENA_SIZE_MASK);
 	return ad->ad_addr + off;
+#else
+	off = (uintptr_t)ptr - (uintptr_t)blob->bb_mmap;
+	return blob_addr(blob) + off;
+#endif
 }
 
 /** convert mapped memory address to storage address */
@@ -1003,11 +1127,15 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	setbits64(ad->ad_bmap, 0, 2);
 
 	D_CASSERT(ARENA_UNIT_SIZE == BLOB_HDR_SIZE);
-	if (id == 0) { /* the first arena */
-		/* Blob header(superblock) is stored in arena zero, it consumes 64K.
+	if (id == 0) {
+		/* Arena 0 reserves 128KB totally -
+		 * Arena header ad_arena_df)			ARENA_HDR_SIZE (64KB)
+		 * Blob header (superblock ad_blob_df)		BLOB_HDR_SIZE (32KB)
+		 * Root obj (export to user by ad_root())	AD_ROOT_OBJ_SIZE (32KB)
 		 * NB: the first arena is written straightway, no WAL
 		 */
-		setbit64(ad->ad_bmap, 2);
+		setbit64(ad->ad_bmap, 2); /* for blob header */
+		setbit64(ad->ad_bmap, 3); /* for root obj */
 	}
 	/* DRAM only operation, mark the arena as reserved */
 	D_ASSERT(!isset64(blob->bb_bmap_rsv, id));
@@ -1639,6 +1767,8 @@ find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bi
 				goto out;
 
 			if (isset64(&free_bits, j)) {
+				if (at < 0)
+					at = i * 64 + j;
 				nr++;
 				continue;
 			}
@@ -2360,22 +2490,22 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 daos_off_t
 ad_alloc(struct ad_blob_handle bh, int type, daos_size_t size, uint32_t *arena_id)
 {
-	struct ad_reserv_act act;
-	struct ad_tx	     tx;
-	daos_off_t	     addr;
-	int		     rc;
+	struct ad_tx		*tx;
+	struct ad_reserv_act	 act;
+	daos_off_t		 addr;
+	int			 rc;
 
 	addr = ad_reserve_addr(bh.bh_blob, type, size, arena_id, &act);
 	if (addr == 0)
 		return 0; /* no space */
 
-	rc = ad_tx_begin(bh, &tx);
+	rc = tx_begin(bh, NULL, &tx);
 	if (rc)
 		goto failed;
 
-	rc = ad_tx_publish(&tx, &act, 1);
+	rc = ad_tx_publish(tx, &act, 1);
 
-	ad_tx_end(&tx, rc);
+	rc = tx_end(tx, rc);
 	if (rc)
 		return 0;
 
@@ -2446,20 +2576,20 @@ int
 ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 		  struct ad_group_spec *specs, unsigned int specs_nr)
 {
-	struct ad_tx	tx;
-	int		rc;
+	struct ad_tx	*tx;
+	int		 rc;
 
 	if (arena_type == ARENA_TYPE_DEF || arena_type == ARENA_TYPE_LARGE) {
 		D_ERROR("Cannot use internal type ID: %d\n", arena_type);
 		return -DER_NO_PERM;
 	}
 
-	rc = ad_tx_begin(bh, &tx);
+	rc = tx_begin(bh, NULL, &tx);
 	if (rc)
 		return rc;
 
-	rc = blob_register_arena(bh.bh_blob, arena_type, specs, specs_nr, &tx);
-	rc = ad_tx_end(&tx, rc);
+	rc = blob_register_arena(bh.bh_blob, arena_type, specs, specs_nr, tx);
+	rc = tx_end(tx, rc);
 	return rc;
 }
 
@@ -2666,4 +2796,27 @@ arena_free(struct ad_arena *arena, bool force)
 	arena_unbind(arena, false);
 
 	D_FREE(arena);
+}
+
+/** Query root object pointer */
+void *
+ad_root(struct ad_blob_handle bh, size_t size)
+{
+	struct ad_blob	*blob = bh.bh_blob;
+	daos_off_t	 addr;
+
+	D_ASSERTF(size > 0 && size <= AD_ROOT_OBJ_SIZE, "invalid size %zu\n", size);
+	addr = blob_addr(blob) + AD_ROOT_OBJ_OFF;
+
+	return ad_addr2ptr(bh, addr);
+}
+
+/** Query base pointer */
+void *
+ad_base(struct ad_blob_handle bh)
+{
+	struct ad_blob	*blob = bh.bh_blob;
+
+	D_ASSERT((uintptr_t)ad_addr2ptr(bh, blob_addr(blob)) == (uintptr_t)blob->bb_mmap);
+	return blob->bb_mmap;
 }
