@@ -42,7 +42,7 @@ def scons():
     dfs_lib = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs_lib)
 
-    libraries = libraries + dfs_lib
+    libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
