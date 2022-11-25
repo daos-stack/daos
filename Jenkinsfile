@@ -697,6 +697,7 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
+                                         referenceJobName: 'daos-stack/daos/release%252F2.2',
                                          valgrind_stash: 'centos7-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
