@@ -139,9 +139,10 @@ class ContInfo(ctypes.Structure):
     Represents struct: daos_cont_info_t"""
     _fields_ = [("ci_uuid", ctypes.c_ubyte * 16),
                 ("ci_lsnapshots", ctypes.c_uint64),
-                ("ci_redun_fac", ctypes.c_uint32),
+                ("ci_nhandles", ctypes.c_uint32),
                 ("ci_nsnapshots", ctypes.c_uint32),
-                ("ci_pad", ctypes.c_uint64 * 2)]
+                ("ci_md_otime", ctypes.c_uint64),
+                ("ci_md_mtime", ctypes.c_uint64)]
 
 
 class DaosEvent(ctypes.Structure):
