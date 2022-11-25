@@ -63,6 +63,10 @@ echo "::group::Re-build all"
 scons --debug=explain
 echo "::endgroup::"
 
+echo "::group::Re-re-build all"
+scons --debug=explain
+echo "::endgroup::"
+
 # TODO: Remove this.
 exit 1
 

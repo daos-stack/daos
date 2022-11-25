@@ -8,11 +8,13 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
+import time
 try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
     print('install pylint to enable this check')
+    time.sleep(10)
     sys.exit(0)
 
 try:
@@ -248,7 +250,8 @@ class FileTypeList():
 
     def run(self, args):
         """Run pylint against all files"""
-        print(self)
+        if args.output_format != 'json':
+            print(self)
         failed = False
         if self.files:
             if self.parse_file(args, self.files):
@@ -558,7 +561,7 @@ def main():
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text'])
+    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--diff', action='store_true')
 
@@ -570,6 +573,9 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
+
+    if args.output_format == 'json':
+        args.reports = 'n'
 
     rc_tmp = None
 

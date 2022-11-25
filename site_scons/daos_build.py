@@ -83,19 +83,22 @@ def _known_deps(env, **kwargs):
     static_libs = []
     if 'LIBS' in kwargs:
         libs = set(kwargs['LIBS'])
+#        libs = set()
+#        for lib in kwargs['LIBS']:
+#            libs.add(str(lib))
     else:
         libs = set(env.get('LIBS', []))
 
-    known_libs = libraries.keys()
-    for lib in libs:
-        if isinstance(lib, File):
-            continue
-        if lib in known_libs:
-            _report_fault(f'Lib {lib} not defined correctly')
+#    known_libs = libraries.keys()
+#    for lib in libs:
+#        if isinstance(lib, File):
+#            continue
+#        if lib in known_libs:
+#            _report_fault(f'Lib {lib} not defined correctly')
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
-    for item in known_libs:
+    for item in sorted(known_libs):
         shared = libraries[item].get('shared', None)
         if shared is not None:
             shared_libs.append(shared)
@@ -164,6 +167,7 @@ def _library(env, *args, **kwargs):
     denv = env.Clone()
     denv.Replace(RPATH=[])
     _add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
+
     lib = denv.SharedLibrary(*args, **kwargs)
     libname = _get_libname(*args, **kwargs)
     _add_lib('shared', libname, lib)
@@ -235,6 +239,21 @@ def _test_program(env, *args, **kwargs):
                 print(env_libs)
                 _report_fault('Libs added to')
                 assert False
+
+    if not libs:
+        libs = env['LIBS']
+
+    # Patch up the libs list if provided.
+    if libs:
+        str_libs = []
+        obj_libs = NodeList()
+        for lib in libs:
+            if lib in libraries and 'shared' in libraries[lib]:
+                obj_libs.append(libraries[lib]['shared'][0])
+            else:
+                str_libs.append(lib)
+        new_libs = obj_libs + str_libs
+        kwargs['LIBS'] = new_libs
 
     if 'target' in kwargs:
         target = kwargs['target']

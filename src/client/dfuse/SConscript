@@ -164,7 +164,7 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env')
+    Import('env', 'gurt_lib')
 
     if env['CC'] == 'gcc':
         il_env = env.Clone()
@@ -209,7 +209,7 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
-    cenv.AppendUnique(LIBS=['gurt'])
+    cenv.AppendUnique(LIBS=gurt_lib)
     dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
 
     Default(dfuse_bin)
