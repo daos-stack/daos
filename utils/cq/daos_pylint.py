@@ -8,13 +8,15 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
-import time
+import json
+for arg in sys.argv:
+    if arg.startswith('--import='):
+        sys.path.append(arg[9:])
 try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
     print('install pylint to enable this check')
-    time.sleep(10)
     sys.exit(0)
 
 try:
@@ -189,6 +191,7 @@ class FileTypeList():
         self.fake_scons = []
         self.files = []
         self._regions = {}
+        self._reports = []
 
     def add_regions(self, file, regions):
         """Mark that only some regions for file should be reported"""
@@ -252,6 +255,7 @@ class FileTypeList():
         """Run pylint against all files"""
         if args.output_format != 'json':
             print(self)
+
         failed = False
         if self.files:
             if self.parse_file(args, self.files):
@@ -269,6 +273,8 @@ class FileTypeList():
             for file in self.scons_files:
                 if self.parse_file(args, file, scons=True):
                     failed = True
+        if args.output_format == 'json':
+            print(json.dumps(self._reports, indent=4))
         return failed
 
     def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
@@ -443,7 +449,14 @@ sys.path.append('site_scons')"""
                     file_warnings.append(msg)
                     continue
 
-            print(args.msg_template.format(**vals))
+            if args.output_format == 'json':
+                report = {'type': vals['category'],
+                          'module': vals['path']}
+                for copy in ('message-id', 'symbol', 'line', 'column', 'message'):
+                    report[copy] = vals[copy]
+                self._reports.append(report)
+            else:
+                print(args.msg_template.format(**vals))
 
             if args.format == 'github':
                 if vals['category'] in ('convention', 'refactor'):
@@ -504,18 +517,6 @@ def get_git_files(directory=None):
     return all_files
 
 
-def run_input_file(args, input_file):
-    """Run from a input file"""
-
-    all_files = FileTypeList()
-
-    with open(input_file, encoding='utf-8') as fd:
-        for file in fd.readlines():
-            all_files.add(file.strip())
-
-    all_files.run(args)
-
-
 class OutPutRegion:
     """Class for managing file regions"""
 
@@ -544,7 +545,7 @@ def main():
 
     # Basic options.
     parser.add_argument('--git', action='store_true')
-    parser.add_argument('--from-file')
+    parser.add_argument('--from-stdin')
 
     spellings = True
     try:
@@ -564,6 +565,10 @@ def main():
     parser.add_argument('--output-format', choices=['text', 'json'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--diff', action='store_true')
+    parser.add_argument('--version', action='store_true')
+
+    # Args that VS Code uses.
+    parser.add_argument('--import')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
@@ -576,6 +581,16 @@ def main():
 
     if args.output_format == 'json':
         args.reports = 'n'
+
+    if args.from_stdin:
+        args.files = [args.from_stdin]
+
+    if args.version:
+        print('pylint 2.15.5')
+        print('astroid 2.12.12')
+        print('Python 3.9.6 (default, Sep 26 2022, 11:37:49)')
+        print('[Clang 14.0.0 (clang-1400.0.29.202)]')
+        sys.exit(0)
 
     rc_tmp = None
 
@@ -637,9 +652,6 @@ def main():
         all_files = get_git_files()
         if all_files.run(args):
             sys.exit(1)
-        return
-    if args.from_file:
-        run_input_file(args, args.from_file)
         return
     all_files = FileTypeList()
     all_dirs = []
