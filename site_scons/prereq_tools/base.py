@@ -52,7 +52,6 @@ from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
 from SCons.Errors import UserError
-from prereq_tools import mocked_tests
 
 OPTIONAL_COMPS = ['psm2']
 
@@ -637,8 +636,6 @@ class PreReqComponent():
         self.__dry_run = GetOption('no_exec')
         self.add_options()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
-        self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
-                             'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
         self.has_icx = False
         self.download_deps = False
@@ -736,7 +733,6 @@ class PreReqComponent():
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
         self._setup_parallel_build()
 
-        self.config_file = config_file
         if config_file is not None:
             self.configs = configparser.ConfigParser()
             self.configs.read(config_file)
@@ -762,22 +758,6 @@ class PreReqComponent():
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
 
-    def has_source(self, env, *comps, **kw):
-        """Check if source exists for a component"""
-        new_env = env.Clone()
-        # first require the binary of the component.
-        self.require(new_env, *comps, **kw)
-
-        for comp in comps:
-            try:
-                path = self.get_src_path(comp)
-                if not os.path.exists(path):
-                    return False
-            except MissingPath:
-                print("%s source not found" % comp)
-                return False
-
-        return True
 
 # pylint: enable=too-many-branches
     def _setup_user_prefix(self):
@@ -923,10 +903,6 @@ class PreReqComponent():
     def get_build_info(self):
         """Retrieve the BuildInfo"""
         return self.__build_info
-
-    def get_config_file(self):
-        """Retrieve the Config File"""
-        return self.config_file
 
     def add_options(self):
         """Add common options to environment"""

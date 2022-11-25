@@ -9,7 +9,7 @@ import tempfile
 import subprocess  # nosec
 import argparse
 try:
-    from pylint.lint import Run
+    from pylint.lint import Run, pylinter
     from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
     print('install pylint to enable this check')
@@ -29,24 +29,26 @@ except ImportError:
 #  Supports minimum python version
 #  Supports python virtual environment usage
 #  Can be used by atom.io live
+#  Can be used by VS Code.
 #  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
-#  Can be used as a commit-hook
-#  flake8 style --diff option
 
-# For now this splits code into one of three types, build (scons), ftest or other.  For build code
-# it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
-# does not warn about f-strings, for others it runs without any special flags.
+# For now this splits code into one of four types, build (scons), fake_scons ftest or other.
+# For build code it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH
+# correctly and does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
 # that currently exist in the code-base we need to restrict this to modified code.  Spellings can
 # also be enabled shortly however we have a number to correct or resolve before enabling.
 
-
 class WrapScript():
-    """Create a wrapper for a scons file and maintain a line mapping"""
+    """Create a wrapper for a scons file and maintain a line mapping
+
+    An update here is needed as files in site_scons/*.py do not automatically import SCons but
+    can do if they wish, this code is importing for all files however.
+    """
 
     def __init__(self, fname):
 
@@ -250,12 +252,15 @@ class FileTypeList():
         if self.files:
             if self.parse_file(args, self.files):
                 failed = True
+            pylinter.MANAGER.clear_cache()
         if self.ftest_files:
             if self.parse_file(args, self.ftest_files, ftest=True):
                 failed = True
+            pylinter.MANAGER.clear_cache()
         if self.fake_scons:
             if self.parse_file(args, self.fake_scons, fake_scons=True):
                 failed = True
+            pylinter.MANAGER.clear_cache()
         if self.scons_files:
             for file in self.scons_files:
                 if self.parse_file(args, file, scons=True):

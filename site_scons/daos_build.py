@@ -86,10 +86,11 @@ def _known_deps(env, **kwargs):
     else:
         libs = set(env.get('LIBS', []))
 
+    known_libs = libraries.keys()
     for lib in libs:
         if isinstance(lib, File):
             continue
-        if lib in libraries.keys():
+        if lib in known_libs:
             _report_fault(f'Lib {lib} not defined correctly')
 
     known_libs = libs.intersection(set(libraries.keys()))
@@ -200,6 +201,7 @@ def _report_fault(message):
 def _test_program(env, *args, **kwargs):
     """build Program with fixed RPATH"""
 
+    # pylint: disable=too-many-branches
     target = None
     source = kwargs.get('source')
 
@@ -217,6 +219,7 @@ def _test_program(env, *args, **kwargs):
     libs = kwargs.get('LIBS')
     if libs and 'LIBS' in env:
         env_libs = env['LIBS']
+        # pylint: disable=using-constant-test
         if False:
             # This doesn't work as some libs are File and some are str.
             # if sorted(libs) == sorted(env_libs):

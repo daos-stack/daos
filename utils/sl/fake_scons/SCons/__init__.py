@@ -22,6 +22,7 @@
 __all__ = ['Script',
            'Action',
            'Variables',
+           'Node',
            'Builder',
            'Errors',
            'Subst',

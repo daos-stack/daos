@@ -26,7 +26,6 @@ import distro
 from prereq_tools import GitRepoRetriever
 # from prereq_tools import WebRetriever
 
-SCONS_EXE = sys.argv[0]
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
