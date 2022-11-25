@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,9 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	tse_task_t	*task = cb_info->cci_arg;
 	int		rc = cb_info->cci_rc;
+
+	if (cb_info->cci_rpc->cr_opc == 0x2050014 /* POOL_TGT_QUERY_MAP */)
+		D_DEBUG(DB_MD, "POOL_TGT_QUERY_MAP complete: "DF_RC"\n", DP_RC(rc));
 
 	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */

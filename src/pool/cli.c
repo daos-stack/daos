@@ -1768,6 +1768,8 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	bool				reinit = false;
 	int				rc = task->dt_result;
 
+	D_DEBUG(DB_MD, DF_UUID": %p: crt: "DF_RC"\n", DP_UUID(pool->dp_pool), task, DP_RC(rc));
+
 	/*
 	 * If it turns out below that we do need to update the cached pool map,
 	 * then holding the lock while doing so will be okay, since we probably
@@ -1776,7 +1778,6 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	 */
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 
-	D_DEBUG(DB_MD, DF_UUID": %p: crt: "DF_RC"\n", DP_UUID(pool->dp_pool), task, DP_RC(rc));
 	if (daos_rpc_retryable_rc(rc)) {
 		reinit = true;
 		goto out;
