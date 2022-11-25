@@ -28,7 +28,7 @@ def configure_lustre(denv):
 
 def scons():
     """Execute build"""
-    Import('env', 'gurt_lib')
+    Import('env', 'gurt_lib', 'daos_lib')
 
     env.d_add_build_rpath()
 
@@ -36,18 +36,19 @@ def scons():
 
     configure_lustre(denv)
 
-    libraries = gurt_lib + ['daos_common', 'daos', 'uuid']
+    libraries = gurt_lib + daos_lib + ['daos_common', 'uuid']
 
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
-    dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib64/', dfs)
+    dfs_lib = denv.d_library('dfs', dfs_src, LIBS=libraries)
+    denv.Install('$PREFIX/lib64/', dfs_lib)
 
-    libraries = libraries + ['dfs']
+    libraries = libraries + dfs_lib
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     duns = denv.d_library('duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
+    Export('dfs_lib')
 
 
 if __name__ == "SCons.Script":

@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env', 'gurt_lib')
 
     if not env.d_tests_requested():
         return
@@ -21,7 +21,7 @@ def scons():
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
-    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal']
+    libraries = gurt_lib + ['daos', 'daos_common', 'uuid', 'cmocka', 'isal']
 
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 

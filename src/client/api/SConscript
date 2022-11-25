@@ -16,12 +16,14 @@ def scons():
     libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
     if env.d_client_requested():
-        libdaos = denv.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
-                                 LIBS=['daos_common'])
-        denv.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
+        daos_lib = denv.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
+                                  LIBS=['daos_common'])
+        denv.InstallVersionedLib('$PREFIX/lib64/', daos_lib, SHLIBVERSION=API_VERSION)
 
     if env.d_tests_requested():
         SConscript('tests/SConscript', 'denv')
+
+    Export('daos_lib')
 
 
 if __name__ == "SCons.Script":

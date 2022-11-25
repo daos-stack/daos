@@ -43,7 +43,7 @@ def build_daos_common(denv, client):
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env')
+    Import('env', 'base_env', 'gurt_lib', 'cart_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -83,7 +83,7 @@ def scons():
 
     tlibenv = env.Clone(LIBS=[])
     tlibenv.d_add_requires('isal', 'isal_crypto', 'protobufc')
-    tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
+    tlibenv.AppendUnique(LIBS=gurt_lib + cart_lib + ['lz4', 'json-c'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
 

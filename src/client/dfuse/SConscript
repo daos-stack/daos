@@ -164,7 +164,7 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env', 'gurt_lib')
+    Import('env', 'gurt_lib', 'daos_lib')
 
     if env['CC'] == 'gcc':
         il_env = env.Clone()
@@ -179,12 +179,12 @@ def scons():
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
-    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
+    dfuse_env.AppendUnique(LIBS=daos_lib + ['pthread', 'daos_common', 'uuid'])
 
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
-    gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
+    gcc_env.AppendUnique(LIBS=daos_lib + ['pthread', 'daos_common'])
 
     build_client_libs_shared(gcc_env)
 

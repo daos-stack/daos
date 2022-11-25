@@ -10,12 +10,12 @@ def build_shim_module():
 
     version = f'{sys.version_info.major}.{sys.version_info.minor}'
 
-    Import('base_env')
+    Import('base_env', 'daos_lib')
 
     new_env = base_env.Clone()
     new_env.ParseConfig(f'pkg-config --cflags --libs python-{version}')
 
-    new_env.Replace(LIBS=['daos', 'duns'])
+    new_env.Replace(LIBS=daos_lib + ['duns'])
     new_env.AppendUnique(LIBPATH=[Dir('../dfs')])
     new_env.AppendUnique(LIBPATH=[Dir('../api')])
 

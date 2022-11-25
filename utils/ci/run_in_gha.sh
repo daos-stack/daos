@@ -67,9 +67,6 @@ echo "::group::Re-re-build all"
 scons --debug=explain
 echo "::endgroup::"
 
-# TODO: Remove this.
-exit 1
-
 echo "::group::install all"
 scons install
 echo "::endgroup::"
@@ -77,6 +74,9 @@ echo "::endgroup::"
 echo "::group::Re-install all"
 scons install --debug=explain
 echo "::endgroup::"
+
+# TODO: Remove this.
+exit 1
 
 echo "::group::Rebuild ofi in alternative location"
 rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
