@@ -14,10 +14,12 @@ struct umem_wal_tx_item {
 };
 
 struct ad_tls_cache {
-	int		atc_act_nr;
-	int		atc_tx_nr;
 	d_list_t	atc_act_list;
 	d_list_t	atc_tx_list;
+	d_list_t	atc_act_copy_list;
+	int		atc_act_nr;
+	int		atc_tx_nr;
+	int		atc_act_copy_nr;
 };
 
 static __thread struct ad_tx	*tls_tx;
@@ -26,6 +28,12 @@ static __thread struct ad_tx	*tls_tx;
 #define TLS_ACT_NUM		(64)
 #define TLS_ACT_MAX		(512)
 #define TLS_TX_NUM		(16)
+#define TLS_ACT_COPY_NUM	(64)
+#define TLS_ACT_COPY_MAX	(256)
+/* payload size of cached UMEM_ACT_COPY act, if payload size exceed it then
+ * will directly allocate.
+ */
+#define TSL_ACT_COPY_SZ		(512)
 
 static __thread struct ad_tls_cache tls_cache;
 
@@ -41,12 +49,20 @@ tls_act_get(int opc, size_t size)
 		tls_cache.atc_act_nr--;
 		return act;
 	}
+	if (opc == UMEM_ACT_COPY && size <= TSL_ACT_COPY_SZ && tls_cache.atc_act_copy_nr > 0) {
+		act = d_list_pop_entry(&tls_cache.atc_act_copy_list, struct ad_act, it_link);
+		act->it_act.ac_opc = opc;
+		tls_cache.atc_act_copy_nr--;
+		return act;
+	}
 #endif
 
-	if (opc == UMEM_ACT_COPY)
-		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[size]));
-	else
-		D_ALLOC_PTR(act);
+	if (opc == UMEM_ACT_COPY) {
+		size = max(size, TSL_ACT_COPY_SZ);
+		D_ALLOC_NZ(act, offsetof(struct ad_act, it_act.ac_copy.payload[size]));
+	} else {
+		D_ALLOC_PTR_NZ(act);
+	}
 	if (likely(act != NULL)) {
 		D_INIT_LIST_HEAD(&act->it_link);
 		act->it_act.ac_opc = opc;
@@ -61,6 +77,12 @@ tls_act_put(struct ad_act *act)
 	d_list_del(&act->it_link);
 
 #if AD_TLS_CACHE_ENABLED
+	if (act->it_act.ac_opc == UMEM_ACT_COPY && act->it_act.ac_copy.size <= TSL_ACT_COPY_SZ &&
+	    tls_cache.atc_act_copy_nr < TLS_ACT_COPY_MAX) {
+		d_list_add(&act->it_link, &tls_cache.atc_act_copy_list);
+		tls_cache.atc_act_copy_nr++;
+		return;
+	}
 	if (act->it_act.ac_opc != UMEM_ACT_COPY && tls_cache.atc_act_nr < TLS_ACT_MAX) {
 		d_list_add(&act->it_link, &tls_cache.atc_act_list);
 		tls_cache.atc_act_nr++;
@@ -120,6 +142,7 @@ ad_tls_cache_init(void)
 		D_ALLOC_PTR(act);
 		if (act == NULL)
 			return;
+		act->it_act.ac_opc = UMEM_ACT_NOOP;
 		D_INIT_LIST_HEAD(&act->it_link);
 		tls_act_put(act);
 	}
@@ -132,6 +155,18 @@ ad_tls_cache_init(void)
 			return;
 		D_INIT_LIST_HEAD(&item->ti_link);
 		tls_utx_put(&item->ti_utx);
+	}
+
+	tls_cache.atc_act_copy_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
+	for (i = 0; i < TLS_ACT_COPY_NUM; i++) {
+		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[TSL_ACT_COPY_SZ]));
+		if (act == NULL)
+			return;
+		act->it_act.ac_opc = UMEM_ACT_COPY;
+		act->it_act.ac_copy.size = TSL_ACT_COPY_SZ;
+		D_INIT_LIST_HEAD(&act->it_link);
+		tls_act_put(act);
 	}
 }
 
@@ -146,6 +181,12 @@ ad_tls_cache_fini(void)
 		D_FREE(act);
 	}
 	tls_cache.atc_act_nr = 0;
+
+	d_list_for_each_entry_safe(act, next, &tls_cache.atc_act_copy_list, it_link) {
+		d_list_del(&act->it_link);
+		D_FREE(act);
+	}
+	tls_cache.atc_act_copy_nr = 0;
 
 	d_list_for_each_entry_safe(item, tmp, &tls_cache.atc_tx_list, ti_link) {
 		d_list_del(&item->ti_link);
@@ -330,7 +371,7 @@ tx_range_add(struct ad_tx *tx, uint64_t off, uint64_t size, bool alloc)
 		}
 	}
 
-	D_ALLOC_PTR(tmp);
+	D_ALLOC_PTR_NZ(tmp);
 	if(tmp == NULL)
 		return -DER_NOMEM;
 	D_INIT_LIST_HEAD(&tmp->ar_link);
