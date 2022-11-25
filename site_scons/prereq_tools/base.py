@@ -758,7 +758,6 @@ class PreReqComponent():
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
 
-
 # pylint: enable=too-many-branches
     def _setup_user_prefix(self):
         """setup ALT_PREFIX option"""

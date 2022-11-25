@@ -9,7 +9,7 @@ import tempfile
 import subprocess  # nosec
 import argparse
 try:
-    from pylint.lint import Run, pylinter
+    from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
     print('install pylint to enable this check')
@@ -42,6 +42,7 @@ except ImportError:
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
 # that currently exist in the code-base we need to restrict this to modified code.  Spellings can
 # also be enabled shortly however we have a number to correct or resolve before enabling.
+
 
 class WrapScript():
     """Create a wrapper for a scons file and maintain a line mapping
@@ -605,7 +606,10 @@ def main():
                 regions = OutPutRegion()
                 all_files.add_regions(file, regions)
                 if not args.git:
-                    all_files.add(file)
+                    if os.path.exists(file):
+                        all_files.add(file)
+                    else:
+                        print(f'Skipping {file} as it does not exist')
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')

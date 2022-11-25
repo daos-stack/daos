@@ -20,7 +20,6 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
-import sys
 import platform
 import distro
 from prereq_tools import GitRepoRetriever
