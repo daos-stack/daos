@@ -762,8 +762,8 @@ class PreReqComponent():
     def _setup_user_prefix(self):
         """setup ALT_PREFIX option"""
         self.add_opts(('ALT_PREFIX',
-                       'Specifies %s separated list of alternative paths to add'
-                       % os.pathsep, None))
+                       f'Specifies {os.pathsep} separated list of alternative paths to add',
+                       None))
 
     def _setup_build_type(self):
         """set build type"""

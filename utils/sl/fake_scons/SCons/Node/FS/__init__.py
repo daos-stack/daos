@@ -1,3 +1,5 @@
+"""Fake SCons.Node.FS"""
+
 
 class File():
-    pass
+    """Fake File"""

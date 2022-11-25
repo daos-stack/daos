@@ -1,6 +1,9 @@
+"""Fake SCons.Node"""
+
 
 class NodeList():
-    pass
+    """Fake NodeList"""
 
-    def append(self, new_node):
+    def append(self, _new_node):
+        """Fake append"""
         return

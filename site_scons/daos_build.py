@@ -245,6 +245,8 @@ def _test_program(env, *args, **kwargs):
 
     # Patch up the libs list if provided.
     if libs:
+        print(args)
+        print(libs)
         str_libs = []
         obj_libs = NodeList()
         for lib in libs:
@@ -253,6 +255,7 @@ def _test_program(env, *args, **kwargs):
             else:
                 str_libs.append(lib)
         new_libs = obj_libs + str_libs
+        print(new_libs)
         kwargs['LIBS'] = new_libs
 
     if 'target' in kwargs:
