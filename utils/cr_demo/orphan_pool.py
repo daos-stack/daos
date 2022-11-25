@@ -28,7 +28,7 @@ def list_directory(dir_path):
     subprocess.run(ls_cmd, check=False)
 
 
-print("Pass 1: Pool is on ranks, but not in MS - trust PS, trust MS, ignore")
+print("Pass 1: Pool is on targets, but not in MS - trust PS, trust MS, ignore")
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")

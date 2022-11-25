@@ -29,7 +29,7 @@ def pool_get_prop(pool_label, properties):
     subprocess.run(get_prop_cmd, check=False)
 
 
-print("Pass 3: Corrupt label in MS - trust PS, trust MS, ignore")
+print("Pass 3: Corrupt label in MS - trust MS, trust PS, ignore")
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
@@ -86,9 +86,9 @@ SEQ_NUM_1 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]])
 SEQ_NUM_2 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]])
 SEQ_NUM_3 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]])
 check_repair(sequence_num=SEQ_NUM_1, action="0")
-input(f"\n8-2. Select 1 (Discard pool) for {POOL_LABEL_2}. Hit enter...")
+input(f"\n8-2. Select 1 (Trust MS) for {POOL_LABEL_2}. Hit enter...")
 check_repair(sequence_num=SEQ_NUM_2, action="1")
-input(f"\n8-3. Select 2 (Re-add) for {POOL_LABEL_3}. Hit enter...")
+input(f"\n8-3. Select 2 (Trust PS) for {POOL_LABEL_3}. Hit enter...")
 check_repair(sequence_num=SEQ_NUM_3, action="2")
 
 print("\n9-1. Query the checker.")
