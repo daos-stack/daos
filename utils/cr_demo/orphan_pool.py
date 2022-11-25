@@ -9,7 +9,7 @@ import time
 import yaml
 from demo_utils import format_storage, create_pool, inject_fault_mgmt, list_pool,\
     check_enable, check_start, check_disable, repeat_check_query, check_repair,\
-    check_query
+    check_query, create_uuid_to_seqnum
 
 
 POOL_SIZE = "1GB"
@@ -77,11 +77,7 @@ input("\n8. Show repair options. Hit enter...")
 check_query()
 
 print("(Create UUID to sequence number mapping.)")
-uuid_to_seqnum = {}
-stdout = check_query(json=True)
-generated_yaml = yaml.safe_load(stdout)
-for report in generated_yaml["response"]["reports"]:
-    uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
+uuid_to_seqnum = create_uuid_to_seqnum()
 
 input(f"\n8-1. Select 0 (Ignore) for {POOL_LABEL_1}. Hit enter...")
 SEQ_NUM_1 = str(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]])

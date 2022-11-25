@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import subprocess
+import yaml
 
 
 def format_storage(host_list):
@@ -143,3 +144,18 @@ def check_repair(sequence_num, action):
     command = " ".join(check_repair_cmd)
     print(f"Command: {command}")
     subprocess.run(check_repair_cmd, check=False)
+
+def create_uuid_to_seqnum():
+    """Create pool UUID to sequence number mapping.
+
+    Returns:
+        dict: UUID to sequence number mapping for each pool. Sequence number will be used
+            during repair.
+    """
+    uuid_to_seqnum = {}
+    stdout = check_query(json=True)
+    generated_yaml = yaml.safe_load(stdout)
+    for report in generated_yaml["response"]["reports"]:
+        uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
+
+    return uuid_to_seqnum
