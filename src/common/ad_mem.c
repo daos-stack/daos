@@ -13,6 +13,8 @@
 
 #define AD_MEM_DEBUG	0
 
+static __thread int	tls_open_nr;	/* #openers of blob */
+
 static struct ad_arena *arena_alloc(struct ad_blob *blob, bool force, int sorter_sz);
 static int arena_init_sorters(struct ad_arena *arena, int sorter_sz);
 static void arena_free(struct ad_arena *arena, bool force);
@@ -513,6 +515,9 @@ blob_set_opened(struct ad_blob *blob)
 		D_ASSERT(!dummy_blob);
 		dummy_blob = blob;
 	}
+	if (tls_open_nr == 0)
+		ad_tls_cache_init();
+	tls_open_nr++;
 }
 
 static void
@@ -549,6 +554,10 @@ blob_close(struct ad_blob *blob)
 		D_ASSERT(dummy_blob == blob);
 		dummy_blob = NULL;
 	}
+
+	tls_open_nr--;
+	if (tls_open_nr == 0)
+		ad_tls_cache_fini();
 }
 
 static int
