@@ -1486,6 +1486,8 @@ int
 ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			    daos_epoch_t eph)
 {
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
 	struct refresh_vos_agg_eph_arg	arg;
 	int				rc;
 
@@ -1493,8 +1495,16 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
-				 DSS_ULT_FL_PERIODIC);
+	coll_ops.co_func = cont_refresh_vos_agg_eph_one;
+	coll_args.ca_func_args = &arg;
+
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc == 0) {
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args, DSS_ULT_FL_PERIODIC);
+		D_FREE(coll_args.ca_exclude_tgts);
+	}
+
 	return rc;
 }
 

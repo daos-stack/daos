@@ -310,7 +310,8 @@ ds_chk_setup(void)
 	 * the check explicitly.
 	 */
 
-	chk_engine_rejoin();
+	rc = dss_ult_create(chk_engine_rejoin, NULL, DSS_XS_SYS, 0, 0, NULL);
+	D_ASSERT(rc == 0);
 
 	goto out_done;
 

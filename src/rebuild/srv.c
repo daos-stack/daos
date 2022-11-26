@@ -390,8 +390,8 @@ dss_rebuild_check_one(void *data)
 
 	pool_tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 					   rpt->rt_rebuild_gen);
-	D_ASSERTF(pool_tls != NULL, DF_UUID" ver %d\n",
-		   DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
+	if (pool_tls == NULL)
+		return 0;
 
 	D_DEBUG(DB_REBUILD, "%d scanning %d status: "DF_RC"\n", idx,
 		pool_tls->rebuild_pool_scanning,
@@ -2110,14 +2110,16 @@ rebuild_prepare_one(void *data)
 	struct ds_pool_child		*dpc;
 	int				 rc = 0;
 
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	D_ASSERT(dpc != NULL);
+	if (unlikely(dpc->spc_no_storage))
+		D_GOTO(put, rc = 0);
+
 	pool_tls = rebuild_pool_tls_create(rpt->rt_pool_uuid, rpt->rt_poh_uuid,
 					   rpt->rt_coh_uuid, rpt->rt_rebuild_ver,
 					   rpt->rt_rebuild_gen);
 	if (pool_tls == NULL)
-		return -DER_NOMEM;
-
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	D_ASSERT(dpc != NULL);
+		D_GOTO(put, rc = -DER_NOMEM);
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
@@ -2130,6 +2132,7 @@ rebuild_prepare_one(void *data)
 		" rebuild eph "DF_X64" "DF_RC"\n", DP_UUID(rpt->rt_pool_uuid),
 		DP_UUID(rpt->rt_coh_uuid), rpt->rt_rebuild_fence, DP_RC(rc));
 
+put:
 	ds_pool_child_put(dpc);
 
 	return rc;

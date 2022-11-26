@@ -328,9 +328,9 @@ rebuild_scan_done(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls != NULL)
+		tls->rebuild_pool_scanning = 0;
 
-	tls->rebuild_pool_scanning = 0;
 	return 0;
 }
 
@@ -828,7 +828,8 @@ rebuild_scanner(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL)
+		return 0;
 
 	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN |
 				      PO_COMP_ST_NEW) ||

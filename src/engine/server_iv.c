@@ -1047,6 +1047,16 @@ retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		if (rc == -DER_GRPVER && engine_in_check()) {
+			/*
+			 * Under check mode, the pool shard on peer rank/target does
+			 * not exist, then it will reply "-DER_GRPVER" that is normal
+			 * for check. Return the errno to the caller instead of retry.
+			 */
+			D_WARN("IV for DAOS check hit unmatched GRP version %d\n", rc);
+			return rc;
+		}
+
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
@@ -1056,17 +1066,6 @@ retry:
 			 */
 			D_WARN("sync (class %d) leader changed\n", key->class_id);
 			return rc;
-		}
-
-		if (rc == -DER_GRPVER && key->class_id == IV_CHK) {
-			/*
-			 * For CHK iv message, the pool (shard) on peer rank/target may
-			 * not exist, under such case, it will reply "-DER_GRPVER" that
-			 * is normal for check logic, do not need retry.
-			 */
-			D_WARN("IV for DAOS check hit unmatched GRP version, may caused "
-			       "by non-exist pool (shard), ignore it.\n");
-			return 0;
 		}
 
 		/* otherwise retry and wait for others to update the ns. */

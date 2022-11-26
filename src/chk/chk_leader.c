@@ -1525,7 +1525,6 @@ report:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		cbk->cb_statistics.cs_total++;
-		seq = ++(ins->ci_seq);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -2165,9 +2164,13 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct chk_traverse_pools_args	 ctpa = { 0 };
+	struct chk_rank_bundle		 rbund = { 0 };
+	d_iov_t				 riov;
+	d_iov_t				 kiov;
 	d_rank_list_t			*rank_list = NULL;
 	uint64_t			 gen;
 	int				 rc = 0;
+	int				 i;
 
 	if (rank_nr == 0) {
 		D_ERROR("Rank list cannot be NULL for check start\n");
@@ -2193,7 +2196,10 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	if (rc < 0)
 		goto out;
 
-	/* Reset globally by force as required. */
+	/*
+	 * If "CHK__CHECK_FLAG__CF_RESET" is specified, then restart check from the
+	 * scratch for the given pools (pool_nr > 0) or for al pools (pool_nr == 0).
+	 */
 	if (flags & CHK__CHECK_FLAG__CF_RESET && pool_nr == 0)
 		goto reset;
 
@@ -2212,6 +2218,7 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 		if (rc != 0)
 			goto out;
 	} else {
+		/* Without CHK__CHECK_FLAG__CF_RESET. */
 		ctpa.ctpa_ins = ins;
 		ctpa.ctpa_gen = gen;
 		rc = chk_traverse_pools(chk_pools_load_from_db, &ctpa);
@@ -2257,6 +2264,20 @@ init:
 	ins->ci_slowest_fail_phase = CHK_INVAL_PHASE;
 	if (flags & CHK__CHECK_FLAG__CF_ORPHAN_POOL)
 		ins->ci_start_flags |= CSF_ORPHAN_POOL;
+
+	/* Prepare ranks tree. */
+	for (i = 0; i < ins->ci_ranks->rl_nr; i++) {
+		rbund.crb_rank = ins->ci_ranks->rl_ranks[i];
+		rbund.crb_phase = cbk->cb_phase;
+		rbund.crb_ins = ins;
+
+		d_iov_set(&riov, &rbund, sizeof(rbund));
+		d_iov_set(&kiov, &ins->ci_ranks->rl_ranks[i], sizeof(d_rank_t));
+		rc = dbtree_upsert(ins->ci_rank_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
+				   &kiov, &riov, NULL);
+		if (rc != 0)
+			break;
+	}
 
 out:
 	d_rank_list_free(rank_list);
@@ -2380,7 +2401,7 @@ next:
 			ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
 							ins_cbk->cb_phase;
 		} else {
-			ins_cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
+			ins_cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
 			ins_cbk->cb_time.ct_stop_time = time(NULL);
 		}
 
@@ -2522,23 +2543,20 @@ out:
 
 int
 chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct chk_policy *policies,
-		 int pool_nr, uuid_t pools[], uint32_t flags, int phase)
+		 int pool_nr, uuid_t pools[], uint32_t api_flags, int phase)
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
 	struct chk_pool_rec	*tmp;
 	uuid_t			*c_pools = NULL;
-	struct chk_rank_bundle	 rbund = { 0 };
 	struct umem_attr	 uma = { 0 };
-	d_iov_t			 riov;
-	d_iov_t			 kiov;
 	uuid_t			 dummy_pool;
 	d_rank_t		 myrank = dss_self_rank();
+	uint32_t		 flags = api_flags;
 	int			 c_pool_nr = 0;
 	int			 rc;
 	int			 rc1;
-	int			 i;
 
 	rc = chk_ins_can_start(ins);
 	if (rc != 0)
@@ -2584,10 +2602,20 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	if (rc != 0)
 		goto out_tree;
 
+reset:
 	rc = chk_leader_start_prep(ins, rank_nr, ranks, policy_nr, policies, pool_nr, pools,
 				   phase, myrank, flags);
+	if (rc == 1 && !(flags & CHK__CHECK_FLAG__CF_RESET)) {
+		/* Former check instance has done, let's re-start from the beginning. */
+		flags |= CHK__CHECK_FLAG__CF_RESET;
+		goto reset;
+	}
+
 	if (rc != 0)
 		goto out_tree;
+
+	if (ins->ci_iv_group != NULL)
+		goto remote;
 
 	rc = crt_group_secondary_create(CHK_DUMMY_POOL, NULL, ins->ci_ranks, &ins->ci_iv_group);
 	if (rc != 0)
@@ -2602,20 +2630,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 
 	ds_iv_ns_update(ins->ci_iv_ns, myrank);
 
-	/* Prepare ranks tree. */
-	for (i = 0; i < ins->ci_ranks->rl_nr; i++) {
-		rbund.crb_rank = ins->ci_ranks->rl_ranks[i];
-		rbund.crb_phase = cbk->cb_phase;
-		rbund.crb_ins = ins;
-
-		d_iov_set(&riov, &rbund, sizeof(rbund));
-		d_iov_set(&kiov, &ins->ci_ranks->rl_ranks[i], sizeof(d_rank_t));
-		rc = dbtree_upsert(ins->ci_rank_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
-				   &kiov, &riov, NULL);
-		if (rc != 0)
-			goto out_iv;
-	}
-
 	if (d_list_empty(&ins->ci_pool_list)) {
 		c_pool_nr = pool_nr;
 		c_pools = pools;
@@ -2625,6 +2639,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 			goto out_iv;
 	}
 
+remote:
 	rc = chk_start_remote(ins->ci_ranks, cbk->cb_gen, rank_nr, ranks, policy_nr, policies,
 			      c_pool_nr, c_pools, flags, phase, myrank, ins->ci_start_flags,
 			      chk_leader_start_cb, ins);
@@ -2632,6 +2647,19 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 		goto out_iv;
 
 	rc = chk_leader_start_post(ins);
+	if (rc == 1 && !(flags & CHK__CHECK_FLAG__CF_RESET)) {
+		rc = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, c_pool_nr, c_pools, NULL, NULL);
+		if (rc < 0) {
+			D_WARN(DF_LEADER" failed to rollback former start before reset: "DF_RC"\n",
+			       DP_LEADER(ins), DP_RC(rc));
+			goto out_iv;
+		}
+
+		/* Former check instance has done, let's re-start from the beginning. */
+		flags |= CHK__CHECK_FLAG__CF_RESET;
+		goto reset;
+	}
+
 	if (rc != 0)
 		goto out_stop_remote;
 
@@ -2645,8 +2673,9 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	}
 
 	D_INFO("Leader %s check with api_flags %x, phase %d, leader %u, flags %x, gen "
-	       DF_X64": rc %d\n", (ins->ci_start_flags & CSF_RESET_ALL) ? "start" : "resume",
-	       flags, phase, myrank, ins->ci_start_flags, cbk->cb_gen, rc);
+	       DF_X64": rc %d\n",
+	       (flags & CHK__CHECK_FLAG__CF_RESET || ins->ci_start_flags & CSF_RESET_ALL) ?
+	       "start" : "resume", api_flags, phase, myrank, ins->ci_start_flags, cbk->cb_gen, rc);
 
 	chk_ranks_dump(ins->ci_ranks->rl_nr, ins->ci_ranks->rl_ranks);
 	chk_pools_dump(&ins->ci_pool_list, c_pool_nr > 0 ? c_pool_nr : pool_nr,
@@ -2673,7 +2702,7 @@ out_stop_pools:
 	}
 out_stop_remote:
 	rc1 = chk_stop_remote(ins->ci_ranks, cbk->cb_gen, c_pool_nr, c_pools, NULL, NULL);
-	if (rc1 != 0)
+	if (rc1 < 0)
 		D_WARN(DF_LEADER" failed to rollback failed check start: "DF_RC"\n",
 		       DP_LEADER(ins), DP_RC(rc1));
 out_iv:
@@ -2687,7 +2716,7 @@ out_log:
 	D_CDEBUG(likely(rc < 0), DLOG_ERR, DLOG_INFO,
 		 "Leader %s to start check on %u ranks for %d pools with "
 		 "api_flags %x, phase %d, leader %u, gen "DF_X64": rc = %d\n",
-		 rc < 0 ? "failed" : "try", rank_nr, pool_nr, flags, phase,
+		 rc < 0 ? "failed" : "try", rank_nr, pool_nr, api_flags, phase,
 		 myrank, cbk->cb_gen, rc);
 
 	if (unlikely(rc > 0))

@@ -728,9 +728,8 @@ out:
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u report DAOS check to leader %u, gen "DF_X64", class %u, action %u, "
-		 "result %d, "DF_UUIDF"/"DF_UUIDF", msg %s, got seq "DF_X64": "DF_RC"\n",
-		 rank, leader, gen, cla, act, result, DP_UUID(pool), DP_UUID(cont),
-		 msg, *seq, DP_RC(rc));
+		 "result %d, "DF_UUIDF"/"DF_UUIDF", seq "DF_X64": "DF_RC"\n", rank, leader,
+		 gen, cla, act, result, DP_UUID(pool), DP_UUID(cont), *seq, DP_RC(rc));
 
 	return rc;
 }
