@@ -43,6 +43,18 @@ def inject_fault_mgmt(pool_label, fault_type):
     print(f"Command: {command}")
     subprocess.run(inject_fault_cmd, check=False)
 
+def inject_fault_pool(pool_label, fault_type):
+    """Call dmg faults pool-svc to inject fault.
+
+    Args:
+        pool_label (str): Pool label.
+        fault_type (str): Fault type.
+    """
+    inject_fault_cmd = ["dmg", "faults", "pool-svc", pool_label, fault_type]
+    command = " ".join(inject_fault_cmd)
+    print(f"Command: {command}")
+    subprocess.run(inject_fault_cmd, check=False)
+
 def list_pool(verbose=False, json=False):
     """Call dmg pool list.
 
@@ -159,3 +171,65 @@ def create_uuid_to_seqnum():
         uuid_to_seqnum[report["pool_uuid"]] = report["seq"]
 
     return uuid_to_seqnum
+
+def pool_get_prop(pool_label, properties):
+    """Call dmg pool get-prop <pool_label> <properties>
+
+    Args:
+        pool_label (str): Pool label.
+        properties (str): Properties to query. Separate them with comma if there are
+            multiple properties.
+    """
+    get_prop_cmd = ["dmg", "pool", "get-prop", pool_label, properties]
+    command = " ".join(get_prop_cmd)
+    print(f"Command: {command}")
+    subprocess.run(get_prop_cmd, check=False)
+
+
+def create_three_pools(pool_label, pool_size):
+    """Create three pools with consecutive number appended to given label.
+
+    Args:
+        pool_label (str): Base pool label.
+        pool_size (str): Pool size.
+
+    Returns:
+        str: Three pool labels.
+    """
+    pool_label_1 = f"{pool_label}_1"
+    pool_label_2 = f"{pool_label}_2"
+    pool_label_3 = f"{pool_label}_3"
+    create_pool(pool_size=pool_size, pool_label=pool_label_1)
+    create_pool(pool_size=pool_size, pool_label=pool_label_2)
+    create_pool(pool_size=pool_size, pool_label=pool_label_3)
+    return [pool_label_1, pool_label_2, pool_label_3]
+
+
+def create_label_to_uuid():
+    """Create label to UUID mapping.
+
+    Returns:
+        dict: Pool label to UUID.
+    """
+    label_to_uuid = {}
+    stdout = list_pool(json=True)
+    generated_yaml = yaml.safe_load(stdout)
+    for pool in generated_yaml["response"]["pools"]:
+        label_to_uuid[pool["label"]] = pool["uuid"]
+
+    return label_to_uuid
+
+
+def get_current_labels():
+    """Get current pool labels.
+
+    Returns:
+        list: Current pool labels.
+    """
+    pool_labels = []
+    stdout = list_pool(json=True)
+    generated_yaml = yaml.safe_load(stdout)
+    for pool in generated_yaml["response"]["pools"]:
+        pool_labels.append(pool["label"])
+
+    return pool_labels
