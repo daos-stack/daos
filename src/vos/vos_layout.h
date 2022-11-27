@@ -96,7 +96,7 @@ enum vos_gc_type {
  *  This enables the user to continue using the pool with the older version unless
  *  they have explicitly upgraded it.
  */
-#define POOL_DF_AGG_OPT				24
+#define POOL_DF_AGG_OPT                         VOS_POOL_DF_2_2
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_AGG_OPT
 

@@ -19,6 +19,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -321,7 +323,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, err
 		}
 
-		ur := new(UnaryResponse)
+		ur := &UnaryResponse{log: log}
 		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
 			return nil, wrapReqTimeout(req, err)
 		}
@@ -409,13 +411,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		ur := &UnaryResponse{fromMS: true}
+		ur := &UnaryResponse{log: log, fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
 			return nil, wrapReqTimeout(req, err)
 		}
 
-		_, err = ur.getMSResponse()
+		err = ur.getMSError()
 		// If the request specifies that the error is retryable,
 		// check to see if it also defines its own retry logic
 		// and run that if so. Otherwise, let the usual retry
@@ -481,12 +483,25 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				break
 			}
 
+			// For the 2.2 release, we have to support 2.2 agents
+			// talking to 2.0 servers. If we receive an error that
+			// the server doesn't understand our system name, and
+			// it's an agent request, then enable compatibility mode
+			// and retry.
+			if fault.IsFaultCode(err, code.ServerWrongSystem) {
+				if isAgentRequest(req) && !getAgentCompat(req) {
+					log.Debug("retrying agent request with compatibility mode enabled")
+					setAgentCompat(req)
+					break
+				}
+			}
+
 			// Otherwise, we're finished trying.
 			return ur, nil
 		}
 
 		backoff := common.ExpBackoff(req.retryAfter(baseMSBackoff), uint64(try), maxMSBackoffFactor)
-		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
+		log.Debugf("retrying MS request after %s", backoff)
 		select {
 		case <-reqCtx.Done():
 			if isTimeout(reqCtx.Err()) {

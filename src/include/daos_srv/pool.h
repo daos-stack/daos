@@ -65,6 +65,11 @@ struct ds_pool {
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
 
+	/* pool_uuid + map version + leader term + rebuild generation define a
+	 * rebuild job.
+	 */
+	uint32_t		sp_rebuild_gen;
+
 	int			sp_reintegrating;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
@@ -167,10 +172,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		       const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		       daos_prop_t *prop, d_rank_list_t *svc_addrs);
-int ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks);
+int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			    const d_rank_list_t *target_addrs, int ndomains,
+			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t *svc_addrs);
+int ds_pool_svc_stop(uuid_t pool_uuid);
 
 int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
@@ -255,9 +260,6 @@ void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
 extern bool ec_agg_disabled;
-
-int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-			  d_rank_list_t **ranks);
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

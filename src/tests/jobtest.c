@@ -49,21 +49,29 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 			continue;
 		}
 		for (j = 0; j < handles_per_pool; j++) {
-			if (daos_handle_is_inval(pool_handles[i][j])) {
+			if (daos_handle_is_inval(pool_handles[i][j]))
 				continue;
-			}
-			rc = daos_cont_close(cont_handles[i][j], NULL);
-			if (rc) {
-				uuid_t		cont;
-				uuid_t		hdl;
-				char		cont_str[64];
-				char		hdl_str[64];
 
-				dc_cont_hdl2uuid(cont_handles[i][j], &hdl, &cont);
-				uuid_unparse_lower(cont, cont_str);
-				uuid_unparse_lower(hdl, hdl_str);
-				printf("disconnect handle %s from container %s "
-					"failed: %d\n", hdl_str, cont_str, rc);
+			if (!daos_handle_is_inval(cont_handles[i][j])) {
+				rc = daos_cont_close(cont_handles[i][j], NULL);
+				if (rc) {
+					uuid_t		cont;
+					uuid_t		hdl;
+
+					if (dc_cont_hdl2uuid(cont_handles[i][j], &hdl, &cont)) {
+						printf("disconnect container handle (pool %d, "
+						       "hdl %d) failed: %d\n", i, j, rc);
+					} else {
+						char		cont_str[DAOS_UUID_STR_SIZE];
+						char		hdl_str[DAOS_UUID_STR_SIZE];
+
+						uuid_unparse_lower(cont, cont_str);
+						uuid_unparse_lower(hdl, hdl_str);
+						printf("disconnect handle %s from container %s "
+						       "(pool %d, hdl %d) failed: %d\n", hdl_str,
+						       cont_str, i, j, rc);
+					}
+				}
 			}
 
 			rc = daos_pool_disconnect(pool_handles[i][j], NULL);
@@ -76,9 +84,12 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 				if (pool) {
 					uuid_unparse_lower(pool->dp_pool, pool_str);
 					uuid_unparse_lower(pool->dp_pool, hdl_str);
-					printf("disconnect handle %s from pool %s "
-						"failed\n", hdl_str, pool_str);
+					printf("disconnect handle %s from pool %s (pool n%d, "
+					       "hdl %d) failed: %d\n", hdl_str, pool_str, i, j, rc);
 					dc_pool_put(pool);
+				} else {
+					printf("disconnect pool handle (pool %d, hdl %d) "
+					       "failed: %d\n", i, j, rc);
 				}
 			}
 		}

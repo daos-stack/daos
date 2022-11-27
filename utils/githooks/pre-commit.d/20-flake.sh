@@ -36,7 +36,7 @@ else
     if command -v gh > /dev/null 2>&1
     then
 	# If there is no PR created yet then do not check anything.
-	if ! TARGET=$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
+	if ! TARGET=origin/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
 	then
 	    exit 0
 	fi

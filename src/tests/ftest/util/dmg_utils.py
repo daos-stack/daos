@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -19,7 +18,7 @@ class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
 
-def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
+def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None, hostlist_suffix=None):
     """Get a dmg command object.
 
     Args:
@@ -31,6 +30,8 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
             configuration file locally and then copy it to all the hosts using
             the config_file specification. Defaults to None, which creates and
             utilizes the file specified by config_file.
+        hostlist_suffix (str, optional): Suffix to append to each host name.
+            Defaults to None.
 
     Returns:
         DmgCommand: the dmg command object
@@ -38,7 +39,7 @@ def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """
     transport_config = DmgTransportCredentials(cert_dir)
     config = DmgYamlParameters(config_file, group, transport_config)
-    command = DmgCommand(bin_dir, config)
+    command = DmgCommand(bin_dir, config, hostlist_suffix)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -318,6 +319,43 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
+
+    def storage_identify_vmd(self, uuid, verbose=False):
+        """Get the result of the 'dmg storage identify vmd".
+
+        Args:
+            uuid (str): Device UUID to query.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "identify", "vmd"), uuid=uuid,
+            verbose=verbose)
+
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+        """Get the result of the 'dmg storage replace nvme' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "replace", "nvme"), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
 
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.

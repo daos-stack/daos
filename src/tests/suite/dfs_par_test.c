@@ -52,6 +52,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 	dfs_t		*dfs;
 	daos_handle_t	coh;
 	dfs_obj_t	*file;
+	dfs_obj_t	*dir;
 	char		*filename = "cond_testfile";
 	char		*dirname = "cond_testdir";
 	int		rc, op_rc;
@@ -100,8 +101,9 @@ test_cond_helper(test_arg_t *arg, int rf)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("All ranks create the same directory\n");
+		print_message("All ranks create the same directory with mkdir\n");
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	op_rc = dfs_mkdir(dfs, NULL, dirname, S_IWUSR | S_IRUSR, 0);
 	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
 	if (rc)
@@ -111,6 +113,29 @@ test_cond_helper(test_arg_t *arg, int rf)
 
 	if (arg->myrank == 0)
 		print_message("All ranks remove the same directory\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_remove(dfs, NULL, dirname, true, NULL);
+	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
+	if (rc)
+		print_error("Failed concurrent rmdir\n");
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same dir with O_EXCL\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	op_rc = dfs_open(dfs, NULL, dirname, S_IFDIR | S_IWUSR | S_IRUSR,
+			 O_RDWR | O_CREAT | O_EXCL, 0, 0, NULL, &dir);
+	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
+	assert_int_equal(rc, 0);
+	if (op_rc == 0) {
+		rc = dfs_release(dir);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("All ranks remove the same dir\n");
 	MPI_Barrier(MPI_COMM_WORLD);
 	op_rc = dfs_remove(dfs, NULL, dirname, true, NULL);
 	rc = check_one_success(op_rc, ENOENT, MPI_COMM_WORLD);
@@ -688,14 +713,17 @@ dfs_test_cont_atomic(void **state)
 }
 
 static void
-file_atomicity_test_helper(test_arg_t *arg, int rf)
+atomicity_test_helper(test_arg_t *arg, int rf)
 {
 	uuid_t		cuuid;
 	dfs_t		*dfs;
 	daos_handle_t	coh;
 	dfs_obj_t	*file;
+	dfs_obj_t	*dir;
 	char		*filename = "testfile";
-	daos_obj_id_t	oid1, oid2;
+	char		*dirname = "testdir";
+	daos_obj_id_t	foid1, foid2;
+	daos_obj_id_t	doid1, doid2;
 	uint64_t	*oids_hi = NULL, *oids_lo = NULL;
 	int		i;
 	int		rc;
@@ -727,7 +755,16 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid1);
+	/** all should succeed with the same dir oid */
+	rc = dfs_open(dfs, NULL, dirname, S_IFDIR | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_obj2id(file, &foid1);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_obj2id(dir, &doid1);
 	assert_int_equal(rc, 0);
 
 	if (arg->myrank == 0) {
@@ -737,33 +774,51 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 		assert_non_null(oids_lo);
 	}
 
-	MPI_Gather(&oid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&foid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&foid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid1.hi != oids_hi[i])
+			if (foid1.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid1.hi, oids_hi[i]);
-			if (oid1.lo != oids_lo[i])
+			assert_int_equal(foid1.hi, oids_hi[i]);
+			if (foid1.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid1.lo, oids_lo[i]);
+			assert_int_equal(foid1.lo, oids_lo[i]);
+		}
+	}
+
+	MPI_Gather(&doid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&doid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (doid1.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid1.hi, oids_hi[i]);
+			if (doid1.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid1.lo, oids_lo[i]);
 		}
 	}
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		print_message("remove the file\n");
+		print_message("remove the file and dir\n");
 		rc = dfs_remove(dfs, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_remove(dfs, NULL, dirname, true, NULL);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("reopen the file with OCREAT from all ranks\n");
+		print_message("reopen the file and dir with OCREAT from all ranks\n");
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** all should succeed with the same file oid */
@@ -771,30 +826,57 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 		      NULL, &file);
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
+	rc = dfs_open(dfs, NULL, dirname, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &dir);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid2);
+	rc = dfs_obj2id(file, &foid2);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(dir, &doid2);
 	assert_int_equal(rc, 0);
 
-	if (oid2.hi == oid1.hi && oid2.lo == oid1.lo) {
+	if (foid2.hi == foid1.hi && foid2.lo == foid1.lo) {
 		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
-		assert_false(oid2.hi == oid1.hi && oid2.lo == oid1.lo);
+		assert_false(foid2.hi == foid1.hi && foid2.lo == foid1.lo);
 	}
 
-	MPI_Gather(&oid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	if (doid2.hi == doid1.hi && doid2.lo == doid1.lo) {
+		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
+		assert_false(doid2.hi == doid1.hi && doid2.lo == doid1.lo);
+	}
+
+	MPI_Gather(&foid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&foid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid2.hi != oids_hi[i])
+			if (foid2.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid2.hi, oids_hi[i]);
-			if (oid2.lo != oids_lo[i])
+			assert_int_equal(foid2.hi, oids_hi[i]);
+			if (foid2.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid2.lo, oids_lo[i]);
+			assert_int_equal(foid2.lo, oids_lo[i]);
+		}
+	}
+
+	MPI_Gather(&doid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&doid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (doid2.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid2.hi, oids_hi[i]);
+			if (doid2.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(doid2.lo, oids_lo[i]);
 		}
 	}
 
 	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0) {
 		D_FREE(oids_hi);
@@ -803,8 +885,10 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		print_message("remove the file\n");
+		print_message("remove the file and dir\n");
 		rc = dfs_remove(dfs, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_remove(dfs, NULL, dirname, true, NULL);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -828,25 +912,25 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 }
 
 static void
-dfs_test_file_create_atomicity(void **state)
+dfs_test_create_atomicity(void **state)
 {
 	test_arg_t	*arg = *state;
 
 	if (arg->myrank == 0) {
-		print_message("All ranks create the same file without O_EXCL\n");
+		print_message("All ranks create the same file & dir without O_EXCL\n");
 		print_message("Testing with RF 0 ...\n");
 	}
-	file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF0);
+	atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF0);
 
 	if (test_runable(arg, 2)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 1 ...\n");
-		file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF1);
+		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF1);
 	}
 	if (test_runable(arg, 3)) {
 		if (arg->myrank == 0)
 			print_message("Testing with RF 2 ...\n");
-		file_atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF2);
+		atomicity_test_helper(arg, DAOS_PROP_CO_REDUN_RF2);
 	}
 }
 
@@ -861,8 +945,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST5: DFS Container create atomicity",
 	  dfs_test_cont_atomic, async_disable, test_case_teardown},
-	{ "DFS_PAR_TEST6: DFS File create (without O_EXCL) atomicity",
-	  dfs_test_file_create_atomicity, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST6: DFS File and Dir create (without O_EXCL) atomicity",
+	  dfs_test_create_atomicity, async_disable, test_case_teardown},
 };
 
 static int

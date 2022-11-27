@@ -176,13 +176,40 @@ struct daos_obj_layout {
 #define DAOS_TGT_IGNORE		((d_rank_t)-1)
 
 enum daos_tgt_flags {
-	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
+	/*
+	 * When leader forward IO RPC to non-leaders, delay the target until the others replied.
+	 *
+	 * For old client (2.0 or older), it will not set such flag when trigger related IO RPC,
+	 * then it may get trouble for conditional check during rebuild. To avoid that, need to
+	 * upgrade DAOS (both client and server) to at least 2.2 or newer. See DAOS-10204.
+	 */
 	DTF_DELAY_FORWARD	= (1 << 0),
-	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	/*
+	 * When leader forward IO RPC to non-leaders, reassemble related sub request.
+	 *
+	 * For old client (2.0 or older), it will not set such flag when trigger related CPD RPC
+	 * (for punch object across multiple RDGs), then it may get trouble during OSA. To avoid
+	 * that, need to upgrade DAOS (both client and server) to at least 2.2 or newer.
+	 */
 	DTF_REASSEMBLE_REQ	= (1 << 1),
+	/* The request is from 2.0 or older client. */
+	DTF_OLD_FORMAT		= (1 << 2),
 };
 
 /** to identify each obj shard's target */
+
+/* For 2.0 or older */
+struct daos_shard_tgt_20 {
+	uint32_t		st_rank;	/* rank of the shard */
+	uint32_t		st_shard;	/* shard index */
+	uint32_t		st_shard_id;	/* shard id */
+	uint32_t		st_tgt_id;	/* target id */
+	uint16_t		st_tgt_idx;	/* target xstream index */
+	/* target idx for EC obj, only used for client */
+	uint16_t		st_ec_tgt;
+};
+
+/* For 2.2 or newer */
 struct daos_shard_tgt {
 	uint32_t		st_rank;	/* rank of the shard */
 	uint32_t		st_shard;	/* shard index */
@@ -193,6 +220,19 @@ struct daos_shard_tgt {
 	uint8_t			st_ec_tgt;
 	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
+
+D_CASSERT(sizeof(struct daos_shard_tgt_20) == sizeof(struct daos_shard_tgt));
+
+D_CASSERT(offsetof(struct daos_shard_tgt_20, st_rank) ==
+	  offsetof(struct daos_shard_tgt, st_rank));
+D_CASSERT(offsetof(struct daos_shard_tgt_20, st_shard) ==
+	  offsetof(struct daos_shard_tgt, st_shard));
+D_CASSERT(offsetof(struct daos_shard_tgt_20, st_shard_id) ==
+	  offsetof(struct daos_shard_tgt, st_shard_id));
+D_CASSERT(offsetof(struct daos_shard_tgt_20, st_tgt_id) ==
+	  offsetof(struct daos_shard_tgt, st_tgt_id));
+D_CASSERT(offsetof(struct daos_shard_tgt_20, st_tgt_idx) ==
+	  offsetof(struct daos_shard_tgt, st_tgt_idx));
 
 static inline bool
 daos_oid_is_null(daos_obj_id_t oid)

@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-1%{?dist}
+%global mercury_version 2.2.0-4%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 %endif
 
 Name:          daos
-Version:       2.1.104
+Version:       2.2.0
 Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -320,7 +320,7 @@ This is the package that bridges the difference between the MOFED openmpi
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
-%global _debuginfo_subpackages 0
+%global _debuginfo_subpackages 1
 %debug_package
 %endif
 
@@ -571,6 +571,24 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Nov 1 2022 Joseph G. Moore <joseph.moore@intel.com> 2.2.0-6
+- Set Mercury version to 2.2 or later.
+
+* Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.2.0-5
+- Set flag to build per-subpackage debuginfo packages for Leap 15
+
+* Wed Oct 5 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.2.0-4
+- Third release candidate for 2.2.0.
+
+* Tue Oct 4 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-3
+- Second release candidate for 2.2.0.
+
+* Tue Sep 20 2022 Joseph Moore <joseph.moore@intel.com> 2.2.0-2
+- Pin Mercury version to 2.2.0-1.
+
+* Fri Sep 2 2022 Johann Lombardi <johann.lombardi@intel.com> 2.2.0-1
+- First release candidate for 2.2.0.
+
 * Thu Aug 25 2022 Ashley Pittman <ashley.m.pittman@intel.com> 2.1.104-5
 - Add dfuse unit-test binary to call from ftest.
 

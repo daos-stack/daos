@@ -44,4 +44,4 @@ Please refer to package-specific README's.
 
 ## User Documentation
 
-- [online documentation](https://daos-stack.github.io/)
+- [online documentation](https://docs.daos.io/latest/)

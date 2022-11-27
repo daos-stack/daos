@@ -124,5 +124,10 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/ior_dm/client_processes/*')
-        #run datamover
-        self.run_dm_activities_with_ior("FS_COPY", True)
+
+        # create pool and container
+        pool = self.create_pool()
+        cont = self.get_container(pool, oclass=self.ior_cmd.dfs_oclass.value)
+
+        # run datamover
+        self.run_dm_activities_with_ior("FS_COPY", pool, cont, True)

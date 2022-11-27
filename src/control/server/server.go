@@ -166,7 +166,7 @@ func (srv *server) logDuration(msg string, start time.Time) {
 
 // createServices builds scaffolding for rpc and event services.
 func (srv *server) createServices(ctx context.Context) error {
-	dbReplicas, err := cfgGetReplicas(srv.cfg, net.ResolveTCPAddr)
+	dbReplicas, err := cfgGetReplicas(srv.cfg, net.LookupIP)
 	if err != nil {
 		return errors.Wrap(err, "retrieve replicas from config")
 	}
@@ -250,7 +250,7 @@ func (srv *server) initNetwork() error {
 	ctlAddr, err := getControlAddr(ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
-		resolveAddr:    net.ResolveTCPAddr,
+		lookupHost:     net.LookupIP,
 	})
 	if err != nil {
 		return err

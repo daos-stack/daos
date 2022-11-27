@@ -105,7 +105,7 @@ enum daos_pool_props {
 #define DAOS_PROP_PO_EC_CELL_SZ_MAX	(1UL << 30)
 
 #define DAOS_PROP_PO_REDUN_FAC_MAX	4
-#define DAOS_RPOP_PO_REDUN_FAC_DEFAULT	0
+#define DAOS_PROP_PO_REDUN_FAC_DEFAULT	0
 
 static inline bool
 daos_rf_is_valid(unsigned long long rf)

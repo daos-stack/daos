@@ -667,8 +667,8 @@ co_acl(void **state)
 	daos_prop_t		*prop_in;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
-	const char		*exp_owner = "fictionaluser@";
-	const char		*exp_owner_grp = "admins@";
+	const char		exp_owner[] = "fictionaluser@";
+	const char		exp_owner_grp[] = "admins@";
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl;
 	struct daos_ace		*ace;
@@ -706,11 +706,9 @@ co_acl(void **state)
 	prop_in = daos_prop_alloc(3);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_owner);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner_grp,
-		  DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner_grp);
 	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_ACL;
 	prop_in->dpp_entries[2].dpe_val_ptr = daos_acl_dup(exp_acl);
 
@@ -845,8 +843,8 @@ co_set_prop(void **state)
 	daos_prop_t		*prop_out = NULL;
 	struct daos_prop_entry	*entry;
 	int			 rc;
-	const char		*exp_label = "NEW_FANCY_LABEL";
-	const char		*exp_owner = "wonderfuluser@wonderfuldomain";
+	const char		 exp_label[] = "NEW_FANCY_LABEL";
+	const char		 exp_owner[] = "wonderfuluser@wonderfuldomain";
 
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
@@ -865,11 +863,9 @@ co_set_prop(void **state)
 	prop_in = daos_prop_alloc(2);
 	assert_non_null(prop_in);
 	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop_in->dpp_entries[0].dpe_str, exp_label,
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_label);
 	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop_in->dpp_entries[1].dpe_str, exp_owner,
-		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner);
 
 	print_message("Setting the container props\n");
 	rc = daos_cont_set_prop(arg->coh, prop_in, NULL);
@@ -2368,6 +2364,7 @@ co_rf_simple(void **state)
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
 	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
 	ghdl.iov_len = ghdl.iov_buf_len;
 	rc = daos_cont_local2global(coh, &ghdl);
 	assert_rc_equal(rc, 0);
@@ -2385,6 +2382,39 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	daos_prop_free(prop);
+	test_teardown((void **)&arg);
+}
+
+static void
+co_global2local_fail_test(void **state)
+{
+	test_arg_t   *arg0 = *state;
+	test_arg_t   *arg  = NULL;
+	d_iov_t       ghdl = {NULL, 0, 0};
+	daos_handle_t coh_g2l;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank, SMALL_POOL_SIZE, 0,
+			NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_local2global(arg->coh, &ghdl);
+	assert_rc_equal(rc, 0);
+	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
+	assert_non_null(ghdl.iov_buf);
+	ghdl.iov_len = ghdl.iov_buf_len;
+	rc = daos_cont_local2global(arg->coh, &ghdl);
+	assert_rc_equal(rc, 0);
+
+	daos_fail_loc_set(DAOS_CONT_G2L_FAIL | DAOS_FAIL_ONCE);
+	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
+	assert_rc_equal(rc, -DER_NO_HDL);
+	daos_fail_loc_set(0);
+
+	free(ghdl.iov_buf);
+
 	test_teardown((void **)&arg);
 }
 
@@ -2525,59 +2555,43 @@ setup(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-	{ "CONT1: create/open/close/destroy container",
-	  co_create, async_disable, test_case_teardown},
-	{ "CONT2: create/open/close/destroy container (async)",
-	  co_create, async_enable, test_case_teardown},
-	{ "CONT3: container handle local2glocal and global2local",
-	  co_create, hdl_share_enable, test_case_teardown},
-	{ "CONT4: set/get/list user-defined container attributes (sync)",
-	  co_attribute, co_setup_sync, test_case_teardown},
-	{ "CONT5: set/get/list user-defined container attributes (async)",
-	  co_attribute, co_setup_async, test_case_teardown},
-	{ "CONT6: create container with properties and query",
-	  co_properties, NULL, test_case_teardown},
-	{ "CONT7: retry CONT_{CLOSE,DESTROY,QUERY}",
-	  co_op_retry, NULL, test_case_teardown},
-	{ "CONT8: get/set container ACL",
-	  co_acl, NULL, test_case_teardown},
-	{ "CONT9: container set prop",
-	  co_set_prop, NULL, test_case_teardown},
-	{ "CONT10: container create access denied",
-	  co_create_access_denied, NULL, test_case_teardown},
-	{ "CONT11: container destroy access denied",
-	  co_destroy_access_denied, NULL, test_case_teardown},
-	{ "CONT12: container destroy allowed by pool ACL only",
-	  co_destroy_allowed_by_pool, NULL, test_case_teardown},
-	{ "CONT13: container open access by ACL",
-	  co_open_access, NULL, test_case_teardown},
-	{ "CONT14: container query access by ACL",
-	  co_query_access, NULL, test_case_teardown},
-	{ "CONT15: container get-acl access by ACL",
-	  co_get_acl_access, NULL, test_case_teardown},
-	{ "CONT16: container set-prop access by ACL",
-	  co_set_prop_access, NULL, test_case_teardown},
-	{ "CONT17: container overwrite/update/delete ACL access by ACL",
-	  co_modify_acl_access, NULL, test_case_teardown},
-	{ "CONT18: container set owner",
-	  co_set_owner, NULL, test_case_teardown},
-	{ "CONT19: container set-owner access by ACL",
-	  co_set_owner_access, NULL, test_case_teardown},
-	{ "CONT20: container destroy force",
-	  co_destroy_force, NULL, test_case_teardown},
-	{ "CONT21: container owner has implicit ACL access",
-	  co_owner_implicit_access, NULL, test_case_teardown},
-	{ "CONT22: container get/set attribute access by ACL",
-	  co_attribute_access, NULL, test_case_teardown},
-	{ "CONT23: container open failed/destroy",
-	  co_open_fail_destroy, NULL, test_case_teardown},
-	{ "CONT24: container RF simple test",
-	  co_rf_simple, NULL, test_case_teardown},
-	{ "CONT25: Delete Container during Aggregation",
-	  delet_container_during_aggregation, co_setup_async,
-	  test_case_teardown},
-	{ "CONT26: container API compat",
-	  co_api_compat, NULL, test_case_teardown},
+    {"CONT1: create/open/close/destroy container", co_create, async_disable, test_case_teardown},
+    {"CONT2: create/open/close/destroy container (async)", co_create, async_enable,
+     test_case_teardown},
+    {"CONT3: container handle local2glocal and global2local", co_create, hdl_share_enable,
+     test_case_teardown},
+    {"CONT4: set/get/list user-defined container attributes (sync)", co_attribute, co_setup_sync,
+     test_case_teardown},
+    {"CONT5: set/get/list user-defined container attributes (async)", co_attribute, co_setup_async,
+     test_case_teardown},
+    {"CONT6: create container with properties and query", co_properties, NULL, test_case_teardown},
+    {"CONT7: retry CONT_{CLOSE,DESTROY,QUERY}", co_op_retry, NULL, test_case_teardown},
+    {"CONT8: get/set container ACL", co_acl, NULL, test_case_teardown},
+    {"CONT9: container set prop", co_set_prop, NULL, test_case_teardown},
+    {"CONT10: container create access denied", co_create_access_denied, NULL, test_case_teardown},
+    {"CONT11: container destroy access denied", co_destroy_access_denied, NULL, test_case_teardown},
+    {"CONT12: container destroy allowed by pool ACL only", co_destroy_allowed_by_pool, NULL,
+     test_case_teardown},
+    {"CONT13: container open access by ACL", co_open_access, NULL, test_case_teardown},
+    {"CONT14: container query access by ACL", co_query_access, NULL, test_case_teardown},
+    {"CONT15: container get-acl access by ACL", co_get_acl_access, NULL, test_case_teardown},
+    {"CONT16: container set-prop access by ACL", co_set_prop_access, NULL, test_case_teardown},
+    {"CONT17: container overwrite/update/delete ACL access by ACL", co_modify_acl_access, NULL,
+     test_case_teardown},
+    {"CONT18: container set owner", co_set_owner, NULL, test_case_teardown},
+    {"CONT19: container set-owner access by ACL", co_set_owner_access, NULL, test_case_teardown},
+    {"CONT20: container destroy force", co_destroy_force, NULL, test_case_teardown},
+    {"CONT21: container owner has implicit ACL access", co_owner_implicit_access, NULL,
+     test_case_teardown},
+    {"CONT22: container get/set attribute access by ACL", co_attribute_access, NULL,
+     test_case_teardown},
+    {"CONT23: container open failed/destroy", co_open_fail_destroy, NULL, test_case_teardown},
+    {"CONT24: container RF simple test", co_rf_simple, NULL, test_case_teardown},
+    {"CONT25: Delete Container during Aggregation", delet_container_during_aggregation,
+     co_setup_async, test_case_teardown},
+    {"CONT26: container API compat", co_api_compat, NULL, test_case_teardown},
+    {"CONT30: daos_cont_global2local failure test", co_global2local_fail_test, NULL,
+     test_case_teardown},
 };
 
 int

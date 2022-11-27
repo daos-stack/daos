@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -8,15 +7,15 @@ from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils_base import \
-    FormattedParameter, CommandWithParameters
+from command_utils_base import FormattedParameter, CommandWithParameters
 from command_utils import CommandWithSubCommand, YamlCommand
+from general_utils import nodeset_append_suffix
 
 
 class DmgCommandBase(YamlCommand):
     """Defines a base object representing a dmg command."""
 
-    def __init__(self, path, yaml_cfg=None):
+    def __init__(self, path, yaml_cfg=None, hostlist_suffix=None):
         """Create a dmg Command object.
 
         Args:
@@ -24,6 +23,7 @@ class DmgCommandBase(YamlCommand):
             yaml_cfg (DmgYamlParameters, optional): dmg config file
                 settings. Defaults to None, in which case settings
                 must be supplied as command-line parameters.
+            hostlist_suffix (str, optional): Suffix to append to each host name. Defaults to None.
         """
         super().__init__("/run/dmg/*", "dmg", path, yaml_cfg)
 
@@ -34,6 +34,8 @@ class DmgCommandBase(YamlCommand):
         default_yaml_file = None
         if self.yaml is not None and hasattr(self.yaml, "filename"):
             default_yaml_file = self.yaml.filename
+
+        self.hostlist_suffix = hostlist_suffix
 
         self._hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
@@ -61,6 +63,9 @@ class DmgCommandBase(YamlCommand):
         Args:
             hostlist (string list): list of host addresses
         """
+        if self.hostlist_suffix:
+            hostlist = nodeset_append_suffix(hostlist, self.hostlist_suffix)
+
         if self.yaml:
             if isinstance(hostlist, NodeSet):
                 hostlist = list(hostlist)
@@ -373,7 +378,11 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg storage sub command object."""
-            if self.sub_command.value == "format":
+            if self.sub_command.value == "identify":
+                self.sub_command_class = self.IdentifySubCommand()
+            if self.sub_command.value == "replace":
+                self.sub_command_class = self.ReplaceSubCommand()
+            elif self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -383,6 +392,51 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.SetSubCommand()
             else:
                 self.sub_command_class = None
+
+        class ReplaceSubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage replace sub command"""
+            def __init__(self):
+                """Create a dmg storage replace sub command object."""
+                super().__init__("/run/dmg/storage/replace/*", "replace")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg storage replace sub command object."""
+                if self.sub_command.value == "nvme":
+                    self.sub_command_class = self.NVMESubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class NVMESubCommand(CommandWithParameters):
+                """Get dmg storage replace sub command object"""
+                def __init__(self):
+                    """Create a dmg storage replace sub command object."""
+                    super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
+                    self.old_uuid = FormattedParameter("--old-uuid {}", None)
+                    self.new_uuid = FormattedParameter("--new-uuid {}", None)
+                    self.no_reint = FormattedParameter("--no-reint", False)
+
+        class IdentifySubCommand(CommandWithSubCommand):
+            """Defines an object for the dmg storage identify command"""
+            def __init__(self):
+                """Create a dmg storage identify sub command object."""
+                super().__init__("/run/dmg/storage/identify/*", "identify")
+
+            def get_sub_command_class(self):
+                # pylint: disable=redefined-variable-type
+                """Get the dmg storage identify sub command object."""
+                if self.sub_command.value == "vmd":
+                    self.sub_command_class = self.VmdSubCommand()
+                else:
+                    self.sub_command_class = None
+
+            class VmdSubCommand(CommandWithParameters):
+                """Get dmg storage identify vmd sub command object"""
+                def __init__(self):
+                    """Create a dmg storage identify vmd command object."""
+                    super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")
+                    self.verbose = FormattedParameter("--verbose", False)
+                    self.uuid = FormattedParameter("--uuid {}", None)
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""

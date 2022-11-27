@@ -20,12 +20,12 @@ or on a dedicated admin node.
 
 All nodes must have:
 
--   sudo access configured
+- sudo access configured
 
--   password-less ssh configured
+- password-less ssh configured
 
--   pdsh installed (or some other means of running multiple remote
-    commands in parallel)
+- pdsh installed (or some other means of running multiple remote
+  commands in parallel)
 
 In addition the server nodes should also have
 [IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
@@ -33,25 +33,25 @@ In addition the server nodes should also have
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
 
--   ADMIN\_NODE
--   CLIENT\_NODES
--   SERVER\_NODES
--   ALL\_NODES
+- ADMIN\_NODES
+- CLIENT\_NODES
+- SERVER\_NODES
+- ALL\_NODES
 
 For example, if you want to use admin-1 as the admin node, client-1 and
 client-2 as client nodes, and server-\[1-3\] as server nodes,
 these variables would be defined as:
 
 ```console
-ADMIN_NODE=admin-1
-CLIENT_NODES=client-1,client-2
-SERVER_NODES=server-1,server-2,server-3
-ALL_NODES=$ADMIN_NODE,$CLIENT_NODES,$SERVER_NODES
+ADMIN_NODES="admin-1"
+CLIENT_NODES="client-1,client-2"
+SERVER_NODES="server-1,server-2"
+ALL_NODES="$ADMIN_NODES,$CLIENT_NODES,$SERVER_NODES"
 ```
 
 !!! note
     If a client node is also serving as an admin node, exclude
-    `$ADMIN_NODE` from the `ALL_NODES` assignment to prevent duplication.
+    `$ADMIN_NODES` from the `ALL_NODES` assignment to prevent duplication.
     For example: `ALL_NODES=$CLIENT_NODES,$SERVER_NODES`
 
 
@@ -79,26 +79,27 @@ daos-server RPM.
 
 		pdsh -w $ALL_NODES 'sudo rpm --import https://packages.daos.io/RPM-GPG-KEY'
 
-3. Perform the additional steps:
+3. Install epel-release on all nodes:
 
 		pdsh -w $ALL_NODES 'sudo yum install -y epel-release'
 
-4. Install the DAOS server RPMs on the server nodes:
+4. Install the `daos-admin` RPMs on the admin nodes:
+
+		pdsh -w $ADMIN_NODES 'sudo zypper install -y daos-admin'
+
+5. Install the `daos-server` RPMs on the server nodes:
 
 		pdsh -w $SERVER_NODES 'sudo yum install -y daos-server'
 
-5. Install the DAOS client RPMs on the client and admin nodes:
+6. Install the `daos-client` RPMs on the client nodes:
 
-		pdsh -w $ALL_NODES -x $SERVER_NODES 'sudo yum install -y daos-client'
+		pdsh -w $CLIENT_NODES 'sudo yum install -y daos-client'
 
 
 ## Hardware Provisioning
 
 In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
 SSDs will be prepared and configured to be used by DAOS.
-
-!!! note
-    PMem preparation is required once per DAOS installation.
 
 1. Prepare the pmem devices on Server nodes:
 
@@ -147,10 +148,8 @@ SSDs will be prepared and configured to be used by DAOS.
 
 		NVMe PCI		Model				FW Revision	Socket ID	Capacity
 		--------		-----				-----------	---------	--------
-		0000:5e:00.0	INTEL SSDPE2KE016T8 VDV10170 	0 			1.6 TB
-		0000:5f:00.0	INTEL SSDPE2KE016T8 VDV10170 	0 			1.6 TB
-		0000:81:00.0	INTEL SSDPED1K750GA E2010475 	1 			750 GB
-		0000:da:00.0	INTEL SSDPED1K750GA E2010475 	1 			750 GB
+		0000:81:00.0	INTEL SSDPE2KE016T8 VDV10170 	0 			1.6 TB
+		0000:83:00.0	INTEL SSDPE2KE016T8 VDV10170 	1 			1.6 TB
 
 		SCM Namespace	Socket ID	Capacity
 		-------------	---------	--------
@@ -165,36 +164,36 @@ encrypting the DAOS control plane communications.
 
 Administrative nodes require the following certificate files:
 
--   CA root certificate (daosCA.crt) owned by the current user
+- CA root certificate (daosCA.crt) owned by the current user
 
--   Admin certificate (admin.crt) owned by the current user
+- Admin certificate (admin.crt) owned by the current user
 
--   Admin key (admin.key) owned by the current user
+- Admin key (admin.key) owned by the current user
 
 Client nodes require the following certificate files:
 
--   CA root certificate (daosCa.crt) owned by the current user
+- CA root certificate (daosCa.crt) owned by the current user
 
--   Agent certificate (agent.crt) owned by the daos_agent user
+- Agent certificate (agent.crt) owned by the daos\_agent user
 
--   Agent key (agent.key) owned by the daos_agent user
+- Agent key (agent.key) owned by the daos\_agent user
 
 Server nodes require the following certificate files:
 
--   CA root certificate (daosCA.crt) owned by the daos_server user
+- CA root certificate (daosCA.crt) owned by the daos\_server user
 
--   Server certificate (server.crt) owned by the daos_server user
+- Server certificate (server.crt) owned by the daos\_server user
 
--   Server key (server.key) owned by the daos_server user
+- Server key (server.key) owned by the daos\_server user
 
--   A copy of the Client certificate (client.crt) owned by the
-    daos_server user
+- A copy of the Client certificate (client.crt) owned by the
+  daos\_server user
 
 See [Certificate Configuration](../admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
-    The following commands are run from the `$ADMIN_NODE`.
+    The following commands are run on **one** of the `$ADMIN_NODES`.
 
 1.  Generate a new set of certificates:
 
@@ -212,14 +211,14 @@ for more information.
 3.  Copy the certificates to their default location (/etc/daos) on each
     admin node:
 
-		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
-		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
-		pdsh -S -w $ADMIN_NODE sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
+		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/daosCA.crt /etc/daos/certs/.
+		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.crt /etc/daos/certs/.
+		pdsh -S -w $ADMIN_NODES sudo cp /tmp/daosCA/certs/admin.key /etc/daos/certs/.
 
 	!!! note
 		If the /etc/daos/certs directory does not exist on the admin nodes then use the following command to create it:
 
-				pdsh -S -w $ADMIN_NODE sudo mkdir /etc/daos/certs
+				pdsh -S -w $ADMIN_NODES sudo mkdir /etc/daos/certs
 
 4.  Copy the certificates to their default location (/etc/daos) on each
     client node:
@@ -248,8 +247,8 @@ for more information.
 7. Set the ownership of the admin certificates on each admin node:
 
 
-		pdsh -S -w $ADMIN_NODE sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
-		pdsh -S -w $ADMIN_NODE sudo chown $USER:$USER /etc/daos/certs/admin.\*
+		pdsh -S -w $ADMIN_NODES sudo chown $USER:$USER /etc/daos/certs/daosCA.crt
+		pdsh -S -w $ADMIN_NODES sudo chown $USER:$USER /etc/daos/certs/admin.\*
 
 8. Set the ownership of the client certificates on each client node:
 
@@ -285,8 +284,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 
 
 		name: daos_server
-
-		access_points: ['server-1']
+		access_points:
+		- server-1
 		port: 10001
 
 		transport_config:
@@ -296,39 +295,50 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 			cert: /etc/daos/certs/server.crt
 			key: /etc/daos/certs/server.key
 		provider: ofi+verbs;ofi_rxm
-		nr_hugepages: 4096
 		control_log_mask: DEBUG
 		control_log_file: /tmp/daos_server.log
 		helper_log_file: /tmp/daos_admin.log
 		engines:
 		-
+			pinned_numa_node: 0
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib0
 			fabric_iface_port: 31316
 			log_mask: INFO
 			log_file: /tmp/daos_engine_0.log
 			env_vars:
 				- CRT_TIMEOUT=30
-			scm_mount: /mnt/daos0
-			scm_class: dcpm
-			scm_list: [/dev/pmem0]
-			bdev_class: nvme
-			bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
+			storage:
+			-
+				class: dcpm
+				scm_mount: /mnt/daos0
+				scm_list:
+				- /dev/pmem0
+			-
+				class: nvme
+				bdev_list:
+				- "0000:81:00.0"
 		-
+			pinned_numa_node: 1
 			targets: 8
-			nr_xs_helpers: 0
+			nr_xs_helpers: 2
 			fabric_iface: ib1
 			fabric_iface_port: 31416
 			log_mask: INFO
 			log_file: /tmp/daos_engine_1.log
 			env_vars:
 				- CRT_TIMEOUT=30
-		 	scm_mount: /mnt/daos1
-		 	scm_class: dcpm
-		 	scm_list: [/dev/pmem1]
-		 	bdev_class: nvme
-		 	bdev_list: ["0000:83:00.0"]  # generate regular nvme.conf
+			storage:
+			-
+				class: dcpm
+				scm_mount: /mnt/daos1
+				scm_list:
+				- /dev/pmem1
+			-
+				class: nvme
+				bdev_list:
+				- "0000:83:00.0"
 
 3. Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
@@ -337,7 +347,8 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
    Copy the modified agent yaml file to all the client nodes at `/etc/daos/daos_agent.yml`.
 
 		name: daos_server
-		access_points: ['server-1']
+		access_points:
+		- server-1
 
 		port: 10001
 
@@ -353,7 +364,9 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 
 		name: daos_server
 		port: 10001
-		hostlist: ['server-1', 'server-2', 'server-3']
+		hostlist:
+		- server-1
+		- server-2
 
 		transport_config:
 			allow_insecure: false
@@ -375,24 +388,24 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-		Dec 16 00:12:11 wolf-180.wolf.hpdd.intel.com daos_server[290473]: SCM format required on instance 1
-		Dec 16 00:12:11 wolf-180.wolf.hpdd.intel.com daos_server[290473]: SCM format required on instance 0
+		server-1: Dec 16 00:12:11 server-1.test.hpdd.intel.com daos_server[290473]: SCM format required on instance 1
+		server-1: Dec 16 00:12:11 server-1.test.hpdd.intel.com daos_server[290473]: SCM format required on instance 0
 
 		# format storage
-		dmg storage format -l $SERVER_NODES --force
+		dmg storage format -l $SERVER_NODES # can use --force if needed
 
 3. Verify that all servers have started:
 
-		# system query from ADMIN_NODE
+		# system query from ADMIN_NODES
 		dmg system query -v
 
 		# all the server ranks should show 'Joined' STATE
 		Rank UUID                                 Control Address  Fault Domain                  State  Reason
 		---- ----                                 ---------------  ------------                  -----  ------
-		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /wolf-179.wolf.hpdd.intel.com Joined
-		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /wolf-179.wolf.hpdd.intel.com Joined
-		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /wolf-189.wolf.hpdd.intel.com Joined
-		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /wolf-189.wolf.hpdd.intel.com Joined
+		0    604c4ffa-563a-49dc-b702-3c87293dbcf3 10.8.1.179:10001 /server-1.test.hpdd.intel.com Joined
+		1    f0791f98-4379-4ace-a083-6ca3ffa65756 10.8.1.179:10001 /server-1.test.hpdd.intel.com Joined
+		2    745d2a5b-46dd-42c5-b90a-d2e46e178b3e 10.8.1.189:10001 /server-2.test.hpdd.intel.com Joined
+		3    ba6a7800-3952-46ce-af92-bba9daa35048 10.8.1.189:10001 /server-2.test.hpdd.intel.com Joined
 
 
 ## Start the DAOS Agents
@@ -403,12 +416,12 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/relea
 		pdsh -S -w $CLIENT_NODES "sudo systemctl start daos_agent"
 
 
-2. (Optional) Check daos_agent status:
+2. (Optional) Check daos\_agent status:
 
 		# check status
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
 
 		# Sample output depending on number of client nodes
-		client-1: agent INFO 2021/05/05 22:38:46 DAOS Agent v1.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2021/05/05 22:38:53 DAOS Agent v1.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.2 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
+		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.2 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
 

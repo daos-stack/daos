@@ -116,6 +116,12 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		},
 		"incompatible fault": {
 			rpcResps: []*control.HostResponse{
+				// First one will be retried.
+				{
+					Error: &fault.Fault{
+						Code: code.ServerWrongSystem,
+					},
+				},
 				{
 					Error: &fault.Fault{
 						Code: code.ServerWrongSystem,

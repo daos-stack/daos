@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -404,11 +404,14 @@ func (cr *cmdRunner) removeNamespace(devName string) error {
 // $ ipmctl show -d PersistentMemoryType,FreeCapacity -region
 //
 // ---ISetID=0x2aba7f4828ef2ccc---
-//    PersistentMemoryType=AppDirect
-//    FreeCapacity=3012.0 GiB
+//
+//	PersistentMemoryType=AppDirect
+//	FreeCapacity=3012.0 GiB
+//
 // ---ISetID=0x81187f4881f02ccc---
-//    PersistentMemoryType=AppDirect
-//    FreeCapacity=3012.0 GiB
+//
+//	PersistentMemoryType=AppDirect
+//	FreeCapacity=3012.0 GiB
 //
 // FIXME: implementation to be replaced by using libipmctl directly through bindings
 func freeCapacity(text string) (uint64, error) {

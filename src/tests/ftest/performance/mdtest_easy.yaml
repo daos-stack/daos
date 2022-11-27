@@ -75,3 +75,5 @@ mdtest_dfs_ec_16p2g1:
 performance:
   env:
     - D_LOG_MASK=ERR
+mpirun:
+  bind_to: socket

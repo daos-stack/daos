@@ -81,7 +81,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
-	conn->time_gran = 1000000000;
+	conn->time_gran = 1;
 
 	if (fs_handle->dpi_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;

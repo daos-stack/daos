@@ -122,7 +122,7 @@ func TestServer_checkVersion(t *testing.T) {
 		"secure pre-2.0.0 component with version somehow is still incompatible": {
 			selfVersion:  "2.2.0",
 			otherVersion: "1.0.0",
-			ctx:          newTestAuthCtx(context.TODO(), "agent"),
+			ctx:          newTestAuthCtx(context.TODO(), "admin"),
 			expErr:       errors.New("not compatible"),
 		},
 		"unknown secure component rejected": {

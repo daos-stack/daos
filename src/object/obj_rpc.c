@@ -538,6 +538,13 @@ crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
 }
 
 static int
+crt_proc_struct_daos_shard_tgt_20(crt_proc_t proc, crt_proc_op_t proc_op,
+				  struct daos_shard_tgt_20 *p)
+{
+	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p) - sizeof(p->st_ec_tgt));
+}
+
+static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
@@ -883,8 +890,8 @@ crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
-crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
-			    struct daos_cpd_sg *dcs)
+crt_proc_struct_daos_cpd_sg_internal(crt_proc_t proc, crt_proc_op_t proc_op,
+				     struct daos_cpd_sg *dcs, bool for_old)
 {
 	int		rc;
 	int		i;
@@ -985,11 +992,22 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 			dst = dcs->dcs_buf;
 		}
 
-		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_shard_tgt(proc, proc_op,
-							    &dst[i]);
-			if (unlikely(rc))
-				D_GOTO(out, rc);
+		if (for_old) {
+			for (i = 0; i < dcs->dcs_nr; i++) {
+				rc = crt_proc_struct_daos_shard_tgt_20(proc, proc_op,
+							(struct daos_shard_tgt_20 *)&dst[i]);
+				if (unlikely(rc))
+					D_GOTO(out, rc);
+
+				if (DECODING(proc_op))
+					dst[i].st_flags = DTF_OLD_FORMAT;
+			}
+		} else {
+			for (i = 0; i < dcs->dcs_nr; i++) {
+				rc = crt_proc_struct_daos_shard_tgt(proc, proc_op, &dst[i]);
+				if (unlikely(rc))
+					D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -1013,14 +1031,31 @@ out:
 	return rc;
 }
 
+static int
+crt_proc_struct_daos_cpd_sg_20(crt_proc_t proc, crt_proc_op_t proc_op,
+			       struct daos_cpd_sg_20 *dcs)
+{
+	return crt_proc_struct_daos_cpd_sg_internal(proc, proc_op, (struct daos_cpd_sg *)dcs, true);
+}
+
+static int
+crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
+			    struct daos_cpd_sg *dcs)
+{
+	return crt_proc_struct_daos_cpd_sg_internal(proc, proc_op, dcs, false);
+}
+
+CRT_RPC_DEFINE(obj_rw_20, DAOS_ISEQ_OBJ_RW_20, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
+CRT_RPC_DEFINE(obj_punch_20, DAOS_ISEQ_OBJ_PUNCH_20, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 CRT_RPC_DEFINE(obj_query_key_0, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_0)
 CRT_RPC_DEFINE(obj_query_key_1, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_1)
 CRT_RPC_DEFINE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
+CRT_RPC_DEFINE(obj_cpd_20, DAOS_ISEQ_OBJ_CPD_20, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 

@@ -180,7 +180,7 @@ start_gc_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 
-	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, 0);
+	child->spc_gc_req = sched_create_ult(&attr, gc_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_gc_req == NULL) {
 		D_ERROR(DF_UUID"[%d]: Failed to create GC ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
@@ -1471,8 +1471,7 @@ update_vos_prop_on_targets(void *in)
 	struct ds_pool			*pool = (struct ds_pool *)in;
 	struct ds_pool_child		*child = NULL;
 	struct policy_desc_t		policy_desc = {0};
-	int				ret = 0;
-	uint64_t			features = 0;
+	int                              ret         = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1481,9 +1480,11 @@ update_vos_prop_on_targets(void *in)
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
-	if (pool->sp_global_version >= 1)
-		features = VOS_POOL_FEAT_AGG_OPT;
-	vos_pool_features_set(child->spc_hdl, features);
+	if (ret == 0 && pool->sp_global_version >= 1) {
+		/** If necessary, upgrade the vos pool format */
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	}
+
 	ds_pool_child_put(child);
 
 	return ret;

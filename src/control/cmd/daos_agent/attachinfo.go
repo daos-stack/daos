@@ -1,8 +1,9 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package main
 
 import (
@@ -40,6 +41,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		AllRanks: true,
 	}
 	req.SetSystem(cmd.cfg.SystemName)
+	req.SetAgentRequest()
 	resp, err := control.GetAttachInfo(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "GetAttachInfo failed")

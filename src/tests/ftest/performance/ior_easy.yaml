@@ -102,3 +102,5 @@ dfuse:
 performance:
   env:
     - D_LOG_MASK=ERR
+mpirun:
+  bind_to: socket

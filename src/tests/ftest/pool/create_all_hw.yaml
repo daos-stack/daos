@@ -4,9 +4,9 @@ setup:
 hosts:
   test_servers: 7
 timeouts:
-  test_one_pool: 120
-  test_two_pools: 160
-  test_recycle_pools: 320
+  test_one_pool: 240
+  test_two_pools: 320
+  test_recycle_pools: 640
 server_config:
   name: daos_server
   servers:

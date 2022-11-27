@@ -92,6 +92,7 @@ const (
 const (
 	SystemUnknown Code = iota + 400
 	SystemBadFaultDomainDepth
+	SystemPoolLocked
 )
 
 // client fault codes
@@ -118,6 +119,7 @@ const (
 	ServerPoolScmTooSmall
 	ServerPoolNvmeTooSmall
 	ServerPoolInvalidRanks
+	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
 	ServerInsufficientFreeHugePageMem

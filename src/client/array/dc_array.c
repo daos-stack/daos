@@ -1894,6 +1894,7 @@ dc_array_get_size(tse_task_t *task)
 	tse_task_t		*query_task = NULL;
 	daos_handle_t		oh;
 	int			rc;
+	bool			cleanup = true;
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -1929,34 +1930,33 @@ dc_array_get_size(tse_task_t *task)
 	query_args->recx	= &kqp->recx;
 	query_args->max_epoch	= NULL;
 
-	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp,
-				       sizeof(kqp));
+	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
-		D_GOTO(err_query_task, rc);
-
-	rc = tse_task_register_deps(task, 1, &query_task);
-	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(query_task, false);
-	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+	cleanup = false;
 
-	tse_sched_progress(tse_task2sched(task));
+	rc = tse_task_register_deps(task, 1, &query_task);
+	if (rc == 0)
+		return tse_task_schedule(query_task, true);
 
-	return 0;
-
-err_query_task:
-	tse_task_complete(query_task, rc);
 err_task:
-	D_FREE(kqp);
-	if (array)
-		array_decref(array);
+	if (query_task != NULL)
+		tse_task_complete(query_task, rc);
+
+	/* tse_task_complete() will handle repeated complete internally. */
 	tse_task_complete(task, rc);
+
+	if (cleanup) {
+		if (array != NULL)
+			array_decref(array);
+		D_FREE(kqp);
+	}
+
 	return rc;
 } /* end daos_array_get_size */
 
@@ -1970,6 +1970,7 @@ dc_array_stat(tse_task_t *task)
 	tse_task_t		*query_task = NULL;
 	daos_handle_t		oh;
 	int			rc;
+	bool			cleanup = true;
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -2007,31 +2008,31 @@ dc_array_stat(tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(query_task, get_array_size_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
-		D_GOTO(err_query_task, rc);
-
-	rc = tse_task_register_deps(task, 1, &query_task);
-	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+		D_GOTO(err_task, rc);
 
 	rc = tse_task_register_comp_cb(task, free_query_cb, &kqp, sizeof(kqp));
 	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+		D_GOTO(err_task, rc);
 
-	rc = tse_task_schedule(query_task, false);
-	if (rc != 0)
-		D_GOTO(err_query_task, rc);
+	cleanup = false;
 
-	tse_sched_progress(tse_task2sched(task));
+	rc = tse_task_register_deps(task, 1, &query_task);
+	if (rc == 0)
+		return tse_task_schedule(query_task, true);
 
-	return 0;
-
-err_query_task:
-	tse_task_complete(query_task, rc);
 err_task:
-	D_FREE(kqp);
-	if (array)
-		array_decref(array);
+	if (query_task != NULL)
+		tse_task_complete(query_task, rc);
+
+	/* tse_task_complete() will handle repeated complete internally. */
 	tse_task_complete(task, rc);
+
+	if (cleanup) {
+		if (array != NULL)
+			array_decref(array);
+		D_FREE(kqp);
+	}
+
 	return rc;
 } /* end daos_array_stat */
 

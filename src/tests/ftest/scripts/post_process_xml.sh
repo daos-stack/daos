@@ -61,15 +61,17 @@ for file in "${FILES[@]}"; do
                 grep -Po "name=\"\K.*(?=\" time=)" | uniq); then
                 echo "Failed to process XML $file. Cannot determine SUITE."
             else
-		for suite_name in ${SUITE}; do
+                for suite_name in ${SUITE}; do
                     sed -i \
                     "s/case name/case classname=\"${COMP}.${suite_name}\" name/" "$file"
                 done
-	    fi
+            fi
         else
             sed -i "s/case classname=\"/case classname=\"${COMP}./" "$file"
         fi
-        sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
-        echo "</testsuites>" >> "$file"
+        if grep "<testsuites>" "$file" >/dev/null; then
+            sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
+            echo "</testsuites>" >> "$file"
+        fi
     fi
 done

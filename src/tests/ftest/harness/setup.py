@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -19,7 +18,7 @@ class HarnessSetupTest(TestWithServers):
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=hw,large
+        :avocado: tags=vm
         :avocado: tags=harness,harness_setup_test,test_setup
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,

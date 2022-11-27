@@ -1561,7 +1561,7 @@ class DaosContainer():
                 params = [self.poh, ctypes.byref(self.uuid), None, event]
             else:
                 params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
-                          None, event]
+                          event]
             thread = threading.Thread(target=daos_cref.AsyncWorker1,
                                       args=(func,
                                             params,

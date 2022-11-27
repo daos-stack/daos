@@ -639,6 +639,11 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool.
  *
+ * Note that if the return value is nonzero, the caller is responsible for
+ * stopping and destroying any PS replicas that may have been created. This
+ * behavior is tailored for ds_mgmt_create_pool, who will clean up all pool
+ * resources upon errors.
+ *
  * \param[in]		pool_uuid	pool UUID
  * \param[in]		ntargets	number of targets in the pool
  * \param[in]		group		crt group ID (unused now)
@@ -651,9 +656,9 @@ pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *
  *					list of pool service replica ranks
  */
 int
-ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
-		   const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
-		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
+ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			const d_rank_list_t *target_addrs, int ndomains, const uint32_t *domains,
+			daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
 	d_iov_t			psid;
@@ -682,7 +687,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, const char *group,
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
-		D_GOTO(out_creation, rc);
+		D_GOTO(out_ranks, rc);
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */,
 				8 /* next (ms) */, 1 << 10 /* max (ms) */);
@@ -740,28 +745,30 @@ out_rpc:
 out_backoff_seq:
 	d_backoff_seq_fini(&backoff_seq);
 	rsvc_client_fini(&client);
-out_creation:
-	if (rc != 0)
-		ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, ranks,
-				  NULL, true /* destroy */);
+	/*
+	 * Intentionally skip cleaning up the PS replicas. See the function
+	 * documentation above.
+	 */
 out_ranks:
 	d_rank_list_free(ranks);
 out:
 	return rc;
 }
 
+/** Stop any local PS replica for \a pool_uuid. */
 int
-ds_pool_svc_destroy(const uuid_t pool_uuid, d_rank_list_t *svc_ranks)
+ds_pool_svc_stop(uuid_t pool_uuid)
 {
-	d_iov_t		psid;
-	int		rc;
+	d_iov_t	id;
+	int	rc;
 
-	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_stop(DS_RSVC_CLASS_POOL, &psid, svc_ranks,
-			       NULL /* excluded */, true /* destroy */);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy pool service: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+	d_iov_set(&id, pool_uuid, sizeof(uuid_t));
+
+	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, false /* destroy */);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		rc = 0;
+	}
 
 	return rc;
 }
@@ -1898,7 +1905,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		 */
 		if (rc == -DER_NONEXIST && global_ver < 1) {
 			rc = 0;
-			val = DAOS_RPOP_PO_REDUN_FAC_DEFAULT;
+			val = DAOS_PROP_PO_REDUN_FAC_DEFAULT;
 		} else if (rc != 0) {
 			return rc;
 		}
@@ -4005,7 +4012,7 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
-		val = DAOS_RPOP_PO_REDUN_FAC_DEFAULT;
+		val = DAOS_PROP_PO_REDUN_FAC_DEFAULT;
 		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_redun_fac, &value);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to upgrade redundancy factor of pool, "
@@ -4081,9 +4088,13 @@ static int pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		if (rc)
 			D_GOTO(out_free, rc);
 		rc = pool_prop_read(tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
-		if (rc)
+		if (rc) {
+			/* Prop might be allocated and returned even if rc != 0 */
+			daos_prop_free(prop);
 			D_GOTO(out_free, rc);
+		}
 		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
+		daos_prop_free(prop);
 	}
 
 out_free:
@@ -4154,12 +4165,13 @@ static int ds_pool_mark_upgrade_completed(uuid_t pool_uuid,
 
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
-		D_GOTO(out_tx, rc1);
-	rc1 = ds_pool_iv_prop_update(svc->ps_pool, prop);
-	daos_prop_free(prop);
-	if (rc1)
-		D_GOTO(out_tx, rc1);
+		/* Prop might be allocated and returned even if rc != 0 */
+		D_GOTO(out_prop, rc1);
 
+	rc1 = ds_pool_iv_prop_update(svc->ps_pool, prop);
+
+out_prop:
+	daos_prop_free(prop);
 out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -5100,6 +5112,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
+	daos_epoch_t			rebuild_eph = crt_hlc_get();
 	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
@@ -5152,7 +5165,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	D_DEBUG(DB_MD, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
-		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, 0, 0,
+		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver, rebuild_eph,
 					 &target_list, op, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
@@ -5260,6 +5273,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	struct pool_svc		*svc;
 	struct rdb_tx		tx;
 	bool			updated = false;
+	daos_epoch_t		extend_eph = crt_hlc_get();
 	struct pool_target_id_list tgts = { 0 };
 	int rc;
 
@@ -5291,7 +5305,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint, uint32_t nnodes,
 	}
 
 	/* Schedule an extension rebuild for those targets */
-	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, 0, 0, &tgts,
+	rc = ds_rebuild_schedule(svc->ps_pool, *map_version_p, extend_eph, &tgts,
 				 RB_OP_EXTEND, 2);
 	if (rc != 0) {
 		D_ERROR("failed to schedule extend rc: "DF_RC"\n", DP_RC(rc));
@@ -5767,28 +5781,6 @@ out:
 	return rc;
 }
 
-static int
-ranks_get_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      d_rank_t *buf, daos_size_t nranks)
-{
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
-
-	d_iov_set(&iov, buf, nranks * sizeof(d_rank_t));
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 0;
-	sgl.sg_iovs = &iov;
-
-	return crt_bulk_create(ctx, &sgl, CRT_BULK_RW, bulk);
-}
-
-static void
-ranks_get_bulk_destroy(crt_bulk_t bulk)
-{
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
-}
-
 /*
  * Transfer list of pool ranks to "remote_bulk". If the remote bulk buffer
  * is too small, then return -DER_TRUNC. RPC response will contain the number
@@ -5862,112 +5854,6 @@ out_eventual:
 out_bulk:
 	if (bulk != CRT_BULK_NULL)
 		crt_bulk_free(bulk);
-out:
-	return rc;
-}
-
-/**
- * Send CaRT RPC to pool svc to get list of storage server ranks.
- *
- * \param[in]	uuid		UUID of the pool
- * \param[in]	svc_ranks	Pool service replicas
- * \param[out]	ranks		Storage server ranks (allocated, caller-freed)
- *
- * return	0		Success
- *
- */
-int
-ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
-		      d_rank_list_t **ranks)
-{
-	int				 rc;
-	struct rsvc_client		 client;
-	crt_endpoint_t			 ep;
-	struct dss_module_info		*info = dss_get_module_info();
-	crt_rpc_t			*rpc;
-	struct pool_ranks_get_in	*in;
-	struct pool_ranks_get_out	*out;
-	uint32_t			 resp_nranks = 2048;
-	d_rank_list_t			*out_ranks = NULL;
-
-	D_DEBUG(DB_MGMT, DF_UUID ": Getting storage ranks\n", DP_UUID(uuid));
-
-	rc = rsvc_client_init(&client, svc_ranks);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-rechoose:
-	ep.ep_grp = NULL; /* primary group */
-	rc = rsvc_client_choose(&client, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": cannot find pool service: " DF_RC "\n",
-			DP_UUID(uuid), DP_RC(rc));
-		goto out_client;
-	}
-
-realloc_resp:
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_RANKS_GET, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create POOL_RANKS_GET rpc, "
-			DF_RC "\n", DP_UUID(uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
-	}
-
-	/* Allocate response buffer */
-	out_ranks = d_rank_list_alloc(resp_nranks);
-	if (out_ranks == NULL)
-		D_GOTO(out_rpc, rc = -DER_NOMEM);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->prgi_op.pi_uuid, uuid);
-	uuid_clear(in->prgi_op.pi_hdl);
-	in->prgi_nranks = resp_nranks;
-	rc = ranks_get_bulk_create(info->dmi_ctx, &in->prgi_ranks_bulk,
-				   out_ranks->rl_ranks, in->prgi_nranks);
-	if (rc != 0)
-		D_GOTO(out_resp_buf, rc);
-
-	D_DEBUG(DB_MD, DF_UUID ": send POOL_RANKS_GET to PS rank %u, "
-		"reply capacity %u\n", DP_UUID(uuid), ep.ep_rank, resp_nranks);
-
-	rc = dss_rpc_send(rpc);
-	out = crt_reply_get(rpc);
-	D_ASSERT(out != NULL);
-
-	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->prgo_op);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
-		/* To simplify logic, destroy bulk hdl and buffer each time */
-		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-		d_rank_list_free(out_ranks);
-		crt_req_decref(rpc);
-		dss_sleep(RECHOOSE_SLEEP_MS);
-		D_GOTO(rechoose, rc);
-	}
-
-	rc = out->prgo_op.po_rc;
-	if (rc == -DER_TRUNC) {
-		/* out_ranks too small - realloc with server-provided nranks */
-		resp_nranks = out->prgo_nranks;
-		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-		d_rank_list_free(out_ranks);
-		crt_req_decref(rpc);
-		D_GOTO(realloc_resp, rc);
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to get ranks, " DF_RC "\n",
-			DP_UUID(uuid), DP_RC(rc));
-	} else {
-		out_ranks->rl_nr = out->prgo_nranks;
-		*ranks = out_ranks;
-	}
-
-	ranks_get_bulk_destroy(in->prgi_ranks_bulk);
-out_resp_buf:
-	if (rc != 0)
-		d_rank_list_free(out_ranks);
-out_rpc:
-	crt_req_decref(rpc);
-out_client:
-	rsvc_client_fini(&client);
 out:
 	return rc;
 }

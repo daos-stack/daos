@@ -50,9 +50,12 @@ class DaosAgentYamlParameters(YamlParameters):
         #       Full path and name of the DAOS agent logfile.
         #   - control_log_mask: <str>, one of: error, info, debug
         #       Specifies the log level for agent logs.
+        #   - exclude_fabric_ifaces: <list>, Ignore a subset of fabric interfaces when selecting
+        #       an interface for client applications.
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
+        self.exclude_fabric_ifaces = BasicParameter(None)
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.
