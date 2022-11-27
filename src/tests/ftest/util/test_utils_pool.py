@@ -1017,7 +1017,7 @@ class TestPool(TestDaosApiBase):
             for key in keys:
                 value = value[key]
             return value
-        except KeyError as error:
+        except (KeyError, TypeError) as error:
             keys_str = ".".join(map(str, keys))
             raise CommandFailure(
                 "The dmg pool query key does not exist: {}".format(keys_str)) from error
@@ -1080,6 +1080,7 @@ class TestPool(TestDaosApiBase):
             "check": None,
             "version_increase": False,
         }
+        self.log.info("%s query rebuild data reset: %s", str(self), self._rebuild_data)
 
     def _update_rebuild_data(self, verbose=True):
         """Update the rebuild data.
@@ -1088,7 +1089,7 @@ class TestPool(TestDaosApiBase):
             verbose (bool, optional): whether to display the pool query info. Defaults to True.
         """
         # Reset the rebuild data if rebuild completion was previously detected
-        if self._rebuild_data["state"] == "completed":
+        if self._rebuild_data["check"] == "completed":
             self._reset_rebuild_data()
 
         # Use the current rebuild data to define the previous rebuild data

@@ -97,8 +97,7 @@ class TargetFailure(IorTestBase):
         job_num = 1
         job = threading.Thread(
             target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace])
+            args=[ior_results, job_num, "test_file_1", self.pool, self.container, ior_namespace])
 
         job.start()
 
@@ -137,12 +136,10 @@ class TargetFailure(IorTestBase):
         # Reintegrate one target and wait for rebuild to finish before reintegrating the
         # next one.
         self.pool.reintegrate(rank="1", tgt_idx="1")
-        self.pool.measure_rebuild_time(
-            operation="Reintegrate rank 1 -> target 1", interval=5)
+        self.pool.measure_rebuild_time(operation="Reintegrate rank 1 -> target 1", interval=5)
         self.log.info("Reintegrate rank 0 target 1")
         self.pool.reintegrate(rank="0", tgt_idx="1")
-        self.pool.measure_rebuild_time(
-            operation="Reintegrate rank 0 -> target 1", interval=5)
+        self.pool.measure_rebuild_time(operation="Reintegrate rank 0 -> target 1", interval=5)
 
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_health(expected_health="HEALTHY"):
@@ -201,7 +198,7 @@ class TargetFailure(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
+        :avocado: tags=deployment,target_failure,rebuild
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
@@ -319,7 +316,7 @@ class TargetFailure(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,target_failure
+        :avocado: tags=deployment,target_failure,rebuild
         :avocado: tags=TargetFailure,test_target_failure_parallel
         """
         self.pool = []
