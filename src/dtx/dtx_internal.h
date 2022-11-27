@@ -93,6 +93,18 @@ extern uint32_t dtx_agg_thd_cnt_lo;
 #define DTX_AGG_THD_AGE_MAX	1830
 #define DTX_AGG_THD_AGE_MIN	210
 #define DTX_AGG_THD_AGE_DEF	630
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory. The value can be changed via
+ * environment "DTX_DISP_STEP_LENGTH" when start the engine.
+ */
+extern uint32_t dtx_disp_step_length;
+
+#define DTX_DISP_STEP_MAX	512
+#define DTX_DISP_STEP_MIN	64
+#define DTX_DISP_STEP_DEF	256
 
 /* There is race between DTX aggregation and DTX refresh. Consider the following scenario:
  *

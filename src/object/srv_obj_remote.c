@@ -140,6 +140,8 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_shard_tgts.ca_count	= orw_parent->orw_shard_tgts.ca_count;
 	orw->orw_shard_tgts.ca_arrays	= orw_parent->orw_shard_tgts.ca_arrays;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
+	if (shard_tgt->st_flags & DTF_DELAY_FORWARD)
+		orw->orw_api_flags &= ~DAOS_COND_MASK;
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
@@ -253,6 +255,8 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;
 	opi->opi_shard_tgts.ca_arrays = opi_parent->opi_shard_tgts.ca_arrays;
 	opi->opi_flags |= obj_exec_arg->flags;
+	if (shard_tgt->st_flags & DTF_DELAY_FORWARD)
+		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
 
@@ -494,9 +498,12 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	/* It is safe to share the head with parent since we are holding reference on parent RPC. */
 	dcsh = ds_obj_cpd_get_dcsh(dca->dca_rpc, dca->dca_idx);
-	head_dcs->dcs_type = DCST_HEAD;
+	head_dcs->dcs_type = ds_obj_cpd_get_head_type(dca->dca_rpc, dca->dca_idx);
 	head_dcs->dcs_nr = 1;
-	head_dcs->dcs_buf = dcsh;
+	if (head_dcs->dcs_type == DCST_BULK_HEAD)
+		head_dcs->dcs_buf = ds_obj_cpd_get_head_bulk(dca->dca_rpc, dca->dca_idx);
+	else
+		head_dcs->dcs_buf = dcsh;
 	oci->oci_sub_heads.ca_arrays = head_dcs;
 	oci->oci_sub_heads.ca_count = 1;
 
