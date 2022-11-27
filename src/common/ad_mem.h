@@ -17,8 +17,6 @@ typedef void (*ad_tx_cb_t)(int stage, void *data);
 
 struct ad_act {
 	d_list_t		it_link;
-	/** it is action for reserve, the modified content is in DRAM only */
-	bool			it_is_reserv;
 	struct umem_action	it_act;
 };
 
@@ -435,5 +433,8 @@ ad_tx_stage_set(struct ad_tx *atx, int stage)
 {
 	ad_tx2umem_tx(atx)->utx_stage = stage;
 }
+
+void ad_tls_cache_init(void);
+void ad_tls_cache_fini(void);
 
 #endif /* __AD_MEM_H__ */

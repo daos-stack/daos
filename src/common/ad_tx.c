@@ -8,7 +8,192 @@
 #include <daos_srv/ad_mem.h>
 #include "ad_mem.h"
 
+struct umem_wal_tx_item {
+	d_list_t		ti_link;
+	struct umem_wal_tx	ti_utx;
+};
+
+struct ad_tls_cache {
+	d_list_t	atc_act_list;
+	d_list_t	atc_tx_list;
+	d_list_t	atc_act_copy_list;
+	int		atc_act_nr;
+	int		atc_tx_nr;
+	int		atc_act_copy_nr;
+};
+
 static __thread struct ad_tx	*tls_tx;
+
+#define AD_TLS_CACHE_ENABLED	(1)
+#define TLS_ACT_NUM		(64)
+#define TLS_ACT_MAX		(512)
+#define TLS_TX_NUM		(16)
+#define TLS_ACT_COPY_NUM	(64)
+#define TLS_ACT_COPY_MAX	(256)
+/* payload size of cached UMEM_ACT_COPY act, if payload size exceed it then
+ * will directly allocate.
+ */
+#define TSL_ACT_COPY_SZ		(512)
+
+static __thread struct ad_tls_cache tls_cache;
+
+static struct ad_act *
+tls_act_get(int opc, size_t size)
+{
+	struct ad_act	*act;
+
+#if AD_TLS_CACHE_ENABLED
+	if (opc != UMEM_ACT_COPY && tls_cache.atc_act_nr > 0) {
+		act = d_list_pop_entry(&tls_cache.atc_act_list, struct ad_act, it_link);
+		act->it_act.ac_opc = opc;
+		tls_cache.atc_act_nr--;
+		return act;
+	}
+	if (opc == UMEM_ACT_COPY && size <= TSL_ACT_COPY_SZ && tls_cache.atc_act_copy_nr > 0) {
+		act = d_list_pop_entry(&tls_cache.atc_act_copy_list, struct ad_act, it_link);
+		act->it_act.ac_opc = opc;
+		tls_cache.atc_act_copy_nr--;
+		return act;
+	}
+#endif
+
+	if (opc == UMEM_ACT_COPY) {
+		size = max(size, TSL_ACT_COPY_SZ);
+		D_ALLOC_NZ(act, offsetof(struct ad_act, it_act.ac_copy.payload[size]));
+	} else {
+		D_ALLOC_PTR_NZ(act);
+	}
+	if (likely(act != NULL)) {
+		D_INIT_LIST_HEAD(&act->it_link);
+		act->it_act.ac_opc = opc;
+	}
+
+	return act;
+}
+
+static void
+tls_act_put(struct ad_act *act)
+{
+	d_list_del(&act->it_link);
+
+#if AD_TLS_CACHE_ENABLED
+	if (act->it_act.ac_opc == UMEM_ACT_COPY && act->it_act.ac_copy.size <= TSL_ACT_COPY_SZ &&
+	    tls_cache.atc_act_copy_nr < TLS_ACT_COPY_MAX) {
+		d_list_add(&act->it_link, &tls_cache.atc_act_copy_list);
+		tls_cache.atc_act_copy_nr++;
+		return;
+	}
+	if (act->it_act.ac_opc != UMEM_ACT_COPY && tls_cache.atc_act_nr < TLS_ACT_MAX) {
+		d_list_add(&act->it_link, &tls_cache.atc_act_list);
+		tls_cache.atc_act_nr++;
+		return;
+	}
+#endif
+
+	D_FREE(act);
+}
+
+static struct umem_wal_tx *
+tls_utx_get(void)
+{
+	struct umem_wal_tx_item	*item;
+
+#if AD_TLS_CACHE_ENABLED
+	if (tls_cache.atc_tx_nr > 0) {
+		item = d_list_pop_entry(&tls_cache.atc_tx_list, struct umem_wal_tx_item, ti_link);
+		item->ti_utx.utx_stage = 0;
+		tls_cache.atc_tx_nr--;
+		return &item->ti_utx;
+	}
+#endif
+	D_ALLOC_PTR(item);
+	if (item == NULL)
+		return NULL;
+	D_INIT_LIST_HEAD(&item->ti_link);
+	return &item->ti_utx;
+}
+
+static void
+tls_utx_put(struct umem_wal_tx *utx)
+{
+	struct umem_wal_tx_item	*item;
+
+	item = container_of(utx, struct umem_wal_tx_item, ti_utx);
+
+#if AD_TLS_CACHE_ENABLED
+	d_list_add(&item->ti_link, &tls_cache.atc_tx_list);
+	tls_cache.atc_tx_nr++;
+	return;
+#endif
+
+	D_FREE(item);
+}
+
+void
+ad_tls_cache_init(void)
+{
+	struct umem_wal_tx_item	*item;
+	struct ad_act		*act;
+	int			 i;
+
+	tls_cache.atc_act_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_act_list);
+	for (i = 0; i < TLS_ACT_NUM; i++) {
+		D_ALLOC_PTR(act);
+		if (act == NULL)
+			return;
+		act->it_act.ac_opc = UMEM_ACT_NOOP;
+		D_INIT_LIST_HEAD(&act->it_link);
+		tls_act_put(act);
+	}
+
+	tls_cache.atc_tx_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_tx_list);
+	for (i = 0; i < TLS_TX_NUM; i++) {
+		D_ALLOC_PTR(item);
+		if (item == NULL)
+			return;
+		D_INIT_LIST_HEAD(&item->ti_link);
+		tls_utx_put(&item->ti_utx);
+	}
+
+	tls_cache.atc_act_copy_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
+	for (i = 0; i < TLS_ACT_COPY_NUM; i++) {
+		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[TSL_ACT_COPY_SZ]));
+		if (act == NULL)
+			return;
+		act->it_act.ac_opc = UMEM_ACT_COPY;
+		act->it_act.ac_copy.size = TSL_ACT_COPY_SZ;
+		D_INIT_LIST_HEAD(&act->it_link);
+		tls_act_put(act);
+	}
+}
+
+void
+ad_tls_cache_fini(void)
+{
+	struct ad_act		*act, *next;
+	struct umem_wal_tx_item	*item, *tmp;
+
+	d_list_for_each_entry_safe(act, next, &tls_cache.atc_act_list, it_link) {
+		d_list_del(&act->it_link);
+		D_FREE(act);
+	}
+	tls_cache.atc_act_nr = 0;
+
+	d_list_for_each_entry_safe(act, next, &tls_cache.atc_act_copy_list, it_link) {
+		d_list_del(&act->it_link);
+		D_FREE(act);
+	}
+	tls_cache.atc_act_copy_nr = 0;
+
+	d_list_for_each_entry_safe(item, tmp, &tls_cache.atc_tx_list, ti_link) {
+		d_list_del(&item->ti_link);
+		D_FREE(item);
+	}
+	tls_cache.atc_tx_nr = 0;
+}
 
 static char *
 act_opc2str(int act)
@@ -68,20 +253,6 @@ act_item_add(struct ad_tx *tx, struct ad_act *it, int undo_or_redo)
 		}
 	}
 }
-
-/** allocate ad_act, if success the it_link and it_act.ac_opc will be init-ed */
-#define D_ALLOC_ACT(it, opc, size)							\
-	do {										\
-		if (opc == UMEM_ACT_COPY)						\
-			D_ALLOC(it, offsetof(struct ad_act,				\
-					     it_act.ac_copy.payload[size]));		\
-		else									\
-			D_ALLOC_PTR(it);						\
-		if (likely(it != NULL)) {						\
-			D_INIT_LIST_HEAD(&it->it_link);					\
-			it->it_act.ac_opc = opc;					\
-		}									\
-	} while (0)
 
 static inline void
 act_copy_payload(struct umem_action *act, const void *addr, daos_size_t size)
@@ -200,7 +371,7 @@ tx_range_add(struct ad_tx *tx, uint64_t off, uint64_t size, bool alloc)
 		}
 	}
 
-	D_ALLOC_PTR(tmp);
+	D_ALLOC_PTR_NZ(tmp);
 	if(tmp == NULL)
 		return -DER_NOMEM;
 	D_INIT_LIST_HEAD(&tmp->ar_link);
@@ -354,10 +525,8 @@ ad_tx_act_cleanup(d_list_t *list)
 {
 	struct ad_act	*it, *next;
 
-	d_list_for_each_entry_safe(it, next, list, it_link) {
-		d_list_del(&it->it_link);
-		D_FREE(it);
-	}
+	d_list_for_each_entry_safe(it, next, list, it_link)
+		tls_act_put(it);
 }
 
 static void
@@ -415,7 +584,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 	if (undo) {
 		struct ad_act	*it_undo;
 
-		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+		it_undo = tls_act_get(UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
 			return -DER_NOMEM;
 
@@ -426,7 +595,7 @@ ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags)
 	} else {
 		struct ad_act	*it_redo = NULL;
 
-		D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+		it_redo = tls_act_get(UMEM_ACT_COPY, size);
 		if (it_redo == NULL)
 			return -DER_NOMEM;
 
@@ -456,7 +625,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 	if (flags & AD_TX_UNDO) {
 		struct ad_act *it_undo;
 
-		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+		it_undo = tls_act_get(UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
 			return -DER_NOMEM;
 
@@ -472,7 +641,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 			return -DER_INVAL;
 
 		if (flags & AD_TX_COPY_PTR) {
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY_PTR, size);
+			it_redo = tls_act_get(UMEM_ACT_COPY_PTR, size);
 			if (it_redo == NULL)
 				return -DER_NOMEM;
 
@@ -480,7 +649,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 			it_redo->it_act.ac_copy_ptr.ptr = (uintptr_t)ptr;
 			it_redo->it_act.ac_set.size = size;
 		} else {
-			D_ALLOC_ACT(it_redo, UMEM_ACT_COPY, size);
+			it_redo = tls_act_get(UMEM_ACT_COPY, size);
 			if (it_redo == NULL)
 				return -DER_NOMEM;
 
@@ -542,7 +711,7 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_undo, UMEM_ACT_ASSIGN, size);
+	it_undo = tls_act_get(UMEM_ACT_ASSIGN, size);
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
@@ -553,7 +722,7 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 
 	assign_integer(addr, size, val);
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_ASSIGN, size);
+	it_redo = tls_act_get(UMEM_ACT_ASSIGN, size);
 	if (it_redo == NULL)
 		return -DER_NOMEM;
 
@@ -586,7 +755,7 @@ ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags
 	}
 
 	if (flags & AD_TX_UNDO) {
-		D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+		it_undo = tls_act_get(UMEM_ACT_COPY, size);
 		if (it_undo == NULL)
 			return -DER_NOMEM;
 
@@ -600,7 +769,7 @@ ad_tx_set(struct ad_tx *tx, void *addr, char c, daos_size_t size, uint32_t flags
 		memset(addr, c, size);
 
 	if (flags & AD_TX_REDO) {
-		D_ALLOC_ACT(it_redo, UMEM_ACT_SET, size);
+		it_redo = tls_act_get(UMEM_ACT_SET, size);
 		if (it_redo == NULL)
 			return -DER_NOMEM;
 
@@ -628,11 +797,11 @@ ad_tx_move(struct ad_tx *tx, void *dst, void *src, daos_size_t size)
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_undo, UMEM_ACT_COPY, size);
+	it_undo = tls_act_get(UMEM_ACT_COPY, size);
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_MOVE, size);
+	it_redo = tls_act_get(UMEM_ACT_MOVE, size);
 	if (it_redo == NULL) {
 		D_FREE(it_undo);
 		return -DER_NOMEM;
@@ -674,7 +843,7 @@ ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_undo, UMEM_ACT_CLR_BITS, 0);
+	it_undo = tls_act_get(UMEM_ACT_CLR_BITS, 0);
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
@@ -685,7 +854,7 @@ ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 
 	setbit_range(bmap, pos, end);
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_SET_BITS, 0);
+	it_redo = tls_act_get(UMEM_ACT_SET_BITS, 0);
 	if (it_redo == NULL)
 		return -DER_NOMEM;
 
@@ -720,7 +889,7 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 		return 0;
 	}
 
-	D_ALLOC_ACT(it_undo, UMEM_ACT_SET_BITS, 0);
+	it_undo = tls_act_get(UMEM_ACT_SET_BITS, 0);
 	if (it_undo == NULL)
 		return -DER_NOMEM;
 
@@ -731,7 +900,7 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 
 	clrbit_range(bmap, pos, end);
 
-	D_ALLOC_ACT(it_redo, UMEM_ACT_CLR_BITS, 0);
+	it_redo = tls_act_get(UMEM_ACT_CLR_BITS, 0);
 	if (it_redo == NULL)
 		return -DER_NOMEM;
 
@@ -795,8 +964,7 @@ tx_end(struct ad_tx *tx, int err)
 	tx_callback(tx);
 	rc = tx->tx_last_errno;
 	utx = ad_tx2umem_tx(tx);
-	D_DEBUG(DB_TRACE, "Freeing tx %p\n", tx);
-	D_FREE(utx);
+	tls_utx_put(utx);
 
 	return rc;
 }
@@ -824,7 +992,7 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 
 	tx = tx_get();
 	if (tx == NULL) {
-		D_ALLOC_PTR(utx);
+		utx = tls_utx_get();
 		if (utx == NULL)
 			return -DER_NOMEM;
 
