@@ -6294,7 +6294,8 @@ dc_obj_key2anchor(tse_task_t *task)
 
 		rc = obj_ec_get_parity_or_alldata_shard(obj_auxi, map_ver, grp_idx, args->dkey,
 							&shard_cnt, NULL);
-		shard_cnt = obj_get_grp_size(obj);
+		if (obj_ec_parity_rotate_enabled(obj))
+		    shard_cnt = obj_get_grp_size(obj);
 		sub_anchors = shard_anchors_alloc(obj_auxi, shard_cnt, 1, args->dkey->iov_buf_len);
 		if (sub_anchors == NULL)
 			D_GOTO(err_obj, rc = -DER_NOMEM);
