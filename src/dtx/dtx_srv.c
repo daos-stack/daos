@@ -136,11 +136,11 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
-	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	uint32_t		 committed = 0;
+	uint32_t		*flags;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -199,18 +199,19 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
 
-		/* Currently, only support to abort single DTX. */
-		if (din->di_dtx_array.ca_count != 1)
-			D_GOTO(out, rc = -DER_PROTO);
+		if (din->di_epoch != 0) {
+			/* Currently, only support to abort single DTX. */
+			if (din->di_dtx_array.ca_count != 1)
+				D_GOTO(out, rc = -DER_PROTO);
 
-		if (din->di_epoch != 0)
 			rc = vos_dtx_abort(cont->sc_hdl,
 					   (struct dtx_id *)din->di_dtx_array.ca_arrays,
 					   din->di_epoch);
-		else
+		} else {
 			rc = vos_dtx_set_flags(cont->sc_hdl,
 					       (struct dtx_id *)din->di_dtx_array.ca_arrays,
-					       DTE_CORRUPTED);
+					       din->di_dtx_array.ca_count, DTE_CORRUPTED);
+		}
 		break;
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
@@ -218,7 +219,7 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, false);
 		if (rc == DTX_ST_INITED) {
 			/* For DTX_CHECK, non-ready one is equal to non-exist. Do not directly
 			 * return 'DTX_ST_INITED' to avoid interoperability trouble if related
@@ -257,12 +258,13 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = 0);
 		}
 
-		for (i = 0, rc1 = 0; i < count; i++) {
+		flags = din->di_flags.ca_arrays;
+
+		for (i = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i],
-					     true);
-			if (*ptr == -DER_NONEXIST) {
+			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &dcks[i], true);
+			if (*ptr == -DER_NONEXIST && !(flags[i] & DRF_INITIAL_LEADER)) {
 				struct dtx_stat		stat = { 0 };
 
 				/* dtx_id::dti_hlc is client side time stamp. If it is
@@ -286,9 +288,6 @@ dtx_handler(crt_rpc_t *rpc)
 				 */
 				*ptr = DTX_ST_PREPARED;
 			}
-
-			if (mbs[i] != NULL)
-				rc1++;
 		}
 		break;
 	default:
@@ -313,42 +312,6 @@ out:
 	if (likely(dpm != NULL))
 		d_tm_inc_counter(dpm->dpm_total[opc], 1);
 
-	if (opc == DTX_REFRESH && rc1 > 0) {
-		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
-		struct dtx_entry	*pdte[DTX_REFRESH_MAX] = { 0 };
-		int			 j;
-
-		for (i = 0, j = 0; i < count; i++) {
-			if (mbs[i] == NULL)
-				continue;
-
-			daos_dti_copy(&dtes[j].dte_xid,
-				      (struct dtx_id *)
-				      din->di_dtx_array.ca_arrays + i);
-			dtes[j].dte_ver = vers[i];
-			dtes[j].dte_refs = 1;
-			dtes[j].dte_mbs = mbs[i];
-
-			pdte[j] = &dtes[j];
-			dcks[j] = dcks[i];
-			j++;
-		}
-
-		D_ASSERT(j == rc1);
-
-		/* Commit the DTX after replied the original refresh request to
-		 * avoid further query the same DTX.
-		 */
-		rc = dtx_commit(cont, pdte, dcks, j, 0);
-		if (rc < 0)
-			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
-			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
-			       DP_RC(rc));
-
-		for (i = 0; i < j; i++)
-			D_FREE(pdte[i]->dte_mbs);
-	}
-
 	D_FREE(dout->do_sub_rets.ca_arrays);
 	dout->do_sub_rets.ca_count = 0;
 
@@ -370,7 +333,7 @@ dtx_init(void)
 		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	}
 
-	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 6 / 7;
+	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 19 / 20;
 	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
 
 	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
@@ -382,7 +345,7 @@ dtx_init(void)
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
-	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 19 / 20;
 	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
 
 	dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
