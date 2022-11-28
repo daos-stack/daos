@@ -193,20 +193,22 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			 * as 'orphan' that will be handled via some special DAOS tools in future.
 			 */
 			rc1 = vos_dtx_set_flags(dra->dra_cont->sc_hdl, &dsp->dsp_xid, DTE_ORPHAN);
-			D_ERROR("Hit uncertain leaked DTX "DF_DTI", mark it as orphan: "DF_RC"\n",
-				DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
-			dtx_dsp_free(dsp);
-
-			if (rc1 == -DER_NONEXIST)
+			if (rc1 == -DER_NONEXIST || rc1 == -DER_NO_PERM) {
+				dtx_dsp_free(dsp);
 				break;
+			}
 
+			D_ERROR("Hit uncertain leaked DTX "DF_DTI", mark it as orphan: "
+				DF_RC"\n", DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
+			dtx_dsp_free(dsp);
 			D_GOTO(out, rc = -DER_TX_UNCERTAIN);
 		case -DER_NONEXIST:
 			/* The leader does not have related DTX info, we may miss related DTX abort
 			 * request, let's abort it locally.
 			 */
 			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, &dsp->dsp_xid, dsp->dsp_epoch);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
+			if (rc1 < 0 && rc1 != -DER_NONEXIST && rc1 != -DER_NO_PERM &&
+			    dra->dra_abt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
 				dtx_dsp_free(dsp);
