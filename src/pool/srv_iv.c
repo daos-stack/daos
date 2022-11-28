@@ -187,6 +187,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			iv_prop->pip_obj_version = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
@@ -326,6 +329,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
+			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			prop_entry->dpe_val = iv_prop->pip_obj_version;
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
@@ -1188,7 +1194,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int
 ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   uint64_t flags, uint64_t sec_capas,
-			   d_iov_t *cred, uint32_t global_ver)
+			   d_iov_t *cred, uint32_t global_ver, uint32_t layout_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	daos_size_t		iv_entry_size;
@@ -1208,6 +1214,7 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	pic->pic_capas = sec_capas;
 	pic->pic_cred_size = cred->iov_len;
 	pic->pic_global_ver = global_ver;
+	pic->pic_obj_ver = layout_ver;
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,

@@ -33,15 +33,19 @@ from process_core_files import CoreFileProcessing
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from host_utils import get_node_set, get_local_host, HostInfo, HostException    # noqa: E402
-from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
-from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
-from run_utils import run_local, run_remote, RunException                       # noqa: E402
-from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
-from user_utils import get_chown_command                                        # noqa: E402
+from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
+from run_utils import run_local, run_remote, RunException                     # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
+    get_user_groups  # noqa: E402
 
+BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
+DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2G"
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
@@ -694,6 +698,18 @@ class TestInfo():
         except HostException as error:
             raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
+    def get_yaml_client_users(self):
+        """Find all the users in the specified yaml file.
+
+        Returns:
+            list: list of (user, group) to create
+
+        """
+        yaml_data = get_yaml_data(self.yaml_file)
+        client_users = find_values(yaml_data, ["client_users"], val_type=list)
+        client_users = client_users['client_users'] if client_users else []
+        return client_users
+
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
 
@@ -742,6 +758,9 @@ class Launch():
         self.job_results_dir = None
         self.job = None
         self.result = None
+
+        # Options for bullseye code coverage
+        self.bullseye_hosts = NodeSet()
 
         # Details about the run
         self.details = OrderedDict()
@@ -1011,6 +1030,18 @@ class Launch():
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
+        # Determine if bullseye code coverage collection is enabled
+        logger.debug("Checking for bullseye code coverage configuration")
+        # pylint: disable=unsupported-binary-operation
+        self.bullseye_hosts = args.test_servers | get_local_host()
+        result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
+        if not result.passed:
+            logger.info(
+                "Bullseye code coverage collection not configured on %s", self.bullseye_hosts)
+            self.bullseye_hosts = NodeSet()
+        else:
+            logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+
         # Define options for creating any slurm partitions required by the tests
         try:
             self.slurm_control_node = NodeSet(args.slurm_control_node)
@@ -1023,7 +1054,7 @@ class Launch():
         # Execute the tests
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold)
+            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1124,6 +1155,7 @@ class Launch():
         # /usr/sbin directory.
         usr_sbin = os.path.sep + os.path.join("usr", "sbin")
         path = os.environ.get("PATH")
+        os.environ["COVFILE"] = BULLSEYE_FILE
 
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
@@ -1138,6 +1170,8 @@ class Launch():
                 os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+            if "DAOS_TEST_USER_DIR" not in os.environ:
+                os.environ["DAOS_TEST_USER_DIR"] = DEFAULT_DAOS_TEST_USER_DIR
             if "DAOS_TEST_SHARED_DIR" not in os.environ:
                 if base_dir != os.path.join(os.sep, "usr"):
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
@@ -1733,6 +1767,120 @@ class Launch():
             test.set_yaml_info(args.include_localhost)
 
     @staticmethod
+    def _query_create_group(hosts, group, create=False):
+        """Query and optionally create a group on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            group (str): group to query and create
+            create (bool, optional): whether to create the group if non-existent
+
+        Raises:
+            LaunchException: if there is an error querying or creating the group
+
+        Returns:
+            str: the group's gid
+
+        """
+        # Get the group id on each node
+        logger.info('Querying group %s', group)
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
+        if not create:
+            raise LaunchException(f'Group not setup correctly: {group}')
+
+        # Create the group
+        logger.info('Creating group %s', group)
+        if not groupadd(logger, hosts, group, True, True).passed:
+            raise LaunchException(f'Error creating group {group}')
+
+        # Get the group id on each node
+        logger.info('Querying group %s', group)
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
+        raise LaunchException(f'Group not setup correctly: {group}')
+
+    @staticmethod
+    def _query_create_user(hosts, user, gid=None, create=False):
+        """Query and optionally create a user on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            user (str): user to query and create
+            gid (str, optional): user's primary gid. Default is None
+            create (bool, optional): whether to create the group if non-existent. Default is False
+
+        Raises:
+            LaunchException: if there is an error querying or creating the user
+
+        """
+        logger.info('Querying user %s', user)
+        groups = get_user_groups(logger, hosts, user)
+        logger.debug('  found groups %s', groups)
+        groups = list(groups)
+        if len(groups) == 1 and groups[0] == gid:
+            # Exists and in correct group
+            return
+        if not create:
+            raise LaunchException(f'User {user} groups not as expected')
+
+        # Delete and ignore errors, in case user account is inconsistent across nodes
+        logger.info('Deleting user %s', user)
+        _ = userdel(logger, hosts, user, True)
+
+        logger.info('Creating user %s in group %s', user, gid)
+        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
+        if not useradd(logger, hosts, user, gid, parent_dir, True).passed:
+            raise LaunchException(f'Error creating user {user}')
+
+    def _user_setup(self, test, create=False):
+        """Setup test users on client nodes.
+
+        Args:
+            test (TestInfo): the test information
+            create (bool, optional): whether to create extra test users defined by the test
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        users = test.get_yaml_client_users()
+        clients = test.host_info.clients.hosts
+        if users:
+            logger.info('Setting up test users on %s', clients)
+
+        # Keep track of queried groups to avoid redundant work
+        group_gid = {}
+
+        # Query and optionally create all groups and users
+        for _user in users:
+            user, *group = _user.split(':')
+            group = group[0] if group else None
+
+            # Save the group's gid
+            if group and group not in group_gid:
+                try:
+                    group_gid[group] = self._query_create_group(clients, group, create)
+                except LaunchException as error:
+                    self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                    return 128
+
+            gid = group_gid.get(group, None)
+            try:
+                self._query_create_user(clients, user, gid, create)
+            except LaunchException as error:
+                self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                return 128
+
+        return 0
+
+    @staticmethod
     def setup_fuse_config(hosts):
         """Set up the system fuse config file.
 
@@ -2032,7 +2180,8 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold):
+                  core_files, threshold, user_create):
+        # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
@@ -2045,6 +2194,7 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2054,6 +2204,9 @@ class Launch():
 
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
+
+        # Configure hosts to collect code coverage
+        self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -2072,7 +2225,7 @@ class Launch():
                 test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
 
                 # Prepare the hosts to run the tests
-                step_status = self.prepare(test, repeat)
+                step_status = self._prepare(test, repeat, user_create)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
@@ -2104,8 +2257,78 @@ class Launch():
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
 
+        # Collect code coverage files after all test have completed
+        self.finalize_bullseye()
+
         # Summarize the run
         return self._summarize_run(return_code)
+
+    def setup_bullseye(self):
+        """Set up the hosts for bullseye code coverage collection.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        if self.bullseye_hosts:
+            logger.debug("-" * 80)
+            logger.info("Setting up bullseye code coverage on %s:", self.bullseye_hosts)
+
+            logger.debug("Removing any existing %s file", BULLSEYE_FILE)
+            command = ["rm", "-fr", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error removing bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
+            command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error copying bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
+            command = ["chmod", "777", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error updating bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+        return 0
+
+    def finalize_bullseye(self):
+        """Retrieve the bullseye code coverage collection information from the hosts.
+
+        Returns:
+            int: status code: 0 = success, 16 = failure
+
+        """
+        if not self.bullseye_hosts:
+            return 0
+
+        bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
+        bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
+        status = self._archive_files(
+            "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
+        # Rename bullseye_coverage_logs.host/test.cov.* to
+        # bullseye_coverage_logs/test.host.cov.*
+        for item in os.listdir(self.job_results_dir):
+            item_full = os.path.join(self.job_results_dir, item)
+            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    os.makedirs(bullseye_dir, exist_ok=True)
+                    for name in os.listdir(item_full):
+                        old_file = os.path.join(item_full, name)
+                        if os.path.isfile(old_file):
+                            new_name = name.split(".")
+                            new_name.insert(1, host_ext[-1][1:])
+                            new_file_name = ".".join(new_name)
+                            new_file = os.path.join(bullseye_dir, new_file_name)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            os.rename(old_file, new_file)
+        return status
 
     @staticmethod
     def display_disk_space(path):
@@ -2122,12 +2345,13 @@ class Launch():
         except RunException:
             pass
 
-    def prepare(self, test, repeat):
+    def _prepare(self, test, repeat, user_create):
         """Prepare the test for execution.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -2143,6 +2367,11 @@ class Launch():
 
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
+        if status:
+            return status
+
+        # Setup additional test users
+        status = self._user_setup(test, user_create)
         if status:
             return status
 
@@ -2224,12 +2453,14 @@ class Launch():
         """
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        user_dir = os.environ["DAOS_TEST_USER_DIR"]
         logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
+            f"mkdir -p {user_dir}"
         ]
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
@@ -2585,7 +2816,7 @@ class Launch():
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                "then daos_server storage prepare -n --reset && "
+                f"then export COVFILE={BULLSEYE_FILE} && daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
@@ -3215,6 +3446,10 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3273,6 +3508,7 @@ def main():
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
+        args.user_create = True
 
     # Perform the steps defined by the arguments specified
     try:
