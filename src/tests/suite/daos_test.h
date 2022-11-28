@@ -374,6 +374,8 @@ int run_daos_rebuild_simple_ec_test(int rank, int size, int *tests,
 				    int test_size);
 int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
+int run_daos_upgrade_test(int rank, int size, int *sub_tests,
+			  int sub_tests_size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
@@ -414,6 +416,7 @@ void daos_reint_server(const uuid_t pool_uuid, const char *grp,
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 
+int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
 

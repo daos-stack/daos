@@ -104,7 +104,7 @@ class PoolSecurityTestBase(TestWithServers):
             return result["status"] != 0 or result["error"] is not None
 
         # Result is CmdResult.
-        return result.exit_status != 0 or result.stderr_text != ""
+        return result.exit_status != 0
 
     @staticmethod
     def _command_missing_err_code(result, err_code):
