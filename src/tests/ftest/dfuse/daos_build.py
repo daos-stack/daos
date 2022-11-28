@@ -196,6 +196,9 @@ class DaosBuild(DfuseTestBase):
         # not yet work, so run this part in serial.  The VMs have 6 cores each.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
+            ##DH test only, to add local branch for build to include the env change
+            #    need to remove next line before land/merge.
+                'git checkout dinghwah/DAOS-12134-ctest',
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',

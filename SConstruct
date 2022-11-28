@@ -334,6 +334,9 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             if value is not None:
                 env['ENV'][key] = value
 
+    if ‘COVFILE’ in os.environ:
+        env[‘ENV’][‘COVFILE’] = os.environ[‘COVFILE’]
+
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
