@@ -370,6 +370,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint64_t)		(om_punched_ephs)	CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
+	((uint32_t)		(om_new_layout_ver)	CRT_VAR)	\
 	((uint32_t)		(om_opc)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
@@ -439,7 +440,7 @@ CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
 CRT_RPC_DECLARE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
 
-void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
+void daos_dc_obj2id(void *ptr, daos_unit_oid_t *id);
 
 enum daos_cpd_sub_opc {
 	DCSO_UPDATE		= 0,
