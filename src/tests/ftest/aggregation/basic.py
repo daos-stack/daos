@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,6 +58,7 @@ class DaosAggregationBasic(IorTestBase):
         :avocado: tags=aggregate,daosio,ior
         :avocado: tags=aggregatebasic
         :avocado: tags=DAOS_5610
+        :avocado: tags=DAOS-11148
         """
 
         # Create pool and container
