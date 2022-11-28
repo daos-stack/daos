@@ -293,6 +293,14 @@ class DefaultEnvironment():
         """Fake d_configure_mpi"""
         return DefaultEnvironment()
 
+    def d_setup_go(self):
+        """Fake d_setup_go"""
+        return
+
+    def d_go_bin(self):
+        """Fake d_go_bin"""
+        return 'go'
+
     def d_program(self, *_args, **_kw):
         """Fake d_program"""
         return self.Program(*_args, **_kw)
@@ -398,6 +406,10 @@ class Configure():
         """Fake CheckFlag"""
         return True
 
+    def CheckGoVersion(self, *_args, **_kw):
+        """Fake CheckGoVersion"""
+        return True
+
     def Finish(self):
         """Fake finish"""
 
@@ -418,6 +430,10 @@ class Dir():
     def srcnode(self):
         """Fake srcnode"""
         return self
+
+
+class Scanner():
+    """Fake Scanner"""
 
 
 class File():

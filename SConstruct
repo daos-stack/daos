@@ -322,7 +322,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile', 'go_builder'])
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.

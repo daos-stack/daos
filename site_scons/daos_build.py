@@ -78,7 +78,10 @@ def _add_build_rpath(env, pathin="."):
 
 
 def _known_deps(env, **kwargs):
-    """Get list of known libraries"""
+    """Get list of known libraries
+
+    SCons is sensitive to dependency order so return a consistent order here
+    """
     shared_libs = []
     static_libs = []
     if 'LIBS' in kwargs:
@@ -133,8 +136,6 @@ def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
-    # Libraries in this case are used to force rebuild, so use Depends
-    Depends(result, static_deps + shared_deps)
     return result
 
 
