@@ -3,7 +3,7 @@ hosts:
   test_clients: 3
 timeout: 1300
 setup:
-  start_servers_once: False
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -56,7 +56,7 @@ ior:
   client_processes:
     np: 12
   test_file: /testFile
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -w -W -r -R -k"
   api: DFS
   transfer_size: '1M'
@@ -64,4 +64,4 @@ ior:
   dfs_oclass: "EC_2P1G1"
   dfs_dir_oclass: "EC_2P1G1"
 runtime:
-  total_runtime: 800 # total seconds to run
+  total_runtime: 800  # total seconds to run
