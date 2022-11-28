@@ -7,17 +7,18 @@
  * This file is part of CaRT. It implements client side of the cart_ctl command
  * line utility.
  */
+#define D_LOGFAC	DD_FAC(ctl)
 
 #include <stdio.h>
 #include <pthread.h>
 #include <getopt.h>
 #include <semaphore.h>
-#include <daos/agent.h>
-#include <daos/mgmt.h>
 
 /* for crt_register_proto_fi() */
 #include "crt_internal.h"
 #include "crt_utils.h"
+#include <daos/agent.h>
+#include <daos/mgmt.h>
 #include "svc.pb-c.h"
 
 
