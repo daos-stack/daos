@@ -661,10 +661,10 @@ out:
 }
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
-		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
-		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr, d_sg_list_t *details,
-		      uint64_t *seq)
+		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label, uuid_t *cont,
+		      char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey,
+		      char *msg, uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
+		      d_sg_list_t *details, uint64_t *seq)
 {
 	crt_rpc_t		*req;
 	struct chk_report_in	*cri;
@@ -682,16 +682,21 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 	cri->cri_ics_result = result;
 	cri->cri_rank = rank;
 	cri->cri_target = target;
+	cri->cri_seq = *seq;
 
 	if (pool != NULL)
 		uuid_copy(cri->cri_pool, *pool);
 	else
 		memset(cri->cri_pool, 0, sizeof(uuid_t));
 
+	cri->cri_pool_label = pool_label;
+
 	if (cont != NULL)
 		uuid_copy(cri->cri_cont, *cont);
 	else
 		memset(cri->cri_cont, 0, sizeof(uuid_t));
+
+	cri->cri_cont_label = cont_label;
 
 	if (obj != NULL)
 		cri->cri_obj = *obj;

@@ -228,8 +228,11 @@ CRT_RPC_DECLARE(chk_pool_mbs, DAOS_ISEQ_CHK_POOL_MBS, DAOS_OSEQ_CHK_POOL_MBS);
 	((d_rank_t)		(cri_rank)		CRT_VAR)		\
 	((uint32_t)		(cri_target)		CRT_VAR)		\
 	((uint32_t)		(cri_padding)		CRT_VAR)		\
+	((uint64_t)		(cri_seq)		CRT_VAR)		\
 	((uuid_t)		(cri_pool)		CRT_VAR)		\
+	((d_string_t)		(cri_pool_label)	CRT_VAR)		\
 	((uuid_t)		(cri_cont)		CRT_VAR)		\
+	((d_string_t)		(cri_cont_label)	CRT_VAR)		\
 	((daos_unit_oid_t)	(cri_obj)		CRT_RAW)		\
 	((daos_key_t)		(cri_dkey)		CRT_VAR)		\
 	((daos_key_t)		(cri_akey)		CRT_VAR)		\
@@ -544,6 +547,7 @@ struct chk_pool_rec {
 	uuid_t			 cpr_uuid;
 	ABT_thread		 cpr_thread;
 	struct ds_pool_clues	 cpr_clues;
+	struct ds_pool_clue	*cpr_clue;
 	struct chk_bookmark	 cpr_bk;
 	struct chk_instance	*cpr_ins;
 	struct chk_pool_mbs	*cpr_mbs;
@@ -578,7 +582,9 @@ struct chk_report_unit {
 	uint32_t		 cru_option_nr;
 	uint32_t		 cru_detail_nr;
 	uuid_t			*cru_pool;
+	char			*cru_pool_label;
 	uuid_t			*cru_cont;
+	char			*cru_cont_label;
 	daos_unit_oid_t		*cru_obj;
 	daos_key_t		*cru_dkey;
 	daos_key_t		*cru_akey;
@@ -741,10 +747,10 @@ int chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid
 			struct rsvc_hint *hint);
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
-		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
-		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
-		      d_sg_list_t *details, uint64_t *seq);
+		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,
+		      uuid_t *cont, char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey,
+		      daos_key_t *akey, char *msg, uint32_t option_nr, uint32_t *options,
+		      uint32_t detail_nr, d_sg_list_t *details, uint64_t *seq);
 
 int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank,
 		      uint32_t *pool_nr, uuid_t **pools);
@@ -752,10 +758,10 @@ int chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank,
 /* chk_updcall.c */
 
 int chk_report_upcall(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
-		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
-		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
-		      d_sg_list_t *details);
+		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,
+		      uuid_t *cont, char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey,
+		      daos_key_t *akey, char *msg, uint32_t option_nr, uint32_t *options,
+		      uint32_t detail_nr, d_sg_list_t *details);
 
 /* chk_vos.c */
 
