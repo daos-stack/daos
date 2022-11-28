@@ -1190,7 +1190,7 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_cnt);
 
 out:
-	D_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_IO,
+	D_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE,
 		 DLOG_ERR, DF_OID", forward:" DF_RC"\n", DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 	return rc;
 }
