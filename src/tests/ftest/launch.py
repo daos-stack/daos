@@ -2667,7 +2667,8 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], test.yaml_info["test_log_threshold"],
+                    data["destination"], data["depth"],
+                    test.yaml_info["test_log_threshold"] or threshold,
                     data["timeout"])
 
         # Optionally rename the test results directory for this test
