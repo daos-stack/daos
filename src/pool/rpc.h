@@ -137,8 +137,7 @@
 		NULL),							\
 	X(POOL_UPGRADE,							\
 		0, &CQF_pool_upgrade,					\
-		ds_pool_upgrade_handler,				\
-		NULL),							\
+		ds_pool_upgrade_handler, NULL),				\
 	X(POOL_TGT_DISCARD,						\
 		0, &CQF_pool_tgt_discard,				\
 		ds_pool_tgt_discard_handler,				\
