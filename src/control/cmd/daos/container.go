@@ -527,31 +527,7 @@ func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	return out, nil
 }
 
-func printContainers(out io.Writer, contIDs []*ContainerID) {
-	if len(contIDs) == 0 {
-		fmt.Fprintf(out, "No containers.\n")
-		return
-	}
-
-	uuidTitle := "UUID"
-	labelTitle := "Label"
-	titles := []string{uuidTitle, labelTitle}
-
-	table := []txtfmt.TableRow{}
-	for _, id := range contIDs {
-		table = append(table,
-			txtfmt.TableRow{
-				uuidTitle:  id.UUID.String(),
-				labelTitle: id.Label,
-			})
-	}
-
-	tf := txtfmt.NewTableFormatter(titles...)
-	tf.InitWriter(out)
-	tf.Format(table)
-}
-
-func printContainersVerbose(out io.Writer, contsInfo []*containerInfo) {
+func printContainers(out io.Writer, contsInfo []*containerInfo, verbose bool) {
 	if len(contsInfo) == 0 {
 		fmt.Fprintf(out, "No containers.\n")
 		return
@@ -561,23 +537,28 @@ func printContainersVerbose(out io.Writer, contsInfo []*containerInfo) {
 	labelTitle := "Label"
 	typeTitle := "Type"
 	oclassTitle := "ObjClass"
+	dclassTitle := "DirClass"
+	fclassTitle := "FileClass"
 	rfTitle := "RF"
-	titles := []string{uuidTitle, labelTitle, typeTitle, oclassTitle, rfTitle}
+	titles := []string{uuidTitle, labelTitle}
+	if verbose {
+		titles = append(titles, typeTitle, oclassTitle, dclassTitle, fclassTitle, rfTitle)
+	}
 
 	table := []txtfmt.TableRow{}
 	for _, info := range contsInfo {
-		rfValue := ""
-		if info.RedundancyFactor != nil {
-			rfValue = fmt.Sprintf("%d", *info.RedundancyFactor)
+		row := txtfmt.TableRow{
+			uuidTitle:  info.ContainerUUID.String(),
+			labelTitle: info.ContainerLabel,
 		}
-		table = append(table,
-			txtfmt.TableRow{
-				uuidTitle:   info.ContainerUUID.String(),
-				labelTitle:  info.ContainerLabel,
-				typeTitle:   info.Type,
-				oclassTitle: info.ObjectClass,
-				rfTitle:     rfValue,
-			})
+		if verbose {
+			row[typeTitle] = info.Type
+			row[oclassTitle] = info.ObjectClass
+			row[dclassTitle] = info.DirObjectClass
+			row[fclassTitle] = info.FileObjectClass
+			row[rfTitle] = fmt.Sprintf("%d", info.RedundancyFactor)
+		}
+		table = append(table, row)
 	}
 
 	tf := txtfmt.NewTableFormatter(titles...)
@@ -608,33 +589,32 @@ func (cmd *containerListCmd) Execute(_ []string) error {
 			"unable to list containers for pool %s", cmd.PoolID())
 	}
 
-	if !cmd.Verbose {
-		if cmd.jsonOutputEnabled() {
-			return cmd.outputJSON(contIDs, nil)
-		}
-
-		var bld strings.Builder
-		printContainers(&bld, contIDs)
-		cmd.Info(bld.String())
-		return nil
-	}
-
 	contInfo := make([]*containerInfo, 0, len(contIDs))
 	for _, contID := range contIDs {
-		info, err := cmd.containerInfo(&contID.UUID)
-		if err != nil {
-			return errors.Wrapf(err,
-				"unable to query container info for pool %s, cont %s", cmd.PoolID(), contID)
+		if cmd.Verbose {
+			info, err := cmd.containerInfo(&contID.UUID)
+			if err != nil {
+				return errors.Wrapf(err,
+					"unable to query container info for pool %s, cont %s", cmd.PoolID(), contID)
+			}
+			contInfo = append(contInfo, info)
+		} else {
+			contInfo = append(contInfo, &containerInfo{
+				ContainerUUID:  &contID.UUID,
+				ContainerLabel: contID.Label,
+			})
 		}
-		contInfo = append(contInfo, info)
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(contInfo, nil)
+		if cmd.Verbose {
+			return cmd.outputJSON(contInfo, nil)
+		}
+		return cmd.outputJSON(contIDs, nil)
 	}
 
 	var bld strings.Builder
-	printContainersVerbose(&bld, contInfo)
+	printContainers(&bld, contInfo, cmd.Verbose)
 	cmd.Info(bld.String())
 	return nil
 }
