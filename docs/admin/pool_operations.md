@@ -380,7 +380,7 @@ When setting this property, the cell size can be specified in Bytes
 (as a number with no suffix), with a base-10 suffix like `k` or `MB`,
 or with a base-2 suffix like `ki` or `MiB`.
 
-See [Erasure Code](../user/container/#erasure-code) for details on
+See [Erasure Code](https://docs.daos.io/v2.2/user/container/#erasure-code) for details on
 erasure coding at the container level.
 
 ## Access Control Lists
