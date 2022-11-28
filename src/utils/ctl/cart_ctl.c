@@ -234,7 +234,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
-		D_GOTO(error_out, 0);
+		return;
 
 	fi_attr_in->fa_argument = token;
 	return;
