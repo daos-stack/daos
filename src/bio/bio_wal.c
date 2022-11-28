@@ -873,6 +873,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	unsigned int		 blks, unused_off;
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
+	unsigned int		 act_nr;
 	uint64_t		 tx_id = tx->utx_id;
 	int			 iov_nr, rc;
 
@@ -888,6 +889,12 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	if (rc) {
 		D_ERROR("Failed to generate async data csum. "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	act_nr = umem_tx_act_nr(tx) + dc_arr.dca_nr;
+	if (act_nr == 0) {
+		D_DEBUG(DB_IO, "MC:%p WAL commit ID:"DF_U64" no act\n", mc, tx_id);
+		goto out;
 	}
 
 	/* Calculate the required log blocks for this transaction */

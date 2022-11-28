@@ -953,7 +953,7 @@ tx_end(struct ad_tx *tx, int err)
 	if (rc == 0) {
 		ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
 	} else {
-		D_ERROR("ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
 		tx->tx_last_errno = rc;
 		ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 	}

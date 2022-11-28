@@ -36,6 +36,7 @@
 #endif /* FAULT_INJECTION */
 
 #define VPOOL_16M	(16ULL << 20)
+#define VPOOL_256M	(256ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
 #define VPOOL_10G	(10ULL << 30)
