@@ -18,7 +18,7 @@ The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 To checkout the 2.2 development branch, simply run:
 
 ```
-$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git -b release/2.2
 $ cd daos
 ```
 
