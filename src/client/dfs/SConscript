@@ -28,7 +28,7 @@ def configure_lustre(denv):
 
 def scons():
     """Execute build"""
-    Import('env', 'CART_VERSION', 'gurt_lib', 'daos_lib')
+    Import('env', 'gurt_lib', 'daos_lib')
 
     env.d_add_build_rpath()
 
@@ -41,8 +41,8 @@ def scons():
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
 
     # TODO: Without SHLIBVERSION then duns silently fails to link.
-    dfs_lib = denv.d_library('dfs', dfs_src, LIBS=libraries, SHLIBVERSION=CART_VERSION)
-    denv.InstallVersionedLib('$PREFIX/lib64/', dfs_lib, SHLIBVERSION=CART_VERSION)
+    dfs_lib = denv.d_library('dfs', dfs_src, LIBS=libraries)
+    denv.InstallVersionedLib('$PREFIX/lib64/', dfs_lib)
 
     duns_libs = libraries + dfs_lib
     print(duns_libs)

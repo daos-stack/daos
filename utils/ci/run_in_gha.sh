@@ -75,9 +75,6 @@ echo "::group::Re-install all"
 scons install --debug=explain
 echo "::endgroup::"
 
-# TODO: Remove this.
-exit 1
-
 echo "::group::Rebuild ofi in alternative location"
 rm -rf /opt/daos/prereq/release/{ofi,mercury} build/external/release/{ofi,mercury*}
 scons PREFIX=/opt/daos/dep TARGET_TYPE=release --build-deps=only DEPS=ofi --jobs \
