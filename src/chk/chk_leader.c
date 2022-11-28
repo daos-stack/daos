@@ -23,6 +23,8 @@
 #define DF_LEADER	"Check leader (gen: "DF_X64")"
 #define DP_LEADER(ins)	(ins)->ci_bk.cb_gen
 
+/* Only for test. */
+
 static struct chk_instance	*chk_leader;
 
 struct chk_query_args {
