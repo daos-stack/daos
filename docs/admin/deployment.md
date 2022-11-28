@@ -757,8 +757,8 @@ Each tier has a `class` parameter which defines the storage type.
 Typical class values are "dcpm" for PMem (Intel(R) Optane(TM) persistent
 memory) and "nvme" for NVMe SSDs.
 When persistent memory is unavailable, class may be set to "ram", which
-emulates SCM using a ramfs device, and metadata is saved to NVMe SSDs using
-logging and checkpointing.
+emulates SCM using a ramfs device, and metadata and small objects are
+saved to NVMe SSDs using logging and checkpointing.
 
 For class == "dcpm", the following parameters should be populated:
 
@@ -787,7 +787,7 @@ For class == "nvme", the following parameters should be populated:
 - `bdev_roles` optionally specifies a list of roles for this tier.
   By default, the DAOS server will assign roles to bdev tiers
   automatically, so the bdev_roles directive is only needed when that
-  assignment is doesn't match your use case.
+  assignment doesn't match your use case.
 
   When "dcpm" is used for the first tier, this list should be omitted or
   specify only "data".  Only a single NVMe tier is supported.

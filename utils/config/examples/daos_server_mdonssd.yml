@@ -29,13 +29,13 @@ engines:
     # Without persistent SCM storage, the first tier uses RAM to hold metadata.
     # Metadata updates are persisted to a write-ahead log (wal) in NVMe, which
     # is checkpointed (meta) to NVME.  Each of the (bdev) tiers specified after
-    # the first ram class is assigned to a combination of the following roles:
+    # the first ram class has a combination of the following roles:
     # wal, meta, data
 
-    # The DAOS server normally assigns the roles to the bdev tiers specified in
-    # the storage description.  If these default assignments are not suitable,
-    # the roles can be assigned explicitly.  To do this, each of the roles must
-    # be assigned to a bdev tier.  Each tier must have one or more roles
+    # The DAOS server assigns the roles to the bdev tiers specified in the
+    # storage description.  If these default assignments are not suitable,
+    # the roles can be assigned explicitly.  To do this, each of the roles
+    # must be assigned to a bdev tier.  Each tier must have one or more roles
     # assigned.  The wal and meta roles must be assigned to exactly one tier,
     # while the data role may be assigned to multiple tiers.
     storage:
@@ -64,7 +64,7 @@ engines:
         # -
         #   class: nvme
         #   bdev_list: ["0000:81:00.0"]
-        #   bdev_roles: [wal,data]
+        #   bdev_roles: [wal]
         # -
         #   class: nvme
         #   bdev_list: ["0000:82:00.0"]
