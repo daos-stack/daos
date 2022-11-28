@@ -36,17 +36,25 @@
  * util.h -- internal definitions for util module
  */
 
-#ifndef DAV_UTIL_H
-#define DAV_UTIL_H 1
+#ifndef __DAOS_COMMON_UTIL_H
+#define __DAOS_COMMON_UTIL_H 1
 
 #include <string.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <ctype.h>
-
+#include <stdatomic.h>
 #include <sys/param.h>
 
+#if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || \
+	defined(__riscv)
+#define PAGESIZE 4096
+#elif defined(__PPC64__)
+#define PAGESIZE 65536
+#else
+#error unable to recognize ISA at compile time
+#endif
 
 #if defined(__x86_64) || defined(_M_X64) || defined(__aarch64__) || \
 	defined(__riscv)
@@ -95,20 +103,6 @@ util_div_ceil(unsigned a, unsigned b)
  * XXX assertions needed on (value != 0) in both versions of bitscans
  *
  */
-
-/*
- * ISO C11 -- 7.17.1.4
- * memory_order - an enumerated type whose enumerators identify memory ordering
- * constraints.
- */
-typedef enum {
-	memory_order_relaxed = __ATOMIC_RELAXED,
-	memory_order_consume = __ATOMIC_CONSUME,
-	memory_order_acquire = __ATOMIC_ACQUIRE,
-	memory_order_release = __ATOMIC_RELEASE,
-	memory_order_acq_rel = __ATOMIC_ACQ_REL,
-	memory_order_seq_cst = __ATOMIC_SEQ_CST
-} memory_order;
 
 /*
  * ISO C11 -- 7.17.7.2 The atomic_load generic functions
@@ -164,31 +158,22 @@ typedef enum {
 #define util_atomic_load64(object, dest)\
 	util_atomic_load_explicit64(object, dest, memory_order_seq_cst)
 
-#if !defined(likely)
-#if defined(__GNUC__)
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x) (!!(x))
-#define unlikely(x) (!!(x))
-#endif
-#endif
-
 #define COMPILE_ERROR_ON(cond) ((void)sizeof(char[(cond) ? -1 : 1]))
 
 /* macro for counting the number of varargs (up to 9) */
 #define COUNT(...)\
-	COUNT_I(__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-#define COUNT_I(_, _9, _8, _7, _6, _5, _4, _3, _2,  X, ...) X
+	COUNT_11TH(_, ##__VA_ARGS__, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+#define COUNT_11TH(_11, _10, _9, _8, _7, _6, _5, _4, _3, _2,  X, ...) X
 
 /* concatenation macro */
 #define GLUE(A, B) GLUE_I(A, B)
 #define GLUE_I(A, B) A##B
 
-/* macro for suppresing errors from unused variables (up to 9) */
+/* macro for suppresing errors from unused variables (zero to 9) */
 #define SUPPRESS_UNUSED(...)\
 	GLUE(SUPPRESS_ARG_, COUNT(__VA_ARGS__))(__VA_ARGS__)
-#define SUPPRESS_ARG_1(X) ((void) X)
+#define SUPPRESS_ARG_0(X)
+#define SUPPRESS_ARG_1(X) ((void)(X))
 #define SUPPRESS_ARG_2(X, ...) do {\
 	SUPPRESS_ARG_1(X); SUPPRESS_ARG_1(__VA_ARGS__);\
 } while (0)
@@ -214,4 +199,4 @@ typedef enum {
 	SUPPRESS_ARG_1(X); SUPPRESS_ARG_8(__VA_ARGS__);\
 } while (0)
 
-#endif /* util.h */
+#endif /* __DAOS_COMMON_UTIL_H */

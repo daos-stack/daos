@@ -48,7 +48,6 @@ struct dav_action_internal {
 	/* type of operation (alloc/free vs set) */
 	enum dav_action_type type;
 
-	/* not used */
 	uint32_t padding;
 
 	/*
@@ -78,6 +77,8 @@ struct dav_action_internal {
 		uint64_t data2[14];
 	};
 };
+D_CASSERT(offsetof(struct dav_action_internal, data2) == offsetof(struct dav_action, data2),
+	  "struct dav_action misaligned!");
 
 /*
  * palloc_set_value -- creates a new set memory action
@@ -129,7 +130,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 	 * parameter had been set.
 	 */
 	if (unlikely(heap->alloc_pattern > PALLOC_CTL_DEBUG_NO_PATTERN)) {
-		pmemops_memset(&heap->p_ops, uptr, heap->alloc_pattern,
+		mo_wal_memset(&heap->p_ops, uptr, heap->alloc_pattern,
 			usize, 0);
 		VALGRIND_DO_MAKE_MEM_UNDEFINED(uptr, usize);
 	}
@@ -137,7 +138,7 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
 	int ret;
 
 	if (constructor != NULL) {
-		ret = constructor(heap->base, uptr, usize, arg);
+		ret = constructor(heap->p_ops.base, uptr, usize, arg);
 		if (ret  != 0) {
 			/*
 			 * If canceled, revert the block back to the free
@@ -270,15 +271,12 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 	const struct dav_action_internal *act,
 	struct operation_context *ctx)
 {
-	/* suppress unused-parameter errors */
-	SUPPRESS_UNUSED(heap);
-
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
 		D_CRIT("invalid operation or heap corruption\n");
 		ASSERT(0);
 	}
-#endif /* DEBUG */
+#endif
 
 	/*
 	 * The actual required metadata modifications are chunk-type
@@ -563,7 +561,7 @@ palloc_exec_actions(struct palloc_heap *heap,
 	}
 
 	/* wait for all allocated object headers to be persistent */
-	pmemops_drain(&heap->p_ops);
+	mo_wal_drain(&heap->p_ops);
 
 	/* perform all persistent memory operations */
 	operation_process(ctx);
@@ -607,11 +605,55 @@ palloc_reserve(struct palloc_heap *heap, size_t size,
 }
 
 /*
+ * palloc_action_isalloc - action is a heap reservation
+ *			   created by palloc_reserve().
+ */
+int
+palloc_action_isalloc(struct dav_action *act)
+{
+	struct dav_action_internal *actp = (struct dav_action_internal *)act;
+
+	return ((actp->type == DAV_ACTION_TYPE_HEAP) &&
+		(actp->new_state == MEMBLOCK_ALLOCATED));
+}
+
+uint64_t
+palloc_get_realoffset(struct palloc_heap *heap, uint64_t off)
+{
+	struct memory_block m = memblock_from_offset(heap, off);
+
+	return HEAP_PTR_TO_OFF(m.heap, m.m_ops->get_real_data(&m));
+}
+
+/*
+ * palloc_get_prange -- get the start offset and size of allocated memory that
+ *			needs to be persisted.
+ *
+ * persist_udata - if true, persist the user data.
+ */
+void
+palloc_get_prange(struct dav_action *act, uint64_t *const offp, uint64_t *const sizep,
+		  int persist_udata)
+{
+	struct dav_action_internal *act_in = (struct dav_action_internal *)act;
+
+	D_ASSERT(act_in->type == DAV_ACTION_TYPE_HEAP);
+	/* we need to persist the header if present */
+	*offp = HEAP_PTR_TO_OFF(act_in->m.heap, act_in->m.m_ops->get_real_data(&act_in->m));
+	*sizep = header_type_to_size[act_in->m.header_type];
+
+	D_ASSERT(act_in->offset == *offp + header_type_to_size[act_in->m.header_type]);
+	/* persist the user data */
+	if (persist_udata)
+		*sizep += act_in->usable_size;
+}
+
+/*
  * palloc_defer_free -- creates an internal deferred free action
  */
 static void
 palloc_defer_free_create(struct palloc_heap *heap, uint64_t off,
-	struct dav_action_internal *out)
+			 struct dav_action_internal *out)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
@@ -633,8 +675,7 @@ palloc_defer_free_create(struct palloc_heap *heap, uint64_t off,
  * palloc_defer_free -- creates a deferred free action
  */
 void
-palloc_defer_free(struct palloc_heap *heap, uint64_t off,
-	struct dav_action *act)
+palloc_defer_free(struct palloc_heap *heap, uint64_t off, struct dav_action *act)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
@@ -646,8 +687,7 @@ palloc_defer_free(struct palloc_heap *heap, uint64_t off,
  * palloc_cancel -- cancels all reservations in the array
  */
 void
-palloc_cancel(struct palloc_heap *heap,
-	struct dav_action *actv, size_t actvcnt)
+palloc_cancel(struct palloc_heap *heap, struct dav_action *actv, size_t actvcnt)
 {
 	struct dav_action_internal *act;
 
@@ -661,9 +701,8 @@ palloc_cancel(struct palloc_heap *heap,
  * palloc_publish -- publishes all reservations in the array
  */
 void
-palloc_publish(struct palloc_heap *heap,
-	struct dav_action *actv, size_t actvcnt,
-	struct operation_context *ctx)
+palloc_publish(struct palloc_heap *heap, struct dav_action *actv, size_t actvcnt,
+	       struct operation_context *ctx)
 {
 	palloc_exec_actions(heap, ctx,
 		(struct dav_action_internal *)actv, actvcnt);
@@ -704,16 +743,15 @@ palloc_publish(struct palloc_heap *heap,
  * of copying the old content.
  */
 int
-palloc_operation(struct palloc_heap *heap,
-	uint64_t off, uint64_t *dest_off, size_t size,
-	palloc_constr constructor, void *arg,
-	uint64_t extra_field, uint16_t object_flags,
-	uint16_t class_id, uint16_t arena_id,
-	struct operation_context *ctx)
+palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, size_t size,
+		 palloc_constr constructor, void *arg, uint64_t extra_field, uint16_t object_flags,
+		 uint16_t class_id, uint16_t arena_id, struct operation_context *ctx)
 {
 	size_t user_size = 0;
 
 	size_t nops = 0;
+	uint64_t aoff;
+	uint64_t asize;
 	struct dav_action_internal ops[2];
 	struct dav_action_internal *alloc = NULL;
 	struct dav_action_internal *dealloc = NULL;
@@ -743,6 +781,11 @@ palloc_operation(struct palloc_heap *heap,
 			operation_cancel(ctx);
 			return -1;
 		}
+
+		palloc_get_prange((struct dav_action *)alloc, &aoff, &asize, 0);
+		if (asize) /* != CHUNK_FLAG_HEADER_NONE */
+			dav_wal_tx_snap(heap->p_ops.base, HEAP_OFF_TO_PTR(heap, aoff),
+					asize, HEAP_OFF_TO_PTR(heap, aoff), 0);
 	}
 
 	/* realloc */
@@ -754,7 +797,7 @@ palloc_operation(struct palloc_heap *heap,
 		VALGRIND_ADD_TO_TX(
 			HEAP_OFF_TO_PTR(heap, alloc->offset),
 			to_cpy);
-		pmemops_memcpy(&heap->p_ops,
+		mo_wal_memcpy(&heap->p_ops,
 			HEAP_OFF_TO_PTR(heap, alloc->offset),
 			HEAP_OFF_TO_PTR(heap, off),
 			to_cpy,
@@ -873,9 +916,9 @@ palloc_next(struct palloc_heap *heap, uint64_t off)
  */
 int
 palloc_boot(struct palloc_heap *heap, void *heap_start,
-		uint64_t heap_size, uint64_t *sizep,
-		void *base, struct pmem_ops *p_ops, struct stats *stats,
-		struct pool_set *set)
+	    uint64_t heap_size, uint64_t *sizep,
+	    void *base, struct mo_ops *p_ops, struct stats *stats,
+	    struct pool_set *set)
 {
 	return heap_boot(heap, heap_start, heap_size, sizep,
 		base, p_ops, stats, set);
@@ -894,8 +937,7 @@ palloc_buckets_init(struct palloc_heap *heap)
  * palloc_init -- initializes palloc heap
  */
 int
-palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep,
-	struct pmem_ops *p_ops)
+palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep, struct mo_ops *p_ops)
 {
 	return heap_init(heap_start, heap_size, sizep, p_ops);
 }

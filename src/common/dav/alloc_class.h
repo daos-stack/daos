@@ -5,18 +5,14 @@
  * alloc_class.h -- internal definitions for allocation classes
  */
 
-#ifndef LIBPMEMOBJ_ALLOC_CLASS_H
-#define LIBPMEMOBJ_ALLOC_CLASS_H 1
+#ifndef __DAOS_COMMON_ALLOC_CLASS_H
+#define __DAOS_COMMON_ALLOC_CLASS_H 1
 
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include "heap_layout.h"
 #include "memblock.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define MAX_ALLOCATION_CLASSES (UINT8_MAX)
 #define DEFAULT_ALLOC_CLASS_ID (0)
@@ -72,8 +68,4 @@ alloc_class_new(int id, struct alloc_class_collection *ac,
 void alloc_class_delete(struct alloc_class_collection *ac,
 	struct alloc_class *c);
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif
+#endif /* __DAOS_COMMON_ALLOC_CLASS_H */

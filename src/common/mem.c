@@ -135,13 +135,15 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		umm_pool->up_priv = pop;
 		return umm_pool;
 	case DAOS_MD_BMEM:
-		dav_hdl = dav_obj_create(path, 0, poolsize, mode);
+		dav_hdl = dav_obj_create(path, 0, poolsize, mode, store);
 		if (!dav_hdl) {
 			D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
 				path, poolsize, errno);
 			D_FREE(umm_pool);
 			return NULL;
 		}
+		if (store != NULL)
+			umm_pool->up_store = *store;
 		umm_pool->up_priv = dav_hdl;
 
 		/* TODO: Do checkpoint here to write back allocator heap */
@@ -219,7 +221,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 		/* TODO Load all meta pages from SSD */
 		/* TODO Replay WAL */
 
-		dav_hdl = dav_obj_open(path, 0);
+		dav_hdl = dav_obj_open(path, 0, store);
 		if (!dav_hdl) {
 			D_ERROR("Error in opening the pool %s: errno =%d\n",
 				path, errno);
@@ -767,7 +769,7 @@ pmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
@@ -1064,11 +1066,18 @@ bmem_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 
 static void *
 bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
-		 size_t len)
+		 size_t len, enum acopy_hint hint)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
-	return dav_memcpy_persist(pop, dest, src, len);
+	if (hint == UMEM_RESERVED_MEM) {
+		memcpy(dest, src, len);
+		return dest;
+	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+		return dav_memcpy_persist(pop, dest, src, len);
+	} else { /* UMEM_COMMIT_DEFER */
+		return dav_memcpy_persist_relaxed(pop, dest, src, len);
+	}
 }
 
 static umem_off_t
@@ -1142,7 +1151,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
 #endif
 
 /* volatile memory operations */

@@ -5,8 +5,8 @@
  * stats.h -- definitions of statistics
  */
 
-#ifndef LIBPMEMOBJ_STATS_H
-#define LIBPMEMOBJ_STATS_H 1
+#ifndef __DAOS_COMMON_STATS_H
+#define __DAOS_COMMON_STATS_H 1
 
 struct stats_transient {
 	uint64_t heap_run_allocated;
@@ -51,9 +51,9 @@ struct stats {
 	util_atomic_store_explicit64((&(stats)->persistent->name),\
 		(value), memory_order_release)\
 
-typedef struct dav_obj dav_obj_t;
+struct dav_obj;
 
-struct stats *stats_new(dav_obj_t *pop);
-void stats_delete(dav_obj_t *pop, struct stats *stats);
+struct stats *stats_new(struct dav_obj *pop);
+void stats_delete(struct dav_obj *pop, struct stats *stats);
 
-#endif
+#endif /* __DAOS_COMMON_STATS_H */

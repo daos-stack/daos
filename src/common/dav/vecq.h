@@ -5,17 +5,13 @@
  * vecq.h -- vector queue (FIFO) interface
  */
 
-#ifndef PMDK_VECQ_H
-#define PMDK_VECQ_H 1
+#ifndef __DAOS_COMMON_VECQ_H
+#define __DAOS_COMMON_VECQ_H 1
 
 #include <stddef.h>
-#include <gurt/common.h>
+
 #include "util.h"
 #include "out.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define VECQ_INIT_SIZE (64)
 
@@ -122,8 +118,4 @@ for (size_t _vec_i = VECQ_SIZE(vec);\
 	(vec)->back = 0;\
 } while (0)
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* PMDK_VECQ_H */
+#endif /* __DAOS_COMMON_VECQ_H */

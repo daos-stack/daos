@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <gurt/common.h>
+
 #include "out.h"
 #include "ravl.h"
 #include "util.h"

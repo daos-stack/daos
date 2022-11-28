@@ -173,9 +173,7 @@ memblock_header_legacy_write(const struct memory_block *m,
 	VALGRIND_DO_MAKE_MEM_UNDEFINED(hdrp, sizeof(*hdrp));
 
 	VALGRIND_ADD_TO_TX(hdrp, sizeof(*hdrp));
-	pmemops_memcpy(&m->heap->p_ops, hdrp, &hdr,
-		sizeof(hdr), /* legacy header is 64 bytes in size */
-		0);
+	memcpy(hdrp, &hdr, sizeof(hdr)); /* legacy header is 64 bytes in size */
 	VALGRIND_REMOVE_FROM_TX(hdrp, sizeof(*hdrp));
 
 	/* unused fields of the legacy headers are used as a red zone */
@@ -216,8 +214,7 @@ memblock_header_compact_write(const struct memory_block *m,
 
 	VALGRIND_ADD_TO_TX(hdrp, hdr_size);
 
-	pmemops_memcpy(&m->heap->p_ops, hdrp, &padded, hdr_size,
-		0);
+	memcpy(hdrp, &padded, hdr_size);
 	VALGRIND_DO_MAKE_MEM_UNDEFINED((char *)hdrp + ALLOC_HDR_COMPACT_SIZE,
 		hdr_size - ALLOC_HDR_COMPACT_SIZE);
 
@@ -382,7 +379,7 @@ memblock_run_default_nallocs(uint32_t *size_idx, uint16_t flags,
 
 	while (nallocs > RUN_DEFAULT_BITMAP_NBITS) {
 		/* trying to create a run with number of units exceeding the bitmap size */
-		DAV_DEBUG("run:%lu number of units %u exceeds bitmap size (%u)",
+		DAV_DBG("run:%lu number of units %u exceeds bitmap size (%u)",
 			  unit_size, nallocs, RUN_DEFAULT_BITMAP_NBITS);
 		if (*size_idx > 1) {
 			*size_idx -= 1;
@@ -645,7 +642,7 @@ huge_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	if (ctx == NULL) {
 		util_atomic_store_explicit64((uint64_t *)hdr, val,
 			memory_order_relaxed);
-		pmemops_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
+		mo_wal_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
 	} else {
 		operation_add_entry(ctx, hdr, val, ULOG_OPERATION_SET);
 	}
@@ -698,6 +695,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	struct operation_context *ctx)
 {
 	ASSERT(m->size_idx <= RUN_BITS_PER_VALUE);
+	ASSERT(m->size_idx > 0);
 
 	/*
 	 * Free blocks are represented by clear bits and used blocks by set
@@ -710,6 +708,7 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 	 */
 	uint64_t bmask;
 
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 	if (m->size_idx == RUN_BITS_PER_VALUE) {
 		ASSERTeq(m->block_off % RUN_BITS_PER_VALUE, 0);
 		bmask = UINT64_MAX;
@@ -717,6 +716,13 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 		bmask = ((1ULL << m->size_idx) - 1ULL) <<
 				(m->block_off % RUN_BITS_PER_VALUE);
 	}
+#else
+	uint16_t num = m->size_idx;
+	uint32_t pos = m->block_off % RUN_BITS_PER_VALUE;
+
+	ASSERT_rt(num > 0 && num <= RUN_BITS_PER_VALUE);
+	bmask = ULOG_ENTRY_TO_VAL(pos, num);
+#endif
 
 	/*
 	 * The run bitmap is composed of several 8 byte values, so a proper
@@ -729,11 +735,21 @@ run_prep_operation_hdr(const struct memory_block *m, enum memblock_state op,
 
 	/* the bit mask is applied immediately by the add entry operations */
 	if (op == MEMBLOCK_ALLOCATED) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 		operation_add_entry(ctx, &b.values[bpos],
-			bmask, ULOG_OPERATION_OR);
+				    bmask, ULOG_OPERATION_OR);
+#else
+		operation_add_entry(ctx, &b.values[bpos],
+				    bmask, ULOG_OPERATION_SET_BITS);
+#endif
 	} else if (op == MEMBLOCK_FREE) {
+#ifdef	WAL_SUPPORTS_AND_OR_OPS
 		operation_add_entry(ctx, &b.values[bpos],
-			~bmask, ULOG_OPERATION_AND);
+				    ~bmask, ULOG_OPERATION_AND);
+#else
+		operation_add_entry(ctx, &b.values[bpos],
+				    bmask, ULOG_OPERATION_CLR_BITS);
+#endif
 	} else {
 		ASSERT(0);
 	}
@@ -824,7 +840,7 @@ huge_ensure_header_type(const struct memory_block *m,
 			hdr->flags | f, hdr->size_idx);
 		util_atomic_store_explicit64((uint64_t *)hdr,
 			nhdr, memory_order_relaxed);
-		pmemops_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
+		mo_wal_persist(&m->heap->p_ops, hdr, sizeof(*hdr));
 		VALGRIND_REMOVE_FROM_TX(hdr, sizeof(*hdr));
 	}
 }
@@ -839,7 +855,7 @@ run_ensure_header_type(const struct memory_block *m,
 	/* suppress unused-parameter errors */
 	SUPPRESS_UNUSED(m, t);
 
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 
 	ASSERTeq(hdr->type, CHUNK_TYPE_RUN);
@@ -1376,7 +1392,7 @@ memblock_huge_init(struct palloc_heap *heap,
 	util_atomic_store_explicit64((uint64_t *)hdr,
 		nhdr, memory_order_relaxed);
 
-	pmemops_persist(&heap->p_ops, hdr, sizeof(*hdr));
+	mo_wal_persist(&heap->p_ops, hdr, sizeof(*hdr));
 
 	huge_write_footer(hdr, size_idx);
 
@@ -1433,7 +1449,7 @@ memblock_run_init(struct palloc_heap *heap,
 
 	VALGRIND_REMOVE_FROM_TX(run, runsize);
 
-	pmemops_flush(&heap->p_ops, run,
+	mo_wal_flush(&heap->p_ops, run,
 		sizeof(struct chunk_run_header) +
 		bitmap_size);
 
@@ -1454,7 +1470,7 @@ memblock_run_init(struct palloc_heap *heap,
 		run_data_hdr.size_idx = i;
 		*data_hdr = run_data_hdr;
 	}
-	pmemops_persist(&heap->p_ops,
+	mo_wal_persist(&heap->p_ops,
 		&z->chunk_headers[chunk_id + 1],
 		sizeof(struct chunk_header) * (size_idx - 1));
 
@@ -1468,7 +1484,7 @@ memblock_run_init(struct palloc_heap *heap,
 		rdsc->flags, hdr->size_idx);
 	util_atomic_store_explicit64((uint64_t *)hdr,
 		run_hdr, memory_order_relaxed);
-	pmemops_persist(&heap->p_ops, hdr, sizeof(*hdr));
+	mo_wal_persist(&heap->p_ops, hdr, sizeof(*hdr));
 
 	VALGRIND_REMOVE_FROM_TX(&z->chunk_headers[chunk_id],
 		sizeof(struct chunk_header) * size_idx);
