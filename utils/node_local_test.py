@@ -3429,7 +3429,8 @@ def set_server_fi(server):
 
     system_name = 'daos_server'
 
-    exec_cmd = valgrind_hdl.get_cmd_prefix()
+    exec_cmd = ''
+    #valgrind_hdl.get_cmd_prefix()
 
     agent_bin = join(server.conf['PREFIX'], 'bin', 'daos_agent')
 
