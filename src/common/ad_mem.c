@@ -2069,9 +2069,9 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	}
 	/* NB: reorder only does minimum amount of works most of the time */
 	arena_reorder_grp(arena, grp, grp_at, true);
-	node = arena2heap_node(arena);
-	D_ASSERT(node->mh_free_size >= grp->gp_df->gd_unit);
-	node->mh_free_size -= grp->gp_df->gd_unit;
+//	node = arena2heap_node(arena);
+//	D_ASSERT(node->mh_free_size >= grp->gp_df->gd_unit);
+//	node->mh_free_size -= grp->gp_df->gd_unit;
 	/*
 	 * current arena is out from the binheap, so we don't have
 	 * to update it's position in binheap all the time
@@ -2363,9 +2363,11 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 {
 	int	i;
 	int	rc = 0;
+	struct ad_maxheap_node	*node;
+	struct ad_arena	*arena = NULL, *arena_last = NULL;
 
 	for (i = 0; i < act_nr; i++) {
-		struct ad_arena	   *arena = acts[i].ra_arena;
+		arena = acts[i].ra_arena;
 		struct ad_group    *group = acts[i].ra_group;
 		struct ad_group_df *gd = group->gp_df;
 
@@ -2387,9 +2389,6 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 				d_list_move_tail(&arena->ar_link, &tx->tx_ar_pub);
 			}
 		}
-		acts[i].ra_arena = NULL;
-		arena_decref(arena);
-
 		if (group->gp_unpub && !group->gp_publishing) {
 			D_DEBUG(DB_TRACE, "publishing a new group, size=%d\n",
 				(int)group->gp_df->gd_unit);
@@ -2427,9 +2426,29 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 		group->gp_unit_rsv--;
 
+		node = arena2heap_node(arena);
+		D_ASSERT(node->mh_free_size >= group->gp_df->gd_unit);
+		node->mh_free_size -= group->gp_df->gd_unit;
+		if (arena != arena_last) {
+			if (arena_last != NULL) {
+				arena_reorder_if_needed(arena_last);
+				arena_decref(arena_last);
+			}
+			arena_last = arena;
+			arena_addref(arena_last);
+		}
+		acts[i].ra_arena = NULL;
+		arena_decref(arena);
+
 		acts[i].ra_group = NULL;
 		group_decref(group);
 	}
+
+	if (arena_last != NULL) {
+		arena_reorder_if_needed(arena_last);
+		arena_decref(arena_last);
+	}
+
 	return rc;
 }
 
