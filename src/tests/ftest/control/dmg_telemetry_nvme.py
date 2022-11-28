@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -25,10 +24,9 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
                                  list of NVMe metric names.
         """
         for key in sorted(metrics_data):
-            self.log.info(
-                    "\n  %12s: %s",
-                    "Initial " if key == 0 else "Test Loop {}".format(key),
-                    metrics_data[key])
+            self.log.info("\n  %12s: %s",
+                          "Initial " if key == 0 else "Test Loop {}".format(key),
+                          metrics_data[key])
 
     def test_nvme_telemetry_metrics(self):
         """JIRA ID: DAOS-7833
@@ -44,13 +42,12 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
         self.display_nvme_test_metrics(metrics_data)
 
         # Get and verify NVMe metrics
-        groups = [
-                "ENGINE_NVME_HEALTH_METRICS",
-                "ENGINE_NVME_CRIT_WARN_METRICS",
-                "ENGINE_NVME_TEMP_METRICS",
-                "ENGINE_NVME_TEMP_TIME_METRICS",
-                "ENGINE_NVME_RELIABILITY_METRICS",
-                "ENGINE_NVME_INTEL_VENDOR_METRICS"]
+        groups = ["ENGINE_NVME_HEALTH_METRICS",
+                  "ENGINE_NVME_CRIT_WARN_METRICS",
+                  "ENGINE_NVME_TEMP_METRICS",
+                  "ENGINE_NVME_TEMP_TIME_METRICS",
+                  "ENGINE_NVME_RELIABILITY_METRICS",
+                  "ENGINE_NVME_INTEL_VENDOR_METRICS"]
 
         for group in groups:
             yaml_key = "_".join([group.lower().replace("engine_", ""), "valid"])

@@ -222,8 +222,7 @@ out:
 
 	for (i = 0; i < OIT_BUCKET_MAX; i++) {
 		bucket = &oa->oa_buckets[i];
-		if (bucket->ob_oids)
-			D_FREE(bucket->ob_oids);
+		D_FREE(bucket->ob_oids);
 	}
 	D_FREE(oa);
 	return rc;

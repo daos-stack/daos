@@ -51,8 +51,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
-	rc = pl_obj_place(pl_map, &md, 0, -1, NULL, layout);
-
+	rc = pl_obj_place(pl_map, 0, &md, 0, -1, NULL, layout);
 	if (print_layout_flag) {
 		if (*layout != NULL)
 			print_layout(*layout);
@@ -524,7 +523,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
+	rc = pl_obj_find_rebuild(pl_map, 0, &md, NULL, *po_ver,
 				 spare_tgt_ranks, shard_ids,
 				 spare_max_nr);
 	D_ASSERT(rc >= 0);
@@ -737,7 +736,7 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver, spare_tgt_ranks,
+	rc = pl_obj_find_reint(pl_map, 0, &md, NULL, *po_ver, spare_tgt_ranks,
 			       shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
