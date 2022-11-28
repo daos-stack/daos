@@ -184,6 +184,8 @@ enum obj_rpc_flags {
 	ORF_REINTEGRATING_IO	= (1 << 22),
 	/* The IO include rebuilding target */
 	ORF_REBUILDING_IO	= (1 << 23),
+	/* 'sgls' is NULL, for update sub-request of CPD RPC. */
+	ORF_EMPTY_SGL		= (1 << 24),
 };
 
 /* common for update/fetch */
@@ -365,6 +367,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint64_t)		(om_punched_ephs)	CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
+	((uint32_t)		(om_new_layout_ver)	CRT_VAR)	\
 	((uint32_t)		(om_opc)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
@@ -413,7 +416,7 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
-void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
+void daos_dc_obj2id(void *ptr, daos_unit_oid_t *id);
 
 enum daos_cpd_sub_opc {
 	DCSO_UPDATE		= 0,

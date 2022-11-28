@@ -4,7 +4,6 @@
 #
 """Build libgurt"""
 
-import daos_build
 SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
        'fault_inject.c', 'slab.c', 'telemetry.c']
 
@@ -24,8 +23,7 @@ def scons():
     prereqs.require(denv, 'uuid')
 
     gurt_targets = denv.SharedObject(SRC)
-    gurt_lib = daos_build.library(denv, 'gurt', gurt_targets,
-                                  SHLIBVERSION=CART_VERSION)
+    gurt_lib = denv.d_library('gurt', gurt_targets, SHLIBVERSION=CART_VERSION)
     denv.InstallVersionedLib('$PREFIX/lib64/', gurt_lib,
                              SHLIBVERSION=CART_VERSION)
 
