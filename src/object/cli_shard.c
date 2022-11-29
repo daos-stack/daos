@@ -256,6 +256,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 	struct obj_reasb_req	*reasb_req;
 	struct dcs_layout	*singv_lo, *singv_los;
 	struct obj_io_desc	*oiods;
+	struct daos_oclass_attr	*oca;
 	uint32_t		 shard_idx;
 	int			 i;
 	int			 rc = 0;
@@ -296,15 +297,13 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
 
 	reasb_req = rw_args->shard_args->reasb_req;
+	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
 	if (obj_is_ec(rw_args->shard_args->auxi.obj_auxi->obj)) {
-		shard_idx = obj_ec_shard_off(
-				obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
-						     rw_args->shard_args->auxi.obj_auxi->dkey_hash),
-				&rw_args->shard_args->auxi.obj_auxi->obj->cob_oca,
-				orw->orw_oid.id_shard);
+		shard_idx = obj_ec_shard_off(rw_args->shard_args->auxi.obj_auxi->obj,
+					     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
+					     orw->orw_oid.id_shard);
 	} else {
-		shard_idx = rw_args->shard_args->auxi.shard -
-			    rw_args->shard_args->auxi.start_shard;
+		shard_idx = orw->orw_oid.id_shard % daos_oclass_grp_size(oca);
 	}
 
 	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr, reasb_req);
@@ -445,9 +444,9 @@ iom_recx_merge(daos_iom_t *dst, daos_recx_t *recx, bool iom_realloc)
 }
 
 static int
-obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
-		 uint32_t shard, uint32_t tgt_idx, const daos_iom_t *src,
-		 daos_iom_t *dst, struct daos_recx_ep_list *recov_list)
+obj_ec_iom_merge(struct dc_object *obj, struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
+		 uint32_t shard, uint32_t tgt_idx, const daos_iom_t *src, daos_iom_t *dst,
+		 struct daos_recx_ep_list *recov_list)
 {
 	struct daos_oclass_attr	*oca = reasb_req->orr_oca;
 	uint64_t		 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
@@ -461,7 +460,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint64_t dkey_hash,
 	bool			 done;
 	int			 rc = 0;
 
-	tgt_off = obj_ec_shard_off(dkey_hash, oca, tgt_idx);
+	tgt_off = obj_ec_shard_off(obj, dkey_hash, tgt_idx);
 	D_ASSERTF(tgt_off < obj_ec_data_tgt_nr(oca), "tgt_off %d, tgt_nr %d\n",
 		  tgt_off, obj_ec_data_tgt_nr(oca));
 
@@ -742,7 +741,6 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		uint32_t		shard;
 		struct daos_oclass_attr	*oca;
 		struct shard_fetch_stat	*fetch_stat;
-		uint64_t		dkey_hash;
 		bool			conflict = false;
 
 		D_DEBUG(DB_IO, DF_UOID" size "DF_U64" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
@@ -773,12 +771,11 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		/* single-value, trust the size replied from first shard or parity shard,
 		 * because if overwrite those shards must be updated.
 		 */
-		shard = orw->orw_oid.id_shard %
-			obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
-		dkey_hash = obj_ec_dkey_hash_get(rw_args->shard_args->auxi.obj_auxi->obj,
-						 orw->orw_dkey_hash);
-		if (shard == obj_ec_singv_small_idx(oca, dkey_hash, iod) ||
-		    is_ec_parity_shard(orw->orw_oid.id_shard, dkey_hash, oca)) {
+		shard = orw->orw_oid.id_shard % daos_oclass_grp_size(oca);
+		if (shard == obj_ec_singv_small_idx(rw_args->shard_args->auxi.obj_auxi->obj,
+						    orw->orw_dkey_hash, iod) ||
+		    is_ec_parity_shard(rw_args->shard_args->auxi.obj_auxi->obj, orw->orw_dkey_hash,
+				       orw->orw_oid.id_shard)) {
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i] && fetch_rc == 0) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
@@ -1141,12 +1138,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				if (is_ec_obj &&
 				    reply_maps->iom_type == DAOS_IOD_ARRAY) {
 					struct obj_auxi_args	*obj_auxi;
-					uint64_t		dkey_hash;
 
 					obj_auxi = rw_args->shard_args->auxi.obj_auxi;
-					dkey_hash = obj_ec_dkey_hash_get(obj_auxi->obj,
-									 obj_auxi->dkey_hash);
-					rc = obj_ec_iom_merge(reasb_req, dkey_hash,
+					rc = obj_ec_iom_merge(obj_auxi->obj, reasb_req,
+							      obj_auxi->dkey_hash,
 							      orw->orw_oid.id_shard,
 							      orw->orw_tgt_idx, reply_maps,
 							      &rw_args->maps[i], recov_list);
@@ -1266,6 +1261,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 		D_ASSERT(args->reasb_req != NULL);
 		D_ASSERT(args->reasb_req->tgt_oiods != NULL);
+		D_ASSERT(!auxi->obj_auxi->spec_shard);
 		toiod = obj_ec_tgt_oiod_get(args->reasb_req->tgt_oiods,
 					    args->reasb_req->orr_tgt_nr,
 					    auxi->ec_tgt_idx);
@@ -2005,7 +2001,6 @@ struct obj_query_key_cb_args {
 	struct dc_object	*obj;
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
-	uint64_t		dkey_hash;
 	daos_handle_t		th;
 };
 
@@ -2022,7 +2017,7 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	uint32_t		 tgt_off;
 	bool			 from_data_tgt;
 	struct daos_oclass_attr	*oca;
-	uint64_t		 dkey_hash;
+	uint64_t		dkey_hash;
 	uint64_t		 stripe_rec_nr, cell_rec_nr;
 
 	oca = obj_get_oca(cb_args->obj);
@@ -2031,10 +2026,9 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 		return;
 	}
 
-	dkey_hash = obj_ec_dkey_hash_get(cb_args->obj,
-					 obj_dkey2hash(cb_args->obj->cob_md.omd_id, dkey));
-	from_data_tgt = is_ec_data_shard(shard, dkey_hash, oca);
-	tgt_off = obj_ec_shard_off(dkey_hash, oca, shard);
+	dkey_hash = obj_dkey2hash(cb_args->obj->cob_md.omd_id, dkey);
+	tgt_off = obj_ec_shard_off(cb_args->obj, dkey_hash, shard);
+	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
 	D_ASSERT(!(reply_recx->rx_idx & PARITY_INDICATOR));
@@ -2217,7 +2211,7 @@ out:
 
 int
 dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-		       uint32_t req_map_ver, uint64_t dkey_hash, struct dc_object *obj,
+		       uint32_t req_map_ver, struct dc_object *obj,
 		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
 		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
@@ -2258,7 +2252,6 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.shard		= shard;
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
-	cb_args.dkey_hash	= dkey_hash;
 	cb_args.max_epoch	= max_epoch;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));

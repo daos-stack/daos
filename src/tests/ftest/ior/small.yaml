@@ -35,13 +35,13 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
   scm_size: 3000000000
   nvme_size: 9000000000
@@ -56,7 +56,7 @@ ior:
     np: 128
   test_file: daos:/testFile
   repetitions: 2
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     ior_flags:
       - "-v -W -w -r -R"
@@ -65,7 +65,7 @@ ior:
       - DFS
       - MPIIO
       - POSIX
-      - POSIX+IL # Custom DFUSE with interception handled by test
+      - POSIX+IL  # Custom DFUSE with interception handled by test
       - HDF5
       - HDF5-VOL
     transfer_block_size:
@@ -76,6 +76,6 @@ ior:
       - "RP_2GX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

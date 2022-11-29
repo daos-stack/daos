@@ -700,7 +700,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 
 	D_ALLOC_PTR(dx);
 	if (dx == NULL) {
-		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
