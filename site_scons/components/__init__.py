@@ -379,11 +379,6 @@ def define_components(reqs):
                 patch_rpath=['lib'])
 
     reqs.define('protobufc',
-                retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
-                commands=[['./autogen.sh'],
-                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
-                          ['make'],
-                          ['make', 'install']],
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'])
 

@@ -36,6 +36,7 @@ apt-get install \
     liblz4-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libprotoc-dev \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \
