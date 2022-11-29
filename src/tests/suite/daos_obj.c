@@ -4836,15 +4836,12 @@ oit_list_filter(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	struct ioreq		req;
 	daos_obj_id_t		oid[OIT_TEST_OID_NR], oid_new;
 	daos_obj_id_t		oid_list[OIT_TEST_OID_NR] = {0};
 	char			*ow_buf;
 	char			*fbuf;
-	d_iov_t			 marker;
-	uint64_t		 mark_data;
-	const char		dkey[] = "dkey";
-	const char		akey[] = "akey";
+	d_iov_t			marker;
+	uint64_t		mark_data;
 	daos_size_t		size = 128;
 	daos_epoch_t		snap_epoch;
 	daos_handle_t		toh;
@@ -4866,6 +4863,10 @@ oit_list_filter(void **state)
 	assert_non_null(fbuf);
 
 	for (i = 0; i < OIT_TEST_OID_NR; i++) {
+		struct ioreq		req;
+		const char		dkey[] = "dkey";
+		const char		akey[] = "akey";
+
 		oid[i] = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
 

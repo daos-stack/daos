@@ -2500,7 +2500,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");
-	rc = open_dir(dfs, NULL, amode | S_IFDIR, 0, &root_dir, 1, &dfs->root);
+	rc = open_dir(dfs, NULL, amode, 0, &root_dir, 1, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
@@ -5228,8 +5228,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name is NULL)\n",
-				parent->name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n", parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -6478,4 +6477,217 @@ dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 		return EINVAL;
 
 	return daos_obj_anchor_set(obj->oh, index, anchor);
+}
+
+#define DFS_NR_ITERATE 128
+
+int
+oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
+{
+	daos_handle_t	oit;
+	dfs_obj_t	*obj;
+	daos_obj_id_t	oid;
+	d_iov_t		marker;
+	bool		mark_data = true;
+	int		rc;
+
+	oit.cookie = (uint64_t)arg;
+
+	/** open the entry name and get the oid */
+	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
+	if (rc) {
+		D_ERROR("dfs_open() if %s failed: %d\n", name, rc);
+		return rc;
+	}
+
+	rc = dfs_obj2id(obj, &oid);
+	if (rc)
+		D_GOTO(out_obj, rc);
+
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	rc = daos_oit_mark(oit, oid, &marker, NULL);
+	/*
+	 * If the entry exists but the file or directory are empty, the corresponding oid itself has
+	 * not been written to, so it doesn't exist in the OIT. The mark operation would return
+	 * NONEXIST in this case, so check and avoid returning an error in this case.
+	 */
+	if (rc && rc != DER_NONEXIST) {
+		D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+	/** descend into directories */
+	if (S_ISDIR(obj->mode))	{
+		daos_anchor_t		anchor = {0};
+		uint32_t		nr_entries = DFS_NR_ITERATE;
+
+		while (!daos_anchor_is_eof(&anchor)) {
+			rc = dfs_iterate(dfs, obj, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+					 oit_mark_cb, (void *)oit.cookie);
+			if (rc) {
+				D_ERROR("dfs_iterate() failed: %d\n", rc);
+				D_GOTO(out_obj, rc);
+			}
+			nr_entries = DFS_NR_ITERATE;
+		}
+	}
+
+out_obj:
+	rc = dfs_release(obj);
+	return rc;
+}
+
+int
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
+{
+	dfs_t			*dfs;
+	daos_handle_t		coh;
+	daos_handle_t		oit;
+	daos_epoch_t		snap_epoch;
+	daos_anchor_t		anchor = {0};
+	uint32_t		nr_entries = DFS_NR_ITERATE, i;
+	daos_obj_id_t		oids[DFS_NR_ITERATE] = {0};
+	uint64_t		unmarked_entries = 0;
+	d_iov_t			marker;
+	bool			mark_data = true;
+	daos_epoch_range_t	epr;
+	int			rc, rc2;
+
+	/** TODO - Update to use Exclusive open when available */
+	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+	if (rc) {
+		D_ERROR("dfs_mount() failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+
+	/** create snapshot for OIT */
+	rc = daos_cont_create_snap_opt(coh, &snap_epoch, NULL, DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc) {
+		D_ERROR("daos_cont_create_snap_opt failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_dfs, rc = daos_der2errno(rc));
+	}
+
+	/** Open OIT table */
+	rc = daos_oit_open(coh, snap_epoch, &oit, NULL);
+	if (rc) {
+		D_ERROR("daos_oit_open failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_snap, rc = daos_der2errno(rc));
+	}
+
+	/** get and mark the SB and root OIDs */
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	rc = daos_oit_mark(oit, dfs->super_oid, &marker, NULL);
+	if (rc) {
+		D_ERROR("Failed to mark SB OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
+	rc = daos_oit_mark(oit, dfs->root.oid, &marker, NULL);
+	if (rc) {
+		D_ERROR("Failed to mark ROOT OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
+
+	/** iterate through the namespace and mark OITs starting from the root object */
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_iterate(dfs, &dfs->root, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+				 oit_mark_cb, (void *)oit.cookie);
+		if (rc) {
+			D_ERROR("dfs_iterate() failed: %d\n", rc);
+			D_GOTO(out_oit, rc);
+		}
+
+		nr_entries = DFS_NR_ITERATE;
+	}
+
+	/** TODO - create lost+found directory and properly link unmarked oids there. */
+#if 0
+	rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL, &lf);
+	if (rc) {
+		D_ERROR("Failed to create lost+found directory: %d\n", rc);
+		D_GOTO(out_oit, rc);
+	}
+#endif
+
+	/** list all unmarked oids */
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = DFS_NR_ITERATE;
+		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_oit_list_unmarked failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_oit, rc = daos_der2errno(rc));
+		}
+
+		for (i = 0; i < nr_entries; i++) {
+			if (flags & DFS_CHECK_REMOVE) {
+				daos_handle_t oh;
+
+				rc = daos_obj_open(dfs->coh, oids[i], DAOS_OO_RW, &oh, NULL);
+				if (rc)
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+
+				rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+				if (rc) {
+					daos_obj_close(oh, NULL);
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+				}
+
+				rc = daos_obj_close(oh, NULL);
+				if (rc)
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+			}
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
+					DP_OID(oids[i]));
+#if 0
+			struct dfs_entry	entry = {0};
+			enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
+			struct timespec		now;
+
+			printf("Adding oid: "DF_OID" to l+f\n", DP_OID(oids[i]));
+			entry.uid = geteuid();
+			entry.gid = getegid();
+			oid_cp(&entry->oid, oids[i]);
+			if (daos_is_array_type(otype))
+				entry.mode = S_IFREG | 0755;
+			else
+				entry.mode = S_IFDIR | 0755;
+
+			rc = clock_gettime(CLOCK_REALTIME, &now);
+			if (rc)
+				D_GOTO(out_lf, rc = errno);
+			entry.atime = entry.mtime = entry.ctime = now.tv_sec;
+			entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+			entry.chunk_size = 0; /** need to figure that out somehow */
+#endif
+			unmarked_entries++;
+		}
+	}
+	if (flags & DFS_CHECK_PRINT)
+		D_PRINT("Number of Leaked OIDs in Namespace = "DF_U64"\n", unmarked_entries);
+out_oit:
+	rc2 = daos_oit_close(oit, NULL);
+	if (rc == 0)
+		rc = rc2;
+out_snap:
+	epr.epr_hi = epr.epr_lo = snap_epoch;
+	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+	if (rc == 0)
+		rc = rc2;
+out_dfs:
+	rc2 = dfs_umount(dfs);
+	if (rc == 0)
+		rc = rc2;
+out_cont:
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
 }
