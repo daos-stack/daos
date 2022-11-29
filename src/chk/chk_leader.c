@@ -1387,8 +1387,8 @@ try_ps:
 		cbk->cb_statistics.cs_total++;
 		seq = ++(ins->ci_seq);
 
-		result = chk_dup_label(&label, clue->pc_label,
-				       clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
+		result = chk_dup_string(&label, clue->pc_label,
+					clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
 		if (result != 0) {
 			cbk->cb_statistics.cs_failed++;
 			label = clue->pc_label;
@@ -1544,8 +1544,8 @@ report:
 		cbk->cb_statistics.cs_total++;
 
 		label = NULL;
-		result = chk_dup_label(&label, clue->pc_label,
-				       clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
+		result = chk_dup_string(&label, clue->pc_label,
+					clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
 		if (result != 0) {
 			cbk->cb_statistics.cs_failed++;
 			label = clue->pc_label;
@@ -1636,8 +1636,9 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 				continue;
 			}
 
-			rc = chk_dup_label(&cpr->cpr_label, clp[i].clp_label,
-					   clp[i].clp_label != NULL ? strlen(clp[i].clp_label) : 0);
+			rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
+					    clp[i].clp_label != NULL ?
+					    strlen(clp[i].clp_label) : 0);
 			if (rc != 0) {
 				cpr->cpr_skip = 1;
 				goto out;
@@ -1679,14 +1680,14 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 	}
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-		/* The cpr is only for check dangling, can be remove from the list now. */
-		if (cpr->cpr_bk.cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
-			chk_pool_remove_nowait(cpr, false);
-			continue;
-		}
-
 		if (cpr->cpr_skip || cpr->cpr_exist_on_ms)
 			continue;
+
+		/* The cpr is only for check dangling, can be remove from the list now. */
+		if (cpr->cpr_bk.cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
+			cpr->cpr_done = 1;
+			continue;
+		}
 
 		chk_pool_get(cpr);
 		/*
@@ -1878,8 +1879,6 @@ chk_leader_pool_ult(void *arg)
 
 		if (cpr->cpr_for_orphan) {
 			cpr->cpr_done = 1;
-			/* The cpr is only for check orphan, remove it from the list. */
-			chk_pool_remove_nowait(cpr, true);
 			D_GOTO(out, rc = 0);
 		}
 	} else {
@@ -2478,7 +2477,7 @@ chk_leader_dup_clue(struct ds_pool_clue **tgt, struct ds_pool_clue *src)
 		}
 	}
 
-	rc = chk_dup_label(&label, src->pc_label, src->pc_label_len);
+	rc = chk_dup_string(&label, src->pc_label, src->pc_label_len);
 	if (rc != 0)
 		goto out;
 

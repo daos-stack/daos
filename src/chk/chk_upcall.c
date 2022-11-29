@@ -18,11 +18,24 @@
 
 #define CHK_ACTION_MAX	CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_EC_DATA
 
+static void
+chk_sg_free(char **buf, int cnt)
+{
+	int	i;
+
+	if (buf != NULL) {
+		for (i = 0; i < cnt; i++)
+			D_FREE(buf[i]);
+		D_FREE(buf);
+	}
+}
+
 static int
 chk_sg_list2string_array(d_sg_list_t *sgls, uint32_t sgl_nr, char ***array)
 {
 	char	**buf = NULL;
 	int	  cnt = 0;
+	int	  rc = 0;
 	int	  i;
 	int	  j;
 	int	  k;
@@ -35,19 +48,26 @@ chk_sg_list2string_array(d_sg_list_t *sgls, uint32_t sgl_nr, char ***array)
 
 	D_ALLOC_ARRAY(buf, cnt);
 	if (buf == NULL)
-		D_GOTO(out, cnt = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* QUEST: How to transfer all the data into d_sg_list_t array? Some may be not string. */
 
 	for (i = 0, k = 0; i < sgl_nr; i++) {
 		for (j = 0; j < sgls[i].sg_nr; j++, k++) {
-			buf[k] = sgls[i].sg_iovs[j].iov_buf;
-			buf[k][sgls[i].sg_iovs[j].iov_len] = '\0';
+			rc = chk_dup_string(&buf[k], sgls[i].sg_iovs[j].iov_buf,
+					    sgls[i].sg_iovs[j].iov_len);
+			if (rc != 0)
+				goto out;
 		}
 	}
 
 out:
-	*array = buf;
+	if (rc == 0) {
+		*array = buf;
+	} else {
+		chk_sg_free(buf, cnt);
+		cnt = rc;
+	}
 
 	return cnt;
 }
@@ -144,7 +164,7 @@ out:
 	D_FREE(report.dkey);
 	D_FREE(report.akey);
 	D_FREE(report.timestamp);
-	D_FREE(report.act_details);
+	chk_sg_free(report.act_details, report.n_act_details);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Check leader upcall for instance "DF_X64" for seq "DF_X64": "DF_RC"\n",

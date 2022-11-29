@@ -2848,7 +2848,7 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 		       sizeof(*mbs_array[i].cpm_tgt_status) * mbs_array[i].cpm_tgt_nr);
 	}
 
-	rc = chk_dup_label(&cpr->cpr_label, label, label != NULL ? strlen(label) : 0);
+	rc = chk_dup_string(&cpr->cpr_label, label, label != NULL ? strlen(label) : 0);
 	if (rc != 0)
 		goto put;
 
