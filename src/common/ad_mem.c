@@ -1118,7 +1118,7 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	}
 	D_ASSERT(id >= 0);
 
-	D_PRINT("Reserved a new arena: type=%d, id=%d\n", type, id);
+	D_DEBUG(DB_TRACE, "Reserved a new arena: type=%d, id=%d\n", type, id);
 	blob->bb_arena_last[type] = id;
 	D_ASSERT(ad->ad_magic != ARENA_MAGIC);
 
@@ -1640,10 +1640,13 @@ group_locate_by_size(struct ad_group_df **sorter, struct ad_group_df *gd, int gr
 	}
 	D_ASSERT(adding);
 
-	if (tmp->gd_unit < gd->gd_unit ||
-	    (tmp->gd_unit == gd->gd_unit && tmp->gd_addr < gd->gd_addr))
+	if (tmp->gd_unit < gd->gd_unit)
 		cur += 1;
-
+	else if (tmp->gd_unit == gd->gd_unit) {
+		if ((group_weight(tmp) < weight)  ||
+		    (group_weight(tmp) == weight && tmp->gd_addr < gd->gd_addr))
+			cur += 1;
+	}
 	return cur;
 }
 
@@ -2200,7 +2203,6 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 	tried = false;
 	while (1) {
 		if (arena == NULL) {
-again:
 			node = d_binheap_remove_root(&blob->bb_arena_free_heap);
 			if (node == NULL) {
 				rc = arena_reserve(blob, type, NULL, &arena);
@@ -2214,7 +2216,8 @@ again:
 				if (rc) {
 					D_DEBUG(DB_TRACE, "failed to load arena %u: %d\n",
 						ad_node->mh_arena_id, rc);
-					goto again;
+					arena = NULL;
+					continue;
 				}
 				blob->bb_arena_last[type] = ad_node->mh_arena_id;
 			}
