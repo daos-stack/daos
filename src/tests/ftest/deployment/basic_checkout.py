@@ -74,11 +74,11 @@ class BasicCheckout(PerformanceTestBase):
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
-        #run ior
+        # run ior
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
                                                  flags, dfuse_mount_dir)
 
-        #run ior with different ec oclass
+        # run ior with different ec oclass
         results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
                                                     [transfer_block_size[1]],
                                                     [flags[0]], dfuse_mount_dir)
@@ -92,7 +92,7 @@ class BasicCheckout(PerformanceTestBase):
         if errors:
             self.fail("Test FAILED")
 
-        #run mdtest
+        # run mdtest
         self.run_mdtest_multiple_variants(mdtest_params)
 
 

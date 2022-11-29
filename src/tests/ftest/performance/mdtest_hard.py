@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 '''
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 '''
 
 from performance_test_base import PerformanceTestBase
+
 
 class MdtestHard(PerformanceTestBase):
     # pylint: disable=too-many-ancestors

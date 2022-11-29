@@ -504,8 +504,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         yaml_data_updated = False
-        if (self.other_params is not None and
-                hasattr(self.other_params, "is_yaml_data_updated")):
+        if (self.other_params is not None and hasattr(self.other_params, "is_yaml_data_updated")):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():
