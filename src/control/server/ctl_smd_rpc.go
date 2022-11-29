@@ -294,9 +294,6 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
 		}
 		eisPtr := &eis[0]
-
-		edm[eisPtr] = []devID{}
-
 		for _, dev := range rr.Devices {
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
@@ -313,6 +310,9 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 				if trAddrs[dds.TrAddr] || uuidMatch {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
+					if _, ok := edm[eisPtr]; ok {
+						edm[eisPtr] = []devID{}
+					}
 					edm[eisPtr] = append(edm[eisPtr], devID{trAddr: dds.TrAddr})
 					delete(trAddrs, dds.TrAddr)
 					delete(devUUIDs, dds.Uuid)
@@ -322,6 +322,9 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 
 			if uuidMatch {
 				// Only add UUID entry if TrAddr is not available for a device.
+				if _, ok := edm[eisPtr]; ok {
+					edm[eisPtr] = []devID{}
+				}
 				edm[eisPtr] = append(edm[eisPtr], devID{uuid: dds.Uuid})
 				delete(devUUIDs, dds.Uuid)
 			}
