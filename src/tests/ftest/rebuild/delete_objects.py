@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from rebuild_test_base import RebuildTestBase
 from daos_utils import DaosCommand
+
 
 class RbldDeleteObjects(RebuildTestBase):
     # pylint: disable=too-many-ancestors
@@ -29,11 +29,9 @@ class RbldDeleteObjects(RebuildTestBase):
     def execute_during_rebuild(self):
         """Delete half of the objects from the container during rebuild."""
         self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
+                                         cont=self.container.uuid,
+                                         prop="status", value="healthy")
 
         if self.punch_type == "object":
             # Punch half of the objects
@@ -62,8 +60,7 @@ class RbldDeleteObjects(RebuildTestBase):
         if self.punch_type == "object":
             expected_qty = len(self.punched_indices)
         elif self.punch_type == "record":
-            expected_qty = \
-                 len(self.punched_indices) * self.container.object_qty.value
+            expected_qty = len(self.punched_indices) * self.container.object_qty.value
         else:
             expected_qty = 0
         self.assertEqual(
