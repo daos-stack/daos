@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -94,8 +93,8 @@ class PoolCreateTests(PoolTestBase):
             self.log.info("Loop %s", index)
             self.pool[1].create()
             self.assertTrue(
-                self.pool[1].dmg.result.exit_status == 1 and
-                "-1007" in self.pool[1].dmg.result.stdout_text,
+                self.pool[1].dmg.result.exit_status == 1
+                and "-1007" in self.pool[1].dmg.result.stdout_text,
                 "Creating a large capacity pool across all servers should fail "
                 "due to an existing pool on one server consuming the required "
                 "space."

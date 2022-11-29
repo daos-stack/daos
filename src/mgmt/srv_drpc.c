@@ -2336,7 +2336,7 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_manage_resp__init(resp);
 
 	D_ALLOC_PTR(resp->device);
-	if (resp == NULL) {
+	if (resp->device == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILURE;
 		drpc_dev_manage_free(resp);
 		ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
