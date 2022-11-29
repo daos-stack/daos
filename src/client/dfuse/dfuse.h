@@ -197,16 +197,16 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
  */
 struct dfuse_pool {
 	/** UUID of the pool */
-	uuid_t			dfp_pool;
+	uuid_t              dfp_pool;
 	/** Pool handle */
-	daos_handle_t		dfp_poh;
+	daos_handle_t       dfp_poh;
 	/** Hash table entry in dpi_pool_table */
-	d_list_t		dfp_entry;
+	d_list_t            dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfp_ref;
+	ATOMIC uint32_t     dfp_ref;
 
 	/** Hash table of open containers in pool */
-	struct d_hash_table	dfp_cont_table;
+	struct d_hash_table dfp_cont_table;
 };
 
 /** Container information
@@ -238,7 +238,7 @@ struct dfuse_cont {
 	/** Hash table entry entry in dfp_cont_table */
 	d_list_t		dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfs_ref;
+	ATOMIC uint32_t          dfs_ref;
 
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
@@ -599,7 +599,7 @@ struct dfuse_inode_entry {
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
-	ATOMIC uint              ie_ref;
+	ATOMIC uint32_t          ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;

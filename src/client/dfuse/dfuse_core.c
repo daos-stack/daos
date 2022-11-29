@@ -115,8 +115,7 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 
 /* Shrink a 64 bit value into 32 bits to avoid hash collisions */
 static uint32_t
-ih_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ih_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	const ino_t *_ino = key;
 	ino_t ino = *_ino;
@@ -126,8 +125,7 @@ ih_key_hash(struct d_hash_table *htable, const void *key,
 }
 
 static bool
-ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
-	   const void *key, unsigned int ksize)
+ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
 	const struct dfuse_inode_entry	*ie;
 	const ino_t			*ino = key;
@@ -169,8 +167,8 @@ static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry *ie;
-	uint                      oldref = 0;
-	uint                      newref = 0;
+	uint32_t                  oldref = 0;
+	uint32_t                  newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -215,8 +213,7 @@ static d_hash_table_ops_t ie_hops = {
 };
 
 static uint32_t
-ph_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ph_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -232,8 +229,7 @@ ph_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ph_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_pool *dfp;
 
@@ -244,8 +240,8 @@ ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ph_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	 *dfp;
-	uint			 oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
 	dfp = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_add_relaxed(&dfp->dfp_ref, 1);
@@ -255,8 +251,8 @@ ph_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ph_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	*dfp;
-	uint			oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
 	dfp = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfp->dfp_ref, 1);
@@ -313,8 +309,7 @@ static d_hash_table_ops_t pool_hops = {
 };
 
 static uint32_t
-ch_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -330,8 +325,7 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ch_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_cont *dfc;
 
@@ -342,8 +336,8 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ch_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint			oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_add_relaxed(&dfc->dfs_ref, 1);
@@ -353,8 +347,8 @@ ch_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ch_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint			oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfc->dfs_ref, 1);
@@ -387,8 +381,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv,
-		 container_of(link, struct dfuse_cont, dfs_entry));
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
 }
 
 d_hash_table_ops_t cont_hops = {
