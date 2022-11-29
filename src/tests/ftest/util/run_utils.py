@@ -79,6 +79,26 @@ class RemoteCommandResult():
         return any(data.timeout for data in self.output)
 
     @property
+    def passed_hosts(self):
+        """Get all passed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command passed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode == 0)
+
+    @property
+    def failed_hosts(self):
+        """Get all failed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command failed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
+
+    @property
     def all_stdout(self):
         """Get all of the stdout from the issued command from each host.
 

@@ -405,7 +405,6 @@ class CommandWithParameters(ObjectWithParameters):
         super().__init__(namespace)
         self._command = command
         self._path = path
-        self._pre_command = None
 
     @property
     def command(self):
@@ -425,20 +424,15 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         # Join all the parameters that have been assigned a value with the
-        # command to create the command string
-        params = []
+        # path and the command to create the command string
+        command = [os.path.join(self._path, self._command)]
         for name in self.get_str_param_names():
             value = str(getattr(self, name))
             if value != "":
-                params.append(value)
-
-        # Append the path to the command and prepend it with any other
-        # specified commands
-        command_list = [] if self._pre_command is None else [self._pre_command]
-        command_list.append(os.path.join(self._path, self._command))
+                command.append(value)
 
         # Return the command and its parameters
-        return " ".join(command_list + params)
+        return " ".join(command)
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -510,8 +504,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         yaml_data_updated = False
-        if (self.other_params is not None and
-                hasattr(self.other_params, "is_yaml_data_updated")):
+        if (self.other_params is not None and hasattr(self.other_params, "is_yaml_data_updated")):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():

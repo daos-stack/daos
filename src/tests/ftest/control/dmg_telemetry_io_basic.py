@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -59,7 +58,8 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                                         invalid += " *_min > _max"
                                 # Verify if value decreased
                                 if ("_min" in name or "_max" in name) and key > 0:
-                                    if value < metrics_data[key-1][name][host][rank][target][size]:
+                                    if value \
+                                            < metrics_data[key - 1][name][host][rank][target][size]:
                                         status = False
                                         invalid += " *value decreased"
                                 self.log.info(

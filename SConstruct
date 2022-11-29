@@ -38,7 +38,7 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "6"
+API_VERSION_MINOR = "7"
 API_VERSION_FIX = "0"
 API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
@@ -322,7 +322,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile'])
+    env = Environment(TOOLS=['extra', 'default', 'textfile', 'go_builder'])
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
