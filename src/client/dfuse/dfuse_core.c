@@ -118,8 +118,8 @@ static uint32_t
 ih_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	const ino_t *_ino = key;
-	ino_t ino = *_ino;
-	uint32_t hash = ino ^ (ino >> 32);
+	ino_t        ino  = *_ino;
+	uint32_t     hash = ino ^ (ino >> 32);
 
 	return hash;
 }
@@ -127,8 +127,8 @@ ih_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
-	const struct dfuse_inode_entry	*ie;
-	const ino_t			*ino = key;
+	const struct dfuse_inode_entry *ie;
+	const ino_t		    *ino = key;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -193,8 +193,8 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
-	struct dfuse_inode_entry	*ie;
+	struct dfuse_projection_info *fs_handle = htable->ht_priv;
+	struct dfuse_inode_entry     *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -280,15 +280,12 @@ _ph_free(struct dfuse_pool *dfp)
 				rc = -DER_SUCCESS;
 		}
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_disconnect() failed: "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: "DF_RC,
-				DP_RC(rc));
+		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
 	D_FREE(dfp);
 }
