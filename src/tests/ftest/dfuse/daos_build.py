@@ -195,10 +195,10 @@ class DaosBuild(DfuseTestBase):
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work, so run this part in serial.  The VMs have 6 cores each.
         #     DH test only, to add local branch for build to include the env change
-        #     need to remove  git checkout   before land/merge.
+        #     need to remove  git clone -C {} ..   before land/merge.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git checkout dinghwah/DAOS-12134-ctest',
+                'git clone -C {} dinghwah/DAOS-12134-ctest'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
