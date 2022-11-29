@@ -9,13 +9,7 @@ def scons():
     if not prereqs.client_requested():
         return
 
-    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
-
     env.d_add_build_rpath()
-    env.AppendUnique(LIBPATH=[Dir('.')])
-    env.AppendUnique(LIBPATH=[Dir('../client/dfs')])
-
-    denv = env.Clone()
 
     # Build self test
     SConscript('self_test/SConscript')
@@ -34,10 +28,13 @@ def scons():
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
+    denv = env.Clone()
+    denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
+    libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
+
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']
     daos_hdlrs_lib = denv.d_library('daos_cmd_hdlrs', daos_hdlrs_src, LIBS=libs)
     env.Install('$PREFIX/lib64/', daos_hdlrs_lib)
-    libs += ['daos_cmd_hdlrs']
 
 
 if __name__ == "SCons.Script":

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 '''
 
 from daos_core_base import DaosCoreBase
+
 
 class DaosCoreTestRebuild(DaosCoreBase):
     # pylint: disable=too-many-ancestors
