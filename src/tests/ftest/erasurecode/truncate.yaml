@@ -9,8 +9,8 @@ hosts:
   test_clients: 1
 timeout: 300
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -66,14 +66,14 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     bs:
-      size: '10485760' #10MB
+      size: '10485760'  # 10MB
     read_write:
       rw: 'write'
-  truncate_size: '26214400' #25Mb
+  truncate_size: '26214400'  # 25Mb
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   caching: !mux
     disable:
-      disable_caching: True
+      disable_caching: true
     enable:
-      enable_caching: True
+      enable_caching: true

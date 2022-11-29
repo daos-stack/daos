@@ -28,9 +28,9 @@ ior:
   api: "DFS"
   client_processes:
     np: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
-      flags: "-w -k"
+    flags: "-w -k"
   repetitions: 1
   transfersize_blocksize:
     4K:

@@ -70,9 +70,8 @@ class RbldBasic(TestWithServers):
             rs_rec_nr.append(rs_obj_nr[-1] * container.record_qty.value)
             self.log.info(
                 "Expecting %s/%s rebuilt records in container %s after excluding rank %s",
-                rs_rec_nr[-1],
-                container.object_qty.value * container.record_qty.value,
-                container, rank)
+                rs_rec_nr[-1], container.object_qty.value * container.record_qty.value, container,
+                rank)
 
         # Manually exclude the specified rank
         for index, pool in enumerate(pools):
