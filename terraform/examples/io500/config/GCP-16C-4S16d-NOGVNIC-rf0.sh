@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2155
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +15,8 @@
 # limitations under the License.
 
 # ------------------------------------------------------------------------------
-# Configuration: 32 clients, 10 servers, 16 disks per server
-# IO500 Config:  io500-isc22.config-template.daos-rf2.ini
+# Configuration: 16 clients, 4 servers, 16 disks per server
+# IO500 Config:  io500-sc22.config-template.daos-rf0.ini
 # ------------------------------------------------------------------------------
 
 # Optional identifier to allow multiple DAOS clusters in the same GCP
@@ -28,40 +29,31 @@
 ID=""
 
 # Server and client instances
-PREEMPTIBLE_INSTANCES="false"
+PREEMPTIBLE_INSTANCES="true"
 SSH_USER="daos-user"
 DAOS_ALLOW_INSECURE="false"
 
 # Server(s)
-# Total disks per server: (16 disks * 375GB)/1000 = 6TB
-# Total space for 8 servers:  8 * 6TB = 48TB
-# Total Amount of SCM needed for tier-ratio to 3: 48TB * 3% = 1.44GB
-# SCM needed per server = 1.44GB / 8 = 180GB
-# vCPUs needed per server: 1 CPU per disk + 2 for the server
-#                          (16 + 2) * 8 = 144 vCPUs per server
-
-
-
-DAOS_SERVER_INSTANCE_COUNT="10"
-DAOS_SERVER_MACHINE_TYPE=n2-highmem-32
+DAOS_SERVER_INSTANCE_COUNT="4"
+DAOS_SERVER_MACHINE_TYPE=n2-custom-36-262144
 DAOS_SERVER_DISK_COUNT=16
 DAOS_SERVER_CRT_TIMEOUT=300
 DAOS_SERVER_SCM_SIZE=200
 DAOS_SERVER_GVNIC=false
 
 # Client(s)
-DAOS_CLIENT_INSTANCE_COUNT="32"
+DAOS_CLIENT_INSTANCE_COUNT="16"
 DAOS_CLIENT_MACHINE_TYPE=c2-standard-16
 DAOS_CLIENT_GVNIC=false
 
 # Storage
-DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${DAOS_SERVER_INSTANCE_COUNT} 'BEGIN {pool_size = 350 * disk_count * server_count / 1000; print pool_size"TB"}')"
+DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${DAOS_SERVER_INSTANCE_COUNT} 'BEGIN {pool_size = 375 * disk_count * server_count / 1000; print pool_size"TB"}')"
 DAOS_CONT_REPLICATION_FACTOR="rf:0"
 
 # IO500
-IO500_TEST_CONFIG_ID="GCP-32C-10S16d-rf2-1"
-IO500_STONEWALL_TIME=30  # Number of seconds to run the benchmark
-IO500_INI="io500-isc22.config-template.daos-rf2.ini"
+IO500_TEST_CONFIG_ID="GCP-16C-4S16d-NOGVNIC-rf0"
+IO500_STONEWALL_TIME=60  # Number of seconds to run the benchmark
+IO500_INI="io500-sc22.config-template.daos-rf0.ini"
 
 # ------------------------------------------------------------------------------
 # Modify instance base names if ID variable is set

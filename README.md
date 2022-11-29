@@ -17,7 +17,7 @@ For instructions, see the [Pre-Deployment Guide](docs/pre-deployment_guide.md)
 
 As an alternative to viewing the guide as a standalone document, you can view it as an in-context tutorial in [Cloud Shell](https://cloud.google.com/shell) by clicking the button below.
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/markaolson/google-cloud-daos&cloudshell_git_branch=DAOSGCP-119&shellonly=true&cloudshell_tutorial=docs/pre-deployment_guide.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/daos-stack/google-cloud-daos&cloudshell_git_branch=develop&shellonly=true&cloudshell_tutorial=docs/pre-deployment_guide.md)
 
 
 
@@ -65,7 +65,7 @@ To deploy DAOS on GCP you may choose one of the following deployment paths.
 
    As an alternative to viewing the instructions in [Deploy the DAOS Cluster Example](docs/deploy_daos_cluster_example.md) as a standalone document, you can view it as an in-context tutorial in [Cloud Shell](https://cloud.google.com/shell) by clicking the button below.
 
-   [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/markaolson/google-cloud-daos&cloudshell_git_branch=DAOSGCP-119&shellonly=true&cloudshell_tutorial=docs/deploy_daos_cluster_example.md)
+   [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/daos-stack/google-cloud-daos&cloudshell_git_branch=develop&shellonly=true&cloudshell_tutorial=docs/deploy_daos_cluster_example.md)
 
 3. **Create your own Terraform Configurations**
 

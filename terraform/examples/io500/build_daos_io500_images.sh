@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,17 +17,12 @@
 # Build daos-server and daos-client images.
 # The daos-client image will have IO500 pre-installed.
 #
-set -e
+set -eo pipefail
 
-trap cleanup EXIT
-trap 'printf "\n\n%s\n\n" "Terminating script ... "; cleanup' SIGINT
-trap 'printf "\n\n%s\n\n" "Hit an unexpected and unchecked error. Exiting."; cleanup' ERR
+trap 'echo "Unexpected and unchecked error. Exiting."' ERR
 
-SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
-
-# CLIENT_OS_FAMILY="daos-client-hpc-centos-7"
-# SERVER_OS_FAMILY="daos-server-centos-7"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+SCRIPT_FILENAME=$(basename "${BASH_SOURCE[0]}")
 
 CLIENT_OS_FAMILY="daos-client-io500-hpc-centos-7"
 SERVER_OS_FAMILY="daos-server-io500-centos-7"
@@ -39,8 +34,7 @@ IO500_INSTALL_SCRIPTS_DIR="${SCRIPT_DIR}/install_scripts"
 INSTALL_SCRIPTS=(
 install_devtools.sh
 install_intel-oneapi.sh
-install_mpifileutils.sh
-install_io500-isc22.sh
+install_io500-sc22.sh
 )
 
 # Reverse the INSTALL_SCRIPTS array
@@ -56,12 +50,34 @@ BUILD_WORKER_POOL="${BUILD_WORKER_POOL:-""}"
 USE_IAP="${USE_IAP:-"true"}"
 ERROR_MSGS=()
 
+# BEGIN: Logging variables and functions
+declare -A LOG_LEVELS=([DEBUG]=0 [INFO]=1  [WARN]=2   [ERROR]=3 [FATAL]=4 [OFF]=5)
+declare -A LOG_COLORS=([DEBUG]=2 [INFO]=12 [WARN]=3 [ERROR]=1 [FATAL]=9 [OFF]=0 [OTHER]=15)
+LOG_LEVEL=INFO
+
+log() {
+  local msg="$1"
+  local lvl=${2:-INFO}
+  if [[ ${LOG_LEVELS[$LOG_LEVEL]} -le ${LOG_LEVELS[$lvl]} ]]; then
+    if [[ -t 1 ]]; then tput setaf "${LOG_COLORS[$lvl]}"; fi
+    printf "[%-5s] %s\n" "$lvl" "${msg}" 1>&2
+    if [[ -t 1 ]]; then tput sgr0; fi
+  fi
+}
+
+log.debug() { log "${1}" "DEBUG" ; }
+log.info()  { log "${1}" "INFO"  ; }
+log.warn()  { log "${1}" "WARN"  ; }
+log.error() { log "${1}" "ERROR" ; }
+log.fatal() { log "${1}" "FATAL" ; }
+# END: Logging variables and functions
+
 show_help() {
   cat <<EOF
 
 Usage:
 
-  ${SCRIPT_NAME} <options>
+  ${SCRIPT_FILENAME} <options>
 
 Options:
 
@@ -92,7 +108,7 @@ Options:
                                Specify a worker pool for the build to run in.
                                Format: projects/{project}/locations/
                                         {region}/workerPools/{workerPool}
-    
+
     -i --use-iap  USE_IAP      Whether to use an IAP proxy for Packer.
                                Possible values: true, false. Default: true.
 
@@ -104,17 +120,17 @@ Options:
 Examples:
 
   Build daos-client-io500 images
-    ${SCRIPT_NAME} -t client
+    ${SCRIPT_FILENAME} -t client
 
   Build daos-server images
-    ${SCRIPT_NAME} -t server
+    ${SCRIPT_FILENAME} -t server
 
   Build both daos-server and daos-client images
-    ${SCRIPT_NAME} -t all
+    ${SCRIPT_FILENAME} -t all
 
 Dependencies:
 
-  ${SCRIPT_NAME} uses the Google Cloud Platform SDK (gcloud command)
+  ${SCRIPT_FILENAME} uses the Google Cloud Platform SDK (gcloud command)
 
   You must install the Google Cloud SDK and make sure it is in your PATH
   See https://cloud.google.com/sdk/docs/install
@@ -122,40 +138,13 @@ Dependencies:
 EOF
 }
 
-log() {
-  local msg
-  local print_lines
-  msg="$1"
-  print_lines="$2"
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  if [[ "${print_lines}" == 1 ]]; then
-    printf -- "\n%s\n %-78s \n%s\n" "${line}" "${msg}" "${line}"
-  else
-    printf -- "\n%s\n\n" "${msg}"
-  fi
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_error() {
-  # shellcheck disable=SC2155,SC2183
-  if [[ -t 1 ]]; then tput setaf 160; fi
-  printf -- "\n%s\n\n" "${1}" >&2;
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_section() {
-  log "$1" "1"
-}
-
 verify_cloudsdk() {
   local gcloud_path
   gcloud_path="$(which gcloud)"
   if [[ -z "${gcloud_path}" ]]; then
-    log_error "ERROR: gcloud not found"
-    log_error "       Is the Google Cloud Platform SDK installed?"
-    log_error "       See https://cloud.google.com/sdk/docs/install"
+    log.error "gcloud not found"
+    log.error "Is the Google Cloud Platform SDK installed?"
+    log.error "See https://cloud.google.com/sdk/docs/install"
     show_help
     exit 1
   fi
@@ -167,7 +156,7 @@ check_existing_builds() {
     if [[ "${FORCE_REBUILD}" -eq 1 ]] || [[ -z ${SERVER_IMAGE} ]]; then
       export BUILD_SERVER_IMAGE=1
     else
-      log "Server image '${SERVER_IMAGE}' exists. Skipping build."
+      log.info "Server image '${SERVER_IMAGE}' exists. Skipping build."
       export BUILD_SERVER_IMAGE=0
     fi
   fi
@@ -177,7 +166,7 @@ check_existing_builds() {
     if [[ "${FORCE_REBUILD}" -eq 1 ]] || [[ -z ${CLIENT_IMAGE} ]]; then
       export BUILD_CLIENT_IMAGE=1
     else
-      log "Client image '${CLIENT_IMAGE}' exists. Skipping build."
+      log.info "Client image '${CLIENT_IMAGE}' exists. Skipping build."
       export BUILD_CLIENT_IMAGE=0
     fi
   fi
@@ -189,7 +178,7 @@ check_existing_builds() {
 
 create_tmp_dir() {
   TMP_DIR="$(mktemp -d)"
-  log "Temp directory for image building: ${TMP_DIR}"
+  log.info "Temp directory for image building: ${TMP_DIR}"
   cp -r "${IMAGES_DIR}" "${TMP_DIR}/"
   TMP_IMAGES_DIR="${TMP_DIR}/$(basename "${IMAGES_DIR}")"
   TMP_SCRIPTS_DIR="${TMP_IMAGES_DIR}/scripts"
@@ -248,12 +237,12 @@ build_images() {
   cd "${TMP_IMAGES_DIR}"
 
   if [[ "${BUILD_SERVER_IMAGE}" -eq 1 ]]; then
-      log "Building DAOS server image: ${SERVER_OS_FAMILY}"
+      log.info "Building DAOS server image: ${SERVER_OS_FAMILY}"
       ./build_images.sh -t "server"
   fi
 
   if [[ "${BUILD_CLIENT_IMAGE}" -eq 1 ]]; then
-      log "Building DAOS client image: ${CLIENT_OS_FAMILY}"
+      log.info "Building DAOS client image: ${CLIENT_OS_FAMILY}"
       ./build_images.sh -t "client"
   fi
 }
@@ -262,7 +251,7 @@ show_errors() {
   # If there are errors, print the error messages and exit
   if [[ ${#ERROR_MSGS[@]} -gt 0 ]]; then
     printf "\n" >&2
-    log_error "${ERROR_MSGS[@]}"
+    log.error "${ERROR_MSGS[@]}"
     show_help
     exit 1
   fi
@@ -285,10 +274,10 @@ opts() {
       --type|-t)
         DAOS_INSTALL_TYPE="$2"
         if [[ "${DAOS_INSTALL_TYPE}" == -* ]] || [[ "${DAOS_INSTALL_TYPE}" = "" ]] || [[ -z ${DAOS_INSTALL_TYPE} ]]; then
-          ERROR_MSGS+=("ERROR: Missing DAOS_INSTALL_TYPE value for -t or --type")
+          ERROR_MSGS+=("Missing DAOS_INSTALL_TYPE value for -t or --type")
           break
         elif [[ ! "${DAOS_INSTALL_TYPE}" =~ ^(all|server|client)$ ]]; then
-          ERROR_MSGS+=("ERROR: Invalid value '${DAOS_INSTALL_TYPE}' for DAOS_INSTALL_TYPE")
+          ERROR_MSGS+=("Invalid value '${DAOS_INSTALL_TYPE}' for DAOS_INSTALL_TYPE")
           ERROR_MSGS+=("       Valid values are 'all', 'server', 'client'")
         fi
         shift 2
@@ -296,7 +285,7 @@ opts() {
       --project|-p)
         GCP_PROJECT="$2"
         if [[ "${GCP_PROJECT}" == -* ]] || [[ "${GCP_PROJECT}" = "" ]] || [[ -z ${GCP_PROJECT} ]]; then
-          ERROR_MSGS+=("ERROR: Missing GCP_PROJECT value for -p or --project")
+          ERROR_MSGS+=("Missing GCP_PROJECT value for -p or --project")
           break
         fi
         shift 2
@@ -304,7 +293,7 @@ opts() {
       --region|-r)
         GCP_REGION="$2"
         if [[ "${GCP_REGION}" == -* ]] || [[ "${GCP_REGION}" = "" ]] || [[ -z ${GCP_REGION} ]]; then
-          ERROR_MSGS+=("ERROR: Missing GCP_REGION value for -r or --region")
+          ERROR_MSGS+=("Missing GCP_REGION value for -r or --region")
           break
         fi
         shift 2
@@ -312,7 +301,7 @@ opts() {
       --zone|-z)
         GCP_ZONE="$2"
         if [[ "${GCP_ZONE}" == -* ]] || [[ "${GCP_ZONE}" = "" ]] || [[ -z ${GCP_ZONE} ]]; then
-          ERROR_MSGS+=("ERROR: Missing GCP_ZONE value for -z or --zone")
+          ERROR_MSGS+=("Missing GCP_ZONE value for -z or --zone")
           break
         fi
         shift 2
@@ -320,7 +309,7 @@ opts() {
       --repo-baseurl|-u)
         DAOS_REPO_BASE_URL="${2}"
         if [[ "${DAOS_REPO_BASE_URL}" == -* ]] || [[ "${DAOS_REPO_BASE_URL}" = "" ]] || [[ -z ${DAOS_REPO_BASE_URL} ]]; then
-          log_error "ERROR: Missing URL value for --repo-baseurl"
+          log.error "Missing URL value for --repo-baseurl"
           show_help
           exit 1
         fi
@@ -329,7 +318,7 @@ opts() {
       --worker-pool|-w)
         BUILD_WORKER_POOL="${2}"
         if [[ "${BUILD_WORKER_POOL}" == -* ]] || [[ "${BUILD_WORKER_POOL}" = "" ]] || [[ -z ${BUILD_WORKER_POOL} ]]; then
-          ERROR_MSGS+=("ERROR: Missing BUILD_WORKER_POOL value for -w or --worker-pool")
+          ERROR_MSGS+=("Missing BUILD_WORKER_POOL value for -w or --worker-pool")
           break
         fi
         shift 2
@@ -337,7 +326,7 @@ opts() {
       --use-iap|-i)
         USE_IAP="${2}"
         if [[ "${USE_IAP}" == -* ]] || [[ "${USE_IAP}" = "" ]] || [[ -z ${USE_IAP} ]]; then
-          ERROR_MSGS+=("ERROR: Missing USE_IAP value for -i or --use-iap")
+          ERROR_MSGS+=("Missing USE_IAP value for -i or --use-iap")
           break
         fi
         shift 2
@@ -356,17 +345,17 @@ opts() {
         exit 0
       ;;
 	    --*|-*)
-        ERROR_MSGS+=("ERROR: Unrecognized option '${1}'")
+        ERROR_MSGS+=("Unrecognized option '${1}'")
         shift
       ;;
 	    *)
-        ERROR_MSGS+=("ERROR: Unrecognized option '${1}'")
+        ERROR_MSGS+=("Unrecognized option '${1}'")
         shift
         break
       ;;
     esac
   done
-  set -e
+  set -eo pipefail
 
   # Before we attempt to do lookups for project, region, and zone show the
   # errors and exit if there are any errors at this point.
@@ -375,17 +364,17 @@ opts() {
   GCP_PROJECT="${GCP_PROJECT:-"${GCP_PROJECT}"}"
   GCP_PROJECT="${GCP_PROJECT:-"${CLOUDSDK_PROJECT}"}"
   GCP_PROJECT="${GCP_PROJECT:-$(gcloud config list --format='value(core.project)')}"
-  [[ -z ${GCP_PROJECT} ]] && ERROR_MSGS+=("ERROR: core.project value not found in Cloud SDK configuration and no value passed for --project")
+  [[ -z ${GCP_PROJECT} ]] && ERROR_MSGS+=("core.project value not found in Cloud SDK configuration and no value passed for --project")
 
   GCP_REGION="${GCP_REGION:-"${GCP_REGION}"}"
   GCP_REGION="${GCP_REGION:-"${CLOUDSDK_REGION}"}"
   GCP_REGION="${GCP_REGION:-$(gcloud config list --format='value(compute.region)')}"
-  [[ -z ${GCP_REGION} ]] && ERROR_MSGS+=("ERROR: compute.region value not found in Cloud SDK configuration and no value passed for --region")
+  [[ -z ${GCP_REGION} ]] && ERROR_MSGS+=("compute.region value not found in Cloud SDK configuration and no value passed for --region")
 
   GCP_ZONE="${GCP_ZONE:-"${GCP_ZONE}"}"
   GCP_ZONE="${GCP_ZONE:-"${CLOUDSDK_ZONE}"}"
   GCP_ZONE="${GCP_ZONE:-$(gcloud config list --format='value(compute.zone)')}"
-  [[ -z ${GCP_ZONE} ]] && ERROR_MSGS+=("ERROR: compute.zone value not found in Cloud SDK configuration and no value passed for --zone")
+  [[ -z ${GCP_ZONE} ]] && ERROR_MSGS+=("compute.zone value not found in Cloud SDK configuration and no value passed for --zone")
 
 
   # Now that we've checked all other variables, exit if there are any errors.
@@ -401,7 +390,7 @@ opts() {
 }
 
 main() {
-  log_section "Building DAOS disk images for IO500"
+  log.info "Building DAOS disk images for IO500"
   opts "$@"
   check_existing_builds
   create_tmp_dir

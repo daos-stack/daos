@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,28 +17,28 @@
 # Clean storage on DAOS servers
 #
 
-#set -e
-#trap 'echo "Hit an unexpected and unchecked error. Exiting."' ERR
+set -eo pipefail
+trap 'echo "Hit an unexpected and unchecked error. Exiting."' ERR
 
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 CONFIG_FILE="${SCRIPT_DIR}/config.sh"
 SERVER_HOSTS_FILE="${SCRIPT_DIR}/hosts_servers"
 
+# shellcheck source=_log.sh
+source "${SCRIPT_DIR}/_log.sh"
+
 # Source config file to load variables
+# shellcheck source=/dev/null
 source "${CONFIG_FILE}"
 
-log() {
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  printf -- "\n%s\n\n" "${1}"
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log "Start cleaning storage on DAOS servers"
+log.info "Start cleaning storage on DAOS servers"
 
 clush --hostfile="${SERVER_HOSTS_FILE}" --dsh 'sudo systemctl stop daos_server'
 clush --hostfile="${SERVER_HOSTS_FILE}" --dsh 'sudo rm -rf /var/daos/ram/*'
 clush --hostfile="${SERVER_HOSTS_FILE}" --dsh '[[ -d /var/daos/ram ]] && sudo umount /var/daos/ram/ || echo "/var/daos/ram/ unmounted"'
 clush --hostfile="${SERVER_HOSTS_FILE}" --dsh 'sudo systemctl start daos_server'
 
-log "Finished cleaning storage on DAOS servers"
+# shellcheck disable=SC2016
+clush --hostfile="${SERVER_HOSTS_FILE}" --dsh 'while /bin/netstat -an | /bin/grep \:10001 | /bin/grep -q LISTEN; [ $? -ne 0 ]; do let TRIES-=1; if [ $TRIES -gt 1 ]; then echo "waiting ${TRIES}"; sleep $WAIT;else echo "Timed out";break; fi;done'
 
+log.info "Finished cleaning storage on DAOS servers"

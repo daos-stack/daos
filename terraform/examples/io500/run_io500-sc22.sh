@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,19 @@
 # Cleans DAOS storage and runs an IO500 benchmark
 #
 # Instructions that were referenced to create this script are at
-# https://daosio.atlassian.net/wiki/spaces/DC/pages/11055792129/IO-500+SC21
+# https://daosio.atlassian.net/wiki/spaces/DC/pages/11167301633/IO-500+SC22
 #
 
-IO500_VERSION_TAG=io500-isc22
-
-# # Determine if this script is being sourced
-# # See https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
-# (return 0 2>/dev/null) && sourced=1 || sourced=0
-set -e
+set -eo pipefail
 trap 'echo "Hit an unexpected and unchecked error. Unmounting and exiting."; unmount' ERR
 
-SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+
+# shellcheck source=_log.sh
+source "${SCRIPT_DIR}/_log.sh"
+export LOG_LEVEL=INFO
+
+IO500_VERSION_TAG="io500-sc22"
 CONFIG_FILE="${SCRIPT_DIR}/config.sh"
 
 # Comma separated list of servers needed for the dmg command
@@ -39,144 +39,136 @@ SERVER_LIST=$(awk -vORS=, '{ print $1 }' "${SCRIPT_DIR}/hosts_servers" | sed 's/
 
 # Source config file to load variables
 if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck source=/dev/null
   source "${CONFIG_FILE}"
 fi
 
-# Set environment variable defaults if not already set
-# This allows for the variables to be set to different values externally.
 IO500_STONEWALL_TIME="${IO500_STONEWALL_TIME:-5}"
-IO500_INSTALL_DIR="${IO500_INSTALL_DIR:-/usr/local}"
-IO500_DIR="${IO500_DIR:-${IO500_INSTALL_DIR}/${IO500_VERSION_TAG}}"
-IO500_RESULTS_DFUSE_DIR="${IO500_RESULTS_DFUSE_DIR:-${HOME}/daos_fuse/${IO500_VERSION_TAG}/results}"
-IO500_RESULTS_DIR="${IO500_RESULTS_DIR:-${HOME}/${IO500_VERSION_TAG}/results}"
+IO500_DIR="${IO500_DIR:-"/opt/${IO500_VERSION_TAG}"}"
+
+IO500_DFUSE_DIR="${IO500_DFUSE_DIR:-"${HOME}/daos_fuse/${IO500_VERSION_TAG}"}"
+IO500_DATAFILES_DFUSE_DIR="${IO500_DATAFILES_DFUSE_DIR:-"${IO500_DFUSE_DIR}/datafiles"}"
+IO500_RESULTS_DFUSE_DIR="${IO500_RESULTS_DFUSE_DIR:-"${IO500_DFUSE_DIR}/results"}"
+
+IO500_RESULTS_DIR="${IO500_RESULTS_DIR:-"${HOME}/${IO500_VERSION_TAG}/results"}"
+
 DAOS_POOL_LABEL="${DAOS_POOL_LABEL:-io500_pool}"
 DAOS_CONT_LABEL="${DAOS_CONT_LABEL:-io500_cont}"
-
-log() {
-  local msg
-  local print_lines
-  msg="$1"
-  print_lines="$2"
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  if [[ "${print_lines}" == 1 ]]; then
-    printf -- "\n%s\n %-78s \n%s\n" "${line}" "${msg}" "${line}"
-  else
-    printf -- "\n%s\n\n" "${msg}"
-  fi
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_error() {
-  # shellcheck disable=SC2155,SC2183
-  if [[ -t 1 ]]; then tput setaf 160; fi
-  printf -- "\n%s\n\n" "${1}" >&2;
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_section() {
-  log "$1" "1"
-}
 
 fix_admin_cert_permissions() {
   # In order to run dmg you must run it with a key which is owned by you
   # This is a hack to allow daos-user to run dmg
+  log.debug "BEGIN: fix_admin_cert_permissions()"
   if [[ -f /etc/daos/certs/admin.key ]];then
     clush --hostfile="${SCRIPT_DIR}/hosts_clients" --dsh sudo chown "${SSH_USER}":"${SSH_USER}" /etc/daos/certs/admin*
   else
-    log_error "Unable to fix admin cert permissions. admin.key does not exist."
+    log.error "Unable to fix admin cert permissions. admin.key does not exist."
   fi
+  log.debug "END: fix_admin_cert_permissions()"
 }
 
 unmount_defuse() {
-  if [[ -d "${IO500_RESULTS_DFUSE_DIR}" ]]; then
-    log_section "Unmount DFuse mountpoint ${IO500_RESULTS_DFUSE_DIR}"
+  log.info "Attempting to unmount DFuse mountpoint ${IO500_DFUSE_DIR}"
+  if findmnt --target "${IO500_DFUSE_DIR}" > /dev/null; then
+    log.info "Unmount DFuse mountpoint ${IO500_DFUSE_DIR}"
 
     clush --hostfile=hosts_clients --dsh \
-      "sudo fusermount3 -u '${IO500_RESULTS_DFUSE_DIR}'"
+      "sudo fusermount3 -u '${IO500_DFUSE_DIR}'"
 
     clush --hostfile=hosts_clients --dsh \
-      "rm -r '${IO500_RESULTS_DFUSE_DIR}'"
+      "rm -r '${IO500_DFUSE_DIR}'"
 
     clush --hostfile=hosts_clients --dsh \
       "mount | sort | grep dfuse || true"
 
-    log "fusermount3 complete!"
+    log.info "fusermount3 complete!"
   fi
 }
 
 cleanup(){
-  log_section "Clean up DAOS storage"
+  log.info "Clean up DAOS storage"
   unmount_defuse
   "${SCRIPT_DIR}/clean_storage.sh"
 }
 
 storage_scan() {
-  log "Run DAOS storage scan"
-  sudo dmg -l ${SERVER_LIST} storage scan --verbose
+  log.info "Run DAOS storage scan"
+  log.debug "COMMAND: dmg -l \"${SERVER_LIST}\" storage scan --verbose"
+  dmg -l "${SERVER_LIST}" storage scan --verbose
 }
 
 format_storage() {
+  log.info "Format DAOS storage"
+  log.debug "COMMAND: dmg -l \"${SERVER_LIST}\" storage format"
+  dmg -l "${SERVER_LIST}" storage format
 
-  log_section "Format DAOS storage"
-  sudo dmg -l ${SERVER_LIST} storage format --reformat
-
-  printf "%s" "Waiting for DAOS storage format to finish"
+  log.info "Waiting for DAOS storage format to finish"
+  echo "Formatting"
   while true
   do
-    if [[ $(dmg -j system query -v | grep joined | wc -l) -eq ${DAOS_SERVER_INSTANCE_COUNT} ]]; then
-      printf "\n%s\n" "DAOS storage format finished"
+    if [[ $(dmg system query -v | grep -c -i joined) -eq ${DAOS_SERVER_INSTANCE_COUNT} ]]; then
+      printf "\n"
+      log.info "DAOS storage format finished"
       dmg system query -v
       break
     fi
     printf "%s" "."
     sleep 5
   done
+}
 
+show_storage_usage() {
+  log.info "Display storage usage"
+  log.debug "COMMAND: dmg storage query usage"
   dmg storage query usage
-
 }
 
 create_pool() {
-  log_section "Create pool: label=${DAOS_POOL_LABEL} size=${DAOS_POOL_SIZE}"
+  log.info "Create pool: label=${DAOS_POOL_LABEL} size=${DAOS_POOL_SIZE}"
 
   # TODO: Don't hardcode tier-ratio to 3 (-t 3)
-  dmg pool create -z ${DAOS_POOL_SIZE} -t 3 -u ${USER} --label=${DAOS_POOL_LABEL}
+  dmg pool create -z "${DAOS_POOL_SIZE}" -t 3 -u "${USER}" --label="${DAOS_POOL_LABEL}"
 
   echo "Set pool property: reclaim=disabled"
-  dmg pool set-prop ${DAOS_POOL_LABEL} --name=reclaim --value=disabled
+  dmg pool set-prop "${DAOS_POOL_LABEL}" --name=reclaim --value=disabled
 
   echo "Pool created successfully"
   dmg pool query "${DAOS_POOL_LABEL}"
+}
 
-  log "Create container: label=${DAOS_CONT_LABEL}"
+create_container() {
+  log.info "Create container: label=${DAOS_CONT_LABEL}"
+  log.debug "COMMAND: daos container create --type=POSIX --properties=\"${DAOS_CONT_REPLICATION_FACTOR}\" --label=\"${DAOS_CONT_LABEL}\" \"${DAOS_POOL_LABEL}\""
   daos container create --type=POSIX --properties="${DAOS_CONT_REPLICATION_FACTOR}" --label="${DAOS_CONT_LABEL}" "${DAOS_POOL_LABEL}"
 
-  #  Show container properties
-  daos cont get-prop ${DAOS_POOL_LABEL} ${DAOS_CONT_LABEL}
+  log.info "Show container properties"
+  log.debug "COMMAND: daos cont get-prop \"${DAOS_POOL_LABEL}\" \"${DAOS_CONT_LABEL}\""
+  daos cont get-prop "${DAOS_POOL_LABEL}" "${DAOS_CONT_LABEL}"
 }
 
 mount_dfuse() {
-  if [[ -d "${IO500_RESULTS_DFUSE_DIR}" ]]; then
-    log_error "DFuse dir ${IO500_RESULTS_DFUSE_DIR} already exists."
+  if [[ -d "${IO500_DFUSE_DIR}" ]]; then
+    log.error "DFuse dir ${IO500_DFUSE_DIR} already exists."
   else
-    log_section "Use dfuse to mount ${DAOS_CONT_LABEL} on ${IO500_RESULTS_DFUSE_DIR}"
+    log.info "Use dfuse to mount ${DAOS_CONT_LABEL} on ${IO500_DFUSE_DIR}"
 
     clush --hostfile=hosts_clients --dsh \
-      "mkdir -p '${IO500_RESULTS_DFUSE_DIR}'"
+      "mkdir -p '${IO500_DFUSE_DIR}'"
 
     clush --hostfile=hosts_clients --dsh \
-      "dfuse -S --pool='${DAOS_POOL_LABEL}' --container='${DAOS_CONT_LABEL}' --mountpoint='${IO500_RESULTS_DFUSE_DIR}'"
+      "dfuse -S --pool='${DAOS_POOL_LABEL}' --container='${DAOS_CONT_LABEL}' --mountpoint='${IO500_DFUSE_DIR}'"
 
     sleep 10
+
+    clush --hostfile=hosts_clients --dsh \
+      "mkdir -p '${IO500_DATAFILES_DFUSE_DIR}' '${IO500_RESULTS_DFUSE_DIR}'"
 
     echo "DFuse mount complete!"
   fi
 }
 
 io500_prepare() {
-  log_section "Load Intel MPI"
+  log.info "Load Intel MPI"
   export I_MPI_OFI_LIBRARY_INTERNAL=0
   export I_MPI_OFI_PROVIDER="tcp;ofi_rxm"
   source /opt/intel/oneapi/setvars.sh
@@ -184,64 +176,64 @@ io500_prepare() {
   export PATH=$PATH:${IO500_DIR}/bin
   export LD_LIBRARY_PATH=/usr/local/mpifileutils/install/lib64/:$LD_LIBRARY_PATH
 
-  log "Prepare config file 'temp.ini' for IO500"
+  log.info "Prepare config file 'temp.ini' for IO500"
 
   # Set the following vars in order to do envsubst with config-full-sc21.ini
   export DAOS_POOL="${DAOS_POOL_LABEL}"
   export DAOS_CONT="${DAOS_CONT_LABEL}"
   export MFU_POSIX_TS=1
-  export IO500_NP=$(( ${DAOS_CLIENT_INSTANCE_COUNT} * $(nproc --all) ))
+  export IO500_NP=$(( DAOS_CLIENT_INSTANCE_COUNT * $(nproc --all) ))
 
-  # cp -f "${IO500_DIR}/config-full-sc21.ini" .
-  # envsubst < config-full-sc21.ini > temp.ini
+  # shellcheck disable=SC2153
   envsubst < "${IO500_INI}" > temp.ini
+  sed -i "s|^datadir.*|datadir = ${IO500_DATAFILES_DFUSE_DIR}|g" temp.ini
   sed -i "s|^resultdir.*|resultdir = ${IO500_RESULTS_DFUSE_DIR}|g" temp.ini
   sed -i "s/^stonewall-time.*/stonewall-time = ${IO500_STONEWALL_TIME}/g" temp.ini
   sed -i "s/^transferSize.*/transferSize = 4m/g" temp.ini
-  #sed -i "s/^blockSize.*/blockSize = 1000000m/g" temp.ini # This causes failures
   sed -i "s/^filePerProc.*/filePerProc = TRUE /g" temp.ini
   sed -i "s/^nproc.*/nproc = ${IO500_NP}/g" temp.ini
 
   # Prepare final results directory for the current run
   TIMESTAMP=$(date "+%Y-%m-%d_%H%M%S")
   IO500_RESULTS_DIR_TIMESTAMPED="${IO500_RESULTS_DIR}/${TIMESTAMP}"
-  log "Creating directory for results ${IO500_RESULTS_DIR_TIMESTAMPED}"
+  log.info "Creating directory for results ${IO500_RESULTS_DIR_TIMESTAMPED}"
   mkdir -p "${IO500_RESULTS_DIR_TIMESTAMPED}"
 }
 
 run_io500() {
-  log_section "Run IO500"
   mpirun -np ${IO500_NP} \
     --hostfile "${SCRIPT_DIR}/hosts_clients" \
     --bind-to socket "${IO500_DIR}/io500" temp.ini
-  log "IO500 run complete!"
+  log.info "IO500 run complete!"
 }
 
 show_pool_state() {
-  log "Query pool state"
+  log.info "Query pool state"
   dmg pool query "${DAOS_POOL_LABEL}"
 }
 
 process_results() {
-  log_section "Copy results from ${IO500_RESULTS_DFUSE_DIR} to ${IO500_RESULTS_DIR_TIMESTAMPED}"
+  log.info "Copy results from ${IO500_RESULTS_DFUSE_DIR} to ${IO500_RESULTS_DIR_TIMESTAMPED}"
 
   cp config.sh "${IO500_RESULTS_DIR_TIMESTAMPED}/"
   cp hosts* "${IO500_RESULTS_DIR_TIMESTAMPED}/"
 
   echo "${TIMESTAMP}" > "${IO500_RESULTS_DIR_TIMESTAMPED}/io500_run_timestamp.txt"
 
-  FIRST_SERVER=$(echo ${SERVER_LIST} | cut -d, -f1)
-  ssh ${FIRST_SERVER} 'daos_server version' > \
+  FIRST_SERVER=$(echo "${SERVER_LIST}" | cut -d, -f1)
+  ssh "${FIRST_SERVER}" 'daos_server version' > \
     "${IO500_RESULTS_DIR_TIMESTAMPED}/daos_server_version.txt"
 
   RESULT_SERVER_FILES_DIR="${IO500_RESULTS_DIR_TIMESTAMPED}/server_files"
+  # shellcheck disable=SC2013
   for server in $(cat hosts_servers);do
     SERVER_FILES_DIR="${RESULT_SERVER_FILES_DIR}/${server}"
     mkdir -p "${SERVER_FILES_DIR}/etc/daos"
-    scp "${server}":/etc/daos/*.yaml "${SERVER_FILES_DIR}/etc/daos/"
+    scp "${server}:/etc/daos/*.yaml" "${SERVER_FILES_DIR}/etc/daos/"
+    scp "${server}:/etc/daos/*.yml" "${SERVER_FILES_DIR}/etc/daos/"
     mkdir -p "${SERVER_FILES_DIR}/var/daos"
-    scp "${server}":/var/daos/*.log "${SERVER_FILES_DIR}/var/daos/"
-    ssh ${server} 'daos_server version' > "${SERVER_FILES_DIR}/daos_server_version.txt"
+    scp "${server}:/var/daos/*.log*" "${SERVER_FILES_DIR}/var/daos/"
+    ssh "${server}" 'daos_server version' > "${SERVER_FILES_DIR}/daos_server_version.txt"
   done
 
   # Save a copy of the environment variables for the IO500 run
@@ -252,29 +244,35 @@ process_results() {
   rsync -avh "${IO500_RESULTS_DFUSE_DIR}/" "${IO500_RESULTS_DIR_TIMESTAMPED}/"
   cp temp.ini "${IO500_RESULTS_DIR_TIMESTAMPED}/"
 
-  # Save output from "sudo dmg pool query"
-  sudo dmg pool query "${DAOS_POOL_LABEL}" > \
+  # Save output from "dmg pool query"
+  # shellcheck disable=SC2024
+  dmg pool query "${DAOS_POOL_LABEL}" > \
     "${IO500_RESULTS_DIR_TIMESTAMPED}/dmg_pool_query_${DAOS_POOL_LABEL}.txt"
 
-  log "Results files located in ${IO500_RESULTS_DIR_TIMESTAMPED}"
+  log.info "Results files located in ${IO500_RESULTS_DIR_TIMESTAMPED}"
 
   RESULTS_TAR_FILE="${IO500_TEST_CONFIG_ID}_${TIMESTAMP}.tar.gz"
 
-  log "Creating '${HOME}/${RESULTS_TAR_FILE}' file with contents of ${IO500_RESULTS_DIR_TIMESTAMPED} directory"
+  log.info "Creating '${HOME}/${RESULTS_TAR_FILE}' file with contents of ${IO500_RESULTS_DIR_TIMESTAMPED} directory"
   pushd "${IO500_RESULTS_DIR_TIMESTAMPED}"
   tar -czf "${HOME}/${RESULTS_TAR_FILE}" ./
-  log "Results tar file: ${HOME}/${RESULTS_TAR_FILE}"
+  log.info "Results tar file: ${HOME}/${RESULTS_TAR_FILE}"
   popd
 }
 
-main(){
+main() {
+  log.section "Prepare for IO500 run"
   fix_admin_cert_permissions
   cleanup
   storage_scan
   format_storage
+  show_storage_usage
   create_pool
+  create_container
   mount_dfuse
   io500_prepare
+
+  log.section "Run IO500"
   run_io500
   process_results
   unmount_defuse

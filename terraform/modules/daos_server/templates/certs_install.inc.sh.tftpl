@@ -17,7 +17,7 @@ get_ca_from_sm() {
 
   # Loop until the secret exists.
   # If the secret is not found in max_secret_wait_time, then exit.
-  max_secret_wait_time="5 mins"
+  max_secret_wait_time="10 mins"
   endtime=$(date -ud "$${max_secret_wait_time}" +%s)
   until gcloud secrets versions list "${daos_ca_secret_id}" \
     --filter="NAME:1" \
@@ -36,7 +36,6 @@ get_ca_from_sm() {
   echo "Saving '${daos_ca_secret_id}' data to /var/daos/daosCA.tar.gz"
 
   # Always get version 1 of the secret. There should not be other versions.
-  mkdir -p /var/daos
   gcloud secrets versions access 1 --secret="${daos_ca_secret_id}" \
     --format "value(payload.data.decode(base64).encode(base64))" \
     | base64 --decode > "/var/daos/daosCA.tar.gz"
@@ -57,6 +56,7 @@ get_ca_from_sm() {
   fi
 }
 
+mkdir -p /var/daos
 cd /var/daos
 
 # Only get the /var/daos/daosCA from Secret Manager

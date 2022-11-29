@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 
 
 # Default DAOS version to be installed in images
-export DEFAULT_DAOS_VERSION="2.0"
+export DEFAULT_DAOS_VERSION="2.2.0"
 
 # Default DAOS packages repo
 export DEFAULT_DAOS_REPO_BASE_URL="https://packages.daos.io"

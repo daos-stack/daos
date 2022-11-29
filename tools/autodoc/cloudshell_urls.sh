@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck disable=SC2013
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,13 +24,14 @@
 #     ./cloudshell_urls.sh -b main -r https://github.com/daos-stack/google-cloud-daos
 #
 
-set -e
+set -eo pipefail
 trap 'echo "Unexpected and unchecked error. Exiting."' ERR
 
-SCRIPT_NAME=$(basename "$0")
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+SCRIPT_FILENAME=$(basename "${BASH_SOURCE[0]}")
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+# shellcheck disable=SC2046
 CURRENT_REMOTE_URL=$(git remote get-url $(git for-each-ref --format='%(upstream:short)' $(git symbolic-ref -q HEAD)|cut -d/ -f1) | sed 's|git@github.com:|https://github.com/|g' | sed 's|\.git||g')
 
 show_help() {
@@ -37,7 +39,7 @@ show_help() {
 
 Usage:
 
-  ${SCRIPT_NAME} <options>
+  ${SCRIPT_FILENAME} <options>
 
   Update all "Open in Google Cloud Shell" links in *.md files
 
@@ -55,15 +57,14 @@ Examples:
 
   Set "Open in Google Cloud Shell" links before merging to main
 
-    ${SCRIPT_NAME} --branch main --repo-url https://github.com/daos-stack/google-cloud-daos
+    ${SCRIPT_FILENAME} --branch main --repo-url https://github.com/daos-stack/google-cloud-daos
 
   Set "Open in Google Cloud Shell" links when submitting a PR to the develop branch
 
-    ${SCRIPT_NAME} --branch develop --repo-url https://github.com/daos-stack/google-cloud-daos
+    ${SCRIPT_FILENAME} --branch develop --repo-url https://github.com/daos-stack/google-cloud-daos
 
 EOF
 }
-
 
 opts() {
   # shift will cause the script to exit if attempting to shift beyond the
@@ -87,12 +88,12 @@ opts() {
         break
       ;;
 	    --*|-*)
-        log_error "ERROR: Unrecognized option '${1}'"
+        echo "ERROR: Unrecognized option '${1}'"
         show_help
         exit 1
       ;;
 	    *)
-        log_error "ERROR: Unrecognized option '${1}'"
+        echo "ERROR: Unrecognized option '${1}'"
         shift
         break
       ;;
@@ -110,43 +111,38 @@ opts() {
 }
 
 update_cloud_shell_urls() {
-  #for mdf in $(find "${SCRIPT_DIR}/../../" -type f -name "*.md"); do
-  for mdf in $(grep -R -l --include "*.md" "https://console.cloud.google.com/cloudshell/open" "${SCRIPT_DIR}/../.."); do
-    log "Updating file: ${mdf}"
-
+  for mdf in $(grep -R -l --include "*.md" \
+                   --exclude "development.md" \
+                   "https://ssh.cloud.google.com/cloudshell/open" \
+                   "${REPO_DIR}"); do
+    echo "Updating cloud shell URLs in file: ${mdf}"
     sed -r -i "s|git_repo=[^\&]*\&|git_repo=${REMOTE_URL}\&|g" "${mdf}"
     sed -r -i "s|cloudshell_git_branch=[^\&]*\&|cloudshell_git_branch=${BRANCH}\&|g" "${mdf}"
   done
-
-  grep -R --include "*.md" "https://console.cloud.google.com/cloudshell/open" "${SCRIPT_DIR}/../.."
+  echo
 }
 
-log_start() {
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  printf -- "\n%s\n" "${line}"
-  printf "%-78s\n\n" "Updating 'Open in Google Cloud Shell' links in *.md files"
-  printf "git_repo=%-78s\n" "${REMOTE_URL}"
-  printf "cloudshell_git_branch=%-78s\n" "${BRANCH}"
-  printf -- "%s\n" "${line}"
-  if [[ -t 1 ]]; then tput sgr0; fi
+update_git_urls() {
+  for mdf in $(grep -R -l --include "*.md" \
+                   --exclude "development.md" \
+                   "git clone" \
+                   "${REPO_DIR}"); do
+    echo "Updating git clone URLs in file: ${mdf}"
+     sed -r -i "s|^(.*git clone) https://.*/google-cloud-daos.git|\1 ${REMOTE_URL}.git|g" "${mdf}"
+  done
+  echo
 }
-
-log() {
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 15; fi
-  printf "%-78s\n" "${1}"
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-
 
 main() {
   opts "$@"
-  log_start
+  echo "Updating 'Open in Google Cloud Shell' links in *.md files
+    git_repo=${REMOTE_URL}
+    cloudshell_git_branch=${BRANCH}
+  "
+  cd "${SCRIPT_DIR}/../../"
+  REPO_DIR=$(pwd)
   update_cloud_shell_urls
+  update_git_urls
 }
 
 main "$@"

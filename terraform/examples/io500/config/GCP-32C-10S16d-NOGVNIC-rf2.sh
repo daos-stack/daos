@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2155
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +15,8 @@
 # limitations under the License.
 
 # ------------------------------------------------------------------------------
-# Configuration: 2 clients, 2 servers, 16 disks per server
-# IO500 Config:  io500-isc22.config-template.daos-rf0.ini
+# Configuration: 32 clients, 10 servers, 16 disks per server
+# IO500 Config:  io500-sc22.config-template.daos-rf2.ini
 # ------------------------------------------------------------------------------
 
 # Optional identifier to allow multiple DAOS clusters in the same GCP
@@ -33,7 +34,7 @@ SSH_USER="daos-user"
 DAOS_ALLOW_INSECURE="false"
 
 # Server(s)
-DAOS_SERVER_INSTANCE_COUNT="2"
+DAOS_SERVER_INSTANCE_COUNT="10"
 DAOS_SERVER_MACHINE_TYPE=n2-custom-36-262144
 DAOS_SERVER_DISK_COUNT=16
 DAOS_SERVER_CRT_TIMEOUT=300
@@ -41,7 +42,7 @@ DAOS_SERVER_SCM_SIZE=200
 DAOS_SERVER_GVNIC=false
 
 # Client(s)
-DAOS_CLIENT_INSTANCE_COUNT="2"
+DAOS_CLIENT_INSTANCE_COUNT="32"
 DAOS_CLIENT_MACHINE_TYPE=c2-standard-16
 DAOS_CLIENT_GVNIC=false
 
@@ -50,9 +51,9 @@ DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${
 DAOS_CONT_REPLICATION_FACTOR="rf:0"
 
 # IO500
-IO500_TEST_CONFIG_ID="GCP-2C-2S16d-1"
-IO500_STONEWALL_TIME=30  # Number of seconds to run the benchmark
-IO500_INI="io500-isc22.config-template.daos-rf0.ini"
+IO500_TEST_CONFIG_ID="GCP-32C-10S16d-NOGVNIC-rf2"
+IO500_STONEWALL_TIME=60  # Number of seconds to run the benchmark
+IO500_INI="io500-sc22.config-template.daos-rf2.ini"
 
 # ------------------------------------------------------------------------------
 # Modify instance base names if ID variable is set
