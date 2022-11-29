@@ -170,11 +170,11 @@ adt_undo_1(void **state)
 	assert_rc_equal(rc, 0);
 	assert_int_equal(ud->set_64[0], 0);
 
-	rc = ad_tx_increase(&tx, &ud->inc_32[0]);
+	rc = ad_tx_increase(&tx, &ud->inc_32[0], AD_TX_UNDO);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(ud->inc_32[0], (ud->inc_32[1] + 1));
 
-	rc = ad_tx_decrease(&tx, &ud->dec_32[0]);
+	rc = ad_tx_decrease(&tx, &ud->dec_32[0], AD_TX_UNDO);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(ud->dec_32[0], (ud->dec_32[1] - 1));
 
