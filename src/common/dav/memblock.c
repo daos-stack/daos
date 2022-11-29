@@ -1451,7 +1451,7 @@ memblock_run_init(struct palloc_heap *heap,
 
 	mo_wal_flush(&heap->p_ops, run,
 		sizeof(struct chunk_run_header) +
-		bitmap_size);
+		bitmap_size, 0);
 
 	struct chunk_header run_data_hdr;
 

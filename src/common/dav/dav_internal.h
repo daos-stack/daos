@@ -47,9 +47,6 @@ struct dav_phdr {
 			sizeof(struct stats_persistent)];
 };
 
-/*REVISIT*/
-struct bio_meta_instance;
-
 /* DAV object handle */
 typedef struct dav_obj {
 	char				*do_path;
@@ -64,7 +61,7 @@ typedef struct dav_obj {
 	int				 do_fd;
 	int				 nested_tx;
 	struct umem_wal_tx		*do_utx;
-	struct umem_store		 do_store;
+	struct umem_store		*do_store;
 
 	struct dav_clogs		 clogs __attribute__ ((__aligned__(CACHELINE_SIZE)));
 } dav_obj_t;
@@ -83,6 +80,6 @@ struct umem_wal_tx *wtx2utx(struct dav_tx *wtx)
 }
 
 int lw_tx_begin(dav_obj_t *pop);
-int lw_tx_end(dav_obj_t *pop);
+int lw_tx_end(dav_obj_t *pop, void *data);
 
 #endif /* __DAOS_COMMON_DAV_INTERNAL_H */
