@@ -20,13 +20,13 @@ server_config:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool_1:
   control_method: dmg
   scm_size: 4000000000

@@ -42,13 +42,12 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
         self.display_nvme_test_metrics(metrics_data)
 
         # Get and verify NVMe metrics
-        groups = [
-            "ENGINE_NVME_HEALTH_METRICS",
-            "ENGINE_NVME_CRIT_WARN_METRICS",
-            "ENGINE_NVME_TEMP_METRICS",
-            "ENGINE_NVME_TEMP_TIME_METRICS",
-            "ENGINE_NVME_RELIABILITY_METRICS",
-            "ENGINE_NVME_INTEL_VENDOR_METRICS"]
+        groups = ["ENGINE_NVME_HEALTH_METRICS",
+                  "ENGINE_NVME_CRIT_WARN_METRICS",
+                  "ENGINE_NVME_TEMP_METRICS",
+                  "ENGINE_NVME_TEMP_TIME_METRICS",
+                  "ENGINE_NVME_RELIABILITY_METRICS",
+                  "ENGINE_NVME_INTEL_VENDOR_METRICS"]
 
         for group in groups:
             yaml_key = "_".join([group.lower().replace("engine_", ""), "valid"])

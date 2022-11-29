@@ -128,9 +128,9 @@ class DmgStorageQuery(ControlTestBase):
 
         # Convert from list of lists to list of strings
         health_info = []
-        for i in parsed:
-            h = [elem[0] for elem in i]
-            health_info.append(h)
+        for idx in parsed:
+            health = [elem[0] for elem in idx]
+            health_info.append(health)
 
         self.log.info("Found health info: %s", str(health_info))
 

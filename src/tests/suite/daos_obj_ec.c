@@ -1706,6 +1706,48 @@ ec_setup(void  **state)
 	return 0;
 }
 
+static void
+ec_few_partial_stripe_aggregation(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size;
+	char		*data;
+	daos_recx_t	recx;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)ec_cell_size;
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+
+	/* full stripe update */
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = stripe_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', stripe_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	/* single partial stripe update */
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = ec_cell_size;
+	recx.rx_idx = ec_cell_size;
+	memset(data, 'b', ec_cell_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, EC_CELL_SIZE, &req);
+
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+				       0, DAOS_FORCE_EC_AGG);
+	ioreq_fini(&req);
+	free(data);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -1746,6 +1788,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
 	 test_case_teardown},
 	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
+	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
+	 test_case_teardown},
 };
 
 int
