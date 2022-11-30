@@ -31,7 +31,7 @@ largefilecount:
     - EC_2P1GX
 ior:
   np: 30
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
@@ -39,7 +39,7 @@ ior:
   block_size: '2G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 
 mdtest:
   client_processes:
@@ -47,7 +47,7 @@ mdtest:
   num_of_files_dirs: 1667      # creating total of 50K files
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   manager: "MPICH"
   flags: "-F -C"
   write_bytes: 4096
