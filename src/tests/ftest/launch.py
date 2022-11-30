@@ -3125,7 +3125,7 @@ class Launch():
             test_job_results (str): the location of the core files
 
         Returns:
-            int: status code: 0 = success, 256 = failure
+            int: status code: 2048 = Core file exist; fail test, 256 = failure
 
         """
         core_file_processing = CoreFileProcessing(logger)
@@ -3141,7 +3141,9 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        return 0
+        message = "Corefile exist"
+        self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+        return 2048
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
@@ -3261,6 +3263,7 @@ class Launch():
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
+            2048: "ERROR: Core stack trace files detected!",
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
