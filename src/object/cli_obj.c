@@ -1077,6 +1077,25 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		req_tgts->ort_shard_tgts = req_tgts->ort_tgts_inline;
 	}
 
+	if (obj_auxi->spec_shard) {
+		D_ASSERT(grp_nr == 1);
+		D_ASSERT(shard_cnt == 1);
+		D_ASSERT(bit_map == NIL_BITMAP);
+		D_ASSERT(req_tgts->ort_srv_disp == 0);
+
+		tgt = req_tgts->ort_shard_tgts;
+
+		req_tgts->ort_grp_nr = 1;
+		req_tgts->ort_grp_size = 1;
+		if (obj_is_ec(obj))
+			req_tgts->ort_start_shard = (start_shard/obj_get_grp_size(obj)) *
+						    daos_oclass_grp_size(obj_get_oca(obj));
+
+		rc = obj_shard_tgts_query(obj, map_ver, start_shard, req_tgts->ort_shard_tgts,
+					  obj_auxi, NIL_BITMAP);
+		return rc;
+	}
+
 	req_tgts->ort_grp_nr = grp_nr;
 	req_tgts->ort_grp_size = grp_size;
 	shard_idx = start_shard;
@@ -4908,6 +4927,9 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 		return rc;
 
 	*shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) % grp_size + start_shard;
+	while (*shard != obj_auxi->initial_shard &&
+	       obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH))
+		*shard = (*shard + 1) % grp_size + start_shard;
 	if (*shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
 		return retry_errcode(obj_auxi, 0);

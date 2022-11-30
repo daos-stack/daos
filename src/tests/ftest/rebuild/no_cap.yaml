@@ -6,8 +6,8 @@ hosts:
 timeout: 360
 server_config:
   name: daos_server
-# reduce cart timeout to make IV update return timeout
-# quickly to ease test (DAOS-9626)
+  # reduce cart timeout to make IV update return timeout
+  # quickly to ease test (DAOS-9626)
   crt_timeout: 10
   engines_per_host: 2
   engines:
