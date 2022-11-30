@@ -64,7 +64,7 @@ install_mofed() {
     rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
-    time dnf -y install mlnx-ofed-basic
+    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
 
     # now, upgrade firmware
     time dnf -y install mlnx-fw-updater
@@ -81,29 +81,4 @@ install_mofed() {
         dnf remove -y ucx-knem || true
     fi
 
-    # Need this module file
-    version="$(rpm -q --qf "%{version}" openmpi)"
-    mkdir -p /etc/modulefiles/mpi/
-    cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
-    #%Module 1.0
-    #
-    #  OpenMPI module for use with 'environment-modules' package:
-    #
-    conflict		mpi
-    prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
-    prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
-    prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
-    prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
-    setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
-    setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
-    setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
-    setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
-    setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
-    setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
-    setenv			MPI_COMPILER	openmpi-x86_64
-    setenv			MPI_SUFFIX	_openmpi
-    setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
-EOF
-
-    printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
 }
