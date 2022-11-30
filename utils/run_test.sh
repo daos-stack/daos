@@ -50,6 +50,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
+    # shellcheck disable=SC2294
     if ! time eval "${VALGRIND_CMD}" "$@"; then
         retcode=${PIPESTATUS[0]}
         echo "Test $* failed with exit status ${retcode}."
@@ -71,11 +72,6 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
@@ -116,6 +112,7 @@ if [ -d "/mnt/daos" ]; then
         sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
 
         export VOS_BDEV_CLASS="AIO"
+        export UCX_HANDLE_ERRORS=none
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
         rm -f "${AIO_DEV}"
@@ -134,6 +131,7 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
+                                          --fair-sched=try \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --error-exitcode=42 \
                                           --xml=yes \
@@ -239,9 +237,7 @@ if [ -d "/mnt/daos" ]; then
         for ((i = 0; i < ${#failures[@]}; i++)); do
             echo "    ${failures[$i]}"
         done
-        if ! ${OLD_CI:-true}; then
-            exit 1
-        fi
+        exit 1
     fi
 else
     echo "/mnt/daos isn't present for unit tests"

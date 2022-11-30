@@ -82,7 +82,7 @@ def update_rpm_version(version, tag):
                       "Additionally, you should define %packager in "
                       "~/.rpmmacros as such:\n"
                       "%packager	John A. Doe <john.doe@intel.com>"
-                      "so that package changelog entries are well defined")
+                      "so that /package changelog entries are well defined")
                 return False
             date_str = time.strftime('%a %b %d %Y', time.gmtime())
             spec.insert(line_num + 1, "\n")
@@ -348,6 +348,10 @@ def scons(): # pylint: disable=too-many-locals
         commits_file = None
 
     platform_arm = is_platform_arm()
+
+    if 'VIRTUAL_ENV' in os.environ:
+        env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):

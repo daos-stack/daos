@@ -1,5 +1,7 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
+   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
+*/
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -80,7 +82,7 @@ Integer getuid() {
 }
 
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'new_lightweight' }
 
     triggers {
         cron(env.BRANCH_NAME == 'release/2.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '')
@@ -295,7 +297,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -363,7 +365,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.code_scanning'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -402,7 +404,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -438,7 +440,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -474,7 +476,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -510,7 +512,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -537,35 +539,40 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: quickBuild()) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
+                        sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   build_deps: 'no',
+                                   stash_opt: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc
+                                      mv config.log config.log-el8-gcc
                                   fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-el8-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -573,36 +580,42 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 Bullseye') {
+                stage('Build on EL 8 Bullseye') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   build_deps: 'no',
+                                   stash_opt: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-covc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-covc',
+                            sh label: 'Save failed Bullseye logs',
+                               script: '''if [ -f config.log ]; then
+                                          mv config.log config.log-el8-covc
+                                       fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-covc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -618,7 +631,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -652,7 +665,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -662,6 +675,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
                     }
@@ -672,7 +686,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -682,6 +696,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()
@@ -692,7 +707,7 @@ pipeline {
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
                                          referenceJobName: 'daos-stack/daos/release%252F2.2',
-                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
@@ -706,7 +721,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye') {
+                stage('Unit Test Bullseye on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -716,6 +731,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -732,8 +748,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck') {
+                } // stage('Unit test Bullseye on EL 8')
+                stage('Unit Test with memcheck on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -743,6 +759,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -751,11 +768,11 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
-                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                                         valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck')
+                } // stage('Unit Test with memcheck on EL 8')
             }
         }
         stage('Test') {
@@ -764,40 +781,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: 'daos-stack/daos',
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
-                    }
-                    post {
-                        success {
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            coverityPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
@@ -935,72 +918,15 @@ pipeline {
                         }
                     }
                 } // stage('Test EL 8.5 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
-                stage('Scan EL 8 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true)
@@ -1013,7 +939,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name centos7.fault-injection fi'
+                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {
@@ -1034,7 +960,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                             job_status_update()
                         }
                     }
@@ -1111,34 +1037,38 @@ pipeline {
         } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
-                stage('Bullseye Report') {
+                stage('Bullseye Report on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
+                            filename 'utils/docker/Dockerfile.el.8'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
+                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
+                                                               'func-vm-cov',
+                                                               'func-hw-small-cov',
+                                                               'func-hw-medium-cov',
+                                                               'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
-                } // stage('Bullseye Report')
+                } // stage('Bullseye Report on EL 8')
             } // parallel
         } // stage ('Test Report')
     } // stages
@@ -1146,8 +1076,8 @@ pipeline {
         always {
             job_status_update('final_status')
             job_status_write()
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
+                                                     'el8-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
