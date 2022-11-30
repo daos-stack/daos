@@ -222,7 +222,7 @@ class DaosBuild(DfuseTestBase):
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
             timeout = 10 * 60
             if cmd.startswith('scons'):
-                timeout = build_time * 72   #increase 20% scons build time
+                timeout = build_time * 180
             start = time.time()
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
