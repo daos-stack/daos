@@ -26,6 +26,8 @@ daos_dev_deps:
     - rpmdevtools
     - rpm-build
     - wget
+    - libattr-devel
+    - bzip2-devel
   pips:
     - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
     - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
