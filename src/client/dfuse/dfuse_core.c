@@ -1317,6 +1317,10 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
 		sem_post(&eqt->de_sem);
+	}
+
+	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
+		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
 		pthread_join(eqt->de_thread, NULL);
 
