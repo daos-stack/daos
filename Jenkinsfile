@@ -90,8 +90,8 @@ pipeline {
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
-               description: 'Repository to include for packages used to the build and test ' +
-                            'nodes, in the project@PR-number[:build] format')
+               description: 'Additional repository used for locating packages for the build and ' +
+                            'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for Functional Hardware Tests')
