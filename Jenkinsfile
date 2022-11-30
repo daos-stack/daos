@@ -90,15 +90,6 @@ pipeline {
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
-        string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
-               description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
-        string(name: 'CI_LEAP15_TARGET',
-               defaultValue: '',
-               description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
-        string(name: 'CI_UBUNTU20.04_TARGET',
-               defaultValue: '',
-               description: 'Image to used for Ubuntu 20 CI tests.  I.e. ubuntu20.04, etc.')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium test stage')
