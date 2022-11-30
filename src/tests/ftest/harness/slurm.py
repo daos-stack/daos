@@ -19,8 +19,9 @@ class HarnessSlurmTest(TestWithoutServers):
         """Verify that launch.py correctly creates the slurm partition defined by this test.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_slurm_test,test_partition
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness
+        :avocado: tags=HarnessSlurmTest,test_partition
         """
         partition = self.params.get('client_partition', '/run/hosts/*', 'unknown')
         control = get_local_host()
