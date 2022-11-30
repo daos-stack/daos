@@ -1,12 +1,11 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
-import avocado
 import time
+import avocado
 
 from pydaos.raw import DaosApiError
 from apricot import TestWithServers

@@ -883,8 +883,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         job_spec, api, b_size, t_size,
                         o_type, nodesperjob * ppn, nodesperjob, ppn)
                     daos_log = os.path.join(
-                        self.soaktest_dir, self.test_name + "_" + log_name +
-                        "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                        self.soaktest_dir, self.test_name + "_" + log_name
+                        + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                     env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
                     sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
@@ -1054,8 +1054,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             oclass, nodesperjob * ppn, nodesperjob,
                             ppn)
                         daos_log = os.path.join(
-                            self.soaktest_dir, self.test_name + "_" + log_name +
-                            "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                            self.soaktest_dir, self.test_name + "_" + log_name
+                            + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                         env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
                         sbatch_cmds = [
                             "module purge", "module load {}".format(self.mpi_module)]
