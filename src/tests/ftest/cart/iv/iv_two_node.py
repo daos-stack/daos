@@ -239,7 +239,7 @@ class CartIvTwoNodeTest(CartTest):
             self.print("TEST FAILED: {}".format(exception))
 
         # Shutdown Servers
-        num_servers = self.get_srv_cnt("test_servers")
+        num_servers = 2
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 
