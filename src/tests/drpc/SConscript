@@ -12,8 +12,6 @@ def scons():
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
-    prereqs.require(denv, 'protobufc')
-
     drpc_test = denv.d_program('drpc_test', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)
 

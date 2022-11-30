@@ -13,7 +13,7 @@ def scons():
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    prereqs.require(denv, 'argobots')
 
     security_test = denv.d_program('security_test', sec_sources, LIBS=libs)
     env.Install('$PREFIX/bin/', security_test)

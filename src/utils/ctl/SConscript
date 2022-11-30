@@ -19,7 +19,7 @@ def scons():
     tenv.AppendUnique(CPPPATH=[Dir('../../cart').srcnode()])
     tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
-    prereqs.require(tenv, 'mercury', 'protobufc')
+    prereqs.require(tenv, 'mercury')
 
     ctl = tenv.d_program([SRC, cart_utils_objs])
     tenv.Install('$PREFIX/bin', ctl)
