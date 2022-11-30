@@ -21,8 +21,6 @@ def scons():
 
     Import('env', 'prereqs', 'conf_dir')
 
-    prereqs.require(env, 'protobufc')
-
     env.d_add_build_rpath()
 
     # Generate cart utility shared objects

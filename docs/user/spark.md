@@ -385,15 +385,15 @@ it's not needed.
         <!--LD_LIBRARY_PATH for non-RPM installation start-->
         <property>
                 <name>mapred.child.env.LD_LIBRARY_PATH</name>
-                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib:/code-repo/daos/install/prereq/release/protobufc/lib</value>
+                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib</value>
         </property>
         <property>
                 <name>yarn.app.mapreduce.am.env.LD_LIBRARY_PATH</name>
-                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib:/code-repo/daos/install/prereq/release/protobufc/lib</value>
+                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib</value>
         </property>
         <property>
                 <name>mapreduce.admin.user.env.LD_LIBRARY_PATH</name>
-                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib:/code-repo/daos/install/prereq/release/protobufc/lib</value>
+                <value>/lib64:/lib:/code-repo/daos/install/lib64:/code-repo/daos/install/lib</value>
         </property>
         <!--LD_LIBRARY_PATH for non-RPM installation end-->
         <property>

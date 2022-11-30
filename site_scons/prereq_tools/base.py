@@ -1082,7 +1082,7 @@ class PreReqComponent():
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'lz4', 'isal', 'isal_crypto']
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c']
         server_reqs = ['pmdk', 'spdk']
         test_reqs = ['cmocka']

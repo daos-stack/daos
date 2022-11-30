@@ -5,8 +5,6 @@ def scons():
     """Execute build"""
     Import('denv', 'prereqs', 'pb')
 
-    prereqs.require(denv, 'protobufc')
-
     mocks = denv.Object("mocks.c")
 
     denv.Append(CPPDEFINES={'DRPC_TEST': '1'})

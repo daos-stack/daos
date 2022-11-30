@@ -378,8 +378,7 @@ def define_components(reqs):
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
 
-    reqs.define('protobufc',
-                libs=['protobuf-c'],
+    reqs.define('protobufc', libs=['protobuf-c'], package='protobuf-c-devel',
                 headers=['protobuf-c/protobuf-c.h'])
 
 
