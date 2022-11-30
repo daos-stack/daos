@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'pb')
+    Import('denv', 'pb')
 
     mocks = denv.Object("mocks.c")
 

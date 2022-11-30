@@ -37,7 +37,8 @@ def scons():
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 
     denv = senv
-    SConscript('tests/SConscript', exports=['denv', 'pb'])
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports=['denv', 'pb'])
 
 
 if __name__ == "SCons.Script":

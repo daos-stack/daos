@@ -227,8 +227,6 @@ def define_common(reqs):
 
     reqs.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'], package='CUnit-devel')
 
-    reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
-
     reqs.define('boost', headers=['boost/preprocessor.hpp'], package='boost-python36-devel')
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')

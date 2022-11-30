@@ -30,7 +30,9 @@ def scons():
     Export('gurt_targets')
 
     SConscript('examples/SConscript')
-    SConscript('tests/SConscript')
+
+    if prereqs.test_requested():
+        SConscript('tests/SConscript')
 
 
 if __name__ == "SCons.Script":
