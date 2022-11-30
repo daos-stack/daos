@@ -49,6 +49,6 @@ jobs:
       - name: flake8 Lint on SCons files.
         uses: py-actions/flake8@v2
         with:
-          ignore: 'F821,W503'
+          ignore: 'F821,W503,F841'
           max-line-length: '100'
           args: '--filename */SConscript, SConstruct'
