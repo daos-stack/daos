@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
+
 
 class EcodOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors

@@ -113,7 +113,7 @@ class NvmeEnospace(ServerFillUp):
         # run IOR Write Command
         try:
             job_manager.run()
-        except (CommandFailure, TestFail) as _error:
+        except (CommandFailure, TestFail):
             self.test_result.append("FAIL")
             return
 
@@ -122,7 +122,7 @@ class NvmeEnospace(ServerFillUp):
         while True:
             try:
                 job_manager.run()
-            except (CommandFailure, TestFail) as _error:
+            except (CommandFailure, TestFail):
                 break
 
     def run_enospace_foreground(self):
@@ -147,7 +147,7 @@ class NvmeEnospace(ServerFillUp):
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
             self.fail('This test suppose to FAIL because of DER_NOSPACE'
                       'but it got Passed')
-        except TestFail as _error:
+        except TestFail:
             self.log.info('Test expected to fail because of DER_NOSPACE')
 
         # Display the pool%
@@ -395,7 +395,7 @@ class NvmeEnospace(ServerFillUp):
                 self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
                 self.fail('This test suppose to fail because of DER_NOSPACE'
                           'but it got Passed')
-            except TestFail as _error:
+            except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
 
             # Verify DER_NO_SAPCE error count is expected and no other Error in client log.

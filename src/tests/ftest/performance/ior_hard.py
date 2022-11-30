@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from performance_test_base import PerformanceTestBase
+
 
 class IorHard(PerformanceTestBase):
     # pylint: disable=too-many-ancestors

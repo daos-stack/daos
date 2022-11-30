@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
+
 
 class EcodServerRestart(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -34,7 +34,6 @@ class EcodServerRestart(ErasureCodeIor):
         # Write all EC object data to SCM
         self.ior_write_dataset(storage='SCM', operation="Auto_Write", percent=self.percent)
         self.log.info(self.pool.pool_percentage_used())
-        size_before_restart = self.pool.pool_percentage_used()
 
         if not agg_check:
             # Set time mode aggregation
@@ -54,7 +53,6 @@ class EcodServerRestart(ErasureCodeIor):
         self.get_dmg_command().system_start()
 
         if agg_check == "After":
-            size_after_restart = self.pool.pool_percentage_used()
             self.log.info("Size after Restarti: %s ", self.pool.pool_percentage_used())
             # Verify if Aggregation is getting started
             if not any(check_aggregation_status(self.pool, attempt=50).values()):
