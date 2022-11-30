@@ -73,7 +73,6 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool1))
         cont2_label = self.parse_create_cont_label(result.stdout_text)
         cont2 = self.get_cont(pool1, cont2_label)
-        cont2.type.update(cont1.type.value, "type")
         self.verify_cont(cont2, api, check_props, src_props)
 
         result = self.run_datamover(
@@ -82,7 +81,6 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool1, 'cont3_label'))
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         cont3 = self.get_cont(pool1, cont3_label)
-        cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
         # Create another pool
@@ -95,7 +93,6 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool2))
         cont4_label = self.parse_create_cont_label(result.stdout_text)
         cont4 = self.get_cont(pool2, cont4_label)
-        cont4.type.update(cont1.type.value, "type")
         self.verify_cont(cont4, api, check_props, src_props)
 
         # Only test POSIX paths with DFS API
@@ -110,7 +107,6 @@ class DmvrDstCreate(DataMoverTestBase):
                 dst_path=format_path(pool1))
             cont6_label = self.parse_create_cont_label(result.stdout_text)
             cont6 = self.get_cont(pool1, cont6_label)
-            cont6.type.update(cont1.type.value, "type")
             self.verify_cont(cont6, api, False)
 
         pool1.disconnect()
@@ -139,7 +135,7 @@ class DmvrDstCreate(DataMoverTestBase):
         cont.close()
 
         # Return existing cont properties
-        return self.get_cont_prop(cont)
+        return cont.get_prop()["response"]
 
     def verify_cont(self, cont, api, check_attr_prop=True, prop_list=None):
         """Read-verify test data using either ior or the obj API.
@@ -148,12 +144,12 @@ class DmvrDstCreate(DataMoverTestBase):
             cont (TestContainer): the container to verify.
             check_attr_prop (bool, optional): whether to verify user
                 attributes and cont properties. Defaults to False.
-            prop_list (list, optional): list of properties from get_cont_prop.
+            prop_list (list, optional): list of properties from cont.get_prop().
                 Required when check_attr_prop is True.
 
         """
         # It's important to check the properties first, since when ior
-        # mounts DFS the alloc'ed OID might be incremented.
+        # mounts DFS the allocated OID might be incremented.
         if check_attr_prop:
             cont.open()
             self.verify_cont_prop(cont, prop_list, api)
@@ -168,28 +164,15 @@ class DmvrDstCreate(DataMoverTestBase):
             # Verify non-POSIX containers copied with the Object API
             self.dataset_verify(self.obj_list, cont, 1, 1, 1, 0, [1024], [])
 
-    def get_cont_prop(self, cont):
-        """Get all container properties with daos command.
-
-        Args:
-            cont (TestContainer): the container to get props of.
-
-        Returns:
-            list: list of dictionaries that contain properties and values from daos command.
-
-        """
-        prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
-        return prop_result["response"]
-
     def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
         Expects the container to be open.
 
         Args:
             cont (TestContainer): the container to verify.
-            prop_list (list): list of properties from get_cont_prop.
+            prop_list (list): list of properties from cont.get_prop().
         """
-        actual_list = self.get_cont_prop(cont)
+        actual_list = cont.get_prop()["response"]
 
         # Make sure sizes match
         if len(prop_list) != len(actual_list):
@@ -255,7 +238,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
-        :avocado: tags=test_dm_dst_create_dcp_posix_dfs
+        :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
 
@@ -271,7 +254,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
-        :avocado: tags=test_dm_dst_create_dcp_posix_daos
+        :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
 
@@ -287,7 +270,7 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
         :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
-        :avocado: tags=test_dm_dst_create_dcp_unknown_daos
+        :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
 
@@ -303,6 +286,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior,daos_cmd
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
-        :avocado: tags=test_dm_dst_create_fs_copy_posix_dfs
+        :avocado: tags=DmvrDstCreate,test_dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

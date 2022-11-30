@@ -7,7 +7,6 @@
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
 
 
@@ -60,10 +59,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         """
         rd_fac = None
         # Create a container and add it to the overall list of containers
-        self.container.append(
-            TestContainer(pool, daos_command=self.get_daos_command()))
-        self.container[-1].namespace = path
-        self.container[-1].get_params(self)
+        self.container.append(self.get_container(pool, namespace=path, create=False))
         # include rd_fac based on the class
         if oclass:
             self.container[-1].oclass.update(oclass)
@@ -162,7 +158,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=telemetry,daos_cmd
         :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """

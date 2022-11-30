@@ -24,7 +24,6 @@ class RbldBasic(TestWithServers):
         # Get the test parameters
         pools = []
         self.container = []
-        daos_cmd = self.get_daos_command()
         for _ in range(pool_quantity):
             pools.append(self.get_pool(create=False))
             self.container.append(self.get_container(pools[-1], create=False))
@@ -101,12 +100,10 @@ class RbldBasic(TestWithServers):
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild
-        for index, pool in enumerate(pools):
-            daos_cmd.container_set_prop(
-                pool=pool.uuid, cont=self.container[index].uuid, prop="status", value="healthy")
-            if self.container[index].object_qty.value != 0:
-                self.assertTrue(
-                    self.container[index].read_objects(), "Data verification error after rebuild")
+        for container in self.container:
+            container.set_prop(prop="status", value="healthy")
+            if container.object_qty.value != 0:
+                self.assertTrue(container.read_objects(), "Data verification error after rebuild")
         self.log.info("Test Passed")
 
     def test_simple_rebuild(self):

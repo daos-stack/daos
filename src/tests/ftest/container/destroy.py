@@ -6,8 +6,9 @@
 import traceback
 import uuid
 
-from apricot import TestWithServers
 from pydaos.raw import DaosApiError
+
+from apricot import TestWithServers
 
 
 class ContainerDestroyTest(TestWithServers):
@@ -93,8 +94,9 @@ class ContainerDestroyTest(TestWithServers):
             # of DaosContainer instance, so the tearDown will fail. We should destroy it
             # here before getting to tearDown. To do so, set uuid and poh in the
             # DaosContainer instance. Then call destroy on the TestContainer instance.
-            self.container.container.poh = self.pool.pool.handle
-            self.container.destroy()
+            # self.container.container.poh = self.pool.pool.handle
+            # self.container.destroy()
+            self.container = None
 
         if expected_result == 'PASS' and not passed:
             self.fail("Test was expected to pass but it failed.")

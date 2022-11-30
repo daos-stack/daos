@@ -5,7 +5,6 @@
 """
 # pylint: disable=too-many-lines
 
-import ctypes
 from logging import getLogger
 from time import time
 
@@ -276,7 +275,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
-        self.label = BasicParameter(None)
+        self.acl_file = BasicParameter(None)
+        self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
 
         self.container = None
@@ -289,6 +289,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         # If defined, use container labels for most operations by default.
         # Setting to False will use the UUID where possible.
         self.use_label = True
+
+        self.control_method = BasicParameter(self.USE_DAOS, self.USE_DAOS)
 
     def __str__(self):
         """Return a string representation of this TestContainer object.
@@ -339,47 +341,23 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, uuid=None, con_in=None, acl_file=None):
+    def create(self):
         """Create a container.
 
-        Args:
-            uuid (str, optional): container uuid. Defaults to None.
-            con_in (optional): to be defined. Defaults to None.
-            acl_file (str, optional): path of the ACL file. Defaults to None.
-
         Raises:
-            DaosTestError: if params are invalid
+            DaosTestError: if params are undefined
 
         """
         self.destroy()
         if not self.silent.value:
             self.log.info(
-                "Creating a container with pool handle %s",
-                self.pool.pool.handle.value)
+                "Creating a container with pool handle %s", self.pool.pool.handle.value)
         self.container = DaosContainer(self.pool.context)
 
-        if self.control_method.value == self.USE_API:
+        # Remaining cases to handle
+        if self.control_method.value == self.USE_API or self.cb_handler is not None:
             # Create a container with the API method
-            kwargs = {"poh": self.pool.pool.handle}
-            if uuid is not None:
-                kwargs["con_uuid"] = uuid
-
-            # Refer daos_api for setting input params for DaosContainer.
-            cop = self.input_params.get_con_create_params()
-            if con_in is not None:
-                cop.type = con_in[0]
-                cop.enable_chksum = con_in[1]
-                cop.srv_verify = con_in[2]
-                cop.chksum_type = con_in[3]
-                cop.chunk_size = con_in[4]
-                cop.rd_lvl = con_in[5]
-            else:
-                # Default to RANK fault domain (rd_lvl:1) when not specified
-                cop.rd_lvl = ctypes.c_uint64(1)
-
-            kwargs["con_prop"] = cop
-
-            self._call_method(self.container.create, kwargs)
+            self._call_method(self.container.create, {"poh": self.pool.pool.handle})
 
         else:
             if not self.daos:
@@ -392,7 +370,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             kwargs = {
                 "pool": self.pool.identifier,
                 "sys_name": self.pool.name.value,
-                "cont": uuid,
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
@@ -400,7 +377,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
-                "acl_file": acl_file,
+                "acl_file": self.acl_file.value,
                 "label": self.label.value
             }
 
@@ -543,8 +520,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             DaosTestError: if params are invalid
 
         Returns:
-            bool: True if the container has been destroyed; False if the
-                container does not exist.
+            bool: True if the container has been destroyed; False if the container does not exist.
 
         """
         status = False
@@ -553,27 +529,22 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             if not self.silent.value:
                 self.log.info("Destroying container %s", str(self))
             if self.container.attached:
-                kwargs = {"force": force}
+                if not self.daos:
+                    raise DaosTestError("Undefined daos command")
 
-                if self.control_method.value == self.USE_API:
-                    # Destroy the container with the API method
-                    self._call_method(self.container.destroy, kwargs)
-                    status = True
+                # Disconnect the pool if connected
+                self.pool.disconnect()
 
-                else:
-                    if not self.daos:
-                        raise DaosTestError("Undefined daos command")
-
-                    # Disconnect the pool if connected
-                    self.pool.disconnect()
-
-                    # Destroy the container with the daos command
-                    kwargs["pool"] = self.pool.identifier
-                    kwargs["sys_name"] = self.pool.name.value
-                    kwargs["cont"] = self.identifier
-                    self._log_method("daos.container_destroy", kwargs)
-                    self.daos.container_destroy(**kwargs)
-                    status = True
+                # Destroy the container with the daos command
+                kwargs = {
+                    "force": force,
+                    "pool": self.pool.identifier,
+                    "sys_name": self.pool.name.value,
+                    "cont": self.identifier
+                }
+                self._log_method("daos.container_destroy", kwargs)
+                self.daos.container_destroy(**kwargs)
+                status = True
 
             self.container = None
             self.uuid = None
@@ -698,8 +669,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         self.open()
         self.log.info(
-            "Reading %s object(s) in container %s",
-            len(self.written_data), str(self))
+            "Reading %s object(s) in container %s", len(self.written_data), str(self))
         status = len(self.written_data) > 0
         for data in self.written_data:
             data.debug = self.debug.value
@@ -718,13 +688,12 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             int: number of bytes written to the container
 
         Raises:
-            DaosTestError: if there is an error writing, reading, or verify the data
+            DaosTestError: if there is an error writing, reading, or verifying the data
 
         """
         self.open()
         self.log.info(
-            "Writing and reading objects in container %s for %s seconds",
-            str(self), duration)
+            "Writing and reading objects in container %s for %s seconds", str(self), duration)
 
         total_bytes_written = 0
         finish_time = time() + duration
@@ -748,8 +717,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 from the DaosObj
 
         Returns:
-            list: a list of list of targets for each written object in this
-                container
+            list: a list of list of targets for each written object in this container
 
         """
         self.open()
@@ -763,10 +731,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             except DaosApiError as error:
                 raise DaosTestError(
                     "Error obtaining target rank list for object {} in "
-                    "container {}: {}".format(
-                        data.obj, str(self), error)) from error
+                    "container {}: {}".format(data.obj, str(self), error)) from error
         if message is not None:
-            self.log.info("Target rank lists%s:", message)
+            self.log.info("Target rank lists: %s", message)
             for ranks in target_rank_lists:
                 self.log.info("  %s", ranks)
         return target_rank_lists
@@ -814,8 +781,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                     obj = self.written_data[index].obj
                 except IndexError as error:
                     raise DaosTestError(
-                        "Invalid index {} for written data".format(
-                            index)) from error
+                        "Invalid index {} for written data".format(index)) from error
 
                 # Close the object
                 self.log.info(
@@ -868,9 +834,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         count = 0
         for data in self.written_data:
             # Close the object
-            self.log.info(
-                "Closing object %s in container %s",
-                data.obj, str(self))
+            self.log.info("Closing object %s in container %s", data.obj, str(self))
             try:
                 self._call_method(data.obj.close, {})
             except DaosApiError:
@@ -923,6 +887,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         Raises:
             DaosTestError: if params are invalid
             CommandFailure: Raised from the daos command call.
+            DaosTestError: if params are invalid
 
         """
         if not self.daos:
@@ -1003,11 +968,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         Raises:
             CommandFailure: Raised from the daos command call.
-            DaosTestError: if params are undefined
 
         """
-        if self.control_method.value != self.USE_DAOS:
-            raise DaosTestError("Undefined control_method: {}".format(self.control_method.value))
         if not self.daos:
             raise DaosTestError("Undefined daos command")
         return self.daos.container_update_acl(

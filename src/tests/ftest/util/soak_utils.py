@@ -10,6 +10,11 @@ import time
 import random
 import threading
 import re
+
+from ClusterShell.NodeSet import NodeSet
+from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosSnapshot, DaosApiError
+
 from ior_utils import IorCommand
 from fio_utils import FioCommand
 from mdtest_utils import MdtestCommand
@@ -23,10 +28,6 @@ from general_utils import get_host_data, get_random_string, \
 from command_utils_base import EnvironmentVariables
 import slurm_utils
 from daos_utils import DaosCommand
-from test_utils_container import TestContainer
-from ClusterShell.NodeSet import NodeSet
-from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
 from oclass_utils import extract_redundancy_factor
 from duns_utils import format_path
@@ -74,14 +75,10 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         pool: pool to create container
         oclass: object class of container
 
-
     """
     rd_fac = None
     # Create a container and add it to the overall list of containers
-    self.container.append(
-        TestContainer(pool, daos_command=self.get_daos_command()))
-    self.container[-1].namespace = path
-    self.container[-1].get_params(self)
+    self.container.append(self.get_container(pool, namespace=path, create=False))
     # include rd_fac based on the class
     if oclass:
         self.container[-1].oclass.update(oclass)
@@ -443,13 +440,9 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    container = TestContainer(pool)
-    container.namespace = "/run/container_reserved/*"
-    container.get_params(self)
-    container.create()
+    container = self.get_container(pool, namespace="/run/container_reserved/*")
     container.open()
-    obj_cls = self.params.get(
-        "object_class", '/run/container_reserved/*')
+    obj_cls = self.params.get("object_class", '/run/container_reserved/*')
 
     # write data to object
     data_pattern = get_random_bytes(500)

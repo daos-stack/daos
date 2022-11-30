@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -27,18 +27,12 @@ class DmvrSerialSmall(DataMoverTestBase):
         super().setUp()
 
         # Get the dataset parameters
-        self.num_objs = self.params.get(
-            "num_objs", "/run/dataset/*")
-        self.num_dkeys = self.params.get(
-            "num_dkeys", "/run/dataset/*")
-        self.num_akeys_single = self.params.get(
-            "num_akeys_single", "/run/dataset/*")
-        self.num_akeys_array = self.params.get(
-            "num_akeys_array", "/run/dataset/*")
-        self.akey_sizes = self.params.get(
-            "akey_sizes", "/run/dataset/*")
-        self.akey_extents = self.params.get(
-            "akey_extents", "/run/dataset/*")
+        self.num_objs = self.params.get("num_objs", "/run/dataset/*")
+        self.num_dkeys = self.params.get("num_dkeys", "/run/dataset/*")
+        self.num_akeys_single = self.params.get("num_akeys_single", "/run/dataset/*")
+        self.num_akeys_array = self.params.get("num_akeys_array", "/run/dataset/*")
+        self.akey_sizes = self.params.get("akey_sizes", "/run/dataset/*")
+        self.akey_extents = self.params.get("akey_extents", "/run/dataset/*")
 
     def run_dm_serial_small(self, tool):
         """
@@ -56,8 +50,7 @@ class DmvrSerialSmall(DataMoverTestBase):
         self.set_tool(tool)
 
         # Create pool1
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create cont1
         cont1 = self.get_container(pool1)
@@ -69,8 +62,7 @@ class DmvrSerialSmall(DataMoverTestBase):
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
         # Create pool2
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
         result = self.run_datamover(
@@ -88,12 +80,6 @@ class DmvrSerialSmall(DataMoverTestBase):
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
-
     @avocado.fail_on(DaosApiError)
     def test_dm_serial_small_dserialize(self):
         """
@@ -102,6 +88,6 @@ class DmvrSerialSmall(DataMoverTestBase):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_serialize,mfu_deserialize,hdf5
-        :avocado: tags=dm_serial_small,dm_serial_small_dserialize,test_dm_serial_small_dserialize
+        :avocado: tags=DmvrSerialSmall,test_dm_serial_small_dserialize
         """
         self.run_dm_serial_small("DSERIAL")

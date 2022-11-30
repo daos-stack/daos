@@ -6,7 +6,6 @@
 import time
 
 from ior_test_base import IorTestBase
-from daos_utils import DaosCommand
 
 
 class SnapshotAggregation(IorTestBase):
@@ -52,7 +51,6 @@ class SnapshotAggregation(IorTestBase):
         :avocado: tags=SnapshotAggregation,test_snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
-        daos = DaosCommand(self.bin)
 
         # Create a pool and a container that spans the 2 servers.
         self.update_ior_cmd_with_pool()
@@ -112,9 +110,7 @@ class SnapshotAggregation(IorTestBase):
         self.pool.use_label = True
 
         # Delete the snapshot.
-        daos.container_destroy_snap(
-            pool=self.pool.uuid,
-            cont=self.container.uuid, epc=self.container.epoch)
+        self.container.destroy_snap(epc=self.container.epoch)
 
         # Wait for aggregation to start and finish.
         space_reclaimed = False
@@ -145,9 +141,6 @@ class SnapshotAggregation(IorTestBase):
 
         if not space_reclaimed:
             self.fail(
-                "Pool free space was not restored by the aggregation after "
-                "snapshot deletion")
+                "Pool free space was not restored by the aggregation after snapshot deletion")
 
-        self.log.info(
-            "Pool free space restored by the aggregation after snapshot "
-            "deletion")
+        self.log.info("Pool free space restored by the aggregation after snapshot deletion")

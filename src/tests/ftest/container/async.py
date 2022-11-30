@@ -5,8 +5,9 @@
 '''
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 from test_utils_container import TestContainer
 from test_utils_base import CallbackHandler
 
@@ -48,8 +49,9 @@ class ContainerAsync(TestWithServers):
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
-        self.container.append(TestContainer(pool=self.pool, cb_handler=cbh1))
-        self.container.append(TestContainer(pool=self.pool))
+        self.container.append(
+            TestContainer(pool=self.pool, cb_handler=cbh1, daos_command=self.get_daos_command()))
+        self.container.append(TestContainer(pool=self.pool, daos_command=self.get_daos_command()))
 
         # We can't use TestContainer.create after the pool is destroyed, but we
         # can call DaosContainer.create to create the underlying DaosContainer,
@@ -88,7 +90,7 @@ class ContainerAsync(TestWithServers):
         self.add_pool()
 
         cbh = CallbackHandler()
-        self.container.append(TestContainer(pool=self.pool))
+        self.container.append(TestContainer(pool=self.pool, daos_command=self.get_daos_command()))
 
         # We don't need to create asynchronously, so set the CallbackHandler
         # after creating it.
@@ -117,7 +119,7 @@ class ContainerAsync(TestWithServers):
         self.add_pool()
 
         cbh = CallbackHandler()
-        self.container.append(TestContainer(pool=self.pool))
+        self.container.append(TestContainer(pool=self.pool, daos_command=self.get_daos_command()))
 
         # We don't need to create asynchronously, so set the CallbackHandler
         # after creating it.
@@ -145,8 +147,8 @@ class ContainerAsync(TestWithServers):
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
-        tc1 = TestContainer(pool=self.pool)
-        tc2 = TestContainer(pool=self.pool)
+        tc1 = TestContainer(pool=self.pool, daos_command=self.get_daos_command())
+        tc2 = TestContainer(pool=self.pool, daos_command=self.get_daos_command())
         self.container.append(tc1)
         self.container.append(tc2)
 
@@ -189,8 +191,8 @@ class ContainerAsync(TestWithServers):
 
         cbh1 = CallbackHandler()
         cbh2 = CallbackHandler()
-        tc1 = TestContainer(pool=self.pool)
-        tc2 = TestContainer(pool=self.pool)
+        tc1 = TestContainer(pool=self.pool, daos_command=self.get_daos_command())
+        tc2 = TestContainer(pool=self.pool, daos_command=self.get_daos_command())
         self.container.append(tc1)
         self.container.append(tc2)
 

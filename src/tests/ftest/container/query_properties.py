@@ -5,9 +5,9 @@
 '''
 import ctypes
 
-from apricot import TestWithServers
 from pydaos.raw import daos_cref, DaosApiError, conversion, DaosContPropEnum
-from test_utils_container import TestContainer
+
+from apricot import TestWithServers
 
 
 class QueryPropertiesTest(TestWithServers):
@@ -39,37 +39,11 @@ class QueryPropertiesTest(TestWithServers):
         """
         errors = []
 
-        self.add_pool()
-        self.container = TestContainer(pool=self.pool)
-        self.container.get_params(self)
-
-        # Prepare DaosContProperties. Update some items from default. These are
-        # properties that determine the values, not the actual values. The actual values
-        # are set in DaosContainer.create() based on these configurations.
-        chksum_type_conf = self.params.get("configured", "/run/properties/chksum_type/*")
-        srv_verify_conf = self.params.get("configured", "/run/properties/srv_verify/*")
-        chunk_size_conf = self.params.get("configured", "/run/properties/chunk_size/*")
-
-        cont_prop_type = bytes("POSIX", "utf-8")  # Updated
-        enable_chksum = True  # Updated
-        srv_verify = srv_verify_conf
-        chksum_type = ctypes.c_uint64(chksum_type_conf)
-        chunk_size = ctypes.c_uint64(chunk_size_conf)
-        rd_lvl = ctypes.c_uint64(daos_cref.DAOS_PROP_CO_REDUN_DEFAULT)
-        con_in = [
-            cont_prop_type,
-            enable_chksum,
-            srv_verify,
-            chksum_type,
-            chunk_size,
-            rd_lvl
-        ]
-
-        # Create container with the DaosContProperties.
-        self.container.create(con_in=con_in)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # Open the container.
-        self.container.open(pool_handle=self.pool.pool.handle)
+        self.container.open()
 
         # Prepare the DaosProperty data structure that stores the values that are
         # configured based on the properties we used during create. Here, we create
@@ -113,9 +87,9 @@ class QueryPropertiesTest(TestWithServers):
             errors.append(msg)
 
         # Verify values set in cont_prop.
-        chksum_type_exp = self.params.get("expected", "/run/properties/chksum_type/*")
-        srv_verify_exp = self.params.get("expected", "/run/properties/srv_verify/*")
-        chunk_size_exp = self.params.get("expected", "/run/properties/chunk_size/*")
+        chksum_type_exp = self.params.get("chksum_type", "/run/expected_properties/*")
+        srv_verify_exp = self.params.get("srv_verify", "/run/expected_properties/*")
+        cksum_size_exp = self.params.get("cksum_size", "/run/expected_properties/*")
 
         # Verify layout type.
         actual_layout_type = cont_prop.dpp_entries[0].dpe_val
@@ -139,10 +113,10 @@ class QueryPropertiesTest(TestWithServers):
             errors.append(msg)
 
         # Verify checksum chunk size.
-        if cont_prop.dpp_entries[3].dpe_val != chunk_size_exp:
+        if cont_prop.dpp_entries[3].dpe_val != cksum_size_exp:
             msg = ("Unexpected checksum chunk size from query! "
                    "Expected = {}; Actual = {}".format(
-                       chunk_size_exp, cont_prop.dpp_entries[3].dpe_val))
+                       cksum_size_exp, cont_prop.dpp_entries[3].dpe_val))
             errors.append(msg)
 
         if errors:

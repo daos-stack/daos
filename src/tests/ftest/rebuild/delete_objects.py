@@ -1,10 +1,9 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
-from daos_utils import DaosCommand
 
 
 class RbldDeleteObjects(RebuildTestBase):
@@ -24,14 +23,10 @@ class RbldDeleteObjects(RebuildTestBase):
         self.punched_indices = None
         self.punched_qty = 0
         self.punch_type = None
-        self.daos_cmd = None
 
     def execute_during_rebuild(self):
         """Delete half of the objects from the container during rebuild."""
-        self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
-                                         cont=self.container.uuid,
-                                         prop="status", value="healthy")
+        self.container.set_prop(prop="status", value="healthy")
 
         if self.punch_type == "object":
             # Punch half of the objects

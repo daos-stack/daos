@@ -54,9 +54,11 @@ class DmvrPreserveProps(DataMoverTestBase):
         # Set the api to use
         self.set_api(api)
 
-        # Create 1 pool
+        # Create 2 pools
         pool1 = self.create_pool()
         pool1.connect(2)
+        pool2 = self.create_pool()
+        pool2.connect(2)
 
         # set the path to read and write container properties
         self.preserve_props_path = join(self.tmp, "cont_props.h5")
@@ -82,14 +84,14 @@ class DmvrPreserveProps(DataMoverTestBase):
         result = self.run_datamover(
             self.test_id + " posix to cont2 (empty cont)",
             "POSIX", posix_file_path, None, None,
-            "DAOS", "/", pool1, None)
+            "DAOS", "/", pool2, cont1.label.value)
 
         cont2_label = self.parse_create_cont_label(result.stdout_text)
-        cont2 = self.get_cont(pool1, cont2_label)
-        cont2.type.update(cont1.type.value, "type")
+        cont2 = self.get_cont(pool2, cont2_label)
         self.verify_cont(cont2, api, True, src_props)
 
         pool1.disconnect()
+        pool2.disconnect()
 
     def write_cont(self, cont):
         """Write the test data using either ior or the obj API.
@@ -115,7 +117,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         cont.close()
 
         # Return existing cont properties
-        return self.get_cont_prop(cont)
+        return cont.get_prop()["response"]
 
     def verify_cont(self, cont, api, check_attr_prop=True, prop_list=None):
         """Read-verify test data using either ior or the obj API.
@@ -124,12 +126,12 @@ class DmvrPreserveProps(DataMoverTestBase):
             cont (TestContainer): the container to verify.
             check_attr_prop (bool, optional): whether to verify user
                 attributes and cont properties. Defaults to False.
-            prop_list (list, optional): list of properties from get_cont_prop.
+            prop_list (list, optional): list of properties from cont.get_prop().
                 Required when check_attr_prop is True.
 
         """
         # It's important to check the properties first, since when ior
-        # mounts DFS the alloc'ed OID might be incremented.
+        # mounts DFS the allocated OID might be incremented.
         if check_attr_prop:
             cont.open()
             self.verify_cont_prop(cont, prop_list, api)
@@ -145,30 +147,16 @@ class DmvrPreserveProps(DataMoverTestBase):
             # Verify non-POSIX containers copied with the Object API
             self.dataset_verify(self.obj_list, cont, 1, 1, 1, 0, [1024], [])
 
-    def get_cont_prop(self, cont):
-        """Get all container properties with daos command.
-
-        Args:
-            cont (TestContainer): the container to get props of.
-
-        Returns:
-            list: list of dictionaries that contain properties and values from daos
-                command.
-
-        """
-        prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
-        return prop_result["response"]
-
     def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
         Expects the container to be open.
 
         Args:
             cont (TestContainer): the container to verify.
-            prop_list (list): list of properties from get_cont_prop.
+            prop_list (list): list of properties from cont.get_prop().
 
         """
-        actual_list = self.get_cont_prop(cont)
+        actual_list = cont.get_prop()["response"]
 
         # Make sure sizes match
         if len(prop_list) != len(actual_list):

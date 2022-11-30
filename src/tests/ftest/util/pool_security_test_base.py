@@ -182,18 +182,15 @@ class PoolSecurityTestBase(TestWithServers):
             value (str optional): Container property value to write.
         """
         if action.lower() == "write":
-            result = self.set_container_property(
-                self.pool.uuid, self.container_uuid, cont_property, value)
+            self.container.daos.exit_status_exception = False
+            result = self.container.set_prop(cont_property, value)
+            self.container.daos.exit_status_exception = True
         elif action.lower() == "read":
-            result = self.get_container_property(
-                self.pool.uuid, self.container_uuid)
+            result = self.container.get_prop()
         else:
-            self.fail(
-                "##In verify_cont_rw_property, "
-                "invalid action: {}".format(action))
+            self.fail("##In verify_cont_rw_property, invalid action: {}".format(action))
         self.log.info(
-            "  In verify_cont_rw_property %s.\n =daos_cmd.run() result:\n%s",
-            action, result)
+            "  In verify_cont_rw_property %s.\n =daos_cmd.run() result:\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
 
     def verify_cont_set_owner(self, expect, user, group):

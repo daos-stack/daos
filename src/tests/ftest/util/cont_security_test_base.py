@@ -8,15 +8,15 @@ import os
 import pwd
 import grp
 import re
-from apricot import TestWithServers
+
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
-from daos_utils import DaosCommand
+
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 import general_utils
 from general_utils import DaosTestError
 import security_test_base as secTestBase
-from test_utils_container import TestContainer
 
 
 class ContSecurityTestBase(TestWithServers):
@@ -47,10 +47,9 @@ class ContSecurityTestBase(TestWithServers):
         self.user_gid = os.getegid()
         self.current_user = pwd.getpwuid(self.user_uid)[0]
         self.current_group = grp.getgrgid(self.user_uid)[0]
-        self.co_prop = self.params.get("container_properties",
-                                       "/run/container/*")
+        self.co_prop = self.params.get("container_properties", "/run/container/*")
         self.dmg = self.get_dmg_command()
-        self.daos_tool = DaosCommand(self.bin)
+        self.daos_tool = self.get_daos_command()
 
     @fail_on(CommandFailure)
     def create_pool_with_dmg(self):
@@ -61,10 +60,8 @@ class ContSecurityTestBase(TestWithServers):
         Returns:
             pool_uuid (str): Pool UUID, randomly generated.
         """
-        self.prepare_pool()
-        pool_uuid = self.pool.pool.get_uuid_str()
-
-        return pool_uuid
+        self.pool = self.get_pool()
+        return self.pool.pool.get_uuid_str()
 
     def create_container_with_daos(self, pool, acl_type=None, acl_file=None):
         """Create a container with the daos tool.
@@ -96,10 +93,7 @@ class ContSecurityTestBase(TestWithServers):
             file_name = acl_file
 
         try:
-            self.container = TestContainer(pool=pool,
-                                           daos_command=self.daos_tool)
-            self.container.get_params(self)
-            self.container.create(acl_file=file_name)
+            self.container = self.get_container(pool, acl_file=file_name)
             container_uuid = self.container.uuid
         except TestFail as error:
             if acl_type != "invalid":
@@ -241,39 +235,6 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_list_attrs(
-            pool_uuid, container_uuid)
-        return result
-
-    def set_container_property(
-            self, pool_uuid, container_uuid, prop, value):
-        """Write/Set container property.
-
-        Args:
-            pool_uuid (str): pool uuid.
-            container_uuid (str): container uuid.
-            prop (str): container property name.
-            value (str): container property value to be set.
-
-        Return:
-            result (str): daos_tool.container_set_prop result.
-        """
-        self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_set_prop(
-            pool_uuid, container_uuid, prop, value)
-        return result
-
-    def get_container_property(self, pool_uuid, container_uuid):
-        """Get container property.
-
-        Args:
-            pool_uuid (str): pool uuid.
-            container_uuid (str): container uuid.
-
-        Return:
-            result (str): daos_tool.container_get_prop.
-        """
-        self.daos_tool.exit_status_exception = False
-        result = self.daos_tool.container_get_prop(
             pool_uuid, container_uuid)
         return result
 

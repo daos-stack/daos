@@ -21,15 +21,13 @@ pool:
   control_method: dmg
 
 container:
-  control_method: API
+  control_method: daos
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  chunk_size: 0
 
-properties:
-  chksum_type:
-    configured: 100  # Default
-    expected: 1
-  srv_verify:
-    configured: true  # Updated
-    expected: 1
-  chunk_size:
-    configured: 0  # Default
-    expected: 16384
+expected_properties:
+  chksum_type: 1
+  srv_verify: 1
+  chunk_size: 1048576
+  cksum_size: 16384

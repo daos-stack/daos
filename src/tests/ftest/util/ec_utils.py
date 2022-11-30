@@ -8,13 +8,12 @@ import threading
 import queue
 import time
 
+from pydaos.raw import DaosApiError
+
 from nvme_utils import ServerFillUp
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
-from pydaos.raw import DaosApiError
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, run_pcmd
 
@@ -111,9 +110,7 @@ class ErasureCodeIor(ServerFillUp):
     def ec_container_create(self, oclass):
         """Create the container for EC object."""
         # Get container params
-        self.ec_container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
-        self.ec_container.get_params(self)
-        self.ec_container.oclass.update(oclass)
+        self.ec_container = self.get_container(self.pool, oclass=oclass, create=False)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -121,8 +118,8 @@ class ErasureCodeIor(ServerFillUp):
         if self.ec_container.properties.value is None:
             self.ec_container.properties.update(rd_fac)
         else:
-            self.ec_container.properties.update("{},{}"
-                                                .format(self.ec_container.properties.value, rd_fac))
+            self.ec_container.properties.update(
+                "{},{}".format(self.ec_container.properties.value, rd_fac))
         # create container
         self.ec_container.create()
         self.nvme_local_cont = self.ec_container
@@ -260,7 +257,6 @@ class ErasureCodeSingle(TestWithServers):
         self.server_count = None
         self.set_online_rebuild = False
         self.rank_to_kill = None
-        self.daos_cmd = None
         self.container = []
 
     def setUp(self):
@@ -275,26 +271,17 @@ class ErasureCodeSingle(TestWithServers):
         self.add_pool()
         self.out_queue = queue.Queue()
 
-    def ec_container_create(self, index, oclass):
+    def ec_container_create(self, oclass):
         """Create the container for EC object.
 
         Args:
-            index (int): container number
-            oclass (str): object class for creating the container.
+            oclass(str): object class for creating the container.
         """
-        self.container.append(TestContainer(self.pool))
-        # Get container parameters
-        self.container[index].get_params(self)
-
-        # update object class for container create, if supplied explicitly.
-        self.container[index].oclass.update(oclass)
-
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.container[index].properties.update("rd_fac:{}".format(ec_object['parity']))
 
-        # create container
-        self.container[index].create()
+        self.container.append(self.get_container(
+            self.pool, oclass=oclass, properties="rd_fac:{}".format(ec_object['parity'])))
 
     def single_type_param_update(self, index, data):
         """Update the data set content provided from yaml file.
@@ -324,7 +311,7 @@ class ErasureCodeSingle(TestWithServers):
                     continue
                 # Create the new container with correct redundancy factor for EC object type
                 try:
-                    self.ec_container_create(cont_count, oclass[0])
+                    self.ec_container_create(oclass[0])
                     self.single_type_param_update(cont_count, sizes)
                     # Write the data
                     self.container[cont_count].write_objects(obj_class=oclass[0])
@@ -344,7 +331,6 @@ class ErasureCodeSingle(TestWithServers):
             parity (int): object parity number for reading, default All.
         """
         cont_count = 0
-        self.daos_cmd = DaosCommand(self.bin)
         for oclass in self.obj_class:
             for _sizes in self.singledata_set:
                 # Skip the object type if server count does not meet the minimum EC object server
@@ -358,10 +344,7 @@ class ErasureCodeSingle(TestWithServers):
                     cont_count += 1
                     continue
 
-                self.daos_cmd.container_set_prop(pool=self.pool.uuid,
-                                                 cont=self.container[cont_count].uuid,
-                                                 prop="status",
-                                                 value="healthy")
+                self.container[cont_count].set_prop(prop="status", value="healthy")
 
                 # Read data and verified the content
                 try:

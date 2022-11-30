@@ -26,18 +26,12 @@ class DmvrObjSmallTest(DataMoverTestBase):
         super().setUp()
 
         # Get the dataset parameters
-        self.num_objs = self.params.get(
-            "num_objs", "/run/dataset/*")
-        self.num_dkeys = self.params.get(
-            "num_dkeys", "/run/dataset/*")
-        self.num_akeys_array = self.params.get(
-            "num_akeys_array", "/run/dataset/*")
-        self.num_akeys_single = self.params.get(
-            "num_akeys_single", "/run/dataset/*")
-        self.akey_sizes = self.params.get(
-            "akey_sizes", "/run/dataset/*")
-        self.akey_extents = self.params.get(
-            "akey_extents", "/run/dataset/*")
+        self.num_objs = self.params.get("num_objs", "/run/dataset/*")
+        self.num_dkeys = self.params.get("num_dkeys", "/run/dataset/*")
+        self.num_akeys_array = self.params.get("num_akeys_array", "/run/dataset/*")
+        self.num_akeys_single = self.params.get("num_akeys_single", "/run/dataset/*")
+        self.akey_sizes = self.params.get("akey_sizes", "/run/dataset/*")
+        self.akey_extents = self.params.get("akey_extents", "/run/dataset/*")
 
     def run_dm_obj_small(self, tool):
         """
@@ -58,8 +52,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         self.set_tool(tool)
 
         # Create pool1
-        pool1 = self.create_pool()
-        pool1.connect(2)
+        pool1 = self.get_pool()
 
         # Create cont1
         cont1 = self.get_container(pool1)
@@ -85,8 +78,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
         # Create pool2
-        pool2 = self.create_pool()
-        pool2.connect(2)
+        pool2 = self.get_pool()
 
         # Clone cont1 to a new cont3 in pool2
         result = self.run_datamover(
@@ -101,13 +93,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
             self.num_objs, self.num_dkeys, self.num_akeys_single,
             self.num_akeys_array, self.akey_sizes, self.akey_extents)
 
-        # Must destroy before closing pools
-        cont1.destroy()
-        cont2.destroy()
-        cont3.destroy()
-        pool1.disconnect()
-        pool2.disconnect()
-
     @avocado.fail_on(DaosApiError)
     def test_dm_obj_small_dcp(self):
         """
@@ -116,7 +101,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_obj_small,dm_obj_small_dcp,test_dm_obj_small_dcp
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
 
@@ -128,6 +113,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_cont_clone,daos_cmd
-        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

@@ -991,8 +991,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.fail("Invalid tool: {}".format(str(self.tool)))
         except CommandFailure as error:
             self.log.error("%s command failed: %s", str(self.tool), str(error))
-            self.fail("Test was expected to pass but it failed: {}\n".format(
-                test_desc))
+            self.fail("{} command failed: {}\n".format(str(self.tool), test_desc))
 
         # Check the return code
         assert result is not None

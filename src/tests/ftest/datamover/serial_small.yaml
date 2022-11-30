@@ -16,9 +16,8 @@ server_config:
           scm_size: 4
 pool:
   scm_size: 1G
-  control_method: dmg
 container:
-  control_method: API
+  control_method: daos
 dserialize:
   client_processes:
     np: 3
