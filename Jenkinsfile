@@ -142,7 +142,7 @@ pipeline {
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
-               description: 'Additional repository used for locating packages for the build and '
+               description: 'Additional repository used for locating packages for the build and ' +
                             'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
