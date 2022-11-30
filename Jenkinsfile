@@ -139,6 +139,11 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Additional repository used for locating packages for the build and '
+                            'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
@@ -216,11 +221,6 @@ pipeline {
         string(name: 'CI_PROVISIONING_POOL',
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
-        // TODO: add parameter support for per-distro CI_PR_REPOS
-        string(name: 'CI_PR_REPOS',
-               defaultValue: '',
-               description: 'Repository to include for packages used to the build and test ' +
-                            'nodes, in the project@PR-number[:build] format')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
