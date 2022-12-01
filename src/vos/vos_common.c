@@ -454,7 +454,7 @@ vos_mod_init(void)
 	int	 rc = 0;
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
-		vos_start_epoch = crt_hlc_get();
+		vos_start_epoch = d_hlc_get();
 
 	rc = vos_pool_settings_init();
 	if (rc != 0) {

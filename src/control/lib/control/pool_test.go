@@ -88,25 +88,25 @@ func TestControl_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
-		"-DER_NONEXIST on first try is not retried": {
+		"ErrPoolNotFound on first try is not retried": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", daos.Nonexistent, nil),
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
 				},
 			},
-			expErr: daos.Nonexistent,
+			expErr: system.ErrPoolUUIDNotFound(test.MockPoolUUID()),
 		},
-		"-DER_NONEXIST on retry is treated as success": {
+		"ErrPoolNotFound on retry is treated as success": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TimedOut, nil),
-					MockMSResponse("host1", daos.Nonexistent, nil),
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
 				},
 			},
 		},
