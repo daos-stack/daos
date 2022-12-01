@@ -9,6 +9,10 @@
 #
 # Picks up flake config settings from .flake8
 
+# Flake8 has removed the --diff option, to make this check work you need a previous version
+# of flake.
+# python3 -m pip install "flake8<6.0.0"
+
 set -ue
 
 if ! command -v flake8 > /dev/null 2>&1
