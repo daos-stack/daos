@@ -1498,7 +1498,7 @@ dss_get_start_epoch(void)
 void
 dss_set_start_epoch(void)
 {
-	dss_start_epoch = crt_hlc_get();
+	dss_start_epoch = d_hlc_get();
 }
 
 bool
