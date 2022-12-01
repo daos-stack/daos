@@ -139,6 +139,12 @@ bio_spdk_env_init(void)
 				DP_RC(rc));
 			goto out;
 		}
+#ifdef DAOS_RELEASE_BUILD
+		if (enable_rpc_srv) {
+			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+#endif
 		nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
 	}
 
