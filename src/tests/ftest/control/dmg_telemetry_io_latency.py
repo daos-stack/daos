@@ -316,7 +316,8 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         test_ops *= repetitions
         num_operations += test_ops
         # 2 DTX entries on 2 replicas
-        num_operations *= 2
+        test_servers = self.params.get("test_servers", "/run/*")
+        num_operations *= test_servers
 
         if dtx_value != num_operations:
             self.log.error("engine_io_dtx_committed NOT verified, %s != %s",
