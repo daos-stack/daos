@@ -317,7 +317,7 @@ main(int argc, char **argv)
 	uuid_t                        cont_uuid                              = {};
 	char                          pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char                          cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
-	char                          c;
+	int                           c;
 	int                           rc;
 	int                           rc2;
 	char                         *path              = NULL;

@@ -15,6 +15,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/slab.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -45,6 +46,10 @@ struct dfuse_projection_info {
 	/** Next available inode number */
 	ATOMIC uint64_t     dpi_ino_next;
 	bool                dpi_shutdown;
+
+	struct d_slab                    dpi_slab;
+
+
 	/* Array of dfuse_eq */
 	struct dfuse_eq    *dpi_eqt;
 	int                 dpi_eqt_count;
@@ -60,7 +65,14 @@ struct dfuse_eq {
 	sem_t                         de_sem;
 
 	pthread_t                     de_thread;
+
+	struct d_slab_type              *dpi_read_slab;
+	struct d_slab_type              *dpi_write_slab;
+
 };
+
+/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
+#define DFUSE_MAX_READ (1024 * 1024)
 
 /* Launch fuse, and do not return until complete */
 int
@@ -173,13 +185,15 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t            de_req; /**< The fuse request handle */
-	daos_event_t          de_ev;
-	size_t                de_len;          /**< The size returned by daos */
-	off_t                 de_req_position; /**< The file position requested by fuse */
-	d_iov_t               de_iov;
-	d_sg_list_t           de_sgl;
+	fuse_req_t                    de_req; /**< The fuse request handle */
+	daos_event_t                  de_ev;
+	size_t                        de_len; /**< The size returned by daos */
+	d_iov_t                       de_iov;
+	d_sg_list_t                   de_sgl;
+	d_list_t                      de_list;
+	struct dfuse_projection_info *de_handle;
 	struct dfuse_obj_hdl *de_oh;
+		off_t                 de_req_position; /**< The file position requested by fuse */
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 

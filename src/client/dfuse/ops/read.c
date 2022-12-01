@@ -12,7 +12,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 {
 	if (ev->de_ev.ev_error != 0) {
 		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
-		D_GOTO(free, 0);
+		D_GOTO(release, 0);
 	}
 
 	if (ev->de_len == 0) {
@@ -20,7 +20,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
 
 		DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
-		D_GOTO(free, 0);
+		D_GOTO(release, 0);
 	}
 
 	if (ev->de_len == ev->de_iov.iov_buf_len)
@@ -33,8 +33,9 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
 
 	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
-free:
-	D_FREE(ev->de_iov.iov_buf);
+release:
+	d_slab_release(ev->de_eqt->dpi_read_slab, ev);
+
 }
 
 void
@@ -53,7 +54,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
 
-	D_ALLOC_PTR(ev);
+	ev = d_slab_acquire(eqt->dpi_read_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -64,44 +65,47 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		mock_read = true;
 	}
 
-	D_ALLOC(buff, len);
-	if (!buff)
-		D_GOTO(err, rc = ENOMEM);
+	/* DFuse requests a buffer size of "0" which translates to 1024*1024 at the time of writing
+	 * however this may change over time.  If the kernel ever starts requesting larger reads
+	 * then dfuse will need to be updated to pre-allocate larger buffers.  Add a warning here,
+	 * not that DFuse won't function correctly but if this value ever changes then DFuse will
+	 * need updating to make full use of larger buffer sizes.
+	 */
+	if (len > ev->de_iov.iov_buf_len) {
+		D_WARN("Fuse read buffer not large enough %zx > %zx\n", len,
+		       ev->de_iov.iov_buf_len);
+	}
 
-	d_iov_set(&ev->de_iov, (void *)buff, len);
-	ev->de_sgl.sg_iovs  = &ev->de_iov;
-	ev->de_oh           = oh;
+	ev->de_iov.iov_len  = len;
 	ev->de_req          = req;
-	ev->de_req_position = position;
 	ev->de_sgl.sg_nr    = 1;
+	ev->de_oh           = oh;
+	ev->de_req_position = position;
 
 	if (mock_read) {
 		ev->de_len = len;
 		dfuse_cb_read_complete(ev);
-		D_FREE(ev);
 		return;
 	}
-
-	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
-	if (rc != -DER_SUCCESS)
-		D_GOTO(err_buff, rc = daos_der2errno(rc));
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-		D_FREE(buff);
-		D_FREE(ev);
+		d_slab_release(eqt->dpi_read_slab, ev);
 		return;
 	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
+
+	/* Now ensure there are more descriptors for the next request */
+	d_slab_restock(eqt->dpi_read_slab);
+
 	return;
-err_buff:
-	D_FREE(buff);
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(ev);
+	if (ev)
+		d_slab_release(eqt->dpi_read_slab, ev);
 }

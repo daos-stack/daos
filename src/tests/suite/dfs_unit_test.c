@@ -1856,12 +1856,15 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	dfs_obj_t		*obj;
 	int			nr = 100;
 	char                    name[24];
+	char                    anchor_name[24];
 	daos_anchor_t		anchor = {0};
 	uint32_t		num_ents = 10;
 	struct dirent		ents[10];
 	struct stat		stbufs[10];
 	int			num_files = 0;
 	int			num_dirs = 0;
+	int			total_entries = 0;
+	bool			check_first = true;
 	char			dir_name[24];
 	int			i;
 	int			rc;
@@ -1886,11 +1889,15 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	}
 
 	/** readdir and stat */
+	print_message("start readdirplus and verify statbuf\n");
 	while (!daos_anchor_is_eof(&anchor)) {
 		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
 		assert_int_equal(rc, 0);
 
 		for (i = 0; i < num_ents; i++) {
+			/** save the 50th entry to restart iteration from there */
+			if (num_files+num_dirs == 50)
+				strcpy(anchor_name, ents[i].d_name);
 			if (strncmp(ents[i].d_name, "RD_file", 7) == 0) {
 				assert_true(S_ISREG(stbufs[i].st_mode));
 				num_files++;
@@ -1900,13 +1907,56 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 			} else {
 				print_error("Found invalid entry: %s\n", ents[i].d_name);
 			}
+			total_entries++;
 		}
+		num_ents = 10;
 	}
 
 	assert_true(num_files == 100);
 	assert_true(num_dirs == 100);
+	assert_true(total_entries == 200);
+
+	/** set anchor at the saved entry and restart iteration */
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
+	assert_int_equal(rc, 0);
+	total_entries = 0;
+	print_message("restart readdir with anchor set at: %s\n", anchor_name);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+		for (i = 0; i < num_ents; i++) {
+			total_entries++;
+			if (check_first) {
+				assert_true(strcmp(ents[i].d_name, anchor_name) == 0);
+				check_first = false;
+			}
+		}
+		num_ents = 10;
+	}
+	assert_true(total_entries == 150);
+
+	/** set anchor at the saved entry */
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
+	assert_int_equal(rc, 0);
+	total_entries = 0;
+
+	/** remove the entry of the anchor */
+	rc = dfs_remove(dfs_mt, dir, anchor_name, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	print_message("restart readdir with anchor set at removed entry: %s\n", anchor_name);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs_mt, dir, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+		for (i = 0; i < num_ents; i++)
+			total_entries++;
+		num_ents = 10;
+	}
+	assert_true(total_entries == 149);
 
 	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dir_name, 1, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -1915,9 +1965,16 @@ dfs_test_readdir(void **state)
 {
 	test_arg_t	*arg = *state;
 
+	print_message("Running readdir test with OC_SX dir..\n");
 	dfs_test_readdir_internal(state, OC_SX);
-	if (test_runable(arg, 4))
+	if (test_runable(arg, 2)) {
+		print_message("Running readdir test with OC_RP_2GX dir..\n");
+		dfs_test_readdir_internal(state, OC_RP_2GX);
+	}
+	if (test_runable(arg, 4)) {
+		print_message("Running readdir test with OC_EC_2P2GX dir..\n");
 		dfs_test_readdir_internal(state, OC_EC_2P2GX);
+	}
 }
 
 static int

@@ -1753,7 +1753,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+	D_RWLOCK_RDLOCK(&tx->tx_pool->dp_map_lock);
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
+	D_RWLOCK_UNLOCK(&tx->tx_pool->dp_map_lock);
 	D_ASSERT(tgt_cnt != 0);
 
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
