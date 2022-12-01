@@ -60,7 +60,7 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
@@ -144,7 +144,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 30 * 5
+                build_time = 360 
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
             cont_attrs['dfuse-data-cache'] = 'off'
@@ -222,7 +222,7 @@ class DaosBuild(DfuseTestBase):
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
             timeout = 10 * 60
             if cmd.startswith('scons'):
-                timeout = build_time * 180
+                timeout = build_time * 60
             start = time.time()
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
