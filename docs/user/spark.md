@@ -22,7 +22,7 @@ to access DAOS from Hadoop and Spark, as well as steps to run Terasort in
 
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
-[DAOS Installation Guide](https://docs.daos.io/v2.2/admin/installation/).
+[DAOS Installation Guide](https://docs.daos.io/v2.4/QSG/setup_rhel/).
 
 ## <a name="mavendownload"></a>Maven Download
 
@@ -278,7 +278,7 @@ $ getfattr -d -m - <your path>
 
 #### DAOS Non-UNS Path
 
-Check [Set DAOS URI and Pool/Container](#non-uns).
+Check [Set DAOS URI and Pool/Container](#daos-non-uns-path).
 
 #### Special UUID Path
 DAOS supports a specialized URI with pool/container UUIDs embedded. The format
