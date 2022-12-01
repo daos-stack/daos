@@ -225,7 +225,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 static int
 objects_query(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	char		*akey = "0";
 	d_iov_t		dkey_iov;
 	d_iov_t		akey_iov;
@@ -367,7 +367,7 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 static int
 objects_punch(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	int		i;
 	int		rc = 0;
 	uint64_t	start = 0;
@@ -469,7 +469,7 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 static int
 pf_aggregate(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -491,7 +491,7 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 static int
 pf_discard(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;

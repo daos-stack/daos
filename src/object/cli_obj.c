@@ -1789,7 +1789,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		 * some targets un-available.
 		 */
 		if (recov_task->ert_epoch == DAOS_EPOCH_MAX)
-			recov_task->ert_epoch = crt_hlc_get();
+			recov_task->ert_epoch = d_hlc_get();
 		dc_cont2hdl_noref(obj->cob_co, &coh);
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
