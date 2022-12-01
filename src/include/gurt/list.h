@@ -544,7 +544,7 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 	     n = d_list_entry(pos->member.prev, __typeof__(*pos), member);     \
 	     &pos->member != (head);                                           \
 	     pos = n, n = d_list_entry(pos->member.prev, __typeof__(*pos),     \
-	                               member))
+				       member))
 #endif /* d_list_for_each_entry_reverse_safe */
 
 #ifndef d_list_for_each_entry_safe_from
