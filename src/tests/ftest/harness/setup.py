@@ -19,7 +19,8 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_setup_test,test_setup
+        :avocado: tags=harness
+        :avocado: tags=HarnessSetupTest,test_setup
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,
                          "FAILED: storage prepare was not set correctly from the yaml")

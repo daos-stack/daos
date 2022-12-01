@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -37,8 +36,9 @@ class ConfigGenerateRun(TestWithServers):
         DaosServerCommand.__init__()
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,config_generate_run
+        :avocado: tags=hw,large
+        :avocado: tags=control,config_generate_entries
+        :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
         num_engines = self.params.get(
             "num_engines", "/run/config_generate_params/*/")
