@@ -1250,11 +1250,11 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	for (i = 0; i < fs_handle->dpi_eqt_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->dpi_eqt[i];
 
-		rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, &eqt->de_read_slab);
+		rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, eqt, &eqt->de_read_slab);
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err_slab, rc);
 
-		rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, &eqt->de_write_slab);
+		rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, eqt, &eqt->de_write_slab);
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err_slab, rc);
 
