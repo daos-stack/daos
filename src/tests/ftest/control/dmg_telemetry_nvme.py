@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -25,9 +25,8 @@ class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
         """
         for key in sorted(metrics_data):
             self.log.info(
-                    "\n  %12s: %s",
-                    "Initial " if key == 0 else "Test Loop {}".format(key),
-                    metrics_data[key])
+                "\n  %12s: %s",
+                "Initial " if key == 0 else "Test Loop {}".format(key), metrics_data[key])
 
     def test_nvme_telemetry_metrics(self):
         """JIRA ID: DAOS-7833
@@ -35,21 +34,21 @@ class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
             Verify the telemetry engine NVMe metrics.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=control,telemetry,nvme
-        :avocado: tags=test_nvme_telemetry_metrics
+        :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
         """
         metrics_data = self.telemetry.get_nvme_metrics(self.server_managers[0])
         self.display_nvme_test_metrics(metrics_data)
 
         # Get and verify NVMe metrics
         groups = [
-                "ENGINE_NVME_HEALTH_METRICS",
-                "ENGINE_NVME_CRIT_WARN_METRICS",
-                "ENGINE_NVME_TEMP_METRICS",
-                "ENGINE_NVME_TEMP_TIME_METRICS",
-                "ENGINE_NVME_RELIABILITY_METRICS",
-                "ENGINE_NVME_INTEL_VENDOR_METRICS"]
+            "ENGINE_NVME_HEALTH_METRICS",
+            "ENGINE_NVME_CRIT_WARN_METRICS",
+            "ENGINE_NVME_TEMP_METRICS",
+            "ENGINE_NVME_TEMP_TIME_METRICS",
+            "ENGINE_NVME_RELIABILITY_METRICS",
+            "ENGINE_NVME_INTEL_VENDOR_METRICS"]
 
         for group in groups:
             yaml_key = "_".join([group.lower().replace("engine_", ""), "valid"])
@@ -71,8 +70,8 @@ class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=control,telemetry,nvme
-        :avocado: tags=test_with_telemetry_nvme,test_telemetry_list_nvme
+        :avocado: tags=TestWithTelemetryNvme,test_telemetry_list_nvme
         """
         self.verify_telemetry_list()
