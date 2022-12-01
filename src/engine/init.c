@@ -628,6 +628,9 @@ static int
 server_init(int argc, char *argv[])
 {
 	uint64_t		bound;
+	uint64_t		metrics_size;
+	const uint64_t		est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t		est_tgt_metrics = 128; /* high estimate */
 	unsigned int		ctx_nr;
 	int			rc;
 	struct engine_metrics	*metrics;
@@ -645,8 +648,13 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/** initialize server topology data - this is needed to set up the number of targets */
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	metrics_size = (est_std_metrics + est_tgt_metrics * dss_tgt_nr) * D_TM_METRIC_SIZE;
+	rc = d_tm_init(dss_instance_idx, metrics_size, D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -667,11 +675,6 @@ server_init(int argc, char *argv[])
 	}
 
 	rc = register_dbtree_classes();
-	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
-
-	/** initialize server topology data */
-	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
