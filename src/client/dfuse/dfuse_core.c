@@ -127,7 +127,7 @@ static bool
 ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
 	const struct dfuse_inode_entry *ie;
-	const ino_t		    *ino = key;
+	const ino_t                    *ino = key;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 

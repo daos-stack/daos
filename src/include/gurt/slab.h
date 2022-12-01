@@ -54,7 +54,7 @@ struct d_slab_type {
 	d_list_t          st_pending_list;
 	pthread_mutex_t   st_lock;
 	struct d_slab    *st_slab;
-	void	    	 *st_arg;
+	void             *st_arg;
 
 	/* Counters for current number of objects */
 	int               st_count;         /* Total currently created */
