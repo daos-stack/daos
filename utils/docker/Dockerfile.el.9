@@ -67,12 +67,14 @@ RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all 
 ARG UID=1000
 
 # Add DAOS users
-RUN useradd --no-log-init --uid $UID --user-group --create-home --shell /bin/bash \
-            --home /home/daos daos_server
-RUN echo "daos_server:daos_server" | chpasswd
+ARG UID=1000
+COPY ./utils/scripts/helpers/daos-server-user-setup.sh \
+     /tmp/daos-server-user-setup.sh
+RUN set -e;                                    \
+    chmod +x /tmp/daos-server-user-setup.sh && \
+    /tmp/daos-server-user-setup.sh
 RUN useradd --no-log-init --user-group --create-home --shell /bin/bash daos_agent
 RUN echo "daos_agent:daos_agent" | chpasswd
-RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
@@ -192,7 +194,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 # Disable Java build for now since it fails
 #RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
 #        mkdir /home/daos/.m2 &&                                                               \
-#        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+#        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
 #        mvn clean install -T 1C                                                               \
 #            -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn                                                   \
 #            -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \
