@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 (C) Copyright 2021-2022 Intel Corporation.
 
@@ -25,8 +24,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
         for key in sorted(metrics_data):
             self.log.info(
                 "\n  %12s: %s",
-                "Initial " if key == 0 else "Test Loop {}".format(key),
-                metrics_data[key])
+                "Initial " if key == 0 else "Test Loop {}".format(key), metrics_data[key])
 
     def test_nvme_telemetry_metrics(self):
         """JIRA ID: DAOS-7833.

@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -30,7 +29,7 @@ class DaosPerf(DaosPerfBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosperf,daosperfsmall
-        :avocado: tags=daos_perf,DaosPerf,test_small
+        :avocado: tags=daos_perf
+        :avocado: tags=DaosPerf,test_small
         """
         self.run_daos_perf()

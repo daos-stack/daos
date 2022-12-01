@@ -126,6 +126,23 @@ typedef struct {
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
 
+/** Container information */
+typedef struct {
+	/** Container UUID */
+	uuid_t			ci_uuid;
+	/** Epoch of latest persistent snapshot */
+	daos_epoch_t		ci_lsnapshot;
+	/** Number of open handles */
+	uint32_t		ci_nhandles;
+	/** Number of snapshots */
+	uint32_t		ci_nsnapshots;
+	/** Latest open time (hybrid logical clock) */
+	uint64_t		ci_md_otime;
+	/** Latest close/modify time (hybrid logical clock) */
+	uint64_t		ci_md_mtime;
+	/* TODO: add more members, e.g., size, # objects, uid, gid... */
+} daos_cont_info_t;
+
 typedef d_iov_t daos_key_t;
 
 /**

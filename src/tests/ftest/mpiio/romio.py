@@ -9,15 +9,14 @@ from mpiio_test_base import MpiioTests
 
 # pylint: disable=too-many-ancestors
 class Romio(MpiioTests):
-    """
-    Runs Romio test.
+    """Run the Romio test.
 
     :avocado: recursive
     """
 
     def test_romio(self):
-        """
-        Test ID: DAOS-1994
+        """Test ID: DAOS-1994.
+
         Run Romio test provided in mpich package
         Testing various I/O functions provided in romio test suite
 

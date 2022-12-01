@@ -267,6 +267,9 @@ func GetLogEntries(log logging.Logger, cfg *DatabaseConfig, maxEntries ...uint64
 					close(entries)
 					return
 				}
+			} else {
+				details.Time = details.Log.AppendedAt
+				details.Operation = details.Log.Type.String()
 			}
 
 			entries <- details

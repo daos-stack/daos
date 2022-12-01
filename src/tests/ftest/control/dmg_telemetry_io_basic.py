@@ -56,13 +56,13 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                                         invalid += " *_min > _max"
                                 # Verify if value decreased
                                 if ("_min" in name or "_max" in name) and key > 0:
-                                    if value < metrics_data[key-1][name][host][rank][target][size]:
+                                    previous = metrics_data[key - 1][name][host][rank][target][size]
+                                    if value < previous:
                                         status = False
                                         invalid += " *value decreased"
                                 self.log.info(
                                     "    %-9s %-12s %-4s %-6s %-6s %s %s",
-                                    testloop, host, rank, target, size, value,
-                                    invalid)
+                                    testloop, host, rank, target, size, value, invalid)
         if not status:
             self.fail("##Telemetry test io metrics verification failed.")
 
@@ -86,7 +86,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,telemetry
+        :avocado: tags=control,telemetry,basic
         :avocado: tags=TestWithTelemetryIOBasic,test_io_telmetry_metrics_basic
         """
         block_sizes = self.params.get("block_sizes", "/run/*")

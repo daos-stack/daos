@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 import re
-
 import avocado
-
 from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -50,7 +49,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,dmg,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
         # Get the storage device information, parse and check devices info
@@ -58,8 +57,7 @@ class DmgStorageQuery(ControlTestBase):
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(
-            len(self.bdev_list), len(list(devs_info.values())[0]), msg)
+        self.assertEqual(len(self.bdev_list), len(list(devs_info.values())[0]), msg)
 
         # Check that number of targets match the config
         targets = 0
@@ -77,7 +75,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,dmg,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
         # Create pool and get the storage smd information, then verify info
@@ -116,7 +114,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,dmg,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_health
         """
         dmg_info = self.get_device_info(health=True)
@@ -155,7 +153,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,dmg,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
         # Get device info and check state is NORMAL

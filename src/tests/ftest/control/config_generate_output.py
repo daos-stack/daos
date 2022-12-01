@@ -60,8 +60,7 @@ class ConfigGenerateOutput(TestWithServers):
             self.nvme_socket_to_addrs[socket_id].append(pci_addr)
             self.pci_address_set.add(pci_addr)
 
-        self.log.info(
-            "nvme_socket_to_addrs = %s", self.nvme_socket_to_addrs)
+        self.log.info("nvme_socket_to_addrs = %s", self.nvme_socket_to_addrs)
         self.log.info("pci_address_set = %s", self.pci_address_set)
 
         # Fill in the dictionary and the set for SCM.
@@ -71,8 +70,7 @@ class ConfigGenerateOutput(TestWithServers):
             self.scm_socket_to_namespaces[numa_node].append(blockdev)
             self.scm_namespace_set.add(blockdev)
 
-        self.log.info(
-            "scm_socket_to_namespaces = %s", self.scm_socket_to_namespaces)
+        self.log.info("scm_socket_to_namespaces = %s", self.scm_socket_to_namespaces)
         self.log.info("scm_namespace_set = %s", self.scm_namespace_set)
 
         # Call dmg network scan --provider=all --json.
@@ -95,8 +93,7 @@ class ConfigGenerateOutput(TestWithServers):
             self.interface_to_providers[device].append(provider)
             self.interface_set.add(device)
 
-        self.log.info(
-            "interface_to_providers = %s", self.interface_to_providers)
+        self.log.info("interface_to_providers = %s", self.interface_to_providers)
         self.log.info("interface_set = %s", self.interface_set)
 
     def check_errors(self, errors):
@@ -148,8 +145,7 @@ class ConfigGenerateOutput(TestWithServers):
                         "Unexpected access point: {} != {}".format(
                             check["expected"], check["actual"]))
             except yaml.YAMLError as error:
-                errors.append(
-                    "Error loading dmg generated config!: {}".format(error))
+                errors.append("Error loading dmg generated config!: {}".format(error))
         elif result.exit_status == 0 and failure_expected is not None:
             errors.append("dmg command passed when expected to fail!: {}".format(result))
         elif result.exit_status != 0 and failure_expected is not None:
@@ -175,8 +171,8 @@ class ConfigGenerateOutput(TestWithServers):
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
         # Get necessary storage and network info.
@@ -203,8 +199,8 @@ class ConfigGenerateOutput(TestWithServers):
                         device_name = scm_dev.split("/")[-1]
                         if device_name not in self.scm_namespace_set:
                             errors.append(
-                                "Cannot find SCM device name {} in expected set {}"
-                                .format(device_name, self.scm_namespace_set))
+                                "Cannot find SCM device name {} in expected set {}".format(
+                                    device_name, self.scm_namespace_set))
                         scm_found = True
 
                 # Verify the bdev_list values are in the NVMe PCI address set.
@@ -235,8 +231,8 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with single AP with and without port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,access_points
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_single
         """
         errors = []
@@ -253,8 +249,8 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with odd number of APs.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,access_points
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_odd
         """
         errors = []
@@ -271,8 +267,8 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with invalid port.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,access_points
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
         """
         errors = []
@@ -294,8 +290,8 @@ class ConfigGenerateOutput(TestWithServers):
         """Test --access-points with the same APs repeated.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,access_points
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
         """
         errors = []
@@ -314,7 +310,7 @@ class ConfigGenerateOutput(TestWithServers):
         3. Call dmg config generate --num-engines=<max_engine + 1> Should fail.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
@@ -345,8 +341,7 @@ class ConfigGenerateOutput(TestWithServers):
                 errors.append(msg)
 
         # Verify that max_engine + 1 fails.
-        result = dmg.config_generate(
-            access_points="wolf-a", num_engines=max_engine + 1)
+        result = dmg.config_generate(access_points="wolf-a", num_engines=max_engine + 1)
         if result.exit_status == 0:
             errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
@@ -363,7 +358,7 @@ class ConfigGenerateOutput(TestWithServers):
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_min_ssds
         """
@@ -430,8 +425,8 @@ class ConfigGenerateOutput(TestWithServers):
         "fabric_iface".
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=hw,large
+        :avocado: tags=control,
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
         # Get necessary storage and network info.
@@ -478,8 +473,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=ib_count + 1,
-            net_class="infiniband")
+            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband")
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
                 ib_count + 1)
@@ -522,8 +516,7 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=eth_count + 1,
-            net_class="ethernet")
+            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet")
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
                 eth_count + 1)

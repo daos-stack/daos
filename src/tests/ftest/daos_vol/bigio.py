@@ -26,7 +26,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=hdf5,vol
+        :avocado: tags=hdf5,daos_vol,vol
         :avocado: tags=DaosVol,test_daos_vol_bigio
         """
         manager = get_job_manager(self, mpi_type="mpich")

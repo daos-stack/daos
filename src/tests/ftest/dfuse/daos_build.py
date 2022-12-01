@@ -13,13 +13,13 @@ from dfuse_test_base import DfuseTestBase
 
 class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
-    """Build DAOS over dfuse
+    """Build DAOS over dfuse.
 
     :avocado: recursive
     """
 
     def test_dfuse_daos_build_wb(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
 
         Use cases:
             Create Pool
@@ -29,83 +29,93 @@ class DaosBuild(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")
 
     def test_dfuse_daos_build_wt(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt
         """
         self.run_build_test("writethrough")
 
     def test_dfuse_daos_build_wt_il(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
 
     def test_dfuse_daos_build_metadata(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_metadata
         """
         self.run_build_test("metadata")
 
     def test_dfuse_daos_build_data(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_data
         """
         self.run_build_test("data")
 
     def test_dfuse_daos_build_nocache(self):
-        """ This test builds DAOS on a dfuse filesystem.
+        """This test builds DAOS on a dfuse filesystem.
+
         Use cases:
             Create Pool
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,dfusedaosbuild
+        :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
         """
         self.run_build_test("nocache")
 
     def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
-        """"Run an actual test from above"""
+        """"Run an actual test from above."""
 
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -176,6 +186,7 @@ class DaosBuild(DfuseTestBase):
         remote_env = {}
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
+        remote_env['COVFILE'] = os.environ['COVFILE']
 
         if intercept:
             remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')

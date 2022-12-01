@@ -72,6 +72,7 @@ extern d_iov_t ds_pool_prop_scrub_mode;	/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
 extern d_iov_t ds_pool_prop_scrub_thresh;	/* uint64_t */
 extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
+extern d_iov_t ds_pool_prop_obj_version;	/* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

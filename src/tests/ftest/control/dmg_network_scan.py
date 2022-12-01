@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -56,7 +55,7 @@ class DmgNetworkScanTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,control,basic
+        :avocado: tags=dmg,control,network_scan,basic
         :avocado: tags=DmgNetworkScanTest,test_dmg_network_scan_basic
         """
         # Get info, both these functions will return a list of NetDev objects

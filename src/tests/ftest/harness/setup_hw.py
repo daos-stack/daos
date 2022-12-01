@@ -19,7 +19,7 @@ class HarnessSetupTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness,harness_setup_test,
+        :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup_hw
         """
         self.assertEqual(self.server_managers[0].storage_prepare_timeout.value, 60,

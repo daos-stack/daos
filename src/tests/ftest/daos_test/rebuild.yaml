@@ -50,13 +50,13 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: False
+    allow_insecure: false
 agent_config:
   transport_config:
-    allow_insecure: False
+    allow_insecure: false
 dmg:
   transport_config:
-    allow_insecure: False
+    allow_insecure: false
 daos_tests:
   num_clients: 1
   num_replicas: 1

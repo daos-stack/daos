@@ -29,7 +29,7 @@ ior:
     ppn: 18
   test_file: daos:/testFile
   repetitions: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     flags: "-v -w -W -k"
   api: DFS

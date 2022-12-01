@@ -289,6 +289,32 @@ class DefaultEnvironment():
         """Fake d_configure_mpi"""
         return DefaultEnvironment()
 
+    def d_setup_go(self):
+        """Fake d_setup_go"""
+        return
+
+    def d_go_bin(self):
+        """Fake d_go_bin"""
+        return 'go'
+
+    def d_program(self, *_args, **_kw):
+        """Fake d_program"""
+
+        return self.Program(*_args, **_kw)
+
+    def d_test_program(self, *_args, **_kw):
+        """Fake d_test_program"""
+
+        return self.d_program(*_args, **_kw)
+
+    def d_static_library(self, *_args, **_kw):
+        """Fake d_static_library"""
+        return self.StaticLibrary(*_args, **_kw)
+
+    def d_library(self, *_args, **_kw):
+        """Fake d_library"""
+        return self.Library(*_args, **_kw)
+
     def compiler_setup(self):
         """Fake compiler_setup"""
         return
@@ -362,6 +388,10 @@ class Configure():
         """Fake CheckFlag"""
         return True
 
+    def CheckGoVersion(self, *_args, **_kw):
+        """Fake CheckGoVersion"""
+        return True
+
     def Finish(self):
         """Fake finish"""
 
@@ -382,6 +412,10 @@ class Dir():
     def srcnode(self):
         """Fake srcnode"""
         return self
+
+
+class Scanner():
+    """Fake Scanner"""
 
 
 class File():

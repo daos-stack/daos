@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,12 +76,12 @@ class DaosAggregationThrottling(IorTestBase):
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
-                                0,                          # write_perf
-                                expected_perf_diff)         # 30% perf difference
+                                0,  # write_perf
+                                expected_perf_diff)  # 30% perf difference
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
-                                1,                          # read_perf
+                                1,  # read_perf
                                 expected_perf_diff)
 
     def verify_performance(self, before_metric, after_metric, read_write_idx, expected_perf_diff):

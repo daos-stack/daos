@@ -79,7 +79,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control
+        :avocado: tags=control,storage_scan,scm
         :avocado: tags=DmgStorageScanSCMTest,test_dmg_storage_scan_scm
         """
         self.verify_dmg_storage_scan(self.verify_storage_scan_scm)

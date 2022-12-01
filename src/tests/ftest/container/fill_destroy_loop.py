@@ -91,7 +91,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=container,pool
+        :avocado: tags=container,pool,fill_cont_pool_stress
         :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
         testloop = self.params.get("testloop", "/run/pool/*")

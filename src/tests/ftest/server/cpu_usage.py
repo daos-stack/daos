@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,8 +64,7 @@ class CPUUsage(IorTestBase):
             float(usage) < usage_limit, "CPU usage is above {}%: {}%".format(usage, usage_limit))
 
     def test_cpu_usage(self):
-        """
-        JIRA ID: DAOS-4826
+        """JIRA ID: DAOS-4826.
 
         Test Description: Test CPU usage of formatted and idle engine.
 

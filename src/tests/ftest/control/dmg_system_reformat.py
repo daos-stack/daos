@@ -28,7 +28,7 @@ class DmgSystemReformatTest(PoolTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,dmg
+        :avocado: tags=control,dmg,system_reformat
         :avocado: tags=DmgSystemReformatTest,test_dmg_system_reformat
         """
         # Create pool using 90% of the available NVMe capacity

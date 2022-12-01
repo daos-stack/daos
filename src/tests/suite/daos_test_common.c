@@ -691,7 +691,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = crt_hlc_get();
+		arg->hce = d_hlc_get();
 	}
 
 	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
@@ -901,6 +901,28 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	rc = system(dmg_cmd);
 	print_message("%s rc %#x\n", dmg_cmd, rc);
 	assert_int_equal(rc, 0);
+}
+
+static int
+daos_dmg_pool_upgrade(const uuid_t pool_uuid, const char *dmg_config)
+{
+	char		dmg_cmd[DTS_CFG_MAX];
+	int		rc;
+
+	/* build and invoke dmg cmd */
+	dts_create_config(dmg_cmd, "dmg pool upgrade " DF_UUIDF, DP_UUID(pool_uuid));
+
+	dts_append_config(dmg_cmd, " -o %s", dmg_config);
+	rc = system(dmg_cmd);
+	print_message("%s rc %#x\n", dmg_cmd, rc);
+	assert_int_equal(rc, 0);
+	return rc;
+}
+
+int
+daos_pool_upgrade(const uuid_t pool_uuid)
+{
+	return daos_dmg_pool_upgrade(pool_uuid, dmg_config_file);
 }
 
 int

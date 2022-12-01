@@ -15,12 +15,12 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubprocessManager
+from dmg_utils import get_dmg_command
+from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, stop_processes, get_display_size, run_pcmd
-from dmg_utils import get_dmg_command
-from run_utils import get_local_host
+from host_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -189,7 +189,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -326,7 +326,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -471,7 +472,7 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.force.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
 

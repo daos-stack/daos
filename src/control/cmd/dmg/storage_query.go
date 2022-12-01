@@ -232,8 +232,8 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	}
 
 	req := &control.SmdManageReq{
+		Operation: control.SetFaultyOp,
 		IDs:       cmd.UUID,
-		SetFaulty: true,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }
@@ -264,9 +264,10 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	}
 
 	req := &control.SmdManageReq{
-		IDs:         cmd.OldDevUUID,
-		ReplaceUUID: cmd.NewDevUUID,
-		NoReint:     cmd.NoReint,
+		Operation:      control.DevReplaceOp,
+		IDs:            cmd.OldDevUUID,
+		ReplaceUUID:    cmd.NewDevUUID,
+		ReplaceNoReint: cmd.NoReint,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }
@@ -286,7 +287,8 @@ type ledManageCmd struct {
 
 type ledIdentifyCmd struct {
 	ledCmd
-	Reset bool `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
+	Timeout uint32 `long:"timeout" description:"Length of time to blink the status LED for"`
+	Reset   bool   `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
 }
 
 // Execute is run when ledIdentifyCmd activates.
@@ -297,12 +299,15 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
 	req := &control.SmdManageReq{
-		IDs: cmd.Args.IDs,
+		Operation:       control.LedBlinkOp,
+		IDs:             cmd.Args.IDs,
+		IdentifyTimeout: cmd.Timeout,
 	}
 	if cmd.Reset {
-		req.ResetLED = true
-	} else {
-		req.Identify = true
+		if cmd.Timeout != 0 {
+			return errors.New("timeout option can not be set at the same time as reset")
+		}
+		req.Operation = control.LedResetOp
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
@@ -319,8 +324,8 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 		return errors.New("neither a pci address or a uuid has been supplied")
 	}
 	req := &control.SmdManageReq{
-		IDs:    cmd.Args.IDs,
-		GetLED: true,
+		Operation: control.LedCheckOp,
+		IDs:       cmd.Args.IDs,
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }

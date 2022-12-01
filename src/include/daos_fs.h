@@ -63,7 +63,7 @@ typedef struct {
 	uint64_t		da_id;
 	/** Default Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
-	/** Default Object Class for all files in the container */
+	/** Default Object Class for all objects in the container */
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
@@ -74,6 +74,8 @@ typedef struct {
 	uint32_t		da_mode;
 	/** Default Object Class for all directories in the container */
 	daos_oclass_id_t	da_dir_oclass_id;
+	/** Default Object Class for all files in the container */
+	daos_oclass_id_t	da_file_oclass_id;
 	/**
 	 * Comma separated hints for POSIX container creation of the format: "type:hint".
 	 * examples include: "file:single,dir:max", "directory:single,file:max", etc.
@@ -156,6 +158,25 @@ dfs_connect(const char *pool, const char *sys, const char *cont, int flags, dfs_
  */
 int
 dfs_disconnect(dfs_t *dfs);
+
+/**
+ * Evict all the container handles from the hashtable and destroy the container.
+ *
+ * \param[in]   pool    Pool label where the container is.
+ * \param[in]	sys	DAOS system name to use for the pool.
+ *			Pass NULL to use the default system.
+ * \param[in]   cont    Container label to destroy.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles from other open calls).
+ *			This parameter will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_destroy(const char *pool, const char *sys, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
@@ -679,6 +700,19 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
 	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
+
+/**
+ * Set the readdir/iterate anchor to start from a specific entry name in a directory object. When
+ * using the anchor in a readdir call, the iteration will start from the position of that entry.
+ *
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	name	Entry name of a file/dir in the open directory where anchor should be set.
+ * \param[out]	anchor	Hash anchor returned for the position of the entry name in \a obj.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
