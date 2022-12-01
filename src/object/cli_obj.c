@@ -3440,9 +3440,9 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
 								&shard_arg->la_recxs[index]);
 
-				/* DAOS-9218: The ouput merged list will latter be reversed.  That
-				 * will be done in the function obj_list_recxs_cb(), when it will
-				 * be dumped into the output buffer.
+				/* DAOS-9218: The output merged list will latter be reversed.  That
+				 * will be done in the function obj_list_recxs_cb(), when the merged
+				 * list will be dumped into the output buffer.
 				 */
 				rc = merge_recx(iter_arg->merged_list,
 						shard_arg->la_recxs[index].rx_idx,
