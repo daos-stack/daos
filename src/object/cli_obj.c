@@ -3440,24 +3440,15 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
 								&shard_arg->la_recxs[index]);
 
+				/* DAOS-9218: The ouput merged list will latter be reversed.  That
+				 * will be done in the function obj_list_recxs_cb(), when it will
+				 * be dumped into the output buffer.
+				 */
 				rc = merge_recx(iter_arg->merged_list,
 						shard_arg->la_recxs[index].rx_idx,
 						shard_arg->la_recxs[index].rx_nr, 0);
 				if (rc)
 					return rc;
-			}
-
-			if (! obj_args->incr_order) {
-				/* Reverse the output merged list */
-				d_list_t	*it = iter_arg->merged_list;
-				d_list_t	*tmp = NULL;
-
-				while (tmp == NULL || it != iter_arg->merged_list) {
-					tmp = it->next;
-					it->next = it->prev;
-					it->prev = tmp;
-					it = tmp;
-				}
 			}
 
 			return 0;
@@ -3986,13 +3977,24 @@ obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	}
 
 	D_ASSERT(obj_is_ec(obj_auxi->obj));
-	d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
-				   recx_list) {
-		if (idx >= *obj_args->nr)
-			break;
-		obj_args->recxs[idx++] = recx->recx;
-		d_list_del(&recx->recx_list);
-		D_FREE(recx);
+	if (obj_args->incr_order) {
+		d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
+					   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
+	} else {
+		d_list_for_each_entry_reverse_safe(recx, tmp, arg->merged_list,
+						   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
 	}
 	anchor_update_check_eof(obj_auxi, obj_args->anchor);
 	*obj_args->nr = idx;
