@@ -415,7 +415,7 @@ ut_setup(struct vea_ut_args *test_args)
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_pool = umempobj_create(pool_file, "vea_ut", 0,
-					     pool_size, 0666);
+					     pool_size, 0666, NULL);
 	if (uma.uma_pool == NULL) {
 		fprintf(stderr, "create pmemobj pool error\n");
 		return -1;

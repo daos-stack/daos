@@ -114,8 +114,10 @@ dir_fsync(const char *path)
 
 	fd = open(path, O_RDONLY|O_DIRECTORY);
 	if (fd < 0) {
-		D_ERROR("failed to open %s for sync: %d\n", path, errno);
-		return daos_errno2der(errno);
+		rc = errno;
+		D_CDEBUG(rc == ENOENT, DB_MGMT, DLOG_ERR, "failed to open %s for sync: %d\n", path,
+			 rc);
+		return daos_errno2der(rc);
 	}
 
 	rc = fsync(fd);
@@ -171,7 +173,7 @@ tgt_kill_pool(void *args)
 {
 	struct d_uuid	*id = args;
 
-	return vos_pool_kill(id->uuid);
+	return vos_pool_kill(id->uuid, 0);
 }
 
 /**
@@ -372,7 +374,6 @@ ds_mgmt_tgt_setup(void)
 	/* create lock/cv and hash table to track outstanding pool creates */
 	D_ALLOC_PTR(pooltgts);
 	if (pooltgts == NULL) {
-		D_ERROR("failed to allocate pooltgts struct\n");
 		D_GOTO(err_zombies, rc = -DER_NOMEM);
 	}
 

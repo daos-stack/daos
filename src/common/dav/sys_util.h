@@ -5,8 +5,8 @@
  * sys_util.h -- internal utility wrappers around system functions
  */
 
-#ifndef PMDK_SYS_UTIL_H
-#define PMDK_SYS_UTIL_H 1
+#ifndef __DAOS_COMMON_SYS_UTIL_H
+#define __DAOS_COMMON_SYS_UTIL_H 1
 
 #include <errno.h>
 
@@ -319,4 +319,4 @@ util_cond_destroy(os_cond_t *__restrict cond)
 		FATAL("!os_cond_destroy");
 }
 
-#endif
+#endif /* __DAOS_COMMON_SYS_UTIL_H */

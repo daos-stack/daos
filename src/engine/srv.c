@@ -492,6 +492,16 @@ dss_srv_handler(void *arg)
 	}
 
 	dmi->dmi_xstream = dx;
+
+	if (dx->dx_xs_id == 0) {
+		rc = vos_db_init(dss_storage_path);
+		if (rc) {
+			D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
+			D_GOTO(nvme_fini, rc);
+		}
+		smd_init(vos_db_get());
+	}
+
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
@@ -543,6 +553,11 @@ dss_srv_handler(void *arg)
 		dmi->dmi_dp = NULL;
 	}
 
+	if (dx->dx_xs_id == 0) {
+		smd_fini();
+		vos_db_fini();
+	}
+
 nvme_fini:
 	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
@@ -574,7 +589,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 
 	D_ALLOC_PTR(dx);
 	if (dx == NULL) {
-		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
@@ -1228,26 +1242,6 @@ dss_srv_fini(bool force)
 	return 0;
 }
 
-static int dss_smd_init(void)
-{
-	int rc;
-
-	rc = vos_db_init(dss_storage_path);
-	if (rc)
-		return rc;
-	rc = smd_init(vos_db_get());
-	if (rc)
-		vos_db_fini();
-
-	return rc;
-}
-
-static void dss_smd_fini(void)
-{
-	vos_db_fini();
-	smd_fini();
-}
-
 int
 dss_srv_init(void)
 {
@@ -1305,7 +1299,6 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
-	bio_register_smd_ops(dss_smd_init, dss_smd_fini);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();

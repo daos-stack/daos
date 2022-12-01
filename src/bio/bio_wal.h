@@ -61,20 +61,20 @@ struct wal_trans_head {
 	uint64_t	th_id;		/* Transaction ID */
 	uint32_t	th_tot_ents;	/* Total entries */
 	uint32_t	th_tot_payload;	/* Total payload size in bytes */
-};
+} __attribute__((packed));
 
 /* WAL transaction entry */
 struct wal_trans_entry {
 	uint64_t	te_off;		/* Offset within meta blob, in bytes */
-	uint16_t	te_type;	/* Operation type, see UMEM_ACT_XXX */
-	uint16_t	te_len;		/* Data length in bytes */
+	uint32_t	te_len;		/* Data length in bytes */
 	uint32_t	te_data;	/* Various inline data */
-};
+	uint16_t	te_type;	/* Operation type, see UMEM_ACT_XXX */
+} __attribute__((packed));
 
 /* WAL transaction tail */
 struct wal_trans_tail {
 	uint32_t	tt_csum;	/* Checksum of WAL transaction */
-};
+} __attribute__((packed));
 
 /* In-memory WAL super information */
 struct wal_super_info {
@@ -100,6 +100,7 @@ struct bio_meta_context {
 	struct wal_super_info	 mc_wal_info;	/* WAL blob super information */
 	struct hash_ft		*mc_csum_algo;
 	void			*mc_csum_ctx;
+	unsigned int		 mc_is_sysdb:1;
 };
 
 struct meta_fmt_info {

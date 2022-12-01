@@ -17,6 +17,8 @@
 #include <spdk/thread.h>
 #include <spdk/blob.h>
 
+#include "smd.pb-c.h"
+
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */
@@ -308,12 +310,10 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	/*
-	 * If a VMD LED event takes place, the original LED state and start
-	 * time will be saved in order to restore the LED to its original
-	 * state after allotted time.
+	 * If a VMD LED identify event takes place with a prescribed duration, the end time will be
+	 * saved and when it is reached the prior LED state will be restored.
 	 */
-	int			 bb_led_state;
-	uint64_t		 bb_led_start_time;
+	uint64_t		 bb_led_expiry_time;
 	unsigned int		 bb_removed:1,
 				 bb_replacing:1,
 				 bb_trigger_reint:1,
@@ -386,7 +386,6 @@ struct bio_xs_context {
 /* Per VOS instance I/O context */
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
-	struct umem_instance	*bic_umem;
 	struct spdk_blob	*bic_blob;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
@@ -394,7 +393,8 @@ struct bio_io_context {
 	uint32_t		 bic_io_unit;
 	uuid_t			 bic_pool_id;
 	unsigned int		 bic_opening:1,
-				 bic_closing:1;
+				 bic_closing:1,
+				 bic_dummy:1;
 };
 
 /* A contiguous DMA buffer region reserved by certain io descriptor */
@@ -431,6 +431,7 @@ struct bio_rsrvd_dma {
 
 /* I/O descriptor */
 struct bio_desc {
+	struct umem_instance	*bd_umem;
 	struct bio_io_context	*bd_ctxt;
 	/* DMA buffers reserved by this io descriptor */
 	struct bio_rsrvd_dma	 bd_rsrvd;
@@ -519,6 +520,14 @@ struct media_error_msg {
 	int			 mem_tgt_id;
 };
 
+struct bio_faulty_criteria {
+	uint32_t	fc_max_io_errs;
+	uint32_t	fc_max_csum_errs;
+	bool		fc_enabled;
+};
+
+extern struct bio_faulty_criteria	glb_criteria;
+
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
@@ -547,8 +556,8 @@ void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
-void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs,
-			struct umem_instance *umm);
+void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
+uint32_t default_cluster_sz(void);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -560,6 +569,7 @@ int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
 		   uint64_t end, uint8_t media);
 int dma_buffer_grow(struct bio_dma_buffer *buf, unsigned int cnt);
+void iod_dma_wait(struct bio_desc *biod);
 
 static inline struct bio_dma_buffer *
 iod_dma_buf(struct bio_desc *biod)
@@ -596,18 +606,20 @@ int bulk_cache_create(struct bio_dma_buffer *bdb);
 void bulk_cache_destroy(struct bio_dma_buffer *bdb);
 int bulk_reclaim_chunk(struct bio_dma_buffer *bdb,
 		       struct bio_bulk_group *ex_grp);
+
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_xs_context *xs_ctxt, uint64_t now);
+void bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t now);
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
+void auto_faulty_detect(struct bio_blobstore *bbs);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);
-int bio_blob_open(struct bio_io_context *ctxt, bool async, bool is_sys,
+int bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		  enum smd_dev_type st, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
@@ -617,7 +629,6 @@ int bio_bs_state_transit(struct bio_blobstore *bbs);
 int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 
 /* bio_device.c */
-void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */

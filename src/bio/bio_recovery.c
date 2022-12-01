@@ -257,7 +257,7 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 			continue;
 
 		/* fix sysdb */
-		bio_blob_open(ioc, true, false, st, SPDK_BLOBID_INVALID);
+		bio_blob_open(ioc, true, 0, st, SPDK_BLOBID_INVALID);
 	}
 
 	if (*closed_blobs)
@@ -603,6 +603,7 @@ bio_media_error(void *msg_arg)
 		break;
 	}
 
+	auto_faulty_detect(mem->mem_bs);
 
 	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
 		goto out;

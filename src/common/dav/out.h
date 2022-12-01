@@ -5,15 +5,19 @@
  * out.h -- definitions for "out" module
  */
 
-#ifndef PMDK_OUT_H
-#define PMDK_OUT_H 1
+#ifndef __DAOS_COMMON_OUT_H
+#define __DAOS_COMMON_OUT_H 1
 
 #include <daos/debug.h>
+#include "util.h"
 
 #define DAV_LOG_FAC DB_TRACE
 
+/* enable extra debug messages and extra checks */
+/*#define DAV_EXTRA_DEBUG*/
+
 #ifndef EVALUATE_DBG_EXPRESSIONS
-#if defined(DEBUG) || defined(__clang_analyzer__) || defined(__COVERITY__) ||\
+#if defined(DAV_EXTRA_DEBUG) || defined(__clang_analyzer__) || defined(__COVERITY__) ||\
 	defined(__KLOCWORK__)
 #define EVALUATE_DBG_EXPRESSIONS 1
 #else
@@ -35,11 +39,12 @@
 } while (0)
 
 /* produce debug/trace output */
-#define DAV_DEBUG(fmt, ...) do {			\
-	if (!EVALUATE_DBG_EXPRESSIONS)			\
-		break;					\
-	D_DEBUG(DAV_LOG_FAC, fmt "\n", ## __VA_ARGS__);	\
-} while (0)
+#if defined(DAV_EXTRA_DEBUG)
+#define DAV_DBG(fmt, ...)
+	D_DEBUG(DAV_LOG_FAC, fmt "\n", ## __VA_ARGS__)
+#else
+#define DAV_DBG(fmt, ...) SUPPRESS_UNUSED(__VA_ARGS__)
+#endif
 
 /* produce output and exit */
 #define FATAL(fmt, ...)					\
@@ -95,6 +100,6 @@
 	} while (0)
 
 #define ERR(fmt, ...)\
-	D_ERROR(fmt, ## __VA_ARGS__)
+	D_ERROR(fmt "\n", ## __VA_ARGS__)
 
-#endif
+#endif /* __DAOS_COMMON_OUT_H */

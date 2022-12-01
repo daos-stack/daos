@@ -464,7 +464,7 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	it = &bag->bag_items[bag->bag_item_last];
 	if (DAOS_ON_VALGRIND)
 		umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
-	umem_atomic_copy(umm, it, item, sizeof(*it));
+	umem_atomic_copy(umm, it, item, sizeof(*it), UMEM_COMMIT_DEFER);
 
 	last = bag->bag_item_last + 1;
 	if (last == bin->bin_bag_size)

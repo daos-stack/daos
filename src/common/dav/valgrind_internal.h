@@ -5,11 +5,11 @@
  * valgrind_internal.h -- internal definitions for valgrind macros
  */
 
-#ifndef PMDK_VALGRIND_INTERNAL_H
-#define PMDK_VALGRIND_INTERNAL_H 1
+#ifndef __DAOS_COMMON_VALGRIND_INTERNAL_H
+#define __DAOS_COMMON_VALGRIND_INTERNAL_H 1
 
 /* REVISIT: VALGRIND support not enabled for now. */
-#if 0
+#if 0 /* DAOS_ON_VALGRIND */
 #if !defined(_WIN32) && !defined(__FreeBSD__) && !defined(__riscv)
 #ifndef VALGRIND_ENABLED
 #define VALGRIND_ENABLED 1
@@ -134,15 +134,18 @@ extern unsigned _On_drd_or_hg;
 extern unsigned _On_pmemcheck;
 #define On_pmemcheck __builtin_expect(_On_pmemcheck, 0)
 
-#include "valgrind/pmemcheck.h"
-
-void pobj_emit_log(const char *func, int order);
-void pmem_emit_log(const char *func, int order);
-void pmem2_emit_log(const char *func, int order);
 extern int _Pmreorder_emit;
-
 #define Pmreorder_emit __builtin_expect(_Pmreorder_emit, 0)
 
+void util_emit_log(const char *lib, const char *func, int order);
+
+static inline void
+pobj_emit_log(const char *func, int order)
+{
+	util_emit_log("libdaos_common_pmem.so", func, order);
+}
+
+#include "valgrind/pmemcheck.h"
 #define VALGRIND_REGISTER_PMEM_MAPPING(addr, len) do {\
 	if (On_pmemcheck)\
 		VALGRIND_PMC_REGISTER_PMEM_MAPPING((addr), (len));\
@@ -258,24 +261,8 @@ extern int _Pmreorder_emit;
 	if (Pmreorder_emit)\
 		pobj_emit_log(__func__, 1);\
 } while (0)
-#define PMEM_API_START() do {\
-	if (Pmreorder_emit)\
-		pmem_emit_log(__func__, 0);\
-} while (0)
-#define PMEM_API_END() do {\
-	if (Pmreorder_emit)\
-		pmem_emit_log(__func__, 1);\
-} while (0)
-#define PMEM2_API_START(func_name) do {\
-	if (Pmreorder_emit)\
-		pmem2_emit_log(func_name, 0);\
-} while (0)
-#define PMEM2_API_END(func_name) do {\
-	if (Pmreorder_emit)\
-		pmem2_emit_log(func_name, 1);\
-} while (0)
 
-#else
+#else /* VG_PMEMCHECK_ENABLED */
 
 #define On_pmemcheck (0)
 #define Pmreorder_emit (0)
@@ -365,14 +352,7 @@ extern int _Pmreorder_emit;
 
 #define PMEMOBJ_API_END() do {} while (0)
 
-#define PMEM_API_START() do {} while (0)
-
-#define PMEM_API_END() do {} while (0)
-
-#define PMEM2_API_START(func_name) { (void) (func_name); }
-
-#define PMEM2_API_END(func_name) { (void) (func_name); }
-#endif
+#endif /* VG_PMEMCHECK_ENABLED */
 
 #if VG_MEMCHECK_ENABLED
 
@@ -436,7 +416,7 @@ extern unsigned _On_memcheck;
 		VALGRIND_CHECK_MEM_IS_ADDRESSABLE(addr, len);\
 } while (0)
 
-#else
+#else /* VG_MEMCHECK_ENABLED */
 
 #define On_memcheck (0)
 
@@ -472,6 +452,6 @@ extern unsigned _On_memcheck;
 #define VALGRIND_DO_CHECK_MEM_IS_ADDRESSABLE(addr, len)\
 	do { (void) (addr); (void) (len); } while (0)
 
-#endif
+#endif /* VG_MEMCHECK_ENABLED */
 
-#endif
+#endif /* __DAOS_COMMON_VALGRIND_INTERNAL_H */

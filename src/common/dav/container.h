@@ -5,14 +5,10 @@
  * container.h -- internal definitions for block containers
  */
 
-#ifndef LIBPMEMOBJ_CONTAINER_H
-#define LIBPMEMOBJ_CONTAINER_H 1
+#ifndef __DAOS_COMMON_CONTAINER_H
+#define __DAOS_COMMON_CONTAINER_H 1
 
 #include "memblock.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct block_container {
 	const struct block_container_ops *c_ops;
@@ -41,8 +37,8 @@ struct block_container_ops {
 	void (*destroy)(struct block_container *c);
 };
 
-#ifdef __cplusplus
-}
-#endif
+struct palloc_heap;
+struct block_container *container_new_ravl(struct palloc_heap *heap);
+struct block_container *container_new_seglists(struct palloc_heap *heap);
 
-#endif /* LIBPMEMOBJ_CONTAINER_H */
+#endif /* __DAOS_COMMON_CONTAINER_H */

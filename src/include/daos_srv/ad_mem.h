@@ -70,30 +70,6 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits);
 int
 ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags);
 
-/**
- * query action number in redo list.
- */
-uint32_t
-ad_tx_redo_act_nr(struct ad_tx *tx);
-
-/**
- * query payload length in redo list.
- */
-uint32_t
-ad_tx_redo_payload_len(struct ad_tx *tx);
-
-/**
- * get first action pointer, NULL for list empty.
- */
-struct umem_action *
-ad_tx_redo_act_first(struct ad_tx *tx);
-
-/**
- * get next action pointer, NULL for done or list empty.
- */
-struct umem_action *
-ad_tx_redo_act_next(struct ad_tx *tx);
-
 static inline int
 ad_tx_decrease(struct ad_tx *tx, int32_t *addr)
 {
@@ -110,13 +86,14 @@ ad_tx_increase(struct ad_tx *tx, int32_t *addr)
 	return ad_tx_assign(tx, addr, sizeof(val), val + 1);
 }
 
-int ad_blob_prep_create(char *path, daos_size_t size, struct ad_blob_handle *bh);
-int ad_blob_post_create(struct ad_blob_handle bh);
-int ad_blob_prep_open(char *path, struct ad_blob_handle *bh);
-int ad_blob_post_open(struct ad_blob_handle bh);
+int ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
+		   struct ad_blob_handle *bh);
+int ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
+		 struct ad_blob_handle *bh);
 int ad_blob_close(struct ad_blob_handle bh);
 int ad_blob_destroy(struct ad_blob_handle bh);
-struct umem_store *ad_blob_hdl2store(struct ad_blob_handle bh);
+void *ad_root(struct ad_blob_handle bh, size_t size);
+void *ad_base(struct ad_blob_handle bh);
 
 #define AD_ARENA_ANY	(~0U)
 
@@ -134,6 +111,8 @@ enum {
 struct ad_reserv_act {
 	struct ad_arena		*ra_arena;
 	struct ad_group		*ra_group;
+	uint64_t		 ra_off;
+	uint64_t		 ra_size;
 	/** reserved allocation bit (in group) */
 	int			 ra_bit;
 };
@@ -144,6 +123,18 @@ struct ad_group_spec {
 	uint32_t		gs_unit;
 	/** number of units in each group */
 	uint32_t		gs_count;
+};
+
+/** reserved arena types */
+enum {
+	ARENA_TYPE_DEF		= 0,
+	ARENA_TYPE_LARGE	= 1,
+	/**
+	 * type={0, 1, 2, 3} are for internal usage, customized arena should between
+	 * ARENA_TYPE_BASE and ARENA_TYPE_MAX.
+	 */
+	ARENA_TYPE_BASE		= 4,
+	ARENA_TYPE_MAX		= 31,
 };
 
 int ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
@@ -164,7 +155,7 @@ umm2ad_blob_hdl(struct umem_instance *umm)
 {
 	struct ad_blob_handle	hdl;
 
-	hdl.bh_blob = (struct ad_blob *)umm->umm_pool; /* FIXME */
+	hdl.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
 	return hdl;
 }
 

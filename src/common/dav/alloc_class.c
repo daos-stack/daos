@@ -81,7 +81,7 @@ static const struct {
 
 /*
  * Every allocation has to be a multiple of at least 8 because we need to
- * ensure proper alignment of every pmem structure.
+ * ensure proper alignment of every persistent structure.
  */
 #define ALLOC_BLOCK_SIZE 16
 
@@ -175,7 +175,7 @@ alloc_class_new(int id, struct alloc_class_collection *ac,
 	size_t unit_size, size_t alignment,
 	uint32_t size_idx)
 {
-	DAV_DEBUG("alloc_class_new id:%d\n",
+	DAV_DBG("alloc_class_new id:%d\n",
 		  (type == CLASS_HUGE) ? DEFAULT_ALLOC_CLASS_ID : id);
 
 	struct alloc_class *c;
@@ -256,7 +256,7 @@ void
 alloc_class_delete(struct alloc_class_collection *ac,
 	struct alloc_class *c)
 {
-	DAV_DEBUG("alloc_class_delete: %d\n", c->id);
+	DAV_DBG("alloc_class_delete: %d\n", c->id);
 
 	ac->aclasses[c->id] = NULL;
 	D_FREE(c);
@@ -491,7 +491,7 @@ alloc_class_collection_new()
 	ac->last_run_max_size = theoretical_run_max_size <= MAX_RUN_SIZE ?
 		theoretical_run_max_size : MAX_RUN_SIZE;
 
-#ifdef DEBUG
+#ifdef DAV_EXTRA_DEBUG
 	/*
 	 * Verify that each bucket's unit size points back to the bucket by the
 	 * bucket map. This must be true for the default allocation classes,
@@ -561,7 +561,7 @@ alloc_class_assign_by_size(struct alloc_class_collection *ac,
 		&ac->class_map_by_alloc_size[class_map_index],
 		MAX_ALLOCATION_CLASSES, c->id);
 
-	DAV_DEBUG("alloc_class_assign_by_size: %zu id:%d",
+	DAV_DBG("alloc_class_assign_by_size: %zu id:%d",
 		  size, c->id);
 
 	return c;

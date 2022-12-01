@@ -28,7 +28,7 @@ class StorageTiers(TestWithoutServers):
         :avocado: tags=all,pr
         :avocado: tags=vm
         :avocado: tags=server,storage,storage_tiers
-        :avocado: tags=test_tiers
+        :avocado: tags=StorageTiers,test_tiers
         """
         expected = []
         for engine in range(2):

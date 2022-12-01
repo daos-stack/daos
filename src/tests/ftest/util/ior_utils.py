@@ -3,6 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import re
 import uuid
 from enum import IntEnum
@@ -163,6 +164,9 @@ class IorCommand(SubProcessCommand):
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
+
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""

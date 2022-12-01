@@ -260,7 +260,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 
 	D_ALLOC_PTR(entry);
 	if (entry == NULL) {
-		D_ERROR("Failed to allocate dedup entry\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&entry->de_link);
@@ -268,7 +267,6 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	D_ASSERT(csum_len != 0);
 	D_ALLOC(entry->de_csum_buf, csum_len);
 	if (entry->de_csum_buf == NULL) {
-		D_ERROR("Failed to allocate csum buf "DF_U64"\n", csum_len);
 		D_FREE(entry);
 		return;
 	}
@@ -403,7 +401,7 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 
 	bsgl_dup->bs_nr_out = bsgl->bs_nr_out;
 
-	bioc = bio_mc2data(ioc->ic_cont->vc_pool->vp_meta_context);
+	bioc = vos_data_ioctxt(ioc->ic_cont->vc_pool);
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov	*biov = &bsgl->bs_iovs[i];
 		struct bio_iov	*biov_dup = &bsgl_dup->bs_iovs[i];
@@ -422,6 +420,8 @@ vos_dedup_dup_bsgl(struct vos_io_context *ioc, unsigned int sgl_idx,
 		if (buf == NULL) {
 			D_ERROR("Failed to alloc "DF_U64" bytes\n",
 				bio_iov2len(biov));
+			/* clear original/copied buffer addr */
+			biov_dup->bi_buf = NULL;
 			return -DER_NOMEM;
 		}
 		ioc->ic_dedup_bufs[*buf_idx] = buf;
@@ -681,9 +681,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	}
 
 	cont = vos_hdl2cont(coh);
-	bioc = bio_mc2data(cont->vc_pool->vp_meta_context);
-	D_ASSERT(bioc != NULL);
-	ioc->ic_biod = bio_iod_alloc(bioc, iod_nr,
+	bioc = vos_data_ioctxt(cont->vc_pool);
+	ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), iod_nr,
 			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
 	if (ioc->ic_biod == NULL) {
 		rc = -DER_NOMEM;
@@ -2362,7 +2361,7 @@ abort:
 		err = vos_ioc_mark_agg(ioc);
 
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
-			 &ioc->ic_blk_exts, tx_started, err);
+			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
@@ -2659,7 +2658,7 @@ vos_dedup_verify(daos_handle_t ioh)
 
 			umem_atomic_copy(vos_ioc2umm(ioc),
 					 biov->bi_buf, biov_dup->bi_buf,
-					 bio_iov2len(biov));
+					 bio_iov2len(biov), UMEM_COMMIT_IMMEDIATE);
 
 			/* For error cleanup */
 			biov_dup->bi_addr.ba_off = biov->bi_addr.ba_off;

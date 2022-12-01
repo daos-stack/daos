@@ -12,6 +12,7 @@
 #include "util.h"
 #include "sys_util.h"
 #include "ravl.h"
+#include "os_thread.h"
 #include "valgrind_internal.h"
 
 #define THRESHOLD_MUL 4

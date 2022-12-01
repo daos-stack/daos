@@ -26,7 +26,7 @@ clogs_extend_redo(struct ulog **redo, uint64_t gen_num)
 {
 	size_t size = SIZEOF_ALIGNED_ULOG(LANE_REDO_EXTERNAL_SIZE);
 
-	D_ALIGNED_ALLOC(*redo, CACHELINE_SIZE, size);
+	D_ALIGNED_ALLOC_NZ(*redo, CACHELINE_SIZE, size);
 	if (*redo == NULL)
 		return -1;
 
@@ -41,7 +41,7 @@ clogs_extend_undo(struct ulog **undo, uint64_t gen_num)
 {
 	size_t size = TX_DEFAULT_RANGE_CACHE_SIZE;
 
-	D_ALIGNED_ALLOC(*undo, CACHELINE_SIZE, size);
+	D_ALIGNED_ALLOC_NZ(*undo, CACHELINE_SIZE, size);
 	if (*undo == NULL)
 		return -1;
 
@@ -55,30 +55,20 @@ int
 dav_create_clogs(dav_obj_t *hdl)
 {
 
-	ulog_construct_new((struct ulog *)&hdl->clogs.internal,
-		LANE_REDO_INTERNAL_SIZE, 0, 0);
 	ulog_construct_new((struct ulog *)&hdl->clogs.external,
 		LANE_REDO_EXTERNAL_SIZE, 0, 0);
 	ulog_construct_new((struct ulog *)&hdl->clogs.undo,
 		LANE_UNDO_SIZE, 0, 0);
 
-	hdl->internal = operation_new((struct ulog *)&hdl->clogs.internal,
-		LANE_REDO_INTERNAL_SIZE, NULL, NULL, &hdl->p_ops, LOG_TYPE_REDO);
-	if (hdl->internal == NULL)
-		return -1;
-
 	hdl->external = operation_new((struct ulog *)&hdl->clogs.external,
 		LANE_REDO_EXTERNAL_SIZE, clogs_extend_redo, clogs_extend_free,
 		&hdl->p_ops, LOG_TYPE_REDO);
-	if (hdl->external == NULL) {
-		operation_delete(hdl->internal);
+	if (hdl->external == NULL)
 		return -1;
-	}
 	hdl->undo = operation_new((struct ulog *)&hdl->clogs.undo,
 		LANE_UNDO_SIZE, clogs_extend_undo, clogs_extend_free,
 		&hdl->p_ops, LOG_TYPE_UNDO);
 	if (hdl->undo == NULL) {
-		operation_delete(hdl->internal);
 		operation_delete(hdl->external);
 		return -1;
 	}
@@ -88,7 +78,6 @@ dav_create_clogs(dav_obj_t *hdl)
 void
 dav_destroy_clogs(dav_obj_t *hdl)
 {
-	operation_delete(hdl->internal);
 	operation_free_logs(hdl->external);
 	operation_delete(hdl->external);
 	operation_free_logs(hdl->undo);
@@ -99,7 +88,6 @@ int
 dav_hold_clogs(dav_obj_t *hdl)
 {
 	if (hdl->nested_tx++ == 0) {
-		operation_init(hdl->internal);
 		operation_init(hdl->external);
 		operation_init(hdl->undo);
 	}

@@ -15,7 +15,6 @@
 #include <gurt/list.h>
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/daos_engine.h>
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,
@@ -46,6 +45,7 @@ struct smd_pool_info {
 	uint64_t	*spi_blobs[SMD_DEV_TYPE_MAX];
 };
 
+struct sys_db;
 /**
  * Initialize SMD store, create store if it's not existing
  *
@@ -156,6 +156,10 @@ int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
 int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
 		     enum smd_dev_type smd_type, uint64_t blob_sz);
 
+/* Assign a blob to a RDB pool target */
+int smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
+		    enum smd_dev_type smd_type, uint64_t blob_sz);
+
 /**
  * Unassign a VOS pool target
  *
@@ -166,6 +170,9 @@ int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
  * \return			Zero on success, negative value on error
  */
 int smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type smd_type);
+
+/* Unassign a RDB pool target */
+int smd_rdb_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type smd_type);
 
 /**
  * Get pool info, caller is responsible to free @pool_info
@@ -188,6 +195,10 @@ int smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
  */
 int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id,
 		      enum smd_dev_type smd_type, uint64_t *blob_id);
+
+/* Get blob ID mapped to RDB:target */
+int smd_rdb_get_blob(uuid_t pool_id, uint32_t tgt_id,
+		     enum smd_dev_type smd_type, uint64_t *blob_id);
 
 /**
  * Get pool info, caller is responsible to free list items

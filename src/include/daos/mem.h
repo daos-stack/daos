@@ -30,14 +30,106 @@ int umempobj_settings_init(void);
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
 
-struct umem_pool;
+struct umem_wal_tx;
+
+struct umem_wal_tx_ops {
+	/**
+	 * Get number of umem_actions in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	uint32_t	(*wtx_act_nr)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get payload size of umem_actions in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	uint32_t	(*wtx_payload_sz)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get the first umem_action in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	struct umem_action *	(*wtx_act_first)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get the next umem_action in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	struct umem_action *	(*wtx_act_next)(struct umem_wal_tx *tx);
+};
+
+#define UTX_PRIV_SIZE	(256)
+struct umem_wal_tx {
+	struct umem_wal_tx_ops	*utx_ops;
+	int			 utx_stage;	/* enum umem_pobj_tx_stage */
+	uint64_t		 utx_id;
+	/* umem class specific TX data */
+	struct {
+		char		 utx_space[UTX_PRIV_SIZE];
+	}			 utx_private;
+};
+
+/** Describing a storage region for I/O */
+struct umem_store_region {
+	/** start offset of the region */
+	daos_off_t	sr_addr;
+	/** size of the region */
+	daos_size_t	sr_size;
+};
+
+/** I/O descriptor, it can include arbitrary number of storage regions */
+struct umem_store_iod {
+	/* number of regions */
+	int				 io_nr;
+	/** embedded one for single region case */
+	struct umem_store_region	 io_region;
+	struct umem_store_region	*io_regions;
+};
+
+struct umem_store;
+/* TODO: sgl read/write, replay, id_compare, make wal_reserve/subumit generic */
+struct umem_store_ops {
+	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
+			   d_sg_list_t *sgl);
+	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
+			    d_sg_list_t *sgl);
+	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
+	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
+				 void *data_iod);
+};
+
+struct umem_store {
+	/**
+	 * Base address and size of the umem storage, umem allocator manages space within
+	 * this range.
+	 */
+	daos_off_t		 stor_addr;
+	daos_size_t		 stor_size;
+	daos_size_t		 stor_blk_size;
+	/** private data passing between layers */
+	void			*stor_priv;
+	/**
+	 * Callbacks provided by upper level stack, umem allocator uses them to operate
+	 * the storage device.
+	 */
+	struct umem_store_ops	*stor_ops;
+};
+
+struct umem_pool {
+	void			*up_priv;
+	struct umem_store	 up_store;
+};
 
 /* umem persistent object functions */
 struct umem_pool *umempobj_create(const char *path, const char *layout_name,
 				  int prop_flags, size_t poolsize,
-				  mode_t mode);
+				  mode_t mode, struct umem_store *store);
 struct umem_pool *umempobj_open(const char *path, const char *layout_name,
-				int prop_flags);
+				int prop_flags, struct umem_store *store);
 void  umempobj_close(struct umem_pool *pool);
 void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
 int   umempobj_get_heapusage(struct umem_pool *pool,
@@ -154,17 +246,6 @@ typedef enum {
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
 
-#define UTX_PRIV_SIZE	(256)
-struct umem_tx {
-	struct umem_instance	*utx_umm;
-	int			 utx_stage;	/* enum umem_pobj_tx_stage */
-	uint64_t		 utx_id;
-	/* umem class specific TX data */
-	struct {
-		char		 utx_space[UTX_PRIV_SIZE];
-	}			 utx_private;
-};
-
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
@@ -205,6 +286,13 @@ struct umem_instance;
 /* type num used by umem ops */
 enum {
 	UMEM_TYPE_ANY,
+};
+
+/* Hints for umem atomic copy operation primarily for bmem implementation */
+enum acopy_hint {
+	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
+	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
+	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
 };
 
 typedef struct {
@@ -265,7 +353,7 @@ typedef struct {
 	int		 (*mo_tx_begin)(struct umem_instance *umm,
 					struct umem_tx_stage_data *txd);
 	/** commit memory transaction */
-	int		 (*mo_tx_commit)(struct umem_instance *umm);
+	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
 #ifdef DAOS_PMEM_BUILD
 	/** get TX stage */
@@ -317,10 +405,11 @@ typedef struct {
 	 * \param dest	[IN]	destination address
 	 * \param src	[IN]	source address
 	 * \param len	[IN]	length of data to be copied.
+	 * \param hint	[IN]	hint on when to persist.
 	 */
 	 void *		(*mo_atomic_copy)(struct umem_instance *umem,
 					  void *dest, const void *src,
-					  size_t len);
+					  size_t len, enum acopy_hint hint);
 
 	/** free umoff atomically */
 	int		 (*mo_atomic_free)(struct umem_instance *umm,
@@ -347,33 +436,6 @@ typedef struct {
 	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
 					   size_t size);
 
-	/**
-	 * Get number of umem_actions in TX redo list.
-	 *
-	 * \param tx	[IN]	umem_rx pointer
-	 */
-	uint32_t	(*mo_tx_act_nr)(struct umem_tx *tx);
-
-	/**
-	 * Get payload size of umem_actions in TX redo list.
-	 *
-	 * \param tx	[IN]	umem_rx pointer
-	 */
-	uint32_t	(*mo_tx_payload_sz)(struct umem_tx *tx);
-
-	/**
-	 * Get the first umem_action in TX redo list.
-	 *
-	 * \param tx	[IN]	umem_rx pointer
-	 */
-	struct umem_action *	(*mo_tx_act_first)(struct umem_tx *tx);
-
-	/**
-	 * Get the next umem_action in TX redo list.
-	 *
-	 * \param tx	[IN]	umem_rx pointer
-	 */
-	struct umem_action *	(*mo_tx_act_next)(struct umem_tx *tx);
 #endif
 	/**
 	 * Add one commit or abort callback to current transaction.
@@ -583,12 +645,18 @@ umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 }
 
 static inline int
-umem_tx_commit(struct umem_instance *umm)
+umem_tx_commit_ex(struct umem_instance *umm, void *data)
 {
 	if (umm->umm_ops->mo_tx_commit)
-		return umm->umm_ops->mo_tx_commit(umm);
+		return umm->umm_ops->mo_tx_commit(umm, data);
 	else
 		return 0;
+}
+
+static inline int
+umem_tx_commit(struct umem_instance *umm)
+{
+	return umem_tx_commit_ex(umm, NULL);
 }
 
 static inline int
@@ -601,12 +669,18 @@ umem_tx_abort(struct umem_instance *umm, int err)
 }
 
 static inline int
-umem_tx_end(struct umem_instance *umm, int err)
+umem_tx_end_ex(struct umem_instance *umm, int err, void *data)
 {
 	if (err)
 		return umem_tx_abort(umm, err);
 	else
-		return umem_tx_commit(umm);
+		return umem_tx_commit_ex(umm, data);
+}
+
+static inline int
+umem_tx_end(struct umem_instance *umm, int err)
+{
+	return umem_tx_end_ex(umm, err, NULL);
 }
 
 #ifdef DAOS_PMEM_BUILD
@@ -621,32 +695,32 @@ umem_tx_stage(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_stage();
 }
 
-/* Get number of umem_actions in TX redo list */
+/* Get number of umem_actions in TX redo log */
 static inline uint32_t
-umem_tx_act_nr(struct umem_tx *tx)
+umem_tx_act_nr(struct umem_wal_tx *tx)
 {
-	return tx->utx_umm->umm_ops->mo_tx_act_nr(tx);
+	return tx->utx_ops->wtx_act_nr(tx);
 }
 
 /* Get payload size of umem_actions in TX redo list */
 static inline uint32_t
-umem_tx_act_payload_sz(struct umem_tx *tx)
+umem_tx_act_payload_sz(struct umem_wal_tx *tx)
 {
-	return tx->utx_umm->umm_ops->mo_tx_payload_sz(tx);
+	return tx->utx_ops->wtx_payload_sz(tx);
 }
 
 /* Get the first umem_action in TX redo list */
 static inline struct umem_action *
-umem_tx_act_first(struct umem_tx *tx)
+umem_tx_act_first(struct umem_wal_tx *tx)
 {
-	return tx->utx_umm->umm_ops->mo_tx_act_first(tx);
+	return tx->utx_ops->wtx_act_first(tx);
 }
 
 /* Get the next umem_action in TX redo list */
 static inline struct umem_action *
-umem_tx_act_next(struct umem_tx *tx)
+umem_tx_act_next(struct umem_wal_tx *tx)
 {
-	return tx->utx_umm->umm_ops->mo_tx_act_next(tx);
+	return tx->utx_ops->wtx_act_next(tx);
 }
 
 struct umem_rsrvd_act;
@@ -669,10 +743,11 @@ int umem_tx_publish(struct umem_instance *umm,
 		    struct umem_rsrvd_act *rsrvd_act);
 
 static inline void *
-umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len)
+umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
+		 enum acopy_hint hint)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_copy != NULL);
-	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len);
+	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len, hint);
 }
 
 static inline umem_off_t
@@ -710,23 +785,6 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 }
 
 /*********************************************************************************/
-
-/** Describing a storage region for I/O */
-struct umem_store_region {
-	/** start offset of the region */
-	daos_off_t	sr_addr;
-	/** size of the region */
-	daos_size_t	sr_size;
-};
-
-/** I/O descriptor, it can include arbitrary number of storage regions */
-struct umem_store_iod {
-	/* number of regions */
-	int				 io_nr;
-	/** embedded one for single region case */
-	struct umem_store_region	 io_region;
-	struct umem_store_region	*io_regions;
-};
 
 /* Type of memory actions */
 enum {
@@ -793,43 +851,6 @@ struct umem_action {
 			uint64_t		addr;
 		} ac_csum;	/**< it is checksum of data stored in @addr */
 	};
-};
-
-struct umem_act_item {
-	d_list_t		it_link;
-	/** it is action for reserve, the modified content is in DRAM only */
-	bool			it_is_reserv;
-	struct umem_action	it_act;
-};
-
-struct umem_store;
-
-/* TODO: sgl */
-struct umem_store_ops {
-	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
-			   d_sg_list_t *sgl);
-	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
-			    d_sg_list_t *sgl);
-	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
-	/** @actions is list head of umem_act_item */
-	int	(*so_wal_submit)(struct umem_store *store, uint64_t id, d_list_t *actions);
-};
-
-struct umem_store {
-	/**
-	 * Base address and size of the umem storage, umem allocator manages space within
-	 * this range.
-	 */
-	daos_off_t		 stor_addr;
-	daos_size_t		 stor_size;
-	daos_size_t		 stor_blk_size;
-	/** private data passing between layers */
-	void			*stor_priv;
-	/**
-	 * Callbacks provided by upper level stack, umem allocator uses them to operate
-	 * the storage device.
-	 */
-	struct umem_store_ops	*stor_ops;
 };
 
 #endif /* __DAOS_MEM_H__ */

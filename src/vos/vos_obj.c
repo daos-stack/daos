@@ -24,6 +24,8 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+bool vos_dkey_punch_propagate;
+
 struct vos_key_info {
 	umem_off_t		*ki_known_key;
 	struct vos_object	*ki_obj;
@@ -189,8 +191,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** For now, don't propagate the punch to object layer */
-		return 0;
+		if (!vos_dkey_punch_propagate)
+			return 0; /** Unless we explicitly enable it, disable punch propagation */
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -524,7 +526,7 @@ reset:
 			rc = -DER_TX_RESTART;
 	}
 
-	rc = vos_tx_end(cont, dth, NULL, NULL, true, rc);
+	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 
 	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
@@ -582,6 +584,10 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 			DP_RC(rc));
 		return rc;
 	}
+
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
 
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
@@ -667,7 +673,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE | VOS_OBJ_KILL_DKEY,
 			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
@@ -1552,6 +1558,7 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	       d_iov_t *iov_out)
 {
 	struct bio_io_context	*bioc;
+	struct umem_instance	*umem;
 	struct bio_iov		*biov = &it_entry->ie_biov;
 
 	D_ASSERT(bio_iov2buf(biov) == NULL);
@@ -1565,13 +1572,13 @@ recx_iter_copy(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	/*
 	 * Set 'iov_len' beforehand, cause it will be used as copy
-	 * size in bio_read().
+	 * size in vos_media_read().
 	 */
 	iov_out->iov_len = bio_iov2len(biov);
-	bioc = bio_mc2data(oiter->it_obj->obj_cont->vc_pool->vp_meta_context);
-	D_ASSERT(bioc != NULL);
+	bioc = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
 
-	return bio_read(bioc, biov->bi_addr, iov_out);
+	return vos_media_read(bioc, umem, biov->bi_addr, iov_out);
 }
 
 static int

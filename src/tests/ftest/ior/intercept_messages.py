@@ -31,9 +31,9 @@ class IorInterceptMessages(IorTestBase):
             Look for interception library messages.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
-        :avocado: tags=ior_intercept_messages,test_ior_intercept_messages
+        :avocado: tags=IorInterceptMessages,test_ior_intercept_messages
         """
         d_il_report_value = self.params.get("value", "/run/tests/D_IL_REPORT/*")
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')

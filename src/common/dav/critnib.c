@@ -50,7 +50,6 @@
 #include <errno.h>
 #include <stdbool.h>
 
-#include <gurt/common.h>
 #include "critnib.h"
 #include "out.h"
 #include "sys_util.h"

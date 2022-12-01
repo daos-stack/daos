@@ -1095,12 +1095,12 @@ rebuild_multiple_failures(void **state)
 
 	arg->rebuild_post_cb_arg = cb_arg_oids;
 
-	rebuild_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
+	rebuild_pools_ranks(&arg, 1, ranks_to_kill, 2, true);
 
 	arg->rebuild_cb = NULL;
 	arg->rebuild_post_cb = NULL;
 
-	reintegrate_pools_ranks(&arg, 1, ranks_to_kill, MAX_KILLS, true);
+	reintegrate_pools_ranks(&arg, 1, ranks_to_kill, 2, true);
 }
 
 static void

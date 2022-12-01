@@ -13,12 +13,11 @@
 #include <daos/tests_lib.h>
 #include "../ad_mem.h"
 
-#define ADT_STORE_SIZE	(256 << 20)
-#define HDR_SIZE	(32 << 10)
+#define ADT_STORE_SIZE	(384 << 20)
 
 static struct ad_blob_handle adt_bh;
 static char	*adt_store;
-static int	 adt_arena_type = 1;
+static int	 adt_arena_type = ARENA_TYPE_BASE + 0;
 
 static void
 addr_swap(void *array, int a, int b)
@@ -83,7 +82,7 @@ adt_store_wal_rsv(struct umem_store *store, uint64_t *id)
 }
 
 static int
-adt_store_wal_submit(struct umem_store *store, uint64_t id, d_list_t *actions)
+adt_store_wal_submit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
 	return 0;
 }
@@ -98,19 +97,14 @@ struct umem_store_ops adt_store_ops = {
 static void
 adt_blob_create(void **state)
 {
-	struct umem_store	*store;
-	struct ad_blob_handle	 bh;
+	struct umem_store	store = {0};
+	struct ad_blob_handle	bh;
 	int	rc;
 
 	printf("prep create ad_blob\n");
-	rc = ad_blob_prep_create(DUMMY_BLOB, ADT_STORE_SIZE, &bh);
-	assert_rc_equal(rc, 0);
-
-	store = ad_blob_hdl2store(bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post create ad_blob\n");
-	rc = ad_blob_post_create(bh);
+	store.stor_size	= ADT_STORE_SIZE;
+	store.stor_ops	= &adt_store_ops;
+	rc = ad_blob_create(DUMMY_BLOB, 0, &store, &bh);
 	assert_rc_equal(rc, 0);
 
 	printf("close ad_blob\n");
@@ -474,7 +468,7 @@ adt_rsv_pub_4(void **state)
 	for (i = 0; i < loop; i++) {
 		for (j = 0; j < rsv_count; j++) {
 			addrs[j] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[j]);
-			if (addrs[j]== 0) {
+			if (addrs[j] == 0) {
 				fprintf(stderr, "failed allocate\n");
 				return;
 			}
@@ -491,6 +485,46 @@ adt_rsv_pub_4(void **state)
 		printf("Published allocation: size = %d KB, arena = %u\n",
 		       ((i + 1) * alloc_size * rsv_count) >> 10, arena);
 	}
+}
+
+static void
+adt_rsv_pub_5(void **state)
+{
+	const int	     alloc_large1 = (8 << 10);
+	const int	     alloc_large2 = (1 << 20);
+	const int	     rsv_count = 16;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[rsv_count * 2];
+	daos_off_t	     addrs[rsv_count * 2];
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Reserve large space and publish\n");
+	for (i = 0; i < rsv_count * 2;) {
+		addrs[i] = ad_reserve(adt_bh, ARENA_TYPE_LARGE, alloc_large1, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed allocate size=%d\n", alloc_large1);
+			return;
+		}
+		i++;
+		addrs[i] = ad_reserve(adt_bh, ARENA_TYPE_LARGE, alloc_large2, &arena, &acts[i]);
+		if (addrs[i]== 0) {
+			fprintf(stderr, "failed allocate size=%d\n", alloc_large2);
+			return;
+		}
+		i++;
+	}
+
+	printf("Publish reserved addresses\n");
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, rsv_count * 2);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
 }
 
 static void
@@ -656,6 +690,53 @@ adt_rsv_free_2(void **state)
 }
 
 static void
+adt_rsv_write_free(void **state)
+{
+	const int	     alloc_size = 1536; /* non-pow2 group */
+	const int	     loop = 200; /* cross group boundary (256K) */
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[loop];
+	daos_off_t	     addrs[loop];
+	int		     rc;
+	int		     i;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("Non-pow2 alloc, write and free\n");
+	for (i = 0; i < loop; i++) {
+		char *ptr;
+
+		addrs[i] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[i]);
+		if (addrs[i] == 0) {
+			fprintf(stderr, "failed %d allocate\n", i);
+			return;
+		}
+
+		ptr = ad_addr2ptr(adt_bh, addrs[i]);
+		memset(ptr, 0xca, alloc_size);
+	}
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_publish(&tx, acts, loop);
+	assert_rc_equal(rc, 0);
+
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+
+	adt_addrs_shuffle(addrs, loop);
+
+	rc = ad_tx_begin(adt_bh, &tx);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < loop; i++) {
+		rc = ad_tx_free(&tx, addrs[i]);
+		assert_rc_equal(rc, 0);
+	}
+	rc = ad_tx_end(&tx, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
 adt_delayed_free_1(void **state)
 {
 	const int	     alloc_size = 256;
@@ -691,6 +772,9 @@ adt_delayed_free_1(void **state)
 	addr2 = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
 	assert_int_not_equal(addr, addr2);
 
+	rc = ad_tx_publish(&tx, &act, 1);
+	assert_rc_equal(rc, 0);
+
 	rc = ad_tx_end(&tx, 0);
 	assert_rc_equal(rc, 0);
 }
@@ -698,10 +782,9 @@ adt_delayed_free_1(void **state)
 static void
 adt_tx_perf_1(void **state)
 {
-	/* XXX alloc_size=64/128 overflows arena, will fix in follow-on patch */
-	const int	     alloc_size = 256;
+	const int	     alloc_sizes[2] = {64, 128};
 	const int	     op_per_tx = 2;
-	const int	     loop = 400000; /* 50MB */
+	const int	     loop = 400000;
 	struct ad_tx	     tx;
 	struct ad_reserv_act acts[op_per_tx];
 	struct timespec	     now;
@@ -719,7 +802,7 @@ adt_tx_perf_1(void **state)
 	for (i = 0; i < loop; i++) {
 		/* NB: two reservations per transaction */
 		for (j = 0; j < op_per_tx; j++) {
-			addrs[j] = ad_reserve(adt_bh, 0, alloc_size, &arena, &acts[j]);
+			addrs[j] = ad_reserve(adt_bh, 0, alloc_sizes[j], &arena, &acts[j]);
 			if (addrs[j] == 0) {
 				fprintf(stderr, "failed allocate\n");
 				return;
@@ -746,6 +829,7 @@ static void
 adt_no_space_1(void **state)
 {
 	const int	     alloc_size = 4096;
+	const int	     alloc_size1 = 512;
 	struct ad_tx	     tx;
 	struct ad_reserv_act act;
 	daos_off_t	     addr;
@@ -780,6 +864,7 @@ adt_no_space_1(void **state)
 	}
 	array_size = i;
 
+	adt_addrs_shuffle(addr_array, array_size);
 	rc = ad_tx_begin(adt_bh, &tx);
 	assert_rc_equal(rc, 0);
 
@@ -793,10 +878,10 @@ adt_no_space_1(void **state)
 
 	printf("Consume all space again\n");
 	for (i = 0;; i++) {
-		addr = ad_reserve(adt_bh, 0, alloc_size, &arena, &act);
+		addr = ad_reserve(adt_bh, 0, alloc_size1, &arena, &act);
 		if (addr == 0) {
 			printf("Run out of space, allocated %d MB space, last used arena=%d\n",
-			       (int)((alloc_size * i) >> 20), arena);
+			       (int)((alloc_size1 * i) >> 20), arena);
 			break;
 		}
 		rc = ad_tx_begin(adt_bh, &tx);
@@ -808,30 +893,24 @@ adt_no_space_1(void **state)
 		rc = ad_tx_end(&tx, 0);
 		assert_rc_equal(rc, 0);
 	}
-	printf("array_size: %d, i: %d\n", array_size, i);
+	/* D_ASSERT(i >= array_size * (alloc_size / alloc_size1)); */
 	D_FREE(addr_array);
 }
 
 static int
 adt_setup(void **state)
 {
-	struct umem_store *store;
-	int		   rc;
+	struct umem_store store = {0};
+	int		  rc;
 
 	adt_blob_create(state);
 
-	printf("prep open ad_blob\n");
-	rc = ad_blob_prep_open(DUMMY_BLOB, &adt_bh);
+	printf("open ad_blob\n");
+	store.stor_ops = &adt_store_ops;
+	rc = ad_blob_open(DUMMY_BLOB, 0, &store, &adt_bh);
 	assert_rc_equal(rc, 0);
 
-	store = ad_blob_hdl2store(adt_bh);
-	store->stor_ops = &adt_store_ops;
-
-	printf("post open ad_blob\n");
-	rc = ad_blob_post_open(adt_bh);
-	assert_rc_equal(rc, 0);
-	assert_int_equal(store->stor_size, ADT_STORE_SIZE);
-
+	assert_int_equal(store.stor_size, ADT_STORE_SIZE);
 	return 0;
 }
 
@@ -857,12 +936,14 @@ main(void)
 		cmocka_unit_test(adt_rsv_pub_2),
 		cmocka_unit_test(adt_rsv_pub_3),
 		cmocka_unit_test(adt_rsv_pub_4),
+		cmocka_unit_test(adt_rsv_pub_5),
 		cmocka_unit_test(adt_rsv_pub_abort_1),
 		cmocka_unit_test(adt_rsv_pub_abort_2),
 		cmocka_unit_test(adt_rsv_inval),
 		cmocka_unit_test(adt_reg_arena),
 		cmocka_unit_test(adt_rsv_free_1),
 		cmocka_unit_test(adt_rsv_free_2),
+		cmocka_unit_test(adt_rsv_write_free),
 		cmocka_unit_test(adt_delayed_free_1),
 		cmocka_unit_test(adt_tx_perf_1),
 		/* Must be the last test */

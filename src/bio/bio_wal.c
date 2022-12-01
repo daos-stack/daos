@@ -329,12 +329,12 @@ calc_trans_blks(unsigned int act_nr, unsigned int payload_sz, unsigned int blk_s
 		left_bytes = blk_sz - (remainder * entry_sz);
 
 	/* Set payload start block */
+	bd->bd_payload_off = sizeof(struct wal_trans_head);
 	if (left_bytes > 0) {
 		bd->bd_payload_idx = entry_blks - 1;
-		bd->bd_payload_off = blk_sz - left_bytes;
+		bd->bd_payload_off += (blk_sz - left_bytes);
 	} else {
 		bd->bd_payload_idx = entry_blks;
-		bd->bd_payload_off = sizeof(struct wal_trans_head);
 	}
 
 	/* Calculates payload blocks & left bytes in the last payload block */
@@ -349,14 +349,14 @@ calc_trans_blks(unsigned int act_nr, unsigned int payload_sz, unsigned int blk_s
 	}
 
 	/* Set tail csum block & total block */
+	bd->bd_tail_off = sizeof(struct wal_trans_head);
 	if (left_bytes >= sizeof(struct wal_trans_tail)) {
 		bd->bd_blks = entry_blks + payload_blks;
-		bd->bd_tail_off = blk_sz - left_bytes;
+		bd->bd_tail_off += (blk_sz - left_bytes);
 		return;
 	}
 
 	bd->bd_blks = entry_blks + payload_blks + 1;
-	bd->bd_tail_off = sizeof(struct wal_trans_head);
 }
 
 struct wal_trans_blk {
@@ -419,7 +419,7 @@ place_entry(struct wal_trans_blk *tb, struct wal_trans_entry *entry)
 
 static void
 place_payload(struct bio_sglist *bsgl, struct wal_blks_desc *bd, struct wal_trans_blk *tb,
-	      uint64_t addr, uint16_t len)
+	      uint64_t addr, uint32_t len)
 {
 	unsigned int	left, copy_sz;
 
@@ -507,16 +507,24 @@ place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks
 	D_ASSERT(rc == 0);
 }
 
+#define	INLINE_DATA_CSUM_NR	5
+struct data_csum_array {
+	unsigned int		 dca_nr;
+	unsigned int		 dca_max_nr;
+	struct umem_action	*dca_acts;
+	struct umem_action	 dca_inline_acts[INLINE_DATA_CSUM_NR];
+};
+
 static void
-fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_tx *tx,
-		unsigned int blk_sz, struct wal_blks_desc *bd)
+fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct umem_wal_tx *tx,
+		struct data_csum_array *dc_arr, unsigned int blk_sz, struct wal_blks_desc *bd)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct umem_action	*act;
 	struct wal_trans_head	 blk_hdr;
 	struct wal_trans_entry	 entry;
 	struct wal_trans_blk	 entry_blk, payload_blk;
-	unsigned int		 left, entry_sz = sizeof(struct wal_trans_entry);
+	unsigned int		 left, entry_sz = sizeof(struct wal_trans_entry), dc_idx = 0;
 	uint64_t		 src_addr;
 
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
@@ -614,7 +622,18 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			break;
 		}
 
-		act = umem_tx_act_next(tx);
+		if (dc_idx == 0) {
+			act = umem_tx_act_next(tx);
+			if (act != NULL)
+				continue;
+		}
+		/* Put data csum actions after other actions */
+		if (dc_idx < dc_arr->dca_nr) {
+			act = &dc_arr->dca_acts[dc_idx];
+			dc_idx++;
+		} else {
+			act = NULL;
+		}
 	}
 
 	place_tail(mc, bsgl, bd, &payload_blk);
@@ -684,6 +703,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	struct bio_desc		*biod_tx = wal_tx->td_biod_tx;
 	struct wal_super_info	*si = wal_tx->td_si;
 	struct wal_tx_desc	*next;
+	bool			 try_wakeup = false;
 
 	D_ASSERT(!d_list_empty(&wal_tx->td_link));
 	D_ASSERT(biod_tx != NULL);
@@ -704,7 +724,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 		} else {
 			/* No depended transactions, unblock incoming transactions */
 			si->si_tx_failed = 0;
-			wakeup_reserve_waiters(si, false);
+			try_wakeup = true;
 		}
 	} else {
 		D_ASSERT(wal_next_id(si, si->si_commit_id, si->si_commit_blks) == wal_tx->td_id);
@@ -718,6 +738,15 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	/* The ABT_eventual could be NULL if WAL I/O IOD failed on DMA mapping in bio_iod_prep() */
 	if (biod_tx->bd_dma_done != ABT_EVENTUAL_NULL)
 		ABT_eventual_set(biod_tx->bd_dma_done, NULL, 0);
+
+	/*
+	 * To ensure the UNDO (for failed transactions) is performed before starting new
+	 * transaction, the waiters blocked on WAL reserve should be waken up after the waiters
+	 * blocked on WAL commit. Here we assume server ULT scheduler executes ULTs in FIFO
+	 * order and no yield during UNDO.
+	 */
+	if (try_wakeup)
+		wakeup_reserve_waiters(si, false);
 
 	if (!complete_next)
 		return;
@@ -758,32 +787,124 @@ data_completion(void *arg, int err)
 		wal_tx_completion(wal_tx, true);
 }
 
+static inline void
+free_data_csum(struct data_csum_array *dc_arr)
+{
+	if (dc_arr->dca_max_nr > INLINE_DATA_CSUM_NR)
+		D_FREE(dc_arr->dca_acts);
+}
+
+static int
+generate_data_csum(struct bio_meta_context *mc, struct bio_desc *biod_data,
+		   struct data_csum_array *dc_arr)
+{
+	struct bio_rsrvd_dma	*rsrvd_dma;
+	struct bio_rsrvd_region	*rg;
+	struct umem_action	*act, *act_arr;
+	void			*payload;
+	unsigned int		 max_nr;
+	int			 i, csum_len = meta_csum_len(mc), rc = 0;
+
+	dc_arr->dca_nr = 0;
+	dc_arr->dca_max_nr = INLINE_DATA_CSUM_NR;
+	dc_arr->dca_acts = &dc_arr->dca_inline_acts[0];
+
+	/* No async data write or the write is already completed */
+	if (biod_data == NULL || biod_data->bd_inflights == 0)
+		return 0;
+
+	rsrvd_dma = &biod_data->bd_rsrvd;
+	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
+		rg = &rsrvd_dma->brd_regions[i];
+
+		D_ASSERT(rg->brr_chk != NULL);
+		D_ASSERT(rg->brr_end > rg->brr_off);
+
+		if (rg->brr_media != DAOS_MEDIA_NVME)
+			continue;
+
+		D_ASSERT(rg->brr_chk_off == 0);
+		if (dc_arr->dca_nr == dc_arr->dca_max_nr) {
+			max_nr = dc_arr->dca_max_nr * 2;
+			D_ALLOC_ARRAY(act_arr, max_nr);
+			if (act_arr == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
+			memcpy(act_arr, dc_arr->dca_acts, dc_arr->dca_max_nr * sizeof(*act));
+			free_data_csum(dc_arr);
+			dc_arr->dca_max_nr = max_nr;
+			dc_arr->dca_acts = act_arr;
+		}
+
+		act = &dc_arr->dca_acts[dc_arr->dca_nr];
+		act->ac_opc = UMEM_ACT_CSUM;
+		act->ac_csum.addr = rg->brr_off;
+		act->ac_csum.size = rg->brr_end - rg->brr_off;
+
+		payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
+		rc = meta_csum_calc(mc, payload, act->ac_csum.size, &act->ac_csum.csum, csum_len);
+		if (rc) {
+			D_ERROR("Failed to calculate data csum off:"DF_U64" len:%u, "DF_RC"\n",
+				act->ac_csum.addr, act->ac_csum.size, DP_RC(rc));
+			break;
+		}
+		dc_arr->dca_nr++;
+	}
+
+	if (rc)
+		free_data_csum(dc_arr);
+	else
+		D_DEBUG(DB_IO, "Generate %u data csums\n", dc_arr->dca_nr);
+
+	return rc;
+}
+
 int
-bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc *biod_data)
+bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
-	struct bio_desc		*biod;
+	struct bio_desc		*biod = NULL;
 	struct bio_sglist	*bsgl;
 	bio_addr_t		 addr = { 0 };
 	struct wal_tx_desc	 wal_tx = { 0 };
 	struct wal_blks_desc	 blk_desc = { 0 };
+	struct data_csum_array	 dc_arr;
 	unsigned int		 blks, unused_off;
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
 	uint64_t		 tx_id = tx->utx_id;
 	int			 iov_nr, rc;
 
+	/* FIXME: Skip WAL commit for sysdb for this moment */
+	if (mc->mc_is_sysdb)
+		return 0;
+
+	D_DEBUG(DB_IO, "MC:%p WAL commit ID:"DF_U64" seq:%u off:%u, biod_data:%p inflights:%u\n",
+		mc, tx_id, id2seq(tx_id), id2off(tx_id), biod_data,
+		biod_data != NULL ? biod_data->bd_inflights : 0);
+
+	rc = generate_data_csum(mc, biod_data, &dc_arr);
+	if (rc) {
+		D_ERROR("Failed to generate async data csum. "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	/* Calculate the required log blocks for this transaction */
-	calc_trans_blks(umem_tx_act_nr(tx), umem_tx_act_payload_sz(tx), blk_bytes, &blk_desc);
+	calc_trans_blks(umem_tx_act_nr(tx) + dc_arr.dca_nr, umem_tx_act_payload_sz(tx),
+			blk_bytes, &blk_desc);
 
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
 		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	biod = bio_iod_alloc(mc->mc_wal, 1, BIO_IOD_TYPE_UPDATE);
-	if (biod == NULL)
-		return -DER_NOMEM;
+	biod = bio_iod_alloc(mc->mc_wal, NULL, 1, BIO_IOD_TYPE_UPDATE);
+	if (biod == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	/* Figure out the regions in WAL for this transaction */
 	D_ASSERT(wal_id_cmp(si, tx_id, si->si_unused_id) == 0);
@@ -835,7 +956,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc 
 	}
 
 	/* Fill DMA buffer with transaction entries */
-	fill_trans_blks(mc, bsgl, tx, blk_bytes, &blk_desc);
+	fill_trans_blks(mc, bsgl, tx, &dc_arr, blk_bytes, &blk_desc);
 
 	/* Set proper completion callbacks for data I/O & WAL I/O */
 	if (biod_data != NULL) {
@@ -856,11 +977,13 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_tx *tx, struct bio_desc 
 
 	/* Wait for WAL commit completion */
 	D_ASSERT(biod->bd_dma_done != ABT_EVENTUAL_NULL);
-	ABT_eventual_wait(biod->bd_dma_done, NULL);
+	iod_dma_wait(biod);
 	/* The completion must have been called */
 	D_ASSERT(d_list_empty(&wal_tx.td_link));
 out:
-	bio_iod_free(biod);
+	free_data_csum(&dc_arr);
+	if (biod != NULL)
+		bio_iod_free(biod);
 	return rc;
 }
 
@@ -1255,7 +1378,7 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 }
 
 static void
-copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uint16_t len)
+copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uint32_t len)
 {
 	unsigned int	left, copy_sz;
 
@@ -1576,6 +1699,16 @@ bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_
 {
 	D_ASSERT(mc->mc_meta != NULL);
 	return bio_writev(mc->mc_meta, bsgl, sgl);
+}
+
+void
+bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz)
+{
+	/* The mc could be NULL when md on SSD not enabled & data blob not existing */
+	if (mc != NULL) {
+		*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
+		*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
+	}
 }
 
 void

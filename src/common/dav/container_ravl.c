@@ -5,7 +5,7 @@
  * container_ravl.c -- implementation of ravl-based block container
  */
 
-#include "container_ravl.h"
+#include "container.h"
 #include "ravl.h"
 #include "out.h"
 #include "sys_util.h"
