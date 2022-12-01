@@ -6,7 +6,7 @@ def build_dts_library(env, prereqs, dc_credit):
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots')
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
 
@@ -25,7 +25,7 @@ def build_tests(prereqs, env):
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(denv, 'argobots', 'pmdk', 'isal')
+    prereqs.require(denv, 'argobots', 'pmdk', 'isal', 'protobufc')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)

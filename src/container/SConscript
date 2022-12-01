@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots')
+    prereqs.require(denv, 'argobots', 'protobufc')
 
     common = denv.SharedObject(['rpc.c'])
 

@@ -9,13 +9,13 @@ def scons():
 
     denv = env.Clone()
 
+    prereqs.require(denv, 'protobufc')
+
     denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
-    # pylint: disable=invalid-name
-    pb = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
-                            'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
-    # pylint: enable=invalid-name
-    common = denv.SharedObject(['rpc.c']) + pb
+    pb_objs = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
+                                 'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
+    common = denv.SharedObject(['rpc.c']) + pb_objs
 
     # Management client library
     libdaos_tgts.extend(common + denv.SharedObject(['cli_mgmt.c', 'cli_query.c', 'cli_debug.c']))
@@ -38,7 +38,7 @@ def scons():
 
     denv = senv
     if prereqs.test_requested():
-        SConscript('tests/SConscript', exports=['denv', 'pb'])
+        SConscript('tests/SConscript', exports=['denv', 'pb_objs'])
 
 
 if __name__ == "SCons.Script":

@@ -16,7 +16,7 @@ def scons():
     prereqs.require(denv, 'argobots')
 
     senv = denv.Clone()
-    senv.AppendUnique(LIBS=['protobuf-c'])
+    prereqs.require(senv, 'protobufc')
 
     security_test = senv.d_program('security_test', sec_sources, LIBS=libs)
     senv.Install('$PREFIX/bin/', security_test)

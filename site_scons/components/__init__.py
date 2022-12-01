@@ -241,9 +241,6 @@ def define_common(reqs):
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
-    reqs.define('protobufc', libs=['protobuf-c'], headers=['protobuf-c/protobuf-c.h'],
-                package='protobuf-c-devel')
-
 
 def define_ompi(reqs):
     """OMPI and related components"""
@@ -359,6 +356,15 @@ def define_components(reqs):
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
                 patch_rpath=['lib'])
+
+    reqs.define('protobufc',
+                retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
+                commands=[['./autogen.sh'],
+                          ['./configure', '--prefix=$PROTOBUFC_PREFIX', '--disable-protoc'],
+                          ['make'],
+                          ['make', 'install']],
+                libs=['protobuf-c'],
+                headers=['protobuf-c/protobuf-c.h'])
 
 
 __all__ = ['define_components']
