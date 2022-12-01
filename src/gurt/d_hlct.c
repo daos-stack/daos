@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This file is part of CaRT. Hybrid Logical Clock Tracker (HLCT)
+ * This file is part of GURT. Hybrid Logical Clock Tracker (HLCT)
  * implementation. An HLCT tracks the highest HLC timestamp the process has
  * heard of. It never generates any new HLC timestamps.
  */
 
-//#include "crt_internal.h"
 #include <stdint.h>
 #include <gurt/atomic.h>
 
