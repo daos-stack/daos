@@ -711,6 +711,53 @@ out:
 	return rc;
 }
 
+static int
+crt_req_completion_disable(struct crt_rpc_priv *rpc_priv)
+{
+	int rc;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_completed) {
+		rc = -DER_CANCELED;
+	} else {
+		D_ASSERT(rpc_priv->crp_completion_disabled < CRP_COMPLETION_DISABLED_MAX);
+		rpc_priv->crp_completion_disabled++;
+		rc = 0;
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+	return rc;
+}
+
+static void
+crt_req_completion_enable(struct crt_rpc_priv *rpc_priv, int *completion_rc)
+{
+	int rc = 0;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	D_ASSERT(rpc_priv->crp_completion_disabled > 0);
+	rpc_priv->crp_completion_disabled--;
+	if (rpc_priv->crp_completion_disabled == 0) {
+		if (rpc_priv->crp_abort_pending) {
+			rpc_priv->crp_completed = 1;
+			rpc_priv->crp_abort_pending = 0;
+			rc = -DER_CANCELED;
+		} else if (rpc_priv->crp_timeout_pending) {
+			rpc_priv->crp_completed = 1;
+			rpc_priv->crp_timeout_pending = 0;
+			rc = -DER_TIMEDOUT;
+		}
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+
+	if (rc == -DER_CANCELED)
+		crt_req_abort_internal(rpc_priv, false /* for_timeout */);
+	else if (rc == -DER_TIMEDOUT)
+		crt_req_timeout_hdlr_internal(rpc_priv);
+
+	if (completion_rc != NULL)
+		*completion_rc = rc;
+}
+
 static inline int
 crt_req_fill_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 {
@@ -776,6 +823,8 @@ crt_issue_uri_lookup_retry(crt_context_t ctx,
 	return rc;
 }
 
+static int crt_req_send_core(struct crt_rpc_priv *rpc_priv);
+
 static void
 uri_lookup_cb(const struct crt_cb_info *cb_info)
 {
@@ -787,6 +836,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t			*lookup_rpc;
 	d_rank_list_t			*membs;
 	bool				found;
+	bool				completion_disabled = false;
 	int				rc = 0;
 
 	chained_rpc_priv = cb_info->cci_arg;
@@ -849,6 +899,11 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 		fill_uri = ul_out->ul_uri;
 	}
 
+	rc = crt_req_completion_disable(chained_rpc_priv);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	completion_disabled = true;
+
 	rc = crt_req_fill_tgt_uri(chained_rpc_priv, fill_uri);
 	if (rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
@@ -877,12 +932,14 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 	/* issue the original RPC */
-	rc = crt_req_send_internal(chained_rpc_priv);
+	rc = crt_req_send_core(chained_rpc_priv);
 
 retry:
 
 	if (rc != 0) {
 		if (chained_rpc_priv->crp_ul_retry++ < MAX_URI_LOOKUP_RETRIES) {
+			chained_rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
+
 			rc = crt_issue_uri_lookup_retry(lookup_rpc->cr_ctx,
 							grp_priv,
 							ul_in->ul_rank,
@@ -898,10 +955,13 @@ retry:
 out:
 	RPC_PUB_DECREF(lookup_rpc);
 
+	if (completion_disabled)
+		crt_req_completion_enable(chained_rpc_priv, NULL);
+
 	/* Force complete and destroy chained rpc */
-	if (rc != 0) {
+	if (rc != 0 && !crt_rpc_completed(chained_rpc_priv)) {
 		crt_context_req_untrack(chained_rpc_priv);
-		crt_rpc_complete(chained_rpc_priv, rc);
+		crt_rpc_complete_internal(chained_rpc_priv, rc);
 	}
 
 	/* Addref done in crt_issue_uri_lookup() */
@@ -1241,13 +1301,6 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rpc_priv->crp_hg_addr = hg_addr;
-	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_send_internal() failed, rc %d\n",
-			  rc);
-		D_GOTO(finish_rpc, rc);
-	}
 
 finish_rpc:
 	if (rc != 0) {
@@ -1289,21 +1342,24 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 		RPC_ERROR(rpc_priv,
 			  "crt_hg_req_send failed, rc: %d\n", rc);
 	}
+
 out:
 	return rc;
 }
 
-int
-crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
+static int
+crt_req_send_core(struct crt_rpc_priv *rpc_priv)
 {
 	crt_rpc_t	*req;
 	bool		uri_exists = false;
 	int		rc = 0;
 
 	req = &rpc_priv->crp_pub;
+
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_QUEUED:
 		rpc_priv->crp_state = RPC_STATE_INITED;
+		/* fall through */
 	case RPC_STATE_INITED:
 		/* lookup local cache  */
 		rpc_priv->crp_hg_addr = NULL;
@@ -1315,42 +1371,43 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc);
 		}
 
-		if (rpc_priv->crp_hg_addr != NULL) {
-			/* send the RPC if the local cache has the HG_Addr */
-			rc = crt_req_send_immediately(rpc_priv);
-		} else if (uri_exists == true) {
-			/* send addr lookup req */
-			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
-			rc = crt_req_hg_addr_lookup(rpc_priv);
-			if (rc != 0)
-				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: %#x.\n", rc, req->cr_opc);
-		} else {
-			/* base_addr == NULL, send uri lookup req */
+		if (rpc_priv->crp_hg_addr != NULL)
+			D_GOTO(send_immediately, rc);
+		if (uri_exists == true)
+			D_GOTO(addr_lookup, rc);
+
+		/* base_addr == NULL, send uri lookup req */
+		rc = crt_req_uri_lookup(rpc_priv);
+		if (rc == 0)
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
-			rc = crt_req_uri_lookup(rpc_priv);
-			if (rc != 0)
-				RPC_ERROR(rpc_priv,
-					  "crt_req_uri_lookup() failed. rc "
-					  DF_RC"\n", DP_RC(rc));
-		}
+		else
+			RPC_ERROR(rpc_priv,
+				  "crt_req_uri_lookup() failed. rc "
+				  DF_RC"\n", DP_RC(rc));
 		break;
 	case RPC_STATE_URI_LOOKUP:
 		crt_lc_hg_addr_fill(rpc_priv);
 
-		if (rpc_priv->crp_hg_addr != NULL) {
-			rc = crt_req_send_immediately(rpc_priv);
-		} else {
-			/* send addr lookup req */
-			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
-			rc = crt_req_hg_addr_lookup(rpc_priv);
-			if (rc != 0)
-				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: %#x.\n", rc, req->cr_opc);
+		if (rpc_priv->crp_hg_addr != NULL)
+			D_GOTO(send_immediately, rc);
+
+addr_lookup:
+		/* send addr lookup req */
+		rc = crt_req_hg_addr_lookup(rpc_priv);
+		if (rc != 0) {
+			D_ERROR("crt_req_hg_addr_lookup() failed, "
+				"rc %d, opc: %#x.\n", rc, req->cr_opc);
+			D_GOTO(out, rc);
 		}
-		break;
-	case RPC_STATE_ADDR_LOOKUP:
+
+send_immediately:
 		rc = crt_req_send_immediately(rpc_priv);
+		break;
+	/* TODO: Think again about these. */
+	case RPC_STATE_CANCELED:
+	case RPC_STATE_COMPLETED:
+	case RPC_STATE_TIMEOUT:
+		rc = 0;
 		break;
 	default:
 		RPC_ERROR(rpc_priv,
@@ -1361,8 +1418,25 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 	}
 
 out:
+	return rc;
+}
+
+int
+crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
+{
+	int	rc;
+	int	completion_rc;
+
+	rc = crt_req_completion_disable(rpc_priv);
 	if (rc != 0)
-		rpc_priv->crp_state = RPC_STATE_INITED;
+		return rc;
+
+	rc = crt_req_send_core(rpc_priv);
+
+	crt_req_completion_enable(rpc_priv, &completion_rc);
+	if (completion_rc != 0)
+		rc = completion_rc;
+
 	return rc;
 }
 
@@ -1504,30 +1578,28 @@ crt_req_abort(crt_rpc_t *req)
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
-	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "aborted or completed, need not abort again.\n");
-		D_GOTO(out, rc = -DER_ALREADY);
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_abort_pending || rpc_priv->crp_timeout_pending ||
+	    rpc_priv->crp_completed) {
+		rc = -DER_ALREADY;
+	} else if (rpc_priv->crp_completion_disabled > 0) {
+		rpc_priv->crp_abort_pending = 1;
+		rc = -DER_BUSY;
+	} else {
+		rpc_priv->crp_completed = 1;
 	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
 
-	if (rpc_priv->crp_state != RPC_STATE_REQ_SENT ||
-	    rpc_priv->crp_on_wire != 1) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "rpc_priv->crp_state %#x, not inflight, complete it "
-			  "as canceled.\n",
-			  rpc_priv->crp_state);
-		crt_rpc_complete(rpc_priv, -DER_CANCELED);
+	if (rc == -DER_ALREADY) {
+		RPC_TRACE(DB_NET, rpc_priv, "already aborted or completed\n");
+		D_GOTO(out, rc);
+	}
+	if (rc == -DER_BUSY) {
+		RPC_TRACE(DB_NET, rpc_priv, "set abort pending\n");
 		D_GOTO(out, rc = 0);
 	}
 
-	rc = crt_hg_req_cancel(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
-			  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
-		crt_rpc_complete(rpc_priv, rc);
-		D_GOTO(out, rc);
-	}
+	crt_req_abort_internal(rpc_priv, false /* for_timeout */);
 
 out:
 	return rc;

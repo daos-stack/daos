@@ -413,16 +413,10 @@ crt_rpc_completed(struct crt_rpc_priv *rpc_priv)
 	return rc;
 }
 
+/* The caller must have already set crp_completed. */
 void
-crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
+crt_rpc_complete_internal(struct crt_rpc_priv *rpc_priv, int rc)
 {
-	D_ASSERT(rpc_priv != NULL);
-
-	if (crt_rpc_completed(rpc_priv)) {
-		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
-		return;
-	}
-
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
 	else if (rc == -DER_TIMEDOUT)
@@ -456,6 +450,19 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 	}
 
 	RPC_DECREF(rpc_priv);
+}
+
+void
+crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
+{
+	D_ASSERT(rpc_priv != NULL);
+
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return;
+	}
+
+	crt_rpc_complete_internal(rpc_priv, rc);
 }
 
 /* Flag bits definition for crt_ctx_epi_abort */
@@ -878,8 +885,51 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 	return true;
 }
 
+/* The caller must have already set crp_completed. */
+void
+crt_req_timeout_hdlr_internal(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_context *crt_ctx;
+
+	if (crt_req_timeout_reset(rpc_priv)) {
+		RPC_TRACE(DB_NET, rpc_priv,
+			  "reached timeout. Renewed for another cycle.\n");
+		return;
+	};
+
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	if (crt_gdata.cg_use_sensors)
+		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
+
+	crt_req_abort_internal(rpc_priv, true /* for_timeout */);
+}
+
 static inline void
 crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
+{
+	int rc = 0;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_abort_pending || rpc_priv->crp_completed) {
+		rc = -DER_ALREADY;
+	} else if (rpc_priv->crp_completion_disabled > 0) {
+		rpc_priv->crp_timeout_pending = 1;
+		rc = -DER_BUSY;
+	} else {
+		rpc_priv->crp_completed = 1;
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+
+	if (rc == -DER_ALREADY || rc == -DER_BUSY)
+		return;
+
+	crt_req_timeout_hdlr_internal(rpc_priv);
+}
+
+/* The caller must have already set crp_completed. */
+void
+crt_req_abort_internal(struct crt_rpc_priv *rpc_priv, bool for_timeout)
 {
 	struct crt_context		*crt_ctx;
 	struct crt_grp_priv		*grp_priv;
@@ -888,18 +938,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	struct crt_uri_lookup_in	*ul_in;
 	int				 rc;
 
-	if (crt_req_timeout_reset(rpc_priv)) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "reached timeout. Renewed for another cycle.\n");
-		return;
-	};
-
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
-
-	if (crt_gdata.cg_use_sensors)
-		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -908,13 +949,14 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_in = crt_req_get(ul_req);
 		RPC_ERROR(rpc_priv,
 			  "failed due to URI_LOOKUP(rpc_priv %p) to group %s,"
-			  "rank %d through PSR %d timedout\n",
+			  "rank %d through PSR %d %s\n",
 			  container_of(ul_req, struct crt_rpc_priv, crp_pub),
 			  ul_in->ul_grp_id,
 			  ul_in->ul_rank,
-			  ul_req->cr_ep.ep_rank);
+			  ul_req->cr_ep.ep_rank,
+			  for_timeout ? "timed out" : "aborted");
 
-		if (crt_gdata.cg_use_sensors)
+		if (for_timeout && crt_gdata.cg_use_sensors)
 			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
 		crt_req_abort(ul_req);
 		/*
@@ -923,18 +965,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		 * crt_req_uri_lookup_by_rpc_cb() be called inside there will
 		 * complete this rpc_priv.
 		 */
-		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */
-		break;
-	case RPC_STATE_ADDR_LOOKUP:
-		RPC_ERROR(rpc_priv,
-			  "failed due to ADDR_LOOKUP to group %s, rank %d, tgt_uri %s timedout\n",
-			  grp_priv->gp_pub.cg_grpid,
-			  tgt_ep->ep_rank,
-			  rpc_priv->crp_tgt_uri);
-		if (crt_gdata.cg_use_sensors)
-			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, -DER_UNREACH);
+		/* crt_rpc_complete_internal(rpc_priv, -DER_PROTO); */
 		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
@@ -943,7 +974,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, -DER_UNREACH);
+		crt_rpc_complete_internal(rpc_priv, -DER_UNREACH);
 		break;
 	default:
 		if (rpc_priv->crp_on_wire) {
@@ -954,9 +985,18 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 				  "aborting to group %s, rank %d, tgt_uri %s\n",
 				  grp_priv->gp_pub.cg_grpid,
 				  tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
-			rc = crt_req_abort(&rpc_priv->crp_pub);
+			rc = crt_hg_req_cancel(rpc_priv);
 			if (rc)
 				crt_context_req_untrack(rpc_priv);
+		} else {
+			RPC_ERROR(rpc_priv,
+				  "aborting not-on-wire to group %s, rank %d, tgt_uri %s\n",
+				  grp_priv->gp_pub.cg_grpid,
+				  tgt_ep->ep_rank,
+				  rpc_priv->crp_tgt_uri);
+			crt_context_req_untrack(rpc_priv);
+			crt_rpc_complete_internal(rpc_priv,
+						  for_timeout ? -DER_TIMEDOUT : -DER_CANCELED);
 		}
 		break;
 	}
@@ -1154,7 +1194,6 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED    ||
 		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
 		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
-		 rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_CANCELED ||
 		 rpc_priv->crp_state == RPC_STATE_FWD_UNREACH);

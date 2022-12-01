@@ -79,7 +79,6 @@ typedef enum {
 	RPC_STATE_COMPLETED,
 	RPC_STATE_CANCELED,
 	RPC_STATE_TIMEOUT,
-	RPC_STATE_ADDR_LOOKUP,
 	RPC_STATE_URI_LOOKUP,
 	RPC_STATE_FWD_UNREACH,
 } crt_rpc_state_t;
@@ -118,6 +117,9 @@ struct crt_corpc_info {
 				 co_grp_ref_taken:1;
 	int			 co_rc;
 };
+
+/* Maximum value for crt_rpc_priv.crp_completion_disabled */
+#define CRP_COMPLETION_DISABLED_MAX 15
 
 struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
@@ -176,8 +178,6 @@ struct crt_rpc_priv {
 				crp_on_wire:1,
 				/* 1 if RPC fails HLC epsilon check */
 				crp_fail_hlc:1,
-				/* RPC completed flag */
-				crp_completed:1,
 				/* RPC originated from a primary provider */
 				crp_src_is_primary:1;
 
@@ -185,6 +185,17 @@ struct crt_rpc_priv {
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;
 	pthread_spinlock_t	crp_lock;
+
+	/* NB: flags that must be read or written under crp_lock */
+				/* request is being used by send or abort code paths */
+	uint32_t		crp_completion_disabled:4,
+				/* RPC completed flag */
+				crp_completed:1,
+				/* request shall be aborted */
+				crp_abort_pending:1,
+				/* request shall be aborted for timeout */
+				crp_timeout_pending:1;
+
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
@@ -640,7 +651,6 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 {
 	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
 		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
 	       !rpc_priv->crp_in_binheap;
