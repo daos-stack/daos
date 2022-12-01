@@ -73,30 +73,42 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: 'pr daily_regression',
                description: 'Test-tag to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. pr, daily_regression, full_regression, etc.)')
+        string(name: 'TestRepeat',
+               defaultValue: '',
+               description: 'Test-repeat to use for this run.  Specifies the number of times to ' +
+                            'repeat each functional test. CAUTION: only use in combination with ' +
+                            'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
                defaultValue: 'ofi+tcp',
                description: 'Provider to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. ofi+tcp)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
-               description: 'The base branch to run weekly-testing against (i.e. master, or a PR\'s branch)')
-        booleanParam(name: 'CI_small_TEST',
-                     defaultValue: true,
-                     description: 'Run the CI Functional Hardware Small test stage')
+               description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
+        string(name: 'CI_RPM_TEST_VERSION',
+               defaultValue: '',
+               description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Additional repository used for locating packages for the build and ' +
+                            'test nodes, in the project@PR-number[:build] format.')
+        string(name: 'CI_HARDWARE_DISTRO',
+               defaultValue: '',
+               description: 'Distribution to use for CI Hardware Tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large test stage')
-        string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node Functional Hardware Small stage')
         string(name: 'CI_NVME_5_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium stage')
         string(name: 'CI_NVME_9_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large stage')
+        string(name: 'CI_BUILD_DESCRIPTION',
+               defaultValue: '',
+               description: 'A description of the build')
     }
 
     stages {
@@ -120,30 +132,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        // Need to get back onto base_branch for ci/
-                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
-                                    withSubmodules: true
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
