@@ -133,13 +133,15 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
 	var cType [10]C.char
 
-	props, entries, err := allocProps(2)
+	props, entries, err := allocProps(3)
 	if err != nil {
 		return nil, err
 	}
 	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
 	props.dpp_nr++
 	entries[1].dpe_type = C.DAOS_PROP_CO_LABEL
+	props.dpp_nr++
+	entries[2].dpe_type = C.DAOS_PROP_CO_REDUN_FAC
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
@@ -158,6 +160,8 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		cStr := C.get_dpe_str(&entries[1])
 		ci.ContainerLabel = C.GoString(cStr)
 	}
+
+	ci.RedundancyFactor = uint32(C.get_dpe_val(&entries[2]))
 
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
@@ -740,7 +744,8 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Container redundancy factor": fmt.Sprintf("%d", ci.RedundancyFactor)},
+			{"Number of open handles": fmt.Sprintf("%d", *ci.NumHandles)},
 			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
 			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
@@ -775,7 +780,8 @@ type containerInfo struct {
 	ContainerUUID    *uuid.UUID `json:"container_uuid"`
 	ContainerLabel   string     `json:"container_label,omitempty"`
 	LatestSnapshot   *uint64    `json:"latest_snapshot"`
-	RedundancyFactor *uint32    `json:"redundancy_factor"`
+	RedundancyFactor uint32     `json:"redundancy_factor"`
+	NumHandles       *uint32    `json:"num_handles"`
 	NumSnapshots     *uint32    `json:"num_snapshots"`
 	OpenTime         *uint64    `json:"open_time"`
 	CloseModifyTime  *uint64    `json:"close_modify_time"`
@@ -804,7 +810,7 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.PoolUUID = poolUUID
 	ci.ContainerUUID = contUUID
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
-	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
+	ci.NumHandles = (*uint32)(&ci.dci.ci_nhandles)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
 	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
 	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)

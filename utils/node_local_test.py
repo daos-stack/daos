@@ -415,6 +415,10 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # Otherwise max number of contexts will be limited by number of cores
+    env['CRT_CTX_NUM'] = '32'
+
     return env
 
 
@@ -4252,6 +4256,8 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
+        if to_rerun:
+            print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4283,7 +4289,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf)
+            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 

@@ -46,7 +46,7 @@ ior:
       dfs_oclass: "SX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 tests:
   D_IL_REPORT: !mux
     summary_only:

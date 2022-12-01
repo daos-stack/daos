@@ -22,15 +22,15 @@ pool:
   control_method: dmg
 container: !mux
   properties:
-    enable_checksum: True
+    enable_checksum: true
 dkeys: !mux
   single:
     no_of_dkeys:
-    - 50
+      - 50
 akeys: !mux
   single:
     no_of_akeys:
-    - 10
+      - 10
 record: !mux
   1Byte:
     length:

@@ -1107,7 +1107,7 @@ out:
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
-	ro->rso_stable_epoch = crt_hlc_get();
+	ro->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 

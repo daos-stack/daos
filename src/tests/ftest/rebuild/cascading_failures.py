@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -6,6 +5,7 @@
 """
 from rebuild_test_base import RebuildTestBase
 from daos_utils import DaosCommand
+
 
 class RbldCascadingFailures(RebuildTestBase):
     # pylint: disable=too-many-ancestors
@@ -76,11 +76,9 @@ class RbldCascadingFailures(RebuildTestBase):
             self.server_managers[0].stop_ranks(
                 [self.inputs.rank.value[1]], self.d_log)
 
-        self.daos_cmd.container_set_prop(
-                      pool=self.pool.uuid,
-                      cont=self.container.uuid,
-                      prop="status",
-                      value="healthy")
+        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
+                                         cont=self.container.uuid,
+                                         prop="status", value="healthy")
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)
 
