@@ -624,13 +624,19 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 }
 
+static uint64_t
+metrics_region_size(int num_tgts)
+{
+	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+
+	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
 	uint64_t		bound;
-	uint64_t		metrics_size;
-	const uint64_t		est_std_metrics = 1024; /* high estimate to allow for pool links */
-	const uint64_t		est_tgt_metrics = 128; /* high estimate */
 	unsigned int		ctx_nr;
 	int			rc;
 	struct engine_metrics	*metrics;
@@ -653,8 +659,7 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		D_GOTO(exit_debug_init, rc);
 
-	metrics_size = (est_std_metrics + est_tgt_metrics * dss_tgt_nr) * D_TM_METRIC_SIZE;
-	rc = d_tm_init(dss_instance_idx, metrics_size, D_TM_SERVER_PROCESS);
+	rc = d_tm_init(dss_instance_idx, metrics_region_size(dss_tgt_nr), D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
