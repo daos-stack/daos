@@ -203,17 +203,14 @@ int
 ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
 	     daos_event_t *ev)
 {
-	d_iov_t     iov;
-	d_sg_list_t rsgl;
-
 	if (ds3b == NULL || buf == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	d_iov_set(&iov, buf, *size);
-	rsgl.sg_nr     = 1;
-	rsgl.sg_iovs   = &iov;
-	rsgl.sg_nr_out = 1;
-	return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &rsgl, off, size, ev);
+	d_iov_set(&ds3o->ds3_iov, buf, *size);
+	ds3o->ds3_sgl.sg_nr     = 1;
+	ds3o->ds3_sgl.sg_iovs   = &ds3o->ds3_iov;
+	ds3o->ds3_sgl.sg_nr_out = 1;
+	return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &ds3o->ds3_sgl, off, size, ev);
 }
 
 int
