@@ -49,10 +49,10 @@ class CoreFileProcessing():
             delete (bool): delete the core files.
 
         Returns:
-            int: number of errors encountered
+            status: (dict) includes num errors and num of corefile processesd
 
         """
-        errors = 0
+        status = {"errors": 0, "corefiles_processed": 0}
         create_stacktrace = True
         self.log.debug("-" * 80)
         self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
@@ -77,7 +77,7 @@ class CoreFileProcessing():
             except RunException as error:
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
-                errors += 1
+                status["errors"] += 1
                 create_stacktrace = False
         else:
             self.log.debug(
@@ -95,17 +95,18 @@ class CoreFileProcessing():
                         run_local(self.log, command)
                         core_name = os.path.splitext(core_name)[0]
                     self._create_stacktrace(core_dir, core_name)
+                    status["corefiles_processed"] += 1
                 except Exception as error:      # pylint: disable=broad-except
                     self.log.error(error)
                     self.log.debug("Stacktrace", exc_info=True)
-                    errors += 1
+                    status["errors"] += 1
                 finally:
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
                         os.remove(core_file)
 
-        return errors
+        return status
 
     def _create_stacktrace(self, core_dir, core_name):
         """Create a stacktrace from the specified core file.
@@ -359,9 +360,9 @@ def main():
 
     core_file_processing = CoreFileProcessing(logger)
     try:
-        error_count = core_file_processing.process_core_files(args.directory, args.delete)
-        if error_count:
-            logger.error("Errors detected processing test core files: %s", error_count)
+        status = core_file_processing.process_core_files(args.directory, args.delete)
+        if status["errors"]:
+            logger.error("Errors detected processing test core files: %s", status["errors"])
             sys.exit(1)
 
     except Exception:       # pylint: disable=broad-except

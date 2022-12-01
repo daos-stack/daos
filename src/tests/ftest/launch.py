@@ -3130,8 +3130,10 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            error_count = core_file_processing.process_core_files(test_job_results, True)
-            if error_count:
+            status = core_file_processing.process_core_files(test_job_results, True)
+            if status["corefiles_processed"] == 0:
+                return 0
+            if status["errors"]:
                 message = f"Errors detected processing test core files: {error_count}"
                 self._fail_test(self.result.tests[-1], "Process", message)
                 return 256
@@ -3141,8 +3143,8 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        message = "Corefile exist"
-        self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+        message = "One or more core files detected after test execution"
+        self._fail_test(self.result.tests[-1], "Process", message, None)
         return 2048
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
