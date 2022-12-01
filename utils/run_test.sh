@@ -115,6 +115,10 @@ if [ -d "/mnt/daos" ]; then
         export VOS_BDEV_CLASS="AIO"
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
+        rm -f "${AIO_DEV}"
+        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=10
+        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
+
         export DAOS_MD_ON_SSD=1
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
         unset DAOS_MD_ON_SSD

@@ -20,7 +20,6 @@ struct wal_action {
 
 struct dav_tx {
 	struct dav_obj		*wt_dav_hdl;
-	uint64_t		 wt_id;
 	d_list_t		 wt_redo;
 	uint32_t		 wt_redo_cnt;
 	uint32_t		 wt_redo_payload_len;
@@ -29,12 +28,12 @@ struct dav_tx {
 D_CASSERT(sizeof(struct dav_tx) <= UTX_PRIV_SIZE,
 	  "Size of struct dav_tx is too big!");
 
-#define dav_action_get_next(it) d_list_entry(&it.next, struct wal_action, wa_link)
+#define dav_action_get_next(it) d_list_entry(it.next, struct wal_action, wa_link)
 
 struct umem_wal_tx *dav_umem_wtx_new(struct dav_obj *dav_hdl);
 void dav_umem_wtx_cleanup(struct umem_wal_tx *utx);
 int dav_wal_tx_reserve(struct dav_obj *hdl);
-int dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx);
+int dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx, void *data);
 int dav_wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t flags);
 int dav_wal_tx_assign(void *hdl, void *addr, uint64_t val);
 int dav_wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits);

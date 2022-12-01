@@ -51,9 +51,9 @@ mo_wal_persist(const struct mo_ops *p_ops, void *d, size_t s)
 }
 
 static force_inline void
-mo_wal_flush(const struct mo_ops *p_ops, void *d, size_t s)
+mo_wal_flush(const struct mo_ops *p_ops, void *d, size_t s, int flags)
 {
-	dav_wal_tx_snap(p_ops->base, d, s, d, 0);
+	dav_wal_tx_snap(p_ops->base, d, s, d, flags);
 }
 
 static force_inline void
@@ -68,7 +68,7 @@ mo_wal_memcpy(const struct mo_ops *p_ops, void *dest,
 {
 	SUPPRESS_UNUSED(p_ops);
 	memcpy(dest, src, len);
-	mo_wal_flush(p_ops, dest, len);
+	mo_wal_flush(p_ops, dest, len, 0);
 	return dest;
 }
 
@@ -78,7 +78,7 @@ mo_wal_memmove(const struct mo_ops *p_ops, void *dest,
 {
 	SUPPRESS_UNUSED(p_ops);
 	memmove(dest, src, len);
-	mo_wal_flush(p_ops, dest, len);
+	mo_wal_flush(p_ops, dest, len, 0);
 	return dest;
 }
 
