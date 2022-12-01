@@ -34,8 +34,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 
 	DFUSE_REPLY_BUFQ(ev->de_oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
-	d_slab_release(ev->de_eqt->dpi_read_slab, ev);
-
+	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
 
 void
@@ -45,7 +44,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	bool                          mock_read = false;
 	struct dfuse_eq              *eqt;
-	void                         *buff;
 	int                           rc;
 	struct dfuse_event           *ev;
 	uint64_t                      eqt_idx;
@@ -54,7 +52,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	eqt = &fs_handle->dpi_eqt[eqt_idx % fs_handle->dpi_eqt_count];
 
-	ev = d_slab_acquire(eqt->dpi_read_slab);
+	ev = d_slab_acquire(eqt->de_read_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -93,7 +91,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-		d_slab_release(eqt->dpi_read_slab, ev);
+		d_slab_release(eqt->de_read_slab, ev);
 		return;
 	}
 
@@ -101,11 +99,11 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
-	d_slab_restock(eqt->dpi_read_slab);
+	d_slab_restock(eqt->de_read_slab);
 
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev)
-		d_slab_release(eqt->dpi_read_slab, ev);
+		d_slab_release(eqt->de_read_slab, ev);
 }

@@ -47,8 +47,7 @@ struct dfuse_projection_info {
 	ATOMIC uint64_t     dpi_ino_next;
 	bool                dpi_shutdown;
 
-	struct d_slab                    dpi_slab;
-
+	struct d_slab       dpi_slab;
 
 	/* Array of dfuse_eq */
 	struct dfuse_eq    *dpi_eqt;
@@ -66,9 +65,8 @@ struct dfuse_eq {
 
 	pthread_t                     de_thread;
 
-	struct d_slab_type              *dpi_read_slab;
-	struct d_slab_type              *dpi_write_slab;
-
+	struct d_slab_type           *de_read_slab;
+	struct d_slab_type           *de_write_slab;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
@@ -191,9 +189,9 @@ struct dfuse_event {
 	d_iov_t                       de_iov;
 	d_sg_list_t                   de_sgl;
 	d_list_t                      de_list;
-	struct dfuse_projection_info *de_handle;
-	struct dfuse_obj_hdl *de_oh;
-		off_t                 de_req_position; /**< The file position requested by fuse */
+	struct dfuse_eq              *de_eqt;
+	struct dfuse_obj_hdl         *de_oh;
+	off_t                         de_req_position; /**< The file position requested by fuse */
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 

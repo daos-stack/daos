@@ -14,7 +14,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 		DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
 	else
 		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
-	d_slab_release(ev->de_eqt->dpi_write_slab, ev);
+	d_slab_release(ev->de_eqt->de_write_slab, ev);
 }
 
 void
@@ -44,7 +44,7 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 		}
 	}
 
-	ev = d_slab_acquire(eqt->dpi_write_slab);
+	ev = d_slab_acquire(eqt->de_write_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -93,12 +93,12 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	sem_post(&eqt->de_sem);
 
 	/* Now ensure there are more descriptors for the next request */
-	d_slab_restock(eqt->dpi_write_slab);
+	d_slab_restock(eqt->de_write_slab);
 
 	return;
 
 err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev)
-		d_slab_release(eqt->dpi_write_slab, ev);
+		d_slab_release(eqt->de_write_slab, ev);
 }
