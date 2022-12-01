@@ -9,24 +9,26 @@
  * heard of. It never generates any new HLC timestamps.
  */
 
-#include "crt_internal.h"
+//#include "crt_internal.h"
+#include <stdint.h>
 #include <gurt/atomic.h>
 
-static ATOMIC uint64_t crt_hlct;
 
-uint64_t crt_hlct_get(void)
+static ATOMIC uint64_t d_hlct;
+
+uint64_t d_hlct_get(void)
 {
-	return crt_hlct;
+	return d_hlct;
 }
 
-void crt_hlct_sync(uint64_t msg)
+void d_hlct_sync(uint64_t msg)
 {
 	uint64_t hlct, hlct_new;
 
 	do {
-		hlct = crt_hlct;
+		hlct = d_hlct;
 		if (hlct >= msg)
 			break;
 		hlct_new = msg;
-	} while (!atomic_compare_exchange(&crt_hlct, hlct, hlct_new));
+	} while (!atomic_compare_exchange(&d_hlct, hlct, hlct_new));
 }

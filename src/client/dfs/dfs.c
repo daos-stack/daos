@@ -979,18 +979,18 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		if (ep) {
 			struct timespec obj_mtime, entry_mtime;
 
-			rc = crt_hlc2timespec(ep, &obj_mtime);
+			rc = d_hlc2timespec(ep, &obj_mtime);
 			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
 			if (obj_hlc)
 				*obj_hlc = ep;
 
-			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+			rc = d_hlc2timespec(entry.obj_hlc, &entry_mtime);
 			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
@@ -1078,18 +1078,18 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		if (array_stbuf.st_max_epoch) {
 			struct timespec obj_mtime, entry_mtime;
 
-			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &obj_mtime);
+			rc = d_hlc2timespec(array_stbuf.st_max_epoch, &obj_mtime);
 			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
 			if (obj_hlc)
 				*obj_hlc = array_stbuf.st_max_epoch;
 
-			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+			rc = d_hlc2timespec(entry.obj_hlc, &entry_mtime);
 			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+				D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 
@@ -5508,17 +5508,17 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
 
 			if (!set_mtime) {
-				rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
+				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
 				if (rc) {
-					D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 					D_GOTO(out_obj, rc = daos_der2errno(rc));
 				}
 			}
 
 			if (!set_ctime) {
-				rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
+				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
 				if (rc) {
-					D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
 					D_GOTO(out_obj, rc = daos_der2errno(rc));
 				}
 			}
