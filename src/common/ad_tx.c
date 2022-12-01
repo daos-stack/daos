@@ -975,8 +975,6 @@ tx_abort(struct ad_tx *tx, int err)
 	if (err == 0)
 		err = -DER_CANCELED;
 
-	ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
-
 	return tx_end(tx, err);
 }
 
