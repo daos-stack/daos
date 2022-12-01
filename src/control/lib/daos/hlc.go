@@ -9,7 +9,6 @@ package daos
 /*
 #cgo LDFLAGS: -lgurt
 
-#include <cart/api.h>
 #include <gurt/common.h>
 */
 import "C"
@@ -22,7 +21,7 @@ import (
 
 const (
 	// ZeroHLCDate is the date of the zero HLC, as
-	// defined by CRT_HLC_START_SEC in src/cart/d_hlc.c
+	// defined by D_HLC_START_SEC in src/gurt/hlc.c
 	ZeroHLCDate = "2021-01-01 00:00:00 +0000 UTC"
 )
 
