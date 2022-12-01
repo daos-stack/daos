@@ -854,16 +854,33 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                        dockerfile {
+                            filename 'ci/docker/Dockerfile.maldet.el.8'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
+                        }
                     }
                     steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
+                        runTest script: 'export DAOS_PKG_VERSION=' +
+                                        daosPackagesVersion(next_version) + '\n' +
+                                        'utils/scripts/helpers/scan_daos_maldet.sh',
+                                junit_files: 'maldetect_el8.xml',
+                                failure_artifacts: env.STAGE_NAME,
+                                ignore_failure: true,
+                                description: env.STAGE_NAME,
+                                context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
-                            junit 'maldetect.xml'
+                            junit 'maldetect_el8.xml'
+                            archiveArtifacts artifacts: 'maldetect_el8.xml'
                             job_status_update()
+                            // Force a job failure if anything was found
+                            sh label: 'Check if anything was found.',
+                               script: '! grep "<error " maldetect_el8.xml'
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
@@ -873,16 +890,33 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
+                        dockerfile {
+                            filename 'ci/docker/Dockerfile.maldet.leap.15'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() +
+                                                " -t ${sanitized_JOB_NAME}-leap15 " +
+                                                ' --build-arg REPOS="' + prRepos() + '"' +
+                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
+                        }
                     }
                     steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
+                        runTest script: 'export DAOS_PKG_VERSION=' +
+                                        daosPackagesVersion(next_version) + '\n' +
+                                        'utils/scripts/helpers/scan_daos_maldet.sh',
+                              junit_files: 'maldetect_leap15.xml',
+                              failure_artifacts: env.STAGE_NAME,
+                              ignore_failure: true,
+                              description: env.STAGE_NAME,
+                              context: 'test/' + env.STAGE_NAME
                     }
                     post {
                         always {
-                            junit 'maldetect.xml'
+                            junit 'maldetect_leap15.xml'
+                            archiveArtifacts artifacts: 'maldetect_leap15.xml'
                             job_status_update()
+                            // Force a job failure if anything was found
+                            sh label: 'Check if anything was found.',
+                               script: '! grep "<error " maldetect_leap15.xml'
                         }
                     }
                 } // stage('Scan Leap 15 RPMs')
@@ -927,6 +961,9 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
+                            stash name: 'fault-inject-valgrind',
+                                  includes: '*.memcheck.xml',
+                                  allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                             job_status_update()
                         }
@@ -1069,7 +1106,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
-                                                     'el8-gcc-unit-memcheck']
+                                                     'el8-gcc-unit-memcheck',
+                                                     'fault-inject-valgrind']
             job_status_update('final_status')
             job_status_write()
         }
