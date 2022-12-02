@@ -59,6 +59,7 @@ class CoreFileProcessing():
             int: num of corefile processesd
 
         """
+        errors = 0
         corefiles_processed = 0
         create_stacktrace = True
         self.log.debug("-" * 80)
