@@ -135,6 +135,11 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Additional repository used for locating packages for the build and ' +
+                            'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
@@ -167,49 +172,45 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit CI tests')
+                     description: 'Run the Unit Test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
-                     description: 'Run the Unit Memcheck CI tests')
+                     description: 'Run the Unit Test with memcheck stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault Injection on EL 8 CI tests')
+                     description: 'Run the Fault injection testing stage')
         booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 7 CI tests')
+                     description: 'Run the Functional on CentOS 7 stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the functional CentOS 8 CI tests' +
-                                  ' with Valgrind')
+                     description: 'Run the Functional on EL 8 with Valgrind stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 8 CI tests')
+                     description: 'Run the Functional on EL 8 stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
-                     description: 'Run the functional OpenSUSE Leap 15 CI tests' +
+                     description: 'Run the Functional on Leap 15 stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the functional Ubuntu 20 CI tests' +
+                     description: 'Run the Functional on Ubuntu 20.04 stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_RPMS_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the CentOS 7 RPM CI tests')
+                     description: 'Run the Test CentOS 7 RPMs stage')
         booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
-        booleanParam(name: 'CI_small_TEST',
-                     defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
+                     description: 'Run the Scan CentOS 7 RPMs stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Medium Cluster CI tests')
+                     description: 'Run the Functional Hardware Medium stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Large Cluster CI tests')
+                     description: 'Run the Functional Hardware Large stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -219,9 +220,6 @@ pipeline {
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
-        string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
         string(name: 'CI_NVME_5_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node NVMe tests')
@@ -234,10 +232,6 @@ pipeline {
         string(name: 'CI_PROVISIONING_POOL',
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
-        // TODO: add parameter support for per-distro CI_PR_REPOS
-        string(name: 'CI_PR_REPOS',
-               defaultValue: '',
-               description: 'Repos to add to the build and test ndoes')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -1071,27 +1065,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, '{client,server}-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
