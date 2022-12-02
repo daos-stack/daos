@@ -71,6 +71,7 @@ ut_format(void **state)
 	rc = vea_format(&args->vua_umm, &args->vua_txd, args->vua_md, blk_sz,
 			hdr_blks, capacity, NULL, NULL, true);
 	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, 1);
 }
 
 static void
