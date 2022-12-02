@@ -22,7 +22,12 @@ import (
 )
 
 type faultsCmdRoot struct {
-	Faults faultInjectionCmd `command:"faults" description:"Inject system fault"`
+	Faults faultsCmd `command:"faults" description:"Inject server faults"`
+}
+
+type faultsCmd struct {
+	Param     debugFaultCmd     `command:"set-param" description:"Use daos_debug_set_params() to set fault parameters"`
+	Container containerFaultCmd `command:"container" description:"Inject container fault"`
 }
 
 type faultFrequency uint64
@@ -87,13 +92,11 @@ type faultInjectionCmd struct {
 
 	Rank      faultRank      `short:"r" long:"rank" description:"Rank to inject fault on" default:"4294967295"`
 	Frequency faultFrequency `short:"f" long:"frequency" description:"Fault injection frequency" choices:"always,once" default:"once"`
-	Args      struct {
-		Location faultLocation `positional-arg-name:"<location>" description:"Fault injection location" required:"1"`
-	} `positional-args:"yes"`
+	Location  faultLocation  `short:"l" long:"location" description:"Fault injection location" required:"1"`
 }
 
-func (cmd *faultInjectionCmd) Execute(_ []string) error {
-	faultMask := C.uint64_t(cmd.Args.Location)
+func (cmd *faultInjectionCmd) setParams() error {
+	faultMask := C.uint64_t(cmd.Location)
 	if someVal, hasSome := cmd.Frequency.HasSome(); hasSome {
 		cmd.Debugf("setting fault injection frequency to %d", someVal)
 		rc := C.daos_debug_set_params(nil, C.d_rank_t(cmd.Rank), C.DMG_KEY_FAIL_NUM, C.uint64_t(someVal), 0, nil)
@@ -113,6 +116,45 @@ func (cmd *faultInjectionCmd) Execute(_ []string) error {
 	rc := C.daos_debug_set_params(nil, C.d_rank_t(cmd.Rank), C.DMG_KEY_FAIL_LOC, faultMask, 0, nil)
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to set fault injection")
+	}
+	return nil
+}
+
+type debugFaultCmd struct {
+	faultInjectionCmd
+}
+
+func (cmd *debugFaultCmd) Execute(_ []string) error {
+	return cmd.setParams()
+}
+
+type containerFaultCmd struct {
+	existingContainerCmd
+	faultInjectionCmd
+}
+
+func (cmd *containerFaultCmd) Execute(_ []string) error {
+	if err := cmd.setParams(); err != nil {
+		return err
+	}
+
+	// Quick hack; find a more maintainable solution for this later.
+	switch cmd.Location {
+	case faultLocation(C.DAOS_CHK_CONT_ORPHAN):
+		cdCmd := containerDestroyCmd{
+			existingContainerCmd: cmd.existingContainerCmd,
+		}
+		cdCmd.Logger = cmd.Logger
+		return cdCmd.Execute(nil)
+	case faultLocation(C.DAOS_CHK_CONT_BAD_LABEL):
+		cspCmd := containerSetPropCmd{
+			existingContainerCmd: cmd.existingContainerCmd,
+		}
+		if err := cspCmd.Properties.UnmarshalFlag("label:new-label"); err != nil {
+			return err
+		}
+		cspCmd.Logger = cmd.Logger
+		return cspCmd.Execute(nil)
 	}
 	return nil
 }
