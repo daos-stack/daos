@@ -386,7 +386,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
-	rc = crt_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
+	rc = d_hlc_get_msg(rpc_priv->crp_req_hdr.cch_hlc,
 			     &ctx->cc_last_unpack_hlc, &clock_offset);
 	if (rc != 0) {
 		REPORT_HLC_SYNC_ERR("failed to sync HLC for request: opc=%x ts="
@@ -525,7 +525,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 						rpc_priv->crp_grp_priv,
 						rpc_priv->crp_grp_priv->gp_self
 						);
-				hdr->cch_hlc = crt_hlc_get();
+				hdr->cch_hlc = d_hlc_get();
 			} else {
 				hdr->cch_src_rank = CRT_NO_RANK;
 				/*
@@ -534,7 +534,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 				 * HLCT reading, which must be either zero or a
 				 * server HLC timestamp.
 				 */
-				hdr->cch_hlc = crt_hlct_get();
+				hdr->cch_hlc = d_hlct_get();
 			}
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
@@ -607,7 +607,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		if (ENCODING(proc_op)) {
 			/* Clients never encode replies. */
 			D_ASSERT(crt_is_service());
-			rpc_priv->crp_reply_hdr.cch_hlc = crt_hlc_get();
+			rpc_priv->crp_reply_hdr.cch_hlc = d_hlc_get();
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
@@ -621,7 +621,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			if (crt_is_service()) {
 				uint64_t clock_offset;
 
-				rc = crt_hlc_get_msg(hdr->cch_hlc,
+				rc = d_hlc_get_msg(hdr->cch_hlc,
 						     NULL /* hlc_out */,
 						     &clock_offset);
 				if (rc != 0) {
@@ -641,7 +641,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 					rc = 0;
 				}
 			} else {
-				crt_hlct_sync(hdr->cch_hlc);
+				d_hlct_sync(hdr->cch_hlc);
 			}
 		}
 
