@@ -65,14 +65,13 @@ class OSAOfflineParallelTest(OSAUtils):
                 # puuid, rank, target to the pool_exclude method.
             if action == "exclude" and self.server_boot is True:
                 ranks = action_args[action][1]
-                getattr(dmg, "system stop --ranks={}".format(ranks))
-                output = "Stopping the rank : {}".format(ranks)
-                self.print_and_assert_on_rebuild_failure(output)
-                getattr(dmg, "system start --ranks={}".format(ranks))
-                self.print_and_assert_on_rebuild_failure(output)
+                dmg.system_stop(ranks=ranks)
+                self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
+                dmg.system_start(ranks=ranks)
+                self.print_and_assert_on_rebuild_failure("Starting rank {}".format(ranks))
             else:
                 getattr(dmg, "pool_{}".format(action))(**action_args[action])
-        except CommandFailure:
+        except Exception:       # pylint: disable=broad-except
             results.put("{} failed".format(action))
 
     def run_offline_parallel_test(self, num_pool, data=False, oclass=None):
@@ -159,10 +158,8 @@ class OSAOfflineParallelTest(OSAUtils):
                 # Add a dmg thread
                 process = threading.Thread(target=self.dmg_thread,
                                            kwargs={"action": action,
-                                                   "action_args":
-                                                   action_args,
-                                                   "results":
-                                                   self.out_queue})
+                                                   "action_args": action_args,
+                                                   "results": self.out_queue})
                 process.start()
                 threads.append(process)
 
@@ -171,10 +168,10 @@ class OSAOfflineParallelTest(OSAUtils):
             thrd.join()
             time.sleep(5)
 
-        # Check the queue for any failure.
-        tmp_list = list(self.out_queue.queue)
-        for failure in tmp_list:
-            if "FAIL" in failure:
+        # Verify the queue result and make sure test has no failure
+        while not self.out_queue.empty():
+            failure = self.out_queue.get()
+            if "failed" in failure:
                 self.fail("Test failed : {0}".format(failure))
 
         for val in range(0, num_pool):
@@ -186,9 +183,11 @@ class OSAOfflineParallelTest(OSAUtils):
             pver_end = self.pool.get_version(True)
             self.log.info("Pool Version at the End %s", pver_end)
             if self.server_boot is True:
-                self.assertTrue(pver_end >= 17, "Pool Version Error:  at the end")
+                self.assertTrue(
+                    pver_end >= 17, "Pool Version Error: {} at the end < 17".format(pver_end))
             else:
-                self.assertTrue(pver_end >= 25, "Pool Version Error:  at the end")
+                self.assertTrue(
+                    pver_end >= 25, "Pool Version Error: {} at the end < 25".format(pver_end))
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):

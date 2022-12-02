@@ -61,8 +61,8 @@ class OSAUtils(MdtestBase, IorTestBase):
         """If the rebuild is not successful, raise assert."""
         rebuild_status = self.pool.get_rebuild_status(True)
         self.log.info("Rebuild Status: %s", rebuild_status)
-        rebuild_failed_string = ["failed", "scanning", "aborted", "busy"]
-        self.assertTrue(rebuild_status not in rebuild_failed_string, "Rebuild failed")
+        if rebuild_status in ["failed", "scanning", "aborted", "busy"]:
+            self.fail("Rebuild failed")
 
     @fail_on(CommandFailure)
     def print_and_assert_on_rebuild_failure(self, out, timeout=3):
