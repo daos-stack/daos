@@ -28,7 +28,7 @@ from ClusterShell.NodeSet import NodeSet
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing
+from process_core_files import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -3130,22 +3130,26 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            status = core_file_processing.process_core_files(test_job_results, True)
-            if status["corefiles_processed"] == 0:
-                return 0
-            if status["errors"]:
-                message = f"Errors detected processing test core files: {error_count}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 256
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+            if corefiles_processed == 0:
+                return_code = 0
+
+        except CoreFileException:
+            message = "Errors detected processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return_code = 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-            return 256
+            return_code = 256
 
-        message = "One or more core files detected after test execution"
-        self._fail_test(self.result.tests[-1], "Process", message, None)
-        return 2048
+        if corefiles_processed > 0:
+            message = "One or more core files detected after test execution"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return_code = 2048
+
+        return return_code
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
