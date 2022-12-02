@@ -699,7 +699,12 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 
 	pci_dev_type = spdk_pci_device_get_type(pci_device);
-	if (strcmp(pci_dev_type, "vmd") != 0) {
+	if (pci_dev_type == NULL) {
+		D_ERROR("nil pci device type returned\n");
+		opts->status = -DER_MISC;
+	}
+
+	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
 		D_ERROR("Found unexpected non-VMD device type (%s)\n", pci_dev_type);
 		opts->status = -DER_NOSYS;
 		return;

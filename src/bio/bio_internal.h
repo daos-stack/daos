@@ -15,6 +15,7 @@
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
+#define BIO_DEV_TYPE_VMD	"vmd"
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */

@@ -603,7 +603,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 		if (spdk_json_strequal(ctx->subsystem_name, "bdev"))
 			bdev_ss = ctx->subsystems_it;
 
-		if (spdk_json_strequal(ctx->subsystem_name, "vmd"))
+		if (spdk_json_strequal(ctx->subsystem_name, BIO_DEV_TYPE_VMD))
 			vmd_ss = ctx->subsystems_it;
 
 		/* Move on to next subsystem */
