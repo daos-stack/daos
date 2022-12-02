@@ -864,7 +864,7 @@ func (db *Database) FindPoolServiceByUUID(uuid uuid.UUID) (*PoolService, error) 
 		return copyPoolService(p), nil
 	}
 
-	return nil, &ErrPoolNotFound{byUUID: &uuid}
+	return nil, ErrPoolUUIDNotFound(uuid)
 }
 
 // FindPoolServiceByLabel searches the pool database by Label. If no
@@ -880,7 +880,7 @@ func (db *Database) FindPoolServiceByLabel(label string) (*PoolService, error) {
 		return copyPoolService(p), nil
 	}
 
-	return nil, &ErrPoolNotFound{byLabel: &label}
+	return nil, ErrPoolLabelNotFound(label)
 }
 
 // TakePoolLock attempts to take a lock on the pool with the given UUID,
