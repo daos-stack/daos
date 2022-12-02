@@ -29,7 +29,7 @@ produce_output()
 {
     echo "$2"
 
-    cname="UTEST_all.run_test_${RUN_TEST_VALGRIND:-native}"
+    cname="run_test.${RUN_TEST_VALGRIND:-native}"
     name="run_test"
     fname="${DAOS_BASE}/test_results/test_run_test.sh.${RUN_TEST_VALGRIND:-native}.xml"
 
