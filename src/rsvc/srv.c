@@ -157,6 +157,7 @@ fini_free(struct ds_rsvc *svc)
 void
 ds_rsvc_get(struct ds_rsvc *svc)
 {
+	D_DEBUG(DB_MD, "%s: %d++\n", svc->s_name, svc->s_ref);
 	svc->s_ref++;
 }
 
@@ -165,6 +166,7 @@ void
 ds_rsvc_put(struct ds_rsvc *svc)
 {
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
+	D_DEBUG(DB_MD, "%s: %d--\n", svc->s_name, svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
 		rdb_stop(svc->s_db);
@@ -196,6 +198,7 @@ rsvc_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
+	D_DEBUG(DB_MD, "%s: %d++\n", svc->s_name, svc->s_ref);
 	svc->s_ref++;
 }
 
@@ -205,6 +208,7 @@ rsvc_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
+	D_DEBUG(DB_MD, "%s: %d--\n", svc->s_name, svc->s_ref);
 	svc->s_ref--;
 	return svc->s_ref == 0;
 }
@@ -692,6 +696,7 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 	rc = alloc_init(class, id, db_uuid, &svc);
 	if (rc != 0)
 		goto err;
+	D_DEBUG(DB_MD, "%s: %d++\n", svc->s_name, svc->s_ref);
 	svc->s_ref++;
 
 	if (create)
@@ -732,6 +737,7 @@ err_db:
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
+	D_DEBUG(DB_MD, "%s: %d--\n", svc->s_name, svc->s_ref);
 	svc->s_ref--;
 	fini_free(svc);
 err:
