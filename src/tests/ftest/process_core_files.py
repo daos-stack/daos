@@ -56,7 +56,7 @@ class CoreFileProcessing():
             CoreFileException: if there is an error processing core files.
 
         Returns:
-            int: num of corefile processesd
+            int: num of core file processed
 
         """
         errors = 0
