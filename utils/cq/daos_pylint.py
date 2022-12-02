@@ -15,6 +15,7 @@ for arg in sys.argv:
 try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
+    from pylint.constants import full_version
 except ImportError:
     print('install pylint to enable this check')
     sys.exit(0)
@@ -586,10 +587,7 @@ def main():
         args.files = [args.from_stdin]
 
     if args.version:
-        print('pylint 2.15.5')
-        print('astroid 2.12.12')
-        print('Python 3.9.6 (default, Sep 26 2022, 11:37:49)')
-        print('[Clang 14.0.0 (clang-1400.0.29.202)]')
+        print(full_version)
         sys.exit(0)
 
     rc_tmp = None
