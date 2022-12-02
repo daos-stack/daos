@@ -54,6 +54,15 @@ def create(path, entry_type, owner=None):
 
 
 def _create(path, entry_type):
+    '''Create a file or directory.
+
+    Files are created with a shebang to be executable.
+
+    Args:
+        path (str): path to create
+        entry_type (str): file or dir
+
+    '''
     if entry_type == 'file':
         with open(path, 'w', encoding='utf-8') as file:
             # Allow the file to be executable
@@ -81,6 +90,12 @@ def delete(path, owner=None):
 
 
 def _delete(path):
+    '''Delete a path.
+
+    Args:
+        path (str): path to delete
+
+    '''
     if os.path.isdir(path):
         os.rmdir(path)
     else:
