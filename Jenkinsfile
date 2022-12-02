@@ -82,7 +82,7 @@ Integer getuid() {
 }
 
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'new_lightweight' }
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
@@ -323,7 +323,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -383,7 +383,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.code_scanning'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -422,7 +422,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -458,7 +458,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args  '--cap-add=SYS_ADMIN'
                         }
@@ -494,7 +494,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -529,7 +529,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
@@ -569,7 +569,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
@@ -611,7 +611,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -850,7 +850,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'ci/docker/Dockerfile.maldet.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
@@ -886,7 +886,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'ci/docker/Dockerfile.maldet.leap.15'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs() +
                                                 " -t ${sanitized_JOB_NAME}-leap15 " +
                                                 ' --build-arg REPOS="' + prRepos() + '"' +
@@ -922,7 +922,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true)
@@ -1044,7 +1044,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
                                 " -t ${sanitized_JOB_NAME}-el8 " +
