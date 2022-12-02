@@ -111,6 +111,7 @@ type cliOptions struct {
 	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
 	Version    versionCmd     `command:"version" description:"print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	faultsCmdRoot
 }
 
 type versionCmd struct{}
