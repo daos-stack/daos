@@ -48,8 +48,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	DFUSE_TRA_UP(ev, oh, "write");
-
 	/* Declare a bufvec on the stack and have fuse copy into it.
 	 * For page size and above this will read directly into the
 	 * buffer, avoiding any copying of the data.

@@ -358,6 +358,7 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->st_reg.sr_offset;
 
+	D_TRACE_DOWN(DB_ANY, ptr);
 	D_MUTEX_LOCK(&type->st_lock);
 	type->st_pending_count++;
 	d_list_add_tail(entry, &type->st_pending_list);
