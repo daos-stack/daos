@@ -1171,7 +1171,7 @@ class TestPool(TestDaosApiBase):
             sleep(interval)
             self._update_rebuild_data()
 
-        self.log.info("Wait for rebuild complete; rebuild is %s", self._rebuild_data["check"])
+        self.log.info("Wait for rebuild complete: rebuild %s", self._rebuild_data["check"])
 
     def has_rebuild_started(self, verbose=True):
         """Determine if rebuild has started.
