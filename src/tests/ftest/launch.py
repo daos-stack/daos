@@ -3125,31 +3125,31 @@ class Launch():
             test_job_results (str): the location of the core files
 
         Returns:
-            int: status code: 2048 = Core file exist; fail test, 256 = failure
+            int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
             corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
             if corefiles_processed == 0:
-                return_code = 0
+                return 0
 
         except CoreFileException:
             message = "Errors detected processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message)
-            return_code = 256
+            return 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
-            return_code = 256
+            return 256
 
         if corefiles_processed > 0:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
-            return_code = 2048
+            return 2048
 
-        return return_code
+        return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
         """Append the test name to its avocado job-results directory name.
