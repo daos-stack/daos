@@ -1,6 +1,6 @@
 hosts:
   # servers if no server partition is defined
-  test_servers: 10
+  test_servers: 8
   # servers if a server partition is defined
   # server_partition: daos_server
   client_partition: daos_client
@@ -107,8 +107,8 @@ soak_harassers:
     # - exclude_reintegrate-offline
     # - server-stop_server-start
     # - server-stop_server-start-offline
-    # - server-stop_server-reintegrate
-    - server-stop_server-reintegrate-offline
+    - server-stop_server-reintegrate
+    # - server-stop_server-reintegrate-offline
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true
