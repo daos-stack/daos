@@ -334,11 +334,12 @@ obj_bulk_inflights(struct obj_bulk_args *args, crt_rpc_t *rpc, int val)
 
 	D_ASSERT(args->bulks_inflight > 0);
 	args->bulks_inflight += val;
-	if (args->bulks_inflight == 0)
-		ABT_eventual_set(args->eventual, &args->result, sizeof(args->result));
 
 	if (!is_primary)
 		ABT_mutex_unlock(args->lock);
+
+	if (args->bulks_inflight == 0)
+		ABT_eventual_set(args->eventual, &args->result, sizeof(args->result));
 }
 
 static int
@@ -383,6 +384,13 @@ bulk_cp(const struct crt_bulk_cb_info *cb_info)
 static inline int
 cached_bulk_cp(const struct crt_bulk_cb_info *cb_info)
 {
+	struct	crt_bulk_desc	*bulk_desc = cb_info->bci_bulk_desc;
+	crt_rpc_t		*rpc = bulk_desc->bd_rpc;
+	bool			 is_primary;
+
+	rpc2orig_ctx(rpc, &is_primary);
+	D_ASSERT(is_primary);
+
 	return obj_bulk_comp_cb(cb_info);
 }
 
