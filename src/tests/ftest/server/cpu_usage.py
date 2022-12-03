@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -65,14 +64,14 @@ class CPUUsage(IorTestBase):
             "CPU usage is above {}%: {}%".format(usage, usage_limit))
 
     def test_cpu_usage(self):
-        """
-        JIRA ID: DAOS-4826
+        """JIRA ID: DAOS-4826.
 
         Test Description: Test CPU usage of formatted and idle engine.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=server,cpu_usage
+        :avocado: tags=CPUUsage,test_cpu_usage
         """
         # Get PID of daos_engine with ps.
         ps_engine = r"ps -C daos_engine -o %\p"

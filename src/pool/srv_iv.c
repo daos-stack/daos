@@ -1138,7 +1138,7 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	key.class_id = class_id;
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
-	pool_key->pik_eph = crt_hlc_get();
+	pool_key->pik_eph = d_hlc_get();
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
