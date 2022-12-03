@@ -1125,7 +1125,7 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 	 * If the layout might being extended, i.e. so extra shards needs
 	 * to be added to the layout. But this is only needed for update.
 	 */
-	if (unlikely(is_extending || is_adding_new)/* && !(mode & DAOS_OO_RO) */) {
+	if (unlikely(is_extending || is_adding_new) && !(mode & DAOS_OO_RO)) {
 		/* Needed to check if domains are being added to pool map */
 		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
 			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
