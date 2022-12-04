@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-1%{?dist}
+%global mercury_version 2.2.0-4%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -529,6 +529,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Oct 26 2022 Joseph Moore <joseph.moore@intel.com> 2.3.101-4
+- Update to mercury 2.2.0-4
+
 * Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.1.101-3
 - Set flag to build per-subpackage debuginfo packages for Leap 15
 
