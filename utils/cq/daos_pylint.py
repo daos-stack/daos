@@ -8,10 +8,6 @@ from collections import Counter
 import tempfile
 import subprocess  # nosec
 import argparse
-import json
-for arg in sys.argv:
-    if arg.startswith('--import='):
-        sys.path.append(arg[9:])
 try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
@@ -33,14 +29,15 @@ except ImportError:
 #  Supports minimum python version
 #  Supports python virtual environment usage
 #  Can be used by atom.io live
-#  Can be used by VS Code.
 #  Outputs directly to GitHub annotations
 # To be added:
 #  Can be used in Jenkins to report regressions
+#  Can be used as a commit-hook
+#  flake8 style --diff option
 
-# For now this splits code into one of four types, build (scons), fake_scons ftest or other.
-# For build code it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH
-# correctly and does not warn about f-strings, for others it runs without any special flags.
+# For now this splits code into one of three types, build (scons), ftest or other.  For build code
+# it enforces all style warnings except f-strings, for ftest it sets PYTHONPATH correctly and
+# does not warn about f-strings, for others it runs without any special flags.
 
 # Errors are reported as annotations to PRs and will fail the build, as do warnings in the build
 # code.  The next step is to enable warnings elsewhere to be logged, but due to the large number
@@ -49,11 +46,7 @@ except ImportError:
 
 
 class WrapScript():
-    """Create a wrapper for a scons file and maintain a line mapping
-
-    An update here is needed as files in site_scons/*.py do not automatically import SCons but
-    can do if they wish, this code is importing for all files however.
-    """
+    """Create a wrapper for a scons file and maintain a line mapping"""
 
     def __init__(self, fname):
 
@@ -191,7 +184,6 @@ class FileTypeList():
         self.fake_scons = []
         self.files = []
         self._regions = {}
-        self._reports = []
 
     def add_regions(self, file, regions):
         """Mark that only some regions for file should be reported"""
@@ -253,28 +245,21 @@ class FileTypeList():
 
     def run(self, args):
         """Run pylint against all files"""
-        if args.output_format != 'json':
-            print(self)
-
+        print(self)
         failed = False
         if self.files:
             if self.parse_file(args, self.files):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.ftest_files:
             if self.parse_file(args, self.ftest_files, ftest=True):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.fake_scons:
             if self.parse_file(args, self.fake_scons, fake_scons=True):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.scons_files:
             for file in self.scons_files:
                 if self.parse_file(args, file, scons=True):
                     failed = True
-        if args.output_format == 'json':
-            print(json.dumps(self._reports, indent=4))
         return failed
 
     def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
@@ -449,14 +434,7 @@ sys.path.append('site_scons')"""
                     file_warnings.append(msg)
                     continue
 
-            if args.output_format == 'json':
-                report = {'type': vals['category'],
-                          'module': vals['path']}
-                for copy in ('message-id', 'symbol', 'line', 'column', 'message'):
-                    report[copy] = vals[copy]
-                self._reports.append(report)
-            else:
-                print(args.msg_template.format(**vals))
+            print(args.msg_template.format(**vals))
 
             if args.format == 'github':
                 if vals['category'] in ('convention', 'refactor'):
@@ -517,6 +495,18 @@ def get_git_files(directory=None):
     return all_files
 
 
+def run_input_file(args, input_file):
+    """Run from a input file"""
+
+    all_files = FileTypeList()
+
+    with open(input_file, encoding='utf-8') as fd:
+        for file in fd.readlines():
+            all_files.add(file.strip())
+
+    all_files.run(args)
+
+
 class OutPutRegion:
     """Class for managing file regions"""
 
@@ -545,7 +535,7 @@ def main():
 
     # Basic options.
     parser.add_argument('--git', action='store_true')
-    parser.add_argument('--from-stdin')
+    parser.add_argument('--from-file')
 
     spellings = True
     try:
@@ -562,13 +552,9 @@ def main():
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
+    parser.add_argument('--output-format', choices=['text'])
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--diff', action='store_true')
-    parser.add_argument('--version', action='store_true')
-
-    # Args that VS Code uses.
-    parser.add_argument('--import')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # A --format github option as yamllint uses.
@@ -578,19 +564,6 @@ def main():
     parser.add_argument('files', nargs='*')
 
     args = parser.parse_args()
-
-    if args.output_format == 'json':
-        args.reports = 'n'
-
-    if args.from_stdin:
-        args.files = [args.from_stdin]
-
-    if args.version:
-        print('pylint 2.15.5')
-        print('astroid 2.12.12')
-        print('Python 3.9.6 (default, Sep 26 2022, 11:37:49)')
-        print('[Clang 14.0.0 (clang-1400.0.29.202)]')
-        sys.exit(0)
 
     rc_tmp = None
 
@@ -627,10 +600,7 @@ def main():
                 regions = OutPutRegion()
                 all_files.add_regions(file, regions)
                 if not args.git:
-                    if os.path.exists(file):
-                        all_files.add(file)
-                    else:
-                        print(f'Skipping {file} as it does not exist')
+                    all_files.add(file)
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
@@ -652,6 +622,9 @@ def main():
         all_files = get_git_files()
         if all_files.run(args):
             sys.exit(1)
+        return
+    if args.from_file:
+        run_input_file(args, args.from_file)
         return
     all_files = FileTypeList()
     all_dirs = []
