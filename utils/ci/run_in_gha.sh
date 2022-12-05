@@ -99,9 +99,9 @@ python3 setup.py install
 cd -
 echo "::endgroup::"
 
-echo "::Cleaning tree::"
+echo "::group::Cleaning tree::"
 rm -rf install
-git status --ignored=matching
+ls -A
 echo "::endgroup::"
 
 echo "::group::Setting up daos_server_helper"
