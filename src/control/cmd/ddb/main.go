@@ -19,7 +19,6 @@ import (
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
 	"os"
-	"runtime"
 )
 
 type cliOptions struct {
@@ -29,12 +28,13 @@ type cliOptions struct {
 }
 
 func main() {
-	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
-	runtime.LockOSThread()
-	C.ddb_init()
-
-	ctx := C.struct_ddb_ctx{}
-	C.ddb_ctx_init(&ctx) // Initialize with ctx default values
+	ctx := DdbContext{}
+	err := ctx.Init()
+	if err != nil {
+		fmt.Printf("Error initializing the DDB Context: %s\n", err)
+		return
+	}
+	defer ctx.Fini()
 
 	// There are two 'stages' to the cli interactivity. The first is the parsing of the command line arguments
 	// and flags. The flags module is used to handle this stage.
@@ -46,26 +46,26 @@ func main() {
 
 	rest, err := parser.ParseArgs(os.Args[1:])
 	if err != nil {
-		goto done
+		return
 	}
 
 	if len(rest) > 1 {
 		fmt.Printf("Unknown argument: %s\n", rest[1])
-		goto done
+		return
 	}
 
 	if len(opts.Run) > 0 && len(opts.File) > 0 {
 		print("Cannot use both '-R' and '-f'.\n")
-		goto done
+		return
 	}
 
 	if len(rest) == 1 {
 		// Path to vos file was supplied. Open before moving on
 		fmt.Printf("Connect to path: %s\n", rest[0])
-		err := open_wrapper(&ctx, rest[0], opts.WriteMode)
+		err := ddbOpen(&ctx, rest[0], opts.WriteMode)
 		if err != nil {
 			fmt.Printf("Error opening file '%s': %s\n", rest[0], err)
-			goto done
+			return
 		}
 	}
 
@@ -75,13 +75,13 @@ func main() {
 		if err != nil {
 			fmt.Printf("%s\n", err)
 		}
-		goto done
+		return
 	} else if len(opts.File) > 0 {
 		// '-f'
 		file, err := os.Open(opts.File)
 		if err != nil {
 			fmt.Printf("Error opening file. Error: %s\n", err)
-			goto done
+			return
 
 		}
 		fmt.Printf("Running commands in: %s\n", opts.File)
@@ -92,7 +92,7 @@ func main() {
 			err := runCmdStr(app, cmd)
 			if err != nil {
 				fmt.Printf("Failed running command '%s'. Error: %s\n", cmd, err)
-				goto done // don't continue if a command fails
+				return // don't continue if a command fails
 			}
 		}
 
@@ -100,12 +100,12 @@ func main() {
 		if err != nil {
 			fmt.Printf("Error closing file. Error: %s\n", err)
 		}
-		goto done
+		return
 	}
 
 	/* Run in interactive mode */
 	// Print the version upon entry
-	err = version_wrapper(&ctx)
+	err = ddbVersion(&ctx)
 	if err != nil {
 		fmt.Printf("Version error: %s", err)
 	}
@@ -116,12 +116,9 @@ func main() {
 	if err != nil {
 		fmt.Printf("error: %s\n", err)
 	}
-done:
-	C.ddb_fini()
-	runtime.UnlockOSThread()
 }
 
-func createGrumbleApp(ctx *C.struct_ddb_ctx) *grumble.App {
+func createGrumbleApp(ctx *DdbContext) *grumble.App {
 	var app = grumble.New(&grumble.Config{
 		Name: "ddb",
 		Description: `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
