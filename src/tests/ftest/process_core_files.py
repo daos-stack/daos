@@ -113,9 +113,13 @@ class CoreFileProcessing():
                     errors += 1
                 finally:
                     if delete:
-                        self.log.debug("Removing %s", core_file)
-                        os.remove(core_file)
-
+                        updated_core_file = os.path.join(core_dir, core_name)
+                        try:
+                            self.log.debug("Removing %s", updated_core_file)
+                            os.remove(updated_core_file)
+                        except FileNotFoundError as error:
+                            self.log.error(error)
+                            self.log.debug("Core file %s not found", updated_core_file)
         if errors:
             raise CoreFileException("Errors while processing core files")
         return corefiles_processed
