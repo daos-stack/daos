@@ -59,10 +59,6 @@ struct dfuse_info {
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
 #define DFUSE_MAX_READ (1024 * 1024)
 
-/* Launch fuse, and do not return until complete */
-int
-dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *args);
-
 struct dfuse_inode_entry;
 
 struct dfuse_readdir_entry {

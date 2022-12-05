@@ -1211,12 +1211,6 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	rc = dfuse_launch_fuse(fs_handle, &args);
-	if (rc == -DER_SUCCESS) {
-		fuse_opt_free_args(&args);
-		return rc;
-	}
-
 err_slab:
 	d_slab_destroy(&fs_handle->dpi_slab);
 err_ie_remove:
