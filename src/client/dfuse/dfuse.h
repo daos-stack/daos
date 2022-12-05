@@ -253,11 +253,8 @@ void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 int
-dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
-			 struct dfuse_pool *dfp,
-			 const char *label,
-			 struct dfuse_cont **_dfs);
-
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
+			 const char *label, struct dfuse_cont **_dfs);
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle,
 		struct dfuse_pool *dfp, uuid_t *cont,
