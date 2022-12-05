@@ -1779,7 +1779,7 @@ static int
 regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			 unsigned int tgts_cnt, daos_rebuild_opc_t rebuild_op)
 {
-	daos_epoch_t	eph = crt_hlc_get();
+	daos_epoch_t	eph = d_hlc_get();
 	unsigned int	i;
 	int		rc;
 
@@ -1896,7 +1896,7 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(rpt->rt_rebuild_fence != 0);
 	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
 		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = crt_hlc_get();
+		dpc->spc_rebuild_end_hlc = d_hlc_get();
 		D_DEBUG(DB_REBUILD, DF_UUID": Reset aggregation end hlc "
 			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
 			dpc->spc_rebuild_end_hlc);
@@ -2285,7 +2285,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = crt_hlc_get();
+	rpt->rt_rebuild_fence = d_hlc_get();
 	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;
