@@ -6,6 +6,7 @@ cd daos
 echo "::group::Rebuild spdk"
 rm -rf /opt/daos/prereq/release/spdk
 scons --jobs "$DEPS_JOBS" PREFIX=/opt/daos --build-deps=only
+rm -rf build/external/release/spdk
 echo "::endgroup::"
 
 echo "::group::Stack analyzer output (post build)"
@@ -57,6 +58,7 @@ find build
 echo "::endgroup::"
 
 echo "::group::Build all"
+ls -l build/debug/clang/src/gurt/ || true
 scons
 echo "::endgroup::"
 
