@@ -3,6 +3,7 @@
 """Build check library"""
 import daos_build
 
+
 def scons():
     """Execute build"""
     Import('env', 'prereqs')
@@ -25,6 +26,7 @@ def scons():
                               'chk_rpc.c', 'chk_upcall.c', 'chk_iv.c', 'chk_leader.c',
                               'chk_engine.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', chk)
+
 
 if __name__ == "SCons.Script":
     scons()

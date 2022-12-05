@@ -468,7 +468,8 @@ class DdbTest(TestWithServers):
                 mkdir=False)
         except DaosTestError as error:
             raise CommandFailure(
-                "ERROR: Copying new_data.txt to {}: {}".format(host, error))
+                "ERROR: Copying new_data.txt to {0}: {1}".format(host, error)) \
+                from error
 
         # The file with the new data is ready. Run ddb load.
         ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)

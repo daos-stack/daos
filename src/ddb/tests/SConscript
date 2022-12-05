@@ -48,5 +48,6 @@ def scons():
 
     denv.Install('$PREFIX/bin/', ddb_tests)
 
+
 if __name__ == "SCons.Script":
     scons()

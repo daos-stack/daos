@@ -292,5 +292,6 @@ def scons():
                                          "-labt -lgurt -luuid -lbio -lcart", sep=" ")
     install_go_bin(ddb_env, gosrc, ['ddb'], "ddb", "ddb")
 
+
 if __name__ == "SCons.Script":
     scons()
