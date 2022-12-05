@@ -543,7 +543,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_dup->dpe_str == NULL) {
 				rc = -DER_NOMEM;
-				D_ERROR("failed to dup label "DF_RC"\n", DP_RC(rc));
+				D_ERROR("failed to dup label: "DF_RC"\n", DP_RC(rc));
 				return rc;
 			}
 		}
@@ -571,7 +571,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 		rc = d_rank_list_dup(&dst_list, svc_list);
 		if (rc) {
-			D_ERROR("failed dup rank list "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed dup rank list: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
@@ -579,7 +579,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_CO_ROOTS:
 		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
 		if (rc) {
-			D_ERROR("failed to dup roots "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed to dup roots: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		break;
