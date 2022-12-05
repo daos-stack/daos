@@ -99,7 +99,7 @@ func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
 		}
 	}
 
-	return uuid.Nil, errors.Errorf("unable to find pool with label %q", id)
+	return uuid.Nil, system.ErrPoolLabelNotFound(id)
 }
 
 // getPoolService returns the pool service entry for the given UUID.

@@ -6,7 +6,7 @@ def scons():
     Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
-                 'daos_tests', 'gurt', 'cart', 'uuid', 'pthread',
+                 'daos_tests', 'gurt', 'uuid', 'pthread',
                  'pmemobj', 'cmocka', 'gomp']
 
     denv.d_add_requires('argobots')

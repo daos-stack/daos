@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -95,10 +94,11 @@ class DfuseSpaceCheck(IorTestBase):
             Disable aggregation.
             Create small files until the pool is out of space.
             Verify the same number of files were written.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=aggregation,daosio,dfuse
-        :avocado: tags=dfusespacecheck,test_dfusespacecheck
+        :avocado: tags=DfuseSpaceCheck,test_dfusespacecheck
         """
         # get test params for cont and pool count
         self.block_size = self.params.get('block_size', '/run/dfusespacecheck/*')
