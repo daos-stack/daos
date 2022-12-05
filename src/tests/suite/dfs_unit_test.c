@@ -2278,7 +2278,7 @@ dfs_test_checker(void **state)
 	test_arg_t		*arg = *state;
 	dfs_t			*dfs;
 	int			nr = 100, i;
-	dfs_obj_t		*root;
+	dfs_obj_t		*root, *lf;
 	daos_obj_id_t		root_oid;
 	daos_handle_t		root_oh;
 	daos_handle_t		coh;
@@ -2366,6 +2366,77 @@ dfs_test_checker(void **state)
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
 	/** should be 200 - 20 punched objects + SB + root object */
 	assert_true(nr_oids == 182);
+
+	/*
+	 * Using lower level obj API, punch 10 directory entry leaving orphaned directory object and
+	 * the file that was created under it.
+	 */
+	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_open(coh, root_oid, 0, &root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 10; i < 20; i++) {
+		char		name[24];
+		d_iov_t		dkey;
+
+		sprintf(name, "RD_dir_%d", i);
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container before invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 180 + SB + root object */
+	assert_true(nr_oids == 182);
+
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_LINK_LF);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container after invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 180 (since the leaked ones are re-linked) + SB + root object + LF dir */
+	assert_true(nr_oids == 183);
+
+	/** readdir of l+f confirming there are 10 files and dirs */
+	int			num_files = 0;
+	int			num_dirs = 0;
+	daos_anchor_t		anchor = {0};
+	uint32_t		num_ents = 10;
+	struct dirent		ents[10];
+	struct stat		stbufs[10];
+
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont_chkr", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR, O_RDWR, 0, 0, NULL, &lf);
+	assert_rc_equal(rc, 0);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs, lf, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+
+		for (i = 0; i < num_ents; i++) {
+			if (S_ISREG(stbufs[i].st_mode)) {
+				print_message("FILE: %s\n", ents[i].d_name);
+				num_files++;
+			} else if (S_ISDIR(stbufs[i].st_mode)) {
+				print_message("DIR: %s\n", ents[i].d_name);
+				num_dirs++;
+			} else {
+				print_error("Found invalid entry: %s\n", ents[i].d_name);
+				assert_true(S_ISREG(stbufs[i].st_mode) ||
+					    S_ISDIR(stbufs[i].st_mode));
+			}
+		}
+		num_ents = 10;
+	}
+	assert_true(num_files == 10);
+	assert_true(num_dirs == 10);
+	rc = dfs_release(lf);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
 
 	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont_chkr", 0, NULL);
 	assert_rc_equal(rc, 0);

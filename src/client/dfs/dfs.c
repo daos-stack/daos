@@ -6544,6 +6544,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 	daos_handle_t		coh;
 	daos_handle_t		oit;
 	daos_epoch_t		snap_epoch;
+	dfs_obj_t		*lf;
 	daos_anchor_t		anchor = {0};
 	uint32_t		nr_entries = DFS_NR_ITERATE, i;
 	daos_obj_id_t		oids[DFS_NR_ITERATE] = {0};
@@ -6553,6 +6554,10 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 	daos_epoch_range_t	epr;
 	int			rc, rc2;
 
+	if (flags & DFS_CHECK_LINK_LF && flags & DFS_CHECK_REMOVE) {
+		D_ERROR("can't request remove and link to l+f at the same time\n");
+		return EINVAL;
+	}
 	/** TODO - Update to use Exclusive open when available */
 	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
 	if (rc) {
@@ -6606,14 +6611,15 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 		nr_entries = DFS_NR_ITERATE;
 	}
 
-	/** TODO - create lost+found directory and properly link unmarked oids there. */
-#if 0
-	rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL, &lf);
-	if (rc) {
-		D_ERROR("Failed to create lost+found directory: %d\n", rc);
-		D_GOTO(out_oit, rc);
+	/** Create lost+found directory and properly link unmarked oids there. */
+	if (flags & DFS_CHECK_LINK_LF) {
+		rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL,
+			      &lf);
+		if (rc) {
+			D_ERROR("Failed to create lost+found directory: %d\n", rc);
+			D_GOTO(out_oit, rc);
+		}
 	}
-#endif
 
 	/** list all unmarked oids */
 	memset(&anchor, 0, sizeof(anchor));
@@ -6622,10 +6628,14 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
 		if (rc) {
 			D_ERROR("daos_oit_list_unmarked failed: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_oit, rc = daos_der2errno(rc));
+			D_GOTO(out_lf, rc = daos_der2errno(rc));
 		}
 
 		for (i = 0; i < nr_entries; i++) {
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
+					DP_OID(oids[i]));
+
 			if (flags & DFS_CHECK_REMOVE) {
 				daos_handle_t oh;
 
@@ -6643,35 +6653,55 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 				if (rc)
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
 			}
-			if (flags & DFS_CHECK_PRINT)
-				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
-					DP_OID(oids[i]));
-#if 0
-			struct dfs_entry	entry = {0};
-			enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
-			struct timespec		now;
 
-			printf("Adding oid: "DF_OID" to l+f\n", DP_OID(oids[i]));
-			entry.uid = geteuid();
-			entry.gid = getegid();
-			oid_cp(&entry->oid, oids[i]);
-			if (daos_is_array_type(otype))
-				entry.mode = S_IFREG | 0755;
-			else
-				entry.mode = S_IFDIR | 0755;
+			if (flags & DFS_CHECK_LINK_LF) {
+				struct dfs_entry	entry = {0};
+				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
+				struct timespec		now;
+				char			name[DFS_MAX_NAME + 1];
+				daos_size_t		len;
 
-			rc = clock_gettime(CLOCK_REALTIME, &now);
-			if (rc)
-				D_GOTO(out_lf, rc = errno);
-			entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-			entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
-			entry.chunk_size = 0; /** need to figure that out somehow */
-#endif
+				entry.uid = geteuid();
+				entry.gid = getegid();
+				oid_cp(&entry.oid, oids[i]);
+				if (daos_is_array_type(otype))
+					entry.mode = S_IFREG | 0755;
+				else
+					entry.mode = S_IFDIR | 0755;
+				rc = clock_gettime(CLOCK_REALTIME, &now);
+				if (rc)
+					D_GOTO(out_lf, rc = errno);
+				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
+				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
+					now.tv_nsec;
+				entry.chunk_size = dfs->attr.da_chunk_size;
+				/*
+				 * If this is a regular file, get the largest offset of every dkey
+				 * in the array to see if it's larger than the chunk size. if it is,
+				 * adjust the chunk size to that.
+				 */
+
+				len = sprintf(name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+				D_ASSERT(len <= DFS_MAX_NAME);
+				rc = insert_entry(dfs->layout_v, lf->oh, DAOS_TX_NONE, name, len,
+						  DAOS_COND_DKEY_INSERT, &entry);
+				if (rc) {
+					D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
+					D_GOTO(out_lf, rc);
+				}
+			}
 			unmarked_entries++;
 		}
 	}
 	if (flags & DFS_CHECK_PRINT)
 		D_PRINT("Number of Leaked OIDs in Namespace = "DF_U64"\n", unmarked_entries);
+
+out_lf:
+	if (flags & DFS_CHECK_LINK_LF) {
+		rc2 = dfs_release(lf);
+		if (rc == 0)
+			rc = rc2;
+	}
 out_oit:
 	rc2 = daos_oit_close(oit, NULL);
 	if (rc == 0)
