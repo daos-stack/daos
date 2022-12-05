@@ -55,16 +55,16 @@ echo "::group::Clean all"
 scons -c
 scons -c install
 find build
+rm -rf build
 echo "::endgroup::"
 
 echo "::group::Build all"
-ls -l build/debug/clang/src/gurt/ || true
-scons
+scons --config=force
 echo "::endgroup::"
 
 echo "::group::Show cart deps"
-sconsign -e libcart.so.4.9.0
-sconsign -e libgurt.so
+sconsign -r -e libcart.so.4.9.0 2> /dev/null
+sconsign -r -e libgurt.so 2> /dev/null
 #scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
 echo "::endgroup::"
 
@@ -75,8 +75,8 @@ ls -l build/debug/clang/src/gurt/ || true
 echo "::endgroup::"
 
 echo "::group::Show cart deps"
-sconsign -e libcart.so.4.9.0
-sconsign -e libgurt.so
+sconsign -r -e libcart.so.4.9.0 2> /dev/null
+sconsign -r -e libgurt.so 2> /dev/null
 #scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
 echo "::endgroup::"
 
