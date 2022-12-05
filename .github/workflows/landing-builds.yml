@@ -6,15 +6,15 @@ on:
     branches:
       - master
       - 'release/*'
-#  pull_request:
-#    paths:
-#      - .github/workflows/landing-builds.yml
-#      - 'utils/docker/Dockerfile.*'
-#      - 'utils/scripts/install-*.sh'
-#      - 'utils/scripts/helpers/*'
-#      - utils/ci
-#      - ci
-#      - requirements.txt
+  pull_request:
+    paths:
+      - .github/workflows/landing-builds.yml
+      - 'utils/docker/Dockerfile.*'
+      - 'utils/scripts/install-*.sh'
+      - 'utils/scripts/helpers/*'
+      - utils/ci
+      - ci
+      - requirements.txt
 
 jobs:
 
