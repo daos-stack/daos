@@ -53,6 +53,7 @@ echo "::endgroup::"
 echo "::group::Clean all"
 scons -c
 scons -c install
+find build
 echo "::endgroup::"
 
 echo "::group::Build all"
@@ -60,7 +61,9 @@ scons
 echo "::endgroup::"
 
 echo "::group::Re-build all"
+ls -l build/debug/clang/src/gurt/ || true
 scons --debug=explain
+ls -l build/debug/clang/src/gurt/ || true
 echo "::endgroup::"
 
 echo "::group::Re-re-build all"
