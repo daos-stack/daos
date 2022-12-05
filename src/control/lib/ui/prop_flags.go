@@ -25,7 +25,7 @@ var (
 
 const (
 	// MaxPropKeyLen is the maximum length of a property key.
-	MaxPropKeyLen = 20
+	MaxPropKeyLen = 32
 	// MaxPropValLen is the maximum length of a property value.
 	MaxPropValLen = 128
 
