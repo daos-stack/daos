@@ -62,10 +62,22 @@ ls -l build/debug/clang/src/gurt/ || true
 scons
 echo "::endgroup::"
 
+echo "::group::Show cart deps"
+sconsign -e libcart.so.4.9.0
+sconsign -e libgurt.so
+#scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
+echo "::endgroup::"
+
 echo "::group::Re-build all"
 ls -l build/debug/clang/src/gurt/ || true
 scons --debug=explain
 ls -l build/debug/clang/src/gurt/ || true
+echo "::endgroup::"
+
+echo "::group::Show cart deps"
+sconsign -e libcart.so.4.9.0
+sconsign -e libgurt.so
+#scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
 echo "::endgroup::"
 
 echo "::group::Re-re-build all"
