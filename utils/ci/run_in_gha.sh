@@ -54,18 +54,16 @@ echo "::endgroup::"
 echo "::group::Clean all"
 scons -c
 scons -c install
-find build
-rm -rf build
+rm -rf build .sconf_temp/ .sconsign.dblite
 echo "::endgroup::"
 
 echo "::group::Build all"
-scons --config=force
+scons
 echo "::endgroup::"
 
 echo "::group::Show cart deps"
 sconsign -r -e libcart.so.4.9.0 2> /dev/null
 sconsign -r -e libgurt.so 2> /dev/null
-#scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
 echo "::endgroup::"
 
 echo "::group::Re-build all"
@@ -77,7 +75,6 @@ echo "::endgroup::"
 echo "::group::Show cart deps"
 sconsign -r -e libcart.so.4.9.0 2> /dev/null
 sconsign -r -e libgurt.so 2> /dev/null
-#scons --tree=prune build/debug/clang/src/cart/libcart.so.4.9.0
 echo "::endgroup::"
 
 echo "::group::Re-re-build all"
