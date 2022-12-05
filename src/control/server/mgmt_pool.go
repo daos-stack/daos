@@ -232,7 +232,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	if err := svc.PoolCreateAddSystemProps(req); err != nil {
+	if err := svc.poolCreateAddSystemProps(req); err != nil {
 		return nil, err
 	}
 
@@ -441,7 +441,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	return resp, nil
 }
 
-func (svc *mgmtSvc) PoolCreateAddSystemProps(req *mgmtpb.PoolCreateReq) error {
+func (svc *mgmtSvc) poolCreateAddSystemProps(req *mgmtpb.PoolCreateReq) error {
 	poolSysProps := make(map[uint32]*daos.PoolProperty)
 	for sp := range svc.systemProps.Iter() {
 		pp, found := sp2pp(sp)

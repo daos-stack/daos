@@ -1192,6 +1192,9 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 		}
+		if resp.Status != 0 {
+			return nil, errors.Errorf("SystemSetProp: %d\n", resp.Status)
+		}
 	}
 
 	return
@@ -1214,42 +1217,4 @@ func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetProp
 
 	resp = &mgmtpb.SystemGetPropResp{Properties: props}
 	return
-}
-
-// PoolSetSystemProp sets the system prop for each pool
-func (svc *mgmtSvc) PoolSetSystemProp(ctx context.Context, prop *mgmtpb.PoolProperty, sys string) (err error) {
-	listPoolReq := &mgmtpb.ListPoolsReq{
-		Sys: sys,
-	}
-
-	poolRes, err := svc.ListPools(ctx, listPoolReq)
-	if err != nil {
-		fmt.Printf("Error listing pools: %s\n", err)
-		return err
-	}
-	for _, p := range poolRes.Pools {
-		ps, err := svc.getPoolService(p.Label)
-		if err != nil {
-			return err
-		}
-		ranks, err := svc.getPoolServiceRanks(ps)
-		if err != nil {
-			return err
-		}
-
-		req := &mgmtpb.PoolSetPropReq{
-			Sys: sys,
-			Id:  p.Label, // Pool uuid/label
-			Properties: []*mgmtpb.PoolProperty{
-				prop,
-			},
-			SvcRanks: ranks,
-		}
-		_, err = svc.PoolSetProp(ctx, req)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
