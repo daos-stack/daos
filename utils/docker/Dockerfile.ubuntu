@@ -86,9 +86,7 @@ ARG DEPS_JOBS=1
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] ||                           \
     { scons --build-deps=only --jobs $DEPS_JOBS PREFIX=/opt/daos \
       TARGET_TYPE=$DAOS_TARGET_TYPE &&                           \
-    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build); }
-
-RUN ls -A
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
 ARG CB1
@@ -116,7 +114,7 @@ RUN [ "$DAOS_BUILD" != "yes" ] || \
     { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) && \
-    go clean -cache; }
+    go clean -cache && cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
