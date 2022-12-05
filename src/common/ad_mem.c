@@ -399,6 +399,7 @@ arena_free_size(struct ad_arena_df *ad)
 	uint32_t	    free_size = 0;
 	struct ad_group_df  *gd;
 	uint32_t	    grp_bit_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
+	int		    bits, grp_free;
 
 	for (grp_idx = 0; grp_idx < grp_bit_max; grp_idx++) {
 		if (!isset64(ad->ad_bmap, grp_idx))
@@ -407,8 +408,13 @@ arena_free_size(struct ad_arena_df *ad)
 
 	for (grp_idx = 0; grp_idx < ARENA_GRP_MAX; grp_idx++) {
 		gd = &ad->ad_groups[grp_idx];
-		if (gd->gd_addr != 0)
-			free_size += gd->gd_unit_free * gd->gd_unit;
+		if (gd->gd_addr != 0) {
+			bits = (gd->gd_unit * gd->gd_unit_nr + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
+			grp_free = (bits << GRP_SIZE_SHIFT) -
+				   (gd->gd_unit_nr - gd->gd_unit_free) * gd->gd_unit;
+
+			free_size += grp_free;
+		}
 	}
 
 	return free_size;
