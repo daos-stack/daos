@@ -706,7 +706,7 @@ daos_dti_gen_unique(struct dtx_id *dti)
 	uuid_generate(uuid);
 
 	uuid_copy(dti->dti_uuid, uuid);
-	dti->dti_hlc = crt_hlc_get();
+	dti->dti_hlc = d_hlc_get();
 }
 
 void
@@ -721,7 +721,7 @@ daos_dti_gen(struct dtx_id *dti, bool zero)
 			uuid_generate(uuid);
 
 		uuid_copy(dti->dti_uuid, uuid);
-		dti->dti_hlc = crt_hlc_get();
+		dti->dti_hlc = d_hlc_get();
 	}
 }
 
@@ -747,7 +747,7 @@ daos_recx_free(daos_recx_t *recx)
 int
 daos_hlc2timespec(uint64_t hlc, struct timespec *ts)
 {
-	return crt_hlc2timespec(hlc, ts);
+	return d_hlc2timespec(hlc, ts);
 }
 
 int
@@ -759,7 +759,7 @@ daos_hlc2timestamp(uint64_t hlc, time_t *ts)
 	if (ts == NULL)
 		return -DER_INVAL;
 
-	rc = crt_hlc2timespec(hlc, &tspec);
+	rc = d_hlc2timespec(hlc, &tspec);
 	if (rc)
 		return rc;
 
