@@ -536,7 +536,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 - Update SPDK dependency requirement to greater than or equal to 22.01.2.
 
 * Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-3
->>>>>>> master
 - Set flag to build per-subpackage debuginfo packages for Leap 15
 
 * Thu Oct 6 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.101-2
