@@ -1404,7 +1404,8 @@ copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uin
 }
 
 static int
-replay_tx(struct wal_super_info *si, char *buf, int (*replay_cb)(struct umem_action *act),
+replay_tx(struct wal_super_info *si, char *buf,
+	  int (*replay_cb)(uint64_t tx_id, struct umem_action *act),
 	  struct wal_blks_desc *bd, struct umem_action *act)
 {
 	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
@@ -1465,7 +1466,7 @@ replay_tx(struct wal_super_info *si, char *buf, int (*replay_cb)(struct umem_act
 		}
 
 		if (act->ac_opc != UMEM_ACT_CSUM) {
-			rc = replay_cb(act);
+			rc = replay_cb(hdr->th_id, act);
 			if (rc)
 				D_ERROR("Replay CB on action %u failed. "DF_RC"\n",
 					act->ac_opc, DP_RC(rc));
@@ -1482,7 +1483,8 @@ replay_tx(struct wal_super_info *si, char *buf, int (*replay_cb)(struct umem_act
 }
 
 int
-bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action *act))
+bio_wal_replay(struct bio_meta_context *mc,
+	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act))
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_trans_head	*hdr;
@@ -1702,12 +1704,14 @@ bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_
 }
 
 void
-bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz)
+bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
+		  uint32_t *hdr_blks)
 {
 	/* The mc could be NULL when md on SSD not enabled & data blob not existing */
 	if (mc != NULL) {
 		*blk_sz = mc->mc_meta_hdr.mh_blk_bytes;
 		*capacity = mc->mc_meta_hdr.mh_tot_blks * (*blk_sz);
+		*hdr_blks = mc->mc_meta_hdr.mh_hdr_blks;
 	}
 }
 
