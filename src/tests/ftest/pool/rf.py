@@ -43,7 +43,7 @@ class PoolRedunFacProperty(IorTestBase):
             Verify the rf is updated for the container.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=pool,redundancy,redundancy_factor,rf
         :avocado: tags=PoolRedunFacProperty,test_rf_pool_property
         """

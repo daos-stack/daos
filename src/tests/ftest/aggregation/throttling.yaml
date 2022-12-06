@@ -26,7 +26,7 @@ container:
   control_method: daos
 ior:
   client_processes:
-    ppn: 18
+    np: 12
   test_file: daos:/testFile
   repetitions: 1
   dfs_destroy: false

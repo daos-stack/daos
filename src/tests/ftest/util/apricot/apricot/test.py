@@ -1114,7 +1114,7 @@ class TestWithServers(TestWithoutServers):
             self.log.debug(
                 "Updating server manager (%s) config namespace: %s",
                 len(self.server_managers) - 1, self.server_config_namespace)
-            self.server_managers[-1].job.yaml.namespace = self.server_config_namespace
+            self.server_managers[-1].manager.job.yaml.namespace = self.server_config_namespace
 
     def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.

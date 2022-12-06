@@ -139,9 +139,6 @@ ior:
       - "EC_4P2G1"
       - "EC_4P2G8"
       - "EC_4P2GX"
-      - "EC_8P2G1"
-      - "EC_8P2G8"
-      - "EC_8P2GX"
 ior_dm:
   client_processes:
     fs_copy: 10
