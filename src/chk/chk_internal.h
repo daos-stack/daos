@@ -252,7 +252,7 @@ CRT_RPC_DECLARE(chk_report, DAOS_ISEQ_CHK_REPORT, DAOS_OSEQ_CHK_REPORT);
 #define DAOS_ISEQ_CHK_REJOIN							\
 	((uint64_t)		(cri_gen)		CRT_VAR)		\
 	((d_rank_t)		(cri_rank)		CRT_VAR)		\
-	((d_rank_t)		(cri_padding)		CRT_VAR)
+	((uint32_t)		(cri_padding)		CRT_VAR)
 
 #define DAOS_OSEQ_CHK_REJOIN							\
 	((int32_t)		(cro_status)		CRT_VAR)		\
@@ -669,7 +669,7 @@ int chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version);
 
 int chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t flags);
 
-int chk_engine_cont_list(uint64_t gen, uuid_t uuid, uuid_t **conts, uint32_t *count);
+int chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *count);
 
 int chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase);
 
@@ -677,11 +677,9 @@ int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *l
 			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
 			struct rsvc_hint *hint);
 
-int chk_engine_report(struct chk_report_unit *cru, int *decision);
-
 int chk_engine_notify(struct chk_iv *iv);
 
-void chk_engine_rejoin(void);
+void chk_engine_rejoin(void *args);
 
 void chk_engine_pause(void);
 

@@ -205,9 +205,9 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 		rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	}
 
-	if (rc != 0)
-		D_ERROR("CHK iv "DF_X64"/"DF_X64" update failed: "DF_RC"\n",
-			iv->ci_gen, iv->ci_seq, DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "CHK iv "DF_X64"/"DF_X64" on rank %u: "DF_RC"\n",
+		 iv->ci_gen, iv->ci_seq, iv->ci_rank, DP_RC(rc));
 
 	return rc;
 }

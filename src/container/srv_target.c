@@ -1264,9 +1264,11 @@ out:
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
-	struct ds_pool	*pool;
-	struct cont_tgt_destroy_in in;
-	int rc;
+	struct ds_pool			*pool;
+	struct cont_tgt_destroy_in	 in;
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	int				 rc;
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
@@ -1275,14 +1277,25 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 		return -DER_NO_HDL;
 	}
 
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc != 0)
+		goto out;
+
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
 	ds_pool_put(pool);
 
-	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
-	if (rc)
+	coll_ops.co_func = cont_child_destroy_one;
+	coll_args.ca_func_args = &in;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	D_FREE(coll_args.ca_exclude_tgts);
+
+out:
+	if (rc != 0)
 		D_ERROR(DF_UUID"/"DF_UUID" container child destroy failed: %d\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid), rc);
 	return rc;
@@ -1766,6 +1779,24 @@ ds_cont_tgt_close(uuid_t hdl_uuid)
 	return dss_thread_collective(cont_close_one_hdl, &arg, 0);
 }
 
+static int
+cont_get_failed_tgt_idx(struct dss_coll_args *args, uuid_t uuid)
+{
+	struct ds_pool_hdl	*hdl;
+	int			 rc;
+
+	hdl = ds_pool_hdl_lookup(uuid);
+	if (hdl == NULL) {
+		rc = -DER_NO_HDL;
+	} else {
+		rc = ds_pool_get_failed_tgt_idx(hdl->sph_pool->sp_uuid, &args->ca_exclude_tgts,
+						&args->ca_exclude_tgts_cnt);
+		ds_pool_hdl_put(hdl);
+	}
+
+	return rc;
+}
+
 struct xstream_cont_query {
 	struct cont_tgt_query_in	*xcq_rpc_in;
 	daos_epoch_t			 xcq_hae;
@@ -1869,7 +1900,9 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 
 	out->tqo_hae			= DAOS_EPOCH_MAX;
 
-	/** on all available streams */
+	rc = cont_get_failed_tgt_idx(&coll_args, in->tqi_pool_uuid);
+	if (rc != 0)
+		goto reply;
 
 	coll_ops.co_func		= cont_query_one;
 	coll_ops.co_reduce		= ds_cont_query_coll_reduce;
@@ -1885,10 +1918,12 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	D_FREE(coll_args.ca_exclude_tgts);
+	if (rc == 0)
+		out->tqo_hae = MIN(out->tqo_hae, pack_args.xcq_hae);
 
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
-	out->tqo_rc	= (rc == 0 ? 0 : 1);
+reply:
+	out->tqo_rc = rc;
 
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n", DP_CONT(NULL, NULL), rpc,
 		out->tqo_rc, DP_RC(rc));
@@ -1962,15 +1997,32 @@ int
 ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count)
 {
-	struct cont_snap_args	 args;
+	struct dss_coll_args	coll_args = { 0 };
+	struct dss_coll_ops	coll_ops = { 0 };
+	struct cont_snap_args	args;
+	int			rc;
+
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc != 0)
+		goto out;
 
 	uuid_copy(args.pool_uuid, pool_uuid);
 	uuid_copy(args.cont_uuid, cont_uuid);
 	args.snap_count = snap_count;
 	args.snapshots = snapshots;
+
+	coll_ops.co_func = cont_snap_update_one;
+	coll_args.ca_func_args = &args;
+
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_task_collective(cont_snap_update_one, &args, 0);
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	D_FREE(coll_args.ca_exclude_tgts);
+
+out:
+	return rc;
 }
 
 void
@@ -2045,9 +2097,17 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	struct cont_tgt_snapshot_notify_in	*in	= crt_req_get(rpc);
 	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
 	struct cont_snap_args			 args	= { 0 };
+	struct dss_coll_ops			 coll_ops = { 0 };
+	struct dss_coll_args			 coll_args = { 0 };
+	int					 rc;
 
 	D_DEBUG(DB_EPC, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
+
+	rc = ds_pool_get_failed_tgt_idx(in->tsi_pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc != 0)
+		goto reply;
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
 	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
@@ -2055,7 +2115,14 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	args.snap_epoch = in->tsi_epoch;
 	args.snap_opts = in->tsi_opts;
 
-	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
+	coll_ops.co_func = cont_snap_notify_one;
+	coll_args.ca_func_args = &args;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	D_FREE(coll_args.ca_exclude_tgts);
+
+reply:
+	out->tso_rc = rc;
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
@@ -2087,6 +2154,8 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
+	struct dss_coll_args			 coll_args = { 0 };
+	struct dss_coll_ops			 coll_ops = { 0 };
 	int					 rc;
 
 	D_DEBUG(DB_MD, DF_CONT ": handling rpc: %p epr (%p) [#" DF_U64 "]\n",
@@ -2100,7 +2169,14 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = ds_pool_get_failed_tgt_idx(in->tai_pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc == 0) {
+		coll_ops.co_func = cont_epoch_aggregate_one;
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+		D_FREE(coll_args.ca_exclude_tgts);
+	}
+
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2710,17 +2786,30 @@ int
 ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
 			     uint32_t pm_ver)
 {
+	struct dss_coll_args	coll_args = { 0 };
+	struct dss_coll_ops	coll_ops = { 0 };
 	struct cont_set_arg	arg;
 	int			rc = 0;
+
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
+	if (rc != 0)
+		goto out;
 
 	uuid_copy(arg.csa_cont_uuid, cont_uuid);
 	uuid_copy(arg.csa_pool_uuid, pool_uuid);
 	arg.csa_status_pm_ver = pm_ver;
-	rc = dss_task_collective(cont_status_pm_ver_set, &arg, 0);
-	if (rc)
+
+	coll_ops.co_func = cont_status_pm_ver_set;
+	coll_args.ca_func_args = &arg;
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	D_FREE(coll_args.ca_exclude_tgts);
+
+out:
+	if (rc != 0)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));
-
 	return rc;
 }
 

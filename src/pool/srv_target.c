@@ -105,11 +105,14 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 
-		/* only stop gc ULT when all ops ULTs are done */
-		stop_gc_ult(child);
-		stop_flush_ult(child);
+		if (likely(!child->spc_no_storage)) {
+			/* only stop gc ULT when all ops ULTs are done */
+			stop_gc_ult(child);
+			stop_flush_ult(child);
 
-		vos_pool_close(child->spc_hdl);
+			vos_pool_close(child->spc_hdl);
+		}
+
 		dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 		ABT_eventual_set(child->spc_ref_eventual,
 				 (void *)&child->spc_ref,
@@ -322,8 +325,19 @@ pool_child_add_one(void *varg)
 
 	D_FREE(path);
 
-	if (rc != 0)
-		goto out_metrics;
+	if (rc != 0) {
+		if (rc != -DER_NONEXIST)
+			goto out_metrics;
+
+		D_WARN("Lost pool "DF_UUIDF" shard %u on rank %u.\n",
+		       DP_UUID(arg->pla_uuid), info->dmi_tgt_id, dss_self_rank());
+		/*
+		 * Ignore the failure to allow subsequent logic (such as DAOS check)
+		 * to handle the trouble.
+		 */
+		child->spc_no_storage = 1;
+
+	}
 
 	uuid_copy(child->spc_uuid, arg->pla_uuid);
 	child->spc_map_version = arg->pla_map_version;
@@ -339,6 +353,11 @@ pool_child_add_one(void *varg)
 	child->spc_pool = arg->pla_pool;
 	D_INIT_LIST_HEAD(&child->spc_list);
 	D_INIT_LIST_HEAD(&child->spc_cont_list);
+
+	if (unlikely(child->spc_no_storage)) {
+		d_list_add(&child->spc_list, &tls->dt_pool_list);
+		return 0;
+	}
 
 	if (!engine_in_check()) {
 		rc = start_gc_ult(child);
@@ -374,7 +393,8 @@ out_gc:
 out_eventual:
 	ABT_eventual_free(&child->spc_ref_eventual);
 out_vos:
-	vos_pool_close(child->spc_hdl);
+	if (likely(!child->spc_no_storage))
+		vos_pool_close(child->spc_hdl);
 out_metrics:
 	dss_module_fini_metrics(DAOS_TGT_TAG, child->spc_metrics);
 out_free:
@@ -399,7 +419,8 @@ pool_child_delete_one(void *uuid)
 
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
-	ds_stop_scrubbing_ult(child);
+	if (likely(!child->spc_no_storage))
+		ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
 	ds_pool_child_put(child); /* -1 for lookup */
@@ -768,6 +789,9 @@ ds_pool_chk_post_one(void *varg)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(out, rc = 0);
+
 	rc = start_gc_ult(child);
 	if (rc != 0)
 		goto out;
@@ -919,7 +943,8 @@ pool_child_stop_containers(void *uuid)
 	if (child == NULL)
 		return 0;
 
-	ds_cont_child_stop_all(child);
+	if (likely(!child->spc_no_storage))
+		ds_cont_child_stop_all(child);
 	ds_pool_child_put(child); /* -1 for the list */
 	return 0;
 }
@@ -1644,6 +1669,9 @@ update_vos_prop_on_targets(void *in)
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
 
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(out, ret = 0);
+
 	policy_desc = pool->sp_policy_desc;
 	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
 
@@ -1655,6 +1683,7 @@ update_vos_prop_on_targets(void *in)
 			ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
 	}
 
+out:
 	ds_pool_child_put(child);
 
 	return ret;

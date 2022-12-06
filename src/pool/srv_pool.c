@@ -7184,6 +7184,7 @@ ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
 	struct rdb_tx		 tx = { 0 };
 	uint32_t		 version;
 	int			 rc = 0;
+	bool			 locked = false;
 
 	version = pool_map_get_version(map);
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
@@ -7194,6 +7195,7 @@ ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
 	}
 
 	ABT_rwlock_wrlock(svc->ps_lock);
+	locked = true;
 
 	rc = pool_buf_extract(map, &buf);
 	if (rc != 0) {
@@ -7229,6 +7231,9 @@ ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
 		rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
 	} else {
 		ds_rsvc_request_map_dist(&svc->ps_rsvc);
+		ABT_rwlock_unlock(svc->ps_lock);
+		locked = false;
+		ds_rsvc_wait_map_dist(&svc->ps_rsvc);
 
 		pool_svc_schedule_reconf(svc, false /* for_chk */);
 	}
@@ -7236,7 +7241,8 @@ ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map)
 out_buf:
 	pool_buf_free(buf);
 out_lock:
-	ABT_rwlock_unlock(svc->ps_lock);
+	if (locked)
+		ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out:
 	return rc;

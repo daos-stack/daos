@@ -351,9 +351,8 @@ chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[])
 
 	if (head != NULL && !d_list_empty(head)) {
 		D_INFO("Pools List:\n");
-		d_list_for_each_entry(cpr, head, cpr_link) {
+		d_list_for_each_entry(cpr, head, cpr_link)
 			D_INFO(DF_UUIDF"\n", DP_UUID(cpr->cpr_uuid));
-		}
 	} else if (pool_nr > 0) {
 		D_INFO("Pools List:\n");
 		do {

@@ -46,12 +46,11 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 	fmt.Fprintf(out, "  %s\n", statusMsg)
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())
 
-	if resp.ScanPhase >= control.SystemCheckScanPhasePoolMembership && resp.ScanPhase < control.SystemCheckScanPhaseDone {
+	if len(resp.Pools) > 0 {
 		fmt.Fprintf(out, "  Checking %d pools\n", len(resp.Pools))
 		if len(resp.Pools) > 0 {
 			fmt.Fprintln(out, "\nPer-Pool Checker Info:")
 			for _, pool := range resp.Pools {
-				// FIXME: Gross debug output for now.
 				fmt.Fprintf(out, "  %+v\n", pool)
 			}
 			fmt.Fprintln(out)
@@ -67,7 +66,13 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 	fmt.Fprintln(out, "Inconsistency Reports:")
 	for _, report := range resp.Reports {
 		cls := control.SystemCheckFindingClass(report.Class)
-		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, cls, report.Msg)
+		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
+		fmt.Fprintf(iw, "Class:      %s\n", cls)
+		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)
+		fmt.Fprintf(iw, "Pool:       %s\n", report.PoolUuid)
+		if report.ContUuid != "" {
+			fmt.Fprintf(iw, "Container:  %s\n", report.ContUuid)
+		}
 		if report.IsInteractive() {
 			fmt.Fprintf(iw, "Potential resolution actions:\n")
 			iw2 := txtfmt.NewIndentWriter(iw)
