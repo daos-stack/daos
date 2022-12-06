@@ -1,8 +1,20 @@
-daos (2.3.101-4) unstable; urgency=medium
+daos (2.3.101-5) unstable; urgency=medium
   [Joseph Moore]
   * Update Mercury version to 2.2.0-5
 
  -- Joseph Moore <joseph.moored@intel.com> Tue, Dec 6 2022 12:15:00 - 0400
+
+daos (2.3.101-4) unstable; urgency=medium
+  [ Tom Nabarro ]
+  * Update SPDK dependency requirement to greater than or equal to 22.01.2.
+
+ -- Tom Nabarro <Tom Nabarro <tom.nabarro@intel.com>  Thu, 01 Dec 2022 12:43:00 -0400
+
+daos (2.3.101-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Set flag to build per-subpackage debuginfo packages for Leap 15
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 18 Oct 2022 15:08:11 -0400
 
 daos (2.3.101-2) unstable; urgency=medium
   [Michael MacDonald]
@@ -44,8 +56,7 @@ daos (2.3.100-18) unstable; urgency=medium
   [Michael MacDonald]
   * Bump min supported go version to 1.16
 
- -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00
--0400
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Tue, Jul 26 2022 10:10:00 -0400
 
 daos (2.3.100-17) unstable; urgency=medium
   [ Jerome Soumagne ]
@@ -54,14 +65,12 @@ daos (2.3.100-17) unstable; urgency=medium
  -- Jerome Soumagne <jerome.soumagne@intel.com> Mon, 18 Jul 2022 11:55:00 -0600
 
 daos (2.3.100-16) unstable; urgency=medium
-
   [ Jeff Olivier ]
   * Add pool_scrubbing_tests to test package
 
  -- Jeff Olivier <Jeff Olivier <jeffrey.v.olivier@intel.com>  Fri, 15 Jul 2022 12:48:00 -0400
 
 daos (2.3.100-15) unstable; urgency=medium
-
   [ Tom Nabarro ]
   * Update SPDK dependency requirement to greater than or equal to 22.01.1.
 
