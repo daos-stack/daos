@@ -585,6 +585,7 @@ struct chk_report_unit {
 	char			*cru_msg;
 	uint32_t		*cru_options;
 	d_sg_list_t		*cru_details;
+	uint32_t		 cru_sugg;
 	uint32_t		 cru_result;
 };
 

@@ -406,9 +406,17 @@ struct  _Chk__CheckReport
    */
   char *pool_uuid;
   /*
+   * The pool label, if available.
+   */
+  char *pool_label;
+  /*
    * The consistency is in which container if applicable.
    */
   char *cont_uuid;
+  /*
+   * The container label, if available.
+   */
+  char *cont_label;
   /*
    * The consistency is in which object if applicable.
    */
@@ -430,7 +438,7 @@ struct  _Chk__CheckReport
    */
   char *msg;
   /*
-   * Potential actions to be made in interaction mode.
+   * Interactive mode options (first is suggested).
    */
   size_t n_act_choices;
   Chk__CheckInconsistAction *act_choices;
@@ -447,7 +455,7 @@ struct  _Chk__CheckReport
 };
 #define CHK__CHECK_REPORT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&chk__check_report__descriptor) \
-    , 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL }
+    , 0, CHK__CHECK_INCONSIST_CLASS__CIC_NONE, CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT, 0, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL }
 
 
 /* Chk__CheckReport methods */

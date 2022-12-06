@@ -185,6 +185,23 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 		out, outErr = proto.Marshal(resp)
 	}()
 
+	if req.Report != nil && req.Report.PoolUuid != "" {
+		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
+		if err != nil {
+			mod.log.Errorf("invalid pool UUID %q: %s", req.Report.PoolUuid, err)
+			resp.Status = int32(daos.InvalidInput)
+			return
+		}
+
+		if ps, err := mod.poolDB.FindPoolServiceByUUID(poolUUID); err == nil {
+			// Annotate the report with the pool label for the user.
+			// NB: In some cases this label may be incorrect, in which
+			// case the user will want to use the verbose or JSON output
+			// modes of the checker in order to get the UUID.
+			req.Report.PoolLabel = ps.PoolLabel
+		}
+	}
+
 	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
 	mod.log.Debugf("annotated finding: %+v", finding)
 	if err := mod.checkerDB.AddOrUpdateCheckerFinding(finding); err != nil {
