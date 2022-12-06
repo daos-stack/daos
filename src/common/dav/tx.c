@@ -507,7 +507,25 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 		VALGRIND_START_TX;
 	} else if (tx->stage == DAV_TX_STAGE_NONE) {
+		struct umem_wal_tx *utx;
+
 		DAV_DBG("");
+		utx = pop->do_utx;
+		if (utx == NULL) {
+			utx = dav_umem_wtx_new(pop);
+			if (utx == NULL) {
+				err = ENOMEM;
+				goto err_abort;
+			}
+		}
+		err = dav_wal_tx_reserve(pop);
+		if (err) {
+			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
+			D_FREE(utx);
+			pop->do_utx = NULL;
+			goto err_abort;
+		}
+		tx = get_tx();
 
 		VALGRIND_START_TX;
 
@@ -545,26 +563,7 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 	DAV_SLIST_INSERT_HEAD(&tx->tx_entries, txd, tx_entry);
 
-	if (tx->stage == DAV_TX_STAGE_NONE) {
-		struct umem_wal_tx *utx;
-
-		tx->stage = DAV_TX_STAGE_WORK;
-		utx = pop->do_utx;
-		if (utx == NULL) {
-			utx = dav_umem_wtx_new(pop);
-			if (utx == NULL) {
-				err = ENOMEM;
-				goto err_abort;
-			}
-		}
-		err = dav_wal_tx_reserve(pop);
-		if (err) {
-			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
-			D_FREE(utx);
-			pop->do_utx = NULL;
-			goto err_abort;
-		}
-	}
+	tx->stage = DAV_TX_STAGE_WORK;
 
 	/* handle locks */
 	va_list argp;
@@ -794,28 +793,27 @@ dav_tx_end(void *data)
 
 	if (DAV_SLIST_EMPTY(&tx->tx_entries)) {
 		dav_obj_t *pop = tx->pop;
+		dav_tx_callback cb = tx->stage_callback;
+		void *arg = tx->stage_callback_arg;
 		int rc;
 
 		DAV_DBG("");
 		ASSERT(pop);
 		tx->pop = NULL;
 		tx->stage = DAV_TX_STAGE_NONE;
+		tx->stage_callback = NULL;
+		tx->stage_callback_arg = NULL;
+
+		VEC_DELETE(&tx->actions);
+		/* tx should not be accessed after this */
 
 		/* commit to WAL */
 		rc = lw_tx_end(pop, data);
 		/* TODO: Handle WAL commit errors */
 		D_ASSERT(rc == 0);
-		VEC_DELETE(&tx->actions);
 
-		if (tx->stage_callback) {
-			dav_tx_callback cb = tx->stage_callback;
-			void *arg = tx->stage_callback_arg;
-
-			tx->stage_callback = NULL;
-			tx->stage_callback_arg = NULL;
-
-			cb(tx->pop, DAV_TX_STAGE_NONE, arg);
-			/* tx should not be accessed after this callback */
+		if (cb) {
+			cb(pop, DAV_TX_STAGE_NONE, arg);
 		}
 	} else {
 		/* resume the next transaction */
@@ -1629,9 +1627,10 @@ constructor_zrealloc_root(void *ctx, void *ptr, size_t usable_size, void *arg)
 static int
 obj_alloc_root(dav_obj_t *pop, size_t size)
 {
-	DAV_DBG("pop %p size %zu", pop, size);
-
+	struct operation_context *ctx;
 	struct carg_realloc carg;
+
+	DAV_DBG("pop %p size %zu", pop, size);
 
 	carg.ptr = OBJ_OFF_TO_PTR(pop, pop->do_phdr->dp_root_offset);
 	carg.old_size = pop->do_phdr->dp_root_size;
@@ -1641,10 +1640,9 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 	carg.zero_init = 1;
 	carg.arg = NULL;
 
-	struct operation_context *ctx = pop->external;
-
-	operation_start(ctx);
 	lw_tx_begin(pop);
+	ctx = pop->external;
+	operation_start(ctx);
 
 	operation_add_entry(ctx, &pop->do_phdr->dp_root_size, size, ULOG_OPERATION_SET);
 
@@ -1732,22 +1730,22 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	type_num_t type_num, uint64_t flags,
 	dav_constr constructor, void *arg)
 {
+	struct operation_context *ctx;
+	struct constr_args carg;
+
 	if (size > DAV_MAX_ALLOC_SIZE) {
 		ERR("requested size too large");
 		errno = ENOMEM;
 		return -1;
 	}
 
-	struct constr_args carg;
-
 	carg.zero_init = flags & DAV_FLAG_ZERO;
 	carg.constructor = constructor;
 	carg.arg = arg;
 
-	struct operation_context *ctx = pop->external;
-
-	operation_start(ctx);
 	lw_tx_begin(pop);
+	ctx = pop->external;
+	operation_start(ctx);
 
 	int ret = palloc_operation(pop->do_heap, 0, offp, size,
 			constructor_alloc, &carg, type_num, 0,
@@ -1794,7 +1792,7 @@ dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
 void
 dav_free(dav_obj_t *pop, uint64_t off)
 {
-	struct operation_context *ctx = pop->external;
+	struct operation_context *ctx;
 
 	DAV_DBG("oid.off 0x%016" PRIx64, off);
 
@@ -1806,6 +1804,7 @@ dav_free(dav_obj_t *pop, uint64_t off)
 	ASSERTne(pop, NULL);
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
 	lw_tx_begin(pop);
+	ctx = pop->external;
 
 	palloc_operation(pop->do_heap, off, &off, 0, NULL, NULL,
 			0, 0, 0, 0, ctx);
