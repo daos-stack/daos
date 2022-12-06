@@ -35,8 +35,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.hostlist_clients, self.workdir, None)
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_reintegration_test(self, num_pool, data=False,
-                                       server_boot=False, oclass=None, pool_fillup=0):
+    def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,
+                                       pool_fillup=0):
+        # pylint: disable=too-many-branches
         """Run the offline reintegration without data.
 
         Args:
@@ -55,10 +56,10 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude ranks [0, 3, 4]
-        rank = [0, 3, 4]
-        for val in range(0, num_pool):
-            pool[val] = add_pool(self, connect=False)
-            self.pool = pool[val]
+        ranks = [0, 3, 4]
+        for index in range(0, num_pool):
+            pool[index] = add_pool(self, connect=False)
+            self.pool = pool[index]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
             if data:
@@ -81,43 +82,42 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     # Create a snapshot of the container
                     # after IOR job completes.
                     self.container.create_snap()
-                    self.log.info("Created container snapshot: %s",
-                                  self.container.epoch)
+                    self.log.info("Created container snapshot: %s", self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
         # Exclude all the ranks
         random_pool = random.randint(0, (num_pool - 1))  # nosec
         for _ in range(0, self.loop_test_cnt):
-            for val, _ in enumerate(rank):
+            for index, rank in enumerate(ranks):
                 self.pool = pool[random_pool]
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 if server_boot is False:
-                    if (self.test_during_rebuild is True and val == 0):
+                    if (self.test_during_rebuild is True and index == 0):
                         # Exclude rank 5
                         output = self.pool.exclude("5")
                         self.print_and_assert_on_rebuild_failure(output)
                     if self.test_during_aggregation is True:
                         self.delete_extra_container(self.pool)
-                        self.simple_osa_reintegrate_loop(rank[val])
+                        self.simple_osa_reintegrate_loop(rank)
                     # For redundancy factor testing, just exclude only
                     # one target on a rank. Don't exclude a rank(s).
-                    if (self.test_with_rf is True and val == 0):
-                        output = self.pool.exclude(rank[val])
-                    elif (self.test_with_rf is True and val > 0):
+                    if (self.test_with_rf is True and index == 0):
+                        output = self.pool.exclude(rank)
+                    elif (self.test_with_rf is True and index > 0):
                         continue
                     else:
-                        if pool_fillup > 0 and val > 0:
+                        if pool_fillup > 0 and index > 0:
                             continue
-                        output = self.pool.exclude(rank[val])
+                        output = self.pool.exclude(rank)
                 else:
-                    output = self.dmg_command.system_stop(ranks=rank[val], force=True)
+                    output = self.dmg_command.system_stop(ranks=rank, force=True)
                     self.print_and_assert_on_rebuild_failure(output)
-                    output = self.dmg_command.system_start(ranks=rank[val])
+                    output = self.dmg_command.system_start(ranks=rank)
                 # Just try to reintegrate rank 5
-                if (self.test_during_rebuild is True and val == 2):
+                if (self.test_during_rebuild is True and index == 2):
                     # Reintegrate rank 5
                     output = self.pool.reintegrate("5")
                 self.print_and_assert_on_rebuild_failure(output)
@@ -131,20 +131,20 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                                 "Pool Version Error: After exclude")
 
             # Reintegrate the ranks which was excluded
-            for val, _ in enumerate(rank):
+            for index, rank in enumerate(ranks):
                 if self.test_with_blank_node is True:
-                    ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
+                    ip_addr, p_num = self.get_ipaddr_for_rank(rank)
                     self.remove_pool_dir(ip_addr, p_num)
-                if (val == 2 and "RP_2G" in oclass):
-                    output = self.pool.reintegrate(rank[val], "0,2")
-                elif (self.test_with_rf is True and val == 0):
-                    output = self.pool.reintegrate(rank[val])
-                elif (self.test_with_rf is True and val > 0):
+                if (index == 2 and "RP_2G" in oclass):
+                    output = self.pool.reintegrate(rank, "0,2")
+                elif (self.test_with_rf is True and index == 0):
+                    output = self.pool.reintegrate(rank)
+                elif (self.test_with_rf is True and index > 0):
                     continue
                 else:
-                    if pool_fillup > 0 and val > 0:
+                    if pool_fillup > 0 and index > 0:
                         continue
-                    output = self.pool.reintegrate(rank[val])
+                    output = self.pool.reintegrate(rank)
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
 
                 pver_reint = self.pool.get_version(True)
@@ -158,8 +158,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
         # Finally check whether the written data can be accessed.
         # Also, run the daos cont check (for object integrity)
-        for val in range(0, num_pool):
-            self.pool = pool[val]
+        for index in range(0, num_pool):
+            self.pool = pool[index]
             if data:
                 if pool_fillup > 0:
                     self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
