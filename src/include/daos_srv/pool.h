@@ -148,7 +148,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1;
+	uint64_t	spc_discard_done:1,
+			spc_no_storage:1; /* The pool shard has no storage. */
+
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a

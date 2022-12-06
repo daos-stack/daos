@@ -77,6 +77,8 @@ struct chk_pool_mbs_args {
 	struct chk_pool_rec		*cpma_cpr;
 };
 
+static int chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq);
+
 static int
 chk_cont_hkey_size(void)
 {
@@ -224,6 +226,7 @@ chk_engine_pm_orphan(struct chk_pool_rec *cpr, d_rank_t rank, int index)
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t			 seq = 0;
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
@@ -331,7 +334,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &decision);
+	rc = chk_engine_report(&cru, &decision, &seq);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects orphan %s entry in pool map for "
@@ -413,6 +416,7 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t			 seq = 0;
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
@@ -505,7 +509,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &decision);
+	rc = chk_engine_report(&cru, &decision, &seq);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects dangling %s entry in pool map for pool "
@@ -581,6 +585,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t			 seq = 0;
 	int				 rc;
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
@@ -603,7 +608,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_msg = msg;
 	cru.cru_result = 0;
 
-	rc = chk_engine_report(&cru, NULL);
+	rc = chk_engine_report(&cru, NULL, &seq);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects unknown target entry in pool map for pool "DF_UUIDF", rank %u, "
@@ -808,6 +813,7 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	uint64_t			 seq = 0;
 	int				 result = 0;
 	int				 rc = 0;
 
@@ -842,7 +848,7 @@ report:
 	cru.cru_msg = msg;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, NULL);
+	rc = chk_engine_report(&cru, NULL, &seq);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects corrupted label %s (MS) vs %s (PS) for pool "
@@ -940,6 +946,7 @@ chk_engine_cont_orphan(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struc
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
+	uint64_t			 seq = 0;
 	uint32_t			 options[2];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
@@ -1032,7 +1039,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &decision);
+	rc = chk_engine_report(&cru, &decision, &seq);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects orphan container "
@@ -1182,6 +1189,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, st
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
+	uint64_t			 seq = 0;
 	uint32_t			 options[3];
 	uint32_t			 option_nr = 0;
 	uint32_t			 detail_nr = 0;
@@ -1344,7 +1352,7 @@ report:
 	cru.cru_details = details;
 	cru.cru_result = result;
 
-	rc = chk_engine_report(&cru, &decision);
+	rc = chk_engine_report(&cru, &decision, &seq);
 
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_ENGINE" detects inconsistent container label for "DF_UUIDF"/"DF_UUIDF
@@ -1752,7 +1760,7 @@ out:
 	}
 
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u exit pool ULT for "DF_UUIDF" with %s stop: %u/%u/%u\n",
+		 DF_ENGINE" on rank %u exit pool ULT for "DF_UUIDF" with %s stop: %d/%d/%d\n",
 		 DP_ENGINE(ins), dss_self_rank(), DP_UUID(cpr->cpr_uuid),
 		 cpr->cpr_stop ? "external" : "self", rc, rc1, rc2);
 
@@ -1992,7 +2000,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		/*
 		 * The phase may be CHK__CHECK_SCAN_PHASE__DSP_DONE, it is fine.
 		 *
-		 * The phase in engine bookmark may be larger then the phase in
+		 * The phase in engine bookmark may be larger than the phase in
 		 * some pools that may be new added into current check instance.
 		 * So we allow the phase to backward.
 		 */
@@ -2005,10 +2013,9 @@ chk_engine_start_post(struct chk_instance *ins)
 						ins_cbk->cb_phase;
 		rc = chk_bk_update_engine(ins_cbk);
 		if (rc == 0) {
-			d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+			d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link)
 				/* Shutdown former instance left opened pool. */
 				chk_pool_shutdown(cpr);
-			}
 		}
 	}
 
@@ -2168,7 +2175,7 @@ out_log:
 		chk_pools_dump(&ins->ci_pool_list, pool_nr, pools);
 	} else if (rc != -DER_ALREADY) {
 		D_ERROR(DF_ENGINE" failed to start on rank %u with %u ranks, %d pools, "
-			"api_flags %x, phase %d, leader %u, flags %u, gen "DF_X64": "DF_RC"\n",
+			"api_flags %x, phase %d, leader %u, flags %x, gen "DF_X64": "DF_RC"\n",
 			DP_ENGINE(ins), myrank, rank_nr, pool_nr, api_flags, phase, leader,
 			flags, gen, DP_RC(rc));
 	}
@@ -2263,6 +2270,9 @@ chk_engine_query_one(void *args)
 	int				 rc;
 
 	target = &shard->cqps_targets[tid];
+	target->cqt_rank = dss_self_rank();
+	target->cqt_tgt = tid;
+
 	rc = ds_mgmt_tgt_pool_exist(shard->cqps_uuid,  &path);
 	/* We allow the target nonexist. */
 	if (rc <= 0)
@@ -2282,8 +2292,6 @@ chk_engine_query_one(void *args)
 		goto out;
 	}
 
-	target->cqt_rank = dss_self_rank();
-	target->cqt_tgt = tid;
 	target->cqt_ins_status = info.pif_chk.cpi_ins_status;
 	target->cqt_statistics = info.pif_chk.cpi_statistics;
 	target->cqt_time = info.pif_chk.cpi_time;
@@ -2616,7 +2624,7 @@ chk_engine_cont_list_free(struct dss_stream_arg_type *args)
 }
 
 int
-chk_engine_cont_list(uint64_t gen, uuid_t pool, uuid_t **conts, uint32_t *count)
+chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *count)
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
@@ -2631,7 +2639,12 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool, uuid_t **conts, uint32_t *count)
 	if (cbk->cb_gen != gen)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
-	rc = chk_engine_cont_list_init(pool, &aggregator);
+	rc = chk_engine_cont_list_init(pool_uuid, &aggregator);
+	if (rc != 0)
+		goto out;
+
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
+					&coll_args.ca_exclude_tgts_cnt);
 	if (rc != 0)
 		goto out;
 
@@ -2644,8 +2657,7 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool, uuid_t **conts, uint32_t *count)
 	coll_ops.co_reduce_arg_free = chk_engine_cont_list_free;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
-	if (rc != 0)
-		goto out;
+	D_FREE(coll_args.ca_exclude_tgts);
 
 out:
 	if (rc == 0 && aggregator.ccla_count > 0) {
@@ -2861,24 +2873,23 @@ out:
 	return rc;
 }
 
-int
-chk_engine_report(struct chk_report_unit *cru, int *decision)
+static int
+chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_pending_rec	*cpr = NULL;
-	uint64_t		 seq = 0;
 	int			 rc;
 
 	rc = chk_report_remote(ins->ci_prop.cp_leader, ins->ci_bk.cb_gen, cru->cru_cla,
 			       cru->cru_act, cru->cru_result, cru->cru_rank, cru->cru_target,
 			       cru->cru_pool, cru->cru_cont, cru->cru_obj, cru->cru_dkey,
 			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
-			       cru->cru_detail_nr, cru->cru_details, &seq);
+			       cru->cru_detail_nr, cru->cru_details, seq);
 	if (rc != 0)
 		goto log;
 
 	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-		rc = chk_pending_add(ins, NULL, seq, cru->cru_rank, cru->cru_cla, &cpr);
+		rc = chk_pending_add(ins, NULL, *seq, cru->cru_rank, cru->cru_cla, &cpr);
 
 log:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
@@ -2973,7 +2984,7 @@ out:
 }
 
 void
-chk_engine_rejoin(void)
+chk_engine_rejoin(void *args)
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_property		*prop = &ins->ci_prop;

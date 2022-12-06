@@ -82,8 +82,10 @@ chk_sg_list2string_array(d_sg_list_t *sgls, uint32_t sgl_nr, char ***array)
 	/* QUEST: How to transfer all the data into d_sg_list_t array? Some may be not string. */
 
 	for (i = 0, k = 0; i < sgl_nr; i++) {
-		for (j = 0; j < sgls[i].sg_nr; j++)
-			buf[k++] = sgls[i].sg_iovs[j].iov_buf;
+		for (j = 0; j < sgls[i].sg_nr; j++, k++) {
+			buf[k] = sgls[i].sg_iovs[j].iov_buf;
+			buf[k][sgls[i].sg_iovs[j].iov_len] = '\0';
+		}
 	}
 
 out:

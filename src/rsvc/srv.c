@@ -401,6 +401,7 @@ init_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
+	svc->s_gen = 0;
 	svc->s_map_dist = false;
 	svc->s_map_distd_stop = false;
 
@@ -607,19 +608,19 @@ static void
 map_distd(void *arg)
 {
 	struct ds_rsvc *svc = arg;
+	uint32_t	gen = 0;
+	int		rc;
+	bool		stop;
 
 	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
 	for (;;) {
-		bool	stop;
-		int	rc;
-
 		ABT_mutex_lock(svc->s_mutex);
 		for (;;) {
 			stop = svc->s_map_distd_stop;
 			if (stop)
 				break;
 			if (svc->s_map_dist) {
-				svc->s_map_dist = false;
+				gen = svc->s_gen;
 				break;
 			}
 			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
@@ -633,8 +634,14 @@ map_distd(void *arg)
 			 * Try again, but back off a little bit to limit the
 			 * retry rate.
 			 */
-			svc->s_map_dist = true;
 			dss_sleep(3000 /* ms */);
+		} else {
+			ABT_mutex_lock(svc->s_mutex);
+			if (gen == svc->s_gen) {
+				svc->s_map_dist = false;
+				ABT_cond_broadcast(svc->s_map_dist_cv);
+			}
+			ABT_mutex_unlock(svc->s_mutex);
 		}
 	}
 	put_leader(svc);
@@ -651,9 +658,27 @@ map_distd(void *arg)
 void
 ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
+	svc->s_gen++;
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
+}
+
+void
+ds_rsvc_wait_map_dist(struct ds_rsvc *svc)
+{
+	D_DEBUG(DB_MD, "%s: waiting map dist %u\n", svc->s_name, svc->s_gen);
+
+	ABT_mutex_lock(svc->s_mutex);
+	for (;;) {
+		if (svc->s_map_distd_stop || !svc->s_map_dist)
+			break;
+
+		sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
+	}
+	ABT_mutex_unlock(svc->s_mutex);
+
+	D_DEBUG(DB_MD, "%s: map dist done %u\n", svc->s_name, svc->s_gen);
 }
 
 static char *

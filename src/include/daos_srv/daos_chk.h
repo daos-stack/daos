@@ -75,7 +75,7 @@ typedef int (*chk_prop_cb_t)(void *buf, struct chk_policy *policies, int cnt, ui
 
 int chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr,
 		     struct chk_policy *policies, int pool_nr, uuid_t pools[],
-		     uint32_t flags, int phase);
+		     uint32_t api_flags, int phase);
 
 int chk_leader_stop(int pool_nr, uuid_t pools[]);
 
