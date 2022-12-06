@@ -221,7 +221,7 @@ def create_label_to_uuid():
 
 
 def get_current_labels():
-    """Get current pool labels.
+    """Get current pool labels from MS.
 
     Returns:
         list: Current pool labels.
