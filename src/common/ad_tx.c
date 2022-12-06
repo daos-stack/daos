@@ -20,6 +20,7 @@ struct ad_tls_cache {
 	int		atc_act_nr;
 	int		atc_tx_nr;
 	int		atc_act_copy_nr;
+	int		atc_inited;
 };
 
 static __thread struct ad_tx	*tls_tx;
@@ -77,6 +78,10 @@ tls_act_put(struct ad_act *act)
 	d_list_del(&act->it_link);
 
 #if AD_TLS_CACHE_ENABLED
+	if (unlikely(!tls_cache.atc_inited)) {
+		D_FREE(act);
+		return;
+	}
 	if (act->it_act.ac_opc == UMEM_ACT_COPY && act->it_act.ac_copy.size <= TSL_ACT_COPY_SZ &&
 	    tls_cache.atc_act_copy_nr < TLS_ACT_COPY_MAX) {
 		d_list_add(&act->it_link, &tls_cache.atc_act_copy_list);
@@ -121,6 +126,10 @@ tls_utx_put(struct umem_wal_tx *utx)
 	item = container_of(utx, struct umem_wal_tx_item, ti_utx);
 
 #if AD_TLS_CACHE_ENABLED
+	if (unlikely(!tls_cache.atc_inited)) {
+		D_FREE(item);
+		return;
+	}
 	d_list_add(&item->ti_link, &tls_cache.atc_tx_list);
 	tls_cache.atc_tx_nr++;
 	return;
@@ -138,6 +147,12 @@ ad_tls_cache_init(void)
 
 	tls_cache.atc_act_nr = 0;
 	D_INIT_LIST_HEAD(&tls_cache.atc_act_list);
+	tls_cache.atc_tx_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_tx_list);
+	tls_cache.atc_act_copy_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
+	tls_cache.atc_inited = true;
+
 	for (i = 0; i < TLS_ACT_NUM; i++) {
 		D_ALLOC_PTR(act);
 		if (act == NULL)
@@ -147,8 +162,6 @@ ad_tls_cache_init(void)
 		tls_act_put(act);
 	}
 
-	tls_cache.atc_tx_nr = 0;
-	D_INIT_LIST_HEAD(&tls_cache.atc_tx_list);
 	for (i = 0; i < TLS_TX_NUM; i++) {
 		D_ALLOC_PTR(item);
 		if (item == NULL)
@@ -157,8 +170,6 @@ ad_tls_cache_init(void)
 		tls_utx_put(&item->ti_utx);
 	}
 
-	tls_cache.atc_act_copy_nr = 0;
-	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
 	for (i = 0; i < TLS_ACT_COPY_NUM; i++) {
 		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[TSL_ACT_COPY_SZ]));
 		if (act == NULL)
@@ -1040,10 +1051,15 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 			rc = -DER_INVAL;
 			goto err_abort;
 		}
-		if (txd != NULL && txd != tx->tx_stage_cb_arg) {
-			D_ERROR("Cannot set different TX callback argument\n");
-			rc = -DER_CANCELED;
-			goto err_abort;
+		if (txd != NULL) {
+			if (tx->tx_stage_cb_arg == NULL) {
+				tx->tx_stage_cb = umem_stage_callback;
+				tx->tx_stage_cb_arg = txd;
+			} else if (txd != tx->tx_stage_cb_arg) {
+				D_ERROR("Cannot set different TX callback argument\n");
+				rc = -DER_CANCELED;
+				goto err_abort;
+			}
 		}
 		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
 	}
