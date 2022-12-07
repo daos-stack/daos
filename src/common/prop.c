@@ -544,8 +544,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
 				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_dup->dpe_str == NULL) {
-				rc = -DER_NOMEM;
-				return rc;
+				return -DER_NOMEM;
 			}
 		}
 		break;
