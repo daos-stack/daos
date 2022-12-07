@@ -1789,7 +1789,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		 * some targets un-available.
 		 */
 		if (recov_task->ert_epoch == DAOS_EPOCH_MAX)
-			recov_task->ert_epoch = crt_hlc_get();
+			recov_task->ert_epoch = d_hlc_get();
 		dc_cont2hdl_noref(obj->cob_co, &coh);
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
@@ -6721,12 +6721,14 @@ dc_obj_query_key(tse_task_t *api_task)
 	for (i = grp_idx; i < grp_idx + grp_nr; i++) {
 		int start_shard;
 		int j;
+		int shard_cnt = 0;
 
 		/* Try leader for current group */
 		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
 			int leader;
 
-			leader = obj_replica_leader_select(obj, i, map_ver);
+			leader = obj_grp_leader_get(obj, i, obj_auxi->dkey_hash,
+						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
 				if (obj_is_ec(obj) &&
 				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
@@ -6751,14 +6753,26 @@ dc_obj_query_key(tse_task_t *api_task)
 
 non_leader:
 		/* Then Try non-leader shards */
+		D_ASSERT(obj_is_ec(obj));
 		start_shard = i * obj_get_grp_size(obj);
 		D_DEBUG(DB_IO, DF_OID" EC needs to try all shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);
 		for (j = start_shard; j < start_shard + daos_oclass_grp_size(&obj->cob_oca); j++) {
+			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
+				continue;
 			rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j, map_ver,
 							obj, &dti, coh_uuid, cont_uuid);
 			if (rc)
 				D_GOTO(out_task, rc);
+
+			if (++shard_cnt >= obj_ec_data_tgt_nr(&obj->cob_oca))
+				break;
+		}
+
+		if (shard_cnt < obj_ec_data_tgt_nr(&obj->cob_oca)) {
+			D_ERROR(DF_OID" EC grp %d only have %d shards.\n",
+				DP_OID(obj->cob_md.omd_id), i, shard_cnt);
+			D_GOTO(out_task, rc = -DER_DATA_LOSS);
 		}
 	}
 
