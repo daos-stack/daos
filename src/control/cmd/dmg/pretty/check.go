@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dustin/go-humanize/english"
+
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -36,7 +38,7 @@ func PrintCheckerPolicies(out io.Writer, flags control.SystemCheckFlags, policie
 	tf.Format(table)
 }
 
-func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
+func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verbose bool) {
 	fmt.Fprintln(out, "DAOS System Checker Info")
 
 	statusMsg := fmt.Sprintf("Current status: %s", resp.Status)
@@ -47,14 +49,14 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())
 
 	if len(resp.Pools) > 0 {
-		fmt.Fprintf(out, "  Checking %d pools\n", len(resp.Pools))
-		if len(resp.Pools) > 0 {
+		fmt.Fprintf(out, "  Checking %s\n", english.Plural(len(resp.Pools), "pool", ""))
+		if verbose {
 			fmt.Fprintln(out, "\nPer-Pool Checker Info:")
 			for _, pool := range resp.Pools {
 				fmt.Fprintf(out, "  %+v\n", pool)
 			}
-			fmt.Fprintln(out)
 		}
+		fmt.Fprintln(out)
 	}
 
 	if len(resp.Reports) == 0 {
@@ -69,9 +71,25 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
 		fmt.Fprintf(iw, "Class:      %s\n", cls)
 		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)
-		fmt.Fprintf(iw, "Pool:       %s\n", report.PoolUuid)
+		poolID := report.PoolUuid
+		var poolIDV string
+		if report.PoolLabel != "" {
+			poolID = report.PoolLabel
+			if verbose {
+				poolIDV = fmt.Sprintf(" (%s)", report.PoolUuid)
+			}
+		}
+		fmt.Fprintf(iw, "Pool:       %s%s\n", poolID, poolIDV)
 		if report.ContUuid != "" {
-			fmt.Fprintf(iw, "Container:  %s\n", report.ContUuid)
+			contID := report.ContUuid
+			var contIDV string
+			if report.ContLabel != "" {
+				contID = report.ContLabel
+				if verbose {
+					contIDV = fmt.Sprintf(" (%s)", report.ContUuid)
+				}
+			}
+			fmt.Fprintf(iw, "Container:  %s%s\n", contID, contIDV)
 		}
 		if report.IsInteractive() {
 			fmt.Fprintf(iw, "Potential resolution actions:\n")

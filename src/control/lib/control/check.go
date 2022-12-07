@@ -398,9 +398,16 @@ type SystemCheckReport struct {
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	choices := make([]*SystemCheckRepairChoice, len(r.ActChoices))
 	for i, c := range r.ActChoices {
+		info := r.ActMsgs[i]
+		// FIXME DAOS-12189: Use the details instead because the messages
+		// are too generic. Longer-term, only the messages should be
+		// user-visible.
+		if len(strings.Fields(r.ActDetails[i])) > 1 {
+			info = r.ActDetails[i]
+		}
 		choices[i] = &SystemCheckRepairChoice{
 			Action: SystemCheckRepairAction(c),
-			Info:   r.ActMsgs[i],
+			Info:   info,
 		}
 	}
 
@@ -427,6 +434,7 @@ type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
 type SystemCheckPoolInfo struct {
 	RawRankInfo rawRankMap    `json:"-"`
 	UUID        string        `json:"uuid"`
+	Label       string        `json:"label"`
 	Status      string        `json:"status"`
 	Phase       string        `json:"phase"`
 	StartTime   time.Time     `json:"start_time"`
