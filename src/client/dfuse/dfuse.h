@@ -65,20 +65,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle, struct fuse_args *arg
 
 struct dfuse_inode_entry;
 
-struct dfuse_readdir_entry {
-	/* Name of this directory entry */
-	char  dre_name[NAME_MAX + 1];
-
-	/* Offset of this directory entry */
-	off_t dre_offset;
-
-	/* Offset of the next directory entry
-	 * A value of DFUSE_READDIR_EOD means end
-	 * of directory.
-	 */
-	off_t dre_next_offset;
-};
-
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
@@ -111,10 +97,24 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_finished;
 };
 
-/* Maximum number of dentries to read at one time. */
-#define READDIR_MAX_COUNT 1024
+/* Readdir entry as saved by the iterator.  These are forward-looking from the current position */
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char  dre_name[NAME_MAX + 1];
 
-/* Dfuse readdir cache entry */
+	/* Offset of this directory entry */
+	off_t dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t dre_next_offset;
+};
+
+/* Readdir entry as saved by the cache.  These are backwards looking from the current position
+ * and will be used by other open handles on the same directory doing subsequent readdir calls
+ */
 struct dfuse_readdir_c {
 	/* List of entries */
 	d_list_t drc_list;
@@ -122,6 +122,10 @@ struct dfuse_readdir_c {
 	char     drc_name[NAME_MAX + 1];
 };
 
+/* Maximum number of dentries to read at one time. */
+#define READDIR_MAX_COUNT 1024
+
+/* Readdir handle.  Pointed to by any open directory handle after the first readdir call */
 struct dfuse_readdir_hdl {
 	/** an anchor to track listing in readdir */
 	daos_anchor_t              drh_anchor;
@@ -135,6 +139,10 @@ struct dfuse_readdir_hdl {
 	/** Next value from anchor */
 	uint32_t                   drh_anchor_index;
 	d_list_t                   drh_cache_list;
+
+	ATOMIC uint32_t            drh_ref;
+
+	bool                       dre_caching;
 };
 
 /* Drop a readdir handle from a open directory handle.

@@ -98,6 +98,35 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	return rc;
 }
 
+/* Create a readdir handle */
+static struct dfuse_readdir_hdl *
+_handle_init()
+{
+	struct dfuse_readdir_hdl *hdl;
+
+	D_ALLOC_PTR(hdl);
+	if (hdl == NULL)
+		return NULL;
+
+	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
+	atomic_store_relaxed(&hdl->drh_ref, 1);
+	hdl->dre_caching = true;
+	return hdl;
+}
+
+/* Ensure a readdir handle is unique.  Handles are only shared if caching so it's enough to check
+ * this bit.
+ */
+static struct dfuse_readdir_hdl *
+_handle_make_unique(struct dfuse_readdir_hdl *hdl)
+{
+	if (hdl->dre_caching)
+		dfuse_dre_drop(hdl);
+
+	return _handle_init();
+}
+
+/* Drop a ref on a readdir handle and release if required. */
 void
 dfuse_dre_drop(struct dfuse_readdir_hdl *hdl)
 {
@@ -105,6 +134,10 @@ dfuse_dre_drop(struct dfuse_readdir_hdl *hdl)
 
 	if (!hdl)
 		return;
+
+	if (atomic_fetch_sub_relaxed(&hdl->drh_ref, 1)) {
+		return;
+	}
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_FREE(drc);
@@ -243,11 +276,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		D_GOTO(out, rc = ENOMEM);
 
 	if (oh->doh_rd == NULL) {
-		D_ALLOC_PTR(oh->doh_rd);
+		oh->doh_rd = _handle_init();
 		if (oh->doh_rd == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		D_INIT_LIST_HEAD(&oh->doh_rd->drh_cache_list);
 		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 	}
 
@@ -255,8 +287,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 	/* if starting from the beginning, reset the anchor attached to the open handle. */
 	if (offset == 0) {
-		if (oh->doh_kreaddir_started)
+		if (oh->doh_kreaddir_started) {
 			oh->doh_kreaddir_invalid = true;
+			dfuse_readdir_reset(hdl);
+		}
 		oh->doh_kreaddir_started = true;
 		dfuse_readdir_reset(hdl);
 	}
@@ -269,9 +303,20 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	 */
 	if (offset && hdl->drh_dre[hdl->drh_dre_index].dre_offset != offset &&
 	    hdl->drh_anchor_index + OFFSET_BASE != offset) {
+		struct dfuse_readdir_hdl *new_hdl;
+
 		uint32_t num;
 
 		oh->doh_kreaddir_invalid = true;
+
+		/* Drop if shared */
+		new_hdl = _handle_make_unique(hdl);
+		if (new_hdl != hdl) {
+			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+
+			dfuse_readdir_reset(hdl);
+			oh->doh_rd = hdl;
+		}
 
 		/*
 		 * otherwise we are starting at an earlier offset where we left
@@ -350,11 +395,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			char                        out[DUNS_MAX_XATTR_LEN];
 			char                       *outp = &out[0];
 			daos_size_t                 attr_len;
-			struct dfuse_readdir_c     *drc;
+			struct dfuse_readdir_c     *drc = NULL;
 
-			D_ALLOC_PTR(drc);
-			if (drc == NULL) {
-				D_GOTO(reply, rc = ENOMEM);
+			if (hdl->dre_caching) {
+				D_ALLOC_PTR(drc);
+				if (drc == NULL) {
+					D_GOTO(reply, rc = ENOMEM);
+				}
 			}
 
 			attr_len = DUNS_MAX_XATTR_LEN;
@@ -385,8 +432,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
 
-			strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
-			d_list_add(&drc->drc_list, &hdl->drh_cache_list);
+			if (drc) {
+				strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
+				d_list_add(&drc->drc_list, &hdl->drh_cache_list);
+			}
 
 			if (plus) {
 				struct fuse_entry_param entry = {0};
