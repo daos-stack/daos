@@ -84,7 +84,9 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	}
 
 	if (daos_prop_has_str(entry)) {
-		D_FREE(entry->dpe_str);
+		if (entry->dpe_str) {
+			D_FREE(entry->dpe_str);
+		}
 		return;
 	}
 
@@ -539,10 +541,10 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
 		if (entry->dpe_str) {
-			entry_dup->dpe_str = strndup(entry->dpe_str, DAOS_PROP_LABEL_MAX_LEN);
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
 			if (entry_dup->dpe_str == NULL) {
 				rc = -DER_NOMEM;
-				D_ERROR("failed to dup label: "DF_RC"\n", DP_RC(rc));
 				return rc;
 			}
 		}
