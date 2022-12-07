@@ -309,6 +309,16 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
+/**
+ * Stop a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
 const char *daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */
