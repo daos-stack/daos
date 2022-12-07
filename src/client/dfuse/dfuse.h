@@ -114,6 +114,14 @@ struct dfuse_obj_hdl {
 /* Maximum number of dentries to read at one time. */
 #define READDIR_MAX_COUNT 1024
 
+/* Dfuse readdir cache entry */
+struct dfuse_readdir_c {
+	/* List of entries */
+	d_list_t drc_list;
+	/* Name of this entry */
+	char     drc_name[NAME_MAX + 1];
+};
+
 struct dfuse_readdir_hdl {
 	/** an anchor to track listing in readdir */
 	daos_anchor_t              drh_anchor;
@@ -126,7 +134,16 @@ struct dfuse_readdir_hdl {
 	uint32_t                   drh_dre_last_index;
 	/** Next value from anchor */
 	uint32_t                   drh_anchor_index;
+	d_list_t                   drh_cache_list;
 };
+
+/* Drop a readdir handle from a open directory handle.
+ *
+ * For non-caching handles this means free it however in the case of caching it will drop
+ * a reference only.
+ */
+void
+dfuse_dre_drop(struct dfuse_readdir_hdl *hdl);
 
 /*
  * Set required initial state in dfuse_obj_hdl.

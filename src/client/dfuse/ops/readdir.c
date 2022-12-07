@@ -98,6 +98,19 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	return rc;
 }
 
+void
+dfuse_dre_drop(struct dfuse_readdir_hdl *hdl)
+{
+	struct dfuse_readdir_c *drc, *next;
+
+	if (!hdl)
+		return;
+
+	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
+		D_FREE(drc);
+	}
+}
+
 static int
 create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *parent,
 	     struct fuse_entry_param *entry, dfs_obj_t *obj, char *name, char *attr,
@@ -234,6 +247,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		if (oh->doh_rd == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
+		D_INIT_LIST_HEAD(&oh->doh_rd->drh_cache_list);
 		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 	}
 
@@ -336,6 +350,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			char                        out[DUNS_MAX_XATTR_LEN];
 			char                       *outp = &out[0];
 			daos_size_t                 attr_len;
+			struct dfuse_readdir_c     *drc;
+
+			D_ALLOC_PTR(drc);
+			if (drc == NULL) {
+				D_GOTO(reply, rc = ENOMEM);
+			}
 
 			attr_len = DUNS_MAX_XATTR_LEN;
 			D_ASSERT(dre->dre_offset != 0);
@@ -365,6 +385,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
 
+			strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
+			d_list_add(&drc->drc_list, &hdl->drh_cache_list);
+
 			if (plus) {
 				struct fuse_entry_param entry = {0};
 				d_list_t               *rlink;
@@ -380,7 +403,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 					       dre->dre_name, &entry, dre->dre_next_offset);
 				if (written > size - buff_offset)
 					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-
 			} else {
 				dfs_release(obj);
 
