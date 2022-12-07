@@ -42,7 +42,7 @@ type configGenCmd struct {
 func (cmd *configGenCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
-	cmd.Debugf("ConfigGenerate called with command parameters %+v", cmd)
+	cmd.Debugf("ConfGenerate called with command parameters %+v", cmd)
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
@@ -56,8 +56,8 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		ndc = hardware.NetDevAny
 	}
 
-	req := control.ConfigGenerateRemoteReq{
-		ConfigGenerateReq: control.ConfigGenerateReq{
+	req := control.ConfGenerateRemoteReq{
+		ConfGenerateReq: control.ConfGenerateReq{
 			Log:          cmd.Logger,
 			NrEngines:    cmd.NrEngines,
 			MinNrSSDs:    cmd.MinNrSSDs,
@@ -73,11 +73,11 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
 	}
 
-	cmd.Debugf("control API ConfigGenerate called with req: %+v", req)
+	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
-	resp, err := control.ConfigGenerate(ctx, req)
+	resp, err := control.ConfGenerateRemote(ctx, req)
 	if err != nil {
-		cge, ok := errors.Cause(err).(*control.ConfigGenerateError)
+		cge, ok := errors.Cause(err).(*control.ConfGenerateError)
 		if !ok {
 			// includes hardware validation errors e.g. hardware across hostset differs
 			return err
@@ -92,9 +92,9 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cmd.Debugf("control API ConfigGenerate resp: %+v", resp)
+	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
 
-	bytes, err := yaml.Marshal(resp.ConfigOut)
+	bytes, err := yaml.Marshal(resp.Server)
 	if err != nil {
 		return err
 	}
