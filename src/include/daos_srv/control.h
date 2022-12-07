@@ -45,6 +45,7 @@ dpdk_cli_override_opts;
 #define NVME_CONF_ENABLE_VMD		"enable_vmd"
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
+#define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"
 
 /** Supported acceleration engine settings */
 #define NVME_ACCEL_NONE		"none"
