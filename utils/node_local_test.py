@@ -79,6 +79,7 @@ def umount(path, background=False):
 
 class NLTConf():
     """Helper class for configuration"""
+
     def __init__(self, json_file, args):
 
         with open(json_file, 'r') as ofh:
@@ -425,6 +426,7 @@ def get_base_env(clean=False):
 
 class DaosPool():
     """Class to store data about daos pools"""
+
     def __init__(self, server, pool_uuid, label):
         self._server = server
         self.uuid = pool_uuid
@@ -4385,9 +4387,8 @@ def test_alloc_cont_create(server, conf, wf):
                 'container',
                 'create',
                 pool,
-                str(cont_id),
                 '--properties',
-                'srv_cksum:on']
+                f'srv_cksum:on,label:{cont_id}']
 
     test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
     test_cmd.wf = wf
