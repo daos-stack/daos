@@ -1231,9 +1231,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
-			rc = ds_rebuild_schedule(pool, task->dst_map_ver,
-						 rgt->rgt_stable_epoch, &task->dst_tgts,
-						 task->dst_rebuild_op, 5);
+			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
+						 &task->dst_tgts, task->dst_rebuild_op, 5);
 			return rc;
 		}
 
