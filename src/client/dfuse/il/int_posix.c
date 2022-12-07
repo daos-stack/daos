@@ -2363,8 +2363,6 @@ dfuse_fputws(const wchar_t *ws, FILE *stream)
 	int              fd;
 	int              rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
