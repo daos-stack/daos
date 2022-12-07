@@ -25,7 +25,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
     *Ubuntu\ 20.04*|*ubuntu2004*)
       : "${CHROOT_NAME:="not_applicable"}"
       : "${TARGET:=ubuntu20}"
-      : "${REPO_SPEC:=ubuntu-22.04}"
+      : "${REPO_SPEC:=ubuntu-20.04}"
       ;;
   esac
 fi

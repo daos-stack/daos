@@ -350,7 +350,9 @@ def scons(): # pylint: disable=too-many-locals
     platform_arm = is_platform_arm()
 
     if 'VIRTUAL_ENV' in os.environ:
+        # pylint: disable=no-member
         env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        # pylint: disable=invalid-sequence-index
         env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
     prereqs = PreReqComponent(env, opts, commits_file)

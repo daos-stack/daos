@@ -90,4 +90,5 @@ class BuildInfo():
             script.write(f'SL_BUILD_DIR={self.info["BUILD_DIR"]}\n')
             script.write(f'SL_SRC_DIR={os.getcwd()}\n')
 
+
 __all__ = ["BuildInfo"]
