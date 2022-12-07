@@ -691,7 +691,7 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 			ranks_to_kill[i] = arg->srv_nnodes -
 					   disable_nodes - i - 1;
 
-		arg->hce = crt_hlc_get();
+		arg->hce = d_hlc_get();
 	}
 
 	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
