@@ -52,16 +52,9 @@ class OSAOfflineParallelTest(OSAUtils):
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                text = "Waiting for rebuild to complete"
+                text = "Waiting for rebuild to complete before pool reintegrate"
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
-                # For each action, read the values from the
-                # dictionary.
-                # example {"exclude" : {"puuid": self.pool, "rank": rank
-                #                       "target": t_string, "action": exclude}}
-                # getattr is used to obtain the method in dmg object.
-                # eg: dmg -> pool_exclude method, then pass arguments like
-                # puuid, rank, target to the pool_exclude method.
             if action == "exclude" and self.server_boot is True:
                 ranks = action_args[action][1]
                 dmg.system_stop(ranks=ranks)
@@ -69,9 +62,16 @@ class OSAOfflineParallelTest(OSAUtils):
                 dmg.system_start(ranks=ranks)
                 self.print_and_assert_on_rebuild_failure("Starting rank {}".format(ranks))
             else:
+                # For each action, read the values from the
+                # dictionary.
+                # example {"exclude" : {"puuid": self.pool, "rank": rank
+                #                       "target": t_string, "action": exclude}}
+                # getattr is used to obtain the method in dmg object.
+                # eg: dmg -> pool_exclude method, then pass arguments like
+                # puuid, rank, target to the pool_exclude method.
                 getattr(dmg, "pool_{}".format(action))(**action_args[action])
-        except Exception:       # pylint: disable=broad-except
-            results.put("{} failed".format(action))
+        except Exception as error:      # pylint: disable=broad-except
+            results.put("pool {} failed: {}".format(action, str(error)))
 
     def run_offline_parallel_test(self, num_pool, data=False, oclass=None):
         """Run multiple OSA commands in parallel with or without data.
@@ -143,15 +143,10 @@ class OSAOfflineParallelTest(OSAUtils):
             threads = []
             # Action dictionary with OSA dmg command parameters
             action_args = {
-                "drain": {"pool": self.pool.uuid, "rank": rank,
-                          "tgt_idx": None},
-                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
-                            "tgt_idx": t_string},
-                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
-                                "tgt_idx": t_string},
-                "extend": {"pool": self.pool.uuid, "ranks": (rank + 2),
-                           "scm_size": self.pool.scm_size,
-                           "nvme_size": self.pool.nvme_size}
+                "drain": {"pool": self.pool.uuid, "rank": rank, "tgt_idx": None},
+                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
+                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
+                "extend": {"pool": self.pool.uuid, "ranks": (rank + 2)}
             }
             for action in sorted(action_args):
                 # Add a dmg thread
@@ -159,12 +154,13 @@ class OSAOfflineParallelTest(OSAUtils):
                                            kwargs={"action": action,
                                                    "action_args": action_args,
                                                    "results": self.out_queue})
+                self.log.info("Starting pool %s in a thread", action)
                 process.start()
                 threads.append(process)
 
         # Wait to finish the threads
-        for thrd in threads:
-            thrd.join()
+        for thread in threads:
+            thread.join()
             time.sleep(5)
 
         # Verify the queue result and make sure test has no failure

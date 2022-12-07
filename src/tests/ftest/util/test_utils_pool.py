@@ -16,7 +16,7 @@ from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
-from dmg_utils import DmgCommand
+from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
@@ -302,6 +302,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
+    @fail_on(DmgJsonCommandFailure)
     def create(self):
         """Create a pool with dmg.
 
@@ -1132,7 +1133,7 @@ class TestPool(TestDaosApiBase):
             # If the current state is busy or idle w/o a version increase after previously being
             # busy then rebuild is running
             self._rebuild_data["check"] = "running"
-        else:
+        elif self._rebuild_data["check"] is None:
             # Otherwise rebuild has yet to start
             self._rebuild_data["check"] = "not yet started"
 

@@ -394,7 +394,7 @@ def wait_for_pool_rebuild(self, pool, name):
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        pool.wait_for_rebuild_to_stop()
+        pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
         self.log.error("<<<FAILED:{} rebuild timed out: {}".format(name, error), exc_info=error)
