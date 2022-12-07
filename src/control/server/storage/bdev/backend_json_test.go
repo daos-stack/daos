@@ -62,11 +62,13 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		fileSizeGB         int
 		devList            []string
 		enableVmd          bool
+		vosEnv             string
 		enableHotplug      bool
 		busidRange         string
-		vosEnv             string
 		accelEngine        string
 		accelOptMask       storage.AccelOptionBits
+		rpcSrvEnable       bool
+		rpcSrvSockAddr     string
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -167,18 +169,27 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				}...),
 			vosEnv: "AIO",
 		},
-		"multiple controllers; acceleration set to spdk; move and crc opts specified": {
-			class:        storage.ClassNvme,
-			devList:      []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			accelEngine:  storage.AccelEngineSPDK,
-			accelOptMask: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
-			expBdevCfgs:  multiCtrlrConfs(),
+		"multiple controllers; accel & rpc server settings": {
+			class:          storage.ClassNvme,
+			devList:        []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			accelEngine:    storage.AccelEngineSPDK,
+			accelOptMask:   storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			rpcSrvEnable:   true,
+			rpcSrvSockAddr: "/tmp/spdk.sock",
+			expBdevCfgs:    multiCtrlrConfs(),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
 					Params: AccelPropsParams{
 						Engine:  storage.AccelEngineSPDK,
 						Options: storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+					},
+				},
+				{
+					Method: storage.ConfSetSpdkRpcServer,
+					Params: SpdkRpcServerParams{
+						Enable:   true,
+						SockAddr: "/tmp/spdk.sock",
 					},
 				},
 			},
@@ -219,7 +230,8 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				).
 				WithStorageEnableHotplug(tc.enableHotplug).
 				WithPinnedNumaNode(0).
-				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask)
+				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
+				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			test.CmpErr(t, tc.expValidateErr, gotValidateErr)
