@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -242,8 +242,8 @@ class CartIvTwoNodeTest(CartTest):
             failed = True
             self.print("TEST FAILED: {}".format(exception))
 
-        ########## Shutdown Servers ##########
-        num_servers = self.get_srv_cnt("test_servers")
+        # Shutdown Servers
+        num_servers = 2
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 
