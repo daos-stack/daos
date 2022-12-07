@@ -31,7 +31,7 @@ type configGenCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
 
-	AccessPoints string `short:"a" long:"access-points" required:"1" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	AccessPoints string `short:"a" long:"access-points" default:"localhost" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
 	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
@@ -66,7 +66,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
-	cmd.Debugf("ConfigGenerate called with command parameters %+v", cmd)
+	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
@@ -90,7 +90,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		return nil, err
 	}
 
-	req := control.ConfigGenerateReq{
+	req := control.ConfGenerateReq{
 		Log:          cmd.Logger,
 		NrEngines:    cmd.NrEngines,
 		MinNrSSDs:    cmd.MinNrSSDs,
@@ -98,15 +98,15 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		AccessPoints: accessPoints,
 	}
 
-	cmd.Debugf("control API GenConfig called with req: %+v", req)
+	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
-	resp, err := control.GenConfig(req, control.DefaultEngineCfg, hf, hs)
+	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd.Debugf("control API GenConfig resp: %+v", resp)
-	return resp.ConfigOut, nil
+	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
+	return &resp.Server, nil
 }
 
 // Execute is run when configGenCmd activates.

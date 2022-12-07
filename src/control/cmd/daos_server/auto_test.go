@@ -8,14 +8,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 )
 
@@ -24,8 +28,12 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		{
 			"Generate with no access point",
 			"config generate",
-			"",
-			errors.New("required flag"),
+			printCommand(t, &configGenCmd{
+				AccessPoints: "localhost",
+				MinNrSSDs:    1,
+				NetClass:     "best-available",
+			}),
+			nil,
 		},
 		{
 			"Generate with defaults",
@@ -128,14 +136,74 @@ func TestDaosServer_confGen(t *testing.T) {
 	ib1 := &control.HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
+	exmplEngineCfg := control.DefaultEngineCfg(0).
+		WithPinnedNumaNode(0).
+		WithFabricInterface("ib0").
+		WithFabricInterfacePort(31416).
+		WithFabricProvider("ofi+psm2").
+		WithStorage(
+			storage.NewTierConfig().
+				WithNumaNodeIndex(0).
+				WithStorageClass(storage.ClassDcpm.String()).
+				WithScmDeviceList("/dev/pmem0").
+				WithScmMountPoint("/mnt/daos0"),
+			storage.NewTierConfig().
+				WithNumaNodeIndex(0).
+				WithStorageClass(storage.ClassNvme.String()).
+				WithBdevDeviceList(
+					storage.MockNvmeController(2).PciAddr,
+					storage.MockNvmeController(4).PciAddr),
+		).
+		WithTargetCount(22).
+		WithHelperStreamCount(1)
+	exmplEngineCfgs := []*engine.Config{
+		exmplEngineCfg,
+		control.DefaultEngineCfg(1).
+			WithPinnedNumaNode(1).
+			WithFabricInterface("ib1").
+			WithFabricInterfacePort(32416).
+			WithFabricProvider("ofi+psm2").
+			WithFabricNumaNodeIndex(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithNumaNodeIndex(1).
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmDeviceList("/dev/pmem1").
+					WithScmMountPoint("/mnt/daos1"),
+				storage.NewTierConfig().
+					WithNumaNodeIndex(1).
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(
+						storage.MockNvmeController(1).PciAddr,
+						storage.MockNvmeController(3).PciAddr),
+			).
+			WithStorageNumaNodeIndex(1).
+			WithTargetCount(22).
+			WithHelperStreamCount(1),
+	}
+	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
+		for idx, ec := range ecs {
+			ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
+				WithStorageVosEnv("NVME")
+		}
+		return config.DefaultServer().
+			WithControlLogFile("").
+			WithFabricProvider(prov).
+			WithDisableVMD(false).
+			WithEngines(ecs...)
+	}
 
 	for name, tc := range map[string]struct {
-		hf     *control.HostFabric
-		hfErr  error
-		hs     *control.HostStorage
-		hsErr  error
-		expCfg *config.Server
-		expErr error
+		accessPoints string
+		nrEngines    int
+		minNrSSDs    int
+		netClass     string
+		hf           *control.HostFabric
+		hfErr        error
+		hs           *control.HostStorage
+		hsErr        error
+		expCfg       *config.Server
+		expErr       error
 	}{
 		"fetching host fabric fails": {
 			hfErr:  errors.New("bad fetch"),
@@ -145,7 +213,10 @@ func TestDaosServer_confGen(t *testing.T) {
 			expErr: errors.New("nil HostFabric"),
 		},
 		"empty host fabric returned": {
-			hf:     &control.HostFabric{},
+			hf: &control.HostFabric{},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
 			expErr: errors.New("zero numa nodes"),
 		},
 		"fetching host storage fails": {
@@ -181,44 +252,44 @@ func TestDaosServer_confGen(t *testing.T) {
 			expErr: errors.New("insufficient number of pmem"),
 		},
 		"single engine; dcpm on numa 1": {
+			accessPoints: "localhost",
+			minNrSSDs:    1,
 			hf: &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					eth0, eth1, ib0, ib1,
 				},
-				NumaCount:    1,
-				CoresPerNuma: 1,
+				NumaCount:    2,
+				CoresPerNuma: 24,
 			},
 			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
 			},
+			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+				WithNrHugePages(22528).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		//		"cfg ignore flag set; device filtering skipped": {
-		//			bmbc: &bdev.MockBackendConfig{
-		//				ScanRes: &storage.BdevScanResponse{
-		//					Controllers: storage.NvmeControllers{
-		//						storage.MockNvmeController(1),
-		//						storage.MockNvmeController(2),
-		//						storage.MockNvmeController(3),
-		//					},
-		//				},
-		//			},
-		//			ignoreCfg: true,
-		//			cfg: (&config.Server{}).WithEngines(
-		//				(&engine.Config{}).WithStorage(storage.NewTierConfig().
-		//					WithStorageClass(storage.ClassNvme.String()).
-		//					WithBdevDeviceList(test.MockPCIAddr(1))),
-		//				(&engine.Config{}).WithStorage(storage.NewTierConfig().
-		//					WithStorageClass(storage.ClassNvme.String()).
-		//					WithBdevDeviceList(test.MockPCIAddr(3))),
-		//			),
-		//			expScanCall: &storage.BdevScanRequest{},
-		//		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			cmd := &configGenCmd{}
+			cmd := &configGenCmd{
+				AccessPoints: tc.accessPoints,
+				NrEngines:    tc.nrEngines,
+				MinNrSSDs:    tc.minNrSSDs,
+				NetClass:     tc.netClass,
+			}
 			cmd.Logger = log
 
 			gf := func(_ context.Context, _ logging.Logger) (*control.HostFabric, error) {
@@ -235,7 +306,17 @@ func TestDaosServer_confGen(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expCfg, gotCfg); diff != "" {
+			cmpOpts := []cmp.Option{
+				cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+					if x == nil && y == nil {
+						return true
+					}
+					return x.Equals(y)
+				}),
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+			}
+
+			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected config generated (-want, +got):\n%s\n", diff)
 			}
 		})
