@@ -15,7 +15,7 @@
 #define D_TM_TIME_BUFF_LEN		26
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
-#define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024)
+#define D_TM_SHARED_MEMORY_SIZE		(1024 * 1024 * 2)
 
 /**
  * The following definitions are suggested strings for units that may be used
