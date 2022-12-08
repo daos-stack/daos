@@ -1046,7 +1046,7 @@ truncate_array(void **state)
 	char *time_str;
 	struct timespec ts;
 
-	crt_hlc2timespec(stbuf.st_max_epoch, &ts);
+	d_hlc2timespec(stbuf.st_max_epoch, &ts);
 	time_str = ctime(&ts.tv_sec);
 	print_message("EPOCH time is %s", time_str);
 

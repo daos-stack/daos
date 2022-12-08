@@ -60,7 +60,6 @@ dav_wal_tx_init(struct umem_wal_tx *utx, struct dav_obj *dav_hdl)
 {
 	struct dav_tx	*tx = utx2wtx(utx);
 
-	tx->wt_id++;
 	D_INIT_LIST_HEAD(&tx->wt_redo);
 	tx->wt_redo_cnt = 0;
 	tx->wt_redo_payload_len = 0;
@@ -71,8 +70,9 @@ dav_wal_tx_init(struct umem_wal_tx *utx, struct dav_obj *dav_hdl)
 struct umem_wal_tx *
 dav_umem_wtx_new(struct dav_obj *dav_hdl)
 {
-	struct umem_wal_tx *umem_wtx = dav_hdl->do_utx;
+	struct umem_wal_tx *umem_wtx;
 
+	D_ASSERT(dav_hdl->do_utx == NULL);
 	D_ALLOC_PTR(umem_wtx);
 	if (umem_wtx == NULL)
 		return NULL;
@@ -98,11 +98,11 @@ dav_umem_wtx_cleanup(struct umem_wal_tx *utx)
 }
 
 static int
-dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx)
+dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx, void *data)
 {
 	struct wal_action	*wa, *next;
 	struct umem_action	*ua;
-	struct umem_store	*store = &dav_hdl->do_store;
+	struct umem_store	*store = dav_hdl->do_store;
 	struct dav_tx		*tx = utx2wtx(utx);
 	d_list_t		*redo_list = &tx->wt_redo;
 
@@ -118,21 +118,28 @@ dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx)
 		switch (ua->ac_opc) {
 		case UMEM_ACT_COPY:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_COPY     txid=%lu, (p,o)=%lu,%lu size=%lu\n",
+				"%s: ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu\n",
 				pathname, id,
 				ua->ac_copy.addr / PAGESIZE, ua->ac_copy.addr % PAGESIZE,
 				ua->ac_copy.size);
 			break;
+		case UMEM_ACT_COPY_PTR:
+			D_DEBUG(DB_TRACE,
+				"%s: ACT_COPY_PTR txid=%lu, (p,o)=%lu,%lu size=%lu ptr=0x%lx\n",
+				pathname, id,
+				ua->ac_copy_ptr.addr / PAGESIZE, ua->ac_copy_ptr.addr % PAGESIZE,
+				ua->ac_copy_ptr.size, ua->ac_copy_ptr.ptr);
+			break;
 		case UMEM_ACT_ASSIGN:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_ASSIGN   txid=%lu, (p,o)=%lu,%lu size=%u\n",
+				"%s: ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u\n",
 				pathname, id,
 				ua->ac_assign.addr / PAGESIZE, ua->ac_assign.addr % PAGESIZE,
 				ua->ac_assign.size);
 			break;
 		case UMEM_ACT_SET:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_SET      txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
+				"%s: ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
 				pathname, id,
 				ua->ac_set.addr / PAGESIZE, ua->ac_set.addr % PAGESIZE,
 				ua->ac_set.size, ua->ac_set.val);
@@ -158,18 +165,18 @@ dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx)
 	}
 	DAV_DBG("tx_id:%lu submitting to WAL: %u bytes in %u actions",
 		id, tx->wt_redo_payload_len, tx->wt_redo_cnt);
-	rc = store->stor_ops->so_wal_submit(store, utx, NULL);
+	rc = store->stor_ops->so_wal_submit(store, utx, data);
 	return rc;
 }
 
 /** complete the wl transaction */
 int
-dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx)
+dav_wal_tx_commit(struct dav_obj *hdl, struct umem_wal_tx *utx, void *data)
 {
 	int rc;
 
 	/* write actions in redo list to WAL */
-	rc = dav_wal_tx_submit(hdl, utx);
+	rc = dav_wal_tx_submit(hdl, utx, data);
 	/* FAIL the engine if commit fails */
 	D_ASSERT(rc == 0);
 	dav_umem_wtx_cleanup(utx);
@@ -182,7 +189,7 @@ dav_wal_tx_reserve(struct dav_obj *hdl)
 	uint64_t id;
 	int rc;
 
-	rc = hdl->do_store.stor_ops->so_wal_reserv(&hdl->do_store, &id);
+	rc = hdl->do_store->stor_ops->so_wal_reserv(hdl->do_store, &id);
 	D_ASSERT(rc == 0);
 	hdl->do_utx->utx_id = id;
 	return rc;
@@ -203,13 +210,21 @@ dav_wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t fla
 	if (addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
 
-	D_ALLOC_ACT(wa_redo, UMEM_ACT_COPY, size);
-	if (wa_redo == NULL)
-		return -DER_NOMEM;
-
-	act_copy_payload(&wa_redo->wa_act, src, size);
-	wa_redo->wa_act.ac_copy.addr = mdblob_addr2offset(tx->wt_dav_hdl, addr);
-	wa_redo->wa_act.ac_copy.size = size;
+	if (flags & DAV_XADD_WAL_CPTR) {
+		D_ALLOC_ACT(wa_redo, UMEM_ACT_COPY_PTR, size);
+		if (wa_redo == NULL)
+			return -DER_NOMEM;
+		wa_redo->wa_act.ac_copy_ptr.ptr = (uintptr_t)src;
+		wa_redo->wa_act.ac_copy_ptr.addr = mdblob_addr2offset(tx->wt_dav_hdl, addr);
+		wa_redo->wa_act.ac_copy_ptr.size = size;
+	} else {
+		D_ALLOC_ACT(wa_redo, UMEM_ACT_COPY, size);
+		if (wa_redo == NULL)
+			return -DER_NOMEM;
+		act_copy_payload(&wa_redo->wa_act, src, size);
+		wa_redo->wa_act.ac_copy.addr = mdblob_addr2offset(tx->wt_dav_hdl, addr);
+		wa_redo->wa_act.ac_copy.size = size;
+	}
 	AD_TX_ACT_ADD(tx, wa_redo);
 	return 0;
 }

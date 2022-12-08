@@ -46,6 +46,11 @@
 					DAV_XADD_ASSUME_INITIALIZED |\
 					DAV_XADD_NO_ABORT)
 
+/*
+ * WAL Redo hints.
+ */
+#define DAV_XADD_WAL_CPTR		(((uint64_t)1) << 5)
+
 #define DAV_XLOCK_NO_ABORT	DAV_FLAG_TX_NO_ABORT
 #define DAV_XLOCK_VALID_FLAGS	(DAV_XLOCK_NO_ABORT)
 
@@ -220,7 +225,7 @@ void dav_tx_commit(void);
  *
  * This function must *not* be called during TX_STAGE_WORK.
  */
-int dav_tx_end(void);
+int dav_tx_end(void *data);
 
 /*
  * Returns the current stage of the transaction.

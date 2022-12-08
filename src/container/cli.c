@@ -1873,7 +1873,9 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	unsigned int		tgt_cnt;
 	int			rc;
 
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	rc = pool_map_find_upin_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	if (rc)
 		return rc;
 

@@ -310,7 +310,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		// the pool, then we can assume that the pool was destroyed
 		// via a server-side cleanup and we can intercept it. Everything
 		// else is still an error.
-		if !(ur.retryCount > 0 && errors.Cause(err) == daos.Nonexistent) {
+		if !(ur.retryCount > 0 && system.IsPoolNotFound(err)) {
 			return errors.Wrap(err, "pool destroy failed")
 		}
 	}

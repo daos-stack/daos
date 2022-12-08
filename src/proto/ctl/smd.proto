@@ -76,6 +76,7 @@ enum NvmeDevState {
 	NORMAL = 0;	// Device is in a normal operational state
 	NEW = 1;	// Device is new and is not yet in-use
 	EVICTED = 2;	// Device is faulty and has been evicted
+	UNPLUGGED = 3;	// Device has been physically removed
 }
 
 enum LedState {
