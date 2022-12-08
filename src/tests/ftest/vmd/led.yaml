@@ -10,39 +10,39 @@ hosts:
     - client-F
 timeout: 2700
 server_config:
-    name: daos_server
-    engines_per_host: 2
-    servers:
+  name: daos_server
+  engines_per_host: 2
+  servers:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage:
         0:
-          pinned_numa_node: 0
-          nr_xs_helpers: 1
-          fabric_iface: ib0
-          fabric_iface_port: 31317
-          log_file: daos_server0.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
-              scm_mount: /mnt/daos0
-            1:
-              class: nvme
-              bdev_list: ["aaaa:aa:aa.a"]
-              bdev_class: nvme
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
         1:
-          pinned_numa_node: 1
-          nr_xs_helpers: 1
-          fabric_iface: ib1
-          fabric_iface_port: 31417
-          log_file: daos_server1.log
-          storage:
-            0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
-              scm_mount: /mnt/daos1
-            1:
-              class: nvme
-              bdev_list: ["bbbb:bb:bb.b"]
-              bdev_class: nvme
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
+          bdev_class: nvme
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
+          bdev_class: nvme
 pool:
   mode: 146
   name: daos_server
@@ -50,18 +50,18 @@ pool:
   control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
-    type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: daos
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
 dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_caching: True
+  mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
 hdf5_vol:
-    plugin_path: /usr/lib64/mpich/lib
-    # Run only checksum tests
+  plugin_path: /usr/lib64/mpich/lib
+  # Run only checksum tests
 daos_tests:
-    num_clients: 1
-    test_name:
-        test_csum_error_logging: DAOS_Checksum_tests
-    daos_test:
-        test_csum_error_logging: z
+  num_clients: 1
+  test_name:
+      test_csum_error_logging: DAOS_Checksum_tests
+  daos_test:
+      test_csum_error_logging: z
