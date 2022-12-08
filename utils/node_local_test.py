@@ -3409,7 +3409,7 @@ def log_test(conf,
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
         raise Exception(f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
-                        '{sizeof_fmt(conf.max_log_size}')
+                        f'{sizeof_fmt(conf.max_log_size}')
 
     return lto.fi_location
 
