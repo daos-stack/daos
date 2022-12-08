@@ -28,63 +28,63 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)				\
-	X(CONT_CREATE,							\
-		0, &CQF_cont_create,					\
-		hdlr, NULL),						\
-	X(CONT_DESTROY,							\
-		0, &CQF_cont_destroy,					\
-		hdlr, NULL),						\
-	X(CONT_OPEN,							\
-		0, ver == 7 ? &CQF_cont_open_v7 : &CQF_cont_open_v6,	\
-		hdlr, NULL),						\
-	X(CONT_CLOSE,							\
-		0, &CQF_cont_close,					\
-		hdlr, NULL),						\
-	X(CONT_QUERY,							\
-		0, ver == 7 ? &CQF_cont_query_v7 : &CQF_cont_query_v6,	\
-		hdlr, NULL),						\
-	X(CONT_OID_ALLOC,						\
-		0, &CQF_cont_oid_alloc,					\
-		ds_cont_oid_alloc_handler, NULL),			\
-	X(CONT_ATTR_LIST,						\
-		0, &CQF_cont_attr_list,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_GET,						\
-		0, &CQF_cont_attr_get,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_SET,						\
-		0, &CQF_cont_attr_set,					\
-		hdlr, NULL),						\
-	X(CONT_ATTR_DEL,						\
-		0, &CQF_cont_attr_del,					\
-		hdlr, NULL),						\
-	X(CONT_EPOCH_AGGREGATE,						\
-		0, &CQF_cont_epoch_op,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_LIST,						\
-		0, &CQF_cont_snap_list,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_CREATE,						\
-		0, &CQF_cont_epoch_op,					\
-		hdlr, NULL),						\
-	X(CONT_SNAP_DESTROY,						\
-		0, &CQF_cont_snap_destroy,				\
-		hdlr, NULL),						\
-	X(CONT_PROP_SET,						\
-		0, &CQF_cont_prop_set,					\
-		hdlr, NULL),						\
-	X(CONT_ACL_UPDATE,						\
-		0, &CQF_cont_acl_update,				\
-		hdlr, NULL),						\
-	X(CONT_ACL_DELETE,						\
-		0, &CQF_cont_acl_delete,				\
-		hdlr, NULL),						\
-	X(CONT_OPEN_BYLABEL,						\
-		0, &CQF_cont_open_bylabel,				\
-		hdlr, NULL),						\
-	X(CONT_DESTROY_BYLABEL,						\
-		0, &CQF_cont_destroy_bylabel,				\
+#define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)						\
+	X(CONT_CREATE,									\
+		0, &CQF_cont_create,							\
+		hdlr, NULL),								\
+	X(CONT_DESTROY,									\
+		0, &CQF_cont_destroy,							\
+		hdlr, NULL),								\
+	X(CONT_OPEN,									\
+		0, ver == 7 ? &CQF_cont_open_v7 : &CQF_cont_open_v6,			\
+		hdlr, NULL),								\
+	X(CONT_CLOSE,									\
+		0, &CQF_cont_close,							\
+		hdlr, NULL),								\
+	X(CONT_QUERY,									\
+		0, ver == 7 ? &CQF_cont_query_v7 : &CQF_cont_query_v6,			\
+		hdlr, NULL),								\
+	X(CONT_OID_ALLOC,								\
+		0, &CQF_cont_oid_alloc,							\
+		ds_cont_oid_alloc_handler, NULL),					\
+	X(CONT_ATTR_LIST,								\
+		0, &CQF_cont_attr_list,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_GET,								\
+		0, &CQF_cont_attr_get,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_SET,								\
+		0, &CQF_cont_attr_set,							\
+		hdlr, NULL),								\
+	X(CONT_ATTR_DEL,								\
+		0, &CQF_cont_attr_del,							\
+		hdlr, NULL),								\
+	X(CONT_EPOCH_AGGREGATE,								\
+		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_LIST,								\
+		0, &CQF_cont_snap_list,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_CREATE,								\
+		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_DESTROY,								\
+		0, &CQF_cont_snap_destroy,						\
+		hdlr, NULL),								\
+	X(CONT_PROP_SET,								\
+		0, &CQF_cont_prop_set,							\
+		hdlr, NULL),								\
+	X(CONT_ACL_UPDATE,								\
+		0, &CQF_cont_acl_update,						\
+		hdlr, NULL),								\
+	X(CONT_ACL_DELETE,								\
+		0, &CQF_cont_acl_delete,						\
+		hdlr, NULL),								\
+	X(CONT_OPEN_BYLABEL,								\
+		0, ver == 7 ? &CQF_cont_open_bylabel_v7 : &CQF_cont_open_bylabel_v6,	\
+		hdlr, NULL),								\
+	X(CONT_DESTROY_BYLABEL,								\
+		0, &CQF_cont_destroy_bylabel,						\
 		hdlr, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -183,7 +183,7 @@ CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 	((daos_prop_t)		(coo_prop)		CRT_PTR) \
 	((daos_epoch_t)		(coo_lsnapshot)		CRT_VAR) \
 	((uint32_t)		(coo_snap_count)	CRT_VAR) \
-	((uint32_t)		(coo_pad)		CRT_VAR)
+	((uint32_t)		(coo_nhandles)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -199,8 +199,9 @@ CRT_RPC_DECLARE(cont_open_v7, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V7)
 
 CRT_RPC_DECLARE(cont_open_v6, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN_V6)
 
-/* version in which cont open, metadata modify times were added to container open, query RPCs */
+/* version in which metadata open/modify times, number of handles were added to open, query RPCs */
 #define CONT_PROTO_VER_WITH_MDTIMES 7
+#define CONT_PROTO_VER_WITH_NHANDLES 7
 
 /* Container open bylabel input
  * Must begin with what DAOS_ISEQ_CONT_OPEN has, for reusing cont_open_in
@@ -269,8 +270,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_RP_PDA		(1ULL << 21)
 #define DAOS_CO_QUERY_PROP_GLOBAL_VERSION	(1ULL << 22)
 #define DAOS_CO_QUERY_PROP_SCRUB_DIS		(1ULL << 23)
+#define DAOS_CO_QUERY_PROP_OBJ_VERSION		(1ULL << 24)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR		(24)
+#define DAOS_CO_QUERY_PROP_BITS_NR		(25)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
@@ -286,7 +288,7 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
 	((daos_epoch_t)		(cqo_lsnapshot)		CRT_VAR) \
 	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
-	((uint32_t)		(cqo_pad)		CRT_VAR)
+	((uint32_t)		(cqo_nhandles)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 

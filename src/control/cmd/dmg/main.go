@@ -87,6 +87,7 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		} else {
 			status = int(daos.MiscError)
 		}
+		in = nil // response should be null if err isn't
 	}
 
 	data, err := json.MarshalIndent(struct {

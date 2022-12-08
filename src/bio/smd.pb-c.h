@@ -52,7 +52,11 @@ typedef enum _Ctl__NvmeDevState {
   /*
    * Device is faulty and has been evicted
    */
-  CTL__NVME_DEV_STATE__EVICTED = 2
+  CTL__NVME_DEV_STATE__EVICTED = 2,
+  /*
+   * Device has been physically removed
+   */
+  CTL__NVME_DEV_STATE__UNPLUGGED = 3
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__NVME_DEV_STATE)
 } Ctl__NvmeDevState;
 typedef enum _Ctl__LedState {
@@ -436,13 +440,17 @@ struct  _Ctl__LedManageReq
    */
   Ctl__LedAction led_action;
   /*
-   * LED control case
+   * LED state to set (used if action is SET)
    */
   Ctl__LedState led_state;
+  /*
+   * LED action duration (how long to blink LED in minutes)
+   */
+  uint32_t led_duration_mins;
 };
 #define CTL__LED_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__led_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF }
+    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF, 0 }
 
 
 struct  _Ctl__DevReplaceReq

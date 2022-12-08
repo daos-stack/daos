@@ -15,8 +15,7 @@
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
-#include "smd.pb-c.h"
-
+#define BIO_DEV_TYPE_VMD	"vmd"
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		48	/* Max VOS xstreams per blobstore */
@@ -308,12 +307,10 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	/*
-	 * If a VMD LED event takes place, the original LED state and start
-	 * time will be saved in order to restore the LED to its original
-	 * state after allotted time.
+	 * If a VMD LED identify event takes place with a prescribed duration, the end time will be
+	 * saved and when it is reached the prior LED state will be restored.
 	 */
-	int			 bb_led_state;
-	uint64_t		 bb_led_start_time;
+	uint64_t		 bb_led_expiry_time;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;
@@ -613,4 +610,5 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
 int bio_set_hotplug_filter(const char *nvme_conf);
 int bio_read_accel_props(const char *nvme_conf);
+int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
 #endif /* __BIO_INTERNAL_H__ */

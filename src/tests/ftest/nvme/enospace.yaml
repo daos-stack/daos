@@ -37,13 +37,13 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
   scm_size: 5G
   nvme_size: 5G
@@ -55,13 +55,13 @@ ior:
   api: "DFS"
   client_processes:
     np: 32
-  daos_destroy: False
+  daos_destroy: false
   iorflags:
     flags: "-w -F -k -G 1"
     read_flags: "-r -R -F -k -G 1"
   test_file: /testFile
   transfersize_blocksize:
     2K:
-      transfer_size: 2048 #2K
+      transfer_size: 2048  # 2K
     16M:
-      nvme_transfer_size: 16777216 #16M
+      nvme_transfer_size: 16777216  # 16M

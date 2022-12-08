@@ -191,7 +191,6 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 
 		D_ALLOC_PTR(roots);
 		if (roots == NULL) {
-			D_ERROR("Failed to allocate structure for root objid\n");
 			D_GOTO(err_out, rc = -DER_NOMEM);
 		}
 
@@ -772,7 +771,7 @@ cont_open_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
-	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
+	arg->coa_info->ci_nhandles = out->coo_nhandles;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
@@ -795,10 +794,12 @@ cont_open_complete(tse_task_t *task, void *data)
 		goto out;
 	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
 	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
-	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_otime, otime_str);
-	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_mtime, mtime_str);
+	D_DEBUG(DB_MD, DF_CONT":%s: metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label  ? : "",
+			arg->coa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT":%s: metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label ? : "",
+			arg->coa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);
@@ -863,7 +864,8 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_EC_CELL_SZ |
 				  DAOS_CO_QUERY_PROP_EC_PDA |
 				  DAOS_CO_QUERY_PROP_RP_PDA |
-				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
+				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
+				  DAOS_CO_QUERY_PROP_OBJ_VERSION;
 
 	/* open bylabel RPC input */
 	if (label) {
@@ -1188,9 +1190,7 @@ cont_query_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
-
-	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
-
+	arg->cqa_info->ci_nhandles = out->cqo_nhandles;
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
 	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 	arg->cqa_info->ci_md_otime = out->cqo_md_otime;
@@ -1304,6 +1304,9 @@ cont_query_bits(daos_prop_t *prop)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -1870,7 +1873,9 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 	unsigned int		tgt_cnt;
 	int			rc;
 
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
 	rc = pool_map_find_upin_tgts(pool->dp_map, &tgts, &tgt_cnt);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	if (rc)
 		return rc;
 
@@ -1984,6 +1989,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_ec_pda;
 	uint32_t	dcg_rp_pda;
 	uint32_t	dcg_global_version;
+	uint32_t	dcg_obj_version;
 	/** minimal required pool map version, as a fence to make sure after
 	 * cont_open/g2l client-side pm_ver >= pm_ver@cont_create.
 	 */
@@ -2069,6 +2075,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_rp_pda		= cont->dc_props.dcp_rp_pda;
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 	cont_glob->dcg_global_version	= cont->dc_props.dcp_global_version;
+	cont_glob->dcg_obj_version	= cont->dc_props.dcp_obj_version;
 
 	dc_pool_put(pool);
 out_cont:
@@ -2158,6 +2165,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_rp_pda	 = cont_glob->dcg_rp_pda;
 	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	cont->dc_props.dcp_global_version = cont_glob->dcg_global_version;
+	cont->dc_props.dcp_obj_version = cont_glob->dcg_obj_version;
 	rc = dc_cont_props_init(cont);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
