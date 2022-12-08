@@ -5,11 +5,19 @@ hosts:
 timeout: 360
 
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 
 server_config:
   name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 16
 
 server:
   num_of_pool: 3

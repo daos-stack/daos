@@ -35,7 +35,7 @@ class DestroyRebuild(TestWithServers):
         :avocado: tags=destroy_pool_rebuild,test_destroy_while_rebuilding
         """
         # Get the test parameters
-        targets = self.params.get("targets", "/run/server_config/servers/*")
+        targets = self.server_managers[0].get_config_value("targets")
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool

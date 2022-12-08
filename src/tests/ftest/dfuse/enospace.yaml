@@ -3,10 +3,16 @@ hosts:
 timeout: 120
 server_config:
   name: daos_server
-  servers:
-    targets: 4
-    nr_xs_helpers: 0
-    scm_size: 4
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
   size: 128MiB
   control_method: dmg

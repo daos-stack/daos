@@ -58,7 +58,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 	sockPath := filepath.Join(cmd.cfg.RuntimeDir, agentSockName)
 	cmd.Debugf("Full socket path is now: %s", sockPath)
 
-	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath)
+	// Agent socket file to be readable and writable by all.
+	drpcServer, err := drpc.NewDomainSocketServer(cmd.Logger, sockPath, 0666)
 	if err != nil {
 		cmd.Errorf("Unable to create socket server: %v", err)
 		return err
@@ -83,7 +84,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
-	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled)
+	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
 	if len(cmd.cfg.FabricInterfaces) > 0 {
 		// Cache is required to use user-defined fabric interfaces
 		fabricCache.enabled.SetTrue()

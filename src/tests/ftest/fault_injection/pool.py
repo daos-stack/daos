@@ -5,8 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from apricot import TestWithServers
 from random import randint
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 from general_utils import DaosTestError
 
@@ -29,7 +29,7 @@ class PoolServicesFaultInjection(TestWithServers):
         self.object_class = self.params.get("object_class", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
 
-    def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
+    def look_missed_request(self, cmd_stderr, msg=b"err: DER_TIMEDOUT"):
         """ Read dmg_stderr for the msg string
         If found, the instance attribute self.failed_request is
         increased by 1.
@@ -65,7 +65,7 @@ class PoolServicesFaultInjection(TestWithServers):
         Due to the nature of how wait_for_rebuild() is coded
         we can only get the last dmg command output.
         """
-        server_to_exclude = randint(0, len(self.hostlist_servers) - 1) #nosec
+        server_to_exclude = randint(0, len(self.hostlist_servers) - 1)  # nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 

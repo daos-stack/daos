@@ -14,12 +14,17 @@ container:
   control_method: daos
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    scm_mount: /mnt/daos0
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
   transport_config:
     allow_insecure: true
 agent_config:

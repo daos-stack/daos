@@ -103,7 +103,10 @@
 		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL, "compound")
+		ds_obj_cpd_handler, NULL, "compound")			\
+	X(DAOS_OBJ_RPC_KEY2ANCHOR,					\
+		0, &CQF_obj_key2anchor,					\
+		ds_obj_key2anchor_handler, NULL, "key2anchor")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
@@ -180,8 +183,12 @@ enum obj_rpc_flags {
 	ORF_CONTAIN_LEADER	= (1 << 20),
 	/*Ascending Order - 0, descending order - 1*/
 	ORF_DESCENDING_ORDER	= (1 << 21),
-	/* send to reintegrating target */
+	/* The IO include reintegrating target */
 	ORF_REINTEGRATING_IO	= (1 << 22),
+	/* The IO include rebuilding target */
+	ORF_REBUILDING_IO	= (1 << 23),
+	/* 'sgls' is NULL, for update sub-request of CPD RPC. */
+	ORF_EMPTY_SGL		= (1 << 24),
 };
 
 /* common for update/fetch */
@@ -363,6 +370,7 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
 	((uint64_t)		(om_punched_ephs)	CRT_ARRAY)	\
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
+	((uint32_t)		(om_new_layout_ver)	CRT_VAR)	\
 	((uint32_t)		(om_opc)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
@@ -411,7 +419,28 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
-void daos_dc_obj2id(void *ptr, daos_obj_id_t *id);
+/* object key2anchor in/out */
+#define DAOS_ISEQ_OBJ_KEY2ANCHOR	/* input fields */	 \
+	((struct dtx_id)	(oki_dti)		CRT_RAW) \
+	((daos_unit_oid_t)	(oki_oid)		CRT_RAW) \
+	((uuid_t)		(oki_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(oki_co_hdl)		CRT_VAR) \
+	((uuid_t)		(oki_co_uuid)		CRT_VAR) \
+	((uint64_t)		(oki_epoch)		CRT_VAR) \
+	((uint32_t)		(oki_map_ver)		CRT_VAR) \
+	((uint32_t)		(oki_flags)		CRT_VAR) \
+	((daos_key_t)		(oki_dkey)		CRT_VAR) \
+	((daos_key_t)		(oki_akey)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_KEY2ANCHOR	/* output fields */	 \
+	((int32_t)		(oko_ret)		CRT_VAR) \
+	((uint32_t)		(oko_map_version)	CRT_VAR) \
+	((uint64_t)		(oko_epoch)		CRT_VAR) \
+	((daos_anchor_t)	(oko_anchor)		CRT_RAW)
+
+CRT_RPC_DECLARE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
+
+void daos_dc_obj2id(void *ptr, daos_unit_oid_t *id);
 
 enum daos_cpd_sub_opc {
 	DCSO_UPDATE		= 0,
@@ -535,11 +564,38 @@ struct daos_cpd_disp_ent {
 };
 
 enum daos_cpd_sg_type {
+	DCST_UNKNOWN	= 0,
 	DCST_HEAD	= 1,
 	DCST_REQ_CLI	= 2,
 	DCST_REQ_SRV	= 3,
 	DCST_DISP	= 4,
 	DCST_TGT	= 5,
+	DCST_BULK_HEAD	= 6,
+	DCST_BULK_DISP	= 7,
+	DCST_BULK_TGT	= 8,
+};
+
+struct daos_cpd_bulk {
+	/*
+	 * The epoch may be generated when leader handle the CPD RPC, so we cannot bulk
+	 * transfer the epoch from client to non-leader. So DCST_BULK_HEAD only contain
+	 * the MBS information. The other parts of daos_cpd_sub_head are packed here.
+	 *
+	 * Another benefit of separated MBS from the other parts from daos_cpd_sub_head
+	 * is to avoid data copy when prepare the MBS bulk. See dc_tx_commit_prepare().
+	 */
+	struct daos_cpd_sub_head	 dcb_head;
+	uint32_t			 dcb_size;
+	uint32_t			 dcb_padding;
+	crt_bulk_t			*dcb_bulk;
+	/*
+	 * The following are only used to handle the bulk for CPD RPC body temporarily,
+	 * do not pack on-wire.
+	 */
+	d_sg_list_t			 dcb_sgl;
+	d_iov_t				 dcb_iov;
+	uint32_t			 dcb_type;
+	uint32_t			 dcb_item_nr;
 };
 
 /** Scatter/gather info for CPD RPC data structure. */

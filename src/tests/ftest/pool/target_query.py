@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ior_test_base import IorTestBase
+
 
 class PoolTargetQueryTest(IorTestBase):
     # pylint: disable=too-many-ancestors

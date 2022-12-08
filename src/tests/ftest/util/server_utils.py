@@ -10,19 +10,17 @@ import math
 import os
 import time
 import random
-import yaml
 
 from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubprocessManager
-from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
-from run_utils import get_local_host
+from exception_utils import CommandFailure
+from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
+    convert_list, stop_processes, get_display_size, run_pcmd
+from host_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -136,6 +134,10 @@ class DaosServerManager(SubprocessManager):
         self.storage_prepare_timeout = BasicParameter(None, 40)
         self.storage_format_timeout = BasicParameter(None, 40)
 
+        # Optional external yaml data to use to create the server config file, bypassing the values
+        # defined in the self.manager.job.yaml object.
+        self._external_yaml_data = None
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -167,7 +169,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), NodeSet(get_local_host()))
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -193,7 +195,7 @@ class DaosServerManager(SubprocessManager):
 
         # Create the daos_server yaml file
         self.manager.job.temporary_file_hosts = self._hosts.copy()
-        self.manager.job.create_yaml_file()
+        self.manager.job.create_yaml_file(self._external_yaml_data)
 
         # Copy certificates
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
@@ -304,7 +306,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -394,6 +397,7 @@ class DaosServerManager(SubprocessManager):
         complete = False
         timed_out = False
         start = time.time()
+        elapsed = 0.0
 
         # Search for patterns in the dmg system query output:
         #   - the expected number of pattern matches are detected (success)
@@ -403,12 +407,14 @@ class DaosServerManager(SubprocessManager):
                 and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
-            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            elapsed = time.time() - start
+            timed_out = elapsed > self.manager.job.pattern_timeout.value
             if not complete and not timed_out:
                 time.sleep(1)
 
         # Summarize results
-        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+        self.manager.job.report_subprocess_status(
+            elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 
@@ -446,7 +452,7 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.force.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
 
@@ -462,7 +468,7 @@ class DaosServerManager(SubprocessManager):
 
         cmd_list = set()
         for engine_params in self.manager.job.yaml.engine_params:
-            scm_mount = engine_params.scm_mount.value
+            scm_mount = engine_params.get_value("scm_mount")
 
             # Support single or multiple scm_mount points
             if not isinstance(scm_mount, list):
@@ -839,65 +845,27 @@ class DaosServerManager(SubprocessManager):
             host = self._expected_states[rank]["host"]
         return host
 
-    def update_config_file_from_file(self, dst_hosts, test_dir, generated_yaml):
+    def update_config_file_from_file(self, generated_yaml, storage_class=None):
         """Update config file and object.
 
-        Create and place the new config file in /etc/daos/daos_server.yml
-        Then update SCM-related data in engine_params so that those disks will
-        be wiped.
+        Use the specified data to generate and distribute the server configuration to the hosts.
+
+        Also use this data to replace the engine storage configuration so that the storage options
+        defined in the specified data are configured correctly as part of the server startup.
 
         Args:
-            dst_hosts (list): Destination server hostnames to place the new config file.
-            test_dir (str): Directory where the server config data from
-                generated_yaml will be written.
             generated_yaml (YAMLObject): New server config data.
-
+            storage_class (list, optional): if set only include storage classes identified in the
+                list. Defaults to None.
         """
-        # Create a temporary file in test_dir and write the generated config.
-        temp_file_path = os.path.join(test_dir, "temp_server.yml")
-        try:
-            with open(temp_file_path, 'w') as write_file:
-                yaml.dump(generated_yaml, write_file, default_flow_style=False)
-        except Exception as error:
-            raise CommandFailure(
-                "Error writing the yaml file! {}: {}".format(temp_file_path, error)) from error
+        # Use the specified yaml data to create the server yaml file and copy it all the hosts
+        self._external_yaml_data = generated_yaml
 
-        # Copy the config from temp dir to /etc/daos of the server node.
-        default_server_config = get_default_config_file("server")
-        try:
-            distribute_files(
-                dst_hosts, temp_file_path, default_server_config, verbose=False, sudo=True)
-        except DaosTestError as error:
-            raise CommandFailure(
-                "ERROR: Copying yaml configuration file to {}: "
-                "{}".format(dst_hosts, error)) from error
-
-        # Before restarting daos_server, we need to clear SCM. Unmount the mount
-        # point, wipefs the disks, etc. This clearing step is built into the
-        # server start steps. It'll look at the engine_params of the
-        # server_manager and clear the SCM set there, so we need to overwrite it
-        # before starting to the values from the generated config.
-        self.log.info("Resetting engine_params")
-        self.manager.job.yaml.engine_params = []
-        engines = generated_yaml["engines"]
-        for idx, engine in enumerate(engines):
-            self.log.info("engine %d", idx)
-            for storage_tier in engine["storage"]:
-                if storage_tier["class"] != "dcpm":
-                    continue
-
-                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
-                self.log.info("class = %s", storage_tier["class"])
-                self.log.info("scm_list = %s", storage_tier["scm_list"])
-
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
-                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
-                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
-                per_engine_yaml_parameters.scm_size.update(None)
-                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
-                per_engine_yaml_parameters.reset_yaml_data_updated()
-
-                self.manager.job.yaml.engine_params.append(per_engine_yaml_parameters)
+        # Before restarting daos_server, we need to clear SCM. Unmount the mount point, wipefs the
+        # disks, etc. This clearing step is built into the server start steps. It'll look at the
+        # engine_params of the server_manager and clear the SCM set there, so we need to overwrite
+        # it before starting to the values from the generated config.
+        self.manager.job.yaml.override_params(generated_yaml, storage_class)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

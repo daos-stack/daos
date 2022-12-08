@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
@@ -134,6 +135,13 @@ func MockDatabaseWithCfg(t *testing.T, log logging.Logger, dbCfg *DatabaseConfig
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
+}
+
+// MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
+func MockDatabaseWithFaultDomainTree(t *testing.T, log logging.Logger, tree *system.FaultDomainTree) *Database {
+	db := MockDatabase(t, log)
+	db.data.Members.FaultDomains = tree
+	return db
 }
 
 // TestDatabase returns a database that is backed by temporary storage

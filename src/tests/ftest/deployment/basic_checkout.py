@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -9,7 +8,6 @@ from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
 
-import oclass_utils
 
 class BasicCheckout(PerformanceTestBase):
     # pylint: disable=too-few-public-methods
@@ -33,22 +31,20 @@ class BasicCheckout(PerformanceTestBase):
         """
 
         # ior easy
-        self.run_performance_ior(namespace="/run/ior_dfs_sx/*", use_stonewalling_read=True)
-        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2GX'):
-            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*",
-                                     use_stonewalling_read=True)
-        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2GX'):
-            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*",
-                                     use_stonewalling_read=True)
+        self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
+        if self.verify_oclass_engine_count('EC_16P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
+        elif self.verify_oclass_engine_count('EC_8P2GX', fail=False):
+            self.run_performance_ior(namespace="/run/ior_dfs_ec_8p2gx/*")
 
         # mdtest easy
         self.run_performance_mdtest(namespace="/run/mdtest_dfs_s1/*")
-        if self.num_servers >= oclass_utils.calculate_min_servers('EC_16P2G1'):
+        if self.verify_oclass_engine_count('EC_16P2G1', fail=False):
             self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_16p2g1/*")
-        elif self.num_servers >= oclass_utils.calculate_min_servers('EC_8P2G1'):
+        elif self.verify_oclass_engine_count('EC_8P2G1', fail=False):
             self.run_performance_mdtest(namespace="/run/mdtest_dfs_ec_8p2g1/*")
 
-        #run autotest
+        # run autotest
         self.log.info("Autotest start")
         daos_cmd = self.get_daos_command()
         try:
@@ -78,11 +74,11 @@ class BasicCheckout(PerformanceTestBase):
         ec_obj_class = self.params.get("ec_oclass", '/run/ior/*')
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
 
-        #run ior
+        # run ior
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
                                                  flags, dfuse_mount_dir)
 
-        #run ior with different ec oclass
+        # run ior with different ec oclass
         results_ec = self.run_ior_multiple_variants(ec_obj_class, [apis[0]],
                                                     [transfer_block_size[1]],
                                                     [flags[0]], dfuse_mount_dir)
@@ -96,7 +92,7 @@ class BasicCheckout(PerformanceTestBase):
         if errors:
             self.fail("Test FAILED")
 
-        #run mdtest
+        # run mdtest
         self.run_mdtest_multiple_variants(mdtest_params)
 
 

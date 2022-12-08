@@ -1,12 +1,11 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
-import avocado
 import time
+import avocado
 
 from pydaos.raw import DaosApiError
 from apricot import TestWithServers
@@ -110,6 +109,7 @@ def test_runner(self, namespace, record_size, array_size, thread_per_size=4):
     self.pool[-1].display_pool_daos_space("after writes and reads")
 
     # container and pool destroy handled by cleanup
+
 
 class NvmeObject(TestWithServers):
     """Test class for NVMe storage.

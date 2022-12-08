@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -322,7 +323,7 @@ func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, 
 }
 
 // PrintPoolProperties displays a two-column table of pool property names and values.
-func PrintPoolProperties(poolID string, out io.Writer, properties ...*control.PoolProperty) {
+func PrintPoolProperties(poolID string, out io.Writer, properties ...*daos.PoolProperty) {
 	fmt.Fprintf(out, "Pool %s properties:\n", poolID)
 
 	nameTitle := "Name"

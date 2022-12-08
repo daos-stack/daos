@@ -248,6 +248,8 @@ int rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		       const d_iov_t *key);
 int rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key, const d_iov_t *value);
+int rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs,
+			   const d_iov_t *key, const d_iov_t *value);
 int rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs,
 		  const d_iov_t *key);
 

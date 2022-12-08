@@ -4,11 +4,17 @@ hosts:
   test_clients: 6
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 pool:
   control_method: dmg
   scm_size: 80G

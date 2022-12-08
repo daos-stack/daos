@@ -356,8 +356,8 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 }
 
 struct iv_priv_entry {
-	struct ds_iv_entry	 *entry;
-	void			**priv;
+	struct ds_iv_entry	*entry;
+	void			*priv;
 };
 
 static bool
@@ -571,6 +571,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry;
+	void			*entry_priv_val;
 	bool			alloc_entry = false;
 	int			rc;
 
@@ -596,17 +597,17 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 			D_GOTO(out, rc);
 	}
 
-	rc = class->iv_class_ops->ivc_ent_get(entry, priv);
+	rc = class->iv_class_ops->ivc_ent_get(entry, &entry_priv_val);
 	if (rc)
 		D_GOTO(out, rc);
 
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
-		class->iv_class_ops->ivc_ent_put(entry, priv);
+		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
 		D_GOTO(out, rc);
 	}
 
-	priv_entry->priv = *priv;
+	priv_entry->priv = entry_priv_val;
 	priv_entry->entry = entry;
 	*priv = priv_entry;
 
@@ -643,6 +644,8 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	entry = priv_entry->entry;
 	D_ASSERT(entry != NULL);
 
+	D_DEBUG(DB_TRACE, "Put entry %p/%d priv %p/%p\n", entry, entry->iv_ref - 1,
+		priv_entry, priv_entry->priv);
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
@@ -651,7 +654,6 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 		D_GOTO(put, rc);
 
 	D_FREE(priv_entry);
-	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
 		D_GOTO(put, rc);
 

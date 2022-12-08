@@ -4,7 +4,6 @@
 #
 """DAOS metrics utility"""
 
-import daos_build
 
 def scons():
     """Execute build"""
@@ -12,10 +11,10 @@ def scons():
 
     denv = env.Clone()
 
-    daos_metrics = daos_build.program(denv, 'daos_metrics',
-                                      ['daos_metrics.c'], LIBS=['gurt'])
+    daos_metrics = denv.d_program('daos_metrics', ['daos_metrics.c'], LIBS=['gurt'])
 
     denv.Install('$PREFIX/bin', daos_metrics)
+
 
 if __name__ == "SCons.Script":
     scons()

@@ -21,6 +21,7 @@ import (
 	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -116,7 +117,15 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Barrier(0).Error()
+		err := svc.Barrier(0).Error()
+		if IsRaftLeadershipError(err) {
+			db.log.Errorf("lost leadership during Barrier(): %s", err)
+			return &system.ErrNotLeader{
+				LeaderHint: db.leaderHint(),
+				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+			}
+		}
+		return err
 	})
 }
 
@@ -196,6 +205,12 @@ func ConfigureComponents(log logging.Logger, dbCfg *DatabaseConfig) (*RaftCompon
 	// volume, so set this value to strike a balance between
 	// creating snapshots too frequently and not often enough.
 	raftCfg.SnapshotThreshold = 32
+	if dbCfg.RaftSnapshotThreshold > 0 {
+		raftCfg.SnapshotThreshold = dbCfg.RaftSnapshotThreshold
+	}
+	if dbCfg.RaftSnapshotInterval > 0 {
+		raftCfg.SnapshotInterval = dbCfg.RaftSnapshotInterval
+	}
 	raftCfg.HeartbeatTimeout = 2000 * time.Millisecond
 	raftCfg.ElectionTimeout = 2000 * time.Millisecond
 	raftCfg.LeaderLeaseTimeout = 1000 * time.Millisecond
@@ -405,7 +420,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, m.Member.LastUpdate)
+	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, common.FormatTime(m.Member.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -417,7 +432,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
+	db.log.Debugf("pool %s (%s) updated @ %s", dbgUuidStr(ps.PoolUUID), ps.State, common.FormatTime(ps.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 

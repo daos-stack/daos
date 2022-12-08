@@ -235,7 +235,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 				PrepErr: tc.prepErr,
 			}
 			msb := scm.NewMockBackend(smbc)
-			msp := scm.NewProvider(log, msb, nil)
+			msp := scm.NewProvider(log, msb, nil, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := prepareSCMCmd{
@@ -420,7 +420,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 				PrepResetErr: tc.prepErr,
 			}
 			msb := scm.NewMockBackend(smbc)
-			msp := scm.NewProvider(log, msb, nil)
+			msp := scm.NewProvider(log, msb, nil, nil)
 			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
 
 			cmd := resetSCMCmd{

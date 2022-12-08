@@ -24,6 +24,8 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+bool vos_dkey_punch_propagate;
+
 struct vos_key_info {
 	umem_off_t		*ki_known_key;
 	struct vos_object	*ki_obj;
@@ -189,8 +191,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** For now, don't propagate the punch to object layer */
-		return 0;
+		if (!vos_dkey_punch_propagate)
+			return 0; /** Unless we explicitly enable it, disable punch propagation */
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -555,6 +557,71 @@ reset:
 }
 
 int
+vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, daos_key_t *akey,
+		   daos_anchor_t *anchor)
+{
+	struct vos_container  *cont;
+	struct daos_lru_cache *occ = vos_obj_cache_current();
+	int                    rc;
+	struct vos_object     *obj;
+	daos_epoch_range_t     epr = {0, DAOS_EPOCH_MAX};
+	daos_handle_t          toh;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Container is not open");
+		return -DER_INVAL;
+	}
+
+	rc = vos_obj_hold(occ, cont, oid, &epr, DAOS_EPOCH_MAX, 0, DAOS_INTENT_DEFAULT, &obj, NULL);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			return 0;
+		}
+
+		D_ERROR("Could not hold object oid=" DF_UOID " rc=" DF_RC "\n", DP_UOID(oid),
+			DP_RC(rc));
+		return rc;
+	}
+
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
+
+	if (akey == NULL) {
+		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
+		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		goto out;
+	}
+
+	/** Otherwise, we need to find the dkey to convert the akey to the anchor */
+	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, 0, DAOS_INTENT_DEFAULT, NULL,
+			      &toh, NULL);
+	if (rc) {
+		if (rc == -DER_NONEXIST) {
+			daos_anchor_set_eof(anchor);
+			goto out;
+		}
+		D_ERROR("Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY " rc=" DF_RC "\n",
+			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = dbtree_key2anchor(toh, akey, anchor);
+	D_DEBUG(DB_TRACE,
+		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
+
+	key_tree_release(toh, false);
+out:
+	vos_obj_release(occ, obj, false);
+
+	return rc;
+}
+
+int
 vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
@@ -606,7 +673,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE | VOS_OBJ_KILL_DKEY,
 			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
