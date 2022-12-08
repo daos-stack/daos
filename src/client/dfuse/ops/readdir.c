@@ -100,7 +100,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 
 /* Create a readdir handle */
 static struct dfuse_readdir_hdl *
-_handle_init()
+_handle_init(struct dfuse_cont *dfc)
 {
 	struct dfuse_readdir_hdl *hdl;
 
@@ -109,8 +109,9 @@ _handle_init()
 		return NULL;
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
-	atomic_store_relaxed(&hdl->drh_ref, 1);
-	hdl->dre_caching = true;
+	atomic_init(&hdl->drh_ref, 1);
+	if (dfc->dfc_dentry_timeout > 0)
+		hdl->dre_caching = true;
 	return hdl;
 }
 
@@ -118,12 +119,13 @@ _handle_init()
  * this bit.
  */
 static struct dfuse_readdir_hdl *
-_handle_make_unique(struct dfuse_readdir_hdl *hdl)
+_handle_make_unique(struct dfuse_cont *dfc, struct dfuse_readdir_hdl *hdl)
 {
-	if (hdl->dre_caching)
-		dfuse_dre_drop(hdl);
+	if (!hdl->dre_caching)
+		return hdl;
 
-	return _handle_init();
+	dfuse_dre_drop(hdl);
+	return _handle_init(dfc);
 }
 
 /* Drop a ref on a readdir handle and release if required. */
@@ -142,6 +144,7 @@ dfuse_dre_drop(struct dfuse_readdir_hdl *hdl)
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_FREE(drc);
 	}
+	D_FREE(hdl);
 }
 
 static int
@@ -276,11 +279,19 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		D_GOTO(out, rc = ENOMEM);
 
 	if (oh->doh_rd == NULL) {
-		oh->doh_rd = _handle_init();
-		if (oh->doh_rd == NULL)
-			D_GOTO(out, rc = ENOMEM);
+		if (oh->doh_ie->ie_rd_hdl) {
+			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
+			atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
+		} else {
+			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+			if (oh->doh_rd == NULL)
+				D_GOTO(out, rc = ENOMEM);
 
-		DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+
+			if (oh->doh_rd->dre_caching)
+				oh->doh_ie->ie_rd_hdl = oh->doh_rd;
+		}
 	}
 
 	hdl = oh->doh_rd;
@@ -310,11 +321,10 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
-		new_hdl = _handle_make_unique(hdl);
+		new_hdl = _handle_make_unique(oh->doh_ie->ie_dfs, hdl);
 		if (new_hdl != hdl) {
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
-			dfuse_readdir_reset(hdl);
 			oh->doh_rd = hdl;
 		}
 

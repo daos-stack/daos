@@ -625,6 +625,9 @@ struct dfuse_inode_entry {
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
 
+	/* Readdir handle, if shared */
+	struct dfuse_readdir_hdl *ie_rd_hdl;
+
 	/** file was truncated from 0 to a certain size */
 	bool                     ie_truncated;
 
