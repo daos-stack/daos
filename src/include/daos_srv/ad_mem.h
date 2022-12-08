@@ -43,7 +43,7 @@ ad_tx_copy(struct ad_tx *tx, void *addr, daos_size_t size, const void *ptr, uint
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
 int
-ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val);
+ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val, uint32_t flags);
 
 /**
  * memset a storage region, save the operation for redo (and old value for undo if it's
@@ -71,19 +71,19 @@ int
 ad_tx_snap(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t flags);
 
 static inline int
-ad_tx_decrease(struct ad_tx *tx, int32_t *addr)
+ad_tx_decrease(struct ad_tx *tx, int32_t *addr, uint32_t flags)
 {
 	int32_t	val = *(int32_t *)addr;
 
-	return ad_tx_assign(tx, addr, sizeof(val), val - 1);
+	return ad_tx_assign(tx, addr, sizeof(val), val - 1, flags);
 }
 
 static inline int
-ad_tx_increase(struct ad_tx *tx, int32_t *addr)
+ad_tx_increase(struct ad_tx *tx, int32_t *addr, uint32_t flags)
 {
 	int32_t	val = *(int32_t *)addr;
 
-	return ad_tx_assign(tx, addr, sizeof(val), val + 1);
+	return ad_tx_assign(tx, addr, sizeof(val), val + 1, flags);
 }
 
 int ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
