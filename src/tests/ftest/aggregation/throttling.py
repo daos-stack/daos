@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +7,7 @@
 import time
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
+
 
 class DaosAggregationThrottling(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -75,12 +75,12 @@ class DaosAggregationThrottling(IorTestBase):
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
-                                0, # write_perf
-                                expected_perf_diff) # 30% perf difference
+                                0,  # write_perf
+                                expected_perf_diff)  # 30% perf difference
 
         self.verify_performance(metric_before_aggregate,
                                 metric_after_aggregate,
-                                1, # read_perf
+                                1,  # read_perf
                                 expected_perf_diff)
 
     def verify_performance(self, before_metric, after_metric, read_write_idx,
@@ -118,9 +118,9 @@ class DaosAggregationThrottling(IorTestBase):
         self.log.info("mean_prev = {0}, mean_curr = {1}".format(
             mean_prev, mean_curr))
 
-        max_perf_diff = (abs(max_prev - max_curr)/max_prev) * 100
-        min_perf_diff = (abs(min_prev - min_curr)/min_prev) * 100
-        mean_perf_diff = (abs(mean_prev - mean_curr)/mean_prev) * 100
+        max_perf_diff = (abs(max_prev - max_curr) / max_prev) * 100
+        min_perf_diff = (abs(min_prev - min_curr) / min_prev) * 100
+        mean_perf_diff = (abs(mean_prev - mean_curr) / mean_prev) * 100
 
         self.log.info("Max perf diff {0} < {1}".format(max_perf_diff,
                                                        expected_perf_diff))
