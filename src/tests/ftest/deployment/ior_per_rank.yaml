@@ -59,6 +59,6 @@ ior:
         - 256B
     block_size: 150G
     write_x: 0.15 # Max 15% performance difference.
-    read_x: 0.15  # Max 15% performance difference.
-    expected_bw: 22500    # For transfer size 1M
-    expected_iops: 600000       # For transfer size 256B
+    read_x: 0.35  # Max 35% performance difference (only for CI). Change it to 15% for Aurora.
+    expected_bw: 2250    # For transfer size 1M. Change to 22500 for Aurora.
+    expected_iops: 250000       # For transfer size 256B. Change to 600000 for Aurora.
