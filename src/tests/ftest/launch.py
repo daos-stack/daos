@@ -17,7 +17,6 @@ import re
 import site
 import sys
 import time
-import yaml
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -40,6 +39,8 @@ from run_utils import run_local, run_remote, RunException                     # 
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
+from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
+    YamlException    # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -88,124 +89,6 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
-
-
-def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
-
-    Removes any mux tags and ignores any other tags present.
-
-    Args:
-        yaml_file (str): yaml file to read
-
-    Raises:
-        Exception: if an error is encountered reading the yaml file
-
-    Returns:
-        dict: the contents of the yaml file
-
-    """
-    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-        """Helper class for parsing avocado yaml files."""
-
-        def forward_mux(self, node):
-            """Pass on mux tags unedited."""
-            return self.construct_mapping(node)
-
-        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
-            """Drop any other tag."""
-            return None
-
-    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
-    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
-
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
-            except yaml.YAMLError as error:
-                logger.error("Error reading %s: %s", yaml_file, str(error))
-                sys.exit(1)
-    return yaml_data
-
-
-def find_values(obj, keys, key=None, val_type=str):
-    """Find dictionary values of a certain type specified with certain keys.
-
-    Args:
-        obj (obj): a python object; initially the dictionary to search
-        keys (list): list of keys to find their matching list values
-        key (str, optional): key to check for a match. Defaults to None.
-
-    Returns:
-        dict: a dictionary of each matching key and its value
-
-    """
-    def add_matches(found):
-        """Add found matches to the match dictionary entry of the same key.
-
-        If a match does not already exist for this key add all the found values.
-        When a match already exists for a key, append the existing match with
-        any new found values.
-
-        For example:
-            Match       Found           Updated Match
-            ---------   ------------    -------------
-            None        [A, B]          [A, B]
-            [A, B]      [C]             [A, B, C]
-            [A, B, C]   [A, B, C, D]    [A, B, C, D]
-
-        Args:
-            found (dict): dictionary of matches found for each key
-        """
-        for found_key in found:
-            if found_key not in matches:
-                # Simply add the new value found for this key
-                matches[found_key] = found[found_key]
-
-            else:
-                is_list = isinstance(matches[found_key], list)
-                if not is_list:
-                    matches[found_key] = [matches[found_key]]
-                if isinstance(found[found_key], list):
-                    for found_item in found[found_key]:
-                        if found_item not in matches[found_key]:
-                            matches[found_key].append(found_item)
-                elif found[found_key] not in matches[found_key]:
-                    matches[found_key].append(found[found_key])
-
-                if not is_list and len(matches[found_key]) == 1:
-                    matches[found_key] = matches[found_key][0]
-
-    matches = {}
-    if isinstance(obj, val_type) and isinstance(key, str) and key in keys:
-        # Match found
-        matches[key] = obj
-    elif isinstance(obj, dict):
-        # Recursively look for matches in each dictionary entry
-        for obj_key, obj_val in list(obj.items()):
-            add_matches(find_values(obj_val, keys, obj_key, val_type))
-    elif isinstance(obj, list):
-        # Recursively look for matches in each list entry
-        for item in obj:
-            add_matches(find_values(item, keys, None, val_type))
-
-    return matches
-
-
-def get_test_category(test_file):
-    """Get a category for the specified test using its path and name.
-
-    Args:
-        test_file (str): the test python file
-
-    Returns:
-        str: concatenation of the test path and base filename joined by dashes
-
-    """
-    file_parts = os.path.split(test_file)
-    return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
 
 
 def find_pci_address(value):
@@ -1005,8 +888,8 @@ class Launch():
 
         # Modify the test yaml files to run on this cluster
         try:
-            self.setup_test_files(args, yaml_dir)
-        except (RunException, LaunchException):
+            self.setup_test_files(yaml_dir, args)
+        except (RunException, YamlException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
@@ -1736,25 +1619,34 @@ class Launch():
             logger.debug("  Fault injection is disabled")
         return False
 
-    def setup_test_files(self, args, yaml_dir):
+    def setup_test_files(self, yaml_dir, args):
         """Set up the test yaml files with any placeholder replacements.
 
         Args:
-            args (argparse.Namespace): command line arguments for this program
             yaml_dir (str): directory in which to write the modified yaml files
+            args (argparse.Namespace): command line arguments for this program
 
         Raises:
             RunException: if there is a problem updating the test yaml files
-            LaunchException: if there is an error getting host information from the test yaml files
+            YamlException: if there is an error getting host information from the test yaml files
 
         """
+        updater = YamlUpdater(
+            logger, args.test_servers, args.test_clients, args.nvme, args.timeout_multiplier,
+            args.override, args.verbose)
+
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
-            args.extra_yaml = [
-                self._replace_yaml_file(extra, args, yaml_dir) for extra in args.extra_yaml]
+            args.extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
 
         for test in self.tests:
-            test.yaml_file = self._replace_yaml_file(test.yaml_file, args, yaml_dir)
+            new_yaml_file = updater.update(test.yaml_file, yaml_dir)
+            if new_yaml_file:
+                if args.verbose > 0:
+                    # Optionally display a diff of the yaml file
+                    command = ["diff", "-y", test.yaml_file, new_yaml_file]
+                    run_local(logger, command, check=False)
+                test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
             command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
@@ -1840,7 +1732,7 @@ class Launch():
             raise LaunchException(f'Error creating user {user}')
 
     def _user_setup(self, test, create=False):
-        """Setup test users on client nodes.
+        """Set up test users on client nodes.
 
         Args:
             test (TestInfo): the test information
