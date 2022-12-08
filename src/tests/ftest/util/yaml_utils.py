@@ -250,13 +250,16 @@ class YamlUpdater():
                 replacement = replacement_data["test_servers"]
 
             if key not in placeholder_data:
-                self.log.debug("  - No '%s' placeholder specified in the test yaml", key)
+                if self._verbose > 1:
+                    self.log.debug("  - No '%s' placeholder specified in the test yaml", key)
                 continue
 
             if not replacement:
-                message = "No replacement value for the '{key}' placeholder"
-                self.log.error("  - %s: %s", message, placeholder_data[key])
-                raise YamlException(message)
+                if self._verbose > 1:
+                    self.log.debug(
+                        "  - No replacement value for the '%s' placeholder: %s",
+                        key, placeholder_data[key])
+                continue
 
             # Replace test yaml keys that were:
             #   - found in the test yaml

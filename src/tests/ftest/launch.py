@@ -3402,6 +3402,9 @@ def main():
         args.slurm_setup = True
         args.user_create = True
 
+        # TODO Remove debug
+        args.verbose = 2
+
     # Perform the steps defined by the arguments specified
     try:
         status = launch.run(args)
