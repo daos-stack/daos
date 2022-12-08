@@ -103,8 +103,7 @@ class VmdLedStatus(OSAUtils):
                 self.fail("dmg command failed: {}".format(resp['host_errors']))
         return resp
 
-
-    def test_vmd_led_Status(self):
+    def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
         :avocado: tags=all,manual
@@ -156,7 +155,7 @@ class VmdLedStatus(OSAUtils):
                 resp = self.set_device_faulty(val)
                 time.sleep(15)
                 self.log.info(resp)
-                resp = self.storage_replace_nvme(old_uuid=val, new_uuid=val)
+                resp = self.dmg.storage_replace_nvme(old_uuid=val, new_uuid=val)
                 time.sleep(60)
                 self.log.info(resp)
             count = count + 1
