@@ -203,7 +203,7 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 		out, outErr = proto.Marshal(resp)
 	}()
 
-	if req.Report != nil && req.Report.PoolUuid != "" {
+	if req.Report != nil && req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
 		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
 		if err != nil {
 			mod.log.Errorf("invalid pool UUID %q: %s", req.Report.PoolUuid, err)
