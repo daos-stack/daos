@@ -20,7 +20,7 @@ To deploy this example, see the instructions in [Deploy the DAOS Cluster Example
 
 As an alternative to viewing the instructions as a standalone document, you can view the document as an in-context tutorial in [Cloud Shell](https://cloud.google.com/shell) by clicking the button below.
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/daos-stack/google-cloud-daos&cloudshell_git_branch=develop&shellonly=true&cloudshell_tutorial=docs/deploy_daos_cluster_example.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/daos-stack/google-cloud-daos.git&cloudshell_git_branch=main&shellonly=true&cloudshell_tutorial=docs/deploy_daos_cluster_example.md)
 
 
 ## Terraform Configuration Documentation
