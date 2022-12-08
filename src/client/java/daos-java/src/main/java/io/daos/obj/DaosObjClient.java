@@ -318,7 +318,7 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
       throws DaosIOException;
 
   /**
-   * update object with one entry. Dkey and Akey are described in {@link IODescUpdAsync}.
+   * update object asynchronously with one entry. Dkey and Akey are described in {@link IODescUpdAsync}.
    *
    * @param objectPtr
    * @param descMemAddress
@@ -329,8 +329,21 @@ public class DaosObjClient extends ShareableClient implements ForceCloseable {
    * @param dataMemAddress
    * @throws DaosIOException
    */
-  native void updateObjNoDecode(long objectPtr, long descMemAddress, long eqWrapHdl, short eventId,
+  native void updateObjAsyncNoDecode(long objectPtr, long descMemAddress, long eqWrapHdl, short eventId,
                              long offset, int dataLen, long dataMemAddress) throws DaosIOException;
+
+  /**
+   * update object synchronously with one entry. Dkey and Akey are described in {@link IODescUpdSync}.
+   *
+   * @param objectPtr
+   * @param descMemAddress
+   * @param offset
+   * @param dataLen
+   * @param dataMemAddress
+   * @throws DaosIOException
+   */
+  native void updateObjSyncNoDecode(long objectPtr, long descMemAddress, long offset, int dataLen,
+                                    long dataMemAddress) throws DaosIOException;
 
   /**
    * list dkeys of given object.
