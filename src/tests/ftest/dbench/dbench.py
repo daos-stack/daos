@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -9,6 +8,7 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
 from dbench_utils import Dbench
+
 
 class DbenchTest(DfuseTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors

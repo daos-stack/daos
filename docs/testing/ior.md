@@ -18,7 +18,7 @@ The `mdtest` tool to benchmark metadata performance is included in the
 same repository as the IOR tool.
 Like `IOR`, it is also an MPI-parallel application.
 
-The [Performance Tuning](https://docs.daos.io/v2.4/admin/performance_tuning/#benchmarking-daos)
+The [Performance Tuning](https://docs.daos.io/v2.4/admin/performance_tuning/)
 section of the Administration Guide contains further information on IOR and mdtest.
 
 ## Build ior and mdtest
@@ -37,8 +37,11 @@ $ make install
 ## Run ior
 
 This example uses the default IOR `API=POSIX`, and requires that the DAOS POSIX container
-is dfuse-mounted at `/tmp/daos_dfuse` on all client nodes. The per-task performance over a dfuse
-mount is limited. To obtain better performance, the POSIX API can be used in conjunction with the
+is dfuse-mounted at `/tmp/daos_dfuse` on all client nodes. Refer to
+[DFuse (DAOS FUSE)](https://docs.daos.io/v2.4/user/filesystem/#dfuse-daos-fuse)
+for details on dfuse mounts.
+The per-task performance over a dfuse mount is limited.
+To obtain better performance, the POSIX API can be used in conjunction with the
 [IOIL](https://docs.daos.io/v2.4/user/filesystem/#interception-library) interception library.
 For best performance IOR can be run with `API=DFS`, passing in the DAOS pool and container
 information (`ior -a DFS --dfs.pool=$DAOS_POOL --daos.cont=$DAOS_CONT ...`).

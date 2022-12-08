@@ -189,9 +189,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -284,6 +286,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -361,6 +364,7 @@ rpc
 rpms
 rsvc
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -373,6 +377,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
@@ -448,6 +453,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
