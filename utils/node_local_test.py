@@ -1947,7 +1947,7 @@ class PosixTests():
         """
         test_dir = join(self.dfuse.dir, 'test_dir')
         os.mkdir(test_dir)
-        count = 30
+        count = 140
         for idx in range(count):
             with open(join(test_dir, f'file_{idx}'), 'w'):
                 pass

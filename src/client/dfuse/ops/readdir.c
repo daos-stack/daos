@@ -148,8 +148,8 @@ dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 	 */
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
-	DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
 	if (oldref != 1) {
+		DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
 		D_GOTO(out, 0);
 		return;
 	}
