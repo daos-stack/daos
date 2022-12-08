@@ -28,7 +28,7 @@ class NvmeIo(IorTestBase):
             Running multiple IOR on same server start instance.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=nvme,daosio,nvme_io
         :avocado: tags=NvmeIo,test_nvme_io
         """
@@ -41,8 +41,10 @@ class NvmeIo(IorTestBase):
             for ior_param in tests:
                 # Create and connect to a pool
                 self.add_pool(create=False)
-                self.pool.scm_size.update(ior_param[0])
-                self.pool.nvme_size.update(ior_param[1])
+                params = self.server_managers[0].autosize_pool_params(
+                    None, None, scm_size=ior_param[0], nvme_size=ior_param[1])
+                self.pool.scm_size.update(params['scm_size'])
+                self.pool.nvme_size.update(params['nvme_size'])
                 self.pool.create()
 
                 # Disable aggregation
