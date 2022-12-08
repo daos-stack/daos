@@ -413,17 +413,6 @@ out:
 	return rc;
 }
 
-static inline struct ds_pool_clue *
-chk_leader_locate_pool_clue(struct chk_pool_rec *cpr)
-{
-	struct ds_pool_clues	*clues = &cpr->cpr_clues;
-
-	D_ASSERT(cpr->cpr_advice >= 0);
-	D_ASSERT(cpr->cpr_advice < clues->pcs_len);
-
-	return &clues->pcs_array[cpr->cpr_advice];
-}
-
 /*
  * NOTE: Initialize and construct clues_out from cpr. The caller is responsible for freeing
  *	 clues->pcs_array with D_FREE, but the borrowed clues->pcs_array->pc_svc_clue must be kept.
@@ -533,7 +522,7 @@ out:
 }
 
 static int
-chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
+chk_leader_dangling_pool(struct chk_instance *ins, struct chk_list_pool *clp)
 {
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
@@ -571,7 +560,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, uuid_t uuid)
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
-			result = ds_chk_deregpool_upcall(seq, uuid);
+			result = ds_chk_deregpool_upcall(seq, clp->clp_uuid);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
 			else
@@ -624,7 +613,8 @@ report:
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
-	cru.cru_pool = (uuid_t *)&uuid;
+	cru.cru_pool = (uuid_t *)&clp->clp_uuid;
+	cru.cru_pool_label = clp->clp_label;
 	cru.cru_msg = "Check leader detects dangling pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -635,8 +625,8 @@ report:
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects dangling pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", handle_rc %d, report_rc %d, decision %d\n",
-		 DP_LEADER(ins), DP_UUID(uuid), act, option_nr ? "need interact" : "no interact",
-		 seq, result, rc, decision);
+		 DP_LEADER(ins), DP_UUID(clp->clp_uuid),
+		 act, option_nr ? "need interact" : "no interact", seq, result, rc, decision);
 
 	if (rc != 0 && option_nr > 0) {
 		cbk->cb_statistics.cs_failed++;
@@ -653,7 +643,7 @@ report:
 	default:
 		D_ERROR(DF_LEADER" got invalid decision %d for dangling pool "
 			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
-			DP_LEADER(ins), decision, DP_UUID(uuid), seq);
+			DP_LEADER(ins), decision, DP_UUID(clp->clp_uuid), seq);
 		/*
 		 * Invalid option, ignore the inconsistency.
 		 *
@@ -668,7 +658,7 @@ report:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
-			result = ds_chk_deregpool_upcall(seq, uuid);
+			result = ds_chk_deregpool_upcall(seq, clp->clp_uuid);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
 			else
@@ -738,7 +728,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = chk_leader_locate_pool_clue(cpr);
+			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -826,6 +816,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	cru.cru_msg = "Check leader detects orphan pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -897,7 +888,7 @@ ignore:
 			cbk->cb_statistics.cs_repaired++;
 			cpr->cpr_exist_on_ms = 1;
 		} else {
-			clue = chk_leader_locate_pool_clue(cpr);
+			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -1053,7 +1044,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			if (result != 0 || cpr->cpr_exist_on_ms)
 				goto report;
 
-			clue = chk_leader_locate_pool_clue(cpr);
+			clue = cpr->cpr_clue;
 			result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 						       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 			if (result != 0) {
@@ -1112,7 +1103,7 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 			options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 3;
 
-			clue = chk_leader_locate_pool_clue(cpr);
+			clue = cpr->cpr_clue;
 			snprintf(suggested, CHK_MSG_BUFLEN - 1,
 				 "Start pool service under DICTATE mode from rank %d [suggested].",
 				 clue->pc_rank);
@@ -1142,6 +1133,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	cru.cru_msg = "Check leader detects corrupted pool without quorum.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -1222,7 +1214,7 @@ ignore:
 		if (result != 0 || cpr->cpr_exist_on_ms)
 			break;
 
-		clue = chk_leader_locate_pool_clue(cpr);
+		clue = cpr->cpr_clue;
 		result = ds_chk_regpool_upcall(seq, cpr->cpr_uuid, clue->pc_label,
 					       clue->pc_svc_clue->psc_db_clue.bcl_replicas);
 		if (result != 0) {
@@ -1270,6 +1262,7 @@ chk_leader_handle_pool_clues(struct chk_pool_rec *cpr)
 
 	if (clues->pcs_len > 0) {
 		rc = ds_pool_check_svc_clues(clues, &cpr->cpr_advice);
+		cpr->cpr_clue = &clues->pcs_array[cpr->cpr_advice];
 		if (rc == 0) {
 			cpr->cpr_healthy = 1;
 			goto out;
@@ -1316,7 +1309,7 @@ chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
 		if (ranks == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		clue = chk_leader_locate_pool_clue(cpr);
+		clue = cpr->cpr_clue;
 		ranks->rl_ranks[0] = clue->pc_rank;
 	}
 
@@ -1356,6 +1349,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
+	char				*label = NULL;
 	struct chk_report_unit		 cru = { 0 };
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
@@ -1382,16 +1376,28 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 
 		/* Fall through. */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS:
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
 		cpr->cpr_delay_label = 1;
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		goto out;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 
 try_ps:
-		cbk->cb_statistics.cs_total++;
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		cbk->cb_statistics.cs_total++;
 		seq = ++(ins->ci_seq);
+
+		result = chk_dup_label(&label, clue->pc_label,
+				       clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
+		if (result != 0) {
+			cbk->cb_statistics.cs_failed++;
+			label = clue->pc_label;
+			break;
+		}
+
+		D_FREE(cpr->cpr_label);
+		cpr->cpr_label = label;
+
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1404,6 +1410,11 @@ try_ps:
 		}
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		if (cpr->cpr_label != NULL)
+			label = cpr->cpr_label;
+		else
+			label = clue->pc_label;
+
 		cbk->cb_statistics.cs_total++;
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
@@ -1416,6 +1427,11 @@ try_ps:
 		 * Fall through.
 		 */
 	case CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT:
+		if (cpr->cpr_label != NULL)
+			label = cpr->cpr_label;
+		else
+			label = clue->pc_label;
+
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1469,6 +1485,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check leader detects corrupted pool label: %s (MS) vs %s (PS).\n",
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
@@ -1525,6 +1542,19 @@ report:
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 		cbk->cb_statistics.cs_total++;
+
+		label = NULL;
+		result = chk_dup_label(&label, clue->pc_label,
+				       clue->pc_label != NULL ? strlen(clue->pc_label) : 0);
+		if (result != 0) {
+			cbk->cb_statistics.cs_failed++;
+			label = clue->pc_label;
+			break;
+		}
+
+		D_FREE(cpr->cpr_label);
+		cpr->cpr_label = label;
+
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1589,7 +1619,7 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 
 			/* No engine report shard for the pool, it is dangling pool. */
 			if (d_list_empty(&cpr->cpr_shard_list)) {
-				rc = chk_leader_dangling_pool(ins, clp[i].clp_uuid);
+				rc = chk_leader_dangling_pool(ins, &clp[i]);
 				if (rc != 0)
 					goto out;
 
@@ -1634,7 +1664,7 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			 * pools, otherwise, skip it.
 			 */
 			if (ins->ci_start_flags & CSF_ORPHAN_POOL)
-				rc = chk_leader_dangling_pool(ins, clp[i].clp_uuid);
+				rc = chk_leader_dangling_pool(ins, &clp[i]);
 			else
 				rc = 0;
 		} else {
@@ -1853,7 +1883,7 @@ chk_leader_pool_ult(void *arg)
 			D_GOTO(out, rc = 0);
 		}
 	} else {
-		clue = chk_leader_locate_pool_clue(cpr);
+		clue = cpr->cpr_clue;
 		if ((clue->pc_label != NULL && cpr->cpr_label == NULL) ||
 		    (clue->pc_label == NULL && cpr->cpr_label != NULL) ||
 		    (clue->pc_label != NULL && cpr->cpr_label != NULL &&
@@ -3151,10 +3181,10 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	}
 
 	rc = chk_report_upcall(cru->cru_gen, *seq, cru->cru_cla, cru->cru_act, cru->cru_result,
-			       cru->cru_rank, cru->cru_target, cru->cru_pool, cru->cru_cont,
-			       cru->cru_obj, cru->cru_dkey, cru->cru_akey, cru->cru_msg,
-			       cru->cru_option_nr, cru->cru_options, cru->cru_detail_nr,
-			       cru->cru_details);
+			       cru->cru_rank, cru->cru_target, cru->cru_pool, cru->cru_pool_label,
+			       cru->cru_cont, cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
+			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
+			       cru->cru_detail_nr, cru->cru_details);
 
 log:
 	if (rc != 0) {
