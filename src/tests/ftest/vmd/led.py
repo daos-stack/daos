@@ -9,7 +9,7 @@ import time
 from osa_utils import OSAUtils
 from avocado.utils import process
 
-class VMDLEDStatus(OSAUtils):
+class VmdLedStatus(OSAUtils):
     """
     Test Class Description: This class methods to get
     the VMD LED status.
@@ -47,7 +47,7 @@ class VMDLEDStatus(OSAUtils):
                     uuid.append(value['storage']['smd_info']['devices'][target]['uuid'])
         return uuid
 
-    def get_LED_status_value(self, device_id=None):
+    def get_led_status_value(self, device_id=None):
         """Get LED Status value.
 
         Args:
@@ -60,7 +60,7 @@ class VMDLEDStatus(OSAUtils):
 
         self.dmg.json.value = True
         try:
-            result = self.dmg.storage_identify_device(uuid=device_id)
+            result = self.dmg.storage_identify_vmd(uuid=device_id)
         except process.CmdError as details:
             self.fail("dmg command failed: {}".format(details))
         finally:
@@ -104,7 +104,7 @@ class VMDLEDStatus(OSAUtils):
         return resp
 
 
-    def test_VMD_LED_Status(self):
+    def test_vmd_led_Status(self):
         """Jira ID: DAOS-11290
 
         :avocado: tags=all,manual
@@ -117,11 +117,11 @@ class VMDLEDStatus(OSAUtils):
         dev_id = self.get_nvme_device_ids()
         self.log.info("%s", dev_id)
         for val in dev_id:
-            resp = self.get_LED_status_value(val)
+            resp = self.get_led_status_value(val)
             time.sleep(15)
             self.log.info(resp)
 
-    def test_VMD_LED_Faulty(self):
+    def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290
 
         :avocado: tags=all,manual
@@ -156,7 +156,7 @@ class VMDLEDStatus(OSAUtils):
                 resp = self.set_device_faulty(val)
                 time.sleep(15)
                 self.log.info(resp)
-                resp = self.storage_replace_device(old_uuid=val, new_uuid=val)
+                resp = self.storage_replace_nvme(old_uuid=val, new_uuid=val)
                 time.sleep(60)
                 self.log.info(resp)
             count = count + 1
