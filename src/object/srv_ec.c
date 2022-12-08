@@ -111,9 +111,11 @@ obj_ec_metrics_process(daos_iod_t *iod, struct obj_io_desc *oiod, struct daos_oc
  * split it for different targets before dispatch.
  */
 int
-obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_array *iod_array,
-		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard, uint32_t leader_id,
-		    void *tgt_map, uint32_t map_size, struct daos_oclass_attr *oca, uint32_t tgt_nr,
+obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt,
+		    struct obj_iod_array *iod_array,
+		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
+		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
+		    struct daos_oclass_attr *oca, uint32_t tgt_nr,
 		    struct daos_shard_tgt *tgts, struct obj_ec_split_req **split_req,
 		    struct obj_pool_metrics *opm)
 {
@@ -180,7 +182,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_arra
 						 tgts[i].st_tgt_id, &tgt_idx))
 				continue;
 
-			D_ASSERT(tgt_idx >= start_shard);
+			D_ASSERTF(tgt_idx >= start_shard, "i %d, tgt_idx %d, start_shard %d\n",
+				  i, tgt_idx, start_shard);
 
 			tgt_idx -= start_shard;
 			if (tgt_max_idx < tgt_idx)
@@ -188,7 +191,9 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_arra
 		} else {
 			if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 				continue;
-			D_ASSERT(tgts[i].st_shard_id >= start_shard);
+			D_ASSERTF(tgts[i].st_shard_id >= start_shard,
+				  "i %d, st_shard_id %d, start_shard %d\n", i,
+				  tgts[i].st_shard_id, start_shard);
 			tgt_idx = tgts[i].st_shard_id - start_shard;
 			D_ASSERTF(tgt_idx <= tgt_max_idx, "tgt_idx %u tgt_max_idx %u\n",
 				  tgt_idx, tgt_max_idx);
@@ -225,7 +230,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_arra
 	}
 
 	tgt_oiods = obj_ec_tgt_oiod_init(oiods, iod_nr, tgt_bit_map,
-					 tgt_max_idx, count, dkey_hash, oca);
+					 tgt_max_idx, count, start_tgt, oca);
 	if (tgt_oiods == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -274,7 +279,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, uint64_t dkey_hash, struct obj_iod_arra
 					split_iod_csum->ic_data = split_ci;
 					split_ci->cs_nr = 1;
 					split_ci->cs_csum +=
-						obj_ec_shard_off(dkey_hash, oca, leader) *
+						obj_ec_shard_off_by_start(leader, oca, start_tgt) *
 						ci->cs_len;
 					split_ci->cs_buf_len = ci->cs_len;
 				}

@@ -1015,7 +1015,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc == 0) {
-		dae->dae_start_time = crt_hlc_get();
+		dae->dae_start_time = d_hlc_get();
 		d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		dth->dth_ent = dae;
 	} else {
@@ -1917,7 +1917,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
-	daos_epoch_t			 cmt_time = crt_hlc_get();
+	daos_epoch_t			 cmt_time = d_hlc_get();
 	int				 committed = 0;
 	int				 cur = 0;
 	int				 rc = 0;
@@ -2256,7 +2256,7 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("Not allow to set flag on committed/aborted DTX entry "DF_DTI"\n",
+			D_ERROR("Not allow to set flag on committed (1) DTX entry "DF_DTI"\n",
 				DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
@@ -2269,7 +2269,7 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
 		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
 			dae->dae_committable ? "committable" :
-			dae->dae_committed ? "committed" : "aborted", DP_DTI(dti));
+			dae->dae_committed ? "committed (2)" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -2632,7 +2632,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 				goto out;
 			}
 
-			dae->dae_start_time = crt_hlc_get();
+			dae->dae_start_time = d_hlc_get();
 			d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		}
 

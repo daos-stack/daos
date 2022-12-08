@@ -656,7 +656,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = crt_hlc_get();
+	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 

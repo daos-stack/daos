@@ -192,7 +192,7 @@ class IorTestBase(DfuseTestBase):
             JobManager: the mpi job manager object
 
         """
-        return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
+        return get_job_manager(self, job=self.ior_cmd, subprocess=self.subprocess)
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""

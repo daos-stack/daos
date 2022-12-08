@@ -76,13 +76,17 @@ typedef struct {
 
 typedef struct {
     daos_key_t dkey;
-    uint16_t maxKeyLen;
-    data_event_t *event;
     daos_iod_t *iods;
     d_sg_list_t *sgls;
     daos_recx_t *recxs;
     d_iov_t *iovs;
+} data_desc_upd_sync_t;
+
+typedef struct {
+    data_desc_upd_sync_t basicDesc;
+    data_event_t *event;
     uint64_t ret_buf_address;
+    uint16_t maxKeyLen;
 } data_desc_upd_async_t;
 
 typedef struct {

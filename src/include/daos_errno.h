@@ -284,6 +284,8 @@ extern "C" {
 	/** Re-update again */						\
 	ACTION(DER_UPDATE_AGAIN,	(DER_ERR_DAOS_BASE + 41),	\
 	       update again)						\
+	ACTION(DER_NVME_IO,		(DER_ERR_DAOS_BASE + 42),	\
+	       NVMe I/O error)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

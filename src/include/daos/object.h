@@ -123,8 +123,8 @@ typedef struct {
 	daos_obj_id_t		id_pub;
 	/** Private section, object shard identifier */
 	uint32_t		id_shard;
-	/** Padding */
-	uint32_t		id_pad_32;
+	/** object layout version */
+	uint32_t		id_layout_ver;
 } daos_unit_oid_t;
 
 /** object metadata stored in the global OI table of container */
@@ -237,6 +237,9 @@ int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf);
+
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
@@ -323,6 +326,12 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 	oid->hi |= hdr;
 }
 
+/* the default value length of each OID in OIT table */
+#define DAOS_OIT_DEFAULT_VAL_LEN	(8)
+#define DAOS_OIT_DKEY_SET(dkey_ptr, bid_ptr)			\
+	(d_iov_set((dkey_ptr), (bid_ptr), sizeof(*(bid_ptr))))
+#define DAOS_OIT_AKEY_SET(akey_ptr, oid_ptr)			\
+	(d_iov_set((akey_ptr), (oid_ptr), sizeof(*(oid_ptr))))
 
 /* check if an object ID is OIT (Object ID Table) */
 static inline bool
@@ -461,6 +470,7 @@ int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
 int dc_obj_list_obj(tse_task_t *task);
+int dc_obj_key2anchor(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);

@@ -3,8 +3,8 @@
 
 ENV:
   default:
-    #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
-    #!filter-only : /run/tests/self_np
+    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/no_sep
+    # !filter-only : /run/tests/self_np
     - D_LOG_MASK: "WARN"
     - OFI_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"

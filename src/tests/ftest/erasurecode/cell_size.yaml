@@ -3,8 +3,8 @@ hosts:
   test_clients: 3
 timeout: 900
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -59,7 +59,7 @@ ior:
   api: "DFS"
   client_processes:
     np: 48
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile

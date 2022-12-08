@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -147,11 +146,11 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         output = self.dmg_command.system_query()
         members_length = self.server_count * self.engine_count
-        for i in range(0, members_length):
-            if rank == int(output["response"]["members"][i]["rank"]):
-                temp = output["response"]["members"][i]["addr"]
+        for idx in range(0, members_length):
+            if rank == int(output["response"]["members"][idx]["rank"]):
+                temp = output["response"]["members"][idx]["addr"]
                 ip_addr = temp.split(":")
-                temp = output["response"]["members"][i]["fabric_uri"]
+                temp = output["response"]["members"][idx]["fabric_uri"]
                 port_num = temp.split(":")
                 return ip_addr[0], port_num[2]
         return None, None
@@ -272,8 +271,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.log.info("Single Dataset Verification -- Started")
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) *
-                          self.record_length)
+                indata = ("{0}".format(str(akey)[0]) * self.record_length)
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey,
@@ -487,7 +485,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         process.start()
         # Wait for the thread to finish
         process.join()
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def ior_thread(self, pool, oclass, test, flags,
@@ -544,7 +542,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
                                out_queue=self.out_queue)
-        if not self.out_queue.empty():
+        if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()
 
     def run_mdtest_thread(self, oclass="RP_2G1"):
