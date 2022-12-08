@@ -1962,6 +1962,7 @@ class PosixTests():
                 for entry in second:
                     files2.append(entry.name)
 
+        print('Reads are from list 2, 1, 1, 2.')
         print(files)
         print(files2)
         assert files == files2

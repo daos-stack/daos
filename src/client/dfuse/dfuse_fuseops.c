@@ -88,8 +88,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
 
+#if 0
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+#endif
+
+	conn->want &= ~(FUSE_CAP_READDIRPLUS | FUSE_CAP_READDIRPLUS_AUTO);
 
 	conn->time_gran = 1;
 

@@ -76,7 +76,7 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	idata.id_base_offset = offset;
 	idata.id_hdl         = hdl;
 
-	DFUSE_TRA_DEBUG(oh, "Fetching new entries at offset %#lx", offset);
+	DFUSE_TRA_DEBUG(hdl, "Fetching new entries at offset %#lx", offset);
 
 	rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &count,
 			 (NAME_MAX + 1) * count, filler_cb, &idata);
@@ -85,8 +85,8 @@ fetch_dir_entries(struct dfuse_obj_hdl *oh, off_t offset, int to_fetch, bool *eo
 	hdl->drh_dre_index      = 0;
 	hdl->drh_dre_last_index = count;
 
-	DFUSE_TRA_DEBUG(oh, "Added %d entries, anchor_index %d rc %d", count, hdl->drh_anchor_index,
-			rc);
+	DFUSE_TRA_DEBUG(hdl, "Added %d entries, anchor_index %d rc %d", count,
+			hdl->drh_anchor_index, rc);
 
 	if (count) {
 		if (daos_anchor_is_eof(&hdl->drh_anchor))
@@ -119,32 +119,56 @@ _handle_init(struct dfuse_cont *dfc)
  * this bit.
  */
 static struct dfuse_readdir_hdl *
-_handle_make_unique(struct dfuse_cont *dfc, struct dfuse_readdir_hdl *hdl)
+_handle_make_unique(struct dfuse_obj_hdl *oh)
 {
-	if (!hdl->dre_caching)
-		return hdl;
+	if (!oh->doh_rd->dre_caching)
+		return oh->doh_rd;
 
-	dfuse_dre_drop(hdl);
-	return _handle_init(dfc);
+	dfuse_dre_drop(oh);
+	return _handle_init(oh->doh_ie->ie_dfs);
 }
 
 /* Drop a ref on a readdir handle and release if required. */
 void
-dfuse_dre_drop(struct dfuse_readdir_hdl *hdl)
+dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 {
-	struct dfuse_readdir_c *drc, *next;
+	struct dfuse_readdir_hdl *hdl;
+	struct dfuse_readdir_c   *drc, *next;
+	uint32_t                  oldref;
 
-	if (!hdl)
+	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
+
+	if (!oh->doh_rd)
 		return;
 
-	if (atomic_fetch_sub_relaxed(&hdl->drh_ref, 1)) {
+	hdl = oh->doh_rd;
+
+	/* Lock
+	 * TODO: See if the kernel will pass concurrent readdirs for the same inode.
+	 */
+
+	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
+	DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
+	if (oldref != 1) {
+		D_GOTO(out, 0);
 		return;
 	}
+
+	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
+
+	/* Check for common */
+	if (oh->doh_rd == oh->doh_ie->ie_rd_hdl)
+		oh->doh_ie->ie_rd_hdl = NULL;
 
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
+	oh->doh_rd = NULL;
+
+out:
+	/* Unlock */
+	return;
 }
 
 static int
@@ -282,6 +306,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		if (oh->doh_ie->ie_rd_hdl) {
 			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 			atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
+			DFUSE_TRA_ERROR(oh, "Sharing readdir handle with existing reader");
 		} else {
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL)
@@ -298,16 +323,65 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 	/* if starting from the beginning, reset the anchor attached to the open handle. */
 	if (offset == 0) {
-		if (oh->doh_kreaddir_started) {
-			oh->doh_kreaddir_invalid = true;
+		if (hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
+			DFUSE_TRA_ERROR(hdl, "Offset is zero but anchor has been used");
+		} else {
+			if (oh->doh_kreaddir_started) {
+				oh->doh_kreaddir_invalid = true;
+				dfuse_readdir_reset(hdl);
+			}
+			oh->doh_kreaddir_started = true;
 			dfuse_readdir_reset(hdl);
 		}
-		oh->doh_kreaddir_started = true;
-		dfuse_readdir_reset(hdl);
 	}
 
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
 			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+
+	DFUSE_TRA_ERROR(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
+			oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+
+	if (oh->doh_rd_offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
+		struct dfuse_readdir_c *drc;
+		size_t                  written = 0;
+
+		DFUSE_TRA_DEBUG(hdl, "hdl_next %p first %p end %p", oh->doh_rd_nextc,
+				hdl->drh_cache_list.next, &hdl->drh_cache_list.next);
+
+		if (oh->doh_rd_nextc)
+			drc = oh->doh_rd_nextc;
+		else
+			drc = (void *)hdl->drh_cache_list.next;
+
+		while (drc != (void *)hdl->drh_cache_list.prev) {
+			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
+					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
+
+			DFUSE_TRA_DEBUG(oh, "drc %p prev %p next %p", drc, drc->drc_list.prev,
+					drc->drc_list.next);
+
+			written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
+				      drc->drc_name, &drc->drc_stbuf, drc->drc_next_offset);
+
+			if (written > size - buff_offset) {
+				DFUSE_TRA_DEBUG(oh, "Buffer is full");
+				oh->doh_rd_nextc = drc;
+				D_GOTO(reply, rc = 0);
+			}
+			added += 1;
+			buff_offset += written;
+			offset++;
+
+			drc = (void *)drc->drc_list.next;
+		}
+
+		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries");
+
+		if (added)
+			D_GOTO(reply, 0);
+
+		D_GOTO(out, rc = EIO);
+	}
 
 	/* If there is an offset, and either there is no current offset, or it's
 	 * different then seek
@@ -321,11 +395,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
-		new_hdl = _handle_make_unique(oh->doh_ie->ie_dfs, hdl);
+		new_hdl = _handle_make_unique(oh);
 		if (new_hdl != hdl) {
+			hdl        = new_hdl;
+			oh->doh_rd = new_hdl;
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
-
-			oh->doh_rd = hdl;
 		}
 
 		/*
@@ -398,7 +472,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		/* Populate dir */
 		for (i = hdl->drh_dre_index; i < hdl->drh_dre_last_index; i++) {
 			struct dfuse_readdir_entry *dre   = &hdl->drh_dre[i];
-			struct stat                 stbuf = {0};
+			struct stat                 _stbuf = {0};
+			struct stat                *stbuf  = &_stbuf;
 			daos_obj_id_t               oid;
 			dfs_obj_t                  *obj;
 			size_t                      written;
@@ -412,6 +487,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 				if (drc == NULL) {
 					D_GOTO(reply, rc = ENOMEM);
 				}
+				stbuf = &drc->drc_stbuf;
+				strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
+				drc->drc_next_offset = dre->dre_next_offset;
 			}
 
 			attr_len = DUNS_MAX_XATTR_LEN;
@@ -424,11 +502,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
-						 O_RDWR | O_NOFOLLOW, &obj, &stbuf.st_mode, &stbuf,
+						 O_RDWR | O_NOFOLLOW, &obj, &stbuf->st_mode, stbuf,
 						 1, &duns_xattr_name, (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
-						    O_RDONLY | O_NOFOLLOW, &obj, &stbuf.st_mode,
+						    O_RDONLY | O_NOFOLLOW, &obj, &stbuf->st_mode,
 						    NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
@@ -440,18 +518,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 			dfs_obj2id(obj, &oid);
 
-			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf.st_ino);
-
-			if (drc) {
-				strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
-				d_list_add(&drc->drc_list, &hdl->drh_cache_list);
-			}
+			dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid, &stbuf->st_ino);
 
 			if (plus) {
 				struct fuse_entry_param entry = {0};
 				d_list_t               *rlink;
 
-				entry.attr = stbuf;
+				entry.attr = *stbuf;
 
 				rc = create_entry(fs_handle, oh->doh_ie, &entry, obj, dre->dre_name,
 						  out, attr_len, &rlink);
@@ -466,12 +539,17 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 				dfs_release(obj);
 
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
-					      dre->dre_name, &stbuf, dre->dre_next_offset);
+					      dre->dre_name, stbuf, dre->dre_next_offset);
 			}
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
 				hdl->drh_dre_index -= 1;
+				D_FREE(drc);
 				D_GOTO(reply, rc = 0);
+			}
+
+			if (drc) {
+				d_list_add_tail(&drc->drc_list, &hdl->drh_cache_list);
 			}
 
 			/* This entry has been added to the buffer so mark it as empty */
@@ -496,11 +574,13 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 reply:
 
-	if (rc != 0)
+	if (rc == 0)
 		DFUSE_TRA_DEBUG(oh, "Replying with %d entries", added);
 
 	if (added == 0 && rc != 0)
 		D_GOTO(out_reset, rc);
+
+	oh->doh_rd_offset = hdl->drh_dre[hdl->drh_dre_index].dre_offset;
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);

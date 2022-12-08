@@ -80,6 +80,11 @@ struct dfuse_obj_hdl {
 	ATOMIC uint32_t           doh_il_calls;
 	ATOMIC uint64_t           doh_write_count;
 
+	/* Last offset returned by readdir */
+	off_t                     doh_rd_offset;
+
+	struct dfuse_readdir_c   *doh_rd_nextc;
+
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
@@ -117,9 +122,12 @@ struct dfuse_readdir_entry {
  */
 struct dfuse_readdir_c {
 	/* List of entries */
-	d_list_t drc_list;
+	d_list_t    drc_list;
+	struct stat drc_stbuf;
+	off_t       drc_offset;
+	off_t       drc_next_offset;
 	/* Name of this entry */
-	char     drc_name[NAME_MAX + 1];
+	char        drc_name[NAME_MAX + 1];
 };
 
 /* Maximum number of dentries to read at one time. */
@@ -151,7 +159,7 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_readdir_hdl *hdl);
+dfuse_dre_drop(struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
