@@ -213,7 +213,9 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_option_nr = cri->cri_options.ca_count;
 	cru.cru_detail_nr = cri->cri_details.ca_count;
 	cru.cru_pool = &cri->cri_pool;
+	cru.cru_pool_label = cri->cri_pool_label;
 	cru.cru_cont = &cri->cri_cont;
+	cru.cru_cont_label = cri->cri_cont_label;
 	cru.cru_obj = &cri->cri_obj;
 	cru.cru_dkey = &cri->cri_dkey;
 	cru.cru_akey = &cri->cri_akey;
@@ -221,6 +223,7 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_options = cri->cri_options.ca_arrays;
 	cru.cru_details = cri->cri_details.ca_arrays;
 	cru.cru_result = cri->cri_ics_result;
+	cro->cro_seq = cri->cri_seq;
 
 	rc = chk_leader_report(&cru, &cro->cro_seq, NULL);
 

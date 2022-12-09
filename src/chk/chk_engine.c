@@ -325,6 +325,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects orphan %s entry in pool map for "
 		 DF_UUIDF", rank %u, index %d\n",
@@ -499,6 +500,7 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects dangling %s entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u, (want) mark as %u\n",
@@ -600,6 +602,7 @@ chk_engine_pm_unknown_target(struct chk_pool_rec *cpr, struct pool_component *co
 	cru.cru_act = act;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects unknown target entry in pool map for pool "
 		 DF_UUIDF", rank %u, index %u, status %u, skip it. You can change "
@@ -841,6 +844,7 @@ report:
 	cru.cru_act = act;
 	cru.cru_rank = dss_self_rank();
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects corrupted pool label: %s (MS) vs %s (PS).\n",
 		 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
@@ -1030,7 +1034,10 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+	if (ccr->ccr_label_prop != NULL)
+		cru.cru_cont_label = ccr->ccr_label_prop->dpp_entries[0].dpe_str;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects orphan container "DF_UUIDF"/"DF_UUIDF"\n",
 		 DP_UUID(cpr->cpr_uuid), DP_UUID(ccr->ccr_uuid));
@@ -1174,6 +1181,26 @@ chk_engine_cont_choose_label(struct chk_cont_rec *ccr)
 	return -1;
 }
 
+static inline char *
+chk_engine_ccr2label(struct chk_cont_rec *ccr, bool trust_target)
+{
+	if (trust_target) {
+		if (ccr->ccr_label_prop != NULL)
+			return ccr->ccr_label_prop->dpp_entries[0].dpe_str;
+
+		if (!daos_iov_empty(&ccr->ccr_label_cs))
+			return ccr->ccr_label_cs.iov_buf;
+	} else {
+		if (!daos_iov_empty(&ccr->ccr_label_cs))
+			return ccr->ccr_label_cs.iov_buf;
+
+		if (ccr->ccr_label_prop != NULL)
+			return ccr->ccr_label_prop->dpp_entries[0].dpe_str;
+	}
+
+	return NULL;
+}
+
 static int
 chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, struct cont_svc *svc)
 {
@@ -1186,6 +1213,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, st
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
+	char				*label = NULL;
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
@@ -1221,6 +1249,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, st
 
 trust_ps:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		label = chk_engine_ccr2label(ccr, false);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1246,6 +1275,7 @@ trust_ps:
 
 trust_target:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+		label = chk_engine_ccr2label(ccr, true);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1264,6 +1294,7 @@ trust_target:
 		}
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE:
+		label = chk_engine_ccr2label(ccr, false);
 		/* Report the inconsistency without repair. */
 		cbk->cb_statistics.cs_ignored++;
 		break;
@@ -1280,6 +1311,7 @@ trust_target:
 			goto out;
 
 interact:
+		label = chk_engine_ccr2label(ccr, false);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_AUTO) {
 			/* Ignore the inconsistency if admin does not want interaction. */
 			act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
@@ -1341,7 +1373,9 @@ report:
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
 	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	cru.cru_cont = (uuid_t *)&ccr->ccr_uuid;
+	cru.cru_cont_label = label;
 	snprintf(msg, CHK_MSG_BUFLEN - 1,
 		 "Check engine detects inconsistent container label: %s (CS) vs %s (property).\n",
 		 daos_iov_empty(&ccr->ccr_label_cs) ? "(null)" : (char *)ccr->ccr_label_cs.iov_buf,
@@ -1394,6 +1428,7 @@ ignore:
 			goto ignore;
 
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
+		label = chk_engine_ccr2label(ccr, false);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1414,6 +1449,7 @@ ignore:
 			goto ignore;
 
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
+		label = chk_engine_ccr2label(ccr, true);
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -2812,13 +2848,12 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 		       sizeof(*mbs_array[i].cpm_tgt_status) * mbs_array[i].cpm_tgt_nr);
 	}
 
-	if (flags & CMF_REPAIR_LABEL) {
-		rc = chk_dup_label(&cpr->cpr_label, label, label != NULL ? strlen(label) : 0);
-		if (rc != 0)
-			goto put;
+	rc = chk_dup_string(&cpr->cpr_label, label, label != NULL ? strlen(label) : 0);
+	if (rc != 0)
+		goto put;
 
+	if (flags & CMF_REPAIR_LABEL)
 		cpr->cpr_delay_label = 1;
-	}
 
 	if (cbk->cb_phase < phase) {
 		cbk->cb_phase = phase;
@@ -2882,7 +2917,8 @@ chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 
 	rc = chk_report_remote(ins->ci_prop.cp_leader, ins->ci_bk.cb_gen, cru->cru_cla,
 			       cru->cru_act, cru->cru_result, cru->cru_rank, cru->cru_target,
-			       cru->cru_pool, cru->cru_cont, cru->cru_obj, cru->cru_dkey,
+			       cru->cru_pool, cru->cru_pool_label, cru->cru_cont,
+			       cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
 			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
 			       cru->cru_detail_nr, cru->cru_details, seq);
 	if (rc != 0)
@@ -2893,9 +2929,9 @@ chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 
 log:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 DF_ENGINE" on rank %u report with class %u, action %u, "
-		 "handle_rc %d, report_rc %d\n",
-		 DP_ENGINE(ins), cru->cru_rank, cru->cru_cla, cru->cru_act, cru->cru_result, rc);
+		 DF_ENGINE" on rank %u report with class %u, action %u, seq "
+		 DF_X64", handle_rc %d, report_rc %d\n", DP_ENGINE(ins),
+		 cru->cru_rank, cru->cru_cla, cru->cru_act, *seq, cru->cru_result, rc);
 
 	if (rc != 0 || cpr == NULL)
 		goto out;
