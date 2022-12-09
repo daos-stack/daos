@@ -1495,6 +1495,10 @@ bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action 
 	uint64_t		 tx_id;
 	int			 rc;
 
+	/* FIXME: Skip WAL replay for sysdb for this moment */
+	if (mc->mc_is_sysdb)
+		return 0;
+
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
 		return -DER_NOMEM;
