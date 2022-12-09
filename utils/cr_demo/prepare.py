@@ -8,8 +8,8 @@ import subprocess
 
 
 # Stop daos_server, unmount, and start daos_server for given hosts.
-SYSTEMCTL_START_CMD = "sudo systemctl start daos_server"
-SYSTEMCTL_STOP_CMD = "sudo systemctl stop daos_server"
+SYSTEMCTL_START_CMD = "sudo systemctl start daos_server; sudo systemctl start daos_agent"
+SYSTEMCTL_STOP_CMD = "sudo systemctl stop daos_server; sudo systemctl stop daos_agent"
 UMOUNT_CMD = "sudo umount /mnt/daos; sudo umount /mnt/daos0; sudo umount /mnt/daos1"
 prepare_cmd = f"{SYSTEMCTL_STOP_CMD}; {UMOUNT_CMD}; {SYSTEMCTL_START_CMD}"
 

@@ -18,18 +18,36 @@ def format_storage(host_list):
     print(f"Command: {command}")
     subprocess.run(format_cmd, check=False)
 
-def create_pool(pool_size, pool_label):
+def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
     """Call dmg pool create.
 
     Args:
         pool_size (str): Pool size.
         pool_label (str): Pool label.
+        ranks (str): Ranks to create pool. Defaults to None.
+        nsvc (str): Number of service replicas. Defaults to None.
     """
     create_pool_cmd = ["dmg", "pool", "create", "--size=" + pool_size,
                        "--label=" + pool_label]
+    if ranks:
+        create_pool_cmd.append("--ranks=" + ranks)
+    if nsvc:
+        create_pool_cmd.append("--nsvc=" + nsvc)
     command = " ".join(create_pool_cmd)
     print(f"Command: {command}")
     subprocess.run(create_pool_cmd, check=False)
+
+def create_container(pool_label, cont_label):
+    """Call daos container create.
+
+    Args:
+        pool_label (str): Pool label.
+        cont_label (str): Container label.
+    """
+    cont_create_cmd = ["daos", "container", "create", pool_label, cont_label]
+    command = " ".join(cont_create_cmd)
+    print(f"Command: {command}")
+    subprocess.run(cont_create_cmd, check=False)
 
 def inject_fault_mgmt(pool_label, fault_type):
     """Call dmg faults mgmt-svc to inject fault.
@@ -55,13 +73,26 @@ def inject_fault_pool(pool_label, fault_type):
     print(f"Command: {command}")
     subprocess.run(inject_fault_cmd, check=False)
 
-def list_pool(verbose=False, json=False):
+def inject_fault_daos(pool_label, cont_label, fault_type):
+    """Call daos faults to inject fault.
+
+    Args:
+        fault_type (str): Fault type.
+    """
+    location = "--location=" + fault_type
+    inject_fault_cmd = ["daos", "faults", "container", pool_label, cont_label, location]
+    command = " ".join(inject_fault_cmd)
+    print(f"Command: {command}")
+    subprocess.run(inject_fault_cmd, check=False)
+
+def list_pool(verbose=False, json=False, no_query=False):
     """Call dmg pool list.
 
     Args:
         verbose (bool): Whether to use --verbose. Defaults to False.
         json (bool): Whether to use --json. If used, verbose value would be irrelevant.
             Defaults to False.
+        no_query (bool): Whether to use --no-query. Defaults to False.
 
     Returns:
         str: If --json is used, return stdout. Otherwise None.
@@ -72,6 +103,8 @@ def list_pool(verbose=False, json=False):
         list_pool_cmd = ["dmg", "pool", "list"]
     if verbose:
         list_pool_cmd.append("--verbose")
+    if no_query:
+        list_pool_cmd.append("--no-query")
     command = " ".join(list_pool_cmd)
     print(f"Command: {command}")
 
@@ -185,6 +218,21 @@ def pool_get_prop(pool_label, properties):
     print(f"Command: {command}")
     subprocess.run(get_prop_cmd, check=False)
 
+def cont_get_prop(pool_label, cont_label, properties=None):
+    """Call daos container get-prop <pool_label> <cont_label> <properties>
+
+    Args:
+        pool_label (str): Pool label.
+        cont_label (str): Container label.
+        properties (str): Properties to query. Separate them with comma if there are
+            multiple properties. Defaults to None.
+    """
+    get_prop_cmd = ["daos", "container", "get-prop", pool_label, cont_label]
+    if properties:
+        get_prop_cmd.append("--properties=" + properties)
+    command = " ".join(get_prop_cmd)
+    print(f"Command: {command}")
+    subprocess.run(get_prop_cmd, check=False)
 
 def create_three_pools(pool_label, pool_size):
     """Create three pools with consecutive number appended to given label.
@@ -204,7 +252,6 @@ def create_three_pools(pool_label, pool_size):
     create_pool(pool_size=pool_size, pool_label=pool_label_3)
     return [pool_label_1, pool_label_2, pool_label_3]
 
-
 def create_label_to_uuid():
     """Create label to UUID mapping.
 
@@ -219,7 +266,6 @@ def create_label_to_uuid():
 
     return label_to_uuid
 
-
 def get_current_labels():
     """Get current pool labels from MS.
 
@@ -233,3 +279,54 @@ def get_current_labels():
         pool_labels.append(pool["label"])
 
     return pool_labels
+
+def system_stop():
+    """Stop servers."""
+    system_stop_cmd = ["dmg", "system", "stop"]
+    command = " ".join(system_stop_cmd)
+    print(f"Command: {command}")
+    subprocess.run(system_stop_cmd, check=False)
+
+def system_start():
+    """Start servers."""
+    system_start_cmd = ["dmg", "system", "start"]
+    command = " ".join(system_start_cmd)
+    print(f"Command: {command}")
+    subprocess.run(system_start_cmd, check=False)
+
+def cont_set_prop(pool_label, cont_label, properties):
+    """Set properties for given container."""
+    set_prop_cmd = ["daos", "container", "set-prop", pool_label, cont_label,
+                    "--properties=" + properties]
+    command = " ".join(set_prop_cmd)
+    print(f"Command: {command}")
+    subprocess.run(set_prop_cmd, check=False)
+
+def system_query(json=False):
+    """Call dmg system query"""
+    if json:
+        system_query_cmd = ["dmg", "--json", "system", "query"]
+    else:
+        system_query_cmd = ["dmg", "system", "query"]
+    command = " ".join(system_query_cmd)
+    print(f"Command: {command}")
+
+    if json:
+        result = subprocess.run(
+            system_query_cmd, stdout=subprocess.PIPE, universal_newlines=True,
+            check=False)
+        return result.stdout
+
+    subprocess.run(system_query_cmd, check=False)
+    return None
+
+def storage_query_usage(host_list):
+    """Call dmg storage query usage.
+
+    Args:
+        host_list (str): List of hosts to query.
+    """
+    format_cmd = ["dmg", "storage", "query", "usage", "--host-list=" + host_list]
+    command = " ".join(format_cmd)
+    print(f"Command: {command}")
+    subprocess.run(format_cmd, check=False)
