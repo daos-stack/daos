@@ -1067,7 +1067,7 @@ chk_pools_find_slowest(struct chk_instance *ins, bool *done)
 }
 
 static inline int
-chk_dup_label(char **tgt, const char *src, size_t len)
+chk_dup_string(char **tgt, const char *src, size_t len)
 {
 	int	rc = 0;
 
