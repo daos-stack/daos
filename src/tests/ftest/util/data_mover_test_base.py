@@ -85,6 +85,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Define processes and np for each datamover tool, which defaults to the "datamover" one.
         self.processes = None
         self.ppn = None
+        self.datamover_np = None
+        self.datamover_ppn = None
         self.ior_np = None
         self.ior_ppn = None
         self.mdtest_np = None
@@ -126,20 +128,20 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.daos_cmd = self.get_daos_command()
 
         # Get the processes and np for all datamover tools, as well as for individual tools.
-        self.processes = self.params.get("np", '/run/datamover/*', 1)
-        self.ppn = self.params.get("ppn", '/run/datamover/*', 1)
+        self.datamover_np = self.params.get("np", '/run/datamover/*', 1)
+        self.datamover_ppn = self.params.get("ppn", '/run/datamover/*', 1)
         self.ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         self.ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         self.mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
         self.mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
-        self.dcp_np = self.params.get("np", "/run/dcp/*", self.processes)
-        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.ppn)
-        self.dsync_np = self.params.get("np", "/run/dsync/*", self.processes)
-        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.ppn)
-        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.processes)
-        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.ppn)
-        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.processes)
-        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.ppn)
+        self.dcp_np = self.params.get("np", "/run/dcp/*", self.datamover_np)
+        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.datamover_ppn)
+        self.dsync_np = self.params.get("np", "/run/dsync/*", self.datamover_np)
+        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.datamover_ppn)
+        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.datamover_np)
+        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.datamover_ppn)
+        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.datamover_np)
+        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.datamover_ppn)
 
         self.posix_root.update_default(self.tmp)
         self.posix_root.get_yaml_value("posix_root", self, "/run/datamover/*")
@@ -1074,11 +1076,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 dst_path=format_path(pool, cont3))
             read_back_cont = cont3
             read_back_pool = pool
-        # the result is that a NEW directory is created in the destination
-        if tool == 'FS_COPY':
-            daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
+        if tool in ['FS_COPY', 'DCP']:
+            # the result is that a NEW directory is created in the destination
+            daos_path = os.path.join(os.sep, os.path.basename(posix_path), 'testfile')
+        elif tool in ['CONT_CLONE', 'DSERIAL']:
+            daos_path = os.path.join(os.sep, 'testfile')
         else:
-            daos_path = self.ior_cmd.test_file.value
+            self.fail("Invalid tool: {}".format(tool))
         # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
             "DAOS", daos_path, read_back_pool, read_back_cont,

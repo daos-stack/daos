@@ -1469,6 +1469,13 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 			continue;
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+			/* Print a subset of enumerated records */
+			if ((i + key_nr) % ENUM_PRINT != 0)
+				continue;
+			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
+				      i + key_nr, (int)size,
+				      (int)recxs[i].rx_nr,
+				      (int)recxs[i].rx_idx);
 		}
 
 		key_nr += number;
