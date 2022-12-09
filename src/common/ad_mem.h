@@ -331,6 +331,8 @@ struct ad_blob {
 	int			 bb_ars_lru_cap;
 	int			 bb_gps_lru_size;
 	int			 bb_gps_lru_cap;
+	char			 *bb_path;
+	daos_size_t		 bb_stat_sz;
 	/** file descriptor of MD file */
 	int			 bb_fd;
 	/** reference counter */
