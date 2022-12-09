@@ -79,6 +79,7 @@ def umount(path, background=False):
 
 class NLTConf():
     """Helper class for configuration"""
+
     def __init__(self, json_file, args):
 
         with open(json_file, 'r') as ofh:
@@ -425,6 +426,7 @@ def get_base_env(clean=False):
 
 class DaosPool():
     """Class to store data about daos pools"""
+
     def __init__(self, server, pool_uuid, label):
         self._server = server
         self.uuid = pool_uuid
@@ -3408,8 +3410,9 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception(f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
-                        + sizeof_fmt(conf.max_log_size))
+        message = (f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
+                   + sizeof_fmt(conf.max_log_size))
+        conf.wf.add_test_case('logfile_size', failure=message)
 
     return lto.fi_location
 
