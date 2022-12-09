@@ -228,6 +228,8 @@ struct ad_arena {
 	int			  ar_ref;
 	/** number of groups */
 	int			  ar_grp_nr;
+	/** last grp index, all prev-grps are used, following grps possibly used */
+	int			  ar_last_grp;
 	/** sorter buffer size */
 	int			  ar_sorter_sz;
 	/** unpublished arena */
