@@ -150,7 +150,6 @@ dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
 		DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
-		D_GOTO(out, 0);
 		return;
 	}
 
@@ -166,9 +165,7 @@ dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 	D_FREE(hdl);
 	oh->doh_rd = NULL;
 
-out:
 	/* Unlock */
-	return;
 }
 
 static int
@@ -306,7 +303,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		if (oh->doh_ie->ie_rd_hdl) {
 			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 			atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
-			DFUSE_TRA_ERROR(oh, "Sharing readdir handle with existing reader");
+			DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
 		} else {
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL)
@@ -338,7 +335,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
 			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
-	DFUSE_TRA_ERROR(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
+	DFUSE_TRA_DEBUG(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
 			oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
 	if (oh->doh_rd_offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
