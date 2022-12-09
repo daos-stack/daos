@@ -7,7 +7,7 @@
 package main
 
 import (
-	"fmt"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"runtime"
 	"unsafe"
 )
@@ -31,7 +31,7 @@ func (ctx *DdbContext) Init() error {
 	result := C.ddb_init()
 
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	C.ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
 
@@ -44,12 +44,6 @@ func (ctx *DdbContext) Fini() {
 	runtime.UnlockOSThread()
 }
 
-func errorString(errno int) string {
-	dErrStr := C.GoString(C.d_errstr(C.int(errno)))
-	dErrDesc := C.GoString(C.d_errdesc(C.int(errno)))
-	return fmt.Sprintf("%s(%d): %s", dErrStr, errno, dErrDesc)
-}
-
 func ddbLs(ctx *DdbContext, path string, recursive bool) error {
 	/* Set up the options */
 	options := C.struct_ls_options{}
@@ -59,7 +53,7 @@ func ddbLs(ctx *DdbContext, path string, recursive bool) error {
 	result := C.ddb_run_ls(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -73,7 +67,7 @@ func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
 	result := C.ddb_run_open(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -82,7 +76,7 @@ func ddbVersion(ctx *DdbContext) error {
 	/* Run the c code command */
 	result := C.ddb_run_version(&ctx.ctx)
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -91,7 +85,7 @@ func ddbClose(ctx *DdbContext) error {
 	/* Run the c code command */
 	result := C.ddb_run_close(&ctx.ctx)
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -100,7 +94,7 @@ func ddbSuperblockDump(ctx *DdbContext) error {
 	/* Run the c code command */
 	result := C.ddb_run_superblock_dump(&ctx.ctx)
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -115,7 +109,7 @@ func ddbValueDump(ctx *DdbContext, path string, dst string) error {
 	C.free(unsafe.Pointer(options.path))
 	C.free(unsafe.Pointer(options.dst))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -128,7 +122,7 @@ func ddbRm(ctx *DdbContext, path string) error {
 	result := C.ddb_run_rm(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -143,7 +137,7 @@ func ddbValueLoad(ctx *DdbContext, src string, dst string) error {
 	C.free(unsafe.Pointer(options.src))
 	C.free(unsafe.Pointer(options.dst))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -156,7 +150,7 @@ func ddbIlogDump(ctx *DdbContext, path string) error {
 	result := C.ddb_run_ilog_dump(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -169,7 +163,7 @@ func ddbIlogCommit(ctx *DdbContext, path string) error {
 	result := C.ddb_run_ilog_commit(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -182,7 +176,7 @@ func ddbIlogClear(ctx *DdbContext, path string) error {
 	result := C.ddb_run_ilog_clear(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -197,7 +191,7 @@ func ddbDtxDump(ctx *DdbContext, path string, active bool, committed bool) error
 	result := C.ddb_run_dtx_dump(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -210,7 +204,7 @@ func ddbDtxCmtClear(ctx *DdbContext, path string) error {
 	result := C.ddb_run_dtx_cmt_clear(&ctx.ctx, &options)
 	C.free(unsafe.Pointer(options.path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -225,7 +219,7 @@ func ddbSmdSync(ctx *DdbContext, nvme_conf string, db_path string) error {
 	C.free(unsafe.Pointer(options.nvme_conf))
 	C.free(unsafe.Pointer(options.db_path))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -234,7 +228,7 @@ func ddbVeaDump(ctx *DdbContext) error {
 	/* Run the c code command */
 	result := C.ddb_run_vea_dump(&ctx.ctx)
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -249,7 +243,7 @@ func ddbVeaUpdate(ctx *DdbContext, offset string, blk_cnt string) error {
 	C.free(unsafe.Pointer(options.offset))
 	C.free(unsafe.Pointer(options.blk_cnt))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -264,7 +258,7 @@ func ddbDtxActCommit(ctx *DdbContext, path string, dtx_id string) error {
 	C.free(unsafe.Pointer(options.path))
 	C.free(unsafe.Pointer(options.dtx_id))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
@@ -279,8 +273,7 @@ func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	C.free(unsafe.Pointer(options.path))
 	C.free(unsafe.Pointer(options.dtx_id))
 	if result != 0 {
-		return fmt.Errorf(errorString(int(result)))
+		return daos.Status(result)
 	}
 	return nil
 }
-
