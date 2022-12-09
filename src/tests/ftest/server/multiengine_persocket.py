@@ -6,14 +6,18 @@
 """
 
 import time
-from server_utils_base import DaosServerCommand
-from general_utils import run_pcmd, get_random_bytes
 import random
 import base64
+import traceback
+
+from general_utils import run_pcmd, get_random_bytes
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from pydaos.raw import DaosApiError
+from server_utils_base import DaosServerCommand
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
+    # pylint: disable=too-many-ancestors
     """Daos server configuration tests.
 
     Test Class Description:
@@ -117,12 +121,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sub_command_class.sub_command_class.scm_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         self.log.info(
-            "===({0}.A)Starting daos_server storage prepare reset: {1}".format(step, str(cmd)))
+            "===(%s.A)Starting daos_server storage prepare reset: %s", step, str(cmd))
         results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
         if results[0]['exit_status']:
             self.fail(
-                "#({0}.A){1} failed, "
-                "please make sure the server equipped with PMem modules".format(step, cmd))
+                "#(%s.A)%s failed, "
+                "please make sure the server equipped with PMem modules", step, cmd)
 
     def daos_server_storage_prepare_ns(self, step, engines_per_socket=1):
         """
@@ -142,7 +146,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sub_command_class.sub_command_class.scm_only.value = True
 
         self.log.info(
-            "===({0}.B)Starting daos_server storage prepare -S: {1}".format(step, str(cmd)))
+            "===(%s.B)Starting daos_server storage prepare -S: %s", step, str(cmd))
         results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
         if results[0]['exit_status']:
             self.fail(
@@ -161,29 +165,24 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         reboot_waittime = self.params.get("reboot_waittime", "/run/server_config/*", default=210)
         cmd = "sudo shutdown -r now"
-        results = run_pcmd(hosts, cmd, timeout=210)
+        run_pcmd(hosts, cmd, timeout=210)
         self.log.info(
-            "===Server rebooting...  sleep {0} seconds.\n".format(reboot_waittime))
+            "===Server rebooting...  sleep %s seconds.\n", reboot_waittime)
         time.sleep(reboot_waittime)
 
-    def cleanup(self, step):
+    def cleanup(self):
         """
         Servers clean up after test complete.
-
-        Args:
-             step: test step.
         """
-        self.log.info("===Start cleanup...")
         self.pool.destroy(recursive=1, force=1)
         cleanup_cmds = [
             "sudo systemctl stop daos_server.service",
             "sudo umount /mnt/daos*",
             "sudo wipefs -a /dev/pmem*",
             "/usr/bin/ls -l /dev/pmem*",
-            'lsblk|grep -E "NAME|pmem"'
-            ]
+            'lsblk|grep -E "NAME|pmem"']
         for cmd in cleanup_cmds:
-            results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
+            run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
     def test_multiengines_per_socket(self):
         """
@@ -207,7 +206,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         # (1) Storage prepare --scm-ns-per-socket
         step = 1
-        self.log.info("===({0})===Storage prepare --scm-ns-per-socket".format(step))
+        self.log.info("===(%s)===Storage prepare --scm-ns-per-socket", step)
         self.daos_server_storage_prepare_reset(step)
         engines_per_socket = self.params.get(
             "engines_per_socket", "/run/server_config/*", default=1)
@@ -218,27 +217,25 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         max_retry = 3
         while results[0]['exit_status'] != 0 and retry < max_retry:
             retry += 1
-            self.log.info(
-                "===({0}.{1} retry)sleep 15 sec, retry server configure "
-                "daos_server_storage_prepare_ns".format(step, retry))
+            self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
+                "daos_server_storage_prepare_ns", step, retry)
             time.sleep(15)
             cmd = "/usr/bin/ls -l /dev/pmem*"
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
         if retry > max_retry:
-            self.cleanup(step)
+            self.cleanup()
             self.fail(
                 "#PMem did not show after storage prepare --scm-ns-per-socket and {0} "
                 "retries".format(max_retry))
 
         # (2) Start server
         step += 1
-        self.log.info("===({0})===Start server".format(step))
+        self.log.info("===(%s)===Start server", step)
         start_server_cmds = [
             'lsblk|grep -E "NAME|pmem"',
             "sudo cp /etc/daos/daos_server.yml_2 /etc/daos/daos_server.yml",
-            "sudo systemctl start daos_server.service"
-            ]
+            "sudo systemctl start daos_server.service"]
         for cmd in start_server_cmds:
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
         # Check for server start status
@@ -247,13 +244,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         # (3) Start agent
         step += 1
-        self.log.info("===({0})===Start agent".format(step))
+        self.log.info("===(%s)===Start agent", step)
         start_agent_cmds = [
             "sudo systemctl start daos_agent.service",
             "dmg storage scan",
             "dmg network scan",
-            "dmg storage format"
-            ]
+            "dmg storage format"]
         for cmd in start_agent_cmds:
             results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
             # Check for agent start status
@@ -262,25 +258,24 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         # (4) Dmg system query
         step += 1
-        self.log.info("===({0})===Dmg system query".format(step))
+        self.log.info("===(%s)===Dmg system query", step)
         # Delay is needed for multi ranks to show
         time.sleep(5)
         query_cmds = [
             "dmg system query",
-            "dmg system query -v"
-            ]
+            "dmg system query -v"]
         for cmd in query_cmds:
             results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
 
         # (5) Pool create
         step += 1
-        self.log.info("===({0})===Pool create".format(step))
+        self.log.info("===(%s)===Pool create", step)
         self.add_pool(connect=False)
         pool_id = self.pool.identifier
 
         # (6) Container create and attributes test
         step += 1
-        self.log.info("===({0})===Container create and attributes test".format(step))
+        self.log.info("===(%s)===Container create and attributes test", step)
         self.add_container(self.pool)
         self.container.open()
         self.daos_cmd = self.get_daos_command()
@@ -308,20 +303,20 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         # (7) IOR test
         step += 1
-        self.log.info("===({0})===IOR test".format(step))
+        self.log.info("===(%s)===IOR test", step)
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         self.run_ior_with_pool(
             timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=True)
 
         # (8) MDTEST
         step += 1
-        self.log.info("===({0})===MDTEST".format(step))
+        self.log.info("===(%s)===MDTEST", step)
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)
 
         # (9) Cleanup
         step += 1
-        self.log.info("===({0})===Cleanup".format(step))
+        self.log.info("===(%s)===Cleanup", step)
         cmd = "dmg system query -v"
         results = run_pcmd(self.hostlist_clients, cmd, timeout=90)
-        self.cleanup(step)
+        self.cleanup()
