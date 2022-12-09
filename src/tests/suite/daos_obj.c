@@ -68,7 +68,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
-	rc = daos_obj_open(coh, oid, 0, &req->oh,
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &req->oh,
 			   req->arg->async ? &req->ev : NULL);
 	assert_rc_equal(rc, 0);
 
@@ -1470,6 +1470,13 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 			continue;
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+			/* Print a subset of enumerated records */
+			if ((i + key_nr) % ENUM_PRINT != 0)
+				continue;
+			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
+				      i + key_nr, (int)size,
+				      (int)recxs[i].rx_nr,
+				      (int)recxs[i].rx_idx);
 		}
 
 		key_nr += number;
@@ -2193,7 +2200,7 @@ basic_byte_array(void **state)
 	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -2339,7 +2346,7 @@ read_empty_records_internal(void **state, unsigned int size)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -2438,7 +2445,7 @@ fetch_size(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -2596,7 +2603,7 @@ close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
-	rc = daos_obj_open(arg->coh, oid, 0, &req->oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &req->oh, NULL);
 	assert_rc_equal(rc, 0);
 }
 
@@ -3302,7 +3309,7 @@ update_overlapped_recxs(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -3373,7 +3380,7 @@ io_obj_key_query(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey, akey */
@@ -3423,7 +3430,7 @@ io_obj_key_query(void **state)
 	oid = daos_test_oid_gen(arg->coh, OC_SX,
 				DAOS_OT_MULTI_UINT64,
 				0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	dkey_val = 5;
@@ -3725,7 +3732,7 @@ split_sgl_internal(void **state, int size)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	sbuf1 = calloc(size/2, 1);
@@ -4064,7 +4071,7 @@ io_invalid(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -4627,7 +4634,7 @@ int_key_setting(void **state, int size)
 	iod.iod_recxs	= NULL;
 	iod.iod_nr	= 1;
 
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("Update with invalid DKEY\n");
@@ -4653,7 +4660,7 @@ int_key_setting(void **state, int size)
 	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OT_AKEY_UINT64, 0,
 				arg->myrank);
 
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("Update with invalid AKEY\n");
@@ -4788,7 +4795,7 @@ obj_open_perf(void **state)
 	start_usec = daos_getutime();
 	for (i = 0; i < nr; i++) {
 		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-		rc = daos_obj_open(arg->coh, oid, 0, &oh[i], NULL);
+		rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh[i], NULL);
 		assert_rc_equal(rc, 0);
 	}
 	end_usec = daos_getutime();
