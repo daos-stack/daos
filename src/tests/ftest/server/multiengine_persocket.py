@@ -125,8 +125,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
         if results[0]['exit_status']:
             self.fail(
-                "#(%s.A)%s failed, "
-                "please make sure the server equipped with PMem modules", step, cmd)
+                "#({0}.A){1} failed, "
+                "please make sure the server equipped with PMem modules".format(step, cmd))
 
     def daos_server_storage_prepare_ns(self, step, engines_per_socket=1):
         """
@@ -271,25 +271,24 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         step += 1
         self.log.info("===(%s)===Pool create", step)
         self.add_pool(connect=False)
-        pool_id = self.pool.identifier
 
         # (6) Container create and attributes test
         step += 1
         self.log.info("===(%s)===Container create and attributes test", step)
         self.add_container(self.pool)
         self.container.open()
-        self.daos_cmd = self.get_daos_command()
+        daos_cmd = self.get_daos_command()
         num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
         attr_dict = self.create_data_set(num_attributes)
         try:
             self.container.container.set_attr(data=attr_dict)
-            data = self.daos_cmd.container_list_attrs(
+            data = daos_cmd.container_list_attrs(
                 pool=self.pool.uuid,
                 cont=self.container.uuid,
                 verbose=False)
             self.verify_list_attr(attr_dict, data['response'])
 
-            data = self.daos_cmd.container_list_attrs(
+            data = daos_cmd.container_list_attrs(
                 pool=self.pool.uuid,
                 cont=self.container.uuid,
                 verbose=True)
