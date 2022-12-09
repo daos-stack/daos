@@ -49,17 +49,14 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             pool_fillup (int) : Percentage of pool filled up with data before performing OSA
                                 operations.
         """
-        # Create a pool
-        pool = {}
-        random_pool = 0
+        # Create 'num_pool' number of pools
+        pools = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
-
-        # Exclude ranks [0, 3, 4]
-        ranks = [0, 3, 4]
+        self.log.info("==> Creating %s pools with oclass: %s", num_pool, oclass)
         for index in range(0, num_pool):
-            pool[index] = add_pool(self, connect=False)
-            self.pool = pool[index]
+            pools.append(add_pool(self, connect=False))
+            self.pool = pools[-1]
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
             if data:
@@ -86,11 +83,14 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
-        # Exclude all the ranks
-        random_pool = random.randint(0, (num_pool - 1))  # nosec
-        for _ in range(0, self.loop_test_cnt):
+        # Exclude ranks 0 and 3 from a random pool
+        ranks = [0, 3]
+        self.pool = random.choice(pools)    # no sec
+        for loop in range(0, self.loop_test_cnt):
+            self.log.info(
+                "==> (Loop %s/%s) Excluding ranks %s from %s",
+                loop + 1, self.loop_test_cnt, ranks, str(self.pool))
             for index, rank in enumerate(ranks):
-                self.pool = pool[random_pool]
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
@@ -131,6 +131,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                                 "Pool Version Error: After exclude")
 
             # Reintegrate the ranks which was excluded
+            self.log.info(
+                "==> (Loop %s/%s) Reintegrating ranks %s into %s",
+                loop + 1, self.loop_test_cnt, ranks, str(self.pool))
             for index, rank in enumerate(ranks):
                 if self.test_with_blank_node is True:
                     ip_addr, p_num = self.get_ipaddr_for_rank(rank)
@@ -152,14 +155,13 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 # Check pool version incremented after pool reintegrate
                 self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
 
-            display_string = "Pool{} space at the End".format(random_pool)
-            self.pool = pool[random_pool]
+            display_string = "{} space at the End".format(str(self.pool))
             self.pool.display_pool_daos_space(display_string)
 
         # Finally check whether the written data can be accessed.
         # Also, run the daos cont check (for object integrity)
-        for index in range(0, num_pool):
-            self.pool = pool[index]
+        for pool in pools:
+            self.pool = pool
             if data:
                 if pool_fillup > 0:
                     self.start_ior_load(storage='NVMe', operation='Auto_Read', percent=pool_fillup)
