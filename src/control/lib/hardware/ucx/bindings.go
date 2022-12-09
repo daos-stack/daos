@@ -203,7 +203,7 @@ import (
 func Load() (func(), error) {
 	ucsHdl, err := openUCS()
 	if err != nil {
-		return nil, errors.Wrap(err, "loading libucs")
+		return nil, errors.Wrap(err, "loading libucs.0")
 	}
 	defer ucsHdl.Close()
 
@@ -213,7 +213,7 @@ func Load() (func(), error) {
 
 	hdl, err := openUCT()
 	if err != nil {
-		return nil, errors.Wrap(err, "loading libuct")
+		return nil, errors.Wrap(err, "loading libuct.0")
 	}
 	return func() {
 		hdl.Close()
