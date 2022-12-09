@@ -334,7 +334,7 @@ ec_agg_check_replica_on_parity(test_arg_t *arg, daos_obj_id_t oid, char *dkey,
 	int		i;
 	int		rc;
 
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -879,7 +879,7 @@ ec_singv_array_mixed_io(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1219,7 +1219,7 @@ ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1374,7 +1374,7 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1560,7 +1560,7 @@ ec_cond_fetch(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
