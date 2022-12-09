@@ -338,7 +338,7 @@ get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool
 	if (do_update) {
 		uint64_t		cur_hlc;
 
-		cur_hlc = crt_hlc_get();
+		cur_hlc = d_hlc_get();
 		mdtimes.otime = update_otime ? cur_hlc : mdtimes.otime;
 		mdtimes.mtime = update_mtime ? cur_hlc : mdtimes.mtime;
 
@@ -989,7 +989,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		struct co_md_times	mdtimes;
 
 		mdtimes.otime = 0;
-		mdtimes.mtime = crt_hlc_get();
+		mdtimes.mtime = d_hlc_get();
 		d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_co_md_times, &value);
 		if (rc != 0) {
@@ -4312,7 +4312,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		mdtimes.otime = 0;
 	}
 
-	mdtimes.mtime = crt_hlc_get();
+	mdtimes.mtime = d_hlc_get();
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 	if (rc) {
 		D_ERROR("failed to upgrade container co_md_times/cont: "DF_CONTF"\n",
@@ -4681,7 +4681,7 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
+		D_DEBUG(DB_MD, DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
 			opc, cont_cli_opc_name(opc));
 		D_GOTO(out_pool_hdl, rc);

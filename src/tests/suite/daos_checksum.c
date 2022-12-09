@@ -192,7 +192,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 

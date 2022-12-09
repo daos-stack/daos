@@ -148,7 +148,7 @@ vts_dtx_prep_update(struct io_test_args *args,
 	args->ta_flags = TF_ZERO_COPY;
 	args->otype = DAOS_OT_MULTI_UINT64;
 
-	*epoch = crt_hlc_get();
+	*epoch = d_hlc_get();
 
 	vts_key_gen(dkey_buf, args->dkey_size, true, args);
 	set_iov(dkey, dkey_buf, is_daos_obj_type_set(args->otype, DAOS_OT_DKEY_UINT64));
