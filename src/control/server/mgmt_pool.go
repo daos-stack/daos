@@ -449,20 +449,18 @@ func (svc *mgmtSvc) poolCreateAddSystemProps(req *mgmtpb.PoolCreateReq) error {
 			continue
 		}
 
-		svc.log.Debugf("Converting System Property '%+v' to Pool Property '%+v'", sp, pp)
 		poolSysProps[pp.Number] = pp
 
 		curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, sp.Key.String())
 		if err != nil {
 			return err
 		}
-		svc.log.Debugf("Current property value from system: %+v", curVal)
 
 		if err := pp.SetValue(curVal); err != nil {
 			return err
 		}
 
-		svc.log.Debugf("Pool Property Value: %s", pp.Value.String())
+		svc.log.Debugf("System Property '%+v' converted to Pool Property '%+v'", sp, pp)
 	}
 
 	if len(poolSysProps) == 0 {

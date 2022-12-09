@@ -408,6 +408,10 @@ func (spm SystemPropertyMap) UpdateCompPropVal(key SystemPropertyKey, sourceFn f
 	return errors.Errorf("system property %q does not exist", key)
 }
 
+// poolPropValue is a wrapper for the PoolProperty type to allow it to
+// implement our SystemPropertyValue interface. This functionality
+// is used for setting system-level pool properties which are then
+// applied to all existing and future pools.
 type poolPropValue struct {
 	pph *PoolPropHandler
 }

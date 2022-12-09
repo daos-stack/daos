@@ -1145,9 +1145,19 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 		return nil, err
 	}
 
-	// for any system property that has a pool property, update all pools
+	if resp, err = svc.updatePoolPropsWithSysProps(ctx, req.GetProperties(), req.Sys); err != nil {
+		return nil, err
+	}
+	return
+}
+
+// updatePoolPropsWithSysProps This function will take systemProperties and
+// update each associated pool property (if one exists) on each pool
+func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context,
+	systemProperties map[string]string, sys string) (resp *mgmtpb.DaosResp, err error) {
+	// Get the properties from the request, convert to pool prop, then put into poolSysProps
 	var poolSysProps []*daos.PoolProperty
-	for k := range req.GetProperties() {
+	for k := range systemProperties {
 		p, ok := svc.systemProps.Get(k)
 		if !ok {
 			return nil, errors.Errorf("unknown property %q", k)
@@ -1157,18 +1167,18 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 		}
 	}
 
-	resp = new(mgmtpb.DaosResp)
 	if len(poolSysProps) == 0 {
 		return
 	}
 
+	// Create the request for updating the pools. The request will have all pool properties
 	pspr := &mgmtpb.PoolSetPropReq{
-		Sys:        req.Sys,
+		Sys:        sys,
 		Properties: make([]*mgmtpb.PoolProperty, len(poolSysProps)),
 	}
 	for i, p := range poolSysProps {
 		pspr.Properties[i] = &mgmtpb.PoolProperty{
-			Number: uint32(p.Number),
+			Number: p.Number,
 		}
 		if nv, err := p.Value.GetNumber(); err == nil {
 			pspr.Properties[i].SetValueNumber(nv)
@@ -1189,6 +1199,7 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 			return nil, err
 		}
 
+		resp = new(mgmtpb.DaosResp)
 		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 		}
@@ -1196,8 +1207,7 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 			return nil, errors.Errorf("SystemSetProp: %d\n", resp.Status)
 		}
 	}
-
-	return
+	return resp, nil
 }
 
 // SystemGetProp gets user-visible system properties.
