@@ -267,6 +267,7 @@ out:
 static inline void
 dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 {
+	DFUSE_TRA_DEBUG(hdl, "Resetting anchor");
 	memset(&hdl->drh_anchor, 0, sizeof(hdl->drh_anchor));
 	memset(hdl->drh_dre, 0, sizeof(*hdl->drh_dre) * READDIR_MAX_COUNT);
 	hdl->drh_dre_index      = 0;
@@ -325,7 +326,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		} else {
 			if (oh->doh_kreaddir_started) {
 				oh->doh_kreaddir_invalid = true;
-				dfuse_readdir_reset(hdl);
 			}
 			oh->doh_kreaddir_started = true;
 			dfuse_readdir_reset(hdl);

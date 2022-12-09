@@ -1971,6 +1971,37 @@ class PosixTests():
         assert len(files) == count
 
     @needs_dfuse
+    def test_readdir_cache_short(self):
+        """Run a parallel readdir test.
+
+        This differs from readdir_hard in that the directory is smaller so dfuse will return
+        it in one go.  The memory management in dfuse is different in this case so add another
+        test for memory leaks.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 5
+        for idx in range(count):
+            with open(join(test_dir, f'file_{idx}'), 'w'):
+                pass
+
+        files = []
+        files2 = []
+        with os.scandir(test_dir) as entries:
+            with os.scandir(test_dir) as second:
+                files2.append(next(second).name)
+                for entry in entries:
+                    files.append(entry.name)
+                for entry in second:
+                    files2.append(entry.name)
+
+        print('Reads are from list 2, 1, 1, 2.')
+        print(files)
+        print(files2)
+        assert files == files2
+        assert len(files) == count
+
+    @needs_dfuse
     def test_readdir_unlink(self):
         """Test readdir where a entry is removed mid read
 
