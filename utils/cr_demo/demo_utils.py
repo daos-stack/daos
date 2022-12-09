@@ -123,6 +123,24 @@ def check_enable():
     print(f"Command: {command}")
     subprocess.run(check_enable_cmd, check=False)
 
+def check_set_policy(reset_defaults=False, all_interactive=False):
+    """Call dmg check set-policy with --reset-defaults or --all-interactive.
+
+    Args:
+        reset_defaults (bool): Set all policies to their default action. Defaults to
+            False.
+        all_interactive (bool): Set all policies to interactive. Defaults to False.
+    """
+    if reset_defaults != all_interactive:
+        check_set_policy_cmd = ["dmg", "check", "set-policy"]
+        if reset_defaults:
+            check_set_policy_cmd.append("--reset-defaults")
+        if all_interactive:
+            check_set_policy_cmd.append("--all-interactive")
+        command = " ".join(check_set_policy_cmd)
+        print(f"Command: {command}")
+        subprocess.run(check_set_policy_cmd, check=False)
+
 def check_start(policies=None):
     """Call dmg check start
 
@@ -302,12 +320,14 @@ def cont_set_prop(pool_label, cont_label, properties):
     print(f"Command: {command}")
     subprocess.run(set_prop_cmd, check=False)
 
-def system_query(json=False):
+def system_query(json=False, verbose=False):
     """Call dmg system query"""
     if json:
         system_query_cmd = ["dmg", "--json", "system", "query"]
     else:
         system_query_cmd = ["dmg", "system", "query"]
+    if verbose:
+        system_query_cmd.append("--verbose")
     command = " ".join(system_query_cmd)
     print(f"Command: {command}")
 

@@ -12,7 +12,7 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     create_uuid_to_seqnum, create_three_pools, create_label_to_uuid, get_current_labels,\
     pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
     system_stop, cont_set_prop, system_query, storage_query_usage, cont_get_prop,\
-    system_start
+    system_start, check_set_policy
 
 # Need to use at least "scm_size: 10" for server config to create 3 1GB-pools.
 POOL_SIZE_1GB = "1GB"
@@ -32,6 +32,9 @@ input(f"Prepare environment on {HOSTLIST}. Hit enter...")
 print(f"\n1. Format storage on {HOSTLIST}.")
 format_storage(host_list=HOSTLIST)
 
+print("\nWait for 10 sec for format...")
+time.sleep(10)
+
 # Call dmg system query to obtain the IP address of necessary ranks.
 rank_0_ip = None
 rank_1_ip = None
@@ -50,12 +53,10 @@ for member in generated_yaml["response"]["members"]:
     elif member["rank"] == 3:
         rank_3_ip = member["addr"].split(":")[0]
 
-print("## Rank 0 IP = {}; Rank 2 IP = {}".format(rank_0_ip, rank_2_ip))
+# print("## Rank 0 IP = {}; Rank 2 IP = {}".format(rank_0_ip, rank_2_ip))
 
-print("\nWait for 8 sec before creating pools...")
-time.sleep(8)
-
-print(f"\n2. Create 7 pools and containers.")
+# Add input here to make sure all ranks are joined before starting the script.
+input(f"\n2. Create 7 pools and containers. Hit enter...")
 pool_label_1 = POOL_LABEL + "_1"
 pool_label_2 = POOL_LABEL + "_2"
 pool_label_4 = POOL_LABEL + "_4"
@@ -85,7 +86,7 @@ create_container(pool_label=pool_label_8, cont_label=cont_label_8)
 
 print(f"\n3-F5. Print storage usage to show that original usage of {pool_label_5}.")
 # We'll copy the pool dir from rank 1 to 3.
-f5_host_list = rank_1_ip + "," + rank_3_ip
+f5_host_list = "{},{}".format(rank_1_ip, rank_3_ip)
 storage_query_usage(host_list=f5_host_list)
 
 print("\n4. Inject fault with dmg (except F5, F6).")
@@ -175,6 +176,9 @@ subprocess.run(clush_ddb_cmd, check=False)
 print("\n5-2. Restart servers.")
 system_start()
 
+print("## Show system query 1")
+system_query(verbose=True)
+
 input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
 # F1: Show dangling pool entry
@@ -203,15 +207,18 @@ cont_get_prop(pool_label=pool_label_8, cont_label=cont_label_8)
 # It should show bucket_8
 cont_get_prop(pool_label=pool_label_8, cont_label="new-label", properties="label")
 
-# input("\n6. Enable checker. Hit enter...")
-# check_enable()
+print("## Show system query 2")
+system_query(verbose=True)
 
-# Enable the interactive mode with the checker.
-# input("\n7. Start checker with interactive mode. Hit enter...")
-# check_start()
+input("\n7. Enable checker. Hit enter...")
+check_enable()
 
-# # Select suggested repair option for all faults.
-# # check_repair(...)
+input("\n8. Start checker with interactive mode. Hit enter...")
+check_set_policy(all_interactive=True)
+check_start()
+
+# input("\n8. Select suggested repair option for all faults. Hit enter...")
+# check_repair(...)
 
 # print("\n8. Query the checker.")
 # repeat_check_query()
