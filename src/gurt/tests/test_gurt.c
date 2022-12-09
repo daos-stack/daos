@@ -401,6 +401,12 @@ test_gurt_list(void **state)
 		i--;
 	}
 
+	i = NUM_ENTRIES * 2 - 1;
+	d_list_for_each_entry_reverse_safe(entry, tentry, &head2, link) {
+		assert_int_equal(i, entry->num);
+		i--;
+	}
+
 	i = 0;
 	d_list_for_each_safe(pos, temp, &head2) {
 		entry = d_list_entry(pos, struct d_list_test_entry, link);
