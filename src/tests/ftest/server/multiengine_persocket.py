@@ -200,7 +200,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             To launch test:
             (1) Make sure server is equipped with PMem
             (2) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
-        :avocado: tags=all,manual
+        :avocado: tags=manual
+        :avocado: tags=hw,medium
         :avocado: tags=server
         :avocado: tags=test_multiengines_per_socket
         """
