@@ -89,6 +89,7 @@ print(f"\n3-F5. Print storage usage to show that original usage of {pool_label_5
 f5_host_list = "{},{}".format(rank_1_ip, rank_3_ip)
 storage_query_usage(host_list=f5_host_list)
 
+####################################################################
 print("\n4. Inject fault with dmg (except F5, F6).")
 # F1
 inject_fault_pool(pool_label=pool_label_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
@@ -116,6 +117,7 @@ generated_yaml = yaml.safe_load(stdout)
 for pool in generated_yaml["response"]["pools"]:
     label_to_uuid[pool["label"]] = pool["uuid"]
 
+####################################################################
 input("\n5-1. Stop servers to manipulate for F2, F5, F6, F7. Hit enter...")
 system_stop()
 
@@ -179,6 +181,7 @@ system_start()
 print("## Show system query 1")
 system_query(verbose=True)
 
+####################################################################
 input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
 # F1: Show dangling pool entry
