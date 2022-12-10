@@ -206,9 +206,10 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
-// node and notify user.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []int {
+// Detect the number of engine configs assigned to each NUMA node and return error if engines are
+// distributed unevenly across NUMA nodes. Otherwise return sorted list of NUMA nodes in use.
+// Configurations where all engines are on a single NUMA node will be allowed.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]int, error) {
 	nodeMap := make(map[int]int)
 	for _, ec := range engineCfgs {
 		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
@@ -218,15 +219,14 @@ func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []int {
 	nodes := make([]int, 0, len(engineCfgs))
 	for k, v := range nodeMap {
 		if lastCount != 0 && v != lastCount {
-			log.Errorf("different number of engines assigned to each NUMA node (%+v),"+
-				"hugepage allocations maybe incorrect", nodeMap)
+			return nil, FaultEngineNUMAImbalance(nodeMap)
 		}
 		lastCount = v
 		nodes = append(nodes, k)
 	}
 	sort.Ints(nodes)
 
-	return nodes
+	return nodes, nil
 }
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
@@ -285,7 +285,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// of hugepages across each engine's numa node (as validation ensures that
 		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
 		// numa node.
-		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		if err != nil {
+			return err
+		}
 
 		if len(numaNodes) == 0 {
 			return errors.New("invalid number of numa nodes detected (0)")
