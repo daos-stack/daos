@@ -342,6 +342,10 @@ class TestPool(TestDaosApiBase):
         finally:
             self.dmg.server_set_logmasks(raise_exception=False)
 
+        # make sure dmg exit status is that of the pool create, not the set-logmasks
+        if data:
+            self.dmg.result.exit_status = data["status"]
+
         if data and data["status"] == 0:
             # Convert the string of service replicas from the dmg command
             # output into an ctype array for the DaosPool object using the

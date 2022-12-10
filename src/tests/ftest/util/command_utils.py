@@ -609,8 +609,6 @@ class CommandWithSubCommand(ExecutableCommand):
             kwargs (dict): Parameters for the command.
         """
 
-        self.log.info("CommandWithSubCommand._get_json_result: kwargs=%s", kwargs)
-
         if self.json is None:
             raise CommandFailure(
                 f"The {self.command} command doesn't have json option defined!")
