@@ -208,20 +208,23 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 
 // Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
 // node and notify user.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
-	nodeMap := make(map[string]bool)
-	nodes := make([]string, 0, len(engineCfgs))
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []int {
+	nodeMap := make(map[int]int)
 	for _, ec := range engineCfgs {
-		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
-		if nodeMap[nn] {
-			log.Noticef("Multiple engines assigned to NUMA node %s, "+
-				"allocating all hugepages on this node.", nn)
-			nodes = []string{nn}
-			break
-		}
-		nodeMap[nn] = true
-		nodes = append(nodes, nn)
+		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
 	}
+
+	var lastCount int
+	nodes := make([]int, 0, len(engineCfgs))
+	for k, v := range nodeMap {
+		if lastCount != 0 && v != lastCount {
+			log.Errorf("different number of engines assigned to each NUMA node (%+v),"+
+				"hugepage allocations maybe incorrect", nodeMap)
+		}
+		lastCount = v
+		nodes = append(nodes, k)
+	}
+	sort.Ints(nodes)
 
 	return nodes
 }
@@ -279,8 +282,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
-		// of hugepages equally across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine).
+		// of hugepages across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
+		// numa node.
 		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
 
 		if len(numaNodes) == 0 {
@@ -291,7 +295,9 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// allocation as some overhead may result in one or two being unavailable.
 		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
 		prepReq.HugePageCount += common.ExtraHugePages
-		prepReq.HugeNodes = strings.Join(numaNodes, ",")
+		prepReq.HugeNodes = strings.Trim(
+			strings.Join(strings.Split(fmt.Sprint(numaNodes), " "), ","),
+			"[]")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
 			prepReq.HugePageCount, numaNodes)

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -553,6 +554,35 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				TargetUser:    username,
 			},
 			expMemSize:      16384,
+			expHugePageSize: 2,
+		},
+		"4 engines; hugepage alloc across numa 0,1": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+				)
+			},
+			hugePagesFree: 16384,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugeNodes:     "0,1",
+				TargetUser:    username,
+				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),
+					storage.BdevPciAddrSep),
+				EnableVMD: true,
+			},
+			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
 			expHugePageSize: 2,
 		},
 	} {
