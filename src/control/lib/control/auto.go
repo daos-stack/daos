@@ -65,8 +65,7 @@ type (
 		ConfGenerateReq
 		unaryRequest
 		msRequest
-		Client   UnaryInvoker
-		HostList []string
+		Client UnaryInvoker
 	}
 
 	// ConfGenerateRemoteResp wraps the ConfGenerateResp.
@@ -151,7 +150,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 // ConfGenerateRemote calls ConfGenerate after validating a homogenous hardware setup across remote
 // hosts. Returns API response or error.
 func ConfGenerateRemote(ctx context.Context, req ConfGenerateRemoteReq) (*ConfGenerateRemoteResp, error) {
-	req.Log.Debugf("ConfGenerate called with request %+v", req)
+	req.Log.Debugf("ConfGenerateRemote called with request %+v", req)
 
 	if len(req.HostList) == 0 {
 		return nil, errors.New("no hosts specified")
@@ -185,6 +184,8 @@ func ConfGenerateRemote(ctx context.Context, req ConfGenerateRemoteReq) (*ConfGe
 // only a single network set in response which indicates that network hardware setup is homogeneous
 // across all hosts.  Return host errors, network scan results for the host set or error.
 func getNetworkSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostFabricSet, error) {
+	log.Debugf("fetching host fabric info on hosts %v", hostList)
+
 	scanReq := &NetworkScanReq{
 		Provider: "all", // explicitly request all providers
 	}
@@ -342,6 +343,8 @@ func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, hf *HostFab
 // different combinations of SSD models.  Return host errors, storage scan results for the host set
 // or error.
 func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, client UnaryInvoker) (*HostStorageSet, error) {
+	log.Debugf("fetching host storage info on hosts %v", hostList)
+
 	scanReq := &StorageScanReq{NvmeBasic: true}
 	scanReq.SetHostList(hostList)
 

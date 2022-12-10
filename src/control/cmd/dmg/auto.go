@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -25,24 +26,18 @@ type configCmd struct {
 
 type configGenCmd struct {
 	baseCmd
-	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	AccessPoints string `short:"a" long:"access-points" required:"1" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+
+	AccessPoints string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
 	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"best-available" short:"c" long:"net-class" description:"Network class preferred" choice:"best-available" choice:"ethernet" choice:"infiniband"`
 }
 
-// Execute is run when configGenCmd activates.
-//
-// Attempt to auto generate a server config file with populated storage and network hardware
-// parameters suitable to be used on all hosts in provided host list.
-func (cmd *configGenCmd) Execute(_ []string) error {
-	ctx := context.Background()
-
-	cmd.Debugf("ConfGenerate called with command parameters %+v", cmd)
+func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
+	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
@@ -52,8 +47,10 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		ndc = hardware.Ether
 	case "infiniband":
 		ndc = hardware.Infiniband
-	default:
+	case "best-available":
 		ndc = hardware.NetDevAny
+	default:
+		return nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
 	}
 
 	req := control.ConfGenerateRemoteReq{
@@ -64,37 +61,55 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 			NetClass:     ndc,
 			AccessPoints: accessPoints,
 		},
-		HostList: cmd.config.HostList,
-		Client:   cmd.ctlInvoker,
+		Client: cmd.ctlInvoker,
 	}
+	if len(cmd.hostlist) == 0 || cmd.hostlist[0] == "" {
+		cmd.hostlist = []string{"localhost"}
+	}
+	req.SetHostList(cmd.hostlist)
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
+		return nil, cmd.outputJSON(nil, errors.New("JSON output not supported"))
 	}
 
-	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
+	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
 
 	resp, err := control.ConfGenerateRemote(ctx, req)
 	if err != nil {
 		cge, ok := errors.Cause(err).(*control.ConfGenerateError)
 		if !ok {
 			// includes hardware validation errors e.g. hardware across hostset differs
-			return err
+			return nil, err
 		}
 
 		// host level errors e.g. unresponsive daos_server process
 		var bld strings.Builder
 		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
-			return err
+			return nil, err
 		}
 		cmd.Error(bld.String())
+		return nil, err
+	}
+
+	cmd.Debugf("control API ConfGenerateRemote resp: %+v", resp)
+	return &resp.Server, nil
+}
+
+// Execute is run when configGenCmd activates.
+//
+// Attempt to auto generate a server config file with populated storage and network hardware
+// parameters suitable to be used across all hosts in provided host list. Use the control API to
+// generate config from remote scan results.
+func (cmd *configGenCmd) Execute(_ []string) error {
+	ctx := context.Background()
+
+	cfg, err := cmd.confGen(ctx)
+	if err != nil {
 		return err
 	}
 
-	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
-
-	bytes, err := yaml.Marshal(resp.Server)
+	bytes, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
