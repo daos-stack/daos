@@ -294,9 +294,6 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
 		}
 		eisPtr := &eis[0]
-
-		edm[eisPtr] = []devID{}
-
 		for _, dev := range rr.Devices {
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
