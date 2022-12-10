@@ -123,7 +123,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
-func TestDaosServer_confGen(t *testing.T) {
+func TestDaosServer_Auto_confGen(t *testing.T) {
 	eth0 := &control.HostFabricInterface{
 		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
 	}
@@ -252,8 +252,6 @@ func TestDaosServer_confGen(t *testing.T) {
 			expErr: errors.New("insufficient number of pmem"),
 		},
 		"single engine; dcpm on numa 1": {
-			accessPoints: "localhost",
-			minNrSSDs:    1,
 			hf: &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					eth0, eth1, ib0, ib1,
@@ -279,10 +277,121 @@ func TestDaosServer_confGen(t *testing.T) {
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
+		"access points set": {
+			accessPoints: "moon-111,mars-115,jupiter-119",
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+				WithNrHugePages(22528).
+				WithAccessPoints("localhost:10001").
+				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
+		"unmet min nr ssds": {
+			minNrSSDs: 8,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expErr: errors.New("insufficient number of ssds"),
+		},
+		"unmet nr engines": {
+			nrEngines: 8,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expErr: errors.New("insufficient number of pmem"),
+		},
+		"bad net class": {
+			netClass: "foo",
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expErr: errors.New("unrecognized net-class"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
+
+			// Mimic go-flags default values.
+			if tc.minNrSSDs == 0 {
+				tc.minNrSSDs = 1
+			}
+			if tc.netClass == "" {
+				tc.netClass = "best-available"
+			}
+			if tc.accessPoints == "" {
+				tc.accessPoints = "localhost"
+			}
 
 			cmd := &configGenCmd{
 				AccessPoints: tc.accessPoints,
