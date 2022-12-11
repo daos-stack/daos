@@ -339,12 +339,13 @@ class TestPool(TestDaosApiBase):
         self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
+            create_res = self.dmg.result
         finally:
             self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
-        if data:
-            self.dmg.result.exit_status = data["status"]
+        if data is not None and create_res is not None:
+            self.dmg.result = create_res
 
         if data and data["status"] == 0:
             # Convert the string of service replicas from the dmg command
