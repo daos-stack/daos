@@ -123,14 +123,6 @@ def cont_get_prop(pool_label, cont_label, properties=None):
     print(f"Command: {command}")
     subprocess.run(get_prop_cmd, check=False)
 
-def cont_set_prop(pool_label, cont_label, properties):
-    """Set properties for given container."""
-    set_prop_cmd = ["daos", "container", "set-prop", pool_label, cont_label,
-                    "--properties=" + properties]
-    command = " ".join(set_prop_cmd)
-    print(f"Command: {command}")
-    subprocess.run(set_prop_cmd, check=False)
-
 # Fault-related methods
 def inject_fault_mgmt(pool_label, fault_type):
     """Call dmg faults mgmt-svc to inject fault.

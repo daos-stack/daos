@@ -11,8 +11,8 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     check_start, check_query, check_disable, repeat_check_query, check_repair,\
     create_uuid_to_seqnum, create_three_pools, create_label_to_uuid, get_current_labels,\
     pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
-    system_stop, cont_set_prop, system_query, storage_query_usage, cont_get_prop,\
-    system_start, check_set_policy
+    system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
+    check_set_policy
 
 # Need to use at least "scm_size: 10" for server config to create 3 1GB-pools.
 POOL_SIZE_1GB = "1GB"
@@ -99,11 +99,6 @@ inject_fault_daos(
 inject_fault_daos(
     pool_label=pool_label_8, cont_label=cont_label_8,
     fault_type="DAOS_CHK_CONT_BAD_LABEL")
-# Also update label to bucket_8-fault.
-cont_label_8_new = cont_label_8 + "-fault"
-properties = "label:" + cont_label_8_new
-# This fails: DAOS-12215
-# cont_set_prop(pool_label=pool_label_8, cont_label=cont_label_8, properties=properties)
 
 print("(Create label to UUID mapping.)")
 label_to_uuid = {}
@@ -216,8 +211,8 @@ check_start()
 print()
 repeat_check_query()
 
-# input("\n8. Select suggested repair option for all faults. Hit enter...")
-# check_repair(...)
+input("\n8. Select suggested repair option for all faults. Hit enter...")
+uuid_to_seqnum = create_uuid_to_seqnum()
 
 # print("\n8. Query the checker.")
 # repeat_check_query()
