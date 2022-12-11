@@ -140,6 +140,8 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_shard_tgts.ca_count	= orw_parent->orw_shard_tgts.ca_count;
 	orw->orw_shard_tgts.ca_arrays	= orw_parent->orw_shard_tgts.ca_arrays;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
+	if (shard_tgt->st_flags & DTF_DELAY_FORWARD)
+		orw->orw_api_flags &= ~DAOS_COND_MASK;
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
