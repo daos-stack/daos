@@ -334,7 +334,7 @@ ec_agg_check_replica_on_parity(test_arg_t *arg, daos_obj_id_t oid, char *dkey,
 	int		i;
 	int		rc;
 
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -879,7 +879,7 @@ ec_singv_array_mixed_io(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1219,7 +1219,7 @@ ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1374,7 +1374,7 @@ ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint3
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1560,7 +1560,7 @@ ec_cond_fetch(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1706,6 +1706,109 @@ ec_setup(void  **state)
 	return 0;
 }
 
+static void
+ec_few_partial_stripe_aggregation(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size;
+	char		*data;
+	daos_recx_t	recx;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)ec_cell_size;
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+
+	/* full stripe update */
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = stripe_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', stripe_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	/* single partial stripe update */
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = ec_cell_size;
+	recx.rx_idx = ec_cell_size;
+	memset(data, 'b', ec_cell_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, EC_CELL_SIZE, &req);
+
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+				       0, DAOS_FORCE_EC_AGG);
+	ioreq_fini(&req);
+	free(data);
+}
+
+static void
+ec_rec_parity_list(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		i;
+	char		*data;
+	int		stripe_size = 4 * ec_cell_size;
+	daos_anchor_t	anchor = { 0 };
+	daos_size_t	size;
+	uint64_t	start = UINT64_MAX;
+	uint64_t	end = 0;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(stripe_size);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = stripe_size;  /* full stripe write */
+		recx.rx_idx = i * stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+	}
+
+	for (i = 0; i < 5; i++) {
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = ec_cell_size;  /* partial stripe write */
+		recx.rx_idx = i * stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+	}
+
+	/* Verify the recx */
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_recx_t	   recxs[10];
+		daos_epoch_range_t eprs[10];
+		uint32_t	   number = 10;
+
+		enumerate_rec(DAOS_TX_NONE, "d_key", "a_key", &size,
+			      &number, recxs, eprs, &anchor, true, &req);
+		for (i = 0; i < number; i++) {
+			start = min(start, recxs[i].rx_idx);
+			end = max(end, recxs[i].rx_idx + recxs[i].rx_nr);
+		}
+	}
+	assert_rc_equal((int)start, 0);
+	assert_rc_equal((int)end, 5 * stripe_size);
+	free(data);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -1746,6 +1849,9 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
 	 test_case_teardown},
 	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
+	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
+	 test_case_teardown},
+	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
 };
 
 int

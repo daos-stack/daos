@@ -79,6 +79,26 @@ class RemoteCommandResult():
         return any(data.timeout for data in self.output)
 
     @property
+    def passed_hosts(self):
+        """Get all passed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command passed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode == 0)
+
+    @property
+    def failed_hosts(self):
+        """Get all failed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command failed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
+
+    @property
     def all_stdout(self):
         """Get all of the stdout from the issued command from each host.
 
@@ -310,3 +330,20 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
     if verbose:
         results.log_output(log)
     return results
+
+
+def command_as_user(command, user):
+    """Adjust a command to be ran as another user.
+
+    Args:
+        command (str): the original command
+        user (str): user to run as
+
+    Returns:
+        str: command adjusted to run as another user
+
+    """
+    if not user:
+        return command
+    switch_command = " ".join(get_switch_user(user))
+    return f"{switch_command} {command}"

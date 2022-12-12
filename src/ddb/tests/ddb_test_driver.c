@@ -84,7 +84,6 @@ dvt_gen_uoid(uint32_t i)
 	daos_obj_set_oid(&oid, DAOS_OT_MULTI_HASHED, OR_RP_1, 1, 0);
 
 	uoid.id_shard	= 0;
-	uoid.id_pad_32	= 0;
 	uoid.id_pub = oid;
 
 	return uoid;

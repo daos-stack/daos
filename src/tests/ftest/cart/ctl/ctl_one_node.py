@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -25,8 +25,8 @@ class CartCtlOneNodeTest(CartTest):
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as error:
+            self.print("Exception in launching server : {}".format(error))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.

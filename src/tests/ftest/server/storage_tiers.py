@@ -35,9 +35,9 @@ class StorageTiers(TestWithServers):
             Verify storage tiers are correctly obtained from the test yaml file.
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=server,storage,storage_tiers
-        :avocado: tags=test_tiers
+        :avocado: tags=StorageTiers,test_tiers
         """
         expected = [[], []]
         for engine in range(2):

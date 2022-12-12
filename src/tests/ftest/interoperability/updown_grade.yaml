@@ -29,7 +29,7 @@ attrtests:
   num_attributes: 20
 dfuse:
   mount_dir: "/tmp/daos_dfuse1/"
-  disable_caching: True
+  disable_caching: true
 ior:
   ior_timeout: 120
   client_processes:
@@ -45,5 +45,4 @@ ior:
 interop:
   upgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc3/x86_64/daos-2.0.3-3.el8.x86_64.rpm"]
   downgrade_rpms: ["/home/dinghwah/RPM/2.0.2-2-GA/daos-2.0.2-2.el8.x86_64.rpm",
-                    "/home/dinghwah/RPM/2.0.2-2-GA/mercury-2.1.0_rc4-5.el8.x86_64.rpm"
-                  ]
+                   "/home/dinghwah/RPM/2.0.2-2-GA/mercury-2.1.0_rc4-5.el8.x86_64.rpm"]

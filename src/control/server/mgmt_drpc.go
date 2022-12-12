@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
@@ -48,10 +49,11 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 type poolDatabase interface {
 	FindPoolServiceByLabel(string) (*system.PoolService, error)
 	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
-	PoolServiceList(all bool) ([]*system.PoolService, error)
-	AddPoolService(ps *system.PoolService) error
-	RemovePoolService(uuid.UUID) error
-	UpdatePoolService(ps *system.PoolService) error
+	PoolServiceList(bool) ([]*system.PoolService, error)
+	AddPoolService(context.Context, *system.PoolService) error
+	RemovePoolService(context.Context, uuid.UUID) error
+	UpdatePoolService(context.Context, *system.PoolService) error
+	TakePoolLock(context.Context, uuid.UUID) (*raft.PoolLock, error)
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by

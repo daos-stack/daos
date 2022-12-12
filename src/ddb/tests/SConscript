@@ -1,6 +1,5 @@
 # pylint: disable-next=wrong-spelling-in-comment
 """Build tests"""
-import daos_build
 
 def scons():
     """Execute build"""
@@ -43,9 +42,7 @@ def scons():
            'ddb_test_driver.c',
            'ddb_vos_tests.c',
            'ddb_commands_print_tests.c']
-    ddb_tests = daos_build.program(denv, 'ddb_tests',
-                                   [ddblib, src],
-                                   LIBS=libs)
+    ddb_tests = denv.d_program('ddb_tests', [ddblib, src], LIBS=libs)
 
     denv.Install('$PREFIX/bin/', ddb_tests)
 
