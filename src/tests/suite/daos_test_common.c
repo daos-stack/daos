@@ -1043,9 +1043,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	/*stop the rank */
+	/* stop the rank */
 	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
-		
+
 	assert_rc_equal(rc, 0);
 
 	daos_cont_status_clear(arg->coh, NULL);
