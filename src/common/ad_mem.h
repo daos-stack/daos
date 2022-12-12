@@ -35,8 +35,11 @@ struct ad_tx {
 	d_list_t		 tx_redo;
 	d_list_t		 tx_ar_pub;
 	d_list_t		 tx_gp_pub;
-	d_list_t		 tx_gp_free;
 	d_list_t		 tx_gp_reset;
+	/** inflight frees */
+	d_list_t		 tx_frees;
+	/** inflight allocations */
+	d_list_t		 tx_allocs;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;
 	struct ad_act		*tx_redo_act_pos;
@@ -49,11 +52,11 @@ struct ad_tx {
 	d_list_t		 tx_ranges;
 };
 
-/** action parameters for free() */
-struct ad_free_act {
-	d_list_t		 fa_link;
-	int			 fa_at;
-	struct ad_group		*fa_group;
+/** action parameters for allocate or free() */
+struct ad_operate {
+	d_list_t		 op_link;
+	int			 op_at;
+	struct ad_group		*op_group;
 };
 
 /** bitmap size of group */
@@ -87,7 +90,7 @@ struct ad_group_df {
 	/** incarnation for validity check of gd_back_ptr */
 	uint64_t		gd_incarnation;
 	/** unit size in bytes, e.g., 64 bytes, 128 bytes */
-	uint32_t		gd_unit;
+	int32_t			gd_unit;
 	/** number of units in this group */
 	int32_t			gd_unit_nr;
 	/** number of free units in this group */
@@ -110,6 +113,7 @@ struct ad_group {
 				 gp_publishing:1,
 	/* group freed and being reset */
 				 gp_reset:1;
+	int			 gp_frags;
 	int			 gp_ref;
 	/** number of reserved units */
 	int			 gp_unit_rsv;
@@ -216,6 +220,8 @@ struct ad_arena {
 	struct ad_arena_df	 *ar_df;
 	/** link chain on ad_blob LRU */
 	d_list_t		  ar_link;
+	/** link chain on reorder list */
+	d_list_t		  ar_ro_link;
 	/** arena type */
 	int			  ar_type;
 	/** refcount */
@@ -292,6 +298,8 @@ struct ad_maxheap_node {
 	struct d_binheap_node	mh_node;
 	int			mh_weight;
 	int			mh_free_size;
+	/** unusable padding bytes in groups */
+	int			mh_frag_size;
 	uint32_t		mh_arena_id;
 	unsigned int		mh_in_tree:1,
 	/**
@@ -323,6 +331,8 @@ struct ad_blob {
 	int			 bb_ars_lru_cap;
 	int			 bb_gps_lru_size;
 	int			 bb_gps_lru_cap;
+	char			 *bb_path;
+	daos_size_t		 bb_stat_sz;
 	/** file descriptor of MD file */
 	int			 bb_fd;
 	/** reference counter */

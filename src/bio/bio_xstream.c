@@ -19,6 +19,7 @@
 #include <spdk/bdev.h>
 #include <spdk/blob_bdev.h>
 #include <spdk/blob.h>
+#include <spdk/rpc.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -82,6 +83,9 @@ struct bio_nvme_data {
 	unsigned int		 bd_nvme_roles;
 	bool			 bd_started;
 	bool			 bd_bypass_health_collect;
+	/* Setting to enable SPDK JSON-RPC server */
+	bool			 bd_enable_rpc_srv;
+	const char		*bd_rpc_srv_addr;
 };
 
 static struct bio_nvme_data nvme_glb;
@@ -90,6 +94,7 @@ static int
 bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	 opts;
+	bool			 enable_rpc_srv;
 	int			 rc;
 
 	/* Only print error and more severe to stderr. */
@@ -97,15 +102,7 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
-
-	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
-		if (rc != 0) {
-			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
-				DP_RC(rc));
-			goto out;
-		}
-	}
+	opts.env_context = (char *)dpdk_cli_override_opts;
 
 	/**
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
@@ -114,9 +111,14 @@ bio_spdk_env_init(void)
 	 * and DPDK will fail to initialize.
 	 */
 
-	opts.env_context = (char *)dpdk_cli_override_opts;
-
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+		if (rc != 0) {
+			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
+
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
 			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
@@ -128,6 +130,25 @@ bio_spdk_env_init(void)
 			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
+
+		/**
+		 * Read flag to indicate whether to enable the SPDK JSON-RPC server and the
+		 * socket file address from the JSON config used to initialize SPDK subsystems.
+		 */
+		rc = bio_read_rpc_srv_settings(nvme_glb.bd_nvme_conf, &enable_rpc_srv,
+					       &nvme_glb.bd_rpc_srv_addr);
+		if (rc != 0) {
+			D_ERROR("Failed to read SPDK JSON-RPC server settings, "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
+#ifdef DAOS_RELEASE_BUILD
+		if (enable_rpc_srv) {
+			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+#endif
+		nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
 	}
 
 	rc = spdk_env_init(&opts);
@@ -198,6 +219,8 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
+	nvme_glb.bd_enable_rpc_srv = false;
+	nvme_glb.bd_rpc_srv_addr = NULL;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
@@ -1431,6 +1454,10 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 		if (is_init_xstream(ctxt)) {
 			struct common_cp_arg	cp_arg;
 
+			/* Close SPDK JSON-RPC server if it has been enabled. */
+			if (nvme_glb.bd_enable_rpc_srv)
+				spdk_rpc_finish();
+
 			/*
 			 * The xstream initialized SPDK env will have to
 			 * wait for all other xstreams finalized first.
@@ -1576,6 +1603,24 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
+		}
+
+		/* After bio_bdevs are initialized, restart SPDK JSON-RPC server if required. */
+		if (nvme_glb.bd_enable_rpc_srv) {
+			if ((!nvme_glb.bd_rpc_srv_addr) || (strlen(nvme_glb.bd_rpc_srv_addr) == 0))
+				nvme_glb.bd_rpc_srv_addr = SPDK_DEFAULT_RPC_ADDR;
+
+			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
+			if (rc != 0) {
+				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
+					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
+				goto out;
+			}
+
+			/* Set SPDK JSON-RPC server state to receive and process RPCs */
+			spdk_rpc_set_state(SPDK_RPC_RUNTIME);
+			D_DEBUG(DB_MGMT, "SPDK JSON-RPC server listening at %s\n",
+				nvme_glb.bd_rpc_srv_addr);
 		}
 	}
 

@@ -79,7 +79,7 @@ vts_pool_fallocate(char **fname)
 		ret = -ENOMEM;
 		goto exit;
 	}
-	ret = fallocate(fd, 0, 0, VPOOL_16M);
+	ret = fallocate(fd, 0, 0, VPOOL_256M);
 
 exit:
 	return ret;

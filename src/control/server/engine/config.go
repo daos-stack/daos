@@ -487,6 +487,13 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 	return c
 }
 
+// WithStorageSpdkRpcSrvProps specifies whether a SPDK JSON-RPC server will run in the I/O Engine.
+func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
+	c.Storage.SpdkRpcSrvProps.Enable = enable
+	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
 // WithIndex sets the I/O Engine instance index.
 func (c *Config) WithIndex(i uint32) *Config {
 	c.Index = i

@@ -25,6 +25,37 @@ if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi
 
+produce_output()
+{
+    echo "$2"
+
+    cname="run_test.${RUN_TEST_VALGRIND:-native}"
+    name="run_test"
+    fname="${DAOS_BASE}/test_results/test_run_test.sh.${RUN_TEST_VALGRIND:-native}.xml"
+
+    if [ "$1" -eq 0 ]; then
+       teststr="    <testcase classname=\"$cname\" name=\"$name\" />"
+    else
+       teststr="    <testcase classname=\"$cname\" name=\"$name\">
+      <failure type=\"format\">
+        <![CDATA[$2
+          ]]>
+      </failure>
+    </testcase>"
+    fi
+
+    cat > "${fname}" << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites>
+  <testsuite tests="1" failures="$1" errors="0" skipped="0" >
+EOF
+echo "${teststr}" >> "${fname}"
+cat >> "${fname}" << EOF
+  </testsuite>
+</testsuites>
+EOF
+}
+
 run_test()
 {
     local in="$*"
@@ -114,6 +145,10 @@ if [ -d "/mnt/daos" ]; then
 
         export VOS_BDEV_CLASS="AIO"
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
+
+        rm -f "${AIO_DEV}"
+        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=10
+        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
         export DAOS_MD_ON_SSD=1
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
@@ -250,12 +285,15 @@ if [ -d "/mnt/daos" ]; then
     # Reporting
     if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
-        echo "SUCCESS! NO TEST FAILURES"
+        produce_output 0 "SUCCESS! NO TEST FAILURES"
     else
-        echo "FAILURE: $failed tests failed (listed below)"
+        fail_msg="FAILURE: $failed tests failed (listed below)
+"
         for ((i = 0; i < ${#failures[@]}; i++)); do
-            echo "    ${failures[$i]}"
+            fail_msg=$"$fail_msg    ${failures[$i]}
+"
         done
+        produce_output 1 "$fail_msg"
         if ! ${IS_CI:-false}; then
             exit 1
         fi

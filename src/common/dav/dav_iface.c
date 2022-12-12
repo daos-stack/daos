@@ -110,9 +110,12 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	hdl->p_ops.base = hdl;
 
 	/* REVISIT */
-	/* hdl->do_store = *store; */
-	if (hdl->do_store.stor_priv == NULL)
-		hdl->do_store.stor_ops = &_store_ops;
+	hdl->do_store = store;
+	if (hdl->do_store->stor_priv == NULL) {
+		D_ERROR("meta context not defined. WAL commit disabled for %s\n",
+			path);
+		hdl->do_store->stor_ops = &_store_ops;
+	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
 	rc = lw_tx_begin(hdl);
@@ -174,7 +177,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	if (persist_hdr)
 		persist_dav_phdr(hdl);
 
-	lw_tx_end(hdl);
+	lw_tx_end(hdl, NULL);
 	return hdl;
 
 out2:
@@ -278,7 +281,7 @@ dav_obj_close(dav_obj_t *hdl)
 
 	lw_tx_begin(hdl);
 	stats_delete(hdl, hdl->do_stats);
-	lw_tx_end(hdl);
+	lw_tx_end(hdl, NULL);
 
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);
