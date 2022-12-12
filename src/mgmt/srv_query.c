@@ -301,10 +301,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->devices, list_devs_info.dev_list_cnt);
-	if (resp->devices == NULL) {
-		D_ERROR("Failed to allocate devices for resp\n");
+	if (resp->devices == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(dev_info, tmp, &list_devs_info.dev_list, bdi_link) {
 		D_ALLOC_PTR(resp->devices[i]);
@@ -321,6 +319,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		 */
 		resp->devices[i]->uuid = NULL;
 		resp->devices[i]->tr_addr = NULL;
+		resp->devices[i]->tgt_ids = NULL;
+		resp->devices[i]->led_state = CTL__LED_STATE__NA;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
@@ -329,11 +329,22 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		uuid_unparse_lower(dev_info->bdi_dev_id, resp->devices[i]->uuid);
 
-		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
-			D_ERROR("Unexpected UNPLUGGED device state");
-			rc = -DER_INVAL;
-			break;
+		if (dev_info->bdi_traddr != NULL) {
+			buflen = strlen(dev_info->bdi_traddr) + 1;
+			D_ALLOC(resp->devices[i]->tr_addr, buflen);
+			if (resp->devices[i]->tr_addr == NULL) {
+				rc = -DER_NOMEM;
+				break;
+			}
+			/* Transport Addr -> Blobstore UUID mapping */
+			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr, buflen);
 		}
+
+		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
+			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
+			goto skip_dev;
+		}
+
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
@@ -341,7 +352,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		else
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
-		/* Fetch LED State */
+		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
@@ -361,18 +372,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		resp->devices[i]->led_state = led_state;
 
-		if (dev_info->bdi_traddr != NULL) {
-			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->tr_addr, buflen);
-			if (resp->devices[i]->tr_addr == NULL) {
-				D_ERROR("Failed to allocate device tr_addr");
-				rc = -DER_NOMEM;
-				break;
-			}
-			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr, buflen);
-		}
-
 		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
 		D_ALLOC(resp->devices[i]->tgt_ids, sizeof(int) * dev_info->bdi_tgt_cnt);
 		if (resp->devices[i]->tgt_ids == NULL) {
@@ -381,7 +380,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
 			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
-
+skip_dev:
 		d_list_del(&dev_info->bdi_link);
 		/* Frees sdi_tgts and dev_info */
 		bio_free_dev_info(dev_info);
@@ -437,10 +436,8 @@ ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp)
 	}
 
 	D_ALLOC_ARRAY(resp->pools, pool_list_cnt);
-	if (resp->pools == NULL) {
-		D_ERROR("Failed to allocate pools for resp\n");
+	if (resp->pools == NULL)
 		return -DER_NOMEM;
-	}
 
 	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		D_ALLOC_PTR(resp->pools[i]);
@@ -566,10 +563,10 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 		D_ERROR("Device UUID:"DF_UUID" not found\n", DP_UUID(dev_uuid));
 		return rc;
 	}
+
 	if (dev_info->sdi_tgts == NULL) {
 		D_ERROR("No targets mapped to device\n");
-		rc = -DER_NONEXIST;
-		goto out;
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 	/* Default tgt_id is the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
@@ -589,8 +586,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 
 	D_ALLOC_PTR(resp->device);
 	if (resp->device == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
@@ -599,9 +595,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate device uuid");
-		rc = -DER_NOMEM;
-		goto out;
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	uuid_unparse_lower(dev_uuid, resp->device->uuid);
 
@@ -650,10 +644,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	resp->device->tr_addr = NULL;
 
 	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
-	if (resp->device->tr_addr == NULL) {
-		D_ERROR("Failed to allocate transport address in response");
+	if (resp->device->tr_addr == NULL)
 		return -DER_NOMEM;
-	}
 
 	if (strlen(req->ids) == 0) {
 		D_ERROR("Transport address not provided in request\n");
@@ -732,7 +724,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
-		D_ERROR("Failed to allocate new device uuid");
 		rc = -DER_NOMEM;
 		goto out;
 	}

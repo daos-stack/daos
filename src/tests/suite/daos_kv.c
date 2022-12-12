@@ -105,7 +105,7 @@ simple_put_get_flags(void **state, bool is_old_flag)
 	}
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
@@ -280,7 +280,7 @@ kv_cond_ops(void **state)
 	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	val_out = 5;

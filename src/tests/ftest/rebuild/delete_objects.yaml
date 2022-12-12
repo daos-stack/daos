@@ -17,7 +17,7 @@ server_config:
 pool:
   scm_size: 1073741824
   svcn: 2
-  debug: True
+  debug: true
   control_method: dmg
   pool_query_timeout: 30
 container:
@@ -32,7 +32,7 @@ container:
       data_size: 8
       object_qty: 30
       record_qty: 1
-  debug: True
+  debug: true
 rebuild:
   rank: 4
   object_class: OC_RP_3G1

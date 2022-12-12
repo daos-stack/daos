@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -69,10 +68,8 @@ class OSADmgNegativeTest(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = add_pool(self, create=False, connect=False)
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
+            pool[val].scm_size.value = int(pool[val].scm_size.value / num_pool)
+            pool[val].nvme_size.value = int(pool[val].nvme_size.value / num_pool)
             pool[val].create()
             pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -17,10 +16,10 @@ class DaosCommand(DaosCommandBase):
     METHOD_REGEX = {
         "run": r"(.*)",
         "container_query":
-            r"Pool UUID:\s+([0-9a-f-]+)\n" +
-            r"Container UUID:\s+([0-9a-f-]+)\n" +
-            r"Number of snapshots:\s+(\d+)\n" +
-            r"Latest Persistent Snapshot:\s+(\d+)\n" +
+            r"Pool UUID:\s+([0-9a-f-]+)\n"
+            r"Container UUID:\s+([0-9a-f-]+)\n"
+            r"Number of snapshots:\s+(\d+)\n"
+            r"Latest Persistent Snapshot:\s+(\d+)\n"
             r"Highest Aggregated Epoch:\s+(\d+)",
     }
 
@@ -59,9 +58,9 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("pool", "autotest"), pool=pool)
 
-    def container_create(self, pool, sys_name=None, cont=None,
-                         path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None, acl_file=None, label=None):
+    def container_create(self, pool, sys_name=None, cont=None, path=None, cont_type=None,
+                         oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
+                         properties=None, acl_file=None, label=None):
         # pylint: disable=too-many-arguments
         """Create a container.
 
@@ -73,7 +72,9 @@ class DaosCommand(DaosCommandBase):
             path (str, optional): container namespace path. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
-            oclass (str, optional): object class. Defaults to None.
+            oclass (str, optional): default object class. Defaults to None.
+            dir_oclass (str, optional): default directory object class. Defaults to None.
+            file_oclass (str, optional): default file object class. Defaults to None.
             chunk_size (str, optional): chunk size of files created. Supports
                 suffixes: K (KB), M (MB), G (GB), T (TB), P (PB), E (EB).
                 Defaults to None.
@@ -96,8 +97,8 @@ class DaosCommand(DaosCommandBase):
         else:
             properties = 'rd_lvl:1'
         return self._get_json_result(
-            ("container", "create"), pool=pool, sys_name=sys_name,
-            cont=cont, path=path, type=cont_type, oclass=oclass,
+            ("container", "create"), pool=pool, sys_name=sys_name, cont=cont, path=path,
+            type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
 
     def container_clone(self, src, dst):
@@ -744,16 +745,14 @@ class DaosCommand(DaosCommandBase):
             data["grp_nr"] = vals[0][2]
 
             data["layout"] = []
-            for i in range(1, len(vals)):
-                if vals[i][3] == "":
+            for idx in range(1, len(vals)):
+                if vals[idx][3] == "":
                     if "replica" in data["layout"][-1]:
-                        data["layout"][-1]["replica"].append(
-                            (vals[i][4], vals[i][5]))
+                        data["layout"][-1]["replica"].append((vals[idx][4], vals[idx][5]))
                     else:
-                        data["layout"][-1]["replica"] = [(
-                            vals[i][4], vals[i][5])]
+                        data["layout"][-1]["replica"] = [(vals[idx][4], vals[idx][5])]
                 else:
-                    data["layout"].append({"grp": vals[i][3]})
+                    data["layout"].append({"grp": vals[idx][3]})
         except IndexError:
             traceback.print_exc()
             self.log.error("--- re.findall output ---")

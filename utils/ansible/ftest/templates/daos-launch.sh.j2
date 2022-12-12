@@ -247,7 +247,10 @@ env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% else %}
 $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% endif %}
+rc=$?
 
 if [[ -n $END_CLEANUP ]] ; then
 	cleanup
 fi
+
+exit $rc

@@ -34,12 +34,14 @@ struct pl_map_ops {
 	/** object methods */
 	/** see \a pl_map_obj_select and \a pl_map_obj_rebalance */
 	int (*o_obj_place)(struct pl_map *map,
+			   uint32_t layout_gl_version,
 			   struct daos_obj_md *md,
 			   unsigned int	mode, uint32_t rebuild_ver,
 			   struct daos_obj_shard_md *shard_md,
 			   struct pl_obj_layout **layout_pp);
 	/** see \a pl_map_obj_rebuild */
 	int (*o_obj_find_rebuild)(struct pl_map *map,
+				  uint32_t layout_gl_version,
 				  struct daos_obj_md *md,
 				  struct daos_obj_shard_md *shard_md,
 				  uint32_t rebuild_ver,
@@ -47,19 +49,21 @@ struct pl_map_ops {
 				  uint32_t *shard_id,
 				  unsigned int array_size);
 	int (*o_obj_find_reint)(struct pl_map *map,
-				  struct daos_obj_md *md,
-				  struct daos_obj_shard_md *shard_md,
-				  uint32_t reint_ver,
-				  uint32_t *tgt_rank,
-				  uint32_t *shard_id,
-				  unsigned int array_size);
+				uint32_t layout_gl_version,
+				struct daos_obj_md *md,
+				struct daos_obj_shard_md *shard_md,
+				uint32_t reint_ver,
+				uint32_t *tgt_rank,
+				uint32_t *shard_id,
+				unsigned int array_size);
 	int (*o_obj_find_addition)(struct pl_map *map,
+				   uint32_t layout_gl_version,
 				   struct daos_obj_md *md,
-				  struct daos_obj_shard_md *shard_md,
-				  uint32_t reint_ver,
-				  uint32_t *tgt_rank,
-				  uint32_t *shard_id,
-				  unsigned int array_size);
+				   struct daos_obj_shard_md *shard_md,
+				   uint32_t reint_ver,
+				   uint32_t *tgt_rank,
+				   uint32_t *shard_id,
+				   unsigned int array_size);
 };
 
 unsigned int pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,

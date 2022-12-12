@@ -585,6 +585,10 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		return rc;
 	}
 
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
+
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
 		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
@@ -669,7 +673,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 	daos_handle_t		 toh;
 	int			 rc;
 
-	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE | VOS_OBJ_KILL_DKEY,
 			  DAOS_INTENT_KILL, &obj, NULL);
 	if (rc == -DER_NONEXIST)
 		return 0;
