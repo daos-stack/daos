@@ -821,12 +821,16 @@ free:
 
 /* Update iv namespace */
 void
-ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint32_t term)
 {
-	D_INFO("update iv_ns %u master rank %u new master rank %u "
+	if (term <= ns->iv_master_term)
+		return;
+
+	D_INFO("update iv_ns %u master rank %u->%u term %u->%u"
 	       "myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-	       master_rank, dss_self_rank(), ns);
+	       master_rank,  ns->iv_master_term, term, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
+	ns->iv_master_term = term;
 }
 
 void
