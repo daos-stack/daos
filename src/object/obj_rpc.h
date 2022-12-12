@@ -103,7 +103,10 @@
 		ds_obj_ec_rep_handler, NULL, "ec_rep")			\
 	X(DAOS_OBJ_RPC_CPD,						\
 		0, &CQF_obj_cpd,					\
-		ds_obj_cpd_handler, NULL, "compound")
+		ds_obj_cpd_handler, NULL, "compound")			\
+	X(DAOS_OBJ_RPC_KEY2ANCHOR,					\
+		0, &CQF_obj_key2anchor,					\
+		ds_obj_key2anchor_handler, NULL, "key2anchor")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
@@ -416,6 +419,27 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
+/* object key2anchor in/out */
+#define DAOS_ISEQ_OBJ_KEY2ANCHOR	/* input fields */	 \
+	((struct dtx_id)	(oki_dti)		CRT_RAW) \
+	((daos_unit_oid_t)	(oki_oid)		CRT_RAW) \
+	((uuid_t)		(oki_pool_uuid)		CRT_VAR) \
+	((uuid_t)		(oki_co_hdl)		CRT_VAR) \
+	((uuid_t)		(oki_co_uuid)		CRT_VAR) \
+	((uint64_t)		(oki_epoch)		CRT_VAR) \
+	((uint32_t)		(oki_map_ver)		CRT_VAR) \
+	((uint32_t)		(oki_flags)		CRT_VAR) \
+	((daos_key_t)		(oki_dkey)		CRT_VAR) \
+	((daos_key_t)		(oki_akey)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_KEY2ANCHOR	/* output fields */	 \
+	((int32_t)		(oko_ret)		CRT_VAR) \
+	((uint32_t)		(oko_map_version)	CRT_VAR) \
+	((uint64_t)		(oko_epoch)		CRT_VAR) \
+	((daos_anchor_t)	(oko_anchor)		CRT_RAW)
+
+CRT_RPC_DECLARE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
+
 void daos_dc_obj2id(void *ptr, daos_unit_oid_t *id);
 
 enum daos_cpd_sub_opc {
@@ -655,6 +679,9 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 }
+
+#define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
+					 DAOS_OO_IO_RAND | DAOS_OO_IO_SEQ)
 
 static inline bool
 obj_is_fetch_opc(uint32_t opc)
