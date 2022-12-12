@@ -968,39 +968,38 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	 */
 	rpc_tmp.crp_pub.cr_opc = opc;
 
-	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
-	if (unlikely(opc_info == NULL)) {
-		D_ERROR("opc: %#x, lookup failed.\n", opc);
-		/*
-		 * The RPC is not registered on the server, we don't know how to
-		 * process the RPC request, so we send a CART
-		 * level error message to the client.
-		 */
-		crt_hg_reply_error_send(&rpc_tmp, -DER_UNREG);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
+	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
+	if (unlikely(rc != 0)) {
+		if (rc == -DER_UNREG) {
+			D_ERROR("opc: %#x, lookup failed.\n", opc);
+			/*
+			 * The RPC is not registered on the server, we don't know how to
+			 * process the RPC request, so we send a CART
+			 * level error message to the client.
+			 */
+			crt_hg_reply_error_send(&rpc_tmp, rc);
+			crt_hg_unpack_cleanup(proc);
+			HG_Destroy(rpc_tmp.crp_hg_hdl);
+			D_GOTO(out, hg_ret = HG_SUCCESS);
+		} else if (rc == -DER_NOMEM) {
+			crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
+			crt_hg_unpack_cleanup(proc);
+			HG_Destroy(rpc_tmp.crp_hg_hdl);
+			D_GOTO(out, hg_ret = HG_SUCCESS);
+		}
 	}
-	D_ASSERT(opc_info->coi_opc == opc);
 
-	D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
-	if (unlikely(rpc_priv == NULL)) {
-		crt_hg_reply_error_send(&rpc_tmp, -DER_DOS);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
-	}
-	crt_hg_header_copy(&rpc_tmp, rpc_priv);
+	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
+
+	crt_hg_header_copy(&rpc_tmp, rpc_priv);
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
 		rpc_priv->crp_input_got = 1;
 	}
 
-	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
-	rpc_pub->cr_opc = rpc_tmp.crp_pub.cr_opc;
 	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
 	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
 
@@ -1009,15 +1008,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
-	if (unlikely(rc != 0)) {
-		D_ERROR("crt_rpc_priv_init rc=%d, opc=%#x\n", rc, opc);
-		crt_hg_reply_error_send(&rpc_tmp, -DER_MISC);
-		crt_hg_unpack_cleanup(proc);
-		HG_Destroy(rpc_tmp.crp_hg_hdl);
-		D_FREE(rpc_priv);
-		D_GOTO(out, hg_ret = HG_SUCCESS);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, true /* srv_flag */);
 
 	D_ASSERT(rpc_priv->crp_srv != 0);
 	if (rpc_pub->cr_input_size > 0) {
@@ -1195,8 +1186,11 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+
 	rpc_pub = &rpc_priv->crp_pub;
 	if (crt_rpc_completed(rpc_priv)) {
+		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return rc;
 	}
@@ -1275,6 +1269,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 out:
 	crt_context_req_untrack(rpc_priv);
 
+	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	RPC_DECREF(rpc_priv);
 
@@ -1318,7 +1314,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 		}
 		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
 	} else {
-		rpc_priv->crp_on_wire = 1;
+		rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	}
 
 	RPC_DECREF(rpc_priv);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -444,13 +444,26 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_forward = forward;
-	*priv_allocated = rpc_priv;
 	rpc_priv->crp_pub.cr_opc = opc;
+
+	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
+	if (rc != 0) {
+		D_FREE(rpc_priv);
+		D_GOTO(out, rc);
+	}
+
+	rc = D_MUTEX_INIT(&rpc_priv->crp_mutex, NULL /* attr */);
+	if (rc != 0) {
+		D_SPIN_DESTROY(&rpc_priv->crp_lock);
+		D_FREE(rpc_priv);
+		D_GOTO(out, rc);
+	}
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
+	*priv_allocated = rpc_priv;
 out:
 	return rc;
 }
@@ -467,6 +480,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
 
+	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
 	D_FREE(rpc_priv);
@@ -535,14 +549,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		rpc_priv->crp_grp_priv = grp_priv;
 	}
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_rpc_priv_init(%#x) failed, " DF_RC "\n",
-			  opc, DP_RC(rc));
-		crt_rpc_priv_free(rpc_priv);
-		D_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	*req = &rpc_priv->crp_pub;
 out:
@@ -792,8 +799,10 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	chained_rpc_priv = cb_info->cci_arg;
 	lookup_rpc  = cb_info->cci_rpc;
 	grp_priv = chained_rpc_priv->crp_grp_priv;
-
 	ul_in = crt_req_get(lookup_rpc);
+
+	D_MUTEX_LOCK(&chained_rpc_priv->crp_mutex);
+
 	if (cb_info->cci_rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
 			  "URI_LOOKUP rpc completed with rc="DF_RC"\n",
@@ -903,6 +912,8 @@ out:
 		crt_context_req_untrack(chained_rpc_priv);
 		crt_rpc_complete(chained_rpc_priv, rc);
 	}
+
+	D_MUTEX_UNLOCK(&chained_rpc_priv->crp_mutex);
 
 	/* Addref done in crt_issue_uri_lookup() */
 	RPC_DECREF(chained_rpc_priv);
@@ -1241,13 +1252,6 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	}
 
 	rpc_priv->crp_hg_addr = hg_addr;
-	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv,
-			  "crt_req_send_internal() failed, rc %d\n",
-			  rc);
-		D_GOTO(finish_rpc, rc);
-	}
 
 finish_rpc:
 	if (rc != 0) {
@@ -1282,8 +1286,6 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	}
 	D_ASSERT(rpc_priv->crp_hg_hdl != NULL);
 
-	/* set state ahead to avoid race with completion cb */
-	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
 	if (rc != DER_SUCCESS) {
 		RPC_ERROR(rpc_priv,
@@ -1322,7 +1324,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			/* send addr lookup req */
 			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
-			if (rc != 0)
+			if (rc == 0)
+				D_GOTO(send_immediately, rc);
+			else
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
 					"rc %d, opc: %#x.\n", rc, req->cr_opc);
 		} else {
@@ -1344,13 +1348,21 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			/* send addr lookup req */
 			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
-			if (rc != 0)
+			if (rc == 0)
+				D_GOTO(send_immediately, rc);
+			else
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
 					"rc %d, opc: %#x.\n", rc, req->cr_opc);
 		}
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
+send_immediately:
 		rc = crt_req_send_immediately(rpc_priv);
+		break;
+	case RPC_STATE_CANCELED:
+	case RPC_STATE_COMPLETED:
+	case RPC_STATE_TIMEOUT:
+		rc = 0;
 		break;
 	default:
 		RPC_ERROR(rpc_priv,
@@ -1370,6 +1382,7 @@ int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
+	bool			 locked = false;
 	int			 rc = 0;
 
 	if (req == NULL) {
@@ -1419,6 +1432,9 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+	locked = true;
+
 	rc = crt_context_req_track(rpc_priv);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
 		/* tracked in crt_ep_inflight::epi_req_q */
@@ -1450,6 +1466,9 @@ out:
 			RPC_DECREF(rpc_priv);
 		}
 	}
+
+	if (locked)
+		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 
 	/* corresponds to RPC_ADDREF in this function */
 	RPC_DECREF(rpc_priv);
@@ -1491,46 +1510,49 @@ out:
 	return rc;
 }
 
+/*
+ * The caller mustn't be holding crt_gdata.cg_rwlock, crt_context.cc_mutex, or
+ * crt_ep_inflight.epi_mutex.
+ */
 int
 crt_req_abort(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	int			 rc = 0;
+	struct crt_context	*ctx;
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	ctx = rpc_priv->crp_pub.cr_ctx;
+
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
 
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
-	    rpc_priv->crp_state == RPC_STATE_COMPLETED) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "aborted or completed, need not abort again.\n");
-		D_GOTO(out, rc = -DER_ALREADY);
+	    rpc_priv->crp_state == RPC_STATE_COMPLETED ||
+	    rpc_priv->crp_state == RPC_STATE_TIMEOUT) {
+		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+		RPC_TRACE(DB_NET, rpc_priv, "aborted or completed, need not abort again.\n");
+		return 0;
 	}
 
-	if (rpc_priv->crp_state != RPC_STATE_REQ_SENT ||
-	    rpc_priv->crp_on_wire != 1) {
-		RPC_TRACE(DB_NET, rpc_priv,
-			  "rpc_priv->crp_state %#x, not inflight, complete it "
-			  "as canceled.\n",
-			  rpc_priv->crp_state);
-		crt_rpc_complete(rpc_priv, -DER_CANCELED);
-		D_GOTO(out, rc = 0);
+	/*
+	 * To guarantee that the RPC completion callback is called by either
+	 * the crt_req_send thread or the crt_progress thread, we must notify
+	 * crt_progress instead of directly aborting the RPC here.
+	 */
+	D_MUTEX_LOCK(&ctx->cc_mutex);
+	if (rpc_priv->crp_timeout_ts > 0) {
+		crt_req_timeout_untrack(rpc_priv);
+		rpc_priv->crp_timeout_ts = 0;
+		crt_req_timeout_track(rpc_priv);
 	}
+	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
-	rc = crt_hg_req_cancel(rpc_priv);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_hg_req_cancel failed, rc: %d, "
-			  "opc: %#x.\n", rc, rpc_priv->crp_pub.cr_opc);
-		crt_rpc_complete(rpc_priv, rc);
-		D_GOTO(out, rc);
-	}
-
-out:
-	return rc;
+	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+	return 0;
 }
 
 static void
@@ -1600,17 +1622,11 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
 }
 
-int
-crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		  bool srv_flag)
+void
+crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag)
 {
 	crt_opcode_t opc = rpc_priv->crp_opc_info->coi_opc;
 	struct crt_context *ctx = crt_ctx;
-	int rc;
-
-	rc = D_SPIN_INIT(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
-	if (rc != 0)
-		D_GOTO(exit, rc);
 
 	D_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
 	D_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
@@ -1646,9 +1662,6 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 
 	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 				     ctx->cc_timeout_sec);
-
-exit:
-	return rc;
 }
 
 void

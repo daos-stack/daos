@@ -379,12 +379,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_init(opc: %#x) failed: "DF_RC"\n", opc,
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
