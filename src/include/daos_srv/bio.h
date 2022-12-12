@@ -1061,4 +1061,17 @@ int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_l
  */
 void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz);
 
+struct bio_wal_info {
+	uint32_t	wi_tot_blks;	/* Total blocks */
+	uint32_t	wi_used_blks;	/* Used blocks */
+	uint64_t	wi_ckp_id;	/* Last check-pointed ID */
+	uint64_t	wi_commit_id;	/* Last committed ID */
+	uint64_t	wi_unused_id;	/* Next unused ID */
+};
+
+/*
+ * Qeury WAL total blocks & used blocks.
+ */
+void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
+
 #endif /* __BIO_API_H__ */

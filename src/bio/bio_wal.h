@@ -27,13 +27,17 @@ struct meta_header {
 	uint32_t	mh_csum;		/* Checksum of this header */
 };
 
+enum wal_hdr_flags {
+	WAL_HDR_FL_NO_TAIL	= (1 << 0),	/* No tail checksum */
+};
+
 /* WAL blob header */
 struct wal_header {
 	uint32_t	wh_magic;
 	uint32_t	wh_version;
 	uint32_t	wh_gen;		/* WAL re-format timestamp */
 	uint16_t	wh_blk_bytes;	/* WAL block size in bytes, usually 4k */
-	uint16_t	wh_padding1;	/* Reserved */
+	uint16_t	wh_flags;	/* WAL header flags */
 	uint64_t	wh_tot_blks;	/* WAL blob capacity, in blocks */
 	uint64_t	wh_ckp_id;	/* Last check-pointed transaction ID */
 	uint64_t	wh_commit_id;	/* Last committed transaction ID */

@@ -270,17 +270,27 @@ wakeup_reserve_waiters(struct wal_super_info *si, bool wakeup_all)
 	}
 }
 
+static inline struct bio_dma_stats *
+ioc2dma_stats(struct bio_io_context *bic)
+{
+	D_ASSERT(bic && bic->bic_xs_ctxt && bic->bic_xs_ctxt->bxc_dma_buf);
+	return &bic->bic_xs_ctxt->bxc_dma_buf->bdb_stats;
+}
+
 /* Caller must guarantee no yield between bio_wal_reserve() and bio_wal_submit() */
 int
 bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
+	struct bio_dma_stats	*stats = ioc2dma_stats(mc->mc_wal);
 	int			 rc = 0;
 
 	if (!si->si_rsrv_waiters && reserve_allowed(si))
 		goto done;
 
 	si->si_rsrv_waiters++;
+	if (stats->bds_wal_waiters)
+		d_tm_inc_gauge(stats->bds_wal_waiters, 1);
 
 	ABT_mutex_lock(si->si_mutex);
 	ABT_cond_wait(si->si_rsrv_wq, si->si_mutex);
@@ -288,6 +298,8 @@ bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id)
 
 	D_ASSERT(si->si_rsrv_waiters > 0);
 	si->si_rsrv_waiters--;
+	if (stats->bds_wal_waiters)
+		d_tm_dec_gauge(stats->bds_wal_waiters, 1);
 
 	wakeup_reserve_waiters(si, false);
 	/* It could happen when wakeup all on WAL unload */
@@ -444,6 +456,12 @@ place_payload(struct bio_sglist *bsgl, struct wal_blks_desc *bd, struct wal_tran
 	}
 }
 
+static inline bool
+skip_wal_tx_tail(struct wal_super_info *si)
+{
+	return (si->si_header.wh_flags & WAL_HDR_FL_NO_TAIL);
+}
+
 static void
 place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks_desc *bd,
 	   struct wal_trans_blk *tb)
@@ -469,6 +487,9 @@ place_tail(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct wal_blks
 		D_ASSERT(bd->bd_tail_off == tb->tb_off);
 		D_ASSERT(tb->tb_idx + 1 == bd->bd_blks);
 	}
+
+	if (skip_wal_tx_tail(&mc->mc_wal_info))
+		return;
 
 	D_ASSERT(mc->mc_csum_algo->cf_reset != NULL);
 	D_ASSERT(mc->mc_csum_algo->cf_update != NULL);
@@ -703,6 +724,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	struct bio_desc		*biod_tx = wal_tx->td_biod_tx;
 	struct wal_super_info	*si = wal_tx->td_si;
 	struct wal_tx_desc	*next;
+	struct bio_dma_stats	*stats;
 	bool			 try_wakeup = false;
 
 	D_ASSERT(!d_list_empty(&wal_tx->td_link));
@@ -735,6 +757,11 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	}
 
 	d_list_del_init(&wal_tx->td_link);
+
+	stats = ioc2dma_stats(biod_tx->bd_ctxt);
+	if (stats->bds_wal_qd)
+		d_tm_dec_gauge(stats->bds_wal_qd, 1);
+
 	/* The ABT_eventual could be NULL if WAL I/O IOD failed on DMA mapping in bio_iod_prep() */
 	if (biod_tx->bd_dma_done != ABT_EVENTUAL_NULL)
 		ABT_eventual_set(biod_tx->bd_dma_done, NULL, 0);
@@ -874,11 +901,18 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
 	uint64_t		 tx_id = tx->utx_id;
+	struct bio_dma_stats	*stats;
 	int			 iov_nr, rc;
 
 	/* FIXME: Skip WAL commit for sysdb for this moment */
 	if (mc->mc_is_sysdb)
 		return 0;
+
+	/* Bypass WAL commit, used for performance evaluation only */
+	if (daos_io_bypass & IOBP_WAL_COMMIT) {
+		bio_yield(NULL);
+		return 0;
+	}
 
 	D_DEBUG(DB_IO, "MC:%p WAL commit ID:"DF_U64" seq:%u off:%u, biod_data:%p inflights:%u\n",
 		mc, tx_id, id2seq(tx_id), id2off(tx_id), biod_data,
@@ -894,6 +928,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	calc_trans_blks(umem_tx_act_nr(tx) + dc_arr.dca_nr, umem_tx_act_payload_sz(tx),
 			blk_bytes, &blk_desc);
 
+	D_ASSERT(blk_desc.bd_blks > 0);
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
 		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
 		rc = -DER_INVAL;
@@ -939,6 +974,13 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	wal_tx.td_blks = blk_desc.bd_blks;
 	/* Track in pending list from now on, since it could yield in bio_iod_prep() */
 	d_list_add_tail(&wal_tx.td_link, &si->si_pending_list);
+
+	stats = ioc2dma_stats(mc->mc_wal);
+	if (stats->bds_wal_qd)
+		d_tm_inc_gauge(stats->bds_wal_qd, 1);
+	if (stats->bds_wal_sz)
+		d_tm_set_gauge(stats->bds_wal_sz,
+			       (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off);
 
 	/* Update next unused ID */
 	si->si_unused_id = wal_next_id(si, si->si_unused_id, blk_desc.bd_blks);
@@ -1346,6 +1388,9 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 	if (wal_id_cmp(si, hdr->th_id, si->si_commit_id) <= 0)
 		committed = true;
 
+	if (skip_wal_tx_tail(&mc->mc_wal_info))
+		goto verify_data;
+
 	csum_len = meta_csum_len(mc);
 	/* Total tx length excluding tail */
 	D_ASSERT(blk_desc->bd_blks > 0);
@@ -1364,6 +1409,7 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 		return committed ? -DER_INVAL : 1;
 	}
 
+verify_data:
 	/*
 	 * Don't verify data csum when the transaction ID is known to be committed.
 	 *
@@ -1890,6 +1936,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	wal_hdr->wh_version = BIO_WAL_VERSION;
 	wal_hdr->wh_gen = (uint32_t)daos_wallclock_secs();
 	wal_hdr->wh_blk_bytes = WAL_BLK_SZ;
+	wal_hdr->wh_flags = 0;	/* Don't skip csum tail by default */
 	wal_hdr->wh_tot_blks = (fi->fi_wal_size / WAL_BLK_SZ) - WAL_HDR_BLKS;
 
 	rc = write_header(mc, mc->mc_wal, wal_hdr, sizeof(*wal_hdr), &wal_hdr->wh_csum);
@@ -1900,4 +1947,16 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 out:
 	meta_csum_fini(mc);
 	return rc;
+}
+
+void
+bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info)
+{
+	struct wal_super_info	*si = &mc->mc_wal_info;
+
+	info->wi_tot_blks = si->si_header.wh_tot_blks;
+	info->wi_used_blks = wal_used_blks(si);
+	info->wi_ckp_id = si->si_ckp_id;
+	info->wi_commit_id = si->si_commit_id;
+	info->wi_unused_id = si->si_unused_id;
 }

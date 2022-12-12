@@ -110,6 +110,9 @@ struct bio_dma_stats {
 	struct d_tm_node_t	*bds_queued_iods;
 	struct d_tm_node_t	*bds_grab_errs;
 	struct d_tm_node_t	*bds_grab_retries;
+	struct d_tm_node_t	*bds_wal_sz;
+	struct d_tm_node_t	*bds_wal_qd;
+	struct d_tm_node_t	*bds_wal_waiters;
 };
 
 /*
@@ -443,6 +446,8 @@ struct bio_desc {
 	int			 bd_result;
 	unsigned int		 bd_chk_type;
 	unsigned int		 bd_type;
+	/* Total bytes landed to data blob */
+	unsigned int		 bd_nvme_bytes;
 	/* Flags */
 	unsigned int		 bd_buffer_prep:1,
 				 bd_dma_issued:1,
@@ -536,6 +541,8 @@ extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
 extern unsigned int	bio_spdk_max_unmap_cnt;
+extern unsigned int	bio_max_async_sz;
+
 int xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		       uint64_t timeout);
 void bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,

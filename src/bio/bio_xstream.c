@@ -61,6 +61,7 @@ unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 /* FIXME: Remove it once md on SSD feature is fully done */
 static bool md_on_ssd_enabled;
+unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -251,6 +252,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
+
+	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
+	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
