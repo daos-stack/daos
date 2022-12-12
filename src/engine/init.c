@@ -113,7 +113,7 @@ get_module_info(void)
 static uint64_t
 hlc_recovery_begin(void)
 {
-	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+	return d_hlc_epsilon_get_bound(d_hlc_get());
 }
 
 /* See the comment near where this function is called. */
@@ -122,12 +122,12 @@ hlc_recovery_end(uint64_t bound)
 {
 	int64_t	diff;
 
-	diff = bound - crt_hlc_get();
+	diff = bound - d_hlc_get();
 	if (diff > 0) {
 		struct timespec	tv;
 
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+		tv.tv_sec = d_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = d_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -640,6 +640,15 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 }
 
+static uint64_t
+metrics_region_size(int num_tgts)
+{
+	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+
+	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -661,8 +670,12 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/** initialize server topology data - this is needed to set up the number of targets */
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	rc = d_tm_init(dss_instance_idx, metrics_region_size(dss_tgt_nr), D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -683,11 +696,6 @@ server_init(int argc, char *argv[])
 	}
 
 	rc = register_dbtree_classes();
-	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
-
-	/** initialize server topology data */
-	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 

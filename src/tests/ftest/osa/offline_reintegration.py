@@ -59,7 +59,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude ranks [0, 3, 4]
-        rank = [0, 3, 4]
+        rank = [0, 3]
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]

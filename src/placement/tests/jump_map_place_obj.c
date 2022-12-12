@@ -253,8 +253,8 @@ rr_print(struct remap_result *map)
 		print_message("\t(Nothing)\n");
 }
 
-typedef int (*find_fn)(struct pl_map *map, struct daos_obj_md *md,
-		       struct daos_obj_shard_md *shard_md,
+typedef int (*find_fn)(struct pl_map *map, uint32_t gl_layout_ver,
+		       struct daos_obj_md *md, struct daos_obj_shard_md *shard_md,
 		       uint32_t reint_ver, uint32_t *tgt_rank,
 		       uint32_t *shard_id, unsigned int array_size);
 
@@ -265,7 +265,7 @@ rr_find(struct pl_map *pl_map, struct daos_obj_md *md, uint32_t ver,
 	if (rr->skip)
 		rr_reset(rr);
 	else
-		rr->out_nr = fn(pl_map, md, NULL, ver, rr->tgt_ranks,
+		rr->out_nr = fn(pl_map, 0, md, NULL, ver, rr->tgt_ranks,
 				rr->ids, rr->nr);
 }
 

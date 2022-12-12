@@ -11,6 +11,7 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
+      - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
       - requirements.txt
@@ -294,7 +295,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
@@ -381,7 +381,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy

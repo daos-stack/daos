@@ -1,5 +1,4 @@
 """Build FUSE client"""
-import daos_build
 
 
 def configure_lustre(denv):
@@ -40,14 +39,14 @@ def scons():
     libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
-    dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
+    dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 
     libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
+    duns = denv.d_library('duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)
 
 
