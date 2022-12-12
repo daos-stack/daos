@@ -1072,7 +1072,6 @@ dfuse_event_release(void *arg)
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args     = {0};
 	struct dfuse_inode_entry *ie       = NULL;
 	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
 						.sr_reset   = dfuse_read_event_reset,
@@ -1084,45 +1083,6 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 						POOL_TYPE_INIT(dfuse_event, de_list)};
 
 	int                       rc;
-
-	args.argc = 5;
-
-	if (fs_handle->di_multi_user)
-		args.argc++;
-
-	/* These allocations are freed later by libfuse so do not use the
-	 * standard allocation macros
-	 */
-	args.allocated = 1;
-	args.argv = calloc(sizeof(*args.argv), args.argc);
-	if (!args.argv)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[0] = strdup("");
-	if (!args.argv[0])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[1] = strdup("-ofsname=dfuse");
-	if (!args.argv[1])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[2] = strdup("-osubtype=daos");
-	if (!args.argv[2])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[3] = strdup("-odefault_permissions");
-	if (!args.argv[3])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[4] = strdup("-onoatime");
-	if (!args.argv[4])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	if (fs_handle->di_multi_user) {
-		args.argv[5] = strdup("-oallow_other");
-		if (!args.argv[5])
-			D_GOTO(err, rc = -DER_NOMEM);
-	}
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
@@ -1176,7 +1136,6 @@ err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
 	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
-	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
 }
