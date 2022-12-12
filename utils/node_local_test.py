@@ -416,6 +416,10 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+
+    # Otherwise max number of contexts will be limited by number of cores
+    env['CRT_CTX_NUM'] = '32'
+
     return env
 
 
@@ -1870,21 +1874,17 @@ class PosixTests():
             self.fatal_errors = True
 
     @needs_dfuse
-    def test_readdir_25(self):
+    def test_readdir_30(self):
         """Test reading a directory with 25 entries"""
-        self.readdir_test(25, test_all=True)
+        self.readdir_test(30)
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
 
         wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
-        if count == 0:
-            files = os.listdir(wide_dir)
-            assert len(files) == 0
-            return
         start = time.time()
         for idx in range(count):
-            with open(join(wide_dir, str(idx)), 'w'):
+            with open(join(wide_dir, f'file_{idx}'), 'w'):
                 pass
             if test_all:
                 files = os.listdir(wide_dir)
@@ -1901,6 +1901,104 @@ class PosixTests():
         print(files)
         print(len(files))
         assert len(files) == count
+        print('Listing dir contents again')
+        start = time.time()
+        files = os.listdir(wide_dir)
+        duration = time.time() - start
+        print(f'Listed {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+        files = []
+        start = time.time()
+        with os.scandir(wide_dir) as entries:
+            for entry in entries:
+                files.append(entry.name)
+        duration = time.time() - start
+        print(f'Scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+
+        files = []
+        files2 = []
+        start = time.time()
+        with os.scandir(wide_dir) as entries:
+            with os.scandir(wide_dir) as second:
+                for entry in entries:
+                    files.append(entry.name)
+                for entry in second:
+                    files2.append(entry.name)
+        duration = time.time() - start
+        print(f'Double scanned {count} files in {duration:.1f} seconds rate {count / duration:.1f}')
+        print(files)
+        print(len(files))
+        assert len(files) == count
+        print(files2)
+        print(len(files2))
+        assert len(files2) == count
+
+    @needs_dfuse
+    def test_readdir_hard(self):
+        """Run a parallel readdir test.
+
+        Open a directory twice, read from the 1st one once, then read the entire directory from
+        the second handle.  This tests dfuse in-memory caching.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 30
+        for idx in range(count):
+            with open(join(test_dir, f'file_{idx}'), 'w'):
+                pass
+
+        files = []
+        files2 = []
+        with os.scandir(test_dir) as entries:
+            with os.scandir(test_dir) as second:
+                files2.append(next(second).name)
+                for entry in entries:
+                    files.append(entry.name)
+                for entry in second:
+                    files2.append(entry.name)
+
+        print(files)
+        print(files2)
+        assert files == files2
+        assert len(files) == count
+
+    @needs_dfuse
+    def test_readdir_unlink(self):
+        """Test readdir where a entry is removed mid read
+
+        Populate a directory, read the contents to know the order, then unlink a file and re-read
+        to verify the file is missing.  If doing the unlink during read then the kernel cache
+        will include the unlinked file so do not check for this behavior.
+        """
+        test_dir = join(self.dfuse.dir, 'test_dir')
+        os.mkdir(test_dir)
+        count = 50
+        for idx in range(count):
+            with open(join(test_dir, f'file_{idx}'), 'w'):
+                pass
+
+        files = []
+        with os.scandir(test_dir) as entries:
+            for entry in entries:
+                files.append(entry.name)
+
+        os.unlink(join(test_dir, files[-2]))
+
+        post_files = []
+        with os.scandir(test_dir) as entries:
+            for entry in entries:
+                post_files.append(entry.name)
+
+        print(files)
+        print(post_files)
+        assert len(files) == count
+        assert len(post_files) == len(files) - 1
+        assert post_files == files[:-2] + [files[-1]]
 
     @needs_dfuse_with_opt(single_threaded=True, caching=True)
     def test_single_threaded(self):
@@ -4158,6 +4256,8 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
+        if to_rerun:
+            print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4189,7 +4289,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf)
+            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 

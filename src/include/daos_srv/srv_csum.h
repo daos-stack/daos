@@ -17,13 +17,13 @@
  * checksums for the bsgl as needed and appropriate. The result is the iod will
  * have checksums appropriate for the extents and data they represent
  *
- * @param iod[in]			I/O Descriptor that will receive the
+ * @param[in]		iod		I/O Descriptor that will receive the
  *					csums
- * @param csummer[in]			csummer object for calculating and csum
+ * @param[in]		csummer		csummer object for calculating and csum
  *					logic
- * @param bsgl[in]			bio scatter gather list with the data
- * @param biov_csums[in]			list csum info for each \bsgl
- * @param biov_csums_used[in/out]	track the number of csums used
+ * @param[in]		bsgl		bio scatter gather list with the data
+ * @param[in]		biov_csums	list csum info for each \bsgl
+ * @param[in/out]	biov_csums_used	track the number of csums used
  * @return
  */
 int
@@ -35,12 +35,12 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist
  * Allocate the memory for and populate the IO Maps structure. This structure is used to identify
  * the parts of the iods' recxes for which there is data and which part are holes.
  *
- * @param biod[in]	contains the extents and info on holes
- * @param iods[in]	IO Descriptor
- * @param iods_nr[in]	Number of iods
- * @param flags[in]	if ORF_CREATE_MAP_DETAIL is set, then all mapped extents are requested,
+ * @param[in]	biod	contains the extents and info on holes
+ * @param[in]	iods	IO Descriptor
+ * @param[in]	iods_nr	Number of iods
+ * @param[in]	flags	if ORF_CREATE_MAP_DETAIL is set, then all mapped extents are requested,
  *			not just the low and high extents.
- * @param p_maps[out]	pointer to the resulting structures
+ * @param[out]	p_maps	pointer to the resulting structures
  *
  * @return		0 on success, else error
  */
@@ -53,7 +53,9 @@ ds_iom_free(daos_iom_t **p_maps, uint64_t map_nr);
 
 
 /* For the pool target to start and stop the scrubbing ult */
-int ds_start_scrubbing_ult(struct ds_pool_child *child);
-void ds_stop_scrubbing_ult(struct ds_pool_child *child);
+int
+ds_start_scrubbing_ult(struct ds_pool_child *child);
+void
+ds_stop_scrubbing_ult(struct ds_pool_child *child);
 
 #endif

@@ -33,7 +33,7 @@ byte_array_simple_stack(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -106,7 +106,7 @@ array_simple(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -187,7 +187,7 @@ array_partial(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -339,7 +339,7 @@ replicator(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -415,7 +415,7 @@ read_empty(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -521,7 +521,7 @@ array_dkey_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init scatter/gather */
@@ -602,7 +602,7 @@ array_akey_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init scatter/gather */
@@ -703,7 +703,7 @@ array_recx_punch_enumerate(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -809,7 +809,7 @@ array_recx_read_incomplete(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -923,7 +923,7 @@ fetch_array_with_map(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1038,7 +1038,7 @@ fetch_array_with_map_2(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1115,7 +1115,7 @@ fetch_array_with_map_3(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1192,7 +1192,7 @@ fetch_array_with_map_4(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1272,7 +1272,7 @@ small_sgl(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1336,7 +1336,7 @@ cond_ops(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init dkey */
@@ -1505,7 +1505,7 @@ mth_async_io(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	pthread_barrier_init(&barrier, NULL, NUM_TH + 1);
