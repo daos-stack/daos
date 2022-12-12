@@ -40,7 +40,7 @@ func (svc *mgmtSvc) FaultInjectReport(ctx context.Context, rpt *chkpb.CheckRepor
 	return new(mgmtpb.DaosResp), nil
 }
 
-func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) FaultInjectMgmtPoolFault(parent context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
 	if err := svc.checkLeaderRequest(fault); err != nil {
 		return nil, err
 	}
@@ -69,6 +69,13 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 	if newLabel == "" {
 		newLabel = ps.PoolLabel + "-fault"
 	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
 
 	var newRanks []ranklist.Rank
 	switch len(fault.Uints) {
@@ -104,7 +111,7 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 	return new(mgmtpb.DaosResp), nil
 }
 
-func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) FaultInjectPoolFault(parent context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
 	if err := svc.checkLeaderRequest(fault); err != nil {
 		return nil, err
 	}
@@ -133,6 +140,13 @@ func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault
 	if newLabel == "" {
 		newLabel = ps.PoolLabel + "-fault"
 	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
 
 	resp = new(mgmtpb.DaosResp)
 	switch fault.Class {
