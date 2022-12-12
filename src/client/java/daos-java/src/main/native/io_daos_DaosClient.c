@@ -334,7 +334,7 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 {
 	daos_handle_t eqhdl;
 	int rc = daos_eq_create(&eqhdl);
-	int i;
+	int i = 0;
 	int count;
 
 	if (unlikely(rc != 0)) {
@@ -342,13 +342,13 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 		return -1;
 	}
 
-	event_queue_wrapper_t *eq = (event_queue_wrapper_t *)calloc(1,
+	event_queue_wrapper_t *eq = (event_queue_wrapper_t *)malloc(
 			sizeof(event_queue_wrapper_t));
 	if (unlikely(eq == NULL)) {
 		goto fail;
 	}
-	eq->events = (data_event_t **)malloc(
-		nbrOfEvents * sizeof(data_event_t *));
+	eq->events = (data_event_t *)malloc(
+		nbrOfEvents * sizeof(data_event_t));
 	eq->polled_events = (daos_event_t **)malloc(
 		nbrOfEvents * sizeof(daos_event_t *));
 	if (unlikely(eq->events == NULL | eq->polled_events == NULL)) {
@@ -363,18 +363,8 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 	}
 	eq->nbrOfEvents = nbrOfEvents;
 	eq->eqhdl = eqhdl;
-	for (i = 0; i < nbrOfEvents; i++) {
-		eq->events[i] = (data_event_t *)malloc(sizeof(data_event_t));
-		if (unlikely(eq->events[i] == NULL)) {
-			char *msg = NULL;
-
-			asprintf(&msg, "Failed to allocate %d th event.",
-				 i);
-			rc = 1;
-			throw_base(env, msg, rc, 1, 0);
-			goto fail;
-		}
-		rc = daos_event_init(&eq->events[i]->event, eqhdl, NULL);
+	for (; i < nbrOfEvents; i++) {
+		rc = daos_event_init(&eq->events[i].event, eqhdl, NULL);
 		if (unlikely(rc != 0)) {
 			char *msg = NULL;
 
@@ -383,24 +373,19 @@ Java_io_daos_DaosClient_createEventQueue(JNIEnv *env,
 			throw_base(env, msg, rc, 1, 0);
 			goto fail;
 		}
-		eq->events[i]->event.ev_debug = i;
+		eq->events[i].event.ev_debug = i;
 	}
 
 fail:
 	if (unlikely(rc != 0)) {
 		count = i;
 		while (i >= 0) {
-			if (eq->events[i] && i < count) {
-				daos_event_fini(&eq->events[i]->event);
+			if (i < count) {
+				daos_event_fini(&eq->events[i].event);
 			}
 			i--;
 		}
 		daos_eq_destroy(eqhdl, 1);
-		for (i = 0; i <= count; i++) {
-			if (eq->events[i]) {
-				free(eq->events[i]);
-			}
-		}
 		free(eq->polled_events);
 		free(eq->events);
 		free(eq);
@@ -458,7 +443,7 @@ Java_io_daos_DaosClient_abortEvent(JNIEnv *env,
 				   jshort eid)
 {
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)&eqWrapperHdl;
-	data_event_t *event = eq->events[eid];
+	data_event_t *event = &eq->events[eid];
 	int rc;
 
 	if (event->status != EVENT_IN_USE) {
@@ -496,10 +481,7 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
 	}
 	if (eq->events) {
 		for (i = 0; i < eq->nbrOfEvents; i++) {
-			ev = eq->events[i];
-			if (!ev) {
-				continue;
-			}
+			ev = &eq->events[i];
 			rc = daos_event_fini(&ev->event);
 			if (unlikely(rc != 0)) {
 				char *msg = NULL;
@@ -522,19 +504,13 @@ Java_io_daos_DaosClient_destroyEventQueue(JNIEnv *env,
 		}
 	}
 fin:
-	if (eq->events) {
-		for (i = 0; i < eq->nbrOfEvents; i++) {
-			ev = eq->events[i];
-			if (ev) {
-				free(ev);
-			}
-		}
+	if (likely(eq->events != NULL)) {
 		free(eq->events);
 	}
-	if (eq->polled_events) {
+	if (likely(eq->polled_events != NULL)) {
 		free(eq->polled_events);
 	}
-	if (eq) {
+	if (likely(eq != NULL)) {
 		free(eq);
 	}
 }

@@ -852,7 +852,7 @@ decode_dfs_desc(char *buf, dfs_desc_t **desc_ret, uint64_t *offset_ret,
 	desc->iov.iov_len = desc->iov.iov_buf_len = (size_t)(*len);
 	/* event */
 	memcpy(&eid, buf, 2);
-	desc->event = desc->eq->events[eid];
+	desc->event = &desc->eq->events[eid];
 }
 
 static int

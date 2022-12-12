@@ -673,7 +673,7 @@ decode_simple(JNIEnv *env, jlong descBufAddress,
 		desc_buffer += 20;
 		memcpy(&value16, desc_buffer, 2);
 		desc_buffer += 2;
-		desc->event = desc->eq->events[value16];
+		desc->event = &desc->eq->events[value16];
 	} else {
 		/* skip address, maxKeyLen, nbrOfEntries */
 		desc_buffer += 12;
@@ -1083,7 +1083,7 @@ Java_io_daos_obj_DaosObjClient_updateObjAsyncNoDecode(JNIEnv *env,
 	event_queue_wrapper_t *eq = *(event_queue_wrapper_t **)
 				&eqWrapHdl;
 
-	desc->event = eq->events[eqId];
+	desc->event = &eq->events[eqId];
 	/* offset */
 	basicDesc->recxs.rx_idx = offset;
 	/* length */
@@ -1212,7 +1212,7 @@ decode_async(JNIEnv *env, jlong descBufAddress,
 
 	memcpy(&value16, desc_buffer, 2);
 	desc_buffer += 2;
-	desc->event = eq->events[value16];
+	desc->event = &eq->events[value16];
 
 	/* dkey */
 	memcpy(&value16, desc_buffer, 2);
