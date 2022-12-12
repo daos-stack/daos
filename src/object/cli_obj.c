@@ -2533,6 +2533,14 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
+	if (obj_is_modification_opc(opc)) {
+		if (!(obj->cob_mode & DAOS_OBJ_UPDATE_MODE_MASK)) {
+			D_ERROR("object "DF_OID" opc %d is opened with mode 0x%x\n",
+				DP_OID(obj->cob_md.omd_id), opc, obj->cob_mode);
+			D_GOTO(out, rc = -DER_NO_PERM);
+		}
+	}
+
 	if (daos_handle_is_valid(th)) {
 		if (!obj_is_modification_opc(opc)) {
 			rc = dc_tx_hdl2epoch_and_pmv(th, epoch, &map_ver);
@@ -3203,7 +3211,7 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 	/* Normally the enumeration is sent to the parity node */
 	/* convert the parity off to daos off */
 	if (recx->rx_idx & PARITY_INDICATOR) {
-		obj_recx_parity_to_daos(oca, recx);
+		D_DEBUG(DB_IO, "skip parity recx "DF_RECX"\n", DP_RECX(*recx));
 		return 0;
 	}
 
@@ -3436,6 +3444,36 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	if (obj_auxi->req_tgts.ort_grp_size == 1) {
+		if (obj_is_ec(obj_auxi->obj) &&
+		    obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE &&
+		    shard_arg->la_recxs != NULL) {
+			int		i;
+			daos_obj_list_t	*obj_args;
+
+			obj_args = dc_task_get_args(obj_auxi->obj_task);
+			for (i = 0; i < shard_arg->la_nr; i++) {
+				int index;
+
+				index = obj_args->incr_order?i:(shard_arg->la_nr - 1 - i);
+
+				if (shard_arg->la_recxs[index].rx_idx & PARITY_INDICATOR)
+					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
+								&shard_arg->la_recxs[index]);
+
+				/* DAOS-9218: The output merged list will latter be reversed.  That
+				 * will be done in the function obj_list_recxs_cb(), when the merged
+				 * list will be dumped into the output buffer.
+				 */
+				rc = merge_recx(iter_arg->merged_list,
+						shard_arg->la_recxs[index].rx_idx,
+						shard_arg->la_recxs[index].rx_nr, 0);
+				if (rc)
+					return rc;
+			}
+
+			return 0;
+		}
+
 		iter_arg->merge_nr = shard_arg->la_nr;
 		return 0;
 	}
@@ -3959,13 +3997,24 @@ obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	}
 
 	D_ASSERT(obj_is_ec(obj_auxi->obj));
-	d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
-				   recx_list) {
-		if (idx >= *obj_args->nr)
-			break;
-		obj_args->recxs[idx++] = recx->recx;
-		d_list_del(&recx->recx_list);
-		D_FREE(recx);
+	if (obj_args->incr_order) {
+		d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
+					   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
+	} else {
+		d_list_for_each_entry_reverse_safe(recx, tmp, arg->merged_list,
+						   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
 	}
 	anchor_update_check_eof(obj_auxi, obj_args->anchor);
 	*obj_args->nr = idx;
