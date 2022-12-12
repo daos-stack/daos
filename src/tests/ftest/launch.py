@@ -3131,12 +3131,10 @@ class Launch():
         core_file_processing = CoreFileProcessing(logger)
         try:
             corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
-            if corefiles_processed == 0:
-                return 0
 
         except CoreFileException:
             message = "Errors detected processing test core files"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
         except Exception:       # pylint: disable=broad-except

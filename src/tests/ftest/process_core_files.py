@@ -60,8 +60,8 @@ class CoreFileProcessing():
 
         """
         errors = 0
-        corefiles_processed = 0
         create_stacktrace = True
+        corefiles_processed = 0
         self.log.debug("-" * 80)
         self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
         if self.is_el7():
@@ -85,7 +85,8 @@ class CoreFileProcessing():
             except RunException as error:
                 self.log.error(error)
                 self.log.debug("Stacktrace", exc_info=True)
-                raise CoreFileException("Errors while installing debuginfo packages") from error
+                errors += 1
+                create_stacktrace = False
         else:
             self.log.debug(
                 "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
@@ -99,29 +100,24 @@ class CoreFileProcessing():
                         continue
                     if os.path.splitext(core_name)[-1] == ".bz2":
                         # Decompress the file
-                        command = ["lbzip2", "-d", "-v", core_file]
+                        command = ["lbzip2", "-d", "-v", os.path.join(core_dir, core_name)]
                         run_local(self.log, command)
                         core_name = os.path.splitext(core_name)[0]
                     self._create_stacktrace(core_dir, core_name)
                     corefiles_processed += 1
-                    self.log.debug(f"Successfully processed core file {core_file}")
-
+                    self.log.debug("Successfully processed core file %s", core_file)
                 except Exception as error:      # pylint: disable=broad-except
                     self.log.error(error)
                     self.log.debug("Stacktrace", exc_info=True)
-                    self.log.debug(f"Failed to process core file {core_file}")
+                    self.log.error("Failed to process core file %s", core_file)
                     errors += 1
                 finally:
                     if delete:
-                        updated_core_file = os.path.join(core_dir, core_name)
-                        try:
-                            self.log.debug("Removing %s", updated_core_file)
-                            os.remove(updated_core_file)
-                        except FileNotFoundError as error:
-                            self.log.error(error)
-                            self.log.debug("Core file %s not found", updated_core_file)
+                        core_file = os.path.join(core_dir, core_name)
+                        self.log.debug("Removing %s", core_file)
+                        os.remove(core_file)
         if errors:
-            raise CoreFileException("Errors while processing core files")
+            raise CoreFileException("Errors detected processing core files")
         return corefiles_processed
 
     def _create_stacktrace(self, core_dir, core_name):
@@ -378,8 +374,8 @@ def main():
     try:
         core_file_processing.process_core_files(args.directory, args.delete)
 
-    except CoreFileException:
-        logger.error("Errors detected processing test core files")
+    except CoreFileException as error:
+        logger.error(str(error))
         sys.exit(1)
 
     except Exception:       # pylint: disable=broad-except
