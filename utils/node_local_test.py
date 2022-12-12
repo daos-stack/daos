@@ -4329,11 +4329,16 @@ def test_dfuse_start(server, conf, wf):
     return rc
 
 
-def test_dfuse_th(_, conf, wf):
+def test_dfuse_th(server, conf, wf):
     """Run dfuse test helper under fault injection."""
 
-    cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th')]
+    pool = server.get_test_pool()
 
+    container = create_cont(conf, pool, ctype='POSIX', label='test_cont')
+
+    cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th'), pool, container]
+
+    print(cmd)
     test_cmd = AllocFailTest(conf, 'dfuse_th', cmd)
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
@@ -4725,24 +4730,24 @@ def run(wf, args):
                 fatal_errors.add_result(test_dfuse_th(server, conf, wf_client))
 
                 # dfuse startup, uses custom fault to force exit if no other faults injected.
-                fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+                # fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                # fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy test.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
                 wf_client.close()
 

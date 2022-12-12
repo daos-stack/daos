@@ -4,16 +4,71 @@
 
 #include "dfuse.h"
 
+static void
+show_help(char *name)
+{
+	printf("\n");
+}
+
+static void
+show_version(char *name)
+{
+	fprintf(stdout, "DFuse test helper\n");
+	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
+		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
+	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
+#if HAVE_CACHE_READDIR
+	fprintf(stdout, "Kernel readdir support enabled\n");
+#endif
+};
+
 int
-main()
+main(int argc, char **argv)
 {
 	struct dfuse_info *dfuse_info                             = NULL;
-	char               pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	uuid_t             cont_uuid                              = {};
+	char               pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
+	char               cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	struct dfuse_pool *dfp                                    = NULL;
 	struct dfuse_cont *dfs                                    = NULL;
 	int                rc;
 	int                rc2;
+	int                c;
+
+	struct option      long_options[] = {{"pool", required_argument, 0, 'p'},
+					     {"container", required_argument, 0, 'c'},
+					     {"version", no_argument, 0, 'v'},
+					     {"help", no_argument, 0, 'h'},
+					     {0, 0, 0, 0}};
+
+	while (1) {
+		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+
+		if (c == -1)
+			break;
+
+		switch (c) {
+		case 'p':
+			strncpy(pool_name, optarg, DAOS_PROP_LABEL_MAX_LEN);
+			break;
+		case 'c':
+			strncpy(cont_name, optarg, DAOS_PROP_LABEL_MAX_LEN);
+			break;
+		case 'h':
+			show_help(argv[0]);
+			D_GOTO(out_debug, rc = -DER_SUCCESS);
+			break;
+		case 'v':
+			show_version(argv[0]);
+
+			D_GOTO(out_debug, rc = -DER_SUCCESS);
+			break;
+		case '?':
+			show_help(argv[0]);
+			D_GOTO(out_debug, rc = -DER_INVAL);
+			break;
+		}
+	}
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
@@ -42,6 +97,10 @@ main()
 		DFUSE_TRA_DEBUG(dfuse_info, "dfuse_pool_connect() failed: %d", rc);
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
+
+	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
+		D_GOTO(out_daos, rc = -DER_INVAL);
+
 	rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
 		DFUSE_TRA_DEBUG(dfuse_info, "dfuse_cont_open() failed: %d", rc);
