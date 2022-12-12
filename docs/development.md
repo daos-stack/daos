@@ -151,3 +151,81 @@ tools/autodoc/cloudshell_urls.sh --repo-url https://github.com/daos-stack/google
 Commit the changes and push them to the develop branch.
 
 This is very tedious. We will continue to seek out a better solution for maintaining the Cloud Shell URLs.
+
+## Development Workflow and Release Process
+
+Workflow for making changes to the [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) repo and updating the community examples in [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit).
+
+Since some of the Intel community examples [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit) reference a specific tagged version of the DAOS Terraform modules in [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) we typically do not tag the [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) repo until we have tested the toolkit examples first.
+
+This requires coordiation of changes between the two repos as described below.
+
+
+### Changes to [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos)
+
+1. Fork [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) to your own GitHub account
+2. Sync the `develop` branch in your forked repo
+3. Clone your forked `google-cloud-daos` repo
+4. Check out the `develop` branch
+5. Create a new branch from the develop branch. The new branch should be named after the Jira ticket you are working on. Example: DAOSGCP-999
+6. Modify code
+7. Commit to your local dev branch
+8. Push local dev branch to your forked repo
+9. Submit PR from dev branch in your forked repo to develop branch in [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos)
+10. PR will be reviewed and merged when approved
+
+### Changes to [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit)
+
+#### Overview
+
+The [Google Cloud HPC Toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit) generates Terraform configurations that can be used to deploy HPC solutions on Google Cloud Platform.
+
+The toolkit uses yaml files called [blueprints](https://cloud.google.com/hpc-toolkit/docs/setup/hpc-blueprint) to generate Terraform configurations.
+
+The [community/examples/intel/daos-*.yaml](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel) blueprint examples use a tagged version of the DAOS terraform modules in [daos-stack/google-cloud-daos/tree/main/terraform/modules](https://github.com/daos-stack/google-cloud-daos/tree/main/terraform/modules) to deploy DAOS instances.
+
+When there are new tags on the main branch of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) the [GoogleCloudPlatform/hpc-toolkit/community/examples/intel/daos-*.yaml](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel) files must be updated accordingly.
+
+Depending on the type of changes being made it may also be necessary to update the documentation in [community/modules/file-system/Intel-DAOS/README.md](https://github.com/GoogleCloudPlatform/hpc-toolkit/blob/main/community/modules/file-system/Intel-DAOS/README.md)
+
+#### Updating the examples in [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit)
+
+1. Fork the [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit) repo
+2. Sync the develop branch of the [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit) repo in your fork
+3. Clone your forked hpc-toolkit repo
+4. Check out the develop branch
+5. Create a new dev branch from the develop branch. The new branch should be named after the Jira ticket you are working on. Example: DAOSGCP-999
+6. Modify the [community/examples/intel/daos-*.yaml](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel) blueprints to point to the develop branch of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos).
+7. Run each blueprint example
+8. Make changes to blueprints as necessary
+
+After the example blueprints are working with the DAOS terraform modules in the tip of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos) you can then focus on releasing a new version of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos).
+
+Set the toolkit aside for now.  You will need to come back to it after you release a new version of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos).
+
+
+### Release new version of [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos)
+
+#### Prerequisites
+
+- All PRs for a release have been merged to the `develop` branch in [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos)
+- The examples and documentation in the following locations have been tested against the tip of `develop` branch in [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos)
+  - [GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel/daos-*.yaml](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel)
+  - [GoogleCloudPlatform/hpc-toolkit/tree/main/community/modules/file-system/Intel-DAOS/READ.md](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/modules/file-system/Intel-DAOS/READ.md)
+
+#### Release
+
+1. Create release notes. See a [previous release](https://github.com/daos-stack/google-cloud-daos/releases/) for format and content.
+2. Create a JIRA ticket to track the task of merging from develop to main
+3. Create a PR to merge develop branch to main branch in [daos-stack/google-cloud-daos](https://github.com/daos-stack/google-cloud-daos). Use the Jira ticket number in the title of the PR.
+4. Merge PR
+5. Tag main branch with new version tag and update release notes.
+
+
+### Update [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit) to use new version of DAOS Terraform modules
+
+1. Modify the URLs in all [daos-*.yaml](https://github.com/GoogleCloudPlatform/hpc-toolkit/tree/main/community/examples/intel) blueprints.  URLs need to point to the latest tagged version of the DAOS modules in the `main` branch.
+2. Run each blueprint to test
+3. Commit changes to local dev branch
+4. Push local dev branch to forked `hpc-toolkit` repo
+5. Submit PR from dev branch in your fork to the develop branch in [GoogleCloudPlatform/hpc-toolkit](https://github.com/GoogleCloudPlatform/hpc-toolkit)

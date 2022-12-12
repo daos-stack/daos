@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,40 +16,36 @@
 #
 # Install development tools and other packages needed for IO500
 #
-set -e
+set -eo pipefail
 trap 'echo "An unexpected error occurred. Exiting."' ERR
 
+# BEGIN: Logging variables and functions
+declare -A LOG_LEVELS=([DEBUG]=0 [INFO]=1  [WARN]=2   [ERROR]=3 [FATAL]=4 [OFF]=5)
+declare -A LOG_COLORS=([DEBUG]=2 [INFO]=12 [WARN]=3 [ERROR]=1 [FATAL]=9 [OFF]=0 [OTHER]=15)
+LOG_LEVEL=INFO
+
 log() {
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  printf -- "\n%s\n %-78s \n%s\n" "${line}" "${1}" "${line}"
-  if [[ -t 1 ]]; then tput sgr0; fi
+  local msg="$1"
+  local lvl=${2:-INFO}
+  if [[ ${LOG_LEVELS[$LOG_LEVEL]} -le ${LOG_LEVELS[$lvl]} ]]; then
+    if [[ -t 1 ]]; then tput setaf "${LOG_COLORS[$lvl]}"; fi
+    printf "[%-5s] %s\n" "$lvl" "${msg}" 1>&2
+    if [[ -t 1 ]]; then tput sgr0; fi
+  fi
 }
 
-log_error() {
-  # shellcheck disable=SC2155,SC2183
-  if [[ -t 1 ]]; then tput setaf 160; fi
-  printf -- "\n%s\n\n" "${1}" >&2;
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-wait_for_yum_lock() {
-  # Wait if another app is currently holding the yum lock
-  loop_count=0
-  yum_proc_count=$(ps -ef | grep bash | grep -v "grep" | wc -l)
-  while [[ yum_proc_count -gt 0 ]] && [[ ${loop_count} -lt 5 ]]
-  do
-    printf "%s\n" "Waiting for another process to release yum lock"
-    sleep 5;
-    yum_proc_count=$(ps -ef | grep bash | grep -v "grep" | wc -l)
-    loop_count=$((loop_count+1))
-  done
-  echo "Good to go!"
-}
+log.debug() { log "${1}" "DEBUG" ; }
+log.info()  { log "${1}" "INFO"  ; }
+log.warn()  { log "${1}" "WARN"  ; }
+log.error() { log "${1}" "ERROR" ; }
+log.fatal() { log "${1}" "FATAL" ; }
+# END: Logging variables and functions
 
 install_pkgs_centos7() {
+  log.info "Installing Development Tools"
   yum group install -y "Development Tools"
+
+  log.info "Installing additional packages"
   yum install -y bzip2-devel clustershell git jq \
     libarchive-devel libuuid-devel openssl-devel patch rsync wget
 }
@@ -57,7 +53,10 @@ install_pkgs_centos7() {
 install_pkgs_centos8() {
   dnf install -y dnf-plugins-core
   dnf config-manager --set-enabled powertools
+  log.info "Installing Development Tools"
   dnf group install -y "Development Tools"
+
+  log.info "Installing additional packages"
   dnf install -y bzip2-devel clustershell \
   gcc-toolset-9-gcc gcc-toolset-9-gcc-c++ git jq \
   libarchive-devel libuuid-devel openssl-devel patch rsync wget
@@ -69,15 +68,9 @@ install_pkgs()  {
   OS_VERSION_ID="${ID,,}_${OS_VERSION}"
   case ${OS_VERSION_ID} in
     centos_7)
-      DAOS_OS_VERSION="CentOS7"
       install_pkgs_centos7
       ;;
-    centos_8)
-      DAOS_OS_VERSION="CentOS8"
-      install_pkgs_centos8
-      ;;
-    rocky_8)
-      DAOS_OS_VERSION="CentOS8"
+    almalinux_8|centos_8|rhel_8|rocky_8)
       install_pkgs_centos8
       ;;
     *)
@@ -88,7 +81,7 @@ install_pkgs()  {
 }
 
 main() {
-  log "Installing Development Tools and misc packages"
+  log.info "Installing Development Tools and misc packages"
   install_pkgs
 }
 

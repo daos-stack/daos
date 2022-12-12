@@ -15,8 +15,10 @@
 # limitations under the License.
 
 # ------------------------------------------------------------------------------
-# Configure the following variables to meet your specific needs
+# Configuration: 32 clients, 8 servers, 16 disks per server
+# IO500 Config:  io500-sc22.config-template.daos-rf0.ini
 # ------------------------------------------------------------------------------
+
 # Optional identifier to allow multiple DAOS clusters in the same GCP
 # project by using this ID in the DAOS server and client instance names.
 # Typically, this would contain the username of each user who is running
@@ -32,15 +34,15 @@ SSH_USER="daos-user"
 DAOS_ALLOW_INSECURE="false"
 
 # Server(s)
-DAOS_SERVER_INSTANCE_COUNT="1"
-DAOS_SERVER_MACHINE_TYPE=n2-highmem-32
-DAOS_SERVER_DISK_COUNT=8
+DAOS_SERVER_INSTANCE_COUNT="8"
+DAOS_SERVER_MACHINE_TYPE=n2-custom-36-262144
+DAOS_SERVER_DISK_COUNT=16
 DAOS_SERVER_CRT_TIMEOUT=300
-DAOS_SERVER_SCM_SIZE=100
+DAOS_SERVER_SCM_SIZE=200
 DAOS_SERVER_GVNIC=false
 
 # Client(s)
-DAOS_CLIENT_INSTANCE_COUNT="1"
+DAOS_CLIENT_INSTANCE_COUNT="32"
 DAOS_CLIENT_MACHINE_TYPE=c2-standard-16
 DAOS_CLIENT_GVNIC=false
 
@@ -49,15 +51,16 @@ DAOS_POOL_SIZE="$(awk -v disk_count=${DAOS_SERVER_DISK_COUNT} -v server_count=${
 DAOS_CONT_REPLICATION_FACTOR="rf:0"
 
 # IO500
-IO500_TEST_CONFIG_ID="GCP-1C-1S8d-NOGVNIC-rf0"
-IO500_STONEWALL_TIME=30  # Number of seconds to run the benchmark
+IO500_TEST_CONFIG_ID="GCP-32C-8S16d-NOGVNIC-rf0"
+IO500_STONEWALL_TIME=60  # Number of seconds to run the benchmark
 IO500_INI="io500-sc22.config-template.daos-rf0.ini"
 
 # ------------------------------------------------------------------------------
 # Modify instance base names if ID variable is set
 # ------------------------------------------------------------------------------
-DAOS_SERVER_BASE_NAME="${DAOS_SERVER_BASE_NAME:-daos-server}"
-DAOS_CLIENT_BASE_NAME="${DAOS_CLIENT_BASE_NAME:-daos-client}"
+DAOS_CONFIG_NAME="${DAOS_CLIENT_INSTANCE_COUNT}c-${DAOS_SERVER_INSTANCE_COUNT}s-${DAOS_SERVER_DISK_COUNT}d"
+DAOS_SERVER_BASE_NAME="${DAOS_SERVER_BASE_NAME:-daos-server-${DAOS_CONFIG_NAME}}"
+DAOS_CLIENT_BASE_NAME="${DAOS_CLIENT_BASE_NAME:-daos-client-${DAOS_CONFIG_NAME}}"
 if [[ -n ${ID} ]]; then
     DAOS_SERVER_BASE_NAME="${DAOS_SERVER_BASE_NAME}-${ID}"
     DAOS_CLIENT_BASE_NAME="${DAOS_CLIENT_BASE_NAME}-${ID}"
@@ -74,6 +77,7 @@ export TF_VAR_subnetwork_project="${TF_VAR_project_id}"
 export TF_VAR_region="us-central1"
 export TF_VAR_zone="us-central1-f"
 export TF_VAR_allow_insecure="${DAOS_ALLOW_INSECURE}"
+
 # Servers
 export TF_VAR_server_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_server_number_of_instances=${DAOS_SERVER_INSTANCE_COUNT}
@@ -89,6 +93,7 @@ export TF_VAR_server_machine_type="${DAOS_SERVER_MACHINE_TYPE}"
 export TF_VAR_server_os_project="${TF_VAR_project_id}"
 export TF_VAR_server_os_family="daos-server-io500-centos-7"
 export TF_VAR_server_gvnic="${DAOS_SERVER_GVNIC}"
+
 # Clients
 export TF_VAR_client_preemptible=${PREEMPTIBLE_INSTANCES}
 export TF_VAR_client_number_of_instances=${DAOS_CLIENT_INSTANCE_COUNT}

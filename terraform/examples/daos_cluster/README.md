@@ -1,16 +1,6 @@
 # DAOS Cluster Example
 
-This example Terraform configuration demonstrates how to use the [DAOS Terraform Modules](../../modules) to deploy a DAOS cluster consisting of servers and clients.
-
-## Pre-deployment
-
-If you have not completed the [pre-deployment steps](../../../README.md#pre-deployment-steps) please complete those steps before continuing to run this Terraform example.
-
-## Quickstart in Cloudshell
-
-Click the button below to run this example in a Cloudshell tutorial.  The tutorial will walk through each of the steps described in this README.md file.
-
-[![DAOS on GCP Setup](http://gstatic.com/cloudssh/images/open-btn.png)](https://console.cloud.google.com/cloudshell/open?git_repo=https://github.com/daos-stack/google-cloud-daos&cloudshell_git_branch=main&shellonly=true&tutorial=docs/tutorials/example_daos_cluster.md)
+This Terraform configuration demonstrates how to use the [DAOS Terraform Modules](../../modules) to deploy a DAOS cluster.
 
 ## Terraform Files
 
@@ -21,202 +11,19 @@ List of Terraform files in this example
 | main.tf                       | Main Terrform configuration file containing resource definitions                |
 | variables.tf                  | Variable definitions for variables used in main.tf                              |
 | versions.tf                   | Provider definitions                                                            |
-| terraform.tfvars.perf.example | Pre-Configured set of set of variables focused on performance                   |
-| terraform.tfvars.tco.example  | Pre-Configured set of set of variables focused on lower total cost of ownership |
+| terraform.tfvars.perf.example | Pre-Configured variables for a cluster that is optimized for performance                   |
+| terraform.tfvars.tco.example  | Pre-Configured variables for a cluster that is optimized for lower cost of ownership |
 
-## Deploy a DAOS Cluster With This Example
+## Deployment
 
-The following sections describe how to deploy a DAOS cluster with this example Terraform configuration.
+To deploy this example, see the instructions in [Deploy the DAOS Cluster Example](../../../docs/deploy_daos_cluster_example.md).
 
-### Create a `terraform.tfvars` file
+As an alternative to viewing the instructions as a standalone document, you can view the document as an in-context tutorial in [Cloud Shell](https://cloud.google.com/shell) by clicking the button below.
 
-Before you run any `terraform` commands you need to create a `terraform.tfvars` file in the `terraform/examples/daos_cluster` directory.
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.png)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/daos-stack/google-cloud-daos.git&cloudshell_git_branch=main&shellonly=true&cloudshell_tutorial=docs/deploy_daos_cluster_example.md)
 
-The `terraform.tfvars` file will contain the variable values for the configuration.
 
-To ensure a successful deployment of a DAOS cluster there are two `terraform.tfvars.*.example` files that you can choose from.
-
-You will need to decide which of these files to copy to `terraform.tfvars`.
-
-#### The terraform.tfvars.tco.example file
-
-The `terraform.tfvars.tco.example` contains variables for a DAOS cluster deployment with
-- 16 DAOS Client instances
-- 4 DAOS Server instances
-  Each server instance has sixteen 375GB NVMe SSDs
-
-To use the `terraform.tfvars.tco.example` file
-
-```bash
-cp terraform.tfvars.tco.example terraform.tfvars
-```
-
-#### The terraform.tfvars.perf.example file
-
-The `terraform.tfvars.perf.example` contains variables for a DAOS cluster deployment with
-- 16 DAOS Client instances
-- 4 DAOS Server instances
-  Each server instances has four 375GB NVMe SSDs
-
-To use the ```terraform.tfvars.perf.example``` file run
-
-```bash
-cp terraform.tfvars.perf.example terraform.tfvars
-```
-
-### Update `terraform.tfvars` with your project id
-
-Now that you have a `terraform.tfvars` file you need to replace the `<project_id>` placeholder in the file with your GCP project id.
-
-To update the project id in `terraform.tfvars` run
-
-```bash
-PROJECT_ID=$(gcloud config list --format 'value(core.project)')
-sed -i "s/<project_id>/${PROJECT_ID}/g" terraform.tfvars
-```
-
-### Deploy the DAOS cluster
-
-> **Billing Notification!**
->
-> Running this example will incur charges in your project.
->
-> To avoid surprises, be sure to monitor your costs associated with running this example.
->
-> Don't forget to shut down the DAOS cluster with `terraform destroy` when you are finished.
-
-To deploy the DAOS cluster
-
-```bash
-terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
-```
-
-### Perform DAOS administration tasks
-
-After your DAOS cluster has been deployed you can log into the first DAOS client instance to perform administrative tasks.
-
-#### Log into the first DAOS client instance
-
-Verify that the daos-client and daos-server instances are running
-
-```bash
-gcloud compute instances list \
-  --filter="name ~ daos" \
-  --format="value(name,INTERNAL_IP)"
-```
-
-Log into the first client instance
-
-```bash
-gcloud compute ssh daos-client-0001
-```
-
-#### Verify that all daos-server instances have joined
-
-```bash
-sudo dmg system query -v
-```
-
-The *State* column should display "Joined" for all servers.
-
-```
-Rank UUID                                 Control Address   Fault Domain      State  Reason
----- ----                                 ---------------   ------------      -----  ------
-0    0796c576-5651-4e37-aa15-09f333d2d2b8 10.128.0.35:10001 /daos-server-0001 Joined
-1    f29f7058-8abb-429f-9fd3-8b13272d7de0 10.128.0.77:10001 /daos-server-0003 Joined
-2    09fc0dab-c238-4090-b3f8-da2bd4dce108 10.128.0.81:10001 /daos-server-0002 Joined
-3    2cc9140b-fb12-4777-892e-7d190f6dfb0f 10.128.0.30:10001 /daos-server-0004 Joined
-```
-
-#### Create a Pool
-
-Check free NVMe storage.
-
-```bash
-sudo dmg storage query usage
-```
-
-From the output you can see there are 4 servers each with 1.6TB free. That means there is a total of 6.4TB free.
-
-```
-Hosts            SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
------            --------- -------- -------- ---------- --------- ---------
-daos-server-0001 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
-daos-server-0002 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
-daos-server-0003 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
-daos-server-0004 48 GB     48 GB    0 %      1.6 TB     1.6 TB    0 %
-```
-
-Create one pool that uses the entire 6.4TB.
-
-```bash
-sudo dmg pool create -z 6.4TB -t 3 --label=pool1
-```
-
-For more information about pools see
-
-- https://docs.daos.io/latest/overview/storage/#daos-pool
-- https://docs.daos.io/latest/admin/pool_operations/
-
-
-## Create a Container
-
-Create a container in the pool
-
-```bash
-daos container create --type=POSIX --properties=rf:0 --label=cont1 pool1
-```
-
-For more information about containers see https://docs.daos.io/latest/overview/storage/#daos-container
-
-### Mount the container
-
-Mount the container with `dfuse`
-
-```bash
-MOUNT_DIR="${HOME}/daos/cont1"
-mkdir -p "${MOUNT_DIR}"
-dfuse --singlethread --pool=pool1 --container=cont1 --mountpoint="${MOUNT_DIR}"
-df -h -t fuse.daos
-```
-
-You can now store files in the DAOS container mounted on `${HOME}/daos/cont1`.
-
-For more information about DFuse see the [DAOS FUSE section of the User Guide](https://docs.daos.io/v2.0/user/filesystem/?h=dfuse#dfuse-daos-fuse).
-
-### Use the Storage
-
-The `cont1` container is now mounted on `${HOME}/daos/cont1`
-
-Create a 20GiB file which will be stored in the DAOS filesystem.
-
-```bash
-cd ${HOME}/daos/cont1
-time LD_PRELOAD=/usr/lib64/libioil.so \
-  dd if=/dev/zero of=./test21G.img bs=1G count=20
-```
-
-### Unmount the container
-
-```bash
-fusermount -u ${HOME}/daos/cont1
-```
-
-### Remove DAOS cluster deployment
-
-To destroy the DAOS cluster run
-
-```bash
-terraform destroy
-```
-
-This will shut down all DAOS server and client instances.
-
-# Terraform Documentation
-
-Documentation for the `terraform/examples/daos_cluster` Terraform configuration.
+## Terraform Configuration Documentation
 
 <!-- BEGINNING OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
 Copyright 2022 Intel Corporation
@@ -265,7 +72,7 @@ No resources.
 | <a name="input_client_labels"></a> [client\_labels](#input\_client\_labels) | Set of key/value label pairs to assign to daos-client instances | `any` | `{}` | no |
 | <a name="input_client_machine_type"></a> [client\_machine\_type](#input\_client\_machine\_type) | GCP machine type. ie. c2-standard-16 | `string` | `"c2-standard-16"` | no |
 | <a name="input_client_mig_name"></a> [client\_mig\_name](#input\_client\_mig\_name) | MIG name | `string` | `"daos-client"` | no |
-| <a name="input_client_number_of_instances"></a> [client\_number\_of\_instances](#input\_client\_number\_of\_instances) | Number of daos clients to bring up | `number` | `4` | no |
+| <a name="input_client_number_of_instances"></a> [client\_number\_of\_instances](#input\_client\_number\_of\_instances) | Number of daos clients to bring up | `number` | `16` | no |
 | <a name="input_client_os_disk_size_gb"></a> [client\_os\_disk\_size\_gb](#input\_client\_os\_disk\_size\_gb) | OS disk size in GB | `number` | `20` | no |
 | <a name="input_client_os_disk_type"></a> [client\_os\_disk\_type](#input\_client\_os\_disk\_type) | OS disk type ie. pd-ssd, pd-standard | `string` | `"pd-ssd"` | no |
 | <a name="input_client_os_family"></a> [client\_os\_family](#input\_client\_os\_family) | OS GCP image family | `string` | `"daos-client-hpc-centos-7"` | no |

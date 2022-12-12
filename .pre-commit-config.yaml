@@ -26,7 +26,7 @@ repos:
         pass_filenames: true
         require_serial: true
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.64.0
+    rev: v1.76.0
     hooks:
       - id: terraform_fmt
       - id: terraform_tflint
@@ -43,3 +43,7 @@ repos:
         exclude: \.terraform\/.*$
         pass_filenames: true
         require_serial: true
+  - repo: https://github.com/jumanjihouse/pre-commit-hooks
+    rev: 3.0.0
+    hooks:
+      - id: shellcheck

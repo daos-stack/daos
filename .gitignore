@@ -27,6 +27,8 @@ id_rsa*
 hosts*
 *.flag
 keys.txt
+results/
+module.json
 
 # addlicense binary for pre-commit
 tools/autodoc/addlicense

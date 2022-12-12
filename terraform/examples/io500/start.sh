@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 2022 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,11 +23,17 @@
 # is used as a bastion host.
 #
 
-set -e
+set -eo pipefail
 trap 'echo "Hit an unexpected and unchecked error. Exiting."' ERR
 
-SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
+SCRIPT_FILENAME=$(basename "${BASH_SOURCE[0]}")
+
+# shellcheck source=_log.sh
+source "${SCRIPT_DIR}/_log.sh"
+
+# shellcheck disable=SC2034
+LOG_LEVEL=INFO
 
 # Directory where all generated files will be stored
 IO500_TMP="${SCRIPT_DIR}/tmp"
@@ -52,13 +58,12 @@ USE_INTERNAL_IP=0
 
 ERROR_MSGS=()
 
-
 show_help() {
   cat <<EOF
 
 Usage:
 
-  ${SCRIPT_NAME} <options>
+  ${SCRIPT_FILENAME} <options>
 
   Set up DAOS server and client images in GCP that are capable of running the
   IO500 benchmark.
@@ -83,42 +88,19 @@ Examples:
 
   Deploy a DAOS environment with a specifc configuration
 
-    ${SCRIPT_NAME} -c ./config/config_1c_1s_8d.sh
+    ${SCRIPT_FILENAME} -c ./config/config_1c_1s_8d.sh
 
 EOF
-}
-
-log() {
-  msg="$1"
-  print_lines="$2"
-  # shellcheck disable=SC2155,SC2183
-  local line=$(printf "%80s" | tr " " "-")
-  if [[ -t 1 ]]; then tput setaf 14; fi
-  if [[ "${print_lines}" == 1 ]]; then
-    printf -- "\n%s\n %-78s \n%s\n" "${line}" "${msg}" "${line}"
-  else
-    printf -- "\n%s\n\n" "${msg}"
-  fi
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_error() {
-  # shellcheck disable=SC2155,SC2183
-  if [[ -t 1 ]]; then tput setaf 160; fi
-  printf -- "\n%s\n\n" "${1}" >&2;
-  if [[ -t 1 ]]; then tput sgr0; fi
-}
-
-log_section() {
-  log "$1" "1"
 }
 
 show_errors() {
   # If there are errors, print the error messages and exit
   if [[ ${#ERROR_MSGS[@]} -gt 0 ]]; then
-    printf "\n" >&2
-    log_error "${ERROR_MSGS[@]}"
-    show_help
+    # shellcheck disable=SC2034
+    for msg in "${ERROR_MSGS[@]}"; do
+      log.error "${ERROR_MSGS[@]}"
+    done
+    #show_help
     exit 1
   fi
 }
@@ -126,14 +108,14 @@ show_errors() {
 check_dependencies() {
   # Exit if gcloud command not found
   if ! gcloud -v &> /dev/null; then
-    log_error "ERROR: 'gcloud' command not found
+    log.error "'gcloud' command not found
        Is the Google Cloud Platform SDK installed?
        See https://cloud.google.com/sdk/docs/install"
     exit 1
   fi
   # Exit if terraform command not found
   if ! terraform -v &> /dev/null; then
-    log_error "ERROR: 'terraform' command not found
+    log.error "'terraform' command not found
        Is Terraform installed?"
     exit 1
   fi
@@ -164,7 +146,7 @@ opts() {
       --version|-v)
         DAOS_VERSION="${2}"
         if [[ "${DAOS_VERSION}" == -* ]] || [[ "${DAOS_VERSION}" = "" ]] || [[ -z ${DAOS_VERSION} ]]; then
-          log_error "ERROR: Missing DAOS_VERSION value for -v or --version"
+          log.error "Missing DAOS_VERSION value for -v or --version"
           show_help
           exit 1
         fi
@@ -174,7 +156,7 @@ opts() {
       --repo-baseurl|-u)
         DAOS_REPO_BASE_URL="${2}"
         if [[ "${DAOS_REPO_BASE_URL}" == -* ]] || [[ "${DAOS_REPO_BASE_URL}" = "" ]] || [[ -z ${DAOS_REPO_BASE_URL} ]]; then
-          log_error "ERROR: Missing URL value for -u or --repo-baseurl"
+          log.error "Missing URL value for -u or --repo-baseurl"
           show_help
           exit 1
         fi
@@ -202,7 +184,7 @@ opts() {
       ;;
     esac
   done
-  set -e
+  set -eo pipefail
 
   show_errors
 }
@@ -213,21 +195,21 @@ create_active_config_symlink() {
   # always source the same config file that was used in start.sh
   if [[ -L "${ACTIVE_CONFIG}" ]]; then
     current_config=$(readlink "${ACTIVE_CONFIG}")
-    if [[ "$(basename ${CONFIG_FILE})" != $(basename "${current_config}") ]]; then
-       read -d '' err_msg <<EOF || true
+    if [[ "$(basename "${CONFIG_FILE}")" != $(basename "${current_config}") ]]; then
+       read -r -d '' err_msg <<EOF || true
 ERROR
 Cannot use configuration: ${CONFIG_FILE}
 An active configuration already exists: ${current_config}
 
 You must run
 
-  ${SCRIPT_NAME} -c ${current_config}
+  ${SCRIPT_FILENAME} -c ${current_config}
 
 or run the stop.sh script before running
 
-  ${SCRIPT_NAME} -c ${CONFIG_FILE}
+  ${SCRIPT_FILENAME} -c ${CONFIG_FILE}
 EOF
-      log_error "${err_msg}"
+      log.error "${err_msg}"
       exit 1
     fi
   else
@@ -238,7 +220,8 @@ EOF
 load_config() {
   # Load configuration which contains all settings for Terraform and the IO500
   # benchmark
-  log "Sourcing config file: ${CONFIG_FILE}"
+  log.info "Sourcing config file: ${CONFIG_FILE}"
+  # shellcheck source=/dev/null
   source "${CONFIG_FILE}"
 }
 
@@ -264,22 +247,22 @@ create_hosts_files() {
 
   rm -f "${HOSTS_CLIENTS_FILE}" "${HOSTS_SERVERS_FILE}" "${HOSTS_ALL_FILE}"
 
-  for ((i=1; i<=${DAOS_CLIENT_INSTANCE_COUNT}; i++))
+  for ((i=1; i<=DAOS_CLIENT_INSTANCE_COUNT; i++))
   do
-      CLIENTS+="${DAOS_CLIENT_BASE_NAME}-$(printf %04d ${i}) "
-      echo ${DAOS_CLIENT_BASE_NAME}-$(printf %04d ${i})>>"${HOSTS_CLIENTS_FILE}"
-      echo ${DAOS_CLIENT_BASE_NAME}-$(printf %04d ${i})>>"${HOSTS_ALL_FILE}"
+      CLIENTS+="${DAOS_CLIENT_BASE_NAME}-$(printf "%04d" "${i}") "
+      echo "${DAOS_CLIENT_BASE_NAME}-$(printf "%04d" "${i}")" >> "${HOSTS_CLIENTS_FILE}"
+      echo "${DAOS_CLIENT_BASE_NAME}-$(printf "%04d" "${i}")" >> "${HOSTS_ALL_FILE}"
   done
 
-  for ((i=1; i<=${DAOS_SERVER_INSTANCE_COUNT}; i++))
+  for ((i=1; i<=DAOS_SERVER_INSTANCE_COUNT; i++))
   do
-      SERVERS+="${DAOS_SERVER_BASE_NAME}-$(printf %04d ${i}) "
-      echo ${DAOS_SERVER_BASE_NAME}-$(printf %04d ${i})>>"${HOSTS_SERVERS_FILE}"
-      echo ${DAOS_SERVER_BASE_NAME}-$(printf %04d ${i})>>"${HOSTS_ALL_FILE}"
+      SERVERS+="${DAOS_SERVER_BASE_NAME}-$(printf "%04d" "${i}") "
+      echo "${DAOS_SERVER_BASE_NAME}-$(printf "%04d" "${i}")" >> "${HOSTS_SERVERS_FILE}"
+      echo "${DAOS_SERVER_BASE_NAME}-$(printf "%04d" "${i}")" >> "${HOSTS_ALL_FILE}"
   done
 
-  DAOS_FIRST_CLIENT=$(echo ${CLIENTS} | awk '{print $1}')
-  DAOS_FIRST_SERVER=$(echo ${SERVERS} | awk '{print $1}')
+  DAOS_FIRST_CLIENT=$(echo "${CLIENTS}" | awk '{print $1}')
+  DAOS_FIRST_SERVER=$(echo "${SERVERS}" | awk '{print $1}')
   ALL_NODES="${SERVERS} ${CLIENTS}"
 
   export CLIENTS
@@ -294,11 +277,12 @@ create_hosts_files() {
 
 build_disk_images() {
   # Build the DAOS disk images
+  log.section "IO500 Disk Images"
   "${SCRIPT_DIR}/build_daos_io500_images.sh" --type all
 }
 
 run_terraform() {
-  log_section "Deploying DAOS Servers and Clients using Terraform"
+  log.section "Deploying DAOS Servers and Clients using Terraform"
   pushd ../daos_cluster
   terraform init -input=false
   terraform plan -out=tfplan -input=false
@@ -308,8 +292,9 @@ run_terraform() {
 
 configure_first_client_ip() {
 
-  log "Wait for DAOS client instances"
-  gcloud compute instance-groups managed wait-until ${TF_VAR_client_template_name} \
+  log.info "Wait for DAOS client instances"
+  # shellcheck disable=SC2154
+  gcloud compute instance-groups managed wait-until "${TF_VAR_client_template_name}" \
     --stable \
     --project="${TF_VAR_project_id}" \
     --zone="${TF_VAR_zone}"
@@ -328,7 +313,7 @@ configure_first_client_ip() {
       --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
 
     if [[ -z "${FIRST_CLIENT_IP}" ]]; then
-      log "Add external IP to first client"
+      log.info "Add external IP to first client"
 
       gcloud compute instances add-access-config "${DAOS_FIRST_CLIENT}" \
         --project="${TF_VAR_project_id}" \
@@ -356,23 +341,23 @@ configure_ssh() {
   #       who has access to the daos-* instances. Users would access the daos-*
   #       instances the same way they do all other instances in their project.
 
-  log_section "Configure SSH on first client instance ${DAOS_FIRST_CLIENT}"
+  log.section "Configure SSH on first client instance ${DAOS_FIRST_CLIENT}"
 
   # Create an ssh key for the current IO500 example environment
   if [[ ! -f "${IO500_TMP}/id_rsa" ]]; then
-    log "Generating SSH key pair"
+    log.info "Generating SSH key pair"
     ssh-keygen -t rsa -b 4096 -C "${SSH_USER}" -N '' -f "${IO500_TMP}/id_rsa"
   fi
   chmod 600 "${IO500_TMP}/id_rsa"
 
   if [[ ! -f "${IO500_TMP}/id_rsa.pub" ]]; then
-    log_error "Missing file: ${IO500_TMP}/id_rsa.pub"
-    log_error "Unable to continue without id_rsa and id_rsa.pub files in ${IO500_TMP}"
+    log.error "Missing file: ${IO500_TMP}/id_rsa.pub"
+    log.error "Unable to continue without id_rsa and id_rsa.pub files in ${IO500_TMP}"
     exit 1
   fi
 
   # Generate file containing keys which will be added to the metadata of all nodes.
-  echo "${SSH_USER}:$(cat ${IO500_TMP}/id_rsa.pub)" > "${IO500_TMP}/keys.txt"
+  echo "${SSH_USER}:$(cat "${IO500_TMP}/id_rsa.pub")" > "${IO500_TMP}/keys.txt"
 
   # Only update instance meta-data once
   if ! gcloud compute instances describe "${DAOS_FIRST_CLIENT}" \
@@ -380,7 +365,7 @@ configure_ssh() {
     --zone="${TF_VAR_zone}" \
     --format='value[](metadata.items.ssh-keys)' | grep -q "${SSH_USER}"; then
 
-    log "Disable os-login and add '${SSH_USER}' SSH key to metadata on all instances"
+    log.info "Disable os-login and add '${SSH_USER}' SSH key to metadata on all instances"
     for node in ${ALL_NODES}; do
       echo "Updating metadata for ${node}"
       # Disable OSLogin to be able to connect with SSH keys uploaded in next command
@@ -427,16 +412,16 @@ Host ${FIRST_CLIENT_IP}
 EOF
   chmod 600 "${SSH_CONFIG_FILE}"
 
-  log "Copy SSH key to first DAOS client instance ${DAOS_FIRST_CLIENT}"
+  log.info "Copy SSH key to first DAOS client instance ${DAOS_FIRST_CLIENT}"
 
   # Create ~/.ssh directory on first daos-client instance
-  ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} \
+  ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
     "mkdir -m 700 -p ~/.ssh"
 
   # Copy SSH key pair to first daos-client instance
   scp -q -F "${SSH_CONFIG_FILE}" \
-    ${IO500_TMP}/id_rsa \
-    ${IO500_TMP}/id_rsa.pub \
+    "${IO500_TMP}/id_rsa" \
+    "${IO500_TMP}/id_rsa.pub" \
     "${FIRST_CLIENT_IP}:~/.ssh/"
 
   # Copy SSH config to first daos-client instance and set permissions
@@ -446,7 +431,7 @@ EOF
   ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
     "chmod -R 600 ~/.ssh/*"
 
-  echo "#!/bin/bash
+  echo "#!/usr/bin/env bash
   ssh -F ./tmp/ssh_config ${FIRST_CLIENT_IP}" > "${SCRIPT_DIR}/login"
   chmod +x "${SCRIPT_DIR}/login"
 }
@@ -455,7 +440,7 @@ copy_files_to_first_client() {
   # Copy the files that will be needed in order to run pdsh, clush and other
   # commands on the first daos-client instance
 
-  log "Copy files to first client ${DAOS_FIRST_CLIENT}"
+  log.info "Copy files to first client ${DAOS_FIRST_CLIENT}"
 
   # Copy the config file for the IO500 example environment
   scp -F "${SSH_CONFIG_FILE}" \
@@ -466,17 +451,20 @@ copy_files_to_first_client() {
     "${HOSTS_CLIENTS_FILE}" \
     "${HOSTS_SERVERS_FILE}" \
     "${HOSTS_ALL_FILE}" \
-    ${SCRIPT_DIR}/clean_storage.sh \
-    ${SCRIPT_DIR}/run_io500-isc22.sh \
-    ${SCRIPT_DIR}/io500-isc22.config-template.daos-rf0.ini \
+    "${SCRIPT_DIR}/_log.sh" \
+    "${SCRIPT_DIR}/clean_storage.sh" \
+    "${SCRIPT_DIR}/run_io500-sc22.sh" \
+    "${SCRIPT_DIR}/io500-sc22.config-template.daos-rf0.ini" \
+    "${SCRIPT_DIR}/io500-sc22.config-template.daos-rf1.ini" \
+    "${SCRIPT_DIR}/io500-sc22.config-template.daos-rf2.ini" \
     "${FIRST_CLIENT_IP}:~/"
 
-  ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} \
+  ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
     "chmod +x ~/*.sh && chmod -x ~/config.sh"
 
 }
 
-propagate_ssh_keys_to_all_nodes () {
+copy_ssh_keys_to_all_nodes () {
   # Clear ~/.ssh/known_hosts so we don't run into any issues
   ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" \
     "clush --hostfile=hosts_all --dsh 'rm -f ~/.ssh/known_hosts'"
@@ -509,8 +497,8 @@ set_permissions_on_cert_files () {
 }
 
 show_instances() {
-  log_section "DAOS Server and Client instances"
-  DAOS_FILTER="$(echo ${DAOS_SERVER_BASE_NAME} | sed -r 's/server/.*/g')-.*"
+  log.section "DAOS Server and Client instances"
+  DAOS_FILTER="$(echo "${DAOS_SERVER_BASE_NAME}" | sed -r 's/server/.*/g')-.*"
   gcloud compute instances list \
     --project="${TF_VAR_project_id}" \
     --zones="${TF_VAR_zone}" \
@@ -518,18 +506,16 @@ show_instances() {
 }
 
 check_gvnic() {
-  DAOS_SERVER_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} "ssh ${DAOS_FIRST_SERVER} 'sudo lshw -class network'" | sed -n "s/^.*product: \(.*\$\)/\1/p")
-  DAOS_CLIENT_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" ${FIRST_CLIENT_IP} "sudo lshw -class network" | sed -n "s/^.*product: \(.*\$\)/\1/p")
-
-  log_section "Network adapters type:"
-  printf '%s\n%s\n' \
-    "DAOS_SERVER_NETWORK_TYPE = ${DAOS_SERVER_NETWORK_TYPE}" \
-    "DAOS_CLIENT_NETWORK_TYPE = ${DAOS_CLIENT_NETWORK_TYPE}"
+  DAOS_SERVER_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" "ssh ${DAOS_FIRST_SERVER} 'sudo lshw -class network'" | sed -n "s/^.*product: \(.*\$\)/\1/p")
+  DAOS_CLIENT_NETWORK_TYPE=$(ssh -q -F "${SSH_CONFIG_FILE}" "${FIRST_CLIENT_IP}" "sudo lshw -class network" | sed -n "s/^.*product: \(.*\$\)/\1/p")
+  log.debug "Network adapters type:"
+  log.debug "DAOS_SERVER_NETWORK_TYPE = ${DAOS_SERVER_NETWORK_TYPE}"
+  log.debug "DAOS_CLIENT_NETWORK_TYPE = ${DAOS_CLIENT_NETWORK_TYPE}"
 }
 
 show_run_steps() {
 
- log_section "DAOS Server and Client instances are ready for IO500 run"
+ log.section "DAOS Server and Client instances are ready for IO500 run"
 
  cat <<EOF
 
@@ -539,7 +525,7 @@ To run the IO500 benchmark:
    ./login
 
 2. Run IO500
-   ./run_io500-isc22.sh
+   ./run_io500-sc22.sh
 
 EOF
 }
@@ -555,7 +541,7 @@ main() {
   configure_first_client_ip
   configure_ssh
   copy_files_to_first_client
-  propagate_ssh_keys_to_all_nodes
+  copy_ssh_keys_to_all_nodes
   wait_for_startup_script_to_finish
   set_permissions_on_cert_files
   show_instances
