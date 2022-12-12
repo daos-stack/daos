@@ -11,8 +11,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#define AD_MEM_DEBUG	0
-
 static __thread int	tls_open_nr;	/* #openers of blob */
 
 static struct ad_arena *arena_alloc(struct ad_blob *blob, bool force, int sorter_sz);
@@ -31,10 +29,18 @@ static int blob_register_arena(struct ad_blob *blob, unsigned int arena_type,
 static int arena_reserve(struct ad_blob *blob, unsigned int type,
 			 struct umem_store *store_extern, struct ad_arena **arena_p);
 static int arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx);
-static void arena_debug_sorter(struct ad_arena *arena);
+static void arena_dump(struct ad_arena *arena);
 static inline int group_unit_avail(const struct ad_group_df *gd);
 static inline int group_weight(const struct ad_group_df *gd);
 static int find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits);
+
+#define ASSERT_DUMP_ARENA(cond, arena)		\
+do {						\
+	if (cond)				\
+		break;				\
+	arena_dump(arena);			\
+	D_ASSERT(0);				\
+} while (0)
 
 /* default group specs */
 static struct ad_group_spec grp_specs_def[] = {
@@ -121,23 +127,38 @@ static struct ad_group_spec grp_specs_large[] = {
 
 static struct ad_blob	*dummy_blob;
 
-static inline void setbits64(uint64_t *bmap, int at, int bits)
+static inline void
+setbits64(uint64_t *bmap, int at, int bits)
 {
 	setbit_range((uint8_t *)bmap, at, at + bits - 1);
 }
 
 #define setbit64(bm, at)	setbits64(bm, at, 1)
 
-static inline void clrbits64(uint64_t *bmap, int at, int bits)
+static inline void
+clrbits64(uint64_t *bmap, int at, int bits)
 {
 	clrbit_range((uint8_t *)bmap, at, at + bits - 1);
 }
 
 #define clrbit64(bm, at)	clrbits64(bm, at, 1)
 
-static inline bool isset64(uint64_t *bmap, int at)
+static inline bool
+isset64(uint64_t *bmap, int at)
 {
 	return isset((uint8_t *)bmap, at);
+}
+
+static int
+group_u2b(int unit, int unit_nr)
+{
+	return ((unit_nr * unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
+}
+
+static int
+group_df2b(struct ad_group_df *gd)
+{
+	return group_u2b(gd->gd_unit, gd->gd_unit_nr);
 }
 
 static struct ad_group *
@@ -211,8 +232,8 @@ blob_bmap_size(struct ad_blob *blob)
 	return (blob->bb_pgs_nr + 63) >> 6;
 }
 
-#define GROUP_LRU_MAX	(256 << 10)
-#define ARENA_LRU_MAX	(64 << 10)
+#define GROUP_LRU_MAX	(256U << 10)
+#define ARENA_LRU_MAX	(64U << 10)
 
 static bool
 arena_free_heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
@@ -296,23 +317,25 @@ blob_init(struct ad_blob *blob)
 		/* NB: buffer must align with arena size, because ptr2addr() depends on
 		 * this to find address of ad_arena.
 		 */
-		D_ALIGNED_ALLOC(buf, ARENA_SIZE, blob->bb_pgs_nr << ARENA_SIZE_BITS);
+		D_ALIGNED_ALLOC(buf, ARENA_SIZE, (uint64_t)blob->bb_pgs_nr << ARENA_SIZE_BITS);
 		if (!buf)
 			goto failed;
 
 		blob->bb_mmap = buf;
 	} else {
-		blob->bb_mmap = mmap(NULL, blob_size(blob), PROT_READ|PROT_WRITE,
+		blob->bb_mmap = mmap(NULL, blob->bb_stat_sz, PROT_READ|PROT_WRITE,
 				     MAP_SHARED, blob->bb_fd, 0);
 		if (blob->bb_mmap == MAP_FAILED) {
 			rc = daos_errno2der(errno);
 			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
 			goto failed;
 		}
+		D_DEBUG(DB_TRACE, "blob path %s, mmap %p, size "DF_U64"\n",
+			blob->bb_path, blob->bb_mmap, blob_size(blob));
 		buf = blob->bb_mmap;
 	}
 	for (i = 0; i < blob->bb_pgs_nr; i++) {
-		blob->bb_pages[i].pa_rpg = buf + (i << ARENA_SIZE_BITS);
+		blob->bb_pages[i].pa_rpg = buf + ((uint64_t)i << ARENA_SIZE_BITS);
 		blob->bb_pages[i].pa_cpg = NULL; /* reserved for future use */
 	}
 
@@ -392,49 +415,61 @@ blob_fini(struct ad_blob *blob)
 	}
 }
 
-static uint32_t
-arena_free_size(struct ad_arena_df *ad)
+#define ARENA_WEIGHT_BITS	14
+#define ARENA_WEIGHT_MASK	((1 << ARENA_WEIGHT_BITS) - 1)
+
+static inline int
+arena_weight(struct ad_maxheap_node *node)
 {
-	int		    grp_idx;
-	uint32_t	    free_size = 0;
-	struct ad_group_df  *gd;
-	uint32_t	    grp_bit_max = (ARENA_SIZE + ARENA_UNIT_SIZE - 1) / ARENA_UNIT_SIZE;
+	int	size;
 
-	for (grp_idx = 0; grp_idx < grp_bit_max; grp_idx++) {
-		if (!isset64(ad->ad_bmap, grp_idx))
-			free_size += (1 << GRP_SIZE_SHIFT);
-	}
-
-	for (grp_idx = 0; grp_idx < ARENA_GRP_MAX; grp_idx++) {
-		gd = &ad->ad_groups[grp_idx];
-		if (gd->gd_addr != 0)
-			free_size += gd->gd_unit_free * gd->gd_unit;
-	}
-
-	return free_size;
+	size = node->mh_free_size - node->mh_frag_size;
+	D_ASSERT(size >= 0);
+	/* Avoid to change weight of an arena on every small alloc/free (reorder arena) */
+	return (size + ARENA_WEIGHT_MASK) >> ARENA_WEIGHT_BITS;
 }
 
-#define ARENA_WEIGHT_BITS 14
-
-/* Avoid to change weight of an arena on every alloc/free (reorder arena) */
-static inline uint32_t
-arena_weight(int free_size)
+void
+arena_init_weight(struct ad_arena_df *ad, struct ad_maxheap_node *node)
 {
-	return (free_size + (1 << ARENA_WEIGHT_BITS) - 1) >> ARENA_WEIGHT_BITS;
+	int		    i;
+	uint32_t	    frag_size = 0;
+	uint32_t	    free_size = ARENA_SIZE;
+
+	free_size -= ARENA_HDR_SIZE;
+	if (ad->ad_id == 0)
+		free_size -= (BLOB_HDR_SIZE + AD_ROOT_OBJ_SIZE);
+
+	for (i = 0; i < ARENA_GRP_MAX; i++) {
+		struct ad_group_df  *gd = &ad->ad_groups[i];
+		int		     bits;
+
+		if (gd->gd_addr == 0)
+			continue;
+
+		bits = group_df2b(gd);
+		free_size -= (gd->gd_unit_nr - gd->gd_unit_free) * gd->gd_unit;
+		frag_size += (bits << GRP_SIZE_SHIFT) - (gd->gd_unit_nr * gd->gd_unit);
+	}
+	D_ASSERT(free_size >= 0);
+	D_ASSERT(frag_size >= 0);
+
+	node->mh_free_size = free_size;
+	node->mh_frag_size = frag_size;
+	node->mh_weight	   = arena_weight(node);
 }
 
 static int
-arena_insert_free_entry(struct ad_blob *blob, uint32_t arena_id, int free_size)
+arena_insert_free_entry(struct ad_blob *blob, struct ad_arena_df *ad)
 {
 	struct ad_maxheap_node	*mh_node;
 	int			 rc;
 
-	D_ASSERT(arena_id < blob->bb_pgs_nr);
-	mh_node = &blob->bb_mh_nodes[arena_id];
+	D_ASSERT(ad->ad_id < blob->bb_pgs_nr);
+	mh_node = &blob->bb_mh_nodes[ad->ad_id];
 
-	mh_node->mh_free_size = free_size;
-	mh_node->mh_weight = arena_weight(free_size);
-	mh_node->mh_arena_id = arena_id;
+	arena_init_weight(ad, mh_node);
+	mh_node->mh_arena_id = ad->ad_id;
 	rc = d_binheap_insert(&blob->bb_arena_free_heap, &mh_node->mh_node);
 	D_ASSERT(rc == 0);
 
@@ -458,7 +493,6 @@ blob_load(struct ad_blob *blob)
 	struct ad_blob_df *bd = blob->bb_df;
 	int		   i;
 	int		   rc = 0;
-	struct ad_arena_df *ad;
 
 	for (i = 0; i < blob->bb_pgs_nr; i++) {
 		struct ad_page		*page;
@@ -479,9 +513,11 @@ blob_load(struct ad_blob *blob)
 			}
 		}
 		if (isset64(bd->bd_bmap, i)) {
-			ad = (struct ad_arena_df *)blob->bb_pages[i].pa_rpg;
+			struct ad_arena_df *ad;
 
-			rc = arena_insert_free_entry(blob, i, arena_free_size(ad));
+			ad = (struct ad_arena_df *)blob->bb_pages[i].pa_rpg;
+			D_ASSERT(ad->ad_id == i);
+			rc = arena_insert_free_entry(blob, ad);
 			if (rc) {
 				D_ERROR("Failed to insert arena free memory entry: %d\n", rc);
 				goto out;
@@ -554,6 +590,7 @@ blob_close(struct ad_blob *blob)
 		D_ASSERT(dummy_blob == blob);
 		dummy_blob = NULL;
 	}
+	D_FREE(blob->bb_path);
 
 	tls_open_nr--;
 	if (tls_open_nr == 0)
@@ -561,12 +598,16 @@ blob_close(struct ad_blob *blob)
 }
 
 static int
-blob_file_open(const char *path, size_t *size, bool create)
+blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create)
 {
 	struct stat	stat_buf;
 	int		fd;
 	int		flags;
 	int		rc;
+
+	blob->bb_path = strdup(path);
+	if (blob->bb_path == NULL)
+		return -DER_NOMEM;
 
 	if (*size == 0) {
 		/* Open the file and obtain the size */
@@ -576,14 +617,6 @@ blob_file_open(const char *path, size_t *size, bool create)
 			return daos_errno2der(errno);
 		}
 
-		if (fstat(fd, &stat_buf) != 0) {
-			close(fd);
-			D_ERROR("fstat %s failed, errno %d:%s\n", path, errno, strerror(errno));
-			return daos_errno2der(errno);
-		}
-
-		*size = stat_buf.st_size;
-		D_DEBUG(DB_TRACE, "stat %s size %zu\n", path, *size);
 	} else {
 		if (create && access(path, F_OK) == 0) {
 			D_DEBUG(DB_TRACE, "path %s existed.\n", path);
@@ -621,6 +654,17 @@ blob_file_open(const char *path, size_t *size, bool create)
 		}
 	}
 
+	if (fstat(fd, &stat_buf) != 0) {
+		close(fd);
+		D_ERROR("fstat %s failed, errno %d:%s\n", path, errno, strerror(errno));
+		return daos_errno2der(errno);
+	}
+
+	blob->bb_stat_sz = stat_buf.st_size;
+	if (*size == 0)
+		*size = stat_buf.st_size;
+	D_DEBUG(DB_TRACE, "stat %s size %zu\n", path, *size);
+
 	return fd;
 }
 
@@ -654,7 +698,7 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	blob->bb_ref	= 1;
 	blob->bb_dummy	= is_dummy;
 	if (!is_dummy) {
-		rc = blob_file_open(path, &store->stor_size, true);
+		rc = blob_file_open(blob, path, &store->stor_size, true);
 		if (rc < 0) {
 			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
 			return rc;
@@ -760,7 +804,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 			return -DER_NOMEM;
 
 		blob->bb_ref = 1;
-		rc = blob_file_open(path, &store->stor_size, false);
+		rc = blob_file_open(blob, path, &store->stor_size, false);
 		if (rc < 0) {
 			D_FREE(blob);
 			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
@@ -904,8 +948,8 @@ ad_ptr2addr(struct ad_blob_handle bh, void *ptr)
 static int
 group_size_cmp(const void *p1, const void *p2)
 {
-	const struct ad_group_df *gd1 = p1;
-	const struct ad_group_df *gd2 = p2;
+	const struct ad_group_df *gd1 = *((struct ad_group_df **)p1);
+	const struct ad_group_df *gd2 = *((struct ad_group_df **)p2);
 	int			  w1;
 	int			  w2;
 
@@ -932,8 +976,8 @@ group_size_cmp(const void *p1, const void *p2)
 static int
 group_addr_cmp(const void *p1, const void *p2)
 {
-	const struct ad_group_df *gd1 = p1;
-	const struct ad_group_df *gd2 = p2;
+	const struct ad_group_df *gd1 = *((struct ad_group_df **)p1);
+	const struct ad_group_df *gd2 = *((struct ad_group_df **)p2);
 
 	if (gd1->gd_addr < gd2->gd_addr)
 		return -1;
@@ -951,25 +995,36 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 	struct ad_blob_df  *bd = blob->bb_df;
 	bool		    reserving = false;
 	int		    id = *arena_id;
+	int		    rc;
 
 	if (id == AD_ARENA_ANY) {
 		int	bits = 1;
 
 		id = find_bits(bd->bd_bmap, blob->bb_bmap_rsv, blob_bmap_size(blob), 1, &bits);
 		if (id < 0) {
-			D_ERROR("Blob is full, cannot create more arena\n");
-			return -DER_NOSPACE;
+			rc = -DER_NOSPACE;
+			D_ERROR("Blob %s is full, cannot create more arena, "DF_RC"\n",
+				blob->bb_path, DP_RC(rc));
+			return rc;
 		}
 		reserving = true;
 	}
 
-	if (((id + 1) << ARENA_SIZE_BITS) > blob_size(blob))
-		return reserving ? -DER_NOSPACE : -DER_INVAL;
+	if ((((uint64_t)id + 1) << ARENA_SIZE_BITS) > blob_size(blob)) {
+		rc = reserving ? -DER_NOSPACE : -DER_INVAL;
+		D_ERROR("Blob %s, arena id %d, blob_size "DF_U64", "DF_RC"\n",
+			blob->bb_path, id, blob_size(blob), DP_RC(rc));
+		return rc;
+	}
 
 	if (!reserving &&
 	    !isset64(bd->bd_bmap, id) &&
-	    !isset64(blob->bb_bmap_rsv, id))
-		return -DER_NONEXIST;
+	    !isset64(blob->bb_bmap_rsv, id)) {
+		rc = -DER_NONEXIST;
+		D_ERROR("Blob %s arena id %d not allocated or reserved, "DF_RC"\n",
+			blob->bb_path, id, DP_RC(rc));
+		return rc;
+	}
 
 	/* Arena is the header of each page */
 	*ad_p = (struct ad_arena_df *)blob->bb_pages[id].pa_rpg;
@@ -1065,10 +1120,8 @@ arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 		qsort(arena->ar_addr_sorter, arena->ar_grp_nr, sizeof(gd), group_addr_cmp);
 	}
 	node = arena2heap_node(arena);
-	if (!node->mh_in_tree) {
-		node->mh_free_size = arena_free_size(ad);
-		node->mh_weight = arena_weight(node->mh_free_size);
-	}
+	if (!node->mh_in_tree)
+		arena_init_weight(ad, node);
 out:
 	if (arena_p)
 		*arena_p = arena;
@@ -1104,6 +1157,7 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	id = AD_ARENA_ANY;
 	rc = arena_find(blob, &id, &ad);
 	if (rc) {
+		D_ERROR("Failed to find available arena\n");
 		D_ASSERT(rc == -DER_NOSPACE);
 		return rc;
 	}
@@ -1164,7 +1218,8 @@ arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx)
 	if (rc)
 		return rc;
 
-	rc = ad_tx_assign(tx, &spec->as_last_used, sizeof(spec->as_last_used), ad->ad_id);
+	rc = ad_tx_assign(tx, &spec->as_last_used, sizeof(spec->as_last_used), ad->ad_id,
+			  AD_TX_REDO | AD_TX_UNDO);
 	if (rc)
 		return rc;
 
@@ -1252,17 +1307,28 @@ group_unit_avail(const struct ad_group_df *gd)
 	return units;
 }
 
-#define GRP_WEIGHT_BITS	3
-
 /* Avoid to change weight of a group on every alloc/free (reorder groups) */
 static inline int
 group_weight(const struct ad_group_df *gd)
 {
-	int	units;
+	int	units = group_unit_avail(gd);
+	int	bits  = 0;
+	int	weight;
 
-	units = group_unit_avail(gd);
-	units = (units + (1 << GRP_WEIGHT_BITS) - 1) >> GRP_WEIGHT_BITS;
-	return units;
+	weight = units;
+	if (gd->gd_unit_nr >= 128)
+		bits = 5; /* change weight after 32 allocations */
+	else if (gd->gd_unit_nr >= 32)
+		bits = 3; /* change weight after 8 allocations */
+	else if (gd->gd_unit_nr >= 8)
+		bits = 1; /* change weight after 2 allocations */
+	else
+		bits = 0;
+
+	if (bits > 0)
+		weight = (units + (1 << bits) - 1) >> bits;
+
+	return weight;
 }
 
 static int
@@ -1294,7 +1360,7 @@ group_load(struct ad_group_df *gd, struct ad_arena *arena, struct ad_group **gro
 	grp->gp_df = gd;
 
 	grp->gp_bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
-	grp->gp_bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
+	grp->gp_bit_nr = group_df2b(gd);
 out:
 	*group_p = grp;
 	return 0;
@@ -1378,8 +1444,8 @@ found:
 }
 
 /** Locate the associated group for the provided address @addr */
-static struct ad_group *
-arena_addr2grp(struct ad_arena *arena, daos_off_t addr)
+static int
+arena_addr2grp(struct ad_arena *arena, daos_off_t addr, struct ad_group **grp_p)
 {
 	struct ad_group_df *gd = NULL;
 	struct ad_group	   *grp;
@@ -1414,16 +1480,21 @@ arena_addr2grp(struct ad_arena *arena, daos_off_t addr)
 		else
 			end = cur - 1;
 	}
-	D_ASSERT(found);
+	if (!found) {
+		D_ERROR("Invalid address %lx\n", (unsigned long)addr);
+		return -DER_ENOENT;
+	}
+
 	rc = group_load(gd, arena, &grp);
 	if (rc)
-		return NULL;
+		return -DER_NOMEM;
 
-	/* this function is called from tx_free(), only published group can actually
-	 * allocate and free space.
-	 */
-	D_ASSERT(!grp->gp_unpub);
-	return grp;
+	/* This can happen in nested transaction */
+	if (!grp->gp_unpub)
+		D_DEBUG(DB_TRACE, "Free space %lx in unpublished group\n", (unsigned long)addr);
+
+	*grp_p = grp;
+	return 0;
 }
 
 /* Locate group position in the size-sorter */
@@ -1469,34 +1540,79 @@ arena_locate_grp(struct ad_arena *arena, struct ad_group *group)
 		else
 			end = cur - 1;
 	}
-	D_ASSERT(0);
+	D_PRINT("Cannot find group %p, address=%lx\n", gd, gd->gd_addr);
+	ASSERT_DUMP_ARENA(0, arena);
 	return -1;
 }
 
+enum {
+	GRP_OP_RSV,
+	GRP_OP_RSV_CANCEL,	/* call ad_cancel */
+	GRP_OP_RSV_ABORT,	/* call ad_tx_complete(.., err) */
+	GRP_OP_FREE_COMMIT,
+	GRP_OP_FREE_ABORT,
+};
+
 /* Adjust group position in the size-sorter after alloc/reserve/free (for binary search) */
 static void
-arena_reorder_grp(struct ad_arena *arena, struct ad_group *group, int pos, bool is_alloc)
+group_refresh_weight(struct ad_group *group, int pos, int opc)
 {
+	struct ad_arena	    *arena = group->gp_arena;
 	struct ad_group_df **sorter = arena->ar_size_sorter;
 	struct ad_group_df  *gd = group->gp_df;
 	struct ad_group_df  *tmp = NULL;
-	int		     g_weight;
-	int		     t_weight;
+	bool		     decreased = false;
+	int		     w_cur;
+	int		     w_tmp;
 	int		     i;
 
-	g_weight = group_weight(gd);
-	/* swap pointers and order groups after alloc/free */
-	if (is_alloc) { /* shift left */
+	if (pos < 0) {
+		pos = arena_locate_grp(arena, group);
+		D_ASSERT(pos >= 0);
+	} else {
+		D_ASSERT(sorter[pos] == gd);
+	}
+
+	switch (opc) {
+	default:
+		D_ASSERT(0);
+	case GRP_OP_RSV:
+		group->gp_unit_rsv++;
+		decreased = true;
+		break;
+	case GRP_OP_RSV_CANCEL:
+	case GRP_OP_FREE_COMMIT:
+		group->gp_unit_rsv--;
+		break;
+	case GRP_OP_RSV_ABORT:
+		gd->gd_unit_free++;
+		break;
+	case GRP_OP_FREE_ABORT:
+		group->gp_unit_rsv--;
+		gd->gd_unit_free--;
+		return; /* weight is the same */
+	}
+	D_ASSERTF(gd->gd_unit_free >= group->gp_unit_rsv, "free=%d, rsv=%d\n",
+		  gd->gd_unit_free, group->gp_unit_rsv);
+
+	if (group->gp_reset)
+		return; /* group has been removed */
+
+	w_cur = group_weight(gd);
+	/* Find current position of the group in binary-search array, adjust position of the
+	 * group and make sure the array is in right order.
+	 */
+	if (decreased) { /* weight decreased, shift left */
 		for (i = pos; i > 0;) {
 			tmp = sorter[--i];
 			if (tmp->gd_unit != gd->gd_unit) {
-				D_ASSERT(tmp->gd_unit < gd->gd_unit);
+				ASSERT_DUMP_ARENA(tmp->gd_unit < gd->gd_unit, arena);
 				break;
 			}
 
-			t_weight = group_weight(tmp);
-			if (t_weight < g_weight ||
-			    (t_weight == g_weight && tmp->gd_addr < gd->gd_addr))
+			w_tmp = group_weight(tmp);
+			if (w_tmp < w_cur ||
+			    (w_tmp == w_cur && tmp->gd_addr < gd->gd_addr))
 				break;
 
 			sorter[pos] = tmp;
@@ -1507,13 +1623,13 @@ arena_reorder_grp(struct ad_arena *arena, struct ad_group *group, int pos, bool 
 		for (i = pos; i < arena->ar_grp_nr - 1;) {
 			tmp = sorter[++i];
 			if (tmp->gd_unit != gd->gd_unit) {
-				D_ASSERT(tmp->gd_unit > gd->gd_unit);
+				ASSERT_DUMP_ARENA(tmp->gd_unit > gd->gd_unit, arena);
 				break;
 			}
 
-			t_weight = group_weight(tmp);
-			if (t_weight > g_weight ||
-			    (t_weight == g_weight && tmp->gd_addr > gd->gd_addr))
+			w_tmp = group_weight(tmp);
+			if (w_tmp > w_cur ||
+			    (w_tmp == w_cur && tmp->gd_addr > gd->gd_addr))
 				break;
 
 			sorter[pos] = tmp;
@@ -1523,39 +1639,51 @@ arena_reorder_grp(struct ad_arena *arena, struct ad_group *group, int pos, bool 
 	}
 }
 
-static void
-arena_debug_sorter(struct ad_arena *arena)
+static int
+arena_free_size(struct ad_arena *arena)
 {
-#if AD_MEM_DEBUG
+	struct ad_maxheap_node *node = arena2heap_node(arena);
+
+	return node->mh_free_size - node->mh_frag_size;
+}
+
+static void
+arena_dump(struct ad_arena *arena)
+{
 	struct ad_group_df *gd;
 	struct ad_group    *grp;
-	int		    cur;
+	int		    i;
 
-	D_DEBUG(DB_TRACE, "arena[%d]=%p, groups=%d\n", arena2id(arena), arena, arena->ar_grp_nr);
-	D_DEBUG(DB_TRACE, "size sorted groups:\n");
-	for (cur = 0; cur < arena->ar_grp_nr; cur++) {
-		gd = arena->ar_size_sorter[cur];
+	D_PRINT("Arena[%d]=%p, groups=%d, free_size=%d\n",
+		arena2id(arena), arena, arena->ar_grp_nr, arena_free_size(arena));
+	D_PRINT("Bitmap:\n");
+	for (i = 0; i < GRP_UNIT_BMSZ; i++) {
+		D_PRINT("\tused="DF_X64", reserve="DF_X64"\n",
+			arena->ar_df->ad_bmap[i], arena->ar_space_rsv[i]);
+	};
+
+	D_PRINT("Groups sorted by size and weight:\n");
+	for (i = 0; i < arena->ar_grp_nr; i++) {
+		gd = arena->ar_size_sorter[i];
 		grp = group_df2ptr(gd);
-		D_DEBUG(DB_TRACE,
-			"group[%d]=%p, size=%d, addr=%lx, weight=%d, avail=%d, pub=%d\n",
-			cur, gd, gd->gd_unit, (unsigned long)gd->gd_addr,
-			group_weight(gd), group_unit_avail(gd), !grp->gp_unpub);
+		D_PRINT("\t%d: addr=%p, size=%d, addr=%lx, weight=%d, avail=%d, pub=%d\n",
+			i, gd, gd->gd_unit, (unsigned long)gd->gd_addr,
+			group_weight(gd), group_unit_avail(gd), grp ? !grp->gp_unpub : 1);
 	}
 
-	D_DEBUG(DB_TRACE, "address sorted groups:\n");
-	for (cur = 0; cur < arena->ar_grp_nr; cur++) {
-		gd = arena->ar_addr_sorter[cur];
+	D_PRINT("\nGroups sorted by address:\n");
+	for (i = 0; i < arena->ar_grp_nr; i++) {
+		gd = arena->ar_addr_sorter[i];
 		grp = group_df2ptr(gd);
-		D_DEBUG(DB_TRACE,
-			"group[%d]=%p, size=%d, addr=%lx, weight=%d, avail=%d, pub=%d\n",
-			cur, gd, gd->gd_unit, (unsigned long)gd->gd_addr,
-			group_weight(gd), group_unit_avail(gd), !grp->gp_unpub);
+		D_PRINT("\t%d: addr=%p, size=%d, addr=%lx, weight=%d, avail=%d, pub=%d\n",
+			i, gd, gd->gd_unit, (unsigned long)gd->gd_addr,
+			group_weight(gd), group_unit_avail(gd), grp ? !grp->gp_unpub : 1);
 	}
-#endif
 }
 
 static int
-group_locate_by_addr(struct ad_group_df **sorter, struct ad_group_df *gd, int grp_nr, bool adding)
+group_locate_by_addr(struct ad_arena *arena, struct ad_group_df **sorter,
+		     struct ad_group_df *gd, int grp_nr, bool adding)
 {
 	struct ad_group_df  *tmp  = NULL;
 	int		     start;
@@ -1568,8 +1696,8 @@ group_locate_by_addr(struct ad_group_df **sorter, struct ad_group_df *gd, int gr
 		cur = (start + end) / 2;
 		tmp = sorter[cur];
 		if (gd->gd_addr == tmp->gd_addr) {
-			D_ASSERT(gd == tmp);
-			D_ASSERT(!adding);
+			ASSERT_DUMP_ARENA(gd == tmp, arena);
+			ASSERT_DUMP_ARENA(!adding, arena);
 			return cur;
 		}
 
@@ -1583,12 +1711,13 @@ group_locate_by_addr(struct ad_group_df **sorter, struct ad_group_df *gd, int gr
 		else
 			end = cur - 1;
 	}
-	D_ASSERT(adding);
+	ASSERT_DUMP_ARENA(adding, arena);
 	return (tmp->gd_addr < gd->gd_addr) ? (cur + 1) : cur;
 }
 
 static int
-group_locate_by_size(struct ad_group_df **sorter, struct ad_group_df *gd, int grp_nr, bool adding)
+group_locate_by_size(struct ad_arena *arena, struct ad_group_df **sorter,
+		     struct ad_group_df *gd, int grp_nr, bool adding)
 {
 	struct ad_group_df  *tmp  = NULL;
 	int		     weight;
@@ -1606,7 +1735,7 @@ group_locate_by_size(struct ad_group_df **sorter, struct ad_group_df *gd, int gr
 			int	w;
 
 			if (tmp == gd) {
-				D_ASSERT(!adding);
+				ASSERT_DUMP_ARENA(!adding, arena);
 				return cur;
 			}
 
@@ -1629,11 +1758,11 @@ group_locate_by_size(struct ad_group_df **sorter, struct ad_group_df *gd, int gr
 		else
 			end = cur - 1;
 	}
-	D_ASSERT(adding);
+	ASSERT_DUMP_ARENA(adding, arena);
 
-	if (tmp->gd_unit < gd->gd_unit)
+	if (tmp->gd_unit < gd->gd_unit) {
 		cur += 1;
-	else if (tmp->gd_unit == gd->gd_unit) {
+	} else if (tmp->gd_unit == gd->gd_unit) {
 		if ((group_weight(tmp) < weight)  ||
 		    (group_weight(tmp) == weight && tmp->gd_addr < gd->gd_addr))
 			cur += 1;
@@ -1678,7 +1807,7 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 	addr_sorter = arena->ar_addr_sorter;
 
 	D_DEBUG(DB_TRACE, "Adding group to address sorter of arena=%d\n", arena2id(arena));
-	cur = group_locate_by_addr(addr_sorter, grp->gp_df, len, true);
+	cur = group_locate_by_addr(arena, addr_sorter, grp->gp_df, len, true);
 	if (cur < len) {
 		memmove(&addr_sorter[cur + 1], &addr_sorter[cur],
 			(len - cur) * sizeof(addr_sorter[0]));
@@ -1687,7 +1816,7 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 
 	/* step-2: add the group the size sorter */
 	D_DEBUG(DB_TRACE, "Adding group to size sorter of arena=%d\n", arena2id(arena));
-	cur = group_locate_by_size(size_sorter, grp->gp_df, len, true);
+	cur = group_locate_by_size(arena, size_sorter, grp->gp_df, len, true);
 	if (cur < len) {
 		memmove(&size_sorter[cur + 1], &size_sorter[cur],
 			(len - cur) * sizeof(size_sorter[0]));
@@ -1696,7 +1825,6 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 	if (pos)
 		*pos = cur;
 
-	arena_debug_sorter(arena);
 	return 0;
 }
 
@@ -1708,16 +1836,16 @@ arena_remove_grp(struct ad_arena *arena, struct ad_group *group)
 	int		     cur;
 
 	/* remove this group from addr sort groups */
-	cur = group_locate_by_addr(addr_sorter, group->gp_df, arena->ar_grp_nr, false);
-	D_ASSERT(cur >= 0);
+	cur = group_locate_by_addr(arena, addr_sorter, group->gp_df, arena->ar_grp_nr, false);
+	ASSERT_DUMP_ARENA(cur >= 0, arena);
 	if (cur != arena->ar_grp_nr - 1) {
 		memmove(&addr_sorter[cur], &addr_sorter[cur + 1],
 			(arena->ar_grp_nr - cur - 1) * sizeof(addr_sorter[0]));
 	}
 
 	/* remove this group from size sort groups */
-	cur = group_locate_by_size(size_sorter, group->gp_df, arena->ar_grp_nr, false);
-	D_ASSERT(cur >= 0);
+	cur = group_locate_by_size(arena, size_sorter, group->gp_df, arena->ar_grp_nr, false);
+	ASSERT_DUMP_ARENA(cur >= 0, arena);
 	if (cur != arena->ar_grp_nr - 1) {
 		memmove(&size_sorter[cur], &size_sorter[cur + 1],
 			(arena->ar_grp_nr - cur - 1) * sizeof(size_sorter[0]));
@@ -1829,7 +1957,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 		return -DER_NOSPACE;
 	}
 
-	bits = ((gsp->gs_unit * gsp->gs_count) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
+	bits = group_u2b(gsp->gs_unit, gsp->gs_count);
 	D_ASSERT(bits >= 1);
 
 	/* at least 2 units within a group */
@@ -1857,13 +1985,15 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 			break;
 	}
 	/* run out of ad groups */
-	if (grp_idx == ARENA_GRP_MAX)
+	if (grp_idx == ARENA_GRP_MAX) {
+		D_DEBUG(DB_TRACE, "Arena=%d, no group found\n", arena2id(arena));
 		return -DER_NOSPACE;
+	}
 
 	gd = &ad->ad_groups[grp_idx];
-	gd->gd_addr	   = ad->ad_addr + (bit_at << GRP_SIZE_SHIFT);
-	D_ASSERT(gd->gd_addr >= blob_addr(blob) + (ad->ad_id << ARENA_SIZE_BITS));
-	D_ASSERT(gd->gd_addr < blob_addr(blob) + ((ad->ad_id + 1) << ARENA_SIZE_BITS));
+	gd->gd_addr	   = ad->ad_addr + ((uint64_t)bit_at << GRP_SIZE_SHIFT);
+	D_ASSERT(gd->gd_addr >= blob_addr(blob) + ((uint64_t)ad->ad_id << ARENA_SIZE_BITS));
+	D_ASSERT(gd->gd_addr < blob_addr(blob) + (((uint64_t)ad->ad_id + 1) << ARENA_SIZE_BITS));
 	gd->gd_unit	   = gsp->gs_unit;
 	gd->gd_unit_nr	   = (bits << GRP_SIZE_SHIFT) / gd->gd_unit;
 	gd->gd_unit_free   = gd->gd_unit_nr;
@@ -1875,6 +2005,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	grp->gp_df	= gd;
 	grp->gp_bit_at	= bit_at;
 	grp->gp_bit_nr	= bits;
+	grp->gp_frags	= (bits << GRP_SIZE_SHIFT) - gd->gd_unit_nr * gd->gd_unit;
 
 	D_DEBUG(DB_TRACE, "Arena=%d reserved a new group (bit_at=%d, bits=%d, size=%d)\n",
 		arena2id(arena), bit_at, bits, (int)size);
@@ -1899,7 +2030,7 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 	int			 rc;
 
 	bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
-	bit_nr = ((gd->gd_unit_nr * gd->gd_unit) + GRP_SIZE_MASK) >> GRP_SIZE_SHIFT;
+	bit_nr = group_df2b(gd);
 	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
 
 	rc = ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
@@ -1935,8 +2066,6 @@ group_reserve_addr(struct ad_group *grp, struct ad_reserv_act *act)
 		return 0;
 
 	setbit64(grp->gp_bmap_rsv, at);
-	D_ASSERT(gd->gd_unit_free > 0);
-	grp->gp_unit_rsv++;
 
 	group_addref(grp);
 	act->ra_group = grp;
@@ -1949,12 +2078,12 @@ static int
 group_tx_free_addr(struct ad_group *grp, daos_off_t addr, struct ad_tx *tx)
 {
 	struct ad_group_df *gd = grp->gp_df;
-	struct ad_free_act *act;
+	struct ad_operate  *oper;
 	int		    at;
 	int		    rc;
 
-	D_ALLOC_PTR(act);
-	if (!act)
+	D_ALLOC_PTR(oper);
+	if (!oper)
 		return -DER_NOMEM;
 
 	at = (addr - gd->gd_addr) / gd->gd_unit;
@@ -1962,21 +2091,23 @@ group_tx_free_addr(struct ad_group *grp, daos_off_t addr, struct ad_tx *tx)
 	if (rc)
 		goto failed;
 
-	rc = ad_tx_increase(tx, &gd->gd_unit_free);
+	gd->gd_unit_free++;
+	rc = ad_tx_increase(tx, &gd->gd_unit_free, AD_TX_REDO | AD_TX_LOG_ONLY);
 	if (rc)
 		goto failed;
 
 	/* lock the bit and prevent it from being reused before commit */
-	setbit64(grp->gp_bmap_rsv, at);
+	/* NB: group weight is unchanged because gd::gd_unit_free is increased as well */
 	grp->gp_unit_rsv++;
+	setbit64(grp->gp_bmap_rsv, at);
 
 	group_addref(grp);
-	act->fa_group = grp;
-	act->fa_at    = at;
-	d_list_add_tail(&act->fa_link, &tx->tx_gp_free);
+	oper->op_group = grp;
+	oper->op_at    = at;
+	d_list_add_tail(&oper->op_link, &tx->tx_frees);
 	return 0;
 failed:
-	D_FREE(act);
+	D_FREE(oper);
 	return rc;
 }
 
@@ -1985,8 +2116,9 @@ arena_reorder_if_needed(struct ad_arena *arena)
 {
 	struct ad_blob		*blob = arena->ar_blob;
 	struct ad_maxheap_node	*node = arena2heap_node(arena);
-	int			 new_weight = arena_weight(node->mh_free_size);
+	int			 new_weight;
 
+	new_weight = arena_weight(node);
 	/* NB, handle this once */
 	if (node->mh_in_tree) {
 		if (new_weight == node->mh_weight)
@@ -1995,13 +2127,30 @@ arena_reorder_if_needed(struct ad_arena *arena)
 		node->mh_weight = new_weight;
 		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
 	} else {
-		if (!node->mh_inactive || node->mh_free_size < ARENA_SIZE >> 2)
+		if (!node->mh_inactive || arena_free_size(arena) < (ARENA_SIZE >> 2))
 			return;
+
+		if (node->mh_weight >= new_weight) {
+			node->mh_weight = new_weight;
+			return;
+		}
 		/* bring arena back if free space more than 1/4 of total size */
-		node->mh_weight = new_weight;
 		node->mh_inactive = 0;
+		node->mh_weight = new_weight;
 		node->mh_arena_id = arena->ar_df->ad_id;
 		d_binheap_insert(&blob->bb_arena_free_heap, &node->mh_node);
+	}
+}
+
+static void
+arena_list_reorder(d_list_t *head)
+{
+	struct ad_arena *arena;
+
+	while ((arena = d_list_pop_entry(head, struct ad_arena, ar_ro_link))) {
+		/* NB: reorder only does minimum amount of works most of the time */
+		arena_reorder_if_needed(arena);
+		arena_decref(arena);
 	}
 }
 
@@ -2024,7 +2173,8 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 		rc = 0;
 		/* fall through */
 	} else if (rc != 0) {
-		D_ERROR("Failed to find group, arena=%d, rc=%d\n", arena->ar_df->ad_id, rc);
+		D_ERROR("Failed to find group, arena=%d, size=%d, rc=%d\n",
+			arena->ar_df->ad_id, (int)size, rc);
 		return rc; /* other errors, failed to reserve */
 	}
 
@@ -2038,12 +2188,15 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 			rc = arena_reserve_grp(arena, size, &grp_at, &grp);
 			if (rc == -DER_NOSPACE) { /* cannot create a new group, full arena */
 				/* XXX: other sized groups may have space. */
-				D_DEBUG(DB_TRACE, "Full arena=%d\n", arena->ar_df->ad_id);
+				D_DEBUG(DB_TRACE, "Full arena=%d, grp_nr=%d\n",
+					arena2id(arena), arena->ar_grp_nr);
+				node->mh_weight = arena_weight(node);
 				node->mh_inactive = 1;
 				return rc;
 			}
 			if (rc != 0) {
-				D_ERROR("Failed to reserve group, rc=%d\n", rc);
+				D_ERROR("Failed to reserve group, size=%d, rc=%d\n",
+					(int)size, rc);
 				return rc;
 			}
 		}
@@ -2061,11 +2214,7 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 		group_decref(grp);
 		grp = NULL;
 	}
-	/* NB: reorder only does minimum amount of works most of the time */
-	arena_reorder_grp(arena, grp, grp_at, true);
-	node = arena2heap_node(arena);
-	D_ASSERT(node->mh_free_size >= grp->gp_df->gd_unit);
-	node->mh_free_size -= grp->gp_df->gd_unit;
+	group_refresh_weight(grp, grp_at, GRP_OP_RSV);
 	/*
 	 * current arena is out from the binheap, so we don't have
 	 * to update it's position in binheap all the time
@@ -2093,17 +2242,23 @@ group_tx_reset(struct ad_tx *tx, struct ad_group *group)
 	struct ad_arena		*arena = group->gp_arena;
 	struct ad_arena_df	*ad = arena->ar_df;
 	struct ad_group_df	*gd = group->gp_df;
+	struct ad_operate	*oper;
 	int			 rc;
-	struct ad_free_act	*act;
 
-	/* not published yet */
-	if (group->gp_unpub && !group->gp_publishing)
+	if (1) {
+		/* XXX: disable group reset for now, it's behavior in nested transaction
+		 * is still unclear.
+		 */
+		return 0;
+	}
+
+	if (group->gp_unpub || group->gp_reset)
 		return 0;
 	if (gd->gd_unit_free != gd->gd_unit_nr)
 		return 0;
 
-	D_ALLOC_PTR(act);
-	if (!act)
+	D_ALLOC_PTR(oper);
+	if (!oper)
 		return -DER_NOMEM;
 
 	/* lock the bit and prevent it from being reused before commit */
@@ -2124,12 +2279,12 @@ group_tx_reset(struct ad_tx *tx, struct ad_group *group)
 		goto failed;
 
 	group_addref(group);
-	act->fa_group = group;
-	d_list_add_tail(&act->fa_link, &tx->tx_gp_reset);
+	oper->op_group = group;
+	d_list_add_tail(&oper->op_link, &tx->tx_gp_reset);
 
 	return 0;
 failed:
-	D_FREE(act);
+	D_FREE(oper);
 	return rc;
 }
 
@@ -2137,21 +2292,20 @@ static int
 arena_tx_free_addr(struct ad_arena *arena, daos_off_t addr, struct ad_tx *tx)
 {
 	struct ad_group	     *grp;
-	int		      rc, rc1;
+	int		      rc;
 
 	/* convert to address to the group it belonging to */
-	grp = arena_addr2grp(arena, addr);
-	if (!grp)
-		return -DER_NOMEM; /* the only possible failure */
+	rc = arena_addr2grp(arena, addr, &grp);
+	if (rc) /* ignore invalid address */
+		return rc == -DER_ENOENT ? 0 : rc;
 
 	rc = group_tx_free_addr(grp, addr, tx);
 	if (rc == 0) {
-		rc1 = group_tx_reset(tx, grp);
-		if (rc1)
-			rc = rc1;
+		rc = group_tx_reset(tx, grp);
+		if (rc)
+			D_ERROR("Failed to reset group, rc=%d\n", rc);
 	}
 	group_decref(grp);
-
 	return rc;
 }
 
@@ -2198,7 +2352,7 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 			if (node == NULL) {
 				rc = arena_reserve(blob, type, NULL, &arena);
 				if (rc) {
-					D_ERROR("Failed to reserve new arena.\n");
+					D_ERROR("Failed to reserve new arena, rc=%d.\n", rc);
 					return 0;
 				}
 			} else {
@@ -2210,7 +2364,6 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 					arena = NULL;
 					continue;
 				}
-				blob->bb_arena_last[type] = ad_node->mh_arena_id;
 			}
 			tried = true;
 		}
@@ -2218,8 +2371,13 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		D_DEBUG(DB_TRACE, "reserve space in arena=%d\n", arena2id(arena));
 		rc = arena_reserve_addr(arena, size, act, &addr);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "failed to reserve space from arena=%d, rc=%d\n",
-				arena2id(arena), rc);
+			struct ad_maxheap_node *mn = arena2heap_node(arena);
+
+			D_DEBUG(DB_TRACE, "Failed to reserve size=%d from arena=%d (rc=%d), "
+				"grps=%d, tried=%d, active=%d, weight=%d, free=%d, frag=%d\n",
+				(int)size, arena2id(arena), rc, arena->ar_grp_nr, tried,
+				!mn->mh_inactive, mn->mh_weight, mn->mh_free_size,
+				mn->mh_frag_size);
 			arena_decref(arena);
 			if (tried || rc != -DER_NOSPACE)
 				return 0;
@@ -2229,8 +2387,9 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		}
 
 		/* completed */
+		blob->bb_arena_last[type] = arena2id(arena);
 		if (arena_id)
-			*arena_id = arena->ar_df->ad_id;
+			*arena_id = blob->bb_arena_last[type];
 
 		arena_decref(arena);
 		return addr;
@@ -2244,26 +2403,65 @@ ad_reserve(struct ad_blob_handle bh, int type, daos_size_t size,
 	return ad_reserve_addr(bh.bh_blob, type, size, arena_id, act);
 }
 
+enum {
+	AR_OP_GRP_RESET,
+	AR_OP_GRP_COMMIT,
+	AR_OP_RSV_COMMIT,
+	AR_OP_FREE_COMMIT,
+};
+
+static void
+arena_track_change(struct ad_arena *arena, struct ad_group *grp, int opc, d_list_t *head)
+{
+	struct ad_maxheap_node	*node = arena2heap_node(arena);
+
+	switch (opc) {
+	default:
+	case AR_OP_GRP_COMMIT:
+		node->mh_frag_size += grp->gp_frags;
+		break;
+	case AR_OP_GRP_RESET:
+		node->mh_frag_size -= grp->gp_frags;
+		break;
+	case AR_OP_RSV_COMMIT:
+		node->mh_free_size -= grp->gp_df->gd_unit;
+		break;
+	case AR_OP_FREE_COMMIT:
+		node->mh_free_size += grp->gp_df->gd_unit;
+		break;
+	}
+	D_ASSERT(node->mh_free_size >= 0);
+	D_ASSERT(node->mh_frag_size >= 0);
+
+	if (d_list_empty(&arena->ar_ro_link)) {
+		arena_addref(arena);
+		d_list_add_tail(&arena->ar_ro_link, head);
+	}
+}
+
 int
 tx_complete(struct ad_tx *tx, int err)
 {
 	struct ad_blob	   *blob  = tx->tx_blob;
 	struct umem_store  *store = &blob->bb_store;
-	struct ad_arena    *arena, *arena_last = NULL;
+	struct ad_arena    *arena;
 	struct ad_group	   *group;
-	struct ad_free_act *fac;
+	struct ad_operate  *oper;
+	d_list_t	    head;
 	int		    rc;
-	struct ad_maxheap_node	*node;
+	bool		    committed;
 
-	/* TODO: Get umem_wal_tx from ad_tx */
-	if (!err)
+	D_INIT_LIST_HEAD(&head);
+	if (!err && tx->tx_redo_act_nr > 0)
 		rc = store->stor_ops->so_wal_submit(store, ad_tx2umem_tx(tx), NULL);
 	else
 		rc = err;
 
+	committed = !rc;
+	/* publish outstanding arenas */
 	while ((arena = d_list_pop_entry(&tx->tx_ar_pub, struct ad_arena, ar_link))) {
 		arena->ar_publishing = 0;
-		if (err) { /* keep the refcount and pin it */
+		if (!committed) { /* keep the refcount and pin it */
 			d_list_add(&arena->ar_link, &blob->bb_ars_rsv);
 			continue;
 		}
@@ -2273,80 +2471,67 @@ tx_complete(struct ad_tx *tx, int err)
 		arena_decref(arena);
 	}
 
+	/* publish outstanding groups */
 	while ((group = d_list_pop_entry(&tx->tx_gp_pub, struct ad_group, gp_link))) {
 		group->gp_publishing = 0;
-		if (err) { /* keep the refcount and pin it */
+		if (!committed) { /* keep the refcount and pin it */
 			d_list_add(&group->gp_link, &blob->bb_gps_rsv);
 			continue;
 		}
+		arena_track_change(group->gp_arena, group, AR_OP_GRP_COMMIT, &head);
+
 		clrbits64(group->gp_arena->ar_space_rsv, group->gp_bit_at, group->gp_bit_nr);
 		D_ASSERT(group->gp_unpub);
 		group->gp_unpub = 0;
 		group_decref(group);
 	}
 
-	arena = NULL;
-	while ((fac = d_list_pop_entry(&tx->tx_gp_free, struct ad_free_act, fa_link))) {
-		int	pos;
+	/* publish all the allocations */
+	while ((oper = d_list_pop_entry(&tx->tx_allocs, struct ad_operate, op_link))) {
+		group = oper->op_group;
+		if (!committed) /* revert the group weight change */
+			group_refresh_weight(group, -1, GRP_OP_RSV_ABORT);
+		else /* apply the arena weight change */
+			arena_track_change(group->gp_arena, group, AR_OP_RSV_COMMIT, &head);
 
-		group = fac->fa_group;
-		/* unlock the free bit, it can be used by future allocation */
-		D_ASSERT(isset64(group->gp_bmap_rsv, fac->fa_at));
-		clrbit64(group->gp_bmap_rsv, fac->fa_at);
-
-		D_ASSERT(group->gp_unit_rsv > 0);
-		if (err == 0) {
-			/* Find current position of the group in binary-search array, change the
-			 * available units of it, adjust position of the group and make sure the
-			 * array is in right order.
-			 */
-			arena = group->gp_arena;
-			if (!group->gp_reset) {
-				pos = arena_locate_grp(arena, group);
-				group->gp_unit_rsv--;
-				arena_reorder_grp(arena, group, pos, false);
-			} else {
-				group->gp_unit_rsv--;
-			}
-			/* NB: reorder only does minimum amount of works most of the time */
-			node = arena2heap_node(arena);
-			node->mh_free_size += group->gp_df->gd_unit;
-			if (arena != arena_last) {
-				if (arena_last != NULL) {
-					arena_reorder_if_needed(arena_last);
-					arena_decref(arena_last);
-				}
-				arena_last = arena;
-				arena_addref(arena_last);
-			}
-		} else {
-			/* cancel the delayed free, no reorder */
-			group->gp_unit_rsv--;
-		}
 		group_decref(group);
-		D_FREE(fac);
+		D_FREE(oper);
 	}
 
-	if (arena_last != NULL) {
-		arena_reorder_if_needed(arena_last);
-		arena_decref(arena_last);
+	/* publish all the frees */
+	while ((oper = d_list_pop_entry(&tx->tx_frees, struct ad_operate, op_link))) {
+		group = oper->op_group;
+		/* unlock the free bit, it can be used by future allocation */
+		D_ASSERT(isset64(group->gp_bmap_rsv, oper->op_at));
+		clrbit64(group->gp_bmap_rsv, oper->op_at);
+
+		group_refresh_weight(group, -1, committed ? GRP_OP_FREE_COMMIT : GRP_OP_FREE_ABORT);
+		if (committed)
+			arena_track_change(group->gp_arena, group, AR_OP_FREE_COMMIT, &head);
+
+		group_decref(group);
+		D_FREE(oper);
 	}
 
-	while ((fac = d_list_pop_entry(&tx->tx_gp_reset, struct ad_free_act, fa_link))) {
-		group = fac->fa_group;
+	while ((oper = d_list_pop_entry(&tx->tx_gp_reset, struct ad_operate, op_link))) {
+		group = oper->op_group;
 		arena = group->gp_arena;
 
 		/* unlock the free bit, it can be used by future allocation */
 		clrbits64(arena->ar_space_rsv, group->gp_bit_at, group->gp_bit_nr);
 		clrbits64(arena->ar_gpid_rsv, gp_df2index(group), 1);
 		/* add it back if error */
-		if (err)
+		if (!committed)
 			arena_add_grp(arena, group, NULL);
+		else
+			arena_track_change(arena, group, AR_OP_GRP_RESET, &head);
+
 		group->gp_reset = 0;
 		group_decref(group);
-		D_FREE(fac);
+		D_FREE(oper);
 	}
 
+	arena_list_reorder(&head);
 	/* TODO: if rc != 0, run all undo operations */
 	return rc;
 }
@@ -2362,6 +2547,7 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		struct ad_arena	   *arena = acts[i].ra_arena;
 		struct ad_group    *group = acts[i].ra_group;
 		struct ad_group_df *gd = group->gp_df;
+		struct ad_operate  *oper;
 
 		if (arena->ar_unpub && !arena->ar_publishing) {
 			D_DEBUG(DB_TRACE, "publishing arena=%d\n", arena2id(arena));
@@ -2404,6 +2590,10 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			}
 		}
 
+		D_ALLOC_PTR(oper);
+		if (!oper)
+			break;
+
 		D_DEBUG(DB_TRACE, "publishing reserved bit=%d\n", acts[i].ra_bit);
 		rc = ad_tx_setbits(tx, gd->gd_bmap, acts[i].ra_bit, 1);
 		if (rc)  {
@@ -2412,17 +2602,19 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			break;
 		}
 
-		rc = ad_tx_decrease(tx, &gd->gd_unit_free);
+		D_ASSERT(gd->gd_unit_free > 0);
+		gd->gd_unit_free--;
+		rc = ad_tx_decrease(tx, &gd->gd_unit_free, AD_TX_REDO | AD_TX_LOG_ONLY);
 		if (rc) {
 			D_ERROR("Failed to decrease free units, rc=%d\n", rc);
 			break;
 		}
-
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 		group->gp_unit_rsv--;
 
 		acts[i].ra_group = NULL;
-		group_decref(group);
+		oper->op_group = group;
+		d_list_add_tail(&oper->op_link, &tx->tx_allocs);
 	}
 	return rc;
 }
@@ -2431,12 +2623,10 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 void
 ad_cancel(struct ad_reserv_act *acts, int act_nr)
 {
-	struct ad_arena	*arena = NULL, *arena_last = NULL;
+	struct ad_arena	*arena = NULL;
 	struct ad_blob	*blob;
 	struct ad_group *group;
 	int		 i;
-	int		 pos;
-	struct ad_maxheap_node	*node;
 
 	for (i = 0; i < act_nr; i++) {
 		group = acts[i].ra_group;
@@ -2445,24 +2635,7 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		D_DEBUG(DB_TRACE, "cancel bit=%d\n", acts[i].ra_bit);
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 
-		/* Find current position of the group in binary-search array, change the
-		 * available units of it, adjust position of the group and make sure the
-		 * array is in right order.
-		 */
-		pos = arena_locate_grp(arena, group);
-		group->gp_unit_rsv--;
-		/* NB: reorder only does minimum amount of works most of the time */
-		arena_reorder_grp(arena, group, pos, false);
-		node = &blob->bb_mh_nodes[arena->ar_df->ad_id];
-		node->mh_free_size += group->gp_df->gd_unit;
-		if (arena != arena_last) {
-			if (arena_last != NULL) {
-				arena_reorder_if_needed(arena_last);
-				arena_decref(arena_last);
-			}
-			arena_last = arena;
-			arena_addref(arena_last);
-		}
+		group_refresh_weight(group, -1, GRP_OP_RSV_CANCEL);
 
 		/* NB: arena and group are remained as "reserved" for now */
 		if (group->gp_unpub && d_list_empty(&group->gp_link)) { /* pin it */
@@ -2482,11 +2655,6 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		}
 		acts[i].ra_arena = NULL;
 		acts[i].ra_group = NULL;
-	}
-
-	if (arena_last != NULL) {
-		arena_reorder_if_needed(arena_last);
-		arena_decref(arena_last);
 	}
 }
 
@@ -2759,6 +2927,7 @@ arena_alloc(struct ad_blob *blob, bool force, int sorter_sz)
 	}
 
 	D_INIT_LIST_HEAD(&arena->ar_link);
+	D_INIT_LIST_HEAD(&arena->ar_ro_link);
 	if (arena->ar_sorter_sz < sorter_sz) {
 		rc = arena_init_sorters(arena, sorter_sz);
 		if (rc)
@@ -2780,6 +2949,7 @@ arena_free(struct ad_arena *arena, bool force)
 {
 	D_ASSERT(arena->ar_ref == 0);
 	D_ASSERT(d_list_empty(&arena->ar_link));
+	D_ASSERT(d_list_empty(&arena->ar_ro_link));
 
 	if (!force) {
 		struct ad_blob *blob = arena->ar_blob;

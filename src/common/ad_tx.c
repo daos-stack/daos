@@ -20,6 +20,7 @@ struct ad_tls_cache {
 	int		atc_act_nr;
 	int		atc_tx_nr;
 	int		atc_act_copy_nr;
+	int		atc_inited;
 };
 
 static __thread struct ad_tx	*tls_tx;
@@ -77,6 +78,10 @@ tls_act_put(struct ad_act *act)
 	d_list_del(&act->it_link);
 
 #if AD_TLS_CACHE_ENABLED
+	if (unlikely(!tls_cache.atc_inited)) {
+		D_FREE(act);
+		return;
+	}
 	if (act->it_act.ac_opc == UMEM_ACT_COPY && act->it_act.ac_copy.size <= TSL_ACT_COPY_SZ &&
 	    tls_cache.atc_act_copy_nr < TLS_ACT_COPY_MAX) {
 		d_list_add(&act->it_link, &tls_cache.atc_act_copy_list);
@@ -121,6 +126,10 @@ tls_utx_put(struct umem_wal_tx *utx)
 	item = container_of(utx, struct umem_wal_tx_item, ti_utx);
 
 #if AD_TLS_CACHE_ENABLED
+	if (unlikely(!tls_cache.atc_inited)) {
+		D_FREE(item);
+		return;
+	}
 	d_list_add(&item->ti_link, &tls_cache.atc_tx_list);
 	tls_cache.atc_tx_nr++;
 	return;
@@ -138,6 +147,12 @@ ad_tls_cache_init(void)
 
 	tls_cache.atc_act_nr = 0;
 	D_INIT_LIST_HEAD(&tls_cache.atc_act_list);
+	tls_cache.atc_tx_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_tx_list);
+	tls_cache.atc_act_copy_nr = 0;
+	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
+	tls_cache.atc_inited = true;
+
 	for (i = 0; i < TLS_ACT_NUM; i++) {
 		D_ALLOC_PTR(act);
 		if (act == NULL)
@@ -147,8 +162,6 @@ ad_tls_cache_init(void)
 		tls_act_put(act);
 	}
 
-	tls_cache.atc_tx_nr = 0;
-	D_INIT_LIST_HEAD(&tls_cache.atc_tx_list);
 	for (i = 0; i < TLS_TX_NUM; i++) {
 		D_ALLOC_PTR(item);
 		if (item == NULL)
@@ -157,8 +170,6 @@ ad_tls_cache_init(void)
 		tls_utx_put(&item->ti_utx);
 	}
 
-	tls_cache.atc_act_copy_nr = 0;
-	D_INIT_LIST_HEAD(&tls_cache.atc_act_copy_list);
 	for (i = 0; i < TLS_ACT_COPY_NUM; i++) {
 		D_ALLOC(act, offsetof(struct ad_act, it_act.ac_copy.payload[TSL_ACT_COPY_SZ]));
 		if (act == NULL)
@@ -441,8 +452,9 @@ ad_tx_begin(struct ad_blob_handle bh, struct ad_tx *tx)
 	D_INIT_LIST_HEAD(&tx->tx_undo);
 	D_INIT_LIST_HEAD(&tx->tx_ar_pub);
 	D_INIT_LIST_HEAD(&tx->tx_gp_pub);
-	D_INIT_LIST_HEAD(&tx->tx_gp_free);
 	D_INIT_LIST_HEAD(&tx->tx_gp_reset);
+	D_INIT_LIST_HEAD(&tx->tx_frees);
+	D_INIT_LIST_HEAD(&tx->tx_allocs);
 	D_INIT_LIST_HEAD(&tx->tx_ranges);
 
 	tx->tx_redo_act_nr	= 0;
@@ -474,7 +486,7 @@ ad_act_replay(struct ad_tx *tx, struct umem_action *act)
 		break;
 	case UMEM_ACT_ASSIGN:
 		rc = ad_tx_assign(NULL, blob_addr2ptr(tx->tx_blob, act->ac_assign.addr),
-				  act->ac_assign.size, act->ac_assign.val);
+				  act->ac_assign.size, act->ac_assign.val, 0);
 		break;
 	case UMEM_ACT_MOVE:
 		rc = ad_tx_move(NULL, blob_addr2ptr(tx->tx_blob, act->ac_move.dst),
@@ -699,10 +711,8 @@ assign_integer(void *addr, int size, uint32_t val)
 
 /** assign integer value to @addr, both old and new value should be saved for redo and undo */
 int
-ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
+ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val, uint32_t flags)
 {
-	struct ad_act	*it_undo, *it_redo;
-
 	if (addr == NULL || (size != 1 && size != 2 && size != 4))
 		return -DER_INVAL;
 
@@ -711,26 +721,34 @@ ad_tx_assign(struct ad_tx *tx, void *addr, daos_size_t size, uint32_t val)
 		return 0;
 	}
 
-	it_undo = tls_act_get(UMEM_ACT_ASSIGN, size);
-	if (it_undo == NULL)
-		return -DER_NOMEM;
+	if (flags & AD_TX_UNDO) {
+		struct ad_act	*it_undo;
 
-	it_undo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
-	it_undo->it_act.ac_assign.size = size;
-	assign_integer(&it_undo->it_act.ac_assign.val, size, get_integer(addr, size));
-	act_item_add(tx, it_undo, ACT_UNDO);
+		it_undo = tls_act_get(UMEM_ACT_ASSIGN, size);
+		if (it_undo == NULL)
+			return -DER_NOMEM;
 
-	assign_integer(addr, size, val);
+		it_undo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
+		it_undo->it_act.ac_assign.size = size;
+		assign_integer(&it_undo->it_act.ac_assign.val, size, get_integer(addr, size));
+		act_item_add(tx, it_undo, ACT_UNDO);
+	}
 
-	it_redo = tls_act_get(UMEM_ACT_ASSIGN, size);
-	if (it_redo == NULL)
-		return -DER_NOMEM;
+	if (!(flags & AD_TX_LOG_ONLY))
+		assign_integer(addr, size, val);
 
-	it_redo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
-	it_redo->it_act.ac_assign.size = size;
-	it_redo->it_act.ac_assign.val = val;
-	act_item_add(tx, it_redo, ACT_REDO);
+	if (flags & AD_TX_REDO) {
+		struct ad_act	*it_redo;
 
+		it_redo = tls_act_get(UMEM_ACT_ASSIGN, size);
+		if (it_redo == NULL)
+			return -DER_NOMEM;
+
+		it_redo->it_act.ac_assign.addr = blob_ptr2addr(tx->tx_blob, addr);
+		it_redo->it_act.ac_assign.size = size;
+		it_redo->it_act.ac_assign.val = val;
+		act_item_add(tx, it_redo, ACT_REDO);
+	}
 	return 0;
 }
 
@@ -953,7 +971,7 @@ tx_end(struct ad_tx *tx, int err)
 	if (rc == 0) {
 		ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
 	} else {
-		D_ERROR("ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
 		tx->tx_last_errno = rc;
 		ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 	}
@@ -974,8 +992,6 @@ tx_abort(struct ad_tx *tx, int err)
 {
 	if (err == 0)
 		err = -DER_CANCELED;
-
-	ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 
 	return tx_end(tx, err);
 }
@@ -1035,10 +1051,15 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 			rc = -DER_INVAL;
 			goto err_abort;
 		}
-		if (txd != NULL && txd != tx->tx_stage_cb_arg) {
-			D_ERROR("Cannot set different TX callback argument\n");
-			rc = -DER_CANCELED;
-			goto err_abort;
+		if (txd != NULL) {
+			if (tx->tx_stage_cb_arg == NULL) {
+				tx->tx_stage_cb = umem_stage_callback;
+				tx->tx_stage_cb_arg = txd;
+			} else if (txd != tx->tx_stage_cb_arg) {
+				D_ERROR("Cannot set different TX callback argument\n");
+				rc = -DER_CANCELED;
+				goto err_abort;
+			}
 		}
 		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
 	}
