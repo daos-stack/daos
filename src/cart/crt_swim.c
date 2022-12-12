@@ -364,6 +364,11 @@ crt_swim_lookup_id(swim_id_t id)
 	grp_ver = grp_priv->gp_membs_ver;
 	membs = grp_priv_get_membs(grp_priv);
 	if (membs) {
+		/*
+		 * TODO: See if there's a better way. This is okay for now
+		 * since we should be performing this linear search only one or
+		 * a few times per period.
+		 */
 		if (d_rank_in_rank_list(membs, id))
 			grp_ver = 0;
 	}

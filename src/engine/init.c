@@ -578,16 +578,16 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		d_rank_t self_rank = dss_self_rank();
 
 		if (rank == dss_self_rank()) {
-			D_WARN("raising SIGTERM: exclusion of this engine (rank %u) detected\n",
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
 			       self_rank);
 			/*
-			 * For now, we just raise a SIGTERM to ourselves; we could
+			 * For now, we just raise a SIGKILL to ourselves; we could
 			 * inform daos_server, who would initiate a termination and
 			 * decide whether to restart us.
 			 */
-			rc = kill(getpid(), SIGTERM);
+			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
-				D_ERROR("failed to raise SIGTERM: %d\n", errno);
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
 			return;
 		}
 
