@@ -167,12 +167,18 @@ Java_io_daos_dfs_DaosFsClient_move__JLjava_lang_String_2Ljava_lang_String_2(
 		throw_exc(env, msg, rc);
 	}
 out:
-	if (likely(src_dir_path != NULL)) free(src_dir_path);
-	if (likely(src_base_path != NULL)) free(src_base_path);
-	if (likely(dest_dir_path != NULL)) free(dest_dir_path);
-	if (likely(dest_base_path != NULL)) free(dest_base_path);
-	if (likely(src_dir_handle != NULL)) dfs_release(src_dir_handle);
-	if (src_dir_handle != dest_dir_handle) dfs_release(dest_dir_handle);
+	if (likely(src_dir_path != NULL))
+		free(src_dir_path);
+	if (likely(src_base_path != NULL))
+		free(src_base_path);
+	if (likely(dest_dir_path != NULL))
+		free(dest_dir_path);
+	if (likely(dest_base_path != NULL))
+		free(dest_base_path);
+	if (likely(src_dir_handle != NULL))
+		dfs_release(src_dir_handle);
+	if (src_dir_handle != dest_dir_handle)
+		dfs_release(dest_dir_handle);
 	(*env)->ReleaseStringUTFChars(env, srcPath, src_path);
 	(*env)->ReleaseStringUTFChars(env, destPath, dest_path);
 }

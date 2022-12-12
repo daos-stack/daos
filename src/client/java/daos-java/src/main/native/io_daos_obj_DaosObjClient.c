@@ -406,7 +406,7 @@ init_desc(JNIEnv *env, data_desc_t **desc_addr, char *desc_buffer,
 		return 1;
 	}
 	if (unlikely((desc->ret_buf_address != endAddress) &&
-	    (desc->ret_buf_address + 8 * nbrOfAkeys != endAddress))) {
+		(desc->ret_buf_address + 8 * nbrOfAkeys != endAddress))) {
 		throw_const_obj(env, "failed to decode initial",
 				CUSTOM_ERR7);
 		return 1;
@@ -1159,8 +1159,8 @@ Java_io_daos_obj_DaosObjClient_updateObjSyncNoDecode(JNIEnv *env,
 	desc->sgls.sg_nr_out = 0;
 
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0L, &desc->dkey,
-			1, &desc->iods,
-			&desc->sgls, NULL);
+			     1, &desc->iods,
+			     &desc->sgls, NULL);
 	free(desc);
 	if (unlikely(rc != 0)) {
 		throw_const_obj(env,

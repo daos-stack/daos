@@ -526,6 +526,7 @@ Java_io_daos_DaosClient_daosFinalize(JNIEnv *env,
 				     jclass clientClass)
 {
 	int rc = daos_fini();
+
 	if (unlikely(rc != 0)) {
 		printf("Failed to finalize daos rc: %d\n", rc);
 		printf("error msg: %.256s\n", d_errstr(rc));
