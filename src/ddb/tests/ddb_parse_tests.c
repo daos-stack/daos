@@ -260,7 +260,7 @@ vos_path_parse_and_print_tests(void **state)
 	struct ddb_ctx			 ctx = {0};
 	char				*path;
 
-	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/'akey'/'dkey'";
+	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0.0/'akey'/'dkey'";
 
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
 
