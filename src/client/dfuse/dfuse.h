@@ -45,13 +45,13 @@ struct dfuse_info {
 	/* Event queue for async events */
 	daos_handle_t        dpi_eq;
 	/** Semaphore to signal event waiting for async thread */
-	sem_t				dpi_sem;
-	pthread_t			dpi_thread;
-	bool				dpi_shutdown;
+	sem_t                dpi_sem;
+	pthread_t            dpi_thread;
+	bool                 dpi_shutdown;
 
-	struct d_slab                    dpi_slab;
-	struct d_slab_type              *dpi_read_slab;
-	struct d_slab_type              *dpi_write_slab;
+	struct d_slab        dpi_slab;
+	struct d_slab_type  *dpi_read_slab;
+	struct d_slab_type  *dpi_write_slab;
 };
 
 #define dfuse_projection_info dfuse_info

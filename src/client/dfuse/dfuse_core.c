@@ -9,45 +9,6 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-/* Async progress thread.
- *
- * This thread is started at launch time with an event queue and blocks
- * on a semaphore until a asynchronous event is created, at which point
- * the thread wakes up and busy polls in daos_eq_poll() until it's complete.
- */
-static void *
-dfuse_progress_thread(void *arg)
-{
-	struct dfuse_projection_info *fs_handle = arg;
-	int rc;
-	daos_event_t *dev;
-	struct dfuse_event *ev;
-
-	while (1) {
-		errno = 0;
-		rc = sem_wait(&fs_handle->dpi_sem);
-		if (rc != 0) {
-			rc = errno;
-
-			if (rc == EINTR)
-				continue;
-
-			DFUSE_TRA_ERROR(fs_handle, "Error from sem_wait: %d", rc);
-		}
-
-		if (fs_handle->dpi_shutdown)
-			return NULL;
-
-		rc = daos_eq_poll(fs_handle->dpi_eq, 1, DAOS_EQ_WAIT, 1, &dev);
-		if (rc == 1) {
-			daos_event_fini(dev);
-			ev = container_of(dev, struct dfuse_event, de_ev);
-			ev->de_complete_cb(ev);
-		}
-	}
-	return NULL;
-}
-
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -1204,12 +1165,6 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, &fs_handle->dpi_write_slab);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_slab, rc);
-
-	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
-	if (rc != 0)
-		D_GOTO(err_slab, rc = daos_errno2der(rc));
-
-	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	if (rc == 0)
 		return 0;
