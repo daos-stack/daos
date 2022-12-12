@@ -191,7 +191,6 @@ dfuse_progress_thread(void *arg)
 			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
 			ev->de_complete_cb(ev);
-			D_FREE(ev);
 		}
 	}
 	return NULL;
