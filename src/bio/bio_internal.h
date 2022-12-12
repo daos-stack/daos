@@ -15,8 +15,6 @@
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
-#include "smd.pb-c.h"
-
 #define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
@@ -309,12 +307,10 @@ struct bio_bdev {
 	/* count of target(VOS xstream) per device */
 	int			 bb_tgt_cnt;
 	/*
-	 * If a VMD LED event takes place, the original LED state and start
-	 * time will be saved in order to restore the LED to its original
-	 * state after allotted time.
+	 * If a VMD LED identify event takes place with a prescribed duration, the end time will be
+	 * saved and when it is reached the prior LED state will be restored.
 	 */
-	int			 bb_led_state;
-	uint64_t		 bb_led_start_time;
+	uint64_t		 bb_led_expiry_time;
 	bool			 bb_removed;
 	bool			 bb_replacing;
 	bool			 bb_trigger_reint;

@@ -1,7 +1,6 @@
 """Build pydaos client"""
 import sys
 import daos_build
-import compiler_setup
 
 
 def build_shim_module():
@@ -10,7 +9,7 @@ def build_shim_module():
     if GetOption('help'):
         return
 
-    version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
+    version = f'{sys.version_info.major}.{sys.version_info.minor}'
 
     Import('base_env')
 
@@ -24,7 +23,7 @@ def build_shim_module():
     new_env['CC'] = 'gcc'
     new_env.AppendUnique(CCFLAGS='-pthread')
 
-    compiler_setup.base_setup(new_env)
+    new_env.compiler_setup()
 
     obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
                                SHLINKFLAGS=[],
