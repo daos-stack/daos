@@ -203,7 +203,7 @@ import (
 func Load() (func(), error) {
 	ucsHdl, err := openUCS()
 	if err != nil {
-		return nil, errors.Wrap(err, "loading libucs.0")
+		return nil, errors.Wrap(err, "loading libucs")
 	}
 	defer ucsHdl.Close()
 
@@ -213,7 +213,7 @@ func Load() (func(), error) {
 
 	hdl, err := openUCT()
 	if err != nil {
-		return nil, errors.Wrap(err, "loading libuct.0")
+		return nil, errors.Wrap(err, "loading libuct")
 	}
 	return func() {
 		hdl.Close()
@@ -221,11 +221,11 @@ func Load() (func(), error) {
 }
 
 func openUCT() (*dlopen.LibHandle, error) {
-	return dlopen.GetHandle([]string{"libuct.so"})
+	return dlopen.GetHandle([]string{"libuct.so.1"})
 }
 
 func openUCS() (*dlopen.LibHandle, error) {
-	return dlopen.GetHandle([]string{"libucs.so"})
+	return dlopen.GetHandle([]string{"libucs.so.1"})
 }
 
 func ucsDisableSignal(hdl *dlopen.LibHandle, sig syscall.Signal) error {
