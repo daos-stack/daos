@@ -94,6 +94,17 @@ def pool_get_prop(pool_label, properties):
     print(f"Command: {command}")
     subprocess.run(get_prop_cmd, check=False)
 
+def list_containers(pool_label):
+    """Call daos pool list-containers <pool_label>
+
+    Args:
+        pool_label (str): Pool label.
+    """
+    list_containers_cmd = ["daos", "pool", "label", pool_label]
+    command = " ".join(list_containers_cmd)
+    print(f"Command: {command}")
+    subprocess.run(list_containers_cmd, check=False)
+
 # Container-related methods
 def create_container(pool_label, cont_label):
     """Call daos container create.

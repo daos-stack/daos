@@ -11,7 +11,8 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     check_start, check_query, check_disable, repeat_check_query, check_repair,\
     create_uuid_to_seqnum, create_label_to_uuid, get_current_labels, pool_get_prop,\
     create_pool, inject_fault_pool, create_container, inject_fault_daos, system_stop,\
-    system_query, storage_query_usage, cont_get_prop, system_start, check_set_policy
+    system_query, storage_query_usage, cont_get_prop, system_start, check_set_policy,\
+    list_containers
 
 # Need to use at least "scm_size: 10" for server config to create 3 1GB-pools.
 POOL_SIZE_1GB = "1GB"
@@ -81,6 +82,13 @@ print()
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_8)
 create_container(pool_label=pool_label_8, cont_label=cont_label_8)
 
+print("(Create label to UUID mapping.)")
+label_to_uuid = {}
+stdout = list_pool(json=True)
+generated_yaml = yaml.safe_load(stdout)
+for pool in generated_yaml["response"]["pools"]:
+    label_to_uuid[pool["label"]] = pool["uuid"]
+
 print(f"\n3-F5. Print storage usage to show original usage of {pool_label_5}. "
       f"Pool is created on {rank_to_ip[F5_RANK_ORIG]}.")
 # F5 pool is created on rank 1, but we'll copy the pool dir from rank 1 to 3, so show
@@ -104,13 +112,6 @@ inject_fault_daos(
 inject_fault_daos(
     pool_label=pool_label_8, cont_label=cont_label_8,
     fault_type="DAOS_CHK_CONT_BAD_LABEL")
-
-print("(Create label to UUID mapping.)")
-label_to_uuid = {}
-stdout = list_pool(json=True)
-generated_yaml = yaml.safe_load(stdout)
-for pool in generated_yaml["response"]["pools"]:
-    label_to_uuid[pool["label"]] = pool["uuid"]
 
 ####################################################################
 input("\n5-1. Stop servers to manipulate for F2, F5, F6, F7. Hit enter...")
@@ -157,7 +158,6 @@ clush_chown_cmd = ["clush", "-w", rank_to_ip[3], chown_cmd]
 print("Command: {}\n".format(clush_chown_cmd))
 subprocess.run(clush_chown_cmd, check=False)
 
-# F6: Remove pool directory from rank 0.
 print("(F6: Remove pool directory from rank 0.)")
 pool_uuid_6 = label_to_uuid[pool_label_6]
 rm_cmd = f"sudo rm -rf /mnt/daos/{pool_uuid_6}"
@@ -165,7 +165,6 @@ clush_rm_cmd = ["clush", "-w", rank_to_ip[0], rm_cmd]
 print("Command: {}\n".format(clush_rm_cmd))
 subprocess.run(clush_rm_cmd, check=False)
 
-# F7: Use ddb to verify that the container is left in shards.
 print("F7: Use ddb to verify that the container is left in shards.")
 pool_uuid_7 = label_to_uuid[pool_label_7]
 # ddb -R "ls" /mnt/daos/<pool_uuid_7>/vos-0
@@ -201,6 +200,7 @@ storage_query_usage(host_list=f5_host_list)
 # F8: Show inconsistency by getting the container label.
 print("\n6-F8. Show container label inconsistency.")
 cont_get_prop(pool_label=pool_label_8, cont_label=cont_label_8)
+# cont_get_prop(pool_label=pool_label_8, cont_label="new-label")
 print(f"Error because container ({cont_label_8}) doesn't exist on container service.\n")
 
 print(f"Container ({cont_label_8}) exists on pool service.")
@@ -217,34 +217,73 @@ check_start()
 print()
 repeat_check_query()
 
+####################################################################
 input("\n8. Select suggested repair option for all faults. Hit enter...")
 uuid_to_seqnum = create_uuid_to_seqnum()
+seq_num_1 = str(uuid_to_seqnum[label_to_uuid[pool_label_1]])
+seq_num_2 = str(uuid_to_seqnum[label_to_uuid[pool_label_2]])
+seq_num_4 = str(uuid_to_seqnum[label_to_uuid[pool_label_4]])
+seq_num_5 = str(uuid_to_seqnum[label_to_uuid[pool_label_5]])
+seq_num_6 = str(uuid_to_seqnum[label_to_uuid[pool_label_6]])
+seq_num_7 = str(uuid_to_seqnum[label_to_uuid[pool_label_7]])
 
-# print("\n8. Query the checker.")
-# repeat_check_query()
+# F1: 1. Discard the dangling pool entry from MS [suggested].
+check_repair(sequence_num=seq_num_1, action="1")
+# F2: 2. Start pool service under DICTATE mode from rank 1 [suggested].
+check_repair(sequence_num=seq_num_2, action="2")
+# F4: 1: Trust MS pool label [suggested].
+check_repair(sequence_num=seq_num_4, action="1")
+# F5: 1: Discard the orphan pool shard to release space [suggested].
+check_repair(sequence_num=seq_num_5, action="1")
+# F6: 2: Start pool service under DICTATE mode from rank 1 [suggested].
+check_repair(sequence_num=seq_num_6, action="2")
+# F7: 1: Destroy the orphan container to release space [suggested].
+check_repair(sequence_num=seq_num_7, action="1")
 
-# print("\n11. Disable the checker.")
-# check_disable()
+repeat_check_query()
 
-# input("\n12. Show the issues fixed. Hit enter...")
-# 1: Verify that the dangling pool was removed.
+print("\n9. Disable the checker.")
+check_disable()
 
-# list_pool()
+####################################################################
+input("\n13. Show the issues fixed. Hit enter...")
+print("13-F1. Dangling pool was removed.")
+list_pool()
 
-# 2: Try creating a container. It should succeed.
+print("13-F2. Create a container. It should succeed.")
+cont_label_2 = CONT_LABEL + "_7"
+create_container(pool_label=pool_label_2, cont_label=cont_label_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
-# 4: Show repaired labels in MS and PS.
+print(f"13-F4. Label inconsistency for {pool_label_4} was resolved. See pool list above.")
+pool_get_prop(pool_label=pool_label_4_fault, properties="label")
 
-# 5: Call dmg storage query usage to verify the storage was reclaimed. - Not working due
-# to a bug. Instead, show that pool directory on rank 1 was removed.
+# F5: Call dmg storage query usage to verify the storage was reclaimed. - Not working due
+# to a bug. Instead, show that pool directory on dst node (rank 3 for 4-VM) was removed.
+print(f"13-F5. {label_to_uuid[pool_label_5]} pool directory on rank 3 "
+      f"({rank_to_ip[3]}) was removed.")
+ls_cmd = ["sudo", "ls", "/mnt/daos"]
+clush_ls_cmd = ["clush", "-w", rank_to_ip[3], ls_cmd]
+print("Command: {}\n".format(clush_ls_cmd))
+subprocess.run(clush_ls_cmd, check=False)
 
-# 6: Verify that the pool directory on rank 1 is retrieved.
+print(f"13-F6. {label_to_uuid[pool_label_6]} pool directory on rank 0 "
+      f"({rank_to_ip[0]}) is retrieved.")
+ls_cmd = ["sudo", "ls", "/mnt/daos"]
+clush_ls_cmd = ["clush", "-w", rank_to_ip[0], ls_cmd]
+print("Command: {}\n".format(clush_ls_cmd))
+subprocess.run(clush_ls_cmd, check=False)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
 
-# 7: Stop server. Call the same ddb command to verify that the container is removed from
-# shard.
-
 # 8: Verify that the inconsistency is fixed (checker used the new label).
 # Call: daos container get-prop tank_8 bucket_8-fault --properties=label
+print(f"13-F8. ")
+list_containers(pool_label=pool_label_8)
+
+# 7: Stop server. Call the same ddb command to verify that the container is removed from
+# shard.
+print("13-F7. Use ddb to verify that the container is left in shards.")
+system_stop()
+print("Command: {}".format(clush_ddb_cmd))
+subprocess.run(clush_ddb_cmd, check=False)
