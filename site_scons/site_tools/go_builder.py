@@ -33,9 +33,11 @@ def _scan_go_file(node, _env, _path):
                     includes.append(File(os.path.join(src_dir, header)))
                 else:
                     includes.append(f'../../../include/{header}')
-        elif line.strip().startswith(GOINC_PREFIX):
-            deps_dir = line[len(GOINC_PREFIX) + 1:-1]
-            includes.extend(Glob(f'src/{deps_dir}/*.go'))
+        else:
+            goinc_idx = line.find(GOINC_PREFIX)
+            if goinc_idx > -1:
+                deps_dir = line[goinc_idx:][len(GOINC_PREFIX):-1]
+                includes.extend(Glob(f'src/{deps_dir}/*.go'))
 
     return includes
 
