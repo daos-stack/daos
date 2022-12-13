@@ -443,7 +443,7 @@ do_init:
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 			d_getenv_int("CRT_CTX_NUM", &ctx_num);
 
-			if (share_addr& !crt_na_type_is_ucx(prov)) {
+			if (share_addr) {
 				set_sep = true;
 				max_num_ctx = ctx_num;
 			}
