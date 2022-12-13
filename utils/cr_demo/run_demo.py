@@ -220,12 +220,12 @@ repeat_check_query()
 ####################################################################
 input("\n8. Select suggested repair option for all faults. Hit enter...")
 uuid_to_seqnum = create_uuid_to_seqnum()
-seq_num_1 = str(uuid_to_seqnum[label_to_uuid[pool_label_1]])
-seq_num_2 = str(uuid_to_seqnum[label_to_uuid[pool_label_2]])
-seq_num_4 = str(uuid_to_seqnum[label_to_uuid[pool_label_4]])
-seq_num_5 = str(uuid_to_seqnum[label_to_uuid[pool_label_5]])
-seq_num_6 = str(uuid_to_seqnum[label_to_uuid[pool_label_6]])
-seq_num_7 = str(uuid_to_seqnum[label_to_uuid[pool_label_7]])
+seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_1]]))
+seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_2]]))
+seq_num_4 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_4]]))
+seq_num_5 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_5]]))
+seq_num_6 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_6]]))
+seq_num_7 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_7]]))
 
 # F1: 1. Discard the dangling pool entry from MS [suggested].
 check_repair(sequence_num=seq_num_1, action="1")
