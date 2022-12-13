@@ -1,8 +1,10 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 1230
+timeout: 930
 setup:
+  start_agents: False
+  start_servers: False
   start_agents_once: False
   start_servers_once: False
 server_config:
@@ -67,7 +69,7 @@ ior:
   block_size: '128M'
   iorflags:
     write_flg: "-w -W -k -G 1 -i 1"
-    read_flg: "-C -k -e -r -R -g -G 27 -Q 1 -vv"
+    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
 mdtest:
   client_processes:
     ppn: 32
@@ -75,4 +77,4 @@ mdtest:
   manager: "MPICH"
   mdtest_params:
     # [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS,   4096, 4096, 1, 100, 0,   ' ']
+    - [DFS, 4096, 4096, 1, 100, 0, ' ']

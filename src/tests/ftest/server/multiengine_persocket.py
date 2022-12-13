@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -9,12 +8,14 @@ import time
 import random
 import base64
 import traceback
+import re
 
 from general_utils import run_pcmd, get_random_bytes
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
 from server_utils_base import DaosServerCommand
+from run_utils import run_local
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
@@ -40,6 +41,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         Args:
             num_attributes (int): number of attributes to be created on container.
+
         Returns:
             dict: a large attribute dictionary
 
@@ -52,8 +54,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         return data_set
 
     def verify_list_attr(self, indata, attributes_list):
-        """
-        Verify the length of the Attribute names
+        """Verify the length of the Attribute names.
 
         Args:
             indata (dict): Dict used to set attr
@@ -80,8 +81,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                     "buf={} and received buf={}".format(key, attributes_list))
 
     def verify_get_attr(self, indata, outdata):
-        """
-        verify the Attributes value after get_attr
+        """verify the Attributes value after get_attr.
 
         Args:
              indata (dict): In data item of container get_attr.
@@ -106,8 +106,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                     decoded.get(attr.decode(), None)))
 
     def daos_server_storage_prepare_reset(self, step):
-        """
-        Perform daos_server storage prepare
+        """Perform daos_server storage prepare.
 
         Args:
              step (str): test step.
@@ -129,8 +128,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "please make sure the server equipped with PMem modules".format(step, cmd))
 
     def daos_server_storage_prepare_ns(self, step, engines_per_socket=1):
-        """
-        Perform daos_server storage prepare --scm-ns-per-socket and reboot
+        """Perform daos_server storage prepare --scm-ns-per-socket and reboot.
 
         Args:
              step (str): test step.
@@ -157,8 +155,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.host_reboot(self.hostlist_servers)
 
     def host_reboot(self, hosts):
-        """
-        To reboot the hosts.
+        """To reboot the hosts.
 
         Args:
              hosts (NodeSet): hosts set to be rebooted.
@@ -166,14 +163,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         reboot_waittime = self.params.get("reboot_waittime", "/run/server_config/*", default=210)
         cmd = "sudo shutdown -r now"
         run_pcmd(hosts, cmd, timeout=210)
-        self.log.info(
-            "===Server rebooting...  sleep %s seconds.\n", reboot_waittime)
+        self.log.info("===Server %s rebooting... \n", hosts)
         time.sleep(reboot_waittime)
 
     def cleanup(self):
-        """
-        Servers clean up after test complete.
-        """
+        """Servers clean up after test complete."""
         self.pool.destroy(recursive=1, force=1)
         cleanup_cmds = [
             "sudo systemctl stop daos_server.service",
@@ -185,9 +179,9 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
     def test_multiengines_per_socket(self):
-        """
-        Test ID: DAOS-12076 Test multiple engines/sockets
-        Test description:
+        """Test ID: DAOS-12076.
+
+        Test description: Test multiple engines/sockets.
             (1) Storage prepare --scm-ns-per-socket
             (2) Start server
             (3) Start agent
@@ -197,11 +191,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             (7) IOR test
             (8) MDTEST
             (9) Cleanup
-            To launch test:
+        To launch test:
             (1) Make sure server is equipped with PMem
             (2) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
+
         :avocado: tags=manual
-        :avocado: tags=hw,medium
         :avocado: tags=server
         :avocado: tags=test_multiengines_per_socket
         """
@@ -294,9 +288,9 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 verbose=True)
             self.verify_get_attr(attr_dict, data['response'])
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.fail("Test was expected to pass but it failed.\n")
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
+            self.fail("#Test was expected to pass but it failed.\n")
         self.container.close()
         self.pool.disconnect()
 
