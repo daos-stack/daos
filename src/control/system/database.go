@@ -63,6 +63,7 @@ type (
 		sync.RWMutex
 		log logging.Logger
 
+		Version       uint64
 		NextRank      Rank
 		MapVersion    uint32
 		Members       *MemberDatabase
@@ -559,6 +560,17 @@ func copyMember(in *Member) *Member {
 	out := new(Member)
 	*out = *in
 	return out
+}
+
+// DataVersion returns the current version of the system database.
+func (db *Database) DataVersion() (uint64, error) {
+	if err := db.CheckReplica(); err != nil {
+		return 0, err
+	}
+
+	db.data.RLock()
+	defer db.data.RUnlock()
+	return db.data.Version, nil
 }
 
 // AllMembers returns a copy of the system membership.
