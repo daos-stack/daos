@@ -67,7 +67,7 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 	return hf
 }
 
-func GetLocalHostFabric(ctx context.Context, fs *hardware.FabricScanner, filterProvider string) (*control.HostFabric, error) {
+func GetLocalFabricIfaces(ctx context.Context, fs *hardware.FabricScanner, filterProvider string) (*control.HostFabric, error) {
 	results, err := fs.Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		cmd.FabricProvider = allProviders
 	}
 
-	hf, err := GetLocalHostFabric(ctx, fs, cmd.FabricProvider)
+	hf, err := GetLocalFabricIfaces(ctx, fs, cmd.FabricProvider)
 	if err != nil {
 		return err
 	}
