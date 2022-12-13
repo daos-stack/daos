@@ -612,8 +612,9 @@ func registerLeaderSubscriptions(srv *server) {
 }
 
 // getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.
-func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
+func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryLoggingInterceptor(log), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
 		unaryVersionInterceptor,
