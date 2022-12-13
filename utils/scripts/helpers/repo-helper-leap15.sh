@@ -11,16 +11,55 @@ set -uex
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 
-disable_repo () {
+# shellcheck disable=SC2120
+disable_repos () {
+    local repos_dir="$1"
+    shift
+    local save_repos
+    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-leap15-artifactory"
     if [ -n "$REPO_FILE_URL" ]; then
-        pushd /etc/dnf/repos.d/
-            mv daos_ci-leap15-artifactory.repo{,.tmp}
-            for file in *.repo; do
-                true > "$file"
-            done
-            mv daos_ci-leap15-artifactory.repo{.tmp,}
+        pushd "$repos_dir"
+        local repo
+        for repo in "${save_repos[@]}"; do
+            mv "$repo".repo{,.tmp}
+        done
+        for file in *.repo; do
+            true > "$file"
+        done
+        for repo in "${save_repos[@]}"; do
+            mv "$repo".repo{.tmp,}
+        done
         popd
     fi
+}
+
+install_curl() {
+
+    if command -v curl; then
+        return
+    fi
+
+    zypper mr --all --disable
+    zypper addrepo                                                                           \
+        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
+          temp_opensuse_oss_proxy
+    zypper --non-interactive install curl
+    zypper removerepo temp_opensuse_oss_proxy
+}
+
+install_dnf() {
+
+    if command -v dnf; then
+        return
+    fi
+
+    zypper mr --all --disable
+    zypper addrepo                                                                           \
+        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
+          temp_opensuse_oss_proxy
+    zypper --non-interactive install dnf{,-plugins-core}
+    zypper removerepo temp_opensuse_oss_proxy
+    zypper mr --all --enable
 }
 
 # Use local repo server if present
@@ -28,36 +67,34 @@ disable_repo () {
 # be reached, have to bootstrap in an environment to get curl installed
 # to then install the pre-built repo file.
 
+MAJOR_VER="${BASE_DISTRO##*:}"
+MAJOR_VER="${MAJOR_VER%%.*}"
 if [ -n "$REPO_FILE_URL" ]; then
-    zypper mr --all --disable
-    zypper addrepo                                                            \
-        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
-          temp_opensuse_oss_proxy
-    zypper --non-interactive install curl
+    install_curl
     mkdir -p /etc/zypp/repos.d
     pushd /etc/zypp/repos.d/
-        curl -k -f -o daos_ci-leap15-artifactory.repo.tmp \
-             "$REPO_FILE_URL"daos_ci-leap15-artifactory.repo
-        for file in *.repo; do
-            true > "$file"
-        done
-        mv daos_ci-leap15-artifactory.repo{.tmp,}
+    curl -k -f -o daos_ci-leap$MAJOR_VER-artifactory.repo        \
+         "$REPO_FILE_URL"daos_ci-leap$MAJOR_VER-artifactory.repo
+    disable_repos /etc/zypp/repos.d/
     popd
+    install_dnf
+else
+    zypper --non-interactive --gpg-auto-import-keys install \
+        dnf dnf-plugins-core
 fi
-zypper --non-interactive --gpg-auto-import-keys install \
-    dnf dnf-plugins-core
 mkdir -p /etc/dnf/repos.d
 pushd /etc/zypp/repos.d/
-    for file in *.repo; do
-        sed -e '/type=NONE/d' < "$file" > "/etc/dnf/repos.d/$file"
-    done
+for file in *.repo; do
+    sed -e '/type=NONE/d' < "$file" > "/etc/dnf/repos.d/$file"
+done
 popd
 zypper --non-interactive clean --all
 dnf config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 
 daos_base="job/daos-stack/job/"
-artifacts="/artifacts/artifacts/leap15/"
+artifacts="/artifact/artifacts/leap15/"
+save_repos=()
 for repo in $REPOS; do
     branch="master"
     build_number="lastSuccessfulBuild"
@@ -75,11 +112,12 @@ baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo
     cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo
+    save_repos+=("$repo:$branch:$build_number")
 done
 
 if [ -e /tmp/install.sh ]; then
     dnf upgrade
-    disable_repo
+    disable_repos /etc/dnf/repos.d/ "${save_repos[@]}"
     /tmp/install.sh
     dnf clean all
     rm -f /tmp/install.sh
