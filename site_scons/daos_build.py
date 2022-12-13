@@ -150,6 +150,7 @@ def _configure_mpi_pkg(env, libs):
         print("**********************************")
         raise e
 
+
     # assume mpi is needed in the fallback case
     libs.append('mpi')
     return env.subst("$MPI_PKG")
