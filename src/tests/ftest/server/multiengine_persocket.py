@@ -70,7 +70,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         if length != size:
             self.fail(
-                "FAIL: Size does not matching for Names in list attr, Expected "
+                "FAIL: Size does not match for Names in list attr, Expected "
                 "len={} and received len={}".format(length, size))
         # verify the Attributes names in list_attr retrieve
         for key in indata.keys():
@@ -221,7 +221,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
                 "daos_server_storage_prepare_ns", step, retry)
             time.sleep(15)
-            cmd = "/usr/bin/ls -l /dev/pmem*"
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
         if retry > max_retry:
