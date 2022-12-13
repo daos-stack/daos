@@ -209,22 +209,22 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 // Detect the number of engine configs assigned to each NUMA node and return error if engines are
 // distributed unevenly across NUMA nodes. Otherwise return sorted list of NUMA nodes in use.
 // Configurations where all engines are on a single NUMA node will be allowed.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]int, error) {
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]string, error) {
 	nodeMap := make(map[int]int)
 	for _, ec := range engineCfgs {
 		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
 	}
 
 	var lastCount int
-	nodes := make([]int, 0, len(engineCfgs))
+	nodes := make([]string, 0, len(engineCfgs))
 	for k, v := range nodeMap {
 		if lastCount != 0 && v != lastCount {
 			return nil, FaultEngineNUMAImbalance(nodeMap)
 		}
 		lastCount = v
-		nodes = append(nodes, k)
+		nodes = append(nodes, fmt.Sprintf("%d", k))
 	}
-	sort.Ints(nodes)
+	sort.Strings(nodes)
 
 	return nodes, nil
 }
@@ -298,9 +298,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 		// allocation as some overhead may result in one or two being unavailable.
 		prepReq.HugePageCount = srv.cfg.NrHugepages / len(numaNodes)
 		prepReq.HugePageCount += common.ExtraHugePages
-		prepReq.HugeNodes = strings.Trim(
-			strings.Join(strings.Split(fmt.Sprint(numaNodes), " "), ","),
-			"[]")
+		prepReq.HugeNodes = strings.Join(numaNodes, ",")
 
 		srv.log.Debugf("allocating %d hugepages on each of these numa nodes: %v",
 			prepReq.HugePageCount, numaNodes)
