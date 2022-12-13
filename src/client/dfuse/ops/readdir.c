@@ -207,27 +207,23 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 #define FADP fuse_add_direntry_plus
 #define FAD  fuse_add_direntry
 
-void
-dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
+int
+dfuse_do_readdir(struct dfuse_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
+		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	char                         *reply_buff;
 	off_t                         buff_offset = 0;
 	int                           added       = 0;
 	int                           rc          = 0;
 	bool                          large_fetch = true;
+	size_t                        size        = *out_size;
 	struct dfuse_readdir_hdl     *hdl;
 
 	if (offset == READDIR_EOD) {
 		oh->doh_kreaddir_finished = true;
 		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
-		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
-		return;
+		*out_size = 0;
+		return 0;
 	}
-
-	D_ALLOC(reply_buff, size);
-	if (reply_buff == NULL)
-		D_GOTO(out, rc = ENOMEM);
 
 	if (oh->doh_rd == NULL) {
 		D_ALLOC_PTR(oh->doh_rd);
@@ -421,14 +417,37 @@ reply:
 	if (added == 0 && rc != 0)
 		D_GOTO(out_reset, rc);
 
-	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
-	D_FREE(reply_buff);
-
-	return;
+	*out_size = buff_offset;
+	return 0;
 
 out_reset:
 	dfuse_readdir_reset(hdl);
 out:
-	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	D_ASSERT(rc != -0);
+	return rc;
+}
+
+void
+dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
+{
+	struct dfuse_info *fs_handle = fuse_req_userdata(req);
+	size_t             out_size;
+	char              *reply_buff;
+	int                rc;
+
+	D_ALLOC(reply_buff, size);
+	if (reply_buff == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	out_size = size;
+
+	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &out_size, offset, plus);
+
+out:
+	if (rc)
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	else
+		DFUSE_REPLY_BUF(oh, req, reply_buff, out_size);
+
 	D_FREE(reply_buff);
 }

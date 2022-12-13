@@ -4333,10 +4333,27 @@ def test_dfuse_th(server, conf, wf):
     """Run dfuse test helper under fault injection."""
 
     pool = server.get_test_pool()
+    container = create_cont(conf, pool, ctype='POSIX', label='th_cont')
 
-    container = create_cont(conf, pool, ctype='POSIX', label='test_cont')
+    with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
 
-    cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th'), pool, container]
+        copy_root = join(src_dir, 'root')
+        os.mkdir(copy_root)
+
+        for idx in range(10):
+            with open(join(copy_root, f'file_{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+            cmd = ['filesystem',
+                   'copy',
+                   '--src',
+                   f'{copy_root}/file_{idx}',
+                   '--dst',
+                   f'daos://{pool}/{container}/']
+            rc = run_daos_cmd(server.conf, cmd)
+            assert rc.returncode == 0
+
+    cmd = [join(conf['PREFIX'], 'bin', 'dfuse_th'), '--pool', pool, '--container', container]
 
     print(cmd)
     test_cmd = AllocFailTest(conf, 'dfuse_th', cmd)

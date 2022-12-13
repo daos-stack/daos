@@ -695,6 +695,10 @@ void
 dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
+int
+dfuse_do_readdir(struct dfuse_info *info, fuse_req_t req, struct dfuse_obj_hdl *oh,
+		 char *reply_buff, size_t *out_size, off_t offset, bool plus);
+
 void
 dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
 
