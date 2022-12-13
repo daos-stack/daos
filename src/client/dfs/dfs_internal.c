@@ -195,7 +195,7 @@ dfs_hdl_lookup(const char *str, int type, const char *pool)
 		daos_size_t	len;
 
 		D_ASSERT(pool);
-		len = snprintf(cont_pool, strlen(pool) + strlen(str) + 2, "%s/%s", pool, str);
+		len = snprintf(cont_pool, DAOS_PROP_LABEL_MAX_LEN * 2 + 2, "%s/%s", pool, str);
 		D_ASSERT(len == strlen(pool) + strlen(str) + 1);
 		rlink = d_hash_rec_find(coh_hash, cont_pool, len + 1);
 	} else {
@@ -283,12 +283,12 @@ dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force)
 	char			cont_pool[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
 	daos_size_t		len;
 
-	D_ASSERT(pool);
-	len = snprintf(cont_pool, strlen(pool) + strlen(cont) + 2, "%s/%s", pool, cont);
-	D_ASSERT(len >= strlen(pool) + strlen(cont) + 1);
-
 	if (coh_hash == NULL)
 		return 0;
+
+	D_ASSERT(pool);
+	len = snprintf(cont_pool, strlen(pool) + strlen(cont) + 2, "%s/%s", pool, cont);
+	D_ASSERT(len == strlen(pool) + strlen(cont) + 1);
 
 	if (force) {
 		if (!d_hash_rec_delete(coh_hash, cont_pool, len + 1))

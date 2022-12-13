@@ -90,14 +90,14 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
 	{dc_obj_open, sizeof(daos_obj_open_t)},
 	{dc_obj_close, sizeof(daos_obj_close_t)},
-	{dc_obj_punch_task,		sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_dkeys_task,	sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_akeys_task,	sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_dkeys_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_akeys_task, sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
-	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
+	{dc_obj_fetch_task, sizeof(daos_obj_fetch_t)},
+	{dc_obj_update_task, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
@@ -124,8 +124,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
 
-	/** More Pool */
 	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
+	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
 };
 
 /**

@@ -9,6 +9,7 @@ package io.daos;
 import io.daos.dfs.StatAttributes;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -178,5 +179,15 @@ public final class DaosUtils {
   public static byte[] keyToBytes8(String key, int lenLimit) {
     byte[] bytes = keyToBytes(key, lenLimit);
     return padZero8(bytes);
+  }
+
+  public static String keyBytes8ToStr(byte[] keyBytes) {
+    int i = 0;
+    for (; i < keyBytes.length && keyBytes[i] == (byte)0; i++) {}
+    try {
+      return new String(keyBytes, i, keyBytes.length - i, Constants.KEY_CHARSET);
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalArgumentException("cannot decode bytes in " + Constants.KEY_CHARSET);
+    }
   }
 }

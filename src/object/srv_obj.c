@@ -194,7 +194,7 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 	if (DAOS_FAIL_CHECK(DAOS_DTX_START_EPOCH)) {
 		/* Return an stale epoch for test. */
 		orwo->orw_epoch = dss_get_start_epoch() -
-				  crt_hlc_epsilon_get() * 3;
+				  d_hlc_epsilon_get() * 3;
 	} else {
 		/* orwo->orw_epoch possibly updated in obj_ec_recov_need_try_again(), reply
 		 * the max so client can fetch from that epoch.
@@ -2614,7 +2614,7 @@ process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 		 * *epoch is not a chosen TX epoch. Choose the current HLC
 		 * reading as the TX epoch.
 		 */
-		*epoch = crt_hlc_get();
+		*epoch = d_hlc_get();
 	else
 		/* *epoch is already a chosen TX epoch. */
 		return PE_OK_REMOTE;
@@ -2842,7 +2842,7 @@ again2:
 			 * Only standalone updates use this RPC. Retry with
 			 * newer epoch.
 			 */
-			orw->orw_epoch = crt_hlc_get();
+			orw->orw_epoch = d_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
 			d_tm_inc_counter(opm->opm_update_restart, 1);
@@ -3698,7 +3698,7 @@ again2:
 		 * Only standalone punches use this RPC. Retry with newer
 		 * epoch.
 		 */
-		opi->opi_epoch = crt_hlc_get();
+		opi->opi_epoch = d_hlc_get();
 		opi->opi_flags &= ~ORF_RESEND;
 		flags = 0;
 		goto again2;
@@ -3839,7 +3839,7 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	struct obj_sync_in	*osi;
 	struct obj_sync_out	*oso;
 	struct obj_io_context	 ioc;
-	daos_epoch_t		 epoch = crt_hlc_get();
+	daos_epoch_t		 epoch = d_hlc_get();
 	int			 rc;
 
 	osi = crt_req_get(rpc);
@@ -5034,4 +5034,50 @@ reply:
 	}
 	obj_cpd_reply(rpc, rc, ioc.ioc_map_ver);
 	obj_ioc_end(&ioc, rc);
+}
+
+void
+ds_obj_key2anchor_handler(crt_rpc_t *rpc)
+{
+	struct obj_key2anchor_in	*oki;
+	struct obj_key2anchor_out	*oko;
+	struct obj_io_context		ioc;
+	daos_key_t			*akey = NULL;
+	int				rc = 0;
+
+	oki = crt_req_get(rpc);
+	D_ASSERT(oki != NULL);
+	oko = crt_reply_get(rpc);
+	D_ASSERT(oko != NULL);
+
+	rc = obj_ioc_begin(oki->oki_oid.id_pub, oki->oki_map_ver,
+			   oki->oki_pool_uuid, oki->oki_co_hdl,
+			   oki->oki_co_uuid, opc_get(rpc->cr_opc),
+			   oki->oki_flags, &ioc);
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
+		DF_X64", pmv %u/%u dti "DF_DTI".\n",
+		rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_UOID(oki->oki_oid), DP_KEY(&oki->oki_dkey),
+		dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
+		oki->oki_map_ver, ioc.ioc_map_ver, DP_DTI(&oki->oki_dti));
+
+	rc = process_epoch(&oki->oki_epoch, NULL, &oki->oki_flags);
+	if (rc == PE_OK_LOCAL)
+		oki->oki_flags &= ~ORF_EPOCH_UNCERTAIN;
+
+	if (oki->oki_akey.iov_len > 0)
+		akey = &oki->oki_akey;
+	rc = vos_obj_key2anchor(ioc.ioc_vos_coh, oki->oki_oid, &oki->oki_dkey, akey,
+				&oko->oko_anchor);
+
+out:
+	obj_reply_set_status(rpc, rc);
+	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
+	obj_ioc_end(&ioc, rc);
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }

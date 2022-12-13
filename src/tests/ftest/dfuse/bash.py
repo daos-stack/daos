@@ -48,10 +48,10 @@ class Cmd(DfuseTestBase):
               Remove renamed file
               Remove a directory
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,small
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
-        :avocado: tags=bashcmd
+        :avocado: tags=Cmd,test_bashcmd
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')
@@ -105,8 +105,8 @@ class Cmd(DfuseTestBase):
                                     [str(node_set) for code, node_set in
                                      list(ret_code.items()) if code != 0]))
                             raise CommandFailure(
-                                "Error running '{}' on the following "
-                                "hosts: {}".format(cmd, error_hosts))
+                                "Error running '{}' on the following hosts: {}".format(
+                                    cmd, error_hosts))
                     # report error if any command fails
                     except CommandFailure as error:
                         self.log.error("BashCmd Test Failed: %s",
