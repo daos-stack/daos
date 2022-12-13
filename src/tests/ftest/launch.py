@@ -39,7 +39,7 @@ from results_utils import create_html, create_xml, Job, Results, TestResult   # 
 from run_utils import run_local, run_remote, RunException                     # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
-    get_user_groups, find_command  # noqa: E402
+    get_user_groups  # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -221,6 +221,28 @@ def find_pci_address(value):
     digit = "0-9a-fA-F"
     pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
     return re.findall(pattern, str(value))
+
+
+def find_command(source, pattern, depth, other=None):
+    """Get the find command.
+
+    Args:
+        source (str): where the files are currently located
+        pattern (str): pattern used to limit which files are processed
+        depth (int): max depth for find command
+        other (object, optional): other commands, as a list or str, to include at the end of the
+            base find command. Defaults to None.
+
+    Returns:
+        str: the find command
+
+    """
+    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    if isinstance(other, list):
+        command.extend(other)
+    elif isinstance(other, str):
+        command.append(other)
+    return " ".join(command)
 
 
 class AvocadoInfo():

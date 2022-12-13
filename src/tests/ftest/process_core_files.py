@@ -116,6 +116,7 @@ class CoreFileProcessing():
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
                         os.remove(core_file)
+
         if errors:
             raise CoreFileException("Errors detected processing core files")
         return corefiles_processed
@@ -161,6 +162,19 @@ class CoreFileProcessing():
 
         except RunException as error:
             raise RunException(f"Error creating {stack_trace_file}") from error
+
+        finally:
+            command = [
+                "find", f"{core_dir}",
+                "-maxdepth 1",
+                "-type f",
+                "-name core.gdb.*.*",
+                "-printf '%M %n %-12u %-12g %12k %t %p\n'",
+                "-delete"
+            ]
+            results = run_local(self.log, command)
+            if results.stdout:
+                self.log.debug("Deleted the following core.gdb files %s", results.stdout)
 
     def _get_exe_name(self, core_file):
         """Get the executable name from the core file.
