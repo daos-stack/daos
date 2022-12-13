@@ -8,14 +8,12 @@ import time
 import random
 import base64
 import traceback
-import re
 
 from general_utils import run_pcmd, get_random_bytes
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
 from server_utils_base import DaosServerCommand
-from run_utils import run_local
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
