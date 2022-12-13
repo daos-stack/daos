@@ -366,6 +366,7 @@ iod_release_buffer(struct bio_desc *biod)
 	D_FREE(rsrvd_dma->brd_regions);
 	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
+	biod->bd_nvme_bytes = 0;
 
 	/* All DMA chunks are used through cached bulk handle */
 	if (rsrvd_dma->brd_chk_cnt == 0) {
