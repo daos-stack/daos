@@ -3,7 +3,7 @@ hosts:
   test_clients: 1
 
 setup:
-  start_servers: False
+  start_servers: false
   start_agents: false
   server_config_namespace: /run/server_configurations/*/server_config/*
 

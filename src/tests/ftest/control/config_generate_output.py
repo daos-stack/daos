@@ -426,7 +426,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
         # Get necessary storage and network info.
