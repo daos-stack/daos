@@ -326,8 +326,8 @@ func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, hf *HostFab
 	if err := provIfaces.fromFabric(ndc, hf.Interfaces); err != nil {
 		return nil, err
 	}
-	log.Debugf("available interfaces %v derived from host fabric output %v", provIfaces,
-		hf.Interfaces)
+	log.Debugf("numa nodes: %d, numa core count: %d, available interfaces %v", hf.NumaCount,
+		hf.CoresPerNuma, provIfaces)
 
 	return &networkDetails{
 		NumaCount:      int(hf.NumaCount),

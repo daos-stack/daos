@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -41,7 +42,20 @@ type configGenCmd struct {
 type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
 
 func getLocalFabric(ctx context.Context, log logging.Logger) (*control.HostFabric, error) {
-	return GetLocalHostFabric(ctx, hwprov.DefaultFabricScanner(log), allProviders)
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), allProviders)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
+	}
+
+	topo, err := hwprov.DefaultTopologyProvider(log).GetTopology(ctx)
+	if err != nil {
+		return nil, errors.Wrapf(err, "fetching local hardware topology")
+	}
+
+	hf.NumaCount = uint32(topo.NumNUMANodes())
+	hf.CoresPerNuma = uint32(topo.NumCoresPerNUMA())
+
+	return hf, nil
 }
 
 type getStorageFn func(context.Context, logging.Logger) (*control.HostStorage, error)
@@ -51,18 +65,26 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 
 	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "nvme scan")
 	}
 
 	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "scm scan")
+	}
+
+	hpi, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, errors.Wrapf(err, "get hugepage info")
 	}
 
 	return &control.HostStorage{
 		NvmeDevices:   nvmeResp.Controllers,
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
+		HugePageInfo: control.HugePageInfo{
+			PageSizeKb: hpi.PageSizeKb,
+		},
 	}, nil
 }
 
@@ -87,11 +109,13 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	if err != nil {
 		return nil, err
 	}
+	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
 	hs, err := getStorage(ctx, cmd.Logger)
 	if err != nil {
 		return nil, err
 	}
+	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
 	req := control.ConfGenerateReq{
 		Log:          cmd.Logger,
