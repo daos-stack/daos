@@ -781,7 +781,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),

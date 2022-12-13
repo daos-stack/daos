@@ -41,7 +41,13 @@ class StorageTiers(TestWithServers):
                 storage_class = self.params.get("class", namespace, None)
                 if not storage_class:
                     break
-                if storage_class in ["dcpm", "ram"]:
+                if storage_class in ["dcpm"]:
+                    data = {
+                        "class": storage_class,
+                        "scm_mount": self.params.get("scm_mount", namespace),
+                        "scm_list": self.params.get("scm_list", namespace)
+                    }
+                elif storage_class in ["ram"]:
                     data = {
                         "class": storage_class,
                         "scm_mount": self.params.get("scm_mount", namespace),
