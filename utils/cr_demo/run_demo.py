@@ -251,7 +251,7 @@ print("13-F1. Dangling pool was removed.")
 list_pool()
 
 print("13-F2. Create a container. It should succeed.")
-cont_label_2 = CONT_LABEL + "_7"
+cont_label_2 = CONT_LABEL + "_2"
 create_container(pool_label=pool_label_2, cont_label=cont_label_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
