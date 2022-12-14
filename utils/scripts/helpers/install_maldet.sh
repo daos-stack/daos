@@ -41,7 +41,12 @@ curl "${lmd_url}" --silent --show-error --fail -o "/var/tmp/${lmd_tarball}"
 
 lmd_src='lmd_src'
 mkdir -p "/var/tmp/${lmd_src}"
-tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xf "/var/tmp/${lmd_tarball}"
+if ! tar -C "/var/tmp/${lmd_src}" --strip-components=1 -xzf "/var/tmp/${lmd_tarball}"; then
+    echo "Failed to extract $lmd_tarball"
+    ls -l /var/tmp/$lmd_tarball
+    file /var/tmp/$lmd_tarball
+    exit 1
+fi
 pushd "/var/tmp/${lmd_src}"
   sed -i -e "/^base_domain=/s|\".*\"|\"$lmd_base/maldetect\"|" \
       files/internals/internals.conf
