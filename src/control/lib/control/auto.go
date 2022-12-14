@@ -1027,10 +1027,6 @@ func genServerConfig(log logging.Logger, accessPoints []string, ecs []*engine.Co
 		WithControlLogFile(defaultControlLogFile).
 		WithNrHugePages(reqHugePages)
 
-	if err := cfg.SetEngineAffinities(log); err != nil {
-		return nil, errors.Wrap(err, "setting engine affinities")
-	}
-
 	if err := cfg.Validate(log, hugePageSizeKb); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
 	}
