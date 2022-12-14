@@ -154,8 +154,13 @@ class FioCommand(ExecutableCommand):
                 command.append(str(self._jobs[name]))
         return " ".join(command)
 
-    def _run_process(self):
+    def _run_process(self, raise_exception=None):
         """Run the command as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -163,12 +168,12 @@ class FioCommand(ExecutableCommand):
         """
         if not self._hosts:
             # Run fio locally
-            self.log.debug("Running: %s", self.__str__())
-            super()._run_process()
+            self.log.debug("Running: %s", str(self))
+            super()._run_process(raise_exception)
         else:
             # Run fio remotely
-            self.log.debug("Running: %s", self.__str__())
-            ret_codes = pcmd(self._hosts, self.__str__())
+            self.log.debug("Running: %s", str(self))
+            ret_codes = pcmd(self._hosts, str(self))
 
             # Report any failures
             if len(ret_codes) > 1 or 0 not in ret_codes:
