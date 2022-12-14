@@ -47,12 +47,12 @@ type Server struct {
 	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
 	DisableHugepages    bool                      `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile      string                    `yaml:"control_log_file"`
+	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                    `yaml:"helper_log_file"`
-	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
+	HelperLogFile       string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file,omitempty"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string                    `yaml:"fault_path"`
+	FaultPath           string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
 

@@ -91,6 +91,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+	cmd.Debugf("discovered fabric interfaces: %+v", hf.Interfaces)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err
