@@ -218,6 +218,7 @@ repeat_check_query()
 
 ####################################################################
 input("\n8. Select repair options and repair. Hit enter...")
+print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
 seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_1]]))
 seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_2]]))
@@ -228,20 +229,36 @@ seq_num_7 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_7]]))
 seq_num_8 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_8]]))
 
 # F1: 1: Discard the dangling pool entry from MS [suggested].
+print(f"\n{pool_label_1} - 1: Discard the dangling pool entry from MS [suggested].")
 check_repair(sequence_num=seq_num_1, action="1")
+
 # F2: 2: Start pool service under DICTATE mode from rank 1 [suggested].
+print(f"\n{pool_label_2} - 2: Start pool service under DICTATE mode from rank 1 "
+      f"[suggested].")
 check_repair(sequence_num=seq_num_2, action="2")
-# F4: 1: Trust PS pool label.
+
+# F4: 2: Trust PS pool label.
+print(f"\n{pool_label_4} - 2: Trust PS pool label.")
 check_repair(sequence_num=seq_num_4, action="2")
+
 # F5: 1: Discard the orphan pool shard to release space [suggested].
+print(f"\n{pool_label_5} - 1: Discard the orphan pool shard to release space "
+      f"[suggested].")
 check_repair(sequence_num=seq_num_5, action="1")
+
 # F6: 1: Change pool map for the dangling map entry [suggested].
+print(f"\n{pool_label_6} - 1: Change pool map for the dangling map entry [suggested].")
 check_repair(sequence_num=seq_num_6, action="1")
+
 # F7: 1: Destroy the orphan container to release space [suggested].
+print(f"\n{pool_label_7} - 1: Destroy the orphan container to release space [suggested].")
 check_repair(sequence_num=seq_num_7, action="1")
+
 # F8: 2: Trust the container label in container property.
+print(f"\n{pool_label_8} - 2: Trust the container label in container property.")
 check_repair(sequence_num=seq_num_8, action="2")
 
+print()
 repeat_check_query()
 
 print("\n9. Disable the checker.")
@@ -257,7 +274,8 @@ cont_label_2 = CONT_LABEL + "_2"
 create_container(pool_label=pool_label_2, cont_label=cont_label_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
-print(f"\n13-F4. Label inconsistency for {pool_label_4} was resolved. See pool list above.")
+print(f"\n13-F4. Label inconsistency for {pool_label_4} was resolved. "
+      f"See pool list above.")
 pool_get_prop(pool_label=pool_label_4, properties="label")
 
 # F5: Call dmg storage query usage to verify the storage was reclaimed. - Not working due
