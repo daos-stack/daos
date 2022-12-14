@@ -2178,8 +2178,11 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
 	rc = cont_close_recs(ctx, svc, recs, nrecs);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to close %d recs: "DF_RC"\n",
+			DP_CONT(svc->cs_pool_uuid, NULL), nrecs, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -2187,8 +2190,12 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 
 	for (i = 0; i < nrecs; i++) {
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to close handle: "DF_UUID", "DF_RC"\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[i].tcr_hdl),
+				DP_RC(rc));
 			goto out_tx;
+		}
 
 		/*
 		 * Yield frequently, in order to cope with the slow
@@ -2214,8 +2221,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 out_tx:
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT": leaving: %d\n",
-		DP_CONT(svc->cs_pool_uuid, NULL), rc);
+	if (rc == 0)
+		D_INFO(DF_CONT": closed %d recs\n", DP_CONT(svc->cs_pool_uuid, NULL), nrecs);
 	return rc;
 }
 

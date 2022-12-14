@@ -35,7 +35,9 @@ class Label(TestWithServers):
 
         try:
             if use_dmg:
+                pool.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 pool.dmg.pool_destroy(pool=pool.label.value, force=1)
+                pool.dmg.server_set_logmasks(raise_exception=False)
             else:
                 pool.destroy()
             if failure_expected:
