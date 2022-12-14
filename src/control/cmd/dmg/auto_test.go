@@ -113,18 +113,6 @@ func TestAuto_ConfigCommands(t *testing.T) {
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestAuto_confGen(t *testing.T) {
-	//	eth0 := &control.HostFabricInterface{
-	//		Provider: "ofi+tcp", Device: "eth0", NumaNode: 0, NetDevClass: 1, Priority: 2,
-	//	}
-	//	eth1 := &control.HostFabricInterface{
-	//		Provider: "ofi+tcp", Device: "eth1", NumaNode: 1, NetDevClass: 1, Priority: 3,
-	//	}
-	//	ib0 := &control.HostFabricInterface{
-	//		Provider: "ofi+psm2", Device: "ib0", NumaNode: 0, NetDevClass: 32, Priority: 0,
-	//	}
-	//	ib1 := &control.HostFabricInterface{
-	//		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
-	//	}
 	ib0 := &ctlpb.FabricInterface{
 		Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Netdevclass: 32, Priority: 0,
 	}
@@ -402,9 +390,6 @@ nr_hugepages: 6144
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
-helper_log_file: ""
-firmware_helper_log_file: ""
-fault_path: ""
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server

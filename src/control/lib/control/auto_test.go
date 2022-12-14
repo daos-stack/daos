@@ -1155,9 +1155,10 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 		},
 		"dual pmem dual ssd": {
 			numaSet: []int{0, 1},
+			// ndctl doesn't guarantee that pmem0 will be created on numa0
 			numaPMems: numaSCMsMap{
-				0: []string{"/dev/pmem0"},
-				1: []string{"/dev/pmem1"},
+				0: []string{"/dev/pmem1"},
+				1: []string{"/dev/pmem0"},
 			},
 			numaIfaces: numaNetIfaceMap{
 				0: ib0,
@@ -1177,7 +1178,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassDcpm.String()).
-							WithScmDeviceList("/dev/pmem0").
+							WithScmDeviceList("/dev/pmem1").
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
@@ -1196,7 +1197,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassDcpm.String()).
-							WithScmDeviceList("/dev/pmem1").
+							WithScmDeviceList("/dev/pmem0").
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).

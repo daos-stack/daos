@@ -46,7 +46,7 @@ const (
 var errNoNuma = errors.New("zero numa nodes reported on hosts")
 
 type (
-	// ConGenReq contains the inputs for the request.
+	// ConGenerateReq contains the inputs for the request.
 	ConfGenerateReq struct {
 		NrEngines    int
 		MinNrSSDs    int
@@ -131,7 +131,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 		return nil, err
 	}
 
-	// calculat rservice and helper thread counts
+	// calculate service and helper thread counts
 	tc, err := getThreadCounts(req.Log, ecs[0], nd.NumaCoreCount)
 	if err != nil {
 		return nil, err
@@ -147,8 +147,8 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	return &resp, nil
 }
 
-// ConfGenerateRemote calls ConfGenerate after validating a homogenous hardware setup across remote
-// hosts. Returns API response or error.
+// ConfGenerateRemote calls ConfGenerate after validating a homogeneous hardware setup across
+// remote hosts. Returns API response or error.
 func ConfGenerateRemote(ctx context.Context, req ConfGenerateRemoteReq) (*ConfGenerateRemoteResp, error) {
 	req.Log.Debugf("ConfGenerateRemote called with request %+v", req)
 
