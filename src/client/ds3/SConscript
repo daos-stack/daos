@@ -9,7 +9,7 @@ def scons():
 
     denv = env.Clone()
 
-    libraries = ['daos', 'dfs', 'gurt', 'cart', 'uuid']
+    libraries = ['daos', 'dfs']
     denv.AppendUnique(LIBPATH=["../dfs"])
     denv.AppendUnique(CPPPATH=["../dfs"])
 
