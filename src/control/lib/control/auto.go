@@ -63,9 +63,8 @@ type (
 	// ConfGenerateRemoteReq adds connectivity related fields to base request.
 	ConfGenerateRemoteReq struct {
 		ConfGenerateReq
-		unaryRequest
-		msRequest
-		Client UnaryInvoker
+		HostList []string
+		Client   UnaryInvoker
 	}
 
 	// ConfGenerateRemoteResp wraps the ConfGenerateResp.
