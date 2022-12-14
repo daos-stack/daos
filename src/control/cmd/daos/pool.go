@@ -43,7 +43,7 @@ type poolBaseCmd struct {
 
 	SysName string `long:"sys-name" short:"G" descripion:"DAOS system name"`
 	Args    struct {
-		Pool PoolID `positional-arg-name:"p  ool name  or UUID" description:"required if --path is not used"`
+		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used"`
 	} `positional-args:"yes"`
 }
 
