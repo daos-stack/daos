@@ -2267,7 +2267,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			obj_ver = 0;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OBJ_VERSION;
@@ -3388,10 +3388,14 @@ pool_cont_filter_is_valid(uuid_t pool_uuid, daos_pool_cont_filter_t *filt)
 	for (i = 0; i < filt->pcf_nparts; i++) {
 		daos_pool_cont_filter_part_t *part = filt->pcf_parts[i];
 
-		if (part->pcfp_key >= PCF_FUNC_MAX) {
+		if (part->pcfp_key >= PCF_KEY_MAX) {
 			D_ERROR(DF_UUID": filter part key %u is outside of valid range %u..%u\n",
-				DP_UUID(pool_uuid), part->pcfp_key, PCF_FUNC_EQ,
-				(PCF_FUNC_MAX - 1));
+				DP_UUID(pool_uuid), part->pcfp_key, 0, (PCF_KEY_MAX - 1));
+			return false;
+		}
+		if (part->pcfp_func >= PCF_FUNC_MAX) {
+			D_ERROR(DF_UUID": filter part func %u is outside of valid range %u..%u\n",
+				DP_UUID(pool_uuid), part->pcfp_key, 0, (PCF_FUNC_MAX - 1));
 			return false;
 		}
 		D_DEBUG(DB_MD, DF_UUID": filter part %u: key(%s) %s "DF_U64"\n",
@@ -4798,7 +4802,7 @@ static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 				 bool *schedule_layout_upgrade)
 {
-	daos_epoch_t	upgrade_eph = crt_hlc_get();
+	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
 	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
@@ -5937,7 +5941,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	daos_epoch_t			rebuild_eph = crt_hlc_get();
+	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,

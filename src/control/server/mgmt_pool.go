@@ -99,7 +99,7 @@ func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
 		}
 	}
 
-	return uuid.Nil, errors.Errorf("unable to find pool with label %q", id)
+	return uuid.Nil, system.ErrPoolLabelNotFound(id)
 }
 
 // getPoolService returns the pool service entry for the given UUID.
@@ -1140,6 +1140,12 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 			State:   ps.State.String(),
 		})
 	}
+
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
 
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", resp)
 

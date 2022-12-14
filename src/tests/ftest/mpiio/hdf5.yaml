@@ -1,7 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 200
+timeout: 300
 server_config:
   name: daos_server
   crt_timeout: 60
@@ -17,13 +17,13 @@ server_config:
           class: nvme
           bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
   scm_size: 30000000000
   nvme_size: 40000000000

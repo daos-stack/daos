@@ -2240,29 +2240,36 @@ co_rf_simple(void **state)
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		daos_prop_t	*prop_out = daos_prop_alloc(1);
+
+		assert_non_null(prop_out);
+		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+
+		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_RF2);
+
+		daos_prop_free(prop_out);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2299,7 +2306,7 @@ co_rf_simple(void **state)
 
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -2676,15 +2683,15 @@ co_redun_lvl(void **state)
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2738,13 +2745,13 @@ co_redun_lvl(void **state)
 		print_message("OC_EC_4P1G1 obj layout create should fail if ndom < 5\n");
 		io_oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
 		/* grp_size > ndom, should fail in dc_obj_open()->obj_layout_create */
-		rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+		rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -2903,41 +2910,42 @@ co_mdtimes(void **state)
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	/* open updates the otime, visible upon subsequent query */
-	print_message("open container %s (%s) again (no special flags), query for updated otime\n",
+	/* open updates the otime and returns updated time in daos_cont_info_t */
+	print_message("open container %s (%s) again (no special flags), confirm updated otime\n",
 		      label, arg->co_str);
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh, &cinfo,
 			    arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
 
 	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
-	prev_otime = cinfo.ci_md_otime;
-	print_message("query returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
+	print_message("query also returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
 
 	print_message("close container\n");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	print_message("open container %s (%s) again (RW), verify mtime updated (from close)\n",
-		      label, arg->co_str);
+	print_message("open container %s (%s) again (RW), verify otime (open) and mtime (close) "
+		      "updated\n", label, arg->co_str);
 	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
 	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	/* NOTE: otime was updated by cont_open(), visible in next query */
-	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_mtime);
+	print_message("open returned updated otime (0x"DF_X64"), mtime (0x"DF_X64")\n",
+		      cinfo.ci_md_otime, cinfo.ci_md_mtime);
 
 	print_message("create container snapshot, query and verify updated mtime\n");
 	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);
@@ -2947,12 +2955,11 @@ co_mdtimes(void **state)
 	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
-	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("created snapshot 0x"DF_X64", query returned updated otime (0x"DF_X64"), "
-		      "updated mtime (0x"DF_X64")\n", epc, cinfo.ci_md_otime, cinfo.ci_md_mtime);
+	print_message("created snapshot 0x"DF_X64", query returned updated mtime (0x"DF_X64")\n",
+		      epc, cinfo.ci_md_mtime);
 
 	print_message("destroy container snapshot, query and verify updated mtime\n");
 	epr.epr_lo = epr.epr_hi = epc;
@@ -2983,6 +2990,143 @@ co_mdtimes(void **state)
 	 */
 
 	daos_prop_free(prop);
+}
+
+static void
+co_nhandles(void **state)
+{
+	test_arg_t	       *arg = *state;
+	daos_event_t		ev;
+	const char	       *clbl =  "nhandles_test_cont";
+	uuid_t			cuuid;
+	daos_handle_t		coh;		/* opened on 0, shared to all ranks (nhandles=1) */
+	daos_handle_t		coh2;		/* opened by all ranks (nhandles=num_ranks) */
+	daos_cont_info_t	cinfo;
+	uint32_t		expect_nhandles;
+	int			rc;
+
+	if (!arg->hdl_share && arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	expect_nhandles = 1;
+
+	if (arg->myrank == 0) {
+		print_message("creating container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+
+		rc = daos_cont_create_with_label(arg->pool.poh, clbl, NULL,
+						 &cuuid, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		print_message("container created: %s\n", clbl);
+
+		/* Open, and expect 1 handles  */
+		print_message("rank 0: opening container %ssynchronously\n",
+			      arg->async ? "a" : "");
+		cinfo.ci_nhandles = 0;
+		rc = daos_cont_open(arg->pool.poh, clbl, DAOS_COO_RW, &coh,
+				    &cinfo, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+		print_message("rank 0: container opened (hdl coh)\n");
+	}
+
+	/* handle share coh among all ranks, all ranks call query and verify nhandles */
+	if (arg->hdl_share)
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0 /* verbose */);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks open coh2, then query and verify nhandles (incremented by num ranks) */
+	expect_nhandles += arg->rank_size;
+	print_message("rank %d: open  container (hdl coh2), expect nhandles<=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_open(arg->pool.poh, clbl, DAOS_COO_RO, &coh2,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	/* ranks independently opening; nhandles will not reach expectation until after barrier */
+	assert_true(cinfo.ci_nhandles <= expect_nhandles);
+	print_message("rank %d: container opened (hdl coh2), nhandles=%d\n", arg->myrank,
+		      cinfo.ci_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("rank %d: query container (hdl coh2), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh2, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks close coh2, then query and verify nhandles (decremented by num ranks) */
+	expect_nhandles -= arg->rank_size;
+	print_message("rank %d: close container (hdl coh2)\n", arg->myrank);
+	rc = daos_cont_close(coh2, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks call close on coh (all except rank 0 handles are global2local handles) */
+	print_message("rank %d: close container (hdl coh)\n", arg->myrank);
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/** destroy container */
+	if (arg->myrank == 0) {
+		print_message("destroying container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = daos_cont_destroy(arg->pool.poh, clbl, 1 /* force */,
+				       arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		if (arg->async) {
+			rc = daos_event_fini(&ev);
+			assert_rc_equal(rc, 0);
+		}
+		print_message("container destroyed\n");
+	}
+
 }
 
 static int
@@ -3049,6 +3193,8 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT29: container metadata times test (async)", co_mdtimes, co_setup_async,
      test_case_teardown},
     {"CONT30: daos_cont_global2local failure test", co_global2local_fail_test, NULL,
+     test_case_teardown},
+    {"CONT31: container open/query number of handles (hdl_share)", co_nhandles, hdl_share_enable,
      test_case_teardown},
 };
 

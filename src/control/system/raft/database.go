@@ -495,7 +495,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					cancelGainedCtx()
 				}
 				runOnLeadershipLost()
-				break
+				continue // restart the monitoring loop
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
@@ -505,7 +505,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				if err = db.ResignLeadership(err); err != nil {
 					db.log.Errorf("raft ResignLeadership() failed: %s", err)
 				}
-				break
+				continue // restart the monitoring loop
 			}
 			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
@@ -518,7 +518,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					if err = db.ResignLeadership(err); err != nil {
 						db.log.Errorf("raft ResignLeadership() failed: %s", err)
 					}
-					break
+					break // break out of the inner loop; restart the monitoring loop
 				}
 			}
 		}
@@ -583,6 +583,17 @@ func copyMember(in *system.Member) *system.Member {
 	out := new(system.Member)
 	*out = *in
 	return out
+}
+
+// DataVersion returns the current version of the system database.
+func (db *Database) DataVersion() (uint64, error) {
+	if err := db.CheckReplica(); err != nil {
+		return 0, err
+	}
+
+	db.data.RLock()
+	defer db.data.RUnlock()
+	return db.data.Version, nil
 }
 
 // AllMembers returns a copy of the system membership.
