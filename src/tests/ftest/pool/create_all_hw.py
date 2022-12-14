@@ -62,16 +62,16 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         return scm_pool_bytes, smd_pool_bytes
 
     def test_one_pool(self):
-        """Test the creation of one pool with all the storage capacity
+        """Test the creation of one pool with all the storage capacity.
 
         Test Description:
             Create a pool with all the capacity of all servers. Verify that the pool created
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_one_hw
+        :avocado: tags=PoolCreateAllHwTests,test_one_pool
         """
         self.log.info("Test  basic pool creation with full storage")
 
@@ -80,12 +80,14 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         self.log.info("Checking size of the pool")
         self.pool[0].get_info()
         tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
-        self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                             "Invalid SCM size: want={}, got={}, delta={}".format(
-                             self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-        self.assertLessEqual(abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
-                             "Invalid SMD size: want={}, got={}, delta={}".format(
-                             self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+            "Invalid SCM size: want={}, got={}, delta={}".format(
+                self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
+            "Invalid SMD size: want={}, got={}, delta={}".format(
+                self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
 
         self.log.info("Checking size of available storage")
         tier_bytes = self.get_pool_available_bytes()
@@ -93,7 +95,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         self.assertEqual(0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
     def test_recycle_pools(self):
-        """Test the pool creation and destruction
+        """Test the pool creation and destruction.
 
         Test Description:
             Create a pool with all the capacity of all servers. Verify that the pool created
@@ -101,9 +103,9 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
             times. For each iteration, check that the size of the created pool is always the same.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_recycle_hw
+        :avocado: tags=PoolCreateAllHwTests,test_recycle_pools
         """
         self.log.info("Test pool creation and destruction")
 
@@ -114,27 +116,30 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
             self.log.info("Checking size of pool %d", index)
             self.pool[0].get_info()
             tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
-            self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                                 "Invalid SCM size: want={}, got={}, delta={}".format(
-                                 self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-            self.assertLessEqual(abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
-                                 "Invalid SMD size: want={}, got={}, delta={}".format(
-                                 self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
+            self.assertLessEqual(
+                abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+                "Invalid SCM size: want={}, got={}, delta={}".format(
+                    self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+            self.assertLessEqual(
+                abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
+                "Invalid SMD size: want={}, got={}, delta={}".format(
+                    self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
 
             self.destroy_one_pool(index)
 
             self.log.info("Checking size of available storage at iteration %d", index)
             tier_bytes = self.get_pool_available_bytes()
-            self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                                 "Invalid SCM size: want={}, got={}, delta={}".format(
-                                 self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
-            self.assertLessEqual(abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
-                                 "Invalid SMD size: want={}, got={}, delta={}".format(
-                                 self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
+            self.assertLessEqual(
+                abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
+                "Invalid SCM size: want={}, got={}, delta={}".format(
+                    self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+            self.assertLessEqual(
+                abs(self.smd_avail_bytes - tier_bytes[1]), self.delta_bytes,
+                "Invalid SMD size: want={}, got={}, delta={}".format(
+                    self.smd_avail_bytes, tier_bytes[1], self.delta_bytes))
 
     def check_pool_distribution(self):
-        """Check if the size used on each hosts is more or less uniform
-        """
+        """Check if the size used on each hosts is more or less uniform."""
         self.assertGreater(len(self.server_managers), 0, "No server managers")
         try:
             self.log.info("Retrieving available size")
@@ -193,7 +198,7 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
                             smd_avail_bytes, smd_device["avail_bytes"]))
 
     def test_two_pools(self):
-        """Test the creation of two pools with 50% and 100% of the available storage
+        """Test the creation of two pools with 50% and 100% of the available storage.
 
         Test Description:
             Create a first pool with 50% of all the capacity of all servers. Verify that the pool
@@ -203,9 +208,9 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
             effectively used all the available storage and there is no more available storage.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,pool_create_all
-        :avocado: tags=pool_create_all_two_hw
+        :avocado: tags=PoolCreateAllHwTests,test_two_pools
         """
         self.log.info("Test pool creation of two pools with 50% and 100% of the available storage")
 
@@ -214,12 +219,14 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         self.log.info("Checking size of the first pool")
         self.pool[0].get_info()
         tier_bytes = [self.pool[0].info.pi_space.ps_space.s_total]
-        self.assertLessEqual(abs(self.scm_avail_bytes - 2 * tier_bytes[0][0]), self.delta_bytes,
-                             "Invalid SCM size: want={}, got={}, delta={}".format(
-                             self.scm_avail_bytes / 2, tier_bytes[0][0], self.delta_bytes))
-        self.assertLessEqual(abs(self.smd_avail_bytes - 2 * tier_bytes[0][1]), self.delta_bytes,
-                             "Invalid SMD size: want={}, got={}, delta={}".format(
-                             self.smd_avail_bytes / 2, tier_bytes[0][1], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - 2 * tier_bytes[0][0]), self.delta_bytes,
+            "Invalid SCM size: want={}, got={}, delta={}".format(
+                self.scm_avail_bytes / 2, tier_bytes[0][0], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.smd_avail_bytes - 2 * tier_bytes[0][1]), self.delta_bytes,
+            "Invalid SMD size: want={}, got={}, delta={}".format(
+                self.smd_avail_bytes / 2, tier_bytes[0][1], self.delta_bytes))
 
         self.log.info("Checking the distribution of the first pool")
         self.check_pool_distribution()
@@ -232,24 +239,28 @@ class PoolCreateAllHwTests(PoolCreateAllTestBase):
         tier_bytes.append(self.pool[1].info.pi_space.ps_space.s_total)
 
         self.log.info("Checking size of the second pool with the old available size")
-        self.assertLessEqual(abs(self.scm_avail_bytes - tier_bytes[1][0]), self.delta_bytes,
-                             "Invalid SCM size: want={}, got={}, delta={}".format(
-                             self.scm_avail_bytes, tier_bytes[1][0], self.delta_bytes))
-        self.assertLessEqual(abs(self.smd_avail_bytes - tier_bytes[1][1]), self.delta_bytes,
-                             "Invalid SMD size: want={}, got={}, delta={}".format(
-                             self.smd_avail_bytes, tier_bytes[1][1], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.scm_avail_bytes - tier_bytes[1][0]), self.delta_bytes,
+            "Invalid SCM size: want={}, got={}, delta={}".format(
+                self.scm_avail_bytes, tier_bytes[1][0], self.delta_bytes))
+        self.assertLessEqual(
+            abs(self.smd_avail_bytes - tier_bytes[1][1]), self.delta_bytes,
+            "Invalid SMD size: want={}, got={}, delta={}".format(
+                self.smd_avail_bytes, tier_bytes[1][1], self.delta_bytes))
 
         self.log.info("Checking size of the second pool with the size of the first pool")
         scm_delta_bytes = self.ranks_size * self.max_scm_metadata_bytes + self.delta_bytes
-        self.assertLessEqual(abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
-                             "Invalid SCM size: want={}, got={}, delta={}".format(
-                             tier_bytes[0][0], tier_bytes[1][0], self.delta_bytes))
+        self.assertLessEqual(
+            abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
+            "Invalid SCM size: want={}, got={}, delta={}".format(
+                tier_bytes[0][0], tier_bytes[1][0], self.delta_bytes))
         smd_delta_bytes = self.ranks_size * max(1, self.engine_target_size - 1)
         smd_delta_bytes *= self.smd_cluster_bytes
         smd_delta_bytes += self.delta_bytes
-        self.assertLessEqual(abs(tier_bytes[0][1] - tier_bytes[1][1]), smd_delta_bytes,
-                             "Invalid SMD size: want={}, got={}, delta={}".format(
-                             tier_bytes[0][1], tier_bytes[1][1], self.delta_bytes))
+        self.assertLessEqual(
+            abs(tier_bytes[0][1] - tier_bytes[1][1]), smd_delta_bytes,
+            "Invalid SMD size: want={}, got={}, delta={}".format(
+                tier_bytes[0][1], tier_bytes[1][1], self.delta_bytes))
 
         self.scm_avail_bytes, self.smd_avail_bytes = self.get_pool_available_bytes()
 
