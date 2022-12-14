@@ -1120,6 +1120,8 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 		       struct pool_target_id_list *tgts)
 {
 	struct rebuild_task *task;
+	struct rebuild_task *merge_pre_task = NULL;
+	struct rebuild_task *merge_post_task = NULL;
 	struct rebuild_task *merge_task = NULL;
 	int rc;
 
@@ -1134,33 +1136,31 @@ rebuild_try_merge_tgts(struct ds_pool *pool, uint32_t map_ver,
 	 * complete.
 	 */
 	d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-		if (uuid_compare(task->dst_pool_uuid, pool->sp_uuid) != 0)
-			/* This task isn't for this pool - don't consider it */
-			continue;
+		if (uuid_compare(task->dst_pool_uuid, pool->sp_uuid) != 0) {
+			if (merge_pre_task == NULL)
+				continue;
+			break;
+		}
 
-		/* Do not merge reclaim rebuild job */
-		if (task->dst_rebuild_op == RB_OP_RECLAIM ||
-		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM)
-			continue;
+		if (merge_pre_task == NULL)
+			merge_pre_task = task;
 
-		/* Since the queue is sorted by map version, so we only need compare
-		 * the first non-reclaim job.
-		 */
-		if (task->dst_rebuild_op != rebuild_op)
-			/* Found a different operation. If we had found a task
-			 * to merge to before this, clear it, as that is no
-			 * longer safe since this later operation exists
-			 */
-			merge_task = NULL;
-		else
-			merge_task = task;
-		break;
+		if (task->dst_map_ver <= map_ver) {
+			if (merge_pre_task->dst_map_ver < task->dst_map_ver)
+				merge_pre_task = task;
+		} else {
+			merge_post_task = task;
+			break;
+		}
 	}
 
+	if (merge_pre_task != NULL && merge_pre_task->dst_rebuild_op == rebuild_op)
+		merge_task = merge_pre_task;
+	else if (merge_post_task != NULL && merge_post_task->dst_rebuild_op == rebuild_op)
+		merge_task = merge_post_task;
+
+	/* Did not find a suitable target. The task will be added to the @rg_queue_list. */
 	if (merge_task == NULL)
-		/* Did not find a suitable target. Caller will handle appending
-		 * this task to the queue
-		 */
 		return 0;
 
 	D_DEBUG(DB_REBUILD, "("DF_UUID" ver=%u) id %u merge to task %p op=%s\n",
@@ -1251,7 +1251,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version, &task->dst_tgts,
-						 RB_OP_RECLAIM, 5);
+						 task->dst_rebuild_op, 5);
 			return rc;
 		}
 
@@ -1693,7 +1693,8 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 		return 0;
 	}
 
-	if (tgts != NULL && tgts->pti_number > 0) {
+	if (tgts != NULL && tgts->pti_number > 0 &&
+	    rebuild_op != RB_OP_RECLAIM && rebuild_op != RB_OP_FAIL_RECLAIM) {
 		/* Check if the pool already in the queue list */
 		rc = rebuild_try_merge_tgts(pool, map_ver, rebuild_op, tgts);
 		if (rc)
@@ -1778,7 +1779,7 @@ static int
 regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			 unsigned int tgts_cnt, daos_rebuild_opc_t rebuild_op)
 {
-	daos_epoch_t	eph = crt_hlc_get();
+	daos_epoch_t	eph = d_hlc_get();
 	unsigned int	i;
 	int		rc;
 
@@ -1895,7 +1896,7 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(rpt->rt_rebuild_fence != 0);
 	if (rpt->rt_rebuild_fence == dpc->spc_rebuild_fence) {
 		dpc->spc_rebuild_fence = 0;
-		dpc->spc_rebuild_end_hlc = crt_hlc_get();
+		dpc->spc_rebuild_end_hlc = d_hlc_get();
 		D_DEBUG(DB_REBUILD, DF_UUID": Reset aggregation end hlc "
 			DF_U64"\n", DP_UUID(rpt->rt_pool_uuid),
 			dpc->spc_rebuild_end_hlc);
@@ -2284,7 +2285,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rpt->rt_rebuild_fence = crt_hlc_get();
+	rpt->rt_rebuild_fence = d_hlc_get();
 	rc = dss_task_collective(rebuild_prepare_one, rpt, 0);
 	if (rc) {
 		rpt->rt_rebuild_fence = 0;

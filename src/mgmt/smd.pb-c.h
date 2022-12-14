@@ -52,7 +52,11 @@ typedef enum _Ctl__NvmeDevState {
   /*
    * Device is faulty and has been evicted
    */
-  CTL__NVME_DEV_STATE__EVICTED = 2
+  CTL__NVME_DEV_STATE__EVICTED = 2,
+  /*
+   * Device has been physically removed
+   */
+  CTL__NVME_DEV_STATE__UNPLUGGED = 3
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__NVME_DEV_STATE)
 } Ctl__NvmeDevState;
 typedef enum _Ctl__LedState {

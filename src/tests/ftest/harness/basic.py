@@ -22,8 +22,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=harness,harness_basic_test,test_always_passes
-        :avocado: tags=always_passes
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes
         """
         self.log.info("NOOP test to do nothing but run successfully")
 
@@ -31,9 +32,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
-        :avocado: tags=hw,large,medium,ib2,small
-        :avocado: tags=harness,harness_basic_test,test_always_passes_hw
-        :avocado: tags=always_passes
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_hw
         """
         self.test_always_passes()
 
@@ -41,8 +42,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code to load the openmpi module.
 
         :avocado: tags=all
-        :avocado: tags=harness,harness_basic_test,test_load_mpi
-        :avocado: tags=load_mpi
+        :avocado: tags=vm
+        :avocado: tags=harness,harness_basic_test,load_mpi
+        :avocado: tags=HarnessBasicTest,test_load_mpi
         """
         try:
             Orterun(None)
@@ -58,9 +60,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code to load the openmpi module.
 
         :avocado: tags=all
-        :avocado: tags=hw,large,medium,ib2,small
-        :avocado: tags=harness,harness_basic_test,test_load_mpi
-        :avocado: tags=load_mpi
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,harness_basic_test,load_mpi
+        :avocado: tags=HarnessBasicTest,test_load_mpi_hw
         """
         self.test_load_mpi()
 
@@ -70,7 +72,7 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,harness_basic_test,sub_process_command
-        :avocado: tags=test_sub_process_command
+        :avocado: tags=HarnessBasicTest,test_sub_process_command
         """
         failed = False
         test_command = ["ls", "-al", os.path.dirname(__file__)]
@@ -100,7 +102,7 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,harness_cmocka
-        :avocado: tags=test_no_cmocka_xml
+        :avocado: tags=HarnessBasicTest,test_no_cmocka_xml
         """
         self.log.info("=" * 80)
         self.log.info("Running the 'hostname' command via CmockaUtils")

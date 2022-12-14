@@ -1078,6 +1078,46 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				},
 			},
 		},
+		"led-manage; dual-engine": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					Led: &ctlpb.LedManageReq{
+						// Matches ID returned in initial list query.
+						Ids: test.MockUUID(1),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentifyDev,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{},
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentifyDev},
+						},
+					},
+				},
+			},
+		},
 		"led-manage; mixed id types in request": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -1199,6 +1239,46 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				},
 			},
 		},
+		"set-faulty; dual-engine": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Faulty{
+					Faulty: &ctlpb.SetFaultyReq{
+						Uuid: test.MockUUID(1),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{},
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbFaultyDev,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Rank: 1,
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbFaultyDev},
+						},
+					},
+				},
+			},
+		},
 		"dev-replace; uuid not found": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
@@ -1237,6 +1317,46 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 					{
 						Message: &ctlpb.DevManageResp{
 							Device: pbReplacedDev,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbReplacedDev},
+						},
+					},
+				},
+			},
+		},
+		"dev-replace; dual-engine": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbReplacedDev,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{},
 						},
 					},
 				},
