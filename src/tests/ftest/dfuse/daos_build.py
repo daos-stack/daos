@@ -134,12 +134,12 @@ class DaosBuild(DfuseTestBase):
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = '5m'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
-            cont_attrs['dfuse-data-cache'] = '5m'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time

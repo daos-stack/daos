@@ -101,7 +101,7 @@ struct dfuse_obj_hdl {
 	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
 	 * here and this flag may be set on create even if the kernel flag isn't provided.
 	 */
-	bool                             doh_keep_cache;
+	bool                      doh_keep_cache;
 
 	/* True if the file handle is writeable - used for cache invalidation */
 	bool                      doh_writeable;
