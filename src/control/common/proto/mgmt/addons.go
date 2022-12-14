@@ -231,7 +231,7 @@ func Debug(msg proto.Message) string {
 			}
 			stateRanks[m.State].Add(ranklist.Rank(m.Rank))
 		}
-		fmt.Fprintf(&bld, "%T ", m)
+		fmt.Fprintf(&bld, "%T@%d ", m, m.DataVersion)
 		for state, set := range stateRanks {
 			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
 		}
@@ -272,6 +272,9 @@ func Debug(msg proto.Message) string {
 		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t)", m, m.Rank, m.State, m.LocalJoin)
 	default:
 		fmt.Fprintf(&bld, "%T", m)
+		if vm, ok := m.(interface{ GetDataVersion() uint64 }); ok {
+			fmt.Fprintf(&bld, "@%d", vm.GetDataVersion())
+		}
 		if sr, ok := m.(interface{ GetStatus() int32 }); ok {
 			fmt.Fprintf(&bld, " status:%s", daos.Status(sr.GetStatus()))
 		}

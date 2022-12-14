@@ -585,6 +585,17 @@ func copyMember(in *system.Member) *system.Member {
 	return out
 }
 
+// DataVersion returns the current version of the system database.
+func (db *Database) DataVersion() (uint64, error) {
+	if err := db.CheckReplica(); err != nil {
+		return 0, err
+	}
+
+	db.data.RLock()
+	defer db.data.RUnlock()
+	return db.data.Version, nil
+}
+
 // AllMembers returns a copy of the system membership.
 func (db *Database) AllMembers() ([]*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {

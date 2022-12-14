@@ -1637,7 +1637,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	/**
 	 * initialized to 1, so user can call crt_req_decref to destroy new req
 	 */
-	rpc_priv->crp_refcount = 1;
+	atomic_init(&rpc_priv->crp_refcount, 1);
 
 	rpc_priv->crp_pub.cr_opc = opc;
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
