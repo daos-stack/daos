@@ -18,8 +18,8 @@ def _scan_go_file(node, env, _path):
     src_dir = os.path.dirname(str(node))
     includes = []
     rc = subprocess.run([env.d_go_bin, 'list', '--json', os.path.basename(str(node))],
-                        cwd=src_dir, capture_output=True, check=True)
-    data = json.loads(rc.stdout)
+                        cwd=src_dir, stdout=subprocess.PIPE, check=True)
+    data = json.loads(rc.stdout.decode('utf-8'))
     for dep in data['Deps']:
         if not dep.startswith('github.com/daos-stack/daos'):
             continue
