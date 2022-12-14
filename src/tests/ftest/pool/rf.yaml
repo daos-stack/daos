@@ -1,6 +1,9 @@
 hosts:
   test_servers: 5
+  test_clients: 1
+
 timeout: 90
+
 server_config:
   engines_per_host: 1
   engines:
@@ -8,8 +11,9 @@ server_config:
       storage:
         0:
           class: ram
-          scm_mount: /mnt/daos
+          scm_mount: /mnt/daos0
           scm_size: 16
+
 pool:
   name: daos_server
   control_method: dmg
@@ -17,6 +21,7 @@ pool:
   rf: !mux
     rf1:
       properties: rd_fac:4
+
 container:
   type: POSIX
   control_method: daos
