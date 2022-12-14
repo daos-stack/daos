@@ -368,9 +368,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
         cont_uuid = query_response['container_uuid']
 
-        # Convert default label to None
-        cont_label = query_response['container_label']
-        if cont_label == 'container_label_not_set':
+        if 'container_label' in query_response:
+            cont_label = query_response['container_label']
+        else:
             cont_label = None
 
         # Create a TestContainer and DaosContainer instance

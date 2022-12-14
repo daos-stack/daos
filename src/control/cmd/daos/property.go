@@ -1146,8 +1146,6 @@ func printProperties(out io.Writer, header string, props ...*property) {
 			if len(titles) == 1 {
 				titles = append(titles, valueTitle)
 			}
-		} else {
-			row[valueTitle] = " "
 		}
 		table = append(table, row)
 	}
