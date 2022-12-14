@@ -1237,7 +1237,7 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 	d_list_t	*rlink;
 	uint64_t	refs = 0;
 	int		handles = 0;
-	int		rc;
+	int              rc      = -DER_SUCCESS;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
@@ -1251,9 +1251,11 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		sem_destroy(&fs_handle->dpi_sem);
 	}
 
-	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
+	if (fs_handle->di_session) {
+		rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
-	DFUSE_TRA_INFO(fs_handle, "Flush complete: "DF_RC, DP_RC(rc));
+		DFUSE_TRA_INFO(fs_handle, "Flush complete: " DF_RC, DP_RC(rc));
+	}
 
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {

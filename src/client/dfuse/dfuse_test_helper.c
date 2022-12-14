@@ -122,7 +122,7 @@ main(int argc, char **argv)
 	ino_t                     ino = 1;
 	d_list_t                 *rlink;
 	char                     *reply_buff;
-	size_t                    size = 4096;
+	size_t                    size = 1024;
 
 	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
 	ie    = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -144,7 +144,14 @@ main(int argc, char **argv)
 	}
 
 	rc = dfuse_do_readdir(dfuse_info, 0, oh, reply_buff, &size, 0, false);
+	if (rc != 0)
+		DFUSE_TRA_ERROR(oh, "Reply was: %d (%s)", rc, strerror(rc));
 
+	rc = dfuse_do_readdir(dfuse_info, 0, oh, reply_buff, &size, 3, false);
+	if (rc != 0)
+		DFUSE_TRA_ERROR(oh, "Reply was: %d (%s)", rc, strerror(rc));
+
+	rc = dfuse_do_readdir(dfuse_info, 0, oh, reply_buff, &size, 0, true);
 	if (rc != 0)
 		DFUSE_TRA_ERROR(oh, "Reply was: %d (%s)", rc, strerror(rc));
 

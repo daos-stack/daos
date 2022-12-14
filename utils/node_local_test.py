@@ -4340,7 +4340,7 @@ def test_dfuse_th(server, conf, wf):
         copy_root = join(src_dir, 'root')
         os.mkdir(copy_root)
 
-        for idx in range(10):
+        for idx in range(30):
             with open(join(copy_root, f'file_{idx}'), 'w') as ofd:
                 ofd.write('hello')
 
