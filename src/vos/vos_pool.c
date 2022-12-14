@@ -103,10 +103,11 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 }
 
 static inline int
-vos_wal_replay(struct umem_store *store, int (*replay_cb)(uint64_t tx_id, struct umem_action *act))
+vos_wal_replay(struct umem_store *store, int (*replay_cb)(uint64_t tx_id, struct umem_action *act,
+	       void *arg), void *arg)
 {
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_replay(store->stor_priv, replay_cb);
+	return bio_wal_replay(store->stor_priv, replay_cb, arg);
 }
 
 static inline int

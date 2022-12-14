@@ -393,3 +393,76 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 	.wtx_act_first = wal_tx_act_first,
 	.wtx_act_next = wal_tx_act_next,
 };
+
+int
+dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
+{
+	void *src, *dst;
+	ptrdiff_t off;
+	uint64_t *p, mask;
+	daos_size_t size;
+	int pos, num, val;
+	int rc = 0;
+
+	switch (act->ac_opc) {
+	case UMEM_ACT_COPY:
+		D_DEBUG(DB_TRACE,
+			"ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu\n",
+			tx_id,
+			act->ac_copy.addr / PAGESIZE, act->ac_copy.addr % PAGESIZE,
+			act->ac_copy.size);
+		off = act->ac_copy.addr;
+		dst = base + off;
+		src = (void *)&act->ac_copy.payload;
+		size = act->ac_copy.size;
+		memcpy(dst, src, size);
+		break;
+	case UMEM_ACT_ASSIGN:
+		D_DEBUG(DB_TRACE,
+			"ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u\n",
+			tx_id,
+			act->ac_assign.addr / PAGESIZE, act->ac_assign.addr % PAGESIZE,
+			act->ac_assign.size);
+		off = act->ac_assign.addr;
+		dst = base + off;
+		size = act->ac_assign.size;
+		ASSERT_rt(size == 1 || size == 2 || size == 4);
+		src = &act->ac_assign.val;
+		memcpy(dst, src, size);
+		break;
+	case UMEM_ACT_SET:
+		D_DEBUG(DB_TRACE,
+			"ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
+			tx_id,
+			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE,
+			act->ac_set.size, act->ac_set.val);
+		off = act->ac_set.addr;
+		dst = base + off;
+		size = act->ac_set.size;
+		val = act->ac_set.val;
+		memset(dst, val, size);
+		break;
+	case UMEM_ACT_SET_BITS:
+	case UMEM_ACT_CLR_BITS:
+		D_DEBUG(DB_TRACE,
+			"ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
+			tx_id,
+			act->ac_op_bits.addr / PAGESIZE, act->ac_op_bits.addr % PAGESIZE,
+			act->ac_op_bits.pos, act->ac_op_bits.num);
+		off = act->ac_op_bits.addr;
+		p = (uint64_t *)(base + off);
+		num = act->ac_op_bits.num;
+		pos = act->ac_op_bits.pos;
+		ASSERT_rt(pos >=0 && (pos + num) <= 64);
+		mask = ((1ULL << num) - 1) << pos;
+		if (act->ac_opc == UMEM_ACT_SET_BITS)
+			*p |= mask;
+		else
+			*p &= ~mask;
+		break;
+	default:
+		D_ASSERT(0);
+		break;
+	}
+	return rc;
+}
