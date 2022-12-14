@@ -378,7 +378,11 @@ dfuse_do_readdir(struct dfuse_info *fs_handle, fuse_req_t req, struct dfuse_obj_
 					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
 
 			} else {
-				dfs_release(obj);
+				int rc2;
+
+				rc2 = dfs_release(obj);
+				if (rc2 == ENOMEM)
+					dfs_release(obj);
 
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
 					      dre->dre_name, &stbuf, dre->dre_next_offset);
