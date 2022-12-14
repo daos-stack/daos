@@ -14,6 +14,7 @@ import sys
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 from util.run_utils import run_local, RunException
+from util.user_utils import find_command
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -112,6 +113,11 @@ class CoreFileProcessing():
                     self.log.error("Failed to process core file %s", core_file)
                     errors += 1
                 finally:
+                    # delete any post processing core files on local host
+                    output = run_local(self.log, "cat /proc/sys/kernel/core_pattern")
+                    source = os.path.split(output.stdout)[0]
+                    other = "-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"
+                    run_local(self.log, find_command(source, "core.gdb.*.*", str(1), other))
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
@@ -162,19 +168,6 @@ class CoreFileProcessing():
 
         except RunException as error:
             raise RunException(f"Error creating {stack_trace_file}") from error
-
-        finally:
-            command = [
-                "find", f"{core_dir}",
-                "-maxdepth 1",
-                "-type f",
-                "-name core.gdb.*.*",
-                "-printf '%M %n %-12u %-12g %12k %t %p\n'",
-                "-delete"
-            ]
-            results = run_local(self.log, command)
-            if results.stdout:
-                self.log.debug("Deleted the following core.gdb files %s", results.stdout)
 
     def _get_exe_name(self, core_file):
         """Get the executable name from the core file.

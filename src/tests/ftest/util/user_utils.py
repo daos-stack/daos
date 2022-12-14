@@ -194,3 +194,25 @@ def get_user_groups(log, hosts, user):
             group = None
         groups[group].add(data.hosts)
     return dict(groups)
+
+
+def find_command(source, pattern, depth, other=None):
+    """Get the find command.
+
+    Args:
+        source (str): where the files are currently located
+        pattern (str): pattern used to limit which files are processed
+        depth (int): max depth for find command
+        other (object, optional): other commands, as a list or str, to include at the end of the
+            base find command. Defaults to None.
+
+    Returns:
+        str: the find command
+
+    """
+    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    if isinstance(other, list):
+        command.extend(other)
+    elif isinstance(other, str):
+        command.append(other)
+    return " ".join(command)
