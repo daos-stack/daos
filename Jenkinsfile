@@ -211,9 +211,6 @@ pipeline {
         booleanParam(name: 'CI_medium-verbs-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
-        booleanParam(name: 'CI_medium-ucx-provider_TEST',
-                     defaultValue: false,
-                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large stage')
@@ -232,9 +229,6 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
-               defaultValue: 'ci_ofed5',
-               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large tests')
@@ -1119,27 +1113,6 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Medium Verbs Provider')
-                stage('Functional Hardware Medium UCX Provider') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium UCX Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
