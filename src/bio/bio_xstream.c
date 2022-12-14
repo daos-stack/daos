@@ -199,7 +199,8 @@ set_faulty_criteria(void)
 
 int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
+	      unsigned int hugepage_size, unsigned int tgt_nr, struct sys_db *db,
+	      bool bypass_health_collect)
 {
 	char		*env;
 	int		 rc, fd;
@@ -290,6 +291,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
 
+	rc = smd_init(db);
+	if (rc != 0) {
+		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
+		goto free_cond;
+	}
+
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
@@ -310,13 +317,15 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	rc = bio_spdk_env_init();
 	if (rc) {
 		nvme_glb.bd_nvme_conf = NULL;
-		goto free_cond;
+		goto fini_smd;
 	}
 	bio_spdk_inited = true;
 	set_faulty_criteria();
 
 	return 0;
 
+fini_smd:
+	smd_fini();
 free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
@@ -1181,24 +1190,6 @@ alloc_xs_blobstore(void)
 	return bxb;
 }
 
-static inline struct bio_bdev *
-find_sys_bdev(unsigned int role)
-{
-	struct bio_bdev	*d_bdev;
-
-	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
-	/*
-	 * Temporarily use the first meta/WAL device, needs be improved when we support
-	 * meta/WAL device hotplug.
-	 */
-	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (is_role_match(d_bdev->bb_roles, role))
-			return d_bdev;
-	}
-
-	return NULL;
-}
-
 static int
 assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
@@ -1242,16 +1233,6 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	int			 rc;
 
 	*dev_state = SMD_DEV_NORMAL;
-	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
-		d_bdev = find_sys_bdev(dev_type2role(st));
-		if (d_bdev == NULL) {
-			D_ERROR("Failed to find sys bdev\n");
-			return NULL;
-		}
-		/* Assume the sys device in NORMAL state for this moment */
-		return d_bdev;
-	}
-
 	rc = smd_dev_get_by_tgt(tgt_id, st, &dev_info);
 	if (rc == -DER_NONEXIST) {
 		d_bdev = choose_device(tgt_id, st);

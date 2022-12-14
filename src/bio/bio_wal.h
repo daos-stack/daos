@@ -104,7 +104,6 @@ struct bio_meta_context {
 	struct wal_super_info	 mc_wal_info;	/* WAL blob super information */
 	struct hash_ft		*mc_csum_algo;
 	void			*mc_csum_ctx;
-	unsigned int		 mc_is_sysdb:1;
 };
 
 struct meta_fmt_info {

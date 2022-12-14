@@ -198,8 +198,6 @@ struct vos_pool {
 	int			vp_excl:1;
 	/** this pool is for rdb */
 	bool			vp_rdb;
-	/** this pool is for sysdb */
-	bool			vp_sysdb;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
 	/** UUID of vos pool */

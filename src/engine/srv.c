@@ -18,6 +18,7 @@
 #include <abt.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
 #include <daos_srv/bio.h>
@@ -93,6 +94,7 @@ bool		dss_helper_pool;
 bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
+static bool		md_on_ssd_enabled;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -492,16 +494,6 @@ dss_srv_handler(void *arg)
 	}
 
 	dmi->dmi_xstream = dx;
-
-	if (dx->dx_xs_id == 0) {
-		rc = vos_db_init(dss_storage_path);
-		if (rc) {
-			D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
-			D_GOTO(nvme_fini, rc);
-		}
-		smd_init(vos_db_get());
-	}
-
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
@@ -551,11 +543,6 @@ dss_srv_handler(void *arg)
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
-	}
-
-	if (dx->dx_xs_id == 0) {
-		smd_fini();
-		vos_db_fini();
 	}
 
 nvme_fini:
@@ -1196,10 +1183,23 @@ enum {
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
+	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
 };
+
+static void
+dss_sys_db_fini(void)
+{
+
+	if (!md_on_ssd_enabled) {
+		vos_db_fini();
+		return;
+	}
+
+	lmm_db_fini();
+}
 
 /**
  * Entry point to start up and shutdown the service
@@ -1218,6 +1218,9 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
+		/* fall through */
+	case XD_INIT_SYS_DB:
+		dss_sys_db_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
@@ -1242,11 +1245,39 @@ dss_srv_fini(bool force)
 	return 0;
 }
 
+static int
+dss_sys_db_init(struct sys_db **db)
+{
+	int	 rc;
+	/* walkaround*/
+	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+
+	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
+	if (!md_on_ssd_enabled) {
+		rc = vos_db_init(dss_storage_path);
+		if (rc == 0)
+			*db = vos_db_get();
+		return rc;
+	}
+
+	if (lmm_db_path == NULL) {
+		D_ERROR("DAOS_LMM_DB_PATH need be configured\n");
+		return -DER_INVAL;
+	}
+
+	rc = lmm_db_init(lmm_db_path);
+	if (rc == 0)
+		*db = lmm_db_get();
+
+	return rc;
+}
+
 int
 dss_srv_init(void)
 {
 	int		 rc;
 	bool		 started = true;
+	struct sys_db	*db;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1291,9 +1322,13 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
+	rc = dss_sys_db_init(&db);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
 	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr,
+			   dss_nvme_hugepage_size, dss_tgt_nr, db,
 			   dss_nvme_bypass_health_check);
 	if (rc != 0)
 		D_GOTO(failed, rc);

@@ -74,6 +74,7 @@ BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
+BuildRequires: lmdb-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
