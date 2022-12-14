@@ -347,3 +347,25 @@ def command_as_user(command, user):
         return command
     switch_command = " ".join(get_switch_user(user))
     return f"{switch_command} {command}"
+
+
+def find_command(source, pattern, depth, other=None):
+    """Get the find command.
+
+    Args:
+        source (str): where the files are currently located
+        pattern (str): pattern used to limit which files are processed
+        depth (int): max depth for find command
+        other (object, optional): other commands, as a list or str, to include at the end of the
+            base find command. Defaults to None.
+
+    Returns:
+        str: the find command
+
+    """
+    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    if isinstance(other, list):
+        command.extend(other)
+    elif isinstance(other, str):
+        command.append(other)
+    return " ".join(command)

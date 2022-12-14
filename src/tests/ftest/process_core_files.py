@@ -13,8 +13,7 @@ import sys
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
-from util.run_utils import run_local, RunException
-from util.user_utils import find_command
+from util.run_utils import run_local, find_command, RunException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -113,11 +112,7 @@ class CoreFileProcessing():
                     self.log.error("Failed to process core file %s", core_file)
                     errors += 1
                 finally:
-                    # delete any post processing core files on local host
-                    output = run_local(self.log, "cat /proc/sys/kernel/core_pattern")
-                    source = os.path.split(output.stdout)[0]
-                    other = "-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"
-                    run_local(self.log, find_command(source, "core.gdb.*.*", str(1), other))
+                    errors += self.delete_gdb_core_files()
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
@@ -360,6 +355,31 @@ class CoreFileProcessing():
             self.log.debug("Package %s not installed, skipping debuginfo", pkg)
 
         return package_info
+
+    def delete_gdb_core_files(self):
+        """Delete any post processing core files on local host.
+
+        Returns:
+            int: number of errors
+
+        """
+        try:
+            output = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
+        except RunException:
+            self.log.error("Unable to find local core file pattern")
+            self.log.debug("Stacktrace", exc_info=True)
+            return 1
+
+        core_path = os.path.split(output.stdout.splitlines[-1])[0]
+        self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
+        other = "-printf '%M %n %-12u %-12g %12k %t %p' -delete"
+        try:
+            run_local(self.log, find_command(core_path, "core.gdb.*.*", 1, other), check=True)
+        except RunException:
+            self.log.error("Unable to find local core file pattern")
+            self.log.debug("Stacktrace", exc_info=True)
+            return 1
+        return 0
 
 
 def main():
