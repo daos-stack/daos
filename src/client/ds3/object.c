@@ -6,6 +6,11 @@
 
 #include "ds3_internal.h"
 
+typedef struct ds3_obj_args {
+	d_iov_t	iov;
+	d_sg_list_t sg;
+} ds3_obj_args_t;
+
 /* helper */
 static bool
 ends_with(const char *str, const char *suffix)
@@ -199,6 +204,32 @@ ds3_obj_set_info(struct ds3_object_info *info, ds3_bucket_t *ds3b, ds3_obj_t *ds
 			     info->encoded_length, 0);
 }
 
+static int
+ds3_obj_read_int_cb(void *args, daos_event_t *ev, int ret)
+{
+	D_FREE(args);
+	return 0;
+}
+
+static int
+ds3_obj_read_int(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
+	     daos_event_t *ev)
+{
+	ds3_obj_args_t	*args;
+
+	D_ALLOC_PTR(args);
+	if (args == NULL)
+		return -DER_NOMEM;
+
+	d_iov_set(&args->iov, buf, *size);
+	args->sg.sg_nr     = 1;
+	args->sg.sg_iovs   = &args->iov;
+	args->sg.sg_nr_out = 1;
+
+	daos_event_register_comp_cb(ev, ds3_obj_read_int_cb, args);
+	return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &args->sg, off, size, ev);
+}
+
 int
 ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, ds3_obj_t *ds3o,
 	     daos_event_t *ev)
@@ -206,11 +237,18 @@ ds3_obj_read(void *buf, daos_off_t off, daos_size_t *size, ds3_bucket_t *ds3b, d
 	if (ds3b == NULL || buf == NULL || ds3o == NULL)
 		return -EINVAL;
 
-	d_iov_set(&ds3o->ds3_iov, buf, *size);
-	ds3o->ds3_sgl.sg_nr     = 1;
-	ds3o->ds3_sgl.sg_iovs   = &ds3o->ds3_iov;
-	ds3o->ds3_sgl.sg_nr_out = 1;
-	return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &ds3o->ds3_sgl, off, size, ev);
+	if (ev == NULL) {
+		d_iov_t     iov;
+		d_sg_list_t rsgl;
+
+		d_iov_set(&iov, buf, *size);
+		rsgl.sg_nr     = 1;
+		rsgl.sg_iovs   = &iov;
+		rsgl.sg_nr_out = 1;
+		return -dfs_read(ds3b->dfs, ds3o->dfs_obj, &rsgl, off, size, ev);
+	}
+
+	return ds3_obj_read_int(buf, off, size, ds3b, ds3o, ev);
 }
 
 int

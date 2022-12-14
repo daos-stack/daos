@@ -58,8 +58,6 @@ struct ds3_bucket {
 struct ds3_obj {
 	/** DFS object handle */
 	dfs_obj_t *dfs_obj;
-	d_sg_list_t	ds3_sgl;
-	d_iov_t		ds3_iov;
 };
 
 /** DAOS S3 Upload Part handle */
