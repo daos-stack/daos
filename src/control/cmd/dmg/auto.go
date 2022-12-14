@@ -26,6 +26,7 @@ type configCmd struct {
 
 type configGenCmd struct {
 	baseCmd
+	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
@@ -63,10 +64,16 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 		},
 		Client: cmd.ctlInvoker,
 	}
-	if len(cmd.hostlist) == 0 || cmd.hostlist[0] == "" {
-		cmd.hostlist = []string{"localhost"}
+
+	// check cli then config for hostlist, default to localhost
+	hl := cmd.hostlist
+	if len(hl) == 0 && cmd.config != nil {
+		hl = cmd.config.HostList
 	}
-	req.SetHostList(cmd.hostlist)
+	if len(hl) == 0 {
+		hl = []string{"localhost"}
+	}
+	req.HostList = hl
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
