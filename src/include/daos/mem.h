@@ -91,7 +91,7 @@ struct umem_store_iod {
 };
 
 struct umem_store;
-/* TODO: sgl read/write, replay, id_compare, make wal_reserve/subumit generic */
+
 struct umem_store_ops {
 	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
 			   d_sg_list_t *sgl);
@@ -100,16 +100,19 @@ struct umem_store_ops {
 	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
 	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
 				 void *data_iod);
+	int	(*so_wal_replay)(struct umem_store *store,
+				 int (*replay_cb)(uint64_t tx_id, struct umem_action *act));
+	/* See bio_wal_id_cmp() */
+	int	(*so_wal_id_cmp)(struct umem_store *store, uint64_t id1, uint64_t id2);
 };
 
 struct umem_store {
 	/**
-	 * Base address and size of the umem storage, umem allocator manages space within
-	 * this range.
+	 * Size of the umem storage, excluding blob header which isn't visible to allocator.
 	 */
-	daos_off_t		 stor_addr;
 	daos_size_t		 stor_size;
-	daos_size_t		 stor_blk_size;
+	uint32_t		 stor_blk_size;
+	uint32_t		 stor_hdr_blks;
 	/** private data passing between layers */
 	void			*stor_priv;
 	/**
