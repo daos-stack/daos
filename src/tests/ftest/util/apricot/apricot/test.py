@@ -673,8 +673,10 @@ class TestWithServers(TestWithoutServers):
 
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
-        self.server_group = self.params.get(
-            "name", "/server_config/", "daos_server")
+        self.server_group = self.params.get("name", "/server_config/", "daos_server")
+
+        # The optional namespace for the server configuration test yaml parameters.
+        self.server_config_namespace = self.params.get("server_config_namespace", "/run/setup/*")
 
         # Support using different job managers to launch the daos agent/servers
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
@@ -1108,6 +1110,11 @@ class TestWithServers(TestWithoutServers):
                 dmg_config_file, svr_config_temp, dmg_config_temp,
                 self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
+        if self.server_config_namespace is not None:
+            self.log.debug(
+                "Updating server manager (%s) config namespace: %s",
+                len(self.server_managers) - 1, self.server_config_namespace)
+            self.server_managers[-1].manager.job.yaml.namespace = self.server_config_namespace
 
     def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.

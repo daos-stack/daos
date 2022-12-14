@@ -74,9 +74,9 @@ class AgentFailure(IorTestBase):
         verifies that DAOS can recover from the fault with minimal human intervention.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_basic
+        :avocado: tags=AgentFailure,test_agent_failure
         """
         # 1. Create a pool and a container.
         self.add_pool()
@@ -166,9 +166,9 @@ class AgentFailure(IorTestBase):
         9. Run IOR again from the keep client. It should succeed without any error.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_isolation
+        :avocado: tags=AgentFailure,test_agent_failure_isolation
         """
         # 1. Create a pool and a container.
         self.add_pool()
