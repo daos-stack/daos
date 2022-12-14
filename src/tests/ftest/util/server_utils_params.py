@@ -14,7 +14,7 @@ class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir="/tmp"):
+    def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
         """Initialize a TransportConfig object."""
         super().__init__(
             "/run/server_config/transport_config/*",
@@ -104,7 +104,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
@@ -130,7 +130,7 @@ class DaosServerYamlParameters(YamlParameters):
         # parameters - for the config_file_gen.py tool. Calling get_params()
         # will update the list to match the number of I/O Engines requested by
         # the self.engines_per_host.value.
-        self.engine_params = [self.PerEngineYamlParameters()]
+        self.engine_params = [self.PerEngineYamlParameters(self.namespace)]
 
         self.fault_path = BasicParameter(None)
 
@@ -335,21 +335,19 @@ class DaosServerYamlParameters(YamlParameters):
                 "CRT_MRC_ENABLE=1"],
         }
 
-        def __init__(self, index=None, provider=None):
+        def __init__(self, base_namespace, index=None, provider=None):
             """Create a SingleServerConfig object.
 
             Args:
-                index (int, optional): index number for the namespace path used
-                    when specifying multiple servers per host. Defaults to None.
+                base_namespace (str): namespace for the server configuration
+                index (int): engine index number for the namespace path
+                provider (str, optional): index number for the namespace path used
+                    when specifying multiple engines per host. Defaults to None.
             """
-            namespace = "/run/server_config/servers/*"
-            if isinstance(index, int):
-                namespace = "/run/server_config/servers/{}/*".format(index)
-            super().__init__(namespace)
-            if provider is not None:
-                self._provider = provider
-            else:
-                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
+            namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["servers"]
+            namespace.extend([str(index), "*"] if isinstance(index, int) else ["*"])
+            self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
+            super().__init__(os.path.join(*namespace))
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")

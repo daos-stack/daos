@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -28,10 +27,9 @@ class RbldWithIOR(IorTestBase):
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild
-        :avocado: tags=rebuildwithior
-
+        :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*")
@@ -45,8 +43,8 @@ class RbldWithIOR(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
-            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_nnodes": self.server_managers[0].engines,
+            "pi_ntargets": self.server_managers[0].engines * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -54,8 +52,7 @@ class RbldWithIOR(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1, rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
         # perform IOR write before rebuild

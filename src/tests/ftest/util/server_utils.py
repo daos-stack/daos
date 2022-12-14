@@ -136,6 +136,30 @@ class DaosServerManager(SubprocessManager):
         self.storage_prepare_timeout = BasicParameter(None, 40)
         self.storage_format_timeout = BasicParameter(None, 40)
 
+        # Optional external yaml data to use to create the server config file, bypassing the values
+        # defined in the self.manager.job.yaml object.
+        self._external_yaml_data = None
+
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: value["host"] for rank, value in self._expected_states.items()}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
