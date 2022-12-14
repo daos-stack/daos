@@ -2,12 +2,6 @@
 
 # A git hook to validate and correct the copyright date in source files.
 
-if [ -e .git/MERGE_HEAD ]
-then
-    echo Merge commit
-    exit 0
-fi
-
 regex='(^[[:blank:]]*[\*/]*.*)((Copyright[[:blank:]]*)([0-9]{4})(-([0-9]{4}))?)([[:blank:]]*(Intel.*$))'
 year=$(date +%Y)
 errors=0
@@ -39,8 +33,6 @@ targets=(
     '.env'
 )
 
-os=$(uname -s)
-
 files=${files:-$(git diff --diff-filter=AM --name-only --cached -- "${targets[@]}")}
 for file in $files; do
 	if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
@@ -53,13 +45,7 @@ for file in $files; do
 		errors=$((errors + 1))
 	elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
 		git reset "$file" || (echo "Unable to un-stage $file" && exit 1)
-		if [ "$os" == 'Linux' ]
-		then
-			sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
-		else
-			sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
-		fi
-
+		sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file" || exit 1
 		git add "$file" || (echo "Unable to re-stage $file" && exit 1)
 	fi
 done
