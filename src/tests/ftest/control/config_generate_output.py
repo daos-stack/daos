@@ -525,7 +525,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
-        result = dmg.onfig_generate(
+        result = dmg.config_generate(
             access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
                 net_provider=self.def_provider)
         if result.exit_status == 0:
