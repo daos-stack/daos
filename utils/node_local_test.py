@@ -3623,11 +3623,11 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = OrderedDict()
-        cont_attrs['dfuse-data-cache'] = False
-        cont_attrs['dfuse-attr-time'] = 60
-        cont_attrs['dfuse-dentry-time'] = 60
-        cont_attrs['dfuse-ndentry-time'] = 60
+        cont_attrs = {}
+        cont_attrs['dfuse-data-cache'] = '1d'
+        cont_attrs['dfuse-attr-time'] = '60m'
+        cont_attrs['dfuse-dentry-time'] = '60m'
+        cont_attrs['dfuse-ndentry-time'] = '60m'
         cont_attrs['dfuse-direct-io-disable'] = False
 
         for key, value in cont_attrs.items():
@@ -3661,7 +3661,10 @@ def run_in_fg(server, conf, args):
     try:
         if args.launch_cmd:
             start = time.time()
-            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir)
+            # Set the agent path.
+            agent_env = os.environ.copy()
+            agent_env['DAOS_AGENT_DRPC_DIR'] = conf.agent_dir
+            rc = subprocess.run(args.launch_cmd, check=False, cwd=t_dir, env=agent_env)
             elapsed = time.time() - start
             dfuse.stop()
             (minutes, seconds) = divmod(elapsed, 60)
