@@ -30,7 +30,7 @@ class HarnessTimeoutTest(Test):
 
         :avocado: tags=manual
         :avocado: tags=vm
-        :avocado: tags=harness
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessTimeoutTest,test_timeout
         """
         sleep_timeout = self.timeout + 1
@@ -50,7 +50,7 @@ class HarnessTimeoutTest(Test):
 
         :avocado: tags=manual
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness
+        :avocado: tags=harness,failure_expected
         :avocado: tags=HarnessTimeoutTest,test_timeout_hw
         """
         self.test_timeout()

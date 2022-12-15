@@ -172,7 +172,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
         # Get necessary storage and network info.
@@ -232,7 +232,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_single
         """
         errors = []
@@ -250,7 +250,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_odd
         """
         errors = []
@@ -268,7 +268,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
         """
         errors = []
@@ -277,8 +277,7 @@ class ConfigGenerateOutput(TestWithServers):
         errors.extend(self.verify_access_point("wolf-a,wolf-b", "non-odd"))
 
         # Single AP with an invalid port.
-        errors.extend(
-            self.verify_access_point("wolf-a:abcd", "invalid access point port"))
+        errors.extend(self.verify_access_point("wolf-a:abcd", "invalid access point port"))
 
         # Odd AP with both valid and invalid port.
         errors.extend(
@@ -292,13 +291,12 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
         """
         errors = []
 
-        errors.extend(
-            self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
+        errors.extend(self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
 
         self.check_errors(errors)
 
@@ -313,7 +311,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
         # Get necessary storage and network info.
@@ -361,7 +359,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_min_ssds
         """
         # Get necessary storage and network info.
@@ -387,8 +385,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --min-ssds=<1 to min_ssd>. Should pass.
         for num_ssd in range(1, min_ssd + 1):
-            result = dmg.config_generate(
-                access_points="wolf-a", min_ssds=num_ssd)
+            result = dmg.config_generate(access_points="wolf-a", min_ssds=num_ssd)
             if result.exit_status != 0:
                 errors.append("config generate failed with min_ssd = {}!".format(num_ssd))
 
@@ -429,7 +426,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
         # Get necessary storage and network info.
@@ -478,8 +475,8 @@ class ConfigGenerateOutput(TestWithServers):
         result = dmg.config_generate(
             access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband")
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=infiniband "\
-                "num_engines = {}!".format(ib_count + 1)
+            msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
+                ib_count + 1)
             errors.append(msg)
 
         # Get eth_count threshold.
@@ -497,8 +494,8 @@ class ConfigGenerateOutput(TestWithServers):
                 access_points="wolf-a", num_engines=num_engines, net_class="ethernet")
 
             if result.exit_status != 0:
-                msg = "config generate failed with --net-class=ethernet "\
-                    "--num-engines = {}!".format(num_engines)
+                msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
+                    num_engines)
                 errors.append(msg)
             else:
                 generated_config = yaml.safe_load(result.stdout)
@@ -521,8 +518,8 @@ class ConfigGenerateOutput(TestWithServers):
         result = dmg.config_generate(
             access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet")
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=ethernet, "\
-                "num_engines = {}!".format(eth_count + 1)
+            msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
+                eth_count + 1)
             errors.append(msg)
 
         self.check_errors(errors)

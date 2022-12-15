@@ -146,6 +146,7 @@ message ListPoolsResp {
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
+	uint64 data_version = 3; // Version of the system database.
 }
 
 // ListContainers
