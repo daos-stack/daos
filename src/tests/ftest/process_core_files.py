@@ -370,7 +370,7 @@ class CoreFileProcessing():
             self.log.debug("Stacktrace", exc_info=True)
             return 1
 
-        core_path = os.path.split(output.stdout.splitlines[-1])[0]
+        core_path = os.path.split(output.stdout.splitlines()[-1])[0]
         self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
         other = "-printf '%M %n %-12u %-12g %12k %t %p' -delete"
         try:
