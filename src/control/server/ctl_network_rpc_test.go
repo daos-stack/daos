@@ -33,9 +33,13 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 				&hardware.FabricInterface{
 					Name:          "fi0",
 					NetInterfaces: common.NewStringSet("net0"),
-					Providers:     common.NewStringSet("p1"),
-					NUMANode:      1,
-					DeviceClass:   hardware.Infiniband,
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name:     "p1",
+							Priority: 2,
+						}),
+					NUMANode:    1,
+					DeviceClass: hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -45,6 +49,7 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 						Device:      "net0",
 						Numanode:    1,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    2,
 					},
 				},
 			},
@@ -54,9 +59,18 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 				&hardware.FabricInterface{
 					Name:          "fi0",
 					NetInterfaces: common.NewStringSet("net0"),
-					Providers:     common.NewStringSet("p1", "p2"),
-					NUMANode:      1,
-					DeviceClass:   hardware.Infiniband,
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name:     "p1",
+							Priority: 1,
+						},
+						&hardware.FabricProvider{
+							Name:     "p2",
+							Priority: 2,
+						},
+					),
+					NUMANode:    1,
+					DeviceClass: hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -66,12 +80,14 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 						Device:      "net0",
 						Numanode:    1,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    1,
 					},
 					{
 						Provider:    "p2",
 						Device:      "net0",
 						Numanode:    1,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    2,
 					},
 				},
 			},
@@ -81,16 +97,30 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 				&hardware.FabricInterface{
 					Name:          "fi0",
 					NetInterfaces: common.NewStringSet("net0"),
-					Providers:     common.NewStringSet("p1"),
-					NUMANode:      0,
-					DeviceClass:   hardware.Infiniband,
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name:     "p1",
+							Priority: 0,
+						},
+					),
+					NUMANode:    0,
+					DeviceClass: hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
 					Name:          "fi1",
 					NetInterfaces: common.NewStringSet("net1"),
-					Providers:     common.NewStringSet("p1", "p2"),
-					NUMANode:      1,
-					DeviceClass:   hardware.Infiniband,
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name:     "p1",
+							Priority: 1,
+						},
+						&hardware.FabricProvider{
+							Name:     "p2",
+							Priority: 2,
+						},
+					),
+					NUMANode:    1,
+					DeviceClass: hardware.Infiniband,
 				},
 			),
 			expResult: &ctlpb.NetworkScanResp{
@@ -100,18 +130,21 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 						Device:      "net0",
 						Numanode:    0,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    0,
 					},
 					{
 						Provider:    "p1",
 						Device:      "net1",
 						Numanode:    1,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    1,
 					},
 					{
 						Provider:    "p2",
 						Device:      "net1",
 						Numanode:    1,
 						Netdevclass: uint32(hardware.Infiniband),
+						Priority:    2,
 					},
 				},
 			},

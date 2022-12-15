@@ -22,6 +22,184 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type (
+	// FabricProvider includes information about a fabric provider.
+	FabricProvider struct {
+		Name     string
+		Priority int
+	}
+
+	fabricProviderMap         map[string]*FabricProvider
+	fabricProviderPriorityMap map[int]fabricProviderMap
+
+	// FabricProviderSet is a non-duplicated set of FabricProviders.
+	FabricProviderSet struct {
+		byName     fabricProviderMap
+		byPriority fabricProviderPriorityMap
+	}
+)
+
+func (pm fabricProviderMap) add(p *FabricProvider) {
+	if _, exists := pm[p.Name]; !exists {
+		pm[p.Name] = p
+	}
+}
+
+func (pm fabricProviderMap) del(p *FabricProvider) {
+	delete(pm, p.Name)
+}
+
+func (pm fabricProviderMap) keys() []string {
+	keys := []string{}
+	for k := range pm {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (ppm fabricProviderPriorityMap) add(p *FabricProvider) {
+	if _, exists := ppm[p.Priority]; !exists {
+		ppm[p.Priority] = make(fabricProviderMap)
+	}
+
+	ppm[p.Priority].add(p)
+}
+
+func (ppm fabricProviderPriorityMap) del(p *FabricProvider) {
+	if provs, exists := ppm[p.Priority]; exists {
+		provs.del(p)
+	}
+}
+
+func (ppm fabricProviderPriorityMap) keys() []int {
+	keys := []int{}
+	for i := range ppm {
+		keys = append(keys, i)
+	}
+	sort.Ints(keys)
+	return keys
+}
+
+func (p *FabricProvider) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	if p.Name == "" {
+		return "<no name>"
+	}
+	return p.Name
+}
+
+func (ps *FabricProviderSet) String() string {
+	if ps == nil {
+		return "<nil>"
+	}
+
+	if ps.Len() == 0 {
+		return "<empty>"
+	}
+
+	sorted := ps.ToSlice()
+	strSlice := make([]string, 0, len(sorted))
+	for _, p := range sorted {
+		strSlice = append(strSlice, p.String())
+	}
+	return strings.Join(strSlice, ", ")
+}
+
+// Len returns the number of providers in the set.
+func (ps *FabricProviderSet) Len() int {
+	if ps == nil {
+		return 0
+	}
+	return len(ps.byName)
+}
+
+// Has detects whether a provider is in the set.
+func (ps *FabricProviderSet) Has(provider string) bool {
+	if ps == nil {
+		return false
+	}
+
+	_, exists := ps.byName[provider]
+	return exists
+}
+
+// Add adds fabric providers to the set.
+func (ps *FabricProviderSet) Add(providers ...*FabricProvider) {
+	if ps == nil {
+		return
+	}
+
+	if ps.byName == nil {
+		ps.byName = make(fabricProviderMap)
+	}
+
+	if ps.byPriority == nil {
+		ps.byPriority = make(fabricProviderPriorityMap)
+	}
+
+	for _, prov := range providers {
+		if prov == nil || prov.Name == "" {
+			continue
+		}
+
+		if old, exists := ps.byName[prov.Name]; exists {
+			if prov.Priority > old.Priority {
+				// lower value == higher priority
+				// old has higher priority, leave it alone
+				continue
+			}
+
+			ps.byPriority.del(old)
+			ps.byName.del(old)
+		}
+		ps.byName.add(prov)
+		ps.byPriority.add(prov)
+	}
+}
+
+// ToSlice returns a list of FabricProviders sorted by priority.
+func (ps *FabricProviderSet) ToSlice() []*FabricProvider {
+	if ps == nil {
+		return []*FabricProvider{}
+	}
+
+	slice := make([]*FabricProvider, 0, ps.Len())
+	for _, priority := range ps.byPriority.keys() {
+		provs := ps.byPriority[priority]
+		for _, prov := range provs.keys() {
+			slice = append(slice, provs[prov])
+		}
+	}
+	return slice
+}
+
+// NewFabricProviderSet creates a new set of FabricProviders.
+func NewFabricProviderSet(providers ...*FabricProvider) *FabricProviderSet {
+	set := new(FabricProviderSet)
+	for _, p := range providers {
+		set.Add(p)
+	}
+
+	return set
+}
+
+// newTestFabricProviderSet creates a new set of FabricProviders. The priority is derived from the order
+// of the provider strings.
+func newTestFabricProviderSet(providers ...string) *FabricProviderSet {
+	set := new(FabricProviderSet)
+	for i, p := range providers {
+		set.Add(&FabricProvider{
+			Name:     p,
+			Priority: i,
+		})
+	}
+
+	return set
+}
+
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
@@ -31,7 +209,7 @@ type FabricInterface struct {
 	// NetInterface is the set of corresponding OS-level network interface device.
 	NetInterfaces common.StringSet `json:"net_interface"`
 	// Providers is the set of supported providers.
-	Providers common.StringSet `json:"providers"`
+	Providers *FabricProviderSet `json:"providers"`
 	// DeviceClass is the type of the network interface.
 	DeviceClass NetDevClass `json:"device_class"`
 	// NUMANode is the NUMA affinity of the network interface.
@@ -59,7 +237,7 @@ func (fi *FabricInterface) String() string {
 	}
 
 	providers := "none"
-	if len(fi.Providers) > 0 {
+	if fi.Providers.Len() > 0 {
 		providers = fi.Providers.String()
 	}
 
@@ -136,7 +314,7 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 		// always possible to add to providers or net interfaces
 		if fi.Providers != nil {
 			if cur.Providers == nil {
-				cur.Providers = common.NewStringSet()
+				cur.Providers = newTestFabricProviderSet()
 			}
 			cur.Providers.Add(fi.Providers.ToSlice()...)
 		}

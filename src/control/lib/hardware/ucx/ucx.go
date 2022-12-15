@@ -141,17 +141,31 @@ func (p *Provider) addFabricDevices(comp string, netDevs []*transportDev, fis *h
 	return nil
 }
 
-func (p *Provider) getProviderSet(transport string) common.StringSet {
+func (p *Provider) getProviderSet(transport string) *hardware.FabricProviderSet {
 	genericTransport := strings.Split(transport, "_")[0]
 
-	providers := common.NewStringSet(transportToDAOSProvider(transport))
+	priority := 0 // by default use the highest
+	daosProv := transportToDAOSProvider(transport)
+	if daosProv == "ucx+tcp" {
+		priority = 1 // TCP is less desirable than other options if this is Infiniband
+	}
+	providers := hardware.NewFabricProviderSet(
+		&hardware.FabricProvider{
+			Name:     daosProv,
+			Priority: priority,
+		},
+	)
 	if shouldAddGeneric(transport) {
-		if err := providers.AddUnique(transportToDAOSProvider(genericTransport)); err != nil {
-			p.log.Error(err.Error())
-		}
+		providers.Add(&hardware.FabricProvider{
+			Name:     transportToDAOSProvider(genericTransport),
+			Priority: priority,
+		})
 	}
 	// Any interface with at least one provider should allow ucx+all
-	providers.Add("ucx+all")
+	providers.Add(&hardware.FabricProvider{
+		Name:     "ucx+all",
+		Priority: 99,
+	})
 	return providers
 }
 

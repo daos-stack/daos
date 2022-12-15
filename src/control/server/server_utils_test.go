@@ -823,6 +823,16 @@ func TestServer_setEngineBdevs(t *testing.T) {
 	}
 }
 
+func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	providers := []*hardware.FabricProvider{}
+	for _, p := range prov {
+		providers = append(providers, &hardware.FabricProvider{
+			Name: p,
+		})
+	}
+	return hardware.NewFabricProviderSet(providers...)
+}
+
 func TestServer_getNetDevClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.MockConfig().
@@ -888,27 +898,27 @@ func TestServer_getNetDevClass(t *testing.T) {
 					Name:          "eth0",
 					NetInterfaces: common.NewStringSet("eth0"),
 					DeviceClass:   hardware.Ether,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "eth1",
 					NetInterfaces: common.NewStringSet("eth1"),
 					DeviceClass:   hardware.Ether,
 					NUMANode:      1,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "ib0",
 					NetInterfaces: common.NewStringSet("ib0"),
 					DeviceClass:   hardware.Infiniband,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "ib1",
 					NetInterfaces: common.NewStringSet("ib1"),
 					DeviceClass:   hardware.Infiniband,
 					NUMANode:      1,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 			)
 
