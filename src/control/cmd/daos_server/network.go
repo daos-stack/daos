@@ -75,12 +75,12 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			netIFs.Add(fi.Name)
 		}
 
-		for _, name := range netIFs.ToSlice() {
+		for _, devName := range netIFs.ToSlice() {
 			for _, provider := range fi.Providers.ToSlice() {
 				if filterProvider == "all" || strings.HasPrefix(provider.Name, filterProvider) {
 					hf.AddInterface(&control.HostFabricInterface{
 						Provider:    provider.Name,
-						Device:      name,
+						Device:      devName,
 						NumaNode:    uint32(fi.NUMANode),
 						NetDevClass: fi.DeviceClass,
 						Priority:    uint32(provider.Priority),

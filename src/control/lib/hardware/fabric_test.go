@@ -44,6 +44,20 @@ func ignoreFabricProviderPriorityCmpOpts() []cmp.Option {
 	}
 }
 
+// newTestFabricProviderSet creates a new set of FabricProviders. The priority is derived from the order
+// of the provider strings.
+func newTestFabricProviderSet(providers ...string) *FabricProviderSet {
+	set := new(FabricProviderSet)
+	for i, p := range providers {
+		set.Add(&FabricProvider{
+			Name:     p,
+			Priority: i,
+		})
+	}
+
+	return set
+}
+
 func TestHardware_FabricProvider_String(t *testing.T) {
 	for name, tc := range map[string]struct {
 		p         *FabricProvider

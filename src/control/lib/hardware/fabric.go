@@ -186,20 +186,6 @@ func NewFabricProviderSet(providers ...*FabricProvider) *FabricProviderSet {
 	return set
 }
 
-// newTestFabricProviderSet creates a new set of FabricProviders. The priority is derived from the order
-// of the provider strings.
-func newTestFabricProviderSet(providers ...string) *FabricProviderSet {
-	set := new(FabricProviderSet)
-	for i, p := range providers {
-		set.Add(&FabricProvider{
-			Name:     p,
-			Priority: i,
-		})
-	}
-
-	return set
-}
-
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
@@ -314,7 +300,7 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 		// always possible to add to providers or net interfaces
 		if fi.Providers != nil {
 			if cur.Providers == nil {
-				cur.Providers = newTestFabricProviderSet()
+				cur.Providers = NewFabricProviderSet()
 			}
 			cur.Providers.Add(fi.Providers.ToSlice()...)
 		}

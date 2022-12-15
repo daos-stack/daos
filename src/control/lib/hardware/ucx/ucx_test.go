@@ -32,7 +32,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: 99,
+					Priority: catchallPriority,
 				},
 			),
 		},
@@ -41,11 +41,11 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 			expSet: hardware.NewFabricProviderSet(
 				&hardware.FabricProvider{
 					Name:     "ucx+tcp",
-					Priority: 1,
+					Priority: tcpPriority,
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: 99,
+					Priority: catchallPriority,
 				},
 			),
 		},
@@ -60,7 +60,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: 99,
+					Priority: catchallPriority,
 				},
 			),
 		},
@@ -75,7 +75,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: 99,
+					Priority: catchallPriority,
 				},
 			),
 		},

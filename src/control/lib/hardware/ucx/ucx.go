@@ -19,6 +19,9 @@ import (
 const (
 	compInfiniband = "ib"
 	compTCP        = "tcp"
+
+	tcpPriority      = 25
+	catchallPriority = 99
 )
 
 // NewProvider creates a new UCX data provider.
@@ -147,7 +150,7 @@ func (p *Provider) getProviderSet(transport string) *hardware.FabricProviderSet 
 	priority := 0 // by default use the highest
 	daosProv := transportToDAOSProvider(transport)
 	if daosProv == "ucx+tcp" {
-		priority = 1 // TCP is less desirable than other options if this is Infiniband
+		priority = tcpPriority // TCP is less desirable than other options if this is Infiniband
 	}
 	providers := hardware.NewFabricProviderSet(
 		&hardware.FabricProvider{
@@ -164,7 +167,7 @@ func (p *Provider) getProviderSet(transport string) *hardware.FabricProviderSet 
 	// Any interface with at least one provider should allow ucx+all
 	providers.Add(&hardware.FabricProvider{
 		Name:     "ucx+all",
-		Priority: 99,
+		Priority: catchallPriority,
 	})
 	return providers
 }
