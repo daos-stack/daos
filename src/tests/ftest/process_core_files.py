@@ -364,7 +364,7 @@ class CoreFileProcessing():
 
         """
         try:
-            output = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
+            output = run_local(self.log, ["cat", "/proc/sys/kernel/core_pattern"], check=True)
         except RunException:
             self.log.error("Unable to find local core file pattern")
             self.log.debug("Stacktrace", exc_info=True)
