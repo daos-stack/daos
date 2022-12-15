@@ -319,6 +319,16 @@ int verify_blobstore_state(int state, const char *state_str);
  */
 int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
 
+/**
+ * Start a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param arg	[IN]	Parameter for -o
+ */
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char* arg);
+
 const char *daos_target_state_enum_to_str(int state);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

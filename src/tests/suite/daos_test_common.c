@@ -998,8 +998,8 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 	if (arg->dmg_config != NULL)
 		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
 
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
+	rc = dmg_system_start_rank(dmg_config_file, rank, arg->dmg_config);
+	print_message(" dmg start: %d, rc %#x\n", rank, rc);
 	assert_rc_equal(rc, 0);
 
 	daos_cont_status_clear(arg->coh, NULL);
