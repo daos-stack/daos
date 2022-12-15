@@ -2217,7 +2217,7 @@ chk_leader_start_prep(struct chk_instance *ins, uint32_t rank_nr, d_rank_t *rank
 	}
 
 	/* New generation for each instance. */
-	gen = crt_hlc_get();
+	gen = d_hlc_get();
 
 	rc = chk_leader_ranks_prepare(ins, rank_nr, ranks, &rank_list);
 	if (rc > 0)

@@ -1,5 +1,5 @@
 """Build tests"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -52,7 +52,7 @@ def scons():
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 
-    ddb = daos_build.program(denv, 'ddb', ['ddb_entry.c', ddblib], LIBS=libs)
+    ddb = denv.d_program('ddb', ['ddb_entry.c', ddblib], LIBS=libs)
 
     denv.Install('$PREFIX/bin/', ddb)
 

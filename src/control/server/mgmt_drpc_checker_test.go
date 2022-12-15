@@ -72,17 +72,21 @@ func TestSrvModule_HandleCheckerListPools(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
 				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
-				if err := mod.poolDB.AddPoolService(testPool); err != nil {
+				lock, ctx := getPoolLockCtx(t, parent, mod.poolDB, testPool.PoolUUID)
+				if err := mod.poolDB.AddPoolService(ctx, testPool); err != nil {
 					t.Fatal(err)
 				}
+				lock.Release()
 			}
 
-			ctx := context.Background()
-			gotMsg, gotErr := mod.handleCheckerListPools(ctx, tc.req)
+			gotMsg, gotErr := mod.handleCheckerListPools(parent, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -181,20 +185,26 @@ func TestSrvModule_HandleCheckerRegisterPool(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
 				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
-				if err := mod.poolDB.AddPoolService(existingPool); err != nil {
+				lock, ctx := getPoolLockCtx(t, parent, mod.poolDB, existingPool.PoolUUID)
+				if err := mod.poolDB.AddPoolService(ctx, existingPool); err != nil {
 					t.Fatal(err)
 				}
-				if err := mod.poolDB.AddPoolService(otherPool); err != nil {
+				lock.Release()
+				lock, ctx = getPoolLockCtx(t, parent, mod.poolDB, otherPool.PoolUUID)
+				if err := mod.poolDB.AddPoolService(ctx, otherPool); err != nil {
 					t.Fatal(err)
 				}
+				lock.Release()
 			}
 
-			ctx := context.Background()
-			gotMsg, gotErr := mod.handleCheckerRegisterPool(ctx, tc.req)
+			gotMsg, gotErr := mod.handleCheckerRegisterPool(parent, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -261,13 +271,18 @@ func TestSrvModule_HandleCheckerDeregisterPool(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			mod := mockSrvModule(t, log, 1)
 			if tc.notReplica {
 				mod.poolDB = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{})
 			} else {
-				if err := mod.poolDB.AddPoolService(existingPool); err != nil {
+				lock, ctx := getPoolLockCtx(t, parent, mod.poolDB, existingPool.PoolUUID)
+				if err := mod.poolDB.AddPoolService(ctx, existingPool); err != nil {
 					t.Fatal(err)
 				}
+				lock.Release()
 			}
 
 			ctx := context.Background()

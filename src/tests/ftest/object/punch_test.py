@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -51,14 +50,14 @@ class PunchTest(TestWithServers):
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch dkey test")
 
-            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+            obj = self.container.write_an_obj(thedata, len(thedata) + 1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
             self.log.info("Committing the TX for punch dkey test")
             self.container.commit_tx(tx_handle)
             self.log.info("Committed the TX for punch dkey test")
 
             # read the data back and make sure its correct
-            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+            thedata2 = self.container.read_an_obj(len(thedata) + 1, dkey, akey,
                                                   obj, txn=tx_handle)
             if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)
@@ -164,13 +163,13 @@ class PunchTest(TestWithServers):
             akey = b"this is the akey"
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch obj test")
-            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+            obj = self.container.write_an_obj(thedata, len(thedata) + 1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
             self.log.info("Committing the TX for punch obj test")
             self.container.commit_tx(tx_handle)
             self.log.info("Committed the TX for punch obj test")
             # read the data back and make sure its correct
-            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+            thedata2 = self.container.read_an_obj(len(thedata) + 1, dkey, akey,
                                                   obj, txn=tx_handle)
             if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)

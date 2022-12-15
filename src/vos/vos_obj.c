@@ -24,6 +24,8 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+bool vos_dkey_punch_propagate;
+
 struct vos_key_info {
 	umem_off_t		*ki_known_key;
 	struct vos_object	*ki_obj;
@@ -189,8 +191,8 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		read_flag = VOS_TS_READ_OBJ;
 		write_flag = VOS_TS_WRITE_OBJ;
 		tree_name = "DKEY";
-		/** For now, don't propagate the punch to object layer */
-		return 0;
+		if (!vos_dkey_punch_propagate)
+			return 0; /** Unless we explicitly enable it, disable punch propagation */
 	case VOS_ITER_AKEY:
 		read_flag = VOS_TS_READ_DKEY;
 		write_flag = VOS_TS_WRITE_DKEY;
@@ -582,6 +584,10 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 			DP_RC(rc));
 		return rc;
 	}
+
+	rc = obj_tree_init(obj);
+	if (rc)
+		goto out;
 
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);

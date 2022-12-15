@@ -563,7 +563,7 @@ class DaosObj():
 
     def open(self):
         """Open the object so we can interact with it."""
-        c_mode = ctypes.c_uint(2)
+        c_mode = ctypes.c_uint(4)
         self.obj_handle = ctypes.c_uint64(0)
 
         func = self.context.get_function('open-obj')

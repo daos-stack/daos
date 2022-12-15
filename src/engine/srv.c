@@ -571,7 +571,6 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 
 	D_ALLOC_PTR(dx);
 	if (dx == NULL) {
-		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
@@ -1499,7 +1498,7 @@ dss_get_start_epoch(void)
 void
 dss_set_start_epoch(void)
 {
-	dss_start_epoch = crt_hlc_get();
+	dss_start_epoch = d_hlc_get();
 }
 
 bool

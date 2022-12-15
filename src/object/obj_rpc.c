@@ -502,13 +502,14 @@ crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 
 static int
 crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
-				  struct daos_cpd_sub_head *dcsh)
+				  struct daos_cpd_sub_head *dcsh, bool mbs)
 {
 	uint32_t	size = 0;
 	int		rc;
 
 	if (FREEING(proc_op)) {
-		D_FREE(dcsh->dcsh_mbs);
+		if (mbs)
+			D_FREE(dcsh->dcsh_mbs);
 		return 0;
 	}
 
@@ -524,6 +525,9 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 			     &dcsh->dcsh_epoch, sizeof(dcsh->dcsh_epoch));
 	if (unlikely(rc))
 		return rc;
+
+	if (!mbs)
+		return 0;
 
 	if (ENCODING(proc_op))
 		/* Pack the size of dcsh->dcsh_mbs to help decode case. */
@@ -628,10 +632,8 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 	} else if (ENCODING(proc_op)) {
 		daos_unit_oid_t		 oid = { 0 };
 
-		daos_dc_obj2id(dcsr->dcsr_obj, &oid.id_pub);
-		/* id_pad_32 must be initialized as zero, it will
-		 * be used as part of the vos object cache index.
-		 *
+		daos_dc_obj2id(dcsr->dcsr_obj, &oid);
+		/*
 		 * It is not important what the id_shard is, that
 		 * is packed via daos_cpd_req_idx::dcri_shard_id.
 		 */
@@ -709,7 +711,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				if (unlikely(rc))
 					D_GOTO(out, rc);
 			}
-		} else {
+		} else if (!(dcu->dcu_flags & ORF_EMPTY_SGL)) {
 			if (DECODING(proc_op)) {
 				D_ALLOC_ARRAY(dcu->dcu_sgls, dcsr->dcsr_nr);
 				if (dcu->dcu_sgls == NULL)
@@ -837,6 +839,46 @@ crt_proc_struct_daos_cpd_disp_ent(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
+crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
+			      struct daos_cpd_bulk *dcb, bool head)
+{
+	int	rc;
+
+	if (head) {
+		rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op, &dcb->dcb_head, false);
+		if (unlikely(rc))
+			return rc;
+	}
+
+	if (FREEING(proc_op)) {
+		D_FREE(dcb->dcb_bulk);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_size);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_padding);
+	if (unlikely(rc))
+		return rc;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_PTR(dcb->dcb_bulk);
+		if (dcb->dcb_bulk == NULL)
+			return -DER_NOMEM;
+	}
+
+	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
+	if (unlikely(rc))
+		return rc;
+
+	/* The other fields will not be packed on-wire. */
+
+	return 0;
+}
+
+static int
 crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 			    struct daos_cpd_sg *dcs)
 {
@@ -866,8 +908,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op,
-							       &dcsh[i]);
+			rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op, &dcsh[i], true);
 			if (unlikely(rc))
 				D_GOTO(out, rc);
 		}
@@ -948,6 +989,28 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		break;
 	}
+	case DCST_BULK_HEAD:
+	case DCST_BULK_DISP:
+	case DCST_BULK_TGT: {
+		struct daos_cpd_bulk	*dcb;
+
+		if (DECODING(proc_op)) {
+			D_ALLOC_PTR(dcb);
+			if (dcb == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			dcs->dcs_buf = dcb;
+		} else {
+			dcb = dcs->dcs_buf;
+		}
+
+		rc = crt_proc_struct_daos_cpd_bulk(proc, proc_op, dcb,
+						   dcs->dcs_type == DCST_BULK_HEAD ? true : false);
+		if (unlikely(rc))
+			D_GOTO(out, rc);
+
+		break;
+	}
 	default:
 		return -DER_INVAL;
 	}
@@ -977,6 +1040,7 @@ CRT_RPC_DEFINE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 CRT_RPC_DEFINE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
+CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
 
 /* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -1032,6 +1096,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_ENUMERATE:
 		((struct obj_key_enum_out *)reply)->oeo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		((struct obj_key2anchor_out *)reply)->oko_ret = status;
+		break;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1075,6 +1142,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_ret;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		return ((struct obj_key2anchor_out *)reply)->oko_ret;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -1113,8 +1182,10 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
-		((struct obj_key_enum_out *)reply)->oeo_map_version =
-								map_version;
+		((struct obj_key_enum_out *)reply)->oeo_map_version = map_version;
+		break;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		((struct obj_key2anchor_out *)reply)->oko_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
@@ -1125,8 +1196,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_QUERY_KEY:
-		((struct obj_query_key_0_out *)reply)->okqo_map_version =
-			map_version;
+		((struct obj_query_key_0_out *)reply)->okqo_map_version = map_version;
 		break;
 	case DAOS_OBJ_RPC_SYNC:
 		((struct obj_sync_out *)reply)->oso_map_version = map_version;
@@ -1160,6 +1230,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 	case DAOS_OBJ_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_map_version;
+	case DAOS_OBJ_RPC_KEY2ANCHOR:
+		return ((struct obj_key2anchor_out *)reply)->oko_map_version;
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_PUNCH_DKEYS:
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:

@@ -883,6 +883,8 @@ vos_dtx_flags2name(uint32_t flags)
 		return "corrupted";
 	case DTE_ORPHAN:
 		return "orphan";
+	case DTE_PARTIAL_COMMITTED:
+		return "partial_committed";
 	default:
 		return "unknown";
 	}
@@ -1015,7 +1017,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	rc = dbtree_upsert(cont->vc_dtx_active_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 	if (rc == 0) {
-		dae->dae_start_time = crt_hlc_get();
+		dae->dae_start_time = d_hlc_get();
 		d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		dth->dth_ent = dae;
 	} else {
@@ -1139,7 +1141,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_AVAILABLE_CLEAN;
 	}
 
-	if (dae->dae_committable || dae->dae_committed)
+	if (dae->dae_committable || dae->dae_committed || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 		return ALB_AVAILABLE_CLEAN;
 
 	if (dae->dae_aborted)
@@ -1811,10 +1813,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			return DTX_ST_COMMITTED;
 		}
 
-		if (dae->dae_committable) {
+		if (dae->dae_committable || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
 			if (mbs != NULL)
-				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont),
-							dae);
+				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont), dae);
 
 			if (epoch != NULL)
 				*epoch = DAE_EPOCH(dae);
@@ -1825,10 +1826,8 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (dae->dae_aborted)
 			return -DER_NONEXIST;
 
-		if (mbs != NULL)
-			dae->dae_maybe_shared = 1;
-
 		if (for_refresh) {
+			dae->dae_maybe_shared = 1;
 			/*
 			 * If DTX_REFRESH happened on current DTX entry but it was not marked
 			 * as leader, then there must be leader switch and the DTX resync has
@@ -1917,7 +1916,7 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 	struct vos_dtx_blob_df		*dbd;
 	struct vos_dtx_blob_df		*dbd_prev;
 	umem_off_t			 dbd_off;
-	daos_epoch_t			 cmt_time = crt_hlc_get();
+	daos_epoch_t			 cmt_time = d_hlc_get();
 	int				 committed = 0;
 	int				 cur = 0;
 	int				 rc = 0;
@@ -2107,7 +2106,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 				daes[i]->dae_committed = 1;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
 			}
-			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
+			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED);
 		}
 	}
 }
@@ -2229,10 +2228,9 @@ out:
 	return rc;
 }
 
-int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
+static int
+vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t flags)
 {
-	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
@@ -2240,24 +2238,14 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	d_iov_t				 kiov;
 	int				 rc;
 
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
-
-	/* Only allow set single flags. */
-	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
-		D_ERROR("Try to set unrecognized flags %x on DTX "
-			DF_DTI"\n", flags, DP_DTI(dti));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("Not allow to set flag on committed/aborted DTX entry "DF_DTI"\n",
-				DP_DTI(dti));
+			D_ERROR("Not allow to set flag %s on committed (1) DTX entry "DF_DTI"\n",
+				vos_dtx_flags2name(flags), DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
 	}
@@ -2266,10 +2254,13 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 		goto out;
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+	if (DAE_FLAGS(dae) & flags)
+		goto out;
+
 	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
-		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
-			dae->dae_committable ? "committable" :
-			dae->dae_committed ? "committed" : "aborted", DP_DTI(dti));
+		D_ERROR("Not allow to set flag %s on the %s DTX entry "DF_DTI"\n",
+			vos_dtx_flags2name(flags), dae->dae_committable ? "committable" :
+			dae->dae_committed ? "committed (2)" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -2277,23 +2268,58 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
 	D_ASSERT(dae_df != NULL);
 
-	rc = umem_tx_begin(umm, NULL);
-	if (rc != 0)
-		goto out;
-
 	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
-	if (rc == 0)
+	if (rc == 0) {
 		dae_df->dae_flags |= flags;
-
-	rc = umem_tx_end(umm, rc);
-	if (rc == 0)
 		DAE_FLAGS(dae) |= flags;
+	}
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
 		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
 		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
 
+	if ((rc == -DER_NO_PERM || rc == -DER_NONEXIST) && flags == DTE_PARTIAL_COMMITTED)
+		rc = 0;
+
+	return rc;
+}
+
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	int			 rc = 0;
+	int			 i;
+
+	if (unlikely(count == 0))
+		goto out;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	/* Only allow set single flags. */
+	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN && flags != DTE_PARTIAL_COMMITTED) {
+		D_ERROR("Try to set unrecognized flags %x on DTX "DF_DTI", count %u\n",
+			flags, DP_DTI(&dtis[0]), count);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < count; i++) {
+		rc = vos_dtx_set_flags_one(cont, &dtis[i], flags);
+		if (rc != 0)
+			break;
+	}
+
+	rc = umem_tx_end(umm, rc);
+
+out:
 	return rc;
 }
 
@@ -2632,7 +2658,7 @@ vos_dtx_act_reindex(struct vos_container *cont)
 				goto out;
 			}
 
-			dae->dae_start_time = crt_hlc_get();
+			dae->dae_start_time = d_hlc_get();
 			d_list_add_tail(&dae->dae_link, &cont->vc_dtx_act_list);
 		}
 
