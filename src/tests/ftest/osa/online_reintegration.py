@@ -13,7 +13,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from apricot import skipForTicket
 
 
 class OSAOnlineReintegration(OSAUtils):
