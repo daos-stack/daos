@@ -163,6 +163,8 @@ def inject_fault_daos(pool_label, cont_label, fault_type):
     """Call daos faults to inject fault.
 
     Args:
+        pool_label (str): Pool label.
+        cont_label (str): Container label.
         fault_type (str): Fault type.
     """
     location = "--location=" + fault_type
@@ -280,7 +282,15 @@ def system_start():
     subprocess.run(system_start_cmd, check=False)
 
 def system_query(json=False, verbose=False):
-    """Call dmg system query"""
+    """Call dmg system query
+
+    Args:
+        json (bool): Whether to use --json. Defaults to False.
+        verbose (bool): Whether to use --verbose. Defaults to False.
+
+    Returns:
+        str: Command output.
+    """
     if json:
         system_query_cmd = ["dmg", "--json", "system", "query"]
     else:
