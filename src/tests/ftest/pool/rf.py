@@ -54,7 +54,7 @@ class PoolRedunFacProperty(IorTestBase):
 
         # Verify pool rf.
         pool_prop_expected = int(self.pool.properties.value.split(":")[1])
-        self.assertEqual(pool_prop_expected, self.pool.get_property("rd_fac"))
+        self.assertEqual(pool_prop_expected, self.pool.get_property("rf"))
 
         for cont_rf in cont_rfs:
             # Initial container
@@ -62,7 +62,7 @@ class PoolRedunFacProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_rf != pool_prop_expected:
-                self.container.properties.update("rd_fac:{}".format(cont_rf))
+                self.container.properties.update("rf:{}".format(cont_rf))
 
             # Create the container and open handle
             self.container.create()

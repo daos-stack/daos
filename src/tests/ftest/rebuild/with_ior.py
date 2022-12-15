@@ -32,7 +32,7 @@ class RbldWithIOR(IorTestBase):
         :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
         # set params
-        targets = self.params.get("targets", "/run/server_config/*")
+        targets = self.server_managers[0].get_config_value("targets")
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         iorflags_write = self.params.get("write_flg", '/run/ior/iorflags/')
         iorflags_read = self.params.get("read_flg", '/run/ior/iorflags/')
