@@ -55,6 +55,9 @@ def _base_setup(env):
     env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
+    env.AppendIfSupported(LINKFLAGS=["-fstack-protector-strong"])
+    if '-fstack-protector-strong' in env["CCFLAGS"]:
+        env.AppendENVPath("CGO_LDFLAGS", "-fstack-protector-strong", sep=" ")
 
     if '-Wmismatched-dealloc' in env['CCFLAGS']:
         env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
