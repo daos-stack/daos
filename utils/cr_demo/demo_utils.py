@@ -352,21 +352,3 @@ def get_current_labels():
         pool_labels.append(pool["label"])
 
     return pool_labels
-
-def create_three_pools(pool_label, pool_size):
-    """Create three pools with consecutive number appended to given label.
-
-    Args:
-        pool_label (str): Base pool label.
-        pool_size (str): Pool size.
-
-    Returns:
-        str: Three pool labels.
-    """
-    pool_label_1 = f"{pool_label}_1"
-    pool_label_2 = f"{pool_label}_2"
-    pool_label_3 = f"{pool_label}_3"
-    create_pool(pool_size=pool_size, pool_label=pool_label_1)
-    create_pool(pool_size=pool_size, pool_label=pool_label_2)
-    create_pool(pool_size=pool_size, pool_label=pool_label_3)
-    return [pool_label_1, pool_label_2, pool_label_3]

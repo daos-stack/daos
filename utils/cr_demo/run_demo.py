@@ -47,43 +47,43 @@ time.sleep(10)
 # Call dmg system query to obtain the IP address of necessary ranks.
 rank_to_ip = {}
 stdout = system_query(json=True)
-print("## dmg system query stdout = {}".format(stdout))
+print(f"dmg system query stdout = {stdout}")
 generated_yaml = yaml.safe_load(stdout)
 for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
 
 # Add input here to make sure all ranks are joined before starting the script.
 input("\n2. Create 8 pools and containers. Hit enter...")
-pool_label_1 = POOL_LABEL + "_1"
-pool_label_2 = POOL_LABEL + "_2"
-pool_label_3 = POOL_LABEL + "_3"
-pool_label_4 = POOL_LABEL + "_4"
-pool_label_5 = POOL_LABEL + "_5"
-pool_label_6 = POOL_LABEL + "_6"
-pool_label_7 = POOL_LABEL + "_7"
-pool_label_8 = POOL_LABEL + "_8"
-cont_label_7 = CONT_LABEL + "_7"
+POOL_LABEL_1 = POOL_LABEL + "_1"
+POOL_LABEL_2 = POOL_LABEL + "_2"
+POOL_LABEL_3 = POOL_LABEL + "_3"
+POOL_LABEL_4 = POOL_LABEL + "_4"
+POOL_LABEL_5 = POOL_LABEL + "_5"
+POOL_LABEL_6 = POOL_LABEL + "_6"
+POOL_LABEL_7 = POOL_LABEL + "_7"
+POOL_LABEL_8 = POOL_LABEL + "_8"
+CONT_LABEL_7 = CONT_LABEL + "_7"
 cont_label_8 = CONT_LABEL + "_8"
 
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_1)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_1)
 # F2. CIC_POOL_LESS_SVC_WITHOUT_QUORUM
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_2, nsvc="3")
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_2, nsvc="3")
 # F3. CIC_POOL_NONEXIST_ON_MS - orphan pool
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_3)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_3)
 # F4. CIC_POOL_BAD_LABEL - inconsistent pool label between MS and PS
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_4)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_4)
 # F5. CIC_ENGINE_NONEXIST_IN_MAP - orphan pool shard
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_5, ranks=str(F5_RANK_ORIG))
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_5, ranks=str(F5_RANK_ORIG))
 # F6. CIC_ENGINE_HAS_NO_STORAGE - dangling pool map
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_6)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_6)
 # F7. CIC_CONT_NONEXIST_ON_PS - orphan container
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_7)
-create_container(pool_label=pool_label_7, cont_label=cont_label_7)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_7)
+create_container(pool_label=POOL_LABEL_7, cont_label=CONT_LABEL_7)
 print()
 # F8. CIC_CONT_BAD_LABEL
-create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_8)
-create_container(pool_label=pool_label_8, cont_label=cont_label_8)
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_8)
+create_container(pool_label=POOL_LABEL_8, cont_label=cont_label_8)
 
 print("(Create label to UUID mapping.)")
 label_to_uuid = {}
@@ -92,7 +92,7 @@ generated_yaml = yaml.safe_load(stdout)
 for pool in generated_yaml["response"]["pools"]:
     label_to_uuid[pool["label"]] = pool["uuid"]
 
-print(f"\n3-F5. Print storage usage to show original usage of {pool_label_5}. "
+print(f"\n3-F5. Print storage usage to show original usage of {POOL_LABEL_5}. "
       f"Pool is created on {rank_to_ip[F5_RANK_ORIG]}.")
 # F5 pool is created on rank 1, but we'll copy the pool dir from rank 1 to 3, so show
 # both.
@@ -102,21 +102,21 @@ storage_query_usage(host_list=f5_host_list)
 ####################################################################
 print("\n4. Inject fault with dmg (except F5, F6).")
 # F1
-inject_fault_pool(pool_label=pool_label_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
+inject_fault_pool(pool_label=POOL_LABEL_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
 
 # F3
-inject_fault_mgmt(pool_label=pool_label_3, fault_type="CIC_POOL_NONEXIST_ON_MS")
+inject_fault_mgmt(pool_label=POOL_LABEL_3, fault_type="CIC_POOL_NONEXIST_ON_MS")
 
 # F4
-inject_fault_mgmt(pool_label=pool_label_4, fault_type="CIC_POOL_BAD_LABEL")
+inject_fault_mgmt(pool_label=POOL_LABEL_4, fault_type="CIC_POOL_BAD_LABEL")
 
 # F7
 inject_fault_daos(
-    pool_label=pool_label_7, cont_label=cont_label_7, fault_type="DAOS_CHK_CONT_ORPHAN")
+    pool_label=POOL_LABEL_7, cont_label=CONT_LABEL_7, fault_type="DAOS_CHK_CONT_ORPHAN")
 
 # F8
 inject_fault_daos(
-    pool_label=pool_label_8, cont_label=cont_label_8,
+    pool_label=POOL_LABEL_8, cont_label=cont_label_8,
     fault_type="DAOS_CHK_CONT_BAD_LABEL")
 
 ####################################################################
@@ -125,7 +125,7 @@ system_stop()
 
 # F2: Destroy tank_2 rdb-pool on rank 0 and 2.
 rank_0_2_ips = "{},{}".format(rank_to_ip[0], rank_to_ip[2])
-rm_cmd = f"sudo rm /mnt/daos/{label_to_uuid[pool_label_2]}/rdb-pool"
+rm_cmd = f"sudo rm /mnt/daos/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
 remove_rdb_rank_0_2 = ["clush", "-w", rank_0_2_ips, rm_cmd]
 print("(F2: Destroy tank_2 rdb-pool on rank 0 and 2.)")
 print("Command: {}\n".format(remove_rdb_rank_0_2))
@@ -143,7 +143,7 @@ subprocess.run(remove_rdb_rank_0_2, check=False)
 
 # Update the mode.
 print("(F5: Update mode for pool directory.)")
-pool_uuid_5 = label_to_uuid[pool_label_5]
+pool_uuid_5 = label_to_uuid[POOL_LABEL_5]
 chmod_cmd = f"sudo chmod 777 /mnt/daos; sudo chmod -R 777 /mnt/daos/{pool_uuid_5}"
 clush_chmod_cmd = ["clush", "-w", rank_to_ip[1], chmod_cmd]
 print("Command: {}\n".format(clush_chmod_cmd))
@@ -165,14 +165,14 @@ print("Command: {}\n".format(clush_chown_cmd))
 subprocess.run(clush_chown_cmd, check=False)
 
 print("(F6: Remove pool directory from rank 0.)")
-pool_uuid_6 = label_to_uuid[pool_label_6]
+pool_uuid_6 = label_to_uuid[POOL_LABEL_6]
 rm_cmd = f"sudo rm -rf /mnt/daos/{pool_uuid_6}"
 clush_rm_cmd = ["clush", "-w", rank_to_ip[0], rm_cmd]
 print("Command: {}\n".format(clush_rm_cmd))
 subprocess.run(clush_rm_cmd, check=False)
 
 print("F7: Use ddb to show that the container is left in shards.")
-pool_uuid_7 = label_to_uuid[pool_label_7]
+pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
 ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos/{pool_uuid_7}/vos-0"
 clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
 print("Command: {}".format(clush_ddb_cmd))
@@ -184,37 +184,37 @@ system_start()
 ####################################################################
 input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
-print(f"\n6-F1. Show dangling pool entry. {pool_label_1} doesn't exist on engine.")
+print(f"\n6-F1. Show dangling pool entry. {POOL_LABEL_1} doesn't exist on engine.")
 # F3 part 1
-print(f"\n6-F3-1. MS doesn't recognize {pool_label_3}.")
+print(f"\n6-F3-1. MS doesn't recognize {POOL_LABEL_3}.")
 # F4 part 1
-print(f"6-F4-1. Label ({pool_label_4}) in MS are corrupted with -fault added.")
+print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS are corrupted with -fault added.")
 list_pool(no_query=True)
 
 # 2: (optional) Try to create a container, which will hang.
 
 # F4 part 2
-print(f"\n6-F4-2. Label ({pool_label_4}) in PS are still original.")
-pool_label_4_fault = pool_label_4 + "-fault"
-pool_get_prop(pool_label=pool_label_4_fault, properties="label")
+print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS are still original.")
+POOL_LABEL_4_fault = POOL_LABEL_4 + "-fault"
+pool_get_prop(pool_label=POOL_LABEL_4_fault, properties="label")
 
 # F3 part 2
-# print(f"\n6-F3-2. {pool_label_3} exists on engine.")
-# pool_get_prop(pool_label=pool_label_3, properties="label")
+# print(f"\n6-F3-2. {POOL_LABEL_3} exists on engine.")
+# pool_get_prop(pool_label=POOL_LABEL_3, properties="label")
 
 # F5: Call dmg storage query usage to show that the pool is using more space.
-print(f"\n6-F5. Print storage usage to show that {pool_label_5} is using more space. "
+print(f"\n6-F5. Print storage usage to show that {POOL_LABEL_5} is using more space. "
       f"Pool directory is copied to {rank_to_ip[F5_RANK_FAULT]}.")
 storage_query_usage(host_list=f5_host_list)
 
 # F8: Show inconsistency by getting the container label.
 print("\n6-F8. Show container label inconsistency.")
-cont_get_prop(pool_label=pool_label_8, cont_label=cont_label_8)
-# cont_get_prop(pool_label=pool_label_8, cont_label="new-label")
+cont_get_prop(pool_label=POOL_LABEL_8, cont_label=cont_label_8)
+# cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label")
 print(f"Error because container ({cont_label_8}) doesn't exist on container service.\n")
 
 print(f"Container ({cont_label_8}) exists on pool service.")
-cont_get_prop(pool_label=pool_label_8, cont_label="new-label", properties="label")
+cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label", properties="label")
 
 ####################################################################
 input("\n7. Enable checker. Hit enter...")
@@ -231,47 +231,47 @@ repeat_check_query()
 input("\n8. Select repair options and repair. Hit enter...")
 print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
-seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_1]]))
-seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_2]]))
-seq_num_3 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_3]]))
-seq_num_4 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_4]]))
-seq_num_5 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_5]]))
-seq_num_6 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_6]]))
-seq_num_7 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_7]]))
-seq_num_8 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_8]]))
+seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]]))
+seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]]))
+seq_num_3 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]]))
+seq_num_4 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_4]]))
+seq_num_5 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_5]]))
+seq_num_6 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_6]]))
+seq_num_7 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_7]]))
+seq_num_8 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_8]]))
 
 # F1: 1: Discard the dangling pool entry from MS [suggested].
-print(f"\n{pool_label_1} - 1: Discard the dangling pool entry from MS [suggested].")
+print(f"\n{POOL_LABEL_1} - 1: Discard the dangling pool entry from MS [suggested].")
 check_repair(sequence_num=seq_num_1, action="1")
 
 # F2: 2: Start pool service under DICTATE mode from rank 1 [suggested].
-print(f"\n{pool_label_2} - 2: Start pool service under DICTATE mode from rank 1 "
+print(f"\n{POOL_LABEL_2} - 2: Start pool service under DICTATE mode from rank 1 "
       f"[suggested].")
 check_repair(sequence_num=seq_num_2, action="2")
 
 # F3:
-print(f"\n{pool_label_3} - 2: Re-add the orphan pool back to MS [suggested].")
+print(f"\n{POOL_LABEL_3} - 2: Re-add the orphan pool back to MS [suggested].")
 check_repair(sequence_num=seq_num_3, action="2")
 
 # F4: 2: Trust PS pool label.
-print(f"\n{pool_label_4} - 2: Trust PS pool label.")
+print(f"\n{POOL_LABEL_4} - 2: Trust PS pool label.")
 check_repair(sequence_num=seq_num_4, action="2")
 
 # F5: 1: Discard the orphan pool shard to release space [suggested].
-print(f"\n{pool_label_5} - 1: Discard the orphan pool shard to release space "
+print(f"\n{POOL_LABEL_5} - 1: Discard the orphan pool shard to release space "
       f"[suggested].")
 check_repair(sequence_num=seq_num_5, action="1")
 
 # F6: 1: Change pool map for the dangling map entry [suggested].
-print(f"\n{pool_label_6} - 1: Change pool map for the dangling map entry [suggested].")
+print(f"\n{POOL_LABEL_6} - 1: Change pool map for the dangling map entry [suggested].")
 check_repair(sequence_num=seq_num_6, action="1")
 
 # F7: 1: Destroy the orphan container to release space [suggested].
-print(f"\n{pool_label_7} - 1: Destroy the orphan container to release space [suggested].")
+print(f"\n{POOL_LABEL_7} - 1: Destroy the orphan container to release space [suggested].")
 check_repair(sequence_num=seq_num_7, action="1")
 
 # F8: 2: Trust the container label in container property.
-print(f"\n{pool_label_8} - 2: Trust the container label in container property.")
+print(f"\n{POOL_LABEL_8} - 2: Trust the container label in container property.")
 check_repair(sequence_num=seq_num_8, action="2")
 
 print()
@@ -282,34 +282,34 @@ check_disable()
 
 ####################################################################
 input("\n13. Show the issues fixed. Hit enter...")
-print(f"13-F1. Dangling pool ({pool_label_1}) was removed.")
-print(f"13-F3. Orphan pool ({pool_label_3}) was reconstructed.")
+print(f"13-F1. Dangling pool ({POOL_LABEL_1}) was removed.")
+print(f"13-F3. Orphan pool ({POOL_LABEL_3}) was reconstructed.")
 list_pool()
 
-print(f"13-F2. Create a container on {pool_label_2}. Pool can be started now, so it "
+print(f"13-F2. Create a container on {POOL_LABEL_2}. Pool can be started now, so it "
       f"should succeed.")
 cont_label_2 = CONT_LABEL + "_2"
-create_container(pool_label=pool_label_2, cont_label=cont_label_2)
+create_container(pool_label=POOL_LABEL_2, cont_label=cont_label_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
-print(f"\n13-F4. Label inconsistency for {pool_label_4} was resolved. "
+print(f"\n13-F4. Label inconsistency for {POOL_LABEL_4} was resolved. "
       f"See pool list above.")
-pool_get_prop(pool_label=pool_label_4, properties="label")
+pool_get_prop(pool_label=POOL_LABEL_4, properties="label")
 
 # F5: Call dmg storage query usage to verify the storage was reclaimed. - Not working due
 # to a bug. Instead, show that pool directory on dst node (rank 3 for 4-VM) was removed.
-print(f"\n13-F5-1. Print storage usage to show that storage used by {pool_label_5} is "
+print(f"\n13-F5-1. Print storage usage to show that storage used by {POOL_LABEL_5} is "
       f"reclaimed after pool directory is removed from {rank_to_ip[F5_RANK_FAULT]}.")
 storage_query_usage(host_list=f5_host_list)
 
-print(f"\n13-F5-2. {label_to_uuid[pool_label_5]} pool directory on rank 3 "
+print(f"\n13-F5-2. {label_to_uuid[POOL_LABEL_5]} pool directory on rank 3 "
       f"({rank_to_ip[3]}) was removed.")
 ls_cmd = "sudo ls /mnt/daos"
 clush_ls_cmd = ["clush", "-w", rank_to_ip[3], ls_cmd]
 print("Command: {}\n".format(clush_ls_cmd))
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"\n13-F6. {label_to_uuid[pool_label_6]} pool directory on rank 0 "
+print(f"\n13-F6. {label_to_uuid[POOL_LABEL_6]} pool directory on rank 0 "
       f"({rank_to_ip[0]}) is retrieved.")
 clush_ls_cmd = ["clush", "-w", rank_to_ip[0], ls_cmd]
 print("Command: {}\n".format(clush_ls_cmd))
@@ -319,11 +319,11 @@ subprocess.run(clush_ls_cmd, check=False)
 
 # F8: Verify that the inconsistency is fixed. The label is back to the original.
 print(f"\n13-F8. Show container label inconsistency for {cont_label_8} was fixed.")
-cont_get_prop(pool_label=pool_label_8, cont_label=cont_label_8, properties="label")
+cont_get_prop(pool_label=POOL_LABEL_8, cont_label=cont_label_8, properties="label")
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
 # shard.
-print(f"\n13-F7. Use ddb to verify that the container in {pool_label_8} is removed "
+print(f"\n13-F7. Use ddb to verify that the container in {POOL_LABEL_8} is removed "
       f"from shards.")
 system_stop()
 print("Command: {}".format(clush_ddb_cmd))
