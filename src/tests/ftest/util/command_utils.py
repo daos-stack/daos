@@ -114,6 +114,16 @@ class ExecutableCommand(CommandWithParameters):
         """
         return "'({})'".format("|".join(self._exe_names))
 
+    @property
+    def with_exports(self):
+        """Get the command string with any environment variable exports.
+
+        Returns:
+            str: the command string with any environment variable exports
+
+        """
+        return " ".join([self.env.to_export_str(), str(self)]).strip()
+
     def run(self):
         """Run the command.
 
@@ -461,8 +471,7 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         super().get_params(test)
         self.get_sub_command_class()
-        if (self.sub_command_class is not None and
-                hasattr(self.sub_command_class, "get_params")):
+        if (self.sub_command_class is not None and hasattr(self.sub_command_class, "get_params")):
             self.sub_command_class.get_params(test)
 
     def get_sub_command_class(self):

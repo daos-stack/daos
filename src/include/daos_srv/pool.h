@@ -29,6 +29,17 @@
 struct ds_pool_svc;
 
 /*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+#define DS_POOL_OBJ_VERSION		1
+
+/*
  * Pool object
  *
  * Caches per-pool information, such as the pool map.
@@ -109,6 +120,7 @@ struct ds_pool_hdl {
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
 	uint32_t		sph_global_ver; /* pool global version */
+	uint32_t		sph_obj_ver;	/* pool obj layout version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -297,6 +309,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking

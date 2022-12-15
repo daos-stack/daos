@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -26,6 +25,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     --verbose.
     :avocado: recursive
     """
+
     def verify_storage_scan_scm(self, storage_dict):
         """Main test component.
 
@@ -76,7 +76,8 @@ class DmgStorageScanSCMTest(ControlTestBase):
         /sys/class/block/<dev_name>/device/numa_node
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,dmg_storage_scan_scm
+        :avocado: tags=hw,medium
+        :avocado: tags=control,storage_scan,scm
+        :avocado: tags=DmgStorageScanSCMTest,test_dmg_storage_scan_scm
         """
         self.verify_dmg_storage_scan(self.verify_storage_scan_scm)
