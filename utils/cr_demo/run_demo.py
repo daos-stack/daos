@@ -178,6 +178,9 @@ clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
 print(f"Command: {clush_ddb_cmd}")
 subprocess.run(clush_ddb_cmd, check=False)
 
+# (optional) F3: Show pool directory at mount point to verify that the pool exists on
+# engine.
+
 print("\n5-2. Restart servers.")
 system_start()
 
@@ -186,7 +189,7 @@ input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
 print(f"\n6-F1. Show dangling pool entry. {POOL_LABEL_1} doesn't exist on engine.")
 # F3 part 1
-print(f"\n6-F3-1. MS doesn't recognize {POOL_LABEL_3}.")
+print(f"\n6-F3. MS doesn't recognize {POOL_LABEL_3}.")
 # F4 part 1
 print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS are corrupted with -fault added.")
 list_pool(no_query=True)
@@ -197,10 +200,6 @@ list_pool(no_query=True)
 print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS are still original.")
 POOL_LABEL_4_FAULT = POOL_LABEL_4 + "-fault"
 pool_get_prop(pool_label=POOL_LABEL_4_FAULT, properties="label")
-
-# F3 part 2
-# print(f"\n6-F3-2. {POOL_LABEL_3} exists on engine.")
-# pool_get_prop(pool_label=POOL_LABEL_3, properties="label")
 
 # F5: Call dmg storage query usage to show that the pool is using more space.
 print(f"\n6-F5. Print storage usage to show that {POOL_LABEL_5} is using more space. "
