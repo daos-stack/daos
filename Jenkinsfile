@@ -143,7 +143,9 @@ pipeline {
             }
         }
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
@@ -177,7 +179,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 8')
-                stage('Functional on Leap 15') {
+                stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -199,7 +201,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     } // post
-                } // stage('Functional on Leap 15')
+                } // stage('Functional on Leap 15.4')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
