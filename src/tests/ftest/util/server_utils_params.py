@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -148,10 +147,11 @@ class DaosServerYamlParameters(YamlParameters):
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
             self.engine_params = [
-                self.PerEngineYamlParameters(index, self.provider.value)
+                self.PerEngineYamlParameters(self.namespace, index, self.provider.value)
                 for index in range(self.engines_per_host.value)]
         else:
-            self.engine_params = [self.PerEngineYamlParameters(None, self.provider.value)]
+            self.engine_params = [
+                self.PerEngineYamlParameters(self.namespace, None, self.provider.value)]
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
@@ -356,7 +356,7 @@ class DaosServerYamlParameters(YamlParameters):
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
-            log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+            log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
             # Parameters
             #   targets:                I/O service threads per engine
