@@ -138,6 +138,9 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.fault_path = BasicParameter(None)
 
+        # Control plane metadata storage.
+        self.control_metadata = ControlMetadataYamlParameters()
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -175,6 +178,8 @@ class DaosServerYamlParameters(YamlParameters):
         yaml_data["engines"] = []
         for engine_params in self.engine_params:
             yaml_data["engines"].append(engine_params.get_yaml_data())
+
+        yaml_data["control_metadata"] = self.control_metadata.get_yaml_data()
 
         return yaml_data
 
@@ -332,6 +337,28 @@ class DaosServerYamlParameters(YamlParameters):
                 self.engine_params[-1].override_params(engine_data)
         else:
             self.engines_per_host.update(0, "engines_per_host")
+
+
+class ControlMetadataYamlParameters(YamlParameters):
+    """Defines the configuration yaml parameters for external control plane metadata storage."""
+
+    def __init__(self):
+        """Initialize a ControlMetadataYamlParameters object.
+        """
+        super().__init__("/run/server_config/control_metadata/*")
+
+        # control_metadata configuration parameters:
+        #
+        #   - path: <str>, e.g. /mnt/daos_control
+        #       Path to metadata storage location for daos_server (control plane).
+        #       If not specified, the default is to use the first SCM mount point.
+        #
+        #   - device: <str>, e.g. /dev/sdc
+        #       Device to use for metadata storage for daos_server (control plane).
+        #       If specified, will be formatted and mounted as necessary at path.
+        #
+        self.path = BasicParameter(None, "/mnt/daos_control")
+        self.device = BasicParameter(None)
 
 
 class EngineYamlParameters(YamlParameters):

@@ -250,6 +250,20 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_commands = []
+
+        if self.manager.job.yaml.control_metadata.device:
+            device = self.manager.job.yaml.control_metadata.device
+            # Clean up the control metadata device
+            self.log.info("Cleaning up the %s device.", str(device))
+            clean_commands.append("sudo umount {}".format(device))
+            clean_commands.append("sudo wipefs -a {}".format(device))
+
+        if self.manager.job.yaml.control_metadata.path:
+            path = self.manager.job.yaml.control_metadata.path
+            # Remove the control metadata directory
+            self.log.info("Cleaning up the %s directory.", str(path))
+            clean_commands.append("sudo rm -fr {}".format(path))
+
         for index, engine_params in enumerate(self.manager.job.yaml.engine_params):
             scm_mount = engine_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
