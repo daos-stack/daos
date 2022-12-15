@@ -34,8 +34,8 @@ class FioSmall(FioBase):
             numjobs: 1
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=fio,checksum,tx,dfuse
-        :avocado: tags=fiosmall
+        :avocado: tags=hw,medium
+        :avocado: tags=dfuse,fio,checksum,tx
+        :avocado: tags=FioSmall,test_fio_small
         """
         self.execute_fio()

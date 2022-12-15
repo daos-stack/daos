@@ -352,6 +352,7 @@ class DaosServerCommand(YamlCommand):
                 #                       kernel modules.
                 #   --force             Perform format without prompting for
                 #                       confirmation
+                #   --scm-ns-per-socket Number of SCM namespaces to create per socket (default: 1)
                 self.pci_allowlist = FormattedParameter("--pci-allowlist={}")
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
@@ -359,6 +360,7 @@ class DaosServerCommand(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
+                self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server version sub command."""

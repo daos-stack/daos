@@ -138,6 +138,26 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: value["host"] for rank, value in self._expected_states.items()}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -845,7 +865,7 @@ class DaosServerManager(SubprocessManager):
             host = self._expected_states[rank]["host"]
         return host
 
-    def update_config_file_from_file(self, generated_yaml, storage_class=None):
+    def update_config_file_from_file(self, generated_yaml):
         """Update config file and object.
 
         Use the specified data to generate and distribute the server configuration to the hosts.
@@ -855,8 +875,6 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             generated_yaml (YAMLObject): New server config data.
-            storage_class (list, optional): if set only include storage classes identified in the
-                list. Defaults to None.
         """
         # Use the specified yaml data to create the server yaml file and copy it all the hosts
         self._external_yaml_data = generated_yaml
@@ -865,7 +883,7 @@ class DaosServerManager(SubprocessManager):
         # disks, etc. This clearing step is built into the server start steps. It'll look at the
         # engine_params of the server_manager and clear the SCM set there, so we need to overwrite
         # it before starting to the values from the generated config.
-        self.manager.job.yaml.override_params(generated_yaml, storage_class)
+        self.manager.job.yaml.override_params(generated_yaml)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
