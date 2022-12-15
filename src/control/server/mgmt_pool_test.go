@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func getPoolLockCtx(t *testing.T, parent context.Context, sysdb *raft.Database, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
+func getPoolLockCtx(t *testing.T, parent context.Context, sysdb poolDatabase, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
 	t.Helper()
 
 	if parent == nil {

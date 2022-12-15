@@ -59,9 +59,9 @@ class DaosCommand(DaosCommandBase):
         return self._get_result(
             ("pool", "autotest"), pool=pool)
 
-    def container_create(self, pool, sys_name=None, cont=None,
-                         path=None, cont_type=None, oclass=None,
-                         chunk_size=None, properties=None, acl_file=None, label=None):
+    def container_create(self, pool, sys_name=None, cont=None, path=None, cont_type=None,
+                         oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
+                         properties=None, acl_file=None, label=None):
         # pylint: disable=too-many-arguments
         """Create a container.
 
@@ -73,7 +73,9 @@ class DaosCommand(DaosCommandBase):
             path (str, optional): container namespace path. Defaults to None.
             cont_type (str, optional): the type of container to create. Defaults
                 to None.
-            oclass (str, optional): object class. Defaults to None.
+            oclass (str, optional): default object class. Defaults to None.
+            dir_oclass (str, optional): default directory object class. Defaults to None.
+            file_oclass (str, optional): default file object class. Defaults to None.
             chunk_size (str, optional): chunk size of files created. Supports
                 suffixes: K (KB), M (MB), G (GB), T (TB), P (PB), E (EB).
                 Defaults to None.
@@ -96,8 +98,8 @@ class DaosCommand(DaosCommandBase):
         else:
             properties = 'rd_lvl:1'
         return self._get_json_result(
-            ("container", "create"), pool=pool, sys_name=sys_name,
-            cont=cont, path=path, type=cont_type, oclass=oclass,
+            ("container", "create"), pool=pool, sys_name=sys_name, cont=cont, path=path,
+            type=cont_type, oclass=oclass, dir_oclass=dir_oclass, file_oclass=file_oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file, label=label)
 
     def container_clone(self, src, dst):
