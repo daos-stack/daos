@@ -232,7 +232,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	// basic engine configs populated enough to complete validation
 	basicEngineCfg := func(i int) *engine.Config {
 		return engine.MockConfig().WithFabricInterfacePort(20000).
-			WithPinnedNumaNode(uint(i)).WithFabricInterface(fmt.Sprintf("ib%d", i))
+			WithFabricInterface(fmt.Sprintf("ib%d", i))
 	}
 	scmTier := func(i int) *storage.TierConfig {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
@@ -614,8 +614,20 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				cfg = tc.srvCfgExtra(cfg)
 			}
 
+			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
+				iface := e.Fabric.Interface
+				l.Debugf("eval affinity of iface %q", iface)
+				switch iface {
+				case "ib0":
+					return 0, nil
+				case "ib1":
+					return 1, nil
+				}
+				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
+			}
+
 			// ensure that the engine affinities are set.
-			if err := cfg.SetEngineAffinities(log); err != nil {
+			if err := cfg.SetEngineAffinities(log, mockAffSrc); err != nil {
 				t.Fatal(err)
 			}
 
@@ -635,8 +647,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
+					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}

@@ -110,7 +110,7 @@ var pciSetCmpOpts = append([]cmp.Option{
 	}),
 }, defResCmpOpts()...)
 
-func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface) providerIfaceMap {
+func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface, ndc hardware.NetDevClass) providerIfaceMap {
 	t.Helper()
 
 	log, buf := logging.NewTestLogger(t.Name())
@@ -123,7 +123,7 @@ func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface) providerIfaceMap 
 		t.Fatal(err)
 	}
 
-	nd, err := getNetworkDetails(log, hardware.NetDevAny, ns.HostFabric)
+	nd, err := getNetworkDetails(log, ndc, ns.HostFabric)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,19 +281,6 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			expNetDetails: networkDetails{
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: eth0},
-				},
-				NumaCoreCount: 24,
-				NumaCount:     2,
-			},
-		},
-		"single numa; select any": {
-			netDevClass:   hardware.NetDevAny,
-			hostResponses: dualHostRespSame(fabIfs3),
-			expNetDetails: networkDetails{
-				ProviderIfaces: providerIfaceMap{
-					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: eth0},
 				},
 				NumaCoreCount: 24,
 				NumaCount:     2,
@@ -324,7 +311,16 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 		"dual numa with typical fabric scan output": {
 			hostResponses: dualHostRespSame(typicalFabIfs),
 			expNetDetails: networkDetails{
-				ProviderIfaces: pbIfs2ProvMap(t, typIfs),
+				ProviderIfaces: pbIfs2ProvMap(t, typIfs, hardware.Infiniband),
+				NumaCoreCount:  24,
+				NumaCount:      2,
+			},
+		},
+		"dual numa with typical fabric scan output; ethernet": {
+			netDevClass:   hardware.Ether,
+			hostResponses: dualHostRespSame(typicalFabIfs),
+			expNetDetails: networkDetails{
+				ProviderIfaces: pbIfs2ProvMap(t, typIfs, hardware.Ether),
 				NumaCoreCount:  24,
 				NumaCount:      2,
 			},
@@ -335,7 +331,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.netDevClass == 0 {
-				tc.netDevClass = hardware.NetDevAny
+				tc.netDevClass = hardware.Infiniband
 			}
 
 			netSet, err := fabricFromHostResp(t, log, nil, tc.hostResponses)
@@ -681,7 +677,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			nd: networkDetails{
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {1: ib1},
-					"ofi+tcp":  {1: eth1},
+					"ofi+tcp":  {1: ib1},
 				},
 			},
 			expErr: errors.New(errInsufNrProvGroups),
@@ -697,7 +693,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			nd: networkDetails{
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {1: ib1},
-					"ofi+tcp":  {1: eth1},
+					"ofi+tcp":  {1: ib1},
 				},
 			},
 			expNumaSet: []int{1},
@@ -753,7 +749,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaCount: 2,
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {0: ib0, 1: ib1},
-					"ofi+tcp":  {0: eth0, 1: eth1},
+					"ofi+tcp":  {0: ib0, 1: ib1},
 				},
 			},
 			expNumaSet: []int{0, 1},
@@ -772,6 +768,40 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
 			},
 		},
+		"sufficient ssds; 3 min nr; matching ether fabric": {
+			minNrSSDs: 3,
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5, 6)...),
+				},
+			},
+			nd: networkDetails{
+				NumaCount: 2,
+				ProviderIfaces: providerIfaceMap{
+					"ofi+tcp": {0: eth0, 1: eth1},
+				},
+			},
+			expNumaSet: []int{0, 1},
+			expSD: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5, 6)...),
+				},
+			},
+			expND: networkDetails{
+				NumaCount:  2,
+				NumaIfaces: numaNetIfaceMap{0: eth0, 1: eth1},
+			},
+		},
 		"sufficient ssds; 3 min nr; matching fabric on one numa only": {
 			minNrSSDs: 3,
 			sd: storageDetails{
@@ -788,7 +818,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaCount: 2,
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: eth0},
+					"ofi+tcp":  {0: ib0},
 				},
 			},
 			expErr: errors.New(errInsufNrProvGroups),
@@ -808,8 +838,14 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			nd: networkDetails{
 				NumaCount: 2,
 				ProviderIfaces: providerIfaceMap{
-					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: eth0, 1: eth1},
+					"ofi+sockets": {0: &HostFabricInterface{
+						Provider:    "ofi+sockets",
+						Device:      "eth2",
+						NumaNode:    0,
+						NetDevClass: 32,
+						Priority:    50,
+					}},
+					"ofi+tcp": {0: eth0, 1: eth1},
 				},
 			},
 			expNumaSet: []int{0, 1},
@@ -845,12 +881,11 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				ProviderIfaces: providerIfaceMap{
 					"ofi+psm2": {0: &HostFabricInterface{
 						Provider:    "ofi+psm2",
-						Device:      "ib0",
-						NumaNode:    0,
+						Device:      "ib2",
+						NumaNode:    1,
 						NetDevClass: 32,
 						Priority:    1,
 					}, 1: ib1},
-					"ofi+tcp": {0: eth0, 1: eth1},
 				},
 			},
 			expNumaSet: []int{1},
@@ -881,8 +916,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			nd: networkDetails{
 				ProviderIfaces: providerIfaceMap{
-					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: eth0, 1: eth1},
+					"ofi+psm2": {0: ib0, 1: ib1},
 				},
 			},
 			expNumaSet: []int{0},
@@ -912,7 +946,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			nd: networkDetails{
 				NumaCount:      2,
-				ProviderIfaces: pbIfs2ProvMap(t, typIfs),
+				ProviderIfaces: pbIfs2ProvMap(t, typIfs, hardware.Infiniband),
 			},
 			expNumaSet: []int{0, 1},
 			expSD: storageDetails{

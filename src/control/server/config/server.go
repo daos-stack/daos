@@ -657,6 +657,9 @@ func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSourc
 
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
+	if len(affSources) == 0 {
+		return errors.New("SetEngineAffinities() requires at least one affinity source")
+	}
 	defaultAffinity := uint(0)
 
 	for idx, engineCfg := range cfg.Engines {
@@ -665,8 +668,8 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			if err != ErrNoAffinityDetected {
 				return errors.Wrap(err, "failure while detecting engine affinity")
 			}
-
-			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx, defaultAffinity)
+			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx,
+				defaultAffinity)
 			numaAffinity = defaultAffinity
 		} else {
 			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)

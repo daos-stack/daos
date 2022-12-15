@@ -269,19 +269,12 @@ func (pis providerIfaceMap) add(iface *HostFabricInterface) {
 	pis[iface.Provider][nn] = iface
 }
 
-// parseInterfaces processes network devices in scan result, adding to a provider bucket when: IF
-// class == (ether OR infiniband) AND requested_class == (ANY OR <class>).  Returns when network
-// devices matching NetDevClass criteria have been assigned to provider bucket with NUMA node
-// mappings.
+// parseInterfaces processes network devices in scan result, adding to a provider bucket when the
+// network device class matches that requested (ETHER or INFINIBAND.
+// Returns when all matching devices have been added to the relevant provider bucket.
 func (pim providerIfaceMap) fromFabric(reqClass hardware.NetDevClass, ifaces []*HostFabricInterface) error {
 	if pim == nil {
 		return errors.Errorf("%T receiver is nil", pim)
-	}
-
-	switch reqClass {
-	case hardware.NetDevAny, hardware.Ether, hardware.Infiniband:
-	default:
-		return errors.Errorf(errUnsupNetDevClass, reqClass.String())
 	}
 
 	// sort network interfaces by priority to get best available
@@ -290,18 +283,9 @@ func (pim providerIfaceMap) fromFabric(reqClass hardware.NetDevClass, ifaces []*
 	})
 
 	for _, iface := range ifaces {
-		switch iface.NetDevClass {
-		case hardware.Ether, hardware.Infiniband:
-			switch reqClass {
-			case hardware.NetDevAny, iface.NetDevClass:
-			default:
-				continue // iface class not requested
-			}
-		default:
-			continue // iface class unsupported
+		if iface.NetDevClass == reqClass {
+			pim.add(iface)
 		}
-
-		pim.add(iface)
 	}
 
 	return nil
@@ -319,6 +303,12 @@ type networkDetails struct {
 func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, hf *HostFabric) (*networkDetails, error) {
 	if hf == nil {
 		return nil, errors.New("nil HostFabric")
+	}
+
+	switch ndc {
+	case hardware.Ether, hardware.Infiniband:
+	default:
+		return nil, errors.Errorf(errUnsupNetDevClass, ndc.String())
 	}
 
 	provIfaces := make(providerIfaceMap)

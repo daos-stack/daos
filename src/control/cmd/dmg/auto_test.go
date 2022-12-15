@@ -86,12 +86,12 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("no host responses"),
 		},
 		{
-			"Generate with best-available network device class",
+			"Generate with deprecated network device class",
 			"config generate -a foo --net-class best-available",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			errors.New("no host responses"),
+			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
@@ -278,7 +278,7 @@ func TestAuto_confGen(t *testing.T) {
 				tc.minNrSSDs = 1
 			}
 			if tc.netClass == "" {
-				tc.netClass = "best-available"
+				tc.netClass = "infiniband"
 			}
 			if tc.accessPoints == "" {
 				tc.accessPoints = "localhost"
