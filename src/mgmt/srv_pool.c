@@ -238,8 +238,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *ranks)
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "Destroying pool " DF_UUID " succeeded.\n",
-		DP_UUID(pool_uuid));
+	D_INFO(DF_UUID": destroy succeeded.\n", DP_UUID(pool_uuid));
 out:
 	return rc;
 }
@@ -293,8 +292,7 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "evicting pool connections "DF_UUID" succeed.\n",
-		DP_UUID(pool_uuid));
+	D_INFO(DF_UUID": evict connections succeeded\n", DP_UUID(pool_uuid));
 out:
 	return rc;
 }

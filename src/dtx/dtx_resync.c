@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, 0);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -424,6 +424,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
+
+		if (mbs->dm_dte_flags & DTE_PARTIAL_COMMITTED)
+			goto commit;
 
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {

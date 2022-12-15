@@ -60,6 +60,10 @@ enum dtx_entry_flags {
 	DTE_CORRUPTED		= (1 << 3),
 	/* The DTX entry on leader does not exist, then not sure the status. */
 	DTE_ORPHAN		= (1 << 4),
+	/* Related DTX may be only committed on some participants, but not
+	 * on all yet, need to be re-committed.
+	 */
+	DTE_PARTIAL_COMMITTED	= (1 << 5),
 };
 
 struct dtx_entry {

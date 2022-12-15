@@ -916,22 +916,17 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 		/* Try to join with thread - either canceled or normal exit. */
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
-			if (res == PTHREAD_CANCELED) {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_destroy_cleanup thread "
-					"canceled\n", DP_UUID(pool_uuid));
-				rc = -DER_CANCELED;
-			} else {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_destroy_cleanup thread "
-					"finished\n", DP_UUID(pool_uuid));
-				rc = tda.tda_rc;
-			}
+			rc = (res == PTHREAD_CANCELED) ? -DER_CANCELED : tda.tda_rc;
 			break;
 		}
 		ABT_thread_yield();
 	}
 out:
+	if (rc)
+		D_ERROR(DF_UUID": tgt_destroy_cleanup() thread failed, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+	else
+		D_INFO(DF_UUID": tgt_destroy_cleanup() thread finished\n", DP_UUID(pool_uuid));
 	return rc;
 }
 
