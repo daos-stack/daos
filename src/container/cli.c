@@ -795,10 +795,12 @@ cont_open_complete(tse_task_t *task, void *data)
 		goto out;
 	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
 	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
-	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_otime, otime_str);
-	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
-		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_info->ci_md_mtime, mtime_str);
+	D_DEBUG(DB_MD, DF_CONT":%s: metadata open   time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label  ? : "",
+			arg->coa_info->ci_md_otime, otime_str);
+	D_DEBUG(DB_MD, DF_CONT":%s: metadata modify time: HLC 0x"DF_X64", %s",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label ? : "",
+			arg->coa_info->ci_md_mtime, mtime_str);
 
 out:
 	crt_req_decref(arg->rpc);
