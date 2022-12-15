@@ -53,7 +53,7 @@ for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
 
 # Add input here to make sure all ranks are joined before starting the script.
-input(f"\n2. Create 8 pools and containers. Hit enter...")
+input("\n2. Create 8 pools and containers. Hit enter...")
 pool_label_1 = POOL_LABEL + "_1"
 pool_label_2 = POOL_LABEL + "_2"
 pool_label_3 = POOL_LABEL + "_3"
