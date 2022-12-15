@@ -349,10 +349,20 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
 
         # Create a pool with the dmg command and store its CmdResult
+        # Elevate engine log_mask to DEBUG before, then restore after pool create
         self._log_method("dmg.pool_create", kwargs)
-        data = self.dmg.pool_create(**kwargs)
+        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+        try:
+            data = self.dmg.pool_create(**kwargs)
+            create_res = self.dmg.result
+        finally:
+            self.dmg.server_set_logmasks(raise_exception=False)
 
-        if self.dmg.result.exit_status == 0:
+        # make sure dmg exit status is that of the pool create, not the set-logmasks
+        if data is not None and create_res is not None:
+            self.dmg.result = create_res
+
+        if data and data["status"] == 0:
             # Convert the string of service replicas from the dmg command
             # output into an ctype array for the DaosPool object using the
             # same technique used in DaosPool.create().
@@ -443,7 +453,11 @@ class TestPool(TestDaosApiBase):
                 self.log.info("Destroying pool %s", self.identifier)
 
                 # Destroy the pool with the dmg command.
+                # Elevate log_mask to DEBUG, then restore after pool destroy
+                self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
+                self.dmg.server_set_logmasks(raise_exception=False)
+
                 status = True
 
             self.pool = None

@@ -120,7 +120,7 @@ class PoolServicesFaultInjection(TestWithServers):
                 injected fault of real network issue.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=fault_injection,pool,faults,rebuild
         :avocado: tags=PoolServicesFaultInjection,test_pool_services
         """

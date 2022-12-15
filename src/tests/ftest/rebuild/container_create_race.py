@@ -40,7 +40,7 @@ class RbldContainerCreate(IorTestBase):
         while not rebuild_done and count < qty:
             count += 1
             self.log.info(
-                "=> Creating container %s/%s in pool %s during rebuild", count, qty, self.pool.uuid)
+                "=> Creating container %s/%s in %s during rebuild", count, qty, str(self.pool))
             self.container.append(self.get_container(self.pool))
             rebuild_done = self.pool.has_rebuild_completed()
             self.log.info("=> Rebuild status, rebuild_done= %s", rebuild_done)
@@ -93,7 +93,7 @@ class RbldContainerCreate(IorTestBase):
             numbers of rebuild targets and no available rebuild targets.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=rebuild
         :avocado: tags=RbldContainerCreate,test_rebuild_container_create
         """
@@ -102,7 +102,6 @@ class RbldContainerCreate(IorTestBase):
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
         ior_loop = self.params.get("ior_test_loop", "/run/ior/*")
         cont_qty = self.params.get("cont_qty", "/run/io/*")
-        node_qty = len(self.hostlist_servers)
 
         # create pool
         self.create_pool()
@@ -110,8 +109,8 @@ class RbldContainerCreate(IorTestBase):
         # make sure pool looks good before we start
         info_checks = {
             "pi_uuid": self.pool.uuid,
-            "pi_ntargets": node_qty * targets,
-            "pi_nnodes": node_qty,
+            "pi_ntargets": self.server_managers[0].engines * targets,
+            "pi_nnodes": self.server_managers[0].engines,
             "pi_ndisabled": 0
         }
         rebuild_checks = {

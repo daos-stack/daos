@@ -24,11 +24,10 @@ class OSAOfflineExtend(OSAUtils):
         self.dmg_command = self.get_dmg_command()
         self.daos_command = DaosCommand(self.bin)
         # Start an additional server.
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
-        self.rank = self.params.get("rank_list", '/run/test_ranks/*')
+        self.rank = self.params.get("rank_list", "/run/test_ranks/*")
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
 
@@ -68,8 +67,7 @@ class OSAOfflineExtend(OSAUtils):
                     # Create a snapshot of the container
                     # after IOR job completes.
                     self.container.create_snap()
-                    self.log.info("Created container snapshot: %s",
-                                  self.container.epoch)
+                    self.log.info("Created container snapshot: %s", self.container.epoch)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
@@ -128,7 +126,7 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline Extend
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend
         """
@@ -141,7 +139,7 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_without_checksum
         """
@@ -155,7 +153,7 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_multiple_pools
         """
@@ -168,7 +166,7 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend without Checksum.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_oclass
         """
@@ -182,8 +180,8 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Extend rank while aggregation is happening in parallel
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=osa,checksum,,offline_extend
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,checksum,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -198,7 +196,7 @@ class OSAOfflineExtend(OSAUtils):
         Test Description: Validate Offline extend after taking snapshot.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_after_snapshot
         """

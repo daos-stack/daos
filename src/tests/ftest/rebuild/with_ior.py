@@ -28,7 +28,7 @@ class RbldWithIOR(IorTestBase):
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild
         :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
@@ -44,8 +44,8 @@ class RbldWithIOR(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
-            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_nnodes": self.server_managers[0].engines,
+            "pi_ntargets": self.server_managers[0].engines * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
