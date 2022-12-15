@@ -31,7 +31,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			printCommand(t, &configGenCmd{
 				AccessPoints: "localhost",
 				MinNrSSDs:    1,
-				NetClass:     "best-available",
+				NetClass:     "infiniband",
 			}),
 			nil,
 		},
@@ -41,7 +41,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
 				MinNrSSDs:    1,
-				NetClass:     "best-available",
+				NetClass:     "infiniband",
 			}),
 			nil,
 		},
@@ -50,7 +50,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --min-ssds 0",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				NetClass:     "best-available",
+				NetClass:     "infiniband",
 			}),
 			nil,
 		},
@@ -61,7 +61,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 				AccessPoints: "foo",
 				NrEngines:    2,
 				MinNrSSDs:    4,
-				NetClass:     "best-available",
+				NetClass:     "infiniband",
 			}),
 			nil,
 		},
@@ -72,7 +72,7 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 				AccessPoints: "foo",
 				NrEngines:    2,
 				MinNrSSDs:    4,
-				NetClass:     "best-available",
+				NetClass:     "infiniband",
 			}),
 			nil,
 		},
@@ -97,14 +97,10 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			nil,
 		},
 		{
-			"Generate with best-available network device class",
+			"Generate with deprecated network device class",
 			"config generate -a foo --net-class best-available",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				MinNrSSDs:    1,
-				NetClass:     "best-available",
-			}),
-			nil,
+			"",
+			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
@@ -387,7 +383,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				tc.minNrSSDs = 1
 			}
 			if tc.netClass == "" {
-				tc.netClass = "best-available"
+				tc.netClass = "infiniband"
 			}
 			if tc.accessPoints == "" {
 				tc.accessPoints = "localhost"

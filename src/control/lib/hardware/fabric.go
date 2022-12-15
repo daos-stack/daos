@@ -9,7 +9,6 @@ package hardware
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -350,9 +349,6 @@ const (
 	Eui64      NetDevClass = 27
 	Infiniband NetDevClass = 32
 	Loopback   NetDevClass = 772
-
-	// NetDevAny matches any network device class
-	NetDevAny NetDevClass = math.MaxUint32
 )
 
 func (c NetDevClass) String() string {
@@ -389,8 +385,6 @@ func (c NetDevClass) String() string {
 		return "INFINIBAND"
 	case Loopback:
 		return "LOOPBACK"
-	case NetDevAny:
-		return "ANY"
 	default:
 		return fmt.Sprintf("UNKNOWN (0x%x)", uint32(c))
 	}

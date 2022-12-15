@@ -893,10 +893,6 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 			ndc:       NetDevClass(0xFFFFFFFE),
 			expResult: "UNKNOWN (0xfffffffe)",
 		},
-		"any": {
-			ndc:       NetDevClass(0xFFFFFFFF),
-			expResult: "ANY",
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			test.AssertEqual(t, tc.expResult, tc.ndc.String(), "")
