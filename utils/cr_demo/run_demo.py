@@ -8,11 +8,10 @@ import time
 import yaml
 import subprocess
 from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable,\
-    check_start, check_query, check_disable, repeat_check_query, check_repair,\
-    create_uuid_to_seqnum, create_label_to_uuid, get_current_labels, pool_get_prop,\
-    create_pool, inject_fault_pool, create_container, inject_fault_daos, system_stop,\
-    system_query, storage_query_usage, cont_get_prop, system_start, check_set_policy,\
-    list_containers
+    check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum,\
+    pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
+    system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
+    check_set_policy
 
 # Need to use at least "scm_size: 10" for server config to create 3 1GB-pools.
 POOL_SIZE_1GB = "1GB"
@@ -26,6 +25,7 @@ F5_RANK_FAULT = 3
 
 print("F1: Dangling pool")
 print("F2: Lost the majority of pool service replicas")
+print("F3: Orphan pool")
 print("F4: Inconsistent pool label between MS and PS")
 print("F5: Orphan pool shard")
 print("F6: Dangling pool map")
@@ -53,9 +53,10 @@ for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
 
 # Add input here to make sure all ranks are joined before starting the script.
-input(f"\n2. Create 7 pools and containers. Hit enter...")
+input(f"\n2. Create 8 pools and containers. Hit enter...")
 pool_label_1 = POOL_LABEL + "_1"
 pool_label_2 = POOL_LABEL + "_2"
+pool_label_3 = POOL_LABEL + "_3"
 pool_label_4 = POOL_LABEL + "_4"
 pool_label_5 = POOL_LABEL + "_5"
 pool_label_6 = POOL_LABEL + "_6"
@@ -68,6 +69,8 @@ cont_label_8 = CONT_LABEL + "_8"
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_1)
 # F2. CIC_POOL_LESS_SVC_WITHOUT_QUORUM
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_2, nsvc="3")
+# F3. CIC_POOL_NONEXIST_ON_MS - orphan pool
+create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_3)
 # F4. CIC_POOL_BAD_LABEL - inconsistent pool label between MS and PS
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=pool_label_4)
 # F5. CIC_ENGINE_NONEXIST_IN_MAP - orphan pool shard
@@ -100,6 +103,9 @@ storage_query_usage(host_list=f5_host_list)
 print("\n4. Inject fault with dmg (except F5, F6).")
 # F1
 inject_fault_pool(pool_label=pool_label_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
+
+# F3
+inject_fault_mgmt(pool_label=pool_label_3, fault_type="CIC_POOL_NONEXIST_ON_MS")
 
 # F4
 inject_fault_mgmt(pool_label=pool_label_4, fault_type="CIC_POOL_BAD_LABEL")
@@ -178,8 +184,9 @@ system_start()
 ####################################################################
 input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
-# F1: Show dangling pool entry
 print(f"\n6-F1. Show dangling pool entry. {pool_label_1} doesn't exist on engine.")
+# F3 part 1
+print(f"\n6-F3-1. MS doesn't recognize {pool_label_3}.")
 # F4 part 1
 print(f"6-F4-1. Label ({pool_label_4}) in MS are corrupted with -fault added.")
 list_pool(no_query=True)
@@ -190,6 +197,10 @@ list_pool(no_query=True)
 print(f"\n6-F4-2. Label ({pool_label_4}) in PS are still original.")
 pool_label_4_fault = pool_label_4 + "-fault"
 pool_get_prop(pool_label=pool_label_4_fault, properties="label")
+
+# F3 part 2
+# print(f"\n6-F3-2. {pool_label_3} exists on engine.")
+# pool_get_prop(pool_label=pool_label_3, properties="label")
 
 # F5: Call dmg storage query usage to show that the pool is using more space.
 print(f"\n6-F5. Print storage usage to show that {pool_label_5} is using more space. "
@@ -222,6 +233,7 @@ print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
 seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_1]]))
 seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_2]]))
+seq_num_3 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_3]]))
 seq_num_4 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_4]]))
 seq_num_5 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_5]]))
 seq_num_6 = str(hex(uuid_to_seqnum[label_to_uuid[pool_label_6]]))
@@ -236,6 +248,10 @@ check_repair(sequence_num=seq_num_1, action="1")
 print(f"\n{pool_label_2} - 2: Start pool service under DICTATE mode from rank 1 "
       f"[suggested].")
 check_repair(sequence_num=seq_num_2, action="2")
+
+# F3:
+print(f"\n{pool_label_3} - 2: Re-add the orphan pool back to MS [suggested].")
+check_repair(sequence_num=seq_num_3, action="2")
 
 # F4: 2: Trust PS pool label.
 print(f"\n{pool_label_4} - 2: Trust PS pool label.")
@@ -267,9 +283,11 @@ check_disable()
 ####################################################################
 input("\n13. Show the issues fixed. Hit enter...")
 print(f"13-F1. Dangling pool ({pool_label_1}) was removed.")
+print(f"13-F3. Orphan pool ({pool_label_3}) was reconstructed.")
 list_pool()
 
-print("13-F2. Create a container. Pool can be started now, so it should succeed.")
+print(f"13-F2. Create a container on {pool_label_2}. Pool can be started now, so it "
+      f"should succeed.")
 cont_label_2 = CONT_LABEL + "_2"
 create_container(pool_label=pool_label_2, cont_label=cont_label_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
@@ -291,7 +309,7 @@ clush_ls_cmd = ["clush", "-w", rank_to_ip[3], ls_cmd]
 print("Command: {}\n".format(clush_ls_cmd))
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"13-F6. {label_to_uuid[pool_label_6]} pool directory on rank 0 "
+print(f"\n13-F6. {label_to_uuid[pool_label_6]} pool directory on rank 0 "
       f"({rank_to_ip[0]}) is retrieved.")
 clush_ls_cmd = ["clush", "-w", rank_to_ip[0], ls_cmd]
 print("Command: {}\n".format(clush_ls_cmd))
@@ -305,7 +323,8 @@ cont_get_prop(pool_label=pool_label_8, cont_label=cont_label_8, properties="labe
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
 # shard.
-print("\n13-F7. Use ddb to verify that the container is removed from shards.")
+print(f"\n13-F7. Use ddb to verify that the container in {pool_label_8} is removed "
+      f"from shards.")
 system_stop()
 print("Command: {}".format(clush_ddb_cmd))
 subprocess.run(clush_ddb_cmd, check=False)
