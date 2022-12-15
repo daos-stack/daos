@@ -1256,7 +1256,9 @@ func TestListPools_Success(t *testing.T) {
 			Replicas:  []system.Rank{0, 1, 2},
 		},
 	}
-	expectedResp := new(mgmtpb.ListPoolsResp)
+	expectedResp := &mgmtpb.ListPoolsResp{
+		DataVersion: uint64(len(testPools)),
+	}
 
 	svc := newTestMgmtSvc(t, log)
 	for _, ps := range testPools {

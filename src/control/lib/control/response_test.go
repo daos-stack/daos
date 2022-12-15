@@ -13,7 +13,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
@@ -121,11 +123,125 @@ func TestControl_getMSResponse(t *testing.T) {
 			resp: &UnaryResponse{
 				fromMS: true,
 			},
-			expErr: errors.New("did not contain"),
+			expErr: errNoMsResponse,
+		},
+		"nil host response": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					nil,
+				},
+			},
+			expErr: errNoMsResponse,
 		},
 		"nil response message": {
 			resp:   MockMSResponse("host1", nil, nil),
 			expErr: errors.New("message was nil"),
+		},
+		"mixed versioned and non-versioned responses": {
+			// NB: This is a weird "can't happen" situation, but
+			// it shouldn't cause a panic.
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr: "host1",
+						Message: &mgmtpb.LeaderQueryResp{
+							Replicas: []string{"host1", "host2"},
+						},
+					},
+					{
+						Addr: "host2",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 1,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SystemQueryResp{
+				DataVersion: 1,
+			},
+		},
+		"valid non-versioned response picked": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: errors.New("whoops"),
+					},
+					{
+						Addr: "host2",
+						Message: &mgmtpb.LeaderQueryResp{
+							Replicas: []string{"host3", "host1"},
+						},
+					},
+					{
+						Addr: "host3",
+						Message: &mgmtpb.LeaderQueryResp{
+							Replicas: []string{"host2", "host1"},
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.LeaderQueryResp{
+				// Expect first valid response
+				Replicas: []string{"host3", "host1"},
+			},
+		},
+		"valid versioned response picked": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr:  "host1",
+						Error: errors.New("whoops"),
+					},
+					{
+						Addr: "host2",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 1,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SystemQueryResp{
+				DataVersion: 1,
+			},
+		},
+		"highest data version returned": {
+			resp: &UnaryResponse{
+				fromMS: true,
+				Responses: []*HostResponse{
+					{
+						Addr: "host1",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 3,
+						},
+					},
+					{
+						Addr: "host2",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 5,
+						},
+					},
+					{
+						Addr: "host3",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 4,
+						},
+					},
+					{
+						Addr: "host4",
+						Message: &mgmtpb.SystemQueryResp{
+							DataVersion: 3,
+						},
+					},
+				},
+			},
+			expResp: &mgmtpb.SystemQueryResp{
+				DataVersion: 5,
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -135,7 +251,10 @@ func TestControl_getMSResponse(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := []cmp.Option{
+				protocmp.Transform(),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
