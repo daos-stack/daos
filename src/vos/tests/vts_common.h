@@ -130,6 +130,7 @@ int run_ts_tests(const char *cfg);
 int run_ilog_tests(const char *cfg);
 int run_csum_extent_tests(const char *cfg);
 int run_mvcc_tests(const char *cfg);
+int run_wal_tests(const char *cfg);
 int
 run_vos_command(const char *arg0, const char *cmd);
 
