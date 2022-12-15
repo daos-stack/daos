@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -529,6 +529,23 @@ d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 					  member))
 
 #endif /* d_list_for_each_entry_safe */
+
+#ifndef d_list_for_each_entry_reverse_safe
+/**
+ * Iterate backwards over a list of given type safe against removal of list entry
+ *
+ * \param[in] pos	the type * to use as a loop counter.
+ * \param[in] n		another type * to use as temporary storage
+ * \param[in] head	the head for your list.
+ * \param[in] member	the name of the list_struct within the struct.
+ */
+#define d_list_for_each_entry_reverse_safe(pos, n, head, member)               \
+	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member),       \
+	     n = d_list_entry(pos->member.prev, __typeof__(*pos), member);     \
+	     &pos->member != (head);                                           \
+	     pos = n, n = d_list_entry(pos->member.prev, __typeof__(*pos),     \
+				       member))
+#endif /* d_list_for_each_entry_reverse_safe */
 
 #ifndef d_list_for_each_entry_safe_from
 /**
