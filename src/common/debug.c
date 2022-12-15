@@ -90,6 +90,10 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_SRV_BULK_CACHE,
 	},
 	{
+		.iob_bit	= IOBP_WAL_COMMIT,
+		.iob_str	= IOBP_ENV_WAL_COMMIT,
+	},
+	{
 		.iob_bit	= IOBP_OFF,
 		.iob_str	= NULL,
 	},
