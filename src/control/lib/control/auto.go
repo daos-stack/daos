@@ -51,6 +51,7 @@ type (
 		NrEngines    int
 		MinNrSSDs    int
 		NetClass     hardware.NetDevClass
+		NetProvider  string
 		AccessPoints []string
 		Log          logging.Logger
 	}
@@ -107,7 +108,7 @@ func DefaultEngineCfg(idx int) *engine.Config {
 // TODO DAOS-11859: When enabling tmpfs SCM, enumerate them in the same map NumaSCMs.
 func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabric, hs *HostStorage) (*ConfGenerateResp, error) {
 	// process host fabric scan results to retrieve network details
-	nd, err := getNetworkDetails(req.Log, req.NetClass, hf)
+	nd, err := getNetworkDetails(req.Log, req.NetClass, req.NetProvider, hf)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +273,7 @@ func (pis providerIfaceMap) add(iface *HostFabricInterface) {
 // parseInterfaces processes network devices in scan result, adding to a provider bucket when the
 // network device class matches that requested (ETHER or INFINIBAND.
 // Returns when all matching devices have been added to the relevant provider bucket.
-func (pim providerIfaceMap) fromFabric(reqClass hardware.NetDevClass, ifaces []*HostFabricInterface) error {
+func (pim providerIfaceMap) fromFabric(reqClass hardware.NetDevClass, prov string, ifaces []*HostFabricInterface) error {
 	if pim == nil {
 		return errors.Errorf("%T receiver is nil", pim)
 	}
@@ -283,7 +284,7 @@ func (pim providerIfaceMap) fromFabric(reqClass hardware.NetDevClass, ifaces []*
 	})
 
 	for _, iface := range ifaces {
-		if iface.NetDevClass == reqClass {
+		if iface.NetDevClass == reqClass && (prov == "" || iface.Provider == prov) {
 			pim.add(iface)
 		}
 	}
@@ -300,7 +301,7 @@ type networkDetails struct {
 
 // getNetworkDetails retrieves fabric network interfaces that can be used in server config file.
 // Return interfaces mapped first by NUMA then provider and per-NUMA core count.
-func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, hf *HostFabric) (*networkDetails, error) {
+func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, prov string, hf *HostFabric) (*networkDetails, error) {
 	if hf == nil {
 		return nil, errors.New("nil HostFabric")
 	}
@@ -312,7 +313,7 @@ func getNetworkDetails(log logging.Logger, ndc hardware.NetDevClass, hf *HostFab
 	}
 
 	provIfaces := make(providerIfaceMap)
-	if err := provIfaces.fromFabric(ndc, hf.Interfaces); err != nil {
+	if err := provIfaces.fromFabric(ndc, prov, hf.Interfaces); err != nil {
 		return nil, err
 	}
 	log.Debugf("numa nodes: %d, numa core count: %d, available interfaces %v", hf.NumaCount,
