@@ -757,7 +757,7 @@ class DaosServer():
             if data['error'] is None:
                 break
 
-            if 'running system' in data['error']:
+            if 'running system' in data['error'] or 'existing filesystem' in data['error']:
                 break
 
             if start_timeout < 5:
