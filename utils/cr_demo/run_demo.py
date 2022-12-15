@@ -13,7 +13,7 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
     check_set_policy
 
-# Need to use at least "scm_size: 10" for server config to create 3 1GB-pools.
+# Need to use at least "scm_size: 15" for server config to create 8 1GB-pools.
 POOL_SIZE_1GB = "1GB"
 POOL_SIZE_5GB = "5GB"
 POOL_LABEL = "tank"
