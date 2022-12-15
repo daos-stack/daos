@@ -30,6 +30,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.interface_to_providers = defaultdict(list)
         self.interface_set = set()
+        self.def_provider = "ofi+tcp;ofi_rxm"
 
     def prepare_expected_data(self):
         """Prepare expected values.
@@ -132,7 +133,8 @@ class ConfigGenerateOutput(TestWithServers):
         dmg.exit_status_exception = False
 
         try:
-            result = dmg.config_generate(access_points=host_port_input)
+            result = dmg.config_generate(
+                access_points=host_port_input, net_provider=self.def_provider)
         except CommandFailure as err:
             errors.append("Unexpected failure! {}".format(err))
 
@@ -179,7 +181,8 @@ class ConfigGenerateOutput(TestWithServers):
         self.prepare_expected_data()
 
         # Call dmg config generate.
-        result = self.get_dmg_command().config_generate(access_points="wolf-a")
+        result = self.get_dmg_command().config_generate(
+            access_points="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)
 
         errors = []
@@ -330,7 +333,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --num-engines=<1 to max_engine>
         for num_engines in range(1, max_engine + 1):
-            result = dmg.config_generate(access_points="wolf-a", num_engines=num_engines)
+            result = dmg.config_generate(
+                access_points="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
@@ -341,7 +345,8 @@ class ConfigGenerateOutput(TestWithServers):
                 errors.append(msg)
 
         # Verify that max_engine + 1 fails.
-        result = dmg.config_generate(access_points="wolf-a", num_engines=max_engine + 1)
+        result = dmg.config_generate(
+            access_points="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
         if result.exit_status == 0:
             errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
@@ -385,18 +390,20 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --min-ssds=<1 to min_ssd>. Should pass.
         for num_ssd in range(1, min_ssd + 1):
-            result = dmg.config_generate(access_points="wolf-a", min_ssds=num_ssd)
+            result = dmg.config_generate(
+                access_points="wolf-a", min_ssds=num_ssd, net_provider=self.def_provider)
             if result.exit_status != 0:
                 errors.append("config generate failed with min_ssd = {}!".format(num_ssd))
 
         # Call dmg config generate --min_ssds=<min_ssd + 1>. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", min_ssds=min_ssd + 1)
+            access_points="wolf-a", min_ssds=min_ssd + 1, net_provider=self.def_provider)
         if result.exit_status == 0:
             errors.append("config generate succeeded with min_ssd + 1 = {}!".format(min_ssd + 1))
 
         # Call dmg config generate --min-ssds=0
-        result = dmg.config_generate(access_points="wolf-a", min_ssds=0)
+        result = dmg.config_generate(
+            access_points="wolf-a", min_ssds=0, net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)
         # Iterate the engines and verify that there's no bdev_list field.
         engines = generated_yaml["engines"]
@@ -448,7 +455,8 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="infiniband")
+                access_points="wolf-a", num_engines=num_engines, net_class="infiniband",
+                    net_provider=self.def_provider)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=infiniband "\
@@ -473,7 +481,8 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband")
+            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
+                net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
                 ib_count + 1)
@@ -491,7 +500,8 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="ethernet")
+                access_points="wolf-a", num_engines=num_engines, net_class="ethernet",
+                    net_provider=self.def_provider)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
@@ -515,8 +525,9 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
-        result = dmg.config_generate(
-            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet")
+        result = dmg.onfig_generate(
+            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
+                net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
                 eth_count + 1)

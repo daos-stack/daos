@@ -123,7 +123,7 @@ func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface, ndc hardware.NetD
 		t.Fatal(err)
 	}
 
-	nd, err := getNetworkDetails(log, ndc, ns.HostFabric)
+	nd, err := getNetworkDetails(log, ndc, "", ns.HostFabric)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,6 +267,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		netDevClass   hardware.NetDevClass
+		netProvider   string
 		hostResponses []*HostResponse
 		expErr        error
 		expNetDetails networkDetails
@@ -339,7 +340,7 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotNetDetails, gotErr := getNetworkDetails(log, tc.netDevClass, netSet.HostFabric)
+			gotNetDetails, gotErr := getNetworkDetails(log, tc.netDevClass, tc.netProvider, netSet.HostFabric)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
