@@ -151,8 +151,8 @@ func TestAuto_confGen(t *testing.T) {
 					storage.MockNvmeController(6).PciAddr,
 					storage.MockNvmeController(8).PciAddr),
 		).
-		WithTargetCount(20).
-		WithHelperStreamCount(3)
+		WithTargetCount(16).
+		WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{
 		exmplEngineCfg,
 		control.DefaultEngineCfg(1).
@@ -177,8 +177,8 @@ func TestAuto_confGen(t *testing.T) {
 						storage.MockNvmeController(7).PciAddr),
 			).
 			WithStorageNumaNodeIndex(1).
-			WithTargetCount(20).
-			WithHelperStreamCount(3),
+			WithTargetCount(16).
+			WithHelperStreamCount(4),
 	}
 	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
 		for idx, ec := range ecs {
@@ -229,7 +229,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(20480).
+				WithNrHugePages(16384).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -240,7 +240,7 @@ func TestAuto_confGen(t *testing.T) {
 				{storHostResp},
 			},
 			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(20480).
+				WithNrHugePages(16384).
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},

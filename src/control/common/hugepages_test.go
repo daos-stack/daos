@@ -38,6 +38,7 @@ func TestCommon_parseHugePageInfo(t *testing.T) {
 		},
 		"2MB pagesize": {
 			input: `
+MemAvailable:       1024
 HugePages_Total:    1024
 HugePages_Free:     1023
 HugePages_Rsvd:        0
@@ -45,9 +46,10 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &HugePageInfo{
-				Total:      1024,
-				Free:       1023,
-				PageSizeKb: 2048,
+				Total:        1024,
+				Free:         1023,
+				PageSizeKb:   2048,
+				MemAvailable: 1024,
 			},
 			expFreeMB: 2046,
 		},

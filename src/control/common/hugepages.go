@@ -29,11 +29,12 @@ const (
 
 // HugePageInfo contains information about system hugepages.
 type HugePageInfo struct {
-	Total      int `json:"total"`
-	Free       int `json:"free"`
-	Reserved   int `json:"reserved"`
-	Surplus    int `json:"surplus"`
-	PageSizeKb int `json:"page_size_kb"`
+	Total        int `json:"total"`
+	Free         int `json:"free"`
+	Reserved     int `json:"reserved"`
+	Surplus      int `json:"surplus"`
+	PageSizeKb   int `json:"page_size_kb"`
+	MemAvailable int `json:"mem_available"`
 }
 
 func (hpi *HugePageInfo) TotalMB() int {
@@ -82,6 +83,8 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 				return nil, errors.Errorf("unhandled page size unit %q", sf[1])
 			}
 			parseInt(sf[0], &hpi.PageSizeKb)
+		case "MemAvailable":
+			parseInt(keyVal[1], &hpi.MemAvailable)
 		default:
 			continue
 		}
@@ -91,7 +94,7 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 }
 
 // GetHugePageInfo reads /proc/meminfo and returns information about
-// system hugepages.
+// system hugepages and available memory (RAM).
 func GetHugePageInfo() (*HugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {

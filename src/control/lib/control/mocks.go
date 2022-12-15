@@ -286,12 +286,10 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 }
 
 // MockHugePageInfo returns a mock HugePageInfo result.
-func MockHugePageInfo(t *testing.T, pgSize ...uint32) *ctlpb.HugePageInfo {
-	if len(pgSize) == 0 {
-		pgSize = []uint32{2048}
-	}
+func MockHugePageInfo(t *testing.T) *ctlpb.HugePageInfo {
 	return &ctlpb.HugePageInfo{
-		PageSizeKb: pgSize[0],
+		PageSizeKb:   2048,
+		MemAvailable: humanize.GiByte * 16,
 	}
 }
 
@@ -478,6 +476,10 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		ssr.HugePageInfo.PageSizeKb = (1 << 30) >> 10
 	case "badPciAddr":
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
+	case "noHugepageSz":
+		ssr.HugePageInfo.PageSizeKb = 0
+	case "noMemAvail":
+		ssr.HugePageInfo.MemAvailable = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)

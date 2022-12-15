@@ -150,8 +150,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(2).PciAddr,
 					storage.MockNvmeController(4).PciAddr),
 		).
-		WithTargetCount(22).
-		WithHelperStreamCount(1)
+		WithTargetCount(18).
+		WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{
 		exmplEngineCfg,
 		control.DefaultEngineCfg(1).
@@ -174,8 +174,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 						storage.MockNvmeController(3).PciAddr),
 			).
 			WithStorageNumaNodeIndex(1).
-			WithTargetCount(22).
-			WithHelperStreamCount(1),
+			WithTargetCount(18).
+			WithHelperStreamCount(4),
 	}
 	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
 		for idx, ec := range ecs {
@@ -213,7 +213,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expErr: errors.New("zero numa nodes"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"fetching host storage fails": {
 			hf: &control.HostFabric{
@@ -245,7 +245,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("insufficient number of pmem"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"single engine; dcpm on numa 1": {
 			hf: &control.HostFabric{
@@ -269,7 +269,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(22528).
+				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -296,7 +296,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(22528).
+				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
