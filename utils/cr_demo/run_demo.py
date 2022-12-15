@@ -231,48 +231,48 @@ repeat_check_query()
 input("\n8. Select repair options and repair. Hit enter...")
 print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
-seq_num_1 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]]))
-seq_num_2 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]]))
-seq_num_3 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]]))
-seq_num_4 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_4]]))
-seq_num_5 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_5]]))
-seq_num_6 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_6]]))
-seq_num_7 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_7]]))
-seq_num_8 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_8]]))
+SEQ_NUM_1 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]]))
+SEQ_NUM_2 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_2]]))
+SEQ_NUM_3 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_3]]))
+SEQ_NUM_4 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_4]]))
+SEQ_NUM_5 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_5]]))
+SEQ_NUM_6 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_6]]))
+SEQ_NUM_7 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_7]]))
+SEQ_NUM_8 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_8]]))
 
 # F1: 1: Discard the dangling pool entry from MS [suggested].
 print(f"\n{POOL_LABEL_1} - 1: Discard the dangling pool entry from MS [suggested].")
-check_repair(sequence_num=seq_num_1, action="1")
+check_repair(sequence_num=SEQ_NUM_1, action="1")
 
 # F2: 2: Start pool service under DICTATE mode from rank 1 [suggested].
 print(f"\n{POOL_LABEL_2} - 2: Start pool service under DICTATE mode from rank 1 "
       f"[suggested].")
-check_repair(sequence_num=seq_num_2, action="2")
+check_repair(sequence_num=SEQ_NUM_2, action="2")
 
 # F3:
 print(f"\n{POOL_LABEL_3} - 2: Re-add the orphan pool back to MS [suggested].")
-check_repair(sequence_num=seq_num_3, action="2")
+check_repair(sequence_num=SEQ_NUM_3, action="2")
 
 # F4: 2: Trust PS pool label.
 print(f"\n{POOL_LABEL_4} - 2: Trust PS pool label.")
-check_repair(sequence_num=seq_num_4, action="2")
+check_repair(sequence_num=SEQ_NUM_4, action="2")
 
 # F5: 1: Discard the orphan pool shard to release space [suggested].
 print(f"\n{POOL_LABEL_5} - 1: Discard the orphan pool shard to release space "
       f"[suggested].")
-check_repair(sequence_num=seq_num_5, action="1")
+check_repair(sequence_num=SEQ_NUM_5, action="1")
 
 # F6: 1: Change pool map for the dangling map entry [suggested].
 print(f"\n{POOL_LABEL_6} - 1: Change pool map for the dangling map entry [suggested].")
-check_repair(sequence_num=seq_num_6, action="1")
+check_repair(sequence_num=SEQ_NUM_6, action="1")
 
 # F7: 1: Destroy the orphan container to release space [suggested].
 print(f"\n{POOL_LABEL_7} - 1: Destroy the orphan container to release space [suggested].")
-check_repair(sequence_num=seq_num_7, action="1")
+check_repair(sequence_num=SEQ_NUM_7, action="1")
 
 # F8: 2: Trust the container label in container property.
 print(f"\n{POOL_LABEL_8} - 2: Trust the container label in container property.")
-check_repair(sequence_num=seq_num_8, action="2")
+check_repair(sequence_num=SEQ_NUM_8, action="2")
 
 print()
 repeat_check_query()
@@ -288,8 +288,8 @@ list_pool()
 
 print(f"13-F2. Create a container on {POOL_LABEL_2}. Pool can be started now, so it "
       f"should succeed.")
-cont_label_2 = CONT_LABEL + "_2"
-create_container(pool_label=POOL_LABEL_2, cont_label=cont_label_2)
+CONT_LABEL_2 = CONT_LABEL + "_2"
+create_container(pool_label=POOL_LABEL_2, cont_label=CONT_LABEL_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
 print(f"\n13-F4. Label inconsistency for {POOL_LABEL_4} was resolved. "
@@ -304,14 +304,14 @@ storage_query_usage(host_list=f5_host_list)
 
 print(f"\n13-F5-2. {label_to_uuid[POOL_LABEL_5]} pool directory on rank 3 "
       f"({rank_to_ip[3]}) was removed.")
-ls_cmd = "sudo ls /mnt/daos"
-clush_ls_cmd = ["clush", "-w", rank_to_ip[3], ls_cmd]
+LS_CMD = "sudo ls /mnt/daos"
+clush_ls_cmd = ["clush", "-w", rank_to_ip[3], LS_CMD]
 print("Command: {}\n".format(clush_ls_cmd))
 subprocess.run(clush_ls_cmd, check=False)
 
 print(f"\n13-F6. {label_to_uuid[POOL_LABEL_6]} pool directory on rank 0 "
       f"({rank_to_ip[0]}) is retrieved.")
-clush_ls_cmd = ["clush", "-w", rank_to_ip[0], ls_cmd]
+clush_ls_cmd = ["clush", "-w", rank_to_ip[0], LS_CMD]
 print("Command: {}\n".format(clush_ls_cmd))
 subprocess.run(clush_ls_cmd, check=False)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
