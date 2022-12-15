@@ -63,7 +63,7 @@ POOL_LABEL_6 = POOL_LABEL + "_6"
 POOL_LABEL_7 = POOL_LABEL + "_7"
 POOL_LABEL_8 = POOL_LABEL + "_8"
 CONT_LABEL_7 = CONT_LABEL + "_7"
-cont_label_8 = CONT_LABEL + "_8"
+CONT_LABEL_8 = CONT_LABEL + "_8"
 
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_1)
@@ -83,7 +83,7 @@ create_container(pool_label=POOL_LABEL_7, cont_label=CONT_LABEL_7)
 print()
 # F8. CIC_CONT_BAD_LABEL
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_8)
-create_container(pool_label=POOL_LABEL_8, cont_label=cont_label_8)
+create_container(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8)
 
 print("(Create label to UUID mapping.)")
 label_to_uuid = {}
@@ -96,7 +96,7 @@ print(f"\n3-F5. Print storage usage to show original usage of {POOL_LABEL_5}. "
       f"Pool is created on {rank_to_ip[F5_RANK_ORIG]}.")
 # F5 pool is created on rank 1, but we'll copy the pool dir from rank 1 to 3, so show
 # both.
-f5_host_list = "{},{}".format(rank_to_ip[F5_RANK_ORIG], rank_to_ip[F5_RANK_FAULT])
+f5_host_list = f"{rank_to_ip[F5_RANK_ORIG]},{rank_to_ip[F5_RANK_FAULT]}"
 storage_query_usage(host_list=f5_host_list)
 
 ####################################################################
@@ -116,7 +116,7 @@ inject_fault_daos(
 
 # F8
 inject_fault_daos(
-    pool_label=POOL_LABEL_8, cont_label=cont_label_8,
+    pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8,
     fault_type="DAOS_CHK_CONT_BAD_LABEL")
 
 ####################################################################
@@ -124,11 +124,11 @@ input("\n5-1. Stop servers to manipulate for F2, F5, F6, F7. Hit enter...")
 system_stop()
 
 # F2: Destroy tank_2 rdb-pool on rank 0 and 2.
-rank_0_2_ips = "{},{}".format(rank_to_ip[0], rank_to_ip[2])
+rank_0_2_ips = f"{rank_to_ip[0]},{rank_to_ip[2]}"
 rm_cmd = f"sudo rm /mnt/daos/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
 remove_rdb_rank_0_2 = ["clush", "-w", rank_0_2_ips, rm_cmd]
 print("(F2: Destroy tank_2 rdb-pool on rank 0 and 2.)")
-print("Command: {}\n".format(remove_rdb_rank_0_2))
+print(f"Command: {remove_rdb_rank_0_2}\n")
 subprocess.run(remove_rdb_rank_0_2, check=False)
 
 # F5: Copy tank_5 pool directory from rank 1 to rank 3. Match owner.
@@ -146,7 +146,7 @@ print("(F5: Update mode for pool directory.)")
 pool_uuid_5 = label_to_uuid[POOL_LABEL_5]
 chmod_cmd = f"sudo chmod 777 /mnt/daos; sudo chmod -R 777 /mnt/daos/{pool_uuid_5}"
 clush_chmod_cmd = ["clush", "-w", rank_to_ip[1], chmod_cmd]
-print("Command: {}\n".format(clush_chmod_cmd))
+print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 
 # sudo scp -rp /mnt/daos/<pool_uuid_5> root@<rank_3>:/mnt/daos/
@@ -154,28 +154,28 @@ print("(F5: Copy pool directory from rank 1 to 3.)")
 scp_cmd = (f"scp -rp /mnt/daos/{pool_uuid_5} "
            f"root@{rank_to_ip[3]}:/mnt/daos/")
 copy_pool_dir = ["clush", "-w", rank_to_ip[1], scp_cmd]
-print("Command: {}\n".format(copy_pool_dir))
+print(f"Command: {copy_pool_dir}\n")
 subprocess.run(copy_pool_dir, check=False)
 
 # Set owner for the copied dir and files to daos_server:daos_server.
 print("(F5: Set owner for the copied dir and files to daos_server:daos_server.)")
 chown_cmd = f"sudo chown -R daos_server:daos_server /mnt/daos/{pool_uuid_5}"
 clush_chown_cmd = ["clush", "-w", rank_to_ip[3], chown_cmd]
-print("Command: {}\n".format(clush_chown_cmd))
+print(f"Command: {clush_chown_cmd}\n")
 subprocess.run(clush_chown_cmd, check=False)
 
 print("(F6: Remove pool directory from rank 0.)")
 pool_uuid_6 = label_to_uuid[POOL_LABEL_6]
 rm_cmd = f"sudo rm -rf /mnt/daos/{pool_uuid_6}"
 clush_rm_cmd = ["clush", "-w", rank_to_ip[0], rm_cmd]
-print("Command: {}\n".format(clush_rm_cmd))
+print(f"Command: {clush_rm_cmd}\n")
 subprocess.run(clush_rm_cmd, check=False)
 
 print("F7: Use ddb to show that the container is left in shards.")
 pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
 ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos/{pool_uuid_7}/vos-0"
 clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
-print("Command: {}".format(clush_ddb_cmd))
+print(f"Command: {clush_ddb_cmd}")
 subprocess.run(clush_ddb_cmd, check=False)
 
 print("\n5-2. Restart servers.")
@@ -195,8 +195,8 @@ list_pool(no_query=True)
 
 # F4 part 2
 print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS are still original.")
-POOL_LABEL_4_fault = POOL_LABEL_4 + "-fault"
-pool_get_prop(pool_label=POOL_LABEL_4_fault, properties="label")
+POOL_LABEL_4_FAULT = POOL_LABEL_4 + "-fault"
+pool_get_prop(pool_label=POOL_LABEL_4_FAULT, properties="label")
 
 # F3 part 2
 # print(f"\n6-F3-2. {POOL_LABEL_3} exists on engine.")
@@ -209,11 +209,11 @@ storage_query_usage(host_list=f5_host_list)
 
 # F8: Show inconsistency by getting the container label.
 print("\n6-F8. Show container label inconsistency.")
-cont_get_prop(pool_label=POOL_LABEL_8, cont_label=cont_label_8)
+cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8)
 # cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label")
-print(f"Error because container ({cont_label_8}) doesn't exist on container service.\n")
+print(f"Error because container ({CONT_LABEL_8}) doesn't exist on container service.\n")
 
-print(f"Container ({cont_label_8}) exists on pool service.")
+print(f"Container ({CONT_LABEL_8}) exists on pool service.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label", properties="label")
 
 ####################################################################
@@ -318,8 +318,8 @@ subprocess.run(clush_ls_cmd, check=False)
 # target count.
 
 # F8: Verify that the inconsistency is fixed. The label is back to the original.
-print(f"\n13-F8. Show container label inconsistency for {cont_label_8} was fixed.")
-cont_get_prop(pool_label=POOL_LABEL_8, cont_label=cont_label_8, properties="label")
+print(f"\n13-F8. Show container label inconsistency for {CONT_LABEL_8} was fixed.")
+cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8, properties="label")
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
 # shard.
