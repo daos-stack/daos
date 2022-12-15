@@ -1295,7 +1295,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
  */
 static int
 init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
-	      uint32_t map_version, uint32_t term)
+	      uint32_t map_version, uint64_t term)
 {
 	struct ds_pool *pool;
 	int		rc;
@@ -6742,7 +6742,7 @@ out:
 
 void
 ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
-		     uint32_t term)
+		     uint64_t term)
 {
 	ds_iv_ns_update(pool->sp_iv_ns, master_rank, term);
 }

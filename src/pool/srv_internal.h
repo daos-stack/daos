@@ -97,7 +97,7 @@ struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
 	daos_epoch_t	pik_eph;
-	uint32_t	pik_term;
+	uint64_t	pik_term;
 };
 
 struct pool_iv_hdl {
