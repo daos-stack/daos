@@ -306,13 +306,13 @@ print(f"\n13-F5-2. {label_to_uuid[POOL_LABEL_5]} pool directory on rank 3 "
       f"({rank_to_ip[3]}) was removed.")
 LS_CMD = "sudo ls /mnt/daos"
 clush_ls_cmd = ["clush", "-w", rank_to_ip[3], LS_CMD]
-print("Command: {}\n".format(clush_ls_cmd))
+print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
 print(f"\n13-F6. {label_to_uuid[POOL_LABEL_6]} pool directory on rank 0 "
       f"({rank_to_ip[0]}) is retrieved.")
 clush_ls_cmd = ["clush", "-w", rank_to_ip[0], LS_CMD]
-print("Command: {}\n".format(clush_ls_cmd))
+print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
@@ -326,5 +326,5 @@ cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8, properties="labe
 print(f"\n13-F7. Use ddb to verify that the container in {POOL_LABEL_8} is removed "
       f"from shards.")
 system_stop()
-print("Command: {}".format(clush_ddb_cmd))
+print(f"Command: {clush_ddb_cmd}")
 subprocess.run(clush_ddb_cmd, check=False)
