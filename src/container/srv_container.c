@@ -338,7 +338,7 @@ get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool
 	if (do_update) {
 		uint64_t		cur_hlc;
 
-		cur_hlc = crt_hlc_get();
+		cur_hlc = d_hlc_get();
 		mdtimes.otime = update_otime ? cur_hlc : mdtimes.otime;
 		mdtimes.mtime = update_mtime ? cur_hlc : mdtimes.mtime;
 
@@ -989,7 +989,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		struct co_md_times	mdtimes;
 
 		mdtimes.otime = 0;
-		mdtimes.mtime = crt_hlc_get();
+		mdtimes.mtime = d_hlc_get();
 		d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_co_md_times, &value);
 		if (rc != 0) {
@@ -2186,8 +2186,11 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
 
 	rc = cont_close_recs(ctx, svc, recs, nrecs);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to close %d recs: "DF_RC"\n",
+			DP_CONT(svc->cs_pool_uuid, NULL), nrecs, DP_RC(rc));
 		D_GOTO(out, rc);
+	}
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -2195,8 +2198,12 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 
 	for (i = 0; i < nrecs; i++) {
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to close handle: "DF_UUID", "DF_RC"\n",
+				DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[i].tcr_hdl),
+				DP_RC(rc));
 			goto out_tx;
+		}
 
 		/*
 		 * Yield frequently, in order to cope with the slow
@@ -2222,8 +2229,8 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 out_tx:
 	rdb_tx_end(&tx);
 out:
-	D_DEBUG(DB_MD, DF_CONT": leaving: %d\n",
-		DP_CONT(svc->cs_pool_uuid, NULL), rc);
+	if (rc == 0)
+		D_INFO(DF_CONT": closed %d recs\n", DP_CONT(svc->cs_pool_uuid, NULL), nrecs);
 	return rc;
 }
 
@@ -4349,7 +4356,7 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		mdtimes.otime = 0;
 	}
 
-	mdtimes.mtime = crt_hlc_get();
+	mdtimes.mtime = d_hlc_get();
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 	if (rc) {
 		D_ERROR("failed to upgrade container co_md_times/cont: "DF_CONTF"\n",
@@ -4718,7 +4725,7 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
 				    &svc, &out->co_hint);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
+		D_DEBUG(DB_MD, DF_CONT": rpc: %p hdl=" DF_UUID " opc=%u(%s) find leader\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, DP_UUID(in->ci_hdl),
 			opc, cont_cli_opc_name(opc));
 		D_GOTO(out_pool_hdl, rc);

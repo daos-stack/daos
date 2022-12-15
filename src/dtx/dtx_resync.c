@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, 0);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -425,6 +425,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
 
+		if (mbs->dm_dte_flags & DTE_PARTIAL_COMMITTED)
+			goto commit;
+
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
 			if (rc < 0)
@@ -656,7 +659,7 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = crt_hlc_get();
+	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 

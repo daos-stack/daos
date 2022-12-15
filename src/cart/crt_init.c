@@ -471,9 +471,9 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	int	rc = 0;
 
 	/* rxm and verbs providers only works with regular EP */
-	if ((prov == CRT_PROV_OFI_VERBS_RXM ||
-	     prov == CRT_PROV_OFI_TCP_RXM) &&
-	    crt_provider_is_sep(prov, primary)) {
+	if (prov != CRT_PROV_OFI_PSM2 &&
+	    prov != CRT_PROV_OFI_SOCKETS &&
+	    crt_provider_is_sep(primary, prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
 		crt_provider_set_sep(prov, primary, false);

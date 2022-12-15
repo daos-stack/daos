@@ -71,7 +71,9 @@ public class DaosFileSystem extends FileSystem {
     }
     DunsInfo info = searchUnsPath(name);
     if (info != null) {
-      LOG.info("initializing from uns path, " + name);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("initializing from uns path, " + name);
+      }
       initializeFromUns(name, conf, info);
       return;
     }
@@ -135,7 +137,9 @@ public class DaosFileSystem extends FileSystem {
       daos.mkdir(workPath, true);
       getAndValidateDaosAttrs(name, conf);
       setConf(conf);
-      LOG.info("DaosFileSystem initialized");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem initialized");
+      }
     } catch (Exception e) {
       throw new IOException("failed to initialize " + this.getClass().getName(), e);
     }

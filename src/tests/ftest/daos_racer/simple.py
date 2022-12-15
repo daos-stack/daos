@@ -29,10 +29,10 @@ class DaosRacerTest(TestWithServers):
         Use Cases:
             Running simultaneous, conflicting I/O requests.
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,large
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=io,daosracer
-        :avocado: tags=daosracer_simple
+        :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer_simple
 
         """
         dmg = self.get_dmg_command()

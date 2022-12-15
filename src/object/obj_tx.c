@@ -1564,7 +1564,7 @@ out:
 static void
 dc_tx_dump(struct dc_tx *tx)
 {
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Dump TX %p:\n"
 		"ID: "DF_DTI"\n"
 		"epoch: "DF_U64"\n"
@@ -1837,7 +1837,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.

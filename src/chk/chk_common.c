@@ -868,7 +868,7 @@ chk_ins_init(struct chk_instance **p_ins)
 	if (ins == NULL)
 		D_GOTO(out_init, rc = -DER_NOMEM);
 
-	ins->ci_seq = crt_hlc_get();
+	ins->ci_seq = d_hlc_get();
 	ins->ci_sched = ABT_THREAD_NULL;
 
 	ins->ci_rank_hdl = DAOS_HDL_INVAL;

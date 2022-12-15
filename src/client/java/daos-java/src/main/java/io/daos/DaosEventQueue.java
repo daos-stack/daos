@@ -558,7 +558,7 @@ public class DaosEventQueue {
     void reuse();
 
     /**
-     * it's should be called before attachment being consumed by user.
+     * it should be called before attachment being consumed by user.
      */
     void ready();
 

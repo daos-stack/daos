@@ -1,7 +1,7 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
-   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
-*/
+/* groovylint-disable-next-line LineLength */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -17,6 +17,7 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+/* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
 void job_status_write() {
@@ -65,9 +66,9 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
-   currentBuild.result = 'SUCCESS'
-   return
-     }
+    currentBuild.result = 'SUCCESS'
+    return
+}
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
@@ -129,16 +130,21 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for this run.  Specifies the default provider ' +
-                            'to use the daos_server config file when running functional tests' +
-                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
-                            '"ofi+tcp")')
+               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
+                            'stages.  Specifies the default provider to use the daos_server ' +
+                            'config file when running functional tests (the launch.py ' +
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Additional repository used for locating packages for the build and ' +
+                            'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
@@ -165,68 +171,69 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit CI tests')
+                     description: 'Run the Unit Test on EL 8 test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
-                     description: 'Run the Unit Memcheck CI tests')
+                     description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault Injection on EL 8 CI tests')
+                     description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the functional EL 8 CI tests' +
-                                  ' with Valgrind')
+                     description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional EL 8 CI tests')
+                     description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
-                     description: 'Run the functional OpenSUSE Leap 15 CI tests' +
+                     description: 'Run the Functional on Leap 15 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the functional Ubuntu 20 CI tests' +
+                     description: 'Run the Functional on Ubuntu 20.04 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
-        booleanParam(name: 'CI_small_TEST',
-                     defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Medium Cluster CI tests')
+                     description: 'Run the Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Large Cluster CI tests')
+                     description: 'Run the Functional Hardware Large test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
-        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+        string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
-        string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
-        string(name: 'CI_NVME_5_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
-        string(name: 'CI_NVME_9_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large tests')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
         string(name: 'CI_PROVISIONING_POOL',
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
-        // TODO: add parameter support for per-distro CI_PR_REPOS
-        string(name: 'CI_PR_REPOS',
-               defaultValue: '',
-               description: 'Repos to add to the build and test ndoes')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -382,8 +389,8 @@ pipeline {
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -455,7 +462,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
+                stage('Build RPM on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -609,7 +616,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.4 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -654,8 +661,8 @@ pipeline {
             parallel {
                 stage('Unit Test on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -675,8 +682,8 @@ pipeline {
                 }
                 stage('NLT on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -710,8 +717,8 @@ pipeline {
                 }
                 stage('Unit Test Bullseye on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -738,8 +745,8 @@ pipeline {
                 } // stage('Unit test Bullseye on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -794,7 +801,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -808,13 +815,13 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
+                stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -827,14 +834,14 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15')
+                } // stage('Functional on Leap 15.4')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -884,7 +891,7 @@ pipeline {
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15 RPMs') {
+                stage('Scan Leap 15.4 RPMs') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -919,7 +926,7 @@ pipeline {
                                script: '! grep "<error " maldetect_leap15.xml'
                         }
                     }
-                } // stage('Scan Leap 15 RPMs')
+                } // stage('Scan Leap 15.4 RPMs')
                 stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
@@ -996,27 +1003,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
@@ -1024,7 +1010,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1038,6 +1024,48 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
+                stage('Functional Hardware Medium Verbs Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium Verbs Provider')
+                stage('Functional Hardware Medium UCX Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium UCX Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -1045,7 +1073,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1065,8 +1093,8 @@ pipeline {
             parallel {
                 stage('Bullseye Report on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -1086,7 +1114,6 @@ pipeline {
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
                                                                'func-vm-cov',
-                                                               'func-hw-small-cov',
                                                                'func-hw-medium-cov',
                                                                'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,

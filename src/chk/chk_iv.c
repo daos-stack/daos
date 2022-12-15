@@ -184,7 +184,7 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	int			rc;
 
 	iv->ci_rank = dss_self_rank();
-	iv->ci_seq = crt_hlc_get();
+	iv->ci_seq = d_hlc_get();
 
 	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
 		/*

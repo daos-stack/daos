@@ -290,7 +290,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	daos_epoch_t		epoch_max, epoch_min;
 	daos_epoch_range_t	epoch_range;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
-	uint64_t		hlc = crt_hlc_get();
+	uint64_t		hlc = d_hlc_get();
 	uint64_t		change_hlc;
 	uint64_t		interval;
 	uint64_t		snapshots_local[MAX_SNAPSHOT_LOCAL] = { 0 };
@@ -319,7 +319,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
-		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+		interval = d_sec2hlc(DAOS_AGG_THRESHOLD);
 
 	D_ASSERT(hlc > (interval * 2));
 	/*
@@ -1983,7 +1983,7 @@ cont_snap_update_one(void *vin)
 
 	/* Snapshot deleted, reset aggregation lower bound epoch */
 	if (cont->sc_snapshots_nr > args->snap_count) {
-		cont->sc_snapshot_delete_hlc = crt_hlc_get();
+		cont->sc_snapshot_delete_hlc = d_hlc_get();
 		D_DEBUG(DB_EPC, DF_CONT": Reset aggregation lower bound\n",
 			DP_CONT(args->pool_uuid, args->cont_uuid));
 	}
@@ -2086,7 +2086,7 @@ cont_snap_notify_one(void *vin)
 			goto out_cont;
 	}
 
-	cont->sc_aggregation_max = crt_hlc_get();
+	cont->sc_aggregation_max = d_hlc_get();
 out_cont:
 	ds_cont_child_put(cont);
 	return rc;
@@ -2834,5 +2834,5 @@ out:
 void
 ds_cont_ec_timestamp_update(struct ds_cont_child *cont)
 {
-	cont->sc_ec_update_timestamp = crt_hlc_get();
+	cont->sc_ec_update_timestamp = d_hlc_get();
 }
