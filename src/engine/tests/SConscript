@@ -9,8 +9,8 @@ def scons():
     unit_env = denv.Clone()
     unit_env.AppendUnique(OBJPREFIX='utest_')
 
-    common_mock_ld_script = "%s/../../common/tests/common-mock-ld-opts" % Dir('.').srcnode()
-    unit_env.AppendUnique(LINKFLAGS=['-Wl,@%s' % common_mock_ld_script])
+    common_mock_ld_script = f"{Dir('.').srcnode()}/../../common/tests/common-mock-ld-opts"
+    unit_env.AppendUnique(LINKFLAGS=[f'-Wl,@{common_mock_ld_script}'])
 
     Depends('drpc_progress_tests', common_mock_ld_script)
     daos_build.test(unit_env, 'drpc_progress_tests',
