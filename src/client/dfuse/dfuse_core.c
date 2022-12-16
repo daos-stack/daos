@@ -818,9 +818,9 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
 		 */
-		dfc->dfc_attr_timeout = 5;
-		dfc->dfc_dentry_dir_timeout = 5;
-		dfc->dfc_ndentry_timeout = 5;
+		dfc->dfc_attr_timeout       = 60;
+		dfc->dfc_dentry_dir_timeout = 60;
+		dfc->dfc_ndentry_timeout    = 60;
 
 	} else if (*_dfc == NULL) {
 		char str[37];
@@ -932,6 +932,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	struct timespec left;
 	double          time_left;
 
+	if (max_age == -1)
+		return true;
+
 	if (ie->ie_cache_last_update.tv_sec == 0)
 		return false;
 
@@ -945,12 +948,14 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 	}
 	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
 	if (time_left > 0) {
-		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
 		use = true;
-	}
 
-	if (use && timeout)
-		*timeout = time_left;
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
+	       use = true;
+
+	       if (timeout)
+			*timeout = time_left;
+	}
 
 	return use;
 }
