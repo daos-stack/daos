@@ -243,10 +243,10 @@ docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.gather
 
 ### Running DAOS Docker Containers
 
-This section presents two ways of running the `daos pool autotest` subcommand with docker images
-build according to the previous section.  For both methods, a tarball (i.e. `tar` archive compressed
-with `xz`) of the DAOS certificate files should be created when the DAOS authentication is enabled.
-However, it is not managed in the same way with both solutions.
+This section presents how to run some relevant use cases with a docker image build according to the
+previous section.  For both methods, a tarball (i.e. `tar` archive compressed with `xz`) of the DAOS
+certificate files should be created when the DAOS authentication is enabled.  However, it is not
+managed in the same way with both solutions.
 
 #### Running DAOS Docker Images with Docker Compose
 
