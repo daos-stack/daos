@@ -391,6 +391,10 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		return nil
 	}
 
+	f.data.Lock()
+	f.data.Version++ // Successful updates should increment this value.
+	f.data.Unlock()
+
 	return nil
 }
 
@@ -476,7 +480,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	f.log.Debugf("created raft db snapshot (map version %d)", f.data.MapVersion)
+	f.log.Debugf("created raft db snapshot (map version %d; data version %d)", f.data.MapVersion, f.data.Version)
 	return &fsmSnapshot{data}, nil
 }
 
@@ -497,8 +501,9 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Version = db.data.Version
 	f.data.Unlock()
-	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
+	f.log.Debugf("db snapshot loaded (map version %d; data version %d)", db.data.MapVersion, db.data.Version)
 	return nil
 }
 

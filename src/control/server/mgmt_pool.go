@@ -1075,6 +1075,12 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 		})
 	}
 
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
+
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, resp:%+v\n", resp)
 
 	return resp, nil

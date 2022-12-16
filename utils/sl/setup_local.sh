@@ -67,7 +67,8 @@ then
 fi
 
 echo "Build vars file found: ${VARS_LOCAL}"
-. ${VARS_LOCAL}
+# shellcheck disable=SC1090
+. "${VARS_LOCAL}"
 
 os="$(uname)"
 if [ "$os" = "Darwin" ]; then
@@ -133,7 +134,7 @@ for item in $list; do
     if [ $? -eq 1 ]; then
         continue
     fi
-    export ${item}
+    export "${item?}"
     added+=" ${!item}"
     in_list "${!item}/bin" "${old_path}"
     if [ $? -eq 1 ]; then
@@ -144,9 +145,9 @@ for item in $list; do
     fi
 done
 
-in_list "${SL_PREFIX}/bin" "${old_path}"
-if [ $? -eq 0 ]; then
+if in_list "${SL_PREFIX}/bin" "${old_path}"; then
     PATH=$SL_PREFIX/bin:$PATH
 fi
 export PATH
 export SL_PREFIX
+export SL_SRC_DIR
