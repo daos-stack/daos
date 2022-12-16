@@ -28,11 +28,10 @@ class AggregationPunching(MdtestBase):
             Enable the aggregation run and verify the space is reclaimed.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=aggregatepunching
+        :avocado: tags=AggregationPunching,aggregatepunching
         """
-
         if self.pool is None:
             self.add_pool(connect=False)
         self.pool.connect()
