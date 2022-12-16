@@ -3,6 +3,7 @@ hosts:
 timeout: 80
 server_config:
   name: daos_server
+  control_log_mask: DEBUG
   engines_per_host: 1
   engines:
     0:

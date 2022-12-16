@@ -114,8 +114,13 @@ class ExecutableCommand(CommandWithParameters):
         """
         return "'({})'".format("|".join(self._exe_names))
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -124,10 +129,15 @@ class ExecutableCommand(CommandWithParameters):
         if self.run_as_subprocess:
             self._run_subprocess()
             return None
-        return self._run_process()
+        return self._run_process(raise_exception)
 
-    def _run_process(self):
+    def _run_process(self, raise_exception=None):
         """Run the command as a foreground process.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -139,17 +149,21 @@ class ExecutableCommand(CommandWithParameters):
         # Clear any previous run results
         self.result = None
         command = str(self)
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         try:
             # Block until the command is complete or times out
+
             self.result = run_command(
-                command, self.timeout, self.verbose, self.exit_status_exception,
+                command, self.timeout, self.verbose, raise_exception,
                 self.output_check, env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
             raise CommandFailure(str(error))    # pylint: disable=raise-missing-from
 
-        if self.exit_status_exception and not self.check_results():
+        if raise_exception and not self.check_results():
             # Command failed if its output contains bad keywords
             raise CommandFailure(
                 "<{}> command failed: Error messages detected in output".format(
@@ -503,13 +517,18 @@ class CommandWithSubCommand(ExecutableCommand):
         self.sub_command.value = value
         self.get_sub_command_class()
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command and assign the 'result' attribute.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command and the
                 CommandWithSubCommand.exit_status_exception attribute is set to
-                True.
+                True (and not overridden by the raise_exception argument).
 
         Returns:
             CmdResult: a CmdResult object containing the results of the command
@@ -518,14 +537,14 @@ class CommandWithSubCommand(ExecutableCommand):
         """
         try:
             # This assigns self.result
-            super().run()
+            super().run(raise_exception)
         except CommandFailure as error:
             raise CommandFailure(
                 "<{}> command failed: {}".format(
                     self.command, error)) from error
         return self.result
 
-    def _get_result(self, sub_command_list=None, **kwargs):
+    def _get_result(self, sub_command_list=None, raise_exception=None, **kwargs):
         """Get the result from running the command with the defined arguments.
 
         The optional sub_command_list and kwargs are used to define the command
@@ -539,11 +558,14 @@ class CommandWithSubCommand(ExecutableCommand):
             sub_command_list (list, optional): a list of sub commands used to
                 define the command to execute. Defaults to None, which will run
                 the command as it is currently defined.
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command and the
                 CommandWithSubCommand.exit_status_exception attribute is set to
-                True.
+                True (and is not overridden by the raise_exception argument).
 
         Returns:
             CmdResult: a CmdResult object containing the results of the command
@@ -562,17 +584,22 @@ class CommandWithSubCommand(ExecutableCommand):
             getattr(this_command, name).value = value
 
         # Issue the command and store the command result
-        return self.run()
+        return self.run(raise_exception)
 
-    def _get_json_result(self, sub_command_list=None, json_err=False, **kwargs):
+    def _get_json_result(self, sub_command_list=None, json_err=False,
+                         raise_exception=None, **kwargs):
         """Wrap the base _get_result method to force JSON output.
 
         Args:
             sub_command_list (list): List of subcommands.
             json_err (bool, optional): If True, return JSON
                 even if the command fails.
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
             kwargs (dict): Parameters for the command.
         """
+
         if self.json is None:
             raise CommandFailure(
                 f"The {self.command} command doesn't have json option defined!")
@@ -583,8 +610,9 @@ class CommandWithSubCommand(ExecutableCommand):
         if json_err:
             prev_exit_exception = self.exit_status_exception
             self.exit_status_exception = False
+
         try:
-            self._get_result(sub_command_list, **kwargs)
+            self._get_result(sub_command_list, raise_exception=raise_exception, **kwargs)
         finally:
             self.json.update(prev_json_val)
             self.output_check = prev_output_check
@@ -823,11 +851,16 @@ class YamlCommand(SubProcessCommand):
 
         return value
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command and assign the 'result' attribute.
 
         Ensure the yaml file is updated with the current attributes before
         executing the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command and the
@@ -841,7 +874,7 @@ class YamlCommand(SubProcessCommand):
         """
         if self.yaml:
             self.create_yaml_file()
-        return super().run()
+        return super().run(raise_exception)
 
     def copy_certificates(self, source, hosts):
         """Copy certificates files from the source to the destination hosts.
