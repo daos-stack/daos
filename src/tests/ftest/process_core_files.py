@@ -369,15 +369,24 @@ class CoreFileProcessing():
             self.log.error("Unable to find local core file pattern")
             self.log.debug("Stacktrace", exc_info=True)
             return 1
-
         core_path = os.path.split(output.stdout.splitlines()[-1])[0]
-        self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
-        other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
+        core_path_name = os.path.join(core_path, "core.gdb.*.*")
         try:
-            run_local(self.log, [find_command(core_path, "core.gdb.*.*", 1, other)])
-        except FileNotFoundError:
-            self.log.debug("No core.gdb.*.* files found")
-            return 0
+            output = run_local(self.log, ["ls -la", core_path_name], check=True)
+        except RunException:
+            self.log.error("Unable to run ls core files command")
+            self.log.debug("Stacktrace", exc_info=True)
+            return 1
+
+        if len(output.stdout.splitlines()) > 1:
+            self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
+            other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
+            try:
+                run_local(
+                    self.log, [find_command(core_path, "core.gdb.*.*", 1, other)], check=False)
+            except RunException:
+                self.log.debug("core.gdb.*.* files could not be removed")
+                return 1
         return 0
 
 
