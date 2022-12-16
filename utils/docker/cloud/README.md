@@ -216,6 +216,7 @@ $ df --human-readable --type=fuse.daos
 $ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
 
+
 ## DAOS Client and Agent Gathered
 
 With the deployment solution presented in this section, the DAOS client and the DAOS Agent are
@@ -237,6 +238,7 @@ When the environment file has been properly filled, the docker image could be cr
 following command:
 ```bash
 docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_agent
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.gathered.yml build daos_client_agent
 ```
 
 ### Running DAOS Docker Containers
@@ -263,6 +265,17 @@ docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.gather
 $ daos pool autotest <POOL ID>
 ```
 
+With the same prerequites, the [fio](https://fio.readthedocs.io/) file system benchmark tool could
+be run thanks to the following commands:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.gathered.yml run --rm daos_client_agent
+$ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
+$ daos container create --type=posix --label=posix-fs tank
+$ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
+$ df --human-readable --type=fuse.daos
+$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
+```
+
 #### Running DAOS Docker Images with Docker Stack
 
 With Docker Stack the tarball of the certificates are managed as [Docker
@@ -281,3 +294,9 @@ bash utils/docker/cloud/deploy-docker_stack.sh utils/docker/cloud/docker-stack.d
 docker exec -u${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID} -ti <DAOS CLIENT DOCKER CONTAINER ID> bash
 $ daos pool autotest <POOL ID>
 ```
+
+At this time, it is not possible to use
+[DFuse](https://docs.daos.io/v2.2/user/filesystem/?h=dfuse#dfuse-daos-fuse) inside a stack deployed
+in swarm mode.  Indeed, the docker option
+[devices](https://docs.docker.com/compose/compose-file/compose-file-v3/#devices) is not supported,
+and thus it is not possible to export the `dev/fuse` device needed by DFuse.

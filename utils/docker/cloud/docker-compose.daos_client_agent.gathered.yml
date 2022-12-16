@@ -17,6 +17,10 @@ services:
         - "DAOS_CLIENT_GNAME=${DAOS_CLIENT_GNAME}"
     tty: true
     network_mode: host
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - "/dev/fuse:/dev/fuse"
     secrets:
       - source: daos_agent-certs
         target: daos_agent-certs.txz
