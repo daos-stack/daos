@@ -91,18 +91,22 @@ func (ei *EngineInstance) hasSuperblock() bool {
 // Should not be called if SCM format is required.
 func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 	if ei.hasSuperblock() {
+		ei.log.Debugf("instance %d has no superblock set", ei.Index())
 		return false, nil
 	}
 
 	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
+		ei.log.Debugf("instance %d: superblock not found", ei.Index())
 		return true, nil
 	}
 
 	if err != nil {
+		ei.log.Debugf("instance %d failed to read superblock", ei.Index())
 		return true, errors.Wrap(err, "failed to read existing superblock")
 	}
 
+	ei.log.Debugf("instance %d: superblock found", ei.Index())
 	return false, nil
 }
 
@@ -161,6 +165,7 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 // WriteSuperblock writes the instance's superblock
 // to storage.
 func (ei *EngineInstance) WriteSuperblock() error {
+	ei.log.Debugf("instance %d: writing superblock at %s", ei.Index(), ei.superblockPath())
 	return WriteSuperblock(ei.superblockPath(), ei.getSuperblock())
 }
 
@@ -173,6 +178,7 @@ func (ei *EngineInstance) ReadSuperblock() error {
 
 	sb, err := ReadSuperblock(ei.superblockPath())
 	if err != nil {
+		ei.log.Debugf("instance %d: failed to read superblock at %s: %s", ei.Index(), ei.superblockPath(), err)
 		return errors.Wrap(err, "failed to read instance superblock")
 	}
 	ei.setSuperblock(sb)
@@ -184,6 +190,7 @@ func (ei *EngineInstance) ReadSuperblock() error {
 func (ei *EngineInstance) RemoveSuperblock() error {
 	ei.setSuperblock(nil)
 
+	ei.log.Debugf("instance %d: removing superblock at %s", ei.Index(), ei.superblockPath())
 	return os.Remove(ei.superblockPath())
 }
 

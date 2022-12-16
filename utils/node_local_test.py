@@ -502,6 +502,10 @@ class DaosServer():
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
                                                        delete=False)
+        self.helper_log = tempfile.NamedTemporaryFile(prefix='dnt_helper_',
+                                                      suffix='.log',
+                                                      dir=conf.tmp_dir,
+                                                      delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
                                                      dir=conf.tmp_dir,
@@ -670,9 +674,9 @@ class DaosServer():
         with open(join(self_dir, 'nlt_server.yaml'), 'r') as scfd:
             scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
+        scyaml['helper_log_file'] = self.helper_log.name
 
         scyaml['socket_dir'] = self.agent_dir
 
@@ -701,6 +705,19 @@ class DaosServer():
         self._yaml_file = tempfile.NamedTemporaryFile(prefix='nlt-server-config-', suffix='.yaml')
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
+
+        import stat
+
+        def walk_dir(dir):
+            for root, dirs, files in os.walk(dir):
+                for name in files:
+                    st = os.stat(join(root, name))
+                    print(f'{root}/{name}: {stat.filemode(st.st_mode)}')
+                for name in dirs:
+                    walk_dir(join(root, name))
+
+        print(f'control_metadata: {scyaml["control_metadata"]}')
+        walk_dir(scyaml['control_metadata']['path'])
 
         cmd = [daos_server, f'--config={self._yaml_file.name}', 'start', '--insecure']
 
@@ -757,7 +774,7 @@ class DaosServer():
             if data['error'] is None:
                 break
 
-            if 'running system' in data['error'] or 'existing filesystem' in data['error']:
+            if 'running system' in data['error']:
                 break
 
             if start_timeout < 5:
