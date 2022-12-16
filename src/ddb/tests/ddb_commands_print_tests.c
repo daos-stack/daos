@@ -261,7 +261,7 @@ print_dtx_active(void **state)
 	assert_str("Rec Cnt: 1\n");
 	assert_str("Mbs Flags: 1\n");
 	assert_str("Flags: 0\n");
-	assert_str("Oid: 281479271743488.4294967296.0\n");
+	assert_str("Oid: 281479271743488.4294967296.0.0\n");
 }
 
 static void
