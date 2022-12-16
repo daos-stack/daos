@@ -10,7 +10,7 @@ setup:
 server_config:
   name: daos_server
   reboot_waittime: 210
-  engines_per_socket: 2
+  engines_per_socket: 4
   engines:
     -
       pinned_numa_node: 0

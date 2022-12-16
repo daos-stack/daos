@@ -30,7 +30,7 @@ go_files=
 if [ $TARGET = "HEAD" ]
 then
         echo "Checking against HEAD"
-	go_files=$(git diff HEAD^ --name-only | grep -e '.go$' || exit 0)
+	go_files=$(git diff HEAD --name-only | grep -e '.go$' || exit 0)
 else
         echo "Checking against branch ${TARGET}"
         go_files=$(git diff $TARGET... --name-only | grep -e '.go$' || exit 0)

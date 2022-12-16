@@ -29,7 +29,7 @@ fi
 if [ $TARGET = "HEAD" ]
 then
         echo "Checking against HEAD"
-        git diff HEAD^ -U10 | ./utils/cq/daos_pylint.py --diff
+        git diff HEAD -U10 | ./utils/cq/daos_pylint.py --diff
 else
         echo "Checking against branch ${TARGET}"
         git diff $TARGET... -U10 | ./utils/cq/daos_pylint.py --diff
