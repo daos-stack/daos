@@ -65,15 +65,15 @@ container and the DAOS Agent is running on the docker host node.
 This section describes how to build Docker container allowing to access a DAOS file system through
 a DAOS agent running on the docker host.  The easiest way is to use the `docker compose` sub
 command.  The first step is to update the docker environment file `utils/docker/cloud/.env`
-according to the targeted DAOS system.  The following environment variables must be defined for
-being able to properly build a docker image:
-The docker image could be created thanks to the following command:
-```bash
-docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml build
-```
+according to the targeted DAOS system.
 
 The following environment variables allow to customize the Docker image to build:
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "rocky8.6")
+
+The docker image could be then created thanks to the following command:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml build
+```
 
 !!! note
     It is not needed to copy or share the certificates of the DAOS agent running on the docker host
