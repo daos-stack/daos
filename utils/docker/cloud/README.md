@@ -1,8 +1,7 @@
 # DAOS in Docker
 
-This document describes how to build and deploy base Docker images for running application
-using a DAOS storage system.  The DAOS agent should be run on the docker host and some resources
-should be shared with its containers.
+This document describes different ways to build and deploy base Docker images for running
+application using a DAOS storage system.
 
 
 ## Prerequisites
@@ -19,13 +18,13 @@ The platform was tested and validated with the following dependencies:
   images.
 
 
-## Building DAOS Client Docker Image
+## Building DAOS Cloud Base Docker Image
 
-This section describes how to build Docker container allowing to access a DAOS file system through
-a DAOS agent running on the docker host.  The easiest way is to use the `docker compose` sub
-command.  The first step is to update the docker environment file `utils/docker/cloud/.env`
-according to the targeted DAOS system.  The following environment variables must be defined for
-being able to properly build a docker image:
+This section describes how to build the base Docker image used for building the DAOS docker images
+of the following sections.  The easiest way is to use the `docker compose` sub command.  The first
+step is to update the docker environment file `utils/docker/cloud/.env` according to the targeted
+DAOS system.  The following environment variables must be defined for being able to properly build
+a docker image:
 - `DAOS_CLIENT_UNAME`: User name of the client (e.g. "foo")
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GNAME`: Group name of the client (e.g., "bar")
@@ -52,8 +51,29 @@ The following environment variables allow to customize the Docker image to build
 When the environment file has been properly filled, the docker image could be created thanks to the
 following command:
 ```bash
-docker compose --file utils/docker/cloud/docker-compose.yml build
+docker compose --file utils/docker/cloud/docker-compose.daos_base.yml build
 ```
+
+
+## DAOS Client Containerized with Bare Metal DAOS Agent
+
+With the deployment solution presented in this section, the DAOS client is running in a docker
+container and the DAOS Agent is running on the docker host node.
+
+### Building DAOS Client Docker Image
+
+This section describes how to build Docker container allowing to access a DAOS file system through
+a DAOS agent running on the docker host.  The easiest way is to use the `docker compose` sub
+command.  The first step is to update the docker environment file `utils/docker/cloud/.env`
+according to the targeted DAOS system.  The following environment variables must be defined for
+being able to properly build a docker image:
+The docker image could be created thanks to the following command:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml build
+```
+
+The following environment variables allow to customize the Docker image to build:
+- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "rocky8.6")
 
 !!! note
     It is not needed to copy or share the certificates of the DAOS agent running on the docker host
@@ -72,14 +92,9 @@ It could also be needed to define the following environment variable according t
 of DAOS agent running on the docker host:
 - `DAOS_AGENT_RUNTIME_DIR`: Directory containing the DAOS agent socket (default `/var/run/daos_agent`)
 
-The first ways is use the `run-cmd.sh` bash script in the following way:
+The easiest ways is use the docker subcommand `docker compose run` subcommand in the following way:
 ```bash
-bash utils/docker/cloud/run-cmd.sh daos pool auotest <POOL ID>
-```
-
-The second ways is use the docker subcommand `docker compose run` subcommand in the following way:
-```bash
-docker compose run --file utils/docker/cloud/docker-compose.yml run
+docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml run --rm daos_client
 $ daos pool autotest <POOL ID>
 ```
 

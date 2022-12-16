@@ -7,16 +7,15 @@ version: "3.8"
 
 services:
 
-  daos_client:
-    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+  daos_base:
+    image: "daos-base:${DAOS_DOCKER_IMAGE_TAG}"
     build:
-      context: "daos-client/el8"
+      context: "daos-base/el8"
       args:
         - "DAOS_CLIENT_UNAME=${DAOS_CLIENT_UNAME}"
         - "DAOS_CLIENT_UID=${DAOS_CLIENT_UID}"
         - "DAOS_CLIENT_GNAME=${DAOS_CLIENT_GNAME}"
         - "DAOS_CLIENT_GID=${DAOS_CLIENT_GID}"
-        - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "RHEL_BASE_IMAGE_NAME=${RHEL_BASE_IMAGE_NAME}"
         - "RHEL_BASE_IMAGE_TAG=${RHEL_BASE_IMAGE_TAG}"
         - "BUST_CACHE=${BUST_CACHE}"
@@ -25,10 +24,3 @@ services:
         - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
         - "DAOS_VERSION=${DAOS_VERSION}"
     tty: true
-    network_mode: host
-    pid: host
-    user: "${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID}"
-    volumes:
-      - type: bind
-        source: "${DAOS_AGENT_RUNTIME_DIR}"
-        target: /var/run/daos_agent
