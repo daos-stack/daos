@@ -456,7 +456,7 @@ class ConfigGenerateOutput(TestWithServers):
             # dmg config generate should pass.
             result = dmg.config_generate(
                 access_points="wolf-a", num_engines=num_engines, net_class="infiniband",
-                    net_provider=self.def_provider)
+                net_provider=self.def_provider)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=infiniband "\
@@ -482,7 +482,7 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
             access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
-                net_provider=self.def_provider)
+            net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
                 ib_count + 1)
@@ -501,7 +501,7 @@ class ConfigGenerateOutput(TestWithServers):
             # dmg config generate should pass.
             result = dmg.config_generate(
                 access_points="wolf-a", num_engines=num_engines, net_class="ethernet",
-                    net_provider=self.def_provider)
+                net_provider=self.def_provider)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
@@ -527,7 +527,7 @@ class ConfigGenerateOutput(TestWithServers):
         # --net-class=ethernet. Too many engines. Should fail.
         result = dmg.config_generate(
             access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
-                net_provider=self.def_provider)
+            net_provider=self.def_provider)
         if result.exit_status == 0:
             msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
                 eth_count + 1)
