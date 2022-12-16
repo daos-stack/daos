@@ -104,6 +104,7 @@ be run thanks to the following commands:
 docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml run --rm daos_client
 $ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
 $ daos container create --type=posix --label=posix-fs tank
+$ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
 $ df --human-readable --type=fuse.daos
 $ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
@@ -170,9 +171,9 @@ docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standa
 
 ### Running DAOS Docker Images
 
-This section presents one ways of running the `daos pool autotest` subcommand with docker images
-build according to the previous section.  In a first time the following environment variables of the
-docker environment file `utils/docker/cloud/.env` must be defined:
+This section presents how to run some relevant use cases with a docker image build according to the
+previous section.  In a first time the following environment variables of the docker environment
+file `utils/docker/cloud/.env` must be defined:
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
 
@@ -201,4 +202,16 @@ could be run in the following way:
 docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
 docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
 $ daos pool autotest <POOL ID>
+```
+
+With the same prerequites, the [fio](https://fio.readthedocs.io/) file system benchmark tool could
+be run thanks to the following commands:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
+$ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
+$ daos container create --type=posix --label=posix-fs tank
+$ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
+$ df --human-readable --type=fuse.daos
+$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
