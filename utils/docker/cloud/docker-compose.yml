@@ -1,9 +1,9 @@
-# Copyright 2021-2022 Intel Corporation
+# Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
 # Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
 
-version: "3"
+version: "3.8"
 
 services:
 
@@ -26,6 +26,7 @@ services:
         - "DAOS_VERSION=${DAOS_VERSION}"
     tty: true
     network_mode: host
+    pid: host
     user: "${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID}"
     volumes:
       - type: bind

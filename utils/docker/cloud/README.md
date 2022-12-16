@@ -36,8 +36,8 @@ being able to properly build a docker image:
     more adapted to export this service inside the docker container.
 
 The following environment variables allow to customize the Docker image to build:
-- `BUST_CACHE`: Manage docker building cache (default undefined).  To invalidate the cache, a random
-   value such as the date of day shall be given.
+- `BUST_CACHE`: Manage docker building cache (default "").  To invalidate the cache, a random value
+  such as the date of day shall be given.
 - `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "rocky8.6")
 - `RHEL_BASE_IMAGE_NAME`: Base docker image name to use (default "rockylinux/rockylinux")
 - `RHEL_BASE_IMAGE_TAG`: Tag identifier of the base docker image to use (default "8.6")
@@ -86,15 +86,13 @@ $ daos pool autotest <POOL ID>
 
 ## Docker Host Configuration
 
-When a docker service is installed on a node it creates a virtual interface `docker0` which could be
-misused by the DAOS agent.  To overcome this issue, the `fabric_ifaces` section of the
+When a Docker Enging service is installed on a node it creates a virtual interface `docker0` which
+could be misused by the DAOS agent.  To overcome this issue, the `fabric_ifaces` section of the
 `daos_agent.yml` configuration file could be used, as illustrated on the following example:
 ```yaml
 fabric_ifaces:
--
-  numa_node: 0
+- numa_node: 0
   devices:
-  -
-    iface: eth0
+  - iface: eth0
     domain: eth0
 ```
