@@ -16,8 +16,12 @@ services:
     tty: true
     network_mode: host
     pid: host
+    cap_add:
+      - SYS_ADMIN
     user: "${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID}"
     volumes:
       - type: bind
         source: "${DAOS_AGENT_RUNTIME_DIR}"
         target: /var/run/daos_agent
+    devices:
+      - "/dev/fuse:/dev/fuse"
