@@ -43,7 +43,7 @@ pool:
 
 container:
   type: POSIX
-  properties: rd_fac:1
+  properties: rf:1
   control_method: daos
 
 ior:
