@@ -11,7 +11,7 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
     check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum,\
     pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
     system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
-    check_set_policy
+    check_set_policy, pool_query
 
 # Need to use at least "scm_size: 15" for server config to create 8 1GB-pools.
 POOL_SIZE_1GB = "1GB"
@@ -164,9 +164,9 @@ clush_chown_cmd = ["clush", "-w", rank_to_ip[3], chown_cmd]
 print(f"Command: {clush_chown_cmd}\n")
 subprocess.run(clush_chown_cmd, check=False)
 
-print("(F6: Remove pool directory from rank 0.)")
+print("(F6: Remove vos-0 from rank 0.)")
 pool_uuid_6 = label_to_uuid[POOL_LABEL_6]
-rm_cmd = f"sudo rm -rf /mnt/daos/{pool_uuid_6}"
+rm_cmd = f"sudo rm -rf /mnt/daos/{pool_uuid_6}/vos-0"
 clush_rm_cmd = ["clush", "-w", rank_to_ip[0], rm_cmd]
 print(f"Command: {clush_rm_cmd}\n")
 subprocess.run(clush_rm_cmd, check=False)
@@ -194,7 +194,7 @@ print(f"\n6-F3. MS doesn't recognize {POOL_LABEL_3}.")
 print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS are corrupted with -fault added.")
 list_pool(no_query=True)
 
-# 2: (optional) Try to create a container, which will hang.
+# F2: (optional) Try to create a container, which will hang.
 
 # F4 part 2
 print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS are still original.")
@@ -209,7 +209,6 @@ storage_query_usage(host_list=f5_host_list)
 # F8: Show inconsistency by getting the container label.
 print("\n6-F8. Show container label inconsistency.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8)
-# cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label")
 print(f"Error because container ({CONT_LABEL_8}) doesn't exist on container service.\n")
 
 print(f"Container ({CONT_LABEL_8}) exists on pool service.")
@@ -308,11 +307,8 @@ clush_ls_cmd = ["clush", "-w", rank_to_ip[3], LS_CMD]
 print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"\n13-F6. {label_to_uuid[POOL_LABEL_6]} pool directory on rank 0 "
-      f"({rank_to_ip[0]}) is retrieved.")
-clush_ls_cmd = ["clush", "-w", rank_to_ip[0], LS_CMD]
-print(f"Command: {clush_ls_cmd}\n")
-subprocess.run(clush_ls_cmd, check=False)
+print(f"\n13-F6. {POOL_LABEL_6} has one less ranks (4 -> 3).")
+pool_query(pool_label=POOL_LABEL_6)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
 
