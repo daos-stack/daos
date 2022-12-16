@@ -158,23 +158,18 @@ following command:
 docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_agent
 ```
 
-
-### Running DAOS Docker Containers
+### Running DAOS Docker Images
 
 This section presents one ways of running the `daos pool autotest` subcommand with docker images
-build according to the previous section.  For both methods the following environment variables of
-the docker environment file `utils/docker/cloud/.env` must be defined:
+build according to the previous section.  In a first time the following environment variables of the
+docker environment file `utils/docker/cloud/.env` must be defined:
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
 
-For both methods, a tarball (i.e. `tar` archive compressed with `xz`) of the DAOS certificate files
-should be created when the DAOS authentication is enabled.
-
-#### Running DAOS Application with Docker Compose
-
-For using Docker Compose the tarball of the certificates file path readable by all users and its
-file path defined in the following variable of the docker environment file
-`utils/docker/cloud/.env`:
+In a second time, a tarball (i.e. `tar` archive compressed with `xz`) of the DAOS certificate files
+should be created when the DAOS authentication is enabled.  For using Docker Compose the tarball of
+the certificates file path readable by all users and its file path defined in the following variable
+of the docker environment file `utils/docker/cloud/.env`:
 - `DAOS_AGENT_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS agent
   (e.g. "secrets/daos\_agent-certs.txz")
 
