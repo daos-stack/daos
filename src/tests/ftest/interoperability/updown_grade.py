@@ -17,11 +17,14 @@ from ior_test_base import IorTestBase
 
 # pylint: disable=global-variable-not-assigned,global-statement
 # pylint: disable=too-many-ancestors
+
+
 class UpgradeDowngradeTest(IorTestBase):
     """
     Tests DAOS container attribute get/set/list.
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a ContainerAttributeTest object."""
         super().__init__(*args, **kwargs)

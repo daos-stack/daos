@@ -15,6 +15,7 @@ from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
 from server_utils_base import DaosServerCommand
 
+
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Daos server configuration tests.
@@ -46,7 +47,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10) # nosec
+            size = random.randint(1, 10)  # nosec
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
@@ -101,7 +102,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 self.fail(
                     "FAIL: Value does not match after get({}), Expected "
                     "val={} and received val={}".format(attr, value,
-                    decoded.get(attr.decode(), None)))
+                                                        decoded.get(attr.decode(), None)))
 
     def daos_server_storage_prepare_reset(self, step):
         """Perform daos_server storage prepare.
@@ -211,7 +212,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         while results[0]['exit_status'] != 0 and retry < max_retry:
             retry += 1
             self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
-                "daos_server_storage_prepare_ns", step, retry)
+                          "daos_server_storage_prepare_ns", step, retry)
             time.sleep(15)
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
