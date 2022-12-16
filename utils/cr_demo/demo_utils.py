@@ -15,9 +15,7 @@ def format_storage(host_list):
         host_list (str): List of hosts to format.
     """
     format_cmd = ["dmg", "storage", "format", "--host-list=" + host_list]
-    command = " ".join(format_cmd)
-    print(f"Command: {command}")
-    subprocess.run(format_cmd, check=False)
+    run_command(command=format_cmd)
 
 def storage_query_usage(host_list):
     """Call dmg storage query usage.
@@ -25,10 +23,8 @@ def storage_query_usage(host_list):
     Args:
         host_list (str): List of hosts to query.
     """
-    format_cmd = ["dmg", "storage", "query", "usage", "--host-list=" + host_list]
-    command = " ".join(format_cmd)
-    print(f"Command: {command}")
-    subprocess.run(format_cmd, check=False)
+    storage_query_cmd = ["dmg", "storage", "query", "usage", "--host-list=" + host_list]
+    run_command(command=storage_query_cmd)
 
 # Pool-related methods
 def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
@@ -46,9 +42,7 @@ def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
         create_pool_cmd.append("--ranks=" + ranks)
     if nsvc:
         create_pool_cmd.append("--nsvc=" + nsvc)
-    command = " ".join(create_pool_cmd)
-    print(f"Command: {command}")
-    subprocess.run(create_pool_cmd, check=False)
+    run_command(command=create_pool_cmd)
 
 def list_pool(verbose=False, json=False, no_query=False):
     """Call dmg pool list.
@@ -90,9 +84,7 @@ def pool_get_prop(pool_label, properties):
             multiple properties.
     """
     get_prop_cmd = ["dmg", "pool", "get-prop", pool_label, properties]
-    command = " ".join(get_prop_cmd)
-    print(f"Command: {command}")
-    subprocess.run(get_prop_cmd, check=False)
+    run_command(command=get_prop_cmd)
 
 def pool_query(pool_label):
     """Call dmg pool query
@@ -101,9 +93,7 @@ def pool_query(pool_label):
         pool_label (str): Pool label.
     """
     pool_query_cmd = ["dmg", "pool", "query", pool_label]
-    command = " ".join(pool_query_cmd)
-    print(f"Command: {command}")
-    subprocess.run(pool_query_cmd, check=False)
+    run_command(command=pool_query_cmd)
 
 def list_containers(pool_label):
     """Call daos pool list-containers <pool_label>
@@ -112,9 +102,7 @@ def list_containers(pool_label):
         pool_label (str): Pool label.
     """
     list_containers_cmd = ["daos", "pool", "label", pool_label]
-    command = " ".join(list_containers_cmd)
-    print(f"Command: {command}")
-    subprocess.run(list_containers_cmd, check=False)
+    run_command(command=list_containers_cmd)
 
 # Container-related methods
 def create_container(pool_label, cont_label):
@@ -125,9 +113,7 @@ def create_container(pool_label, cont_label):
         cont_label (str): Container label.
     """
     cont_create_cmd = ["daos", "container", "create", pool_label, cont_label]
-    command = " ".join(cont_create_cmd)
-    print(f"Command: {command}")
-    subprocess.run(cont_create_cmd, check=False)
+    run_command(command=cont_create_cmd)
 
 def cont_get_prop(pool_label, cont_label, properties=None):
     """Call daos container get-prop <pool_label> <cont_label> <properties>
@@ -141,9 +127,7 @@ def cont_get_prop(pool_label, cont_label, properties=None):
     get_prop_cmd = ["daos", "container", "get-prop", pool_label, cont_label]
     if properties:
         get_prop_cmd.append("--properties=" + properties)
-    command = " ".join(get_prop_cmd)
-    print(f"Command: {command}")
-    subprocess.run(get_prop_cmd, check=False)
+    run_command(command=get_prop_cmd)
 
 # Fault-related methods
 def inject_fault_mgmt(pool_label, fault_type):
@@ -154,9 +138,7 @@ def inject_fault_mgmt(pool_label, fault_type):
         fault_type (str): Fault type.
     """
     inject_fault_cmd = ["dmg", "faults", "mgmt-svc", "pool", pool_label, fault_type]
-    command = " ".join(inject_fault_cmd)
-    print(f"Command: {command}")
-    subprocess.run(inject_fault_cmd, check=False)
+    run_command(command=inject_fault_cmd)
 
 def inject_fault_pool(pool_label, fault_type):
     """Call dmg faults pool-svc to inject fault.
@@ -166,9 +148,7 @@ def inject_fault_pool(pool_label, fault_type):
         fault_type (str): Fault type.
     """
     inject_fault_cmd = ["dmg", "faults", "pool-svc", pool_label, fault_type]
-    command = " ".join(inject_fault_cmd)
-    print(f"Command: {command}")
-    subprocess.run(inject_fault_cmd, check=False)
+    run_command(command=inject_fault_cmd)
 
 def inject_fault_daos(pool_label, cont_label, fault_type):
     """Call daos faults to inject fault.
@@ -180,17 +160,13 @@ def inject_fault_daos(pool_label, cont_label, fault_type):
     """
     location = "--location=" + fault_type
     inject_fault_cmd = ["daos", "faults", "container", pool_label, cont_label, location]
-    command = " ".join(inject_fault_cmd)
-    print(f"Command: {command}")
-    subprocess.run(inject_fault_cmd, check=False)
+    run_command(command=inject_fault_cmd)
 
 # Check-related methods
 def check_enable():
     """Call dmg check enable"""
     check_enable_cmd = ["dmg", "check", "enable"]
-    command = " ".join(check_enable_cmd)
-    print(f"Command: {command}")
-    subprocess.run(check_enable_cmd, check=False)
+    run_command(command=check_enable_cmd)
 
 def check_set_policy(reset_defaults=False, all_interactive=False):
     """Call dmg check set-policy with --reset-defaults or --all-interactive.
@@ -206,9 +182,7 @@ def check_set_policy(reset_defaults=False, all_interactive=False):
             check_set_policy_cmd.append("--reset-defaults")
         if all_interactive:
             check_set_policy_cmd.append("--all-interactive")
-        command = " ".join(check_set_policy_cmd)
-        print(f"Command: {command}")
-        subprocess.run(check_set_policy_cmd, check=False)
+        run_command(command=check_set_policy_cmd)
 
 def check_start(policies=None):
     """Call dmg check start
@@ -219,9 +193,7 @@ def check_start(policies=None):
     check_start_cmd = ["dmg", "check", "start"]
     if policies:
         check_start_cmd.extend(["-p", policies])
-    command = " ".join(check_start_cmd)
-    print(f"Command: {command}")
-    subprocess.run(check_start_cmd, check=False)
+    run_command(command=check_start_cmd)
 
 def check_query(json=False):
     """Call dmg check query
@@ -250,9 +222,7 @@ def check_query(json=False):
 def check_disable():
     """Call dmg check disable"""
     check_disable_cmd = ["dmg", "check", "disable"]
-    command = " ".join(check_disable_cmd)
-    print(f"Command: {command}")
-    subprocess.run(check_disable_cmd, check=False)
+    run_command(command=check_disable_cmd)
 
 def repeat_check_query():
     """Allow user to repeatedly call dmg check query."""
@@ -273,24 +243,18 @@ def check_repair(sequence_num, action):
         action (str): Repair action number.
     """
     check_repair_cmd = ["dmg", "check", "repair", sequence_num, action]
-    command = " ".join(check_repair_cmd)
-    print(f"Command: {command}")
-    subprocess.run(check_repair_cmd, check=False)
+    run_command(command=check_repair_cmd)
 
 # System-related methods
 def system_stop():
     """Stop servers."""
     system_stop_cmd = ["dmg", "system", "stop"]
-    command = " ".join(system_stop_cmd)
-    print(f"Command: {command}")
-    subprocess.run(system_stop_cmd, check=False)
+    run_command(command=system_stop_cmd)
 
 def system_start():
     """Start servers."""
     system_start_cmd = ["dmg", "system", "start"]
-    command = " ".join(system_start_cmd)
-    print(f"Command: {command}")
-    subprocess.run(system_start_cmd, check=False)
+    run_command(command=system_start_cmd)
 
 def system_query(json=False, verbose=False):
     """Call dmg system query
@@ -363,3 +327,13 @@ def get_current_labels():
         pool_labels.append(pool["label"])
 
     return pool_labels
+
+def run_command(command):
+    """Print given command and run.
+
+    Args:
+        command (list): List of characters that make up the command.
+    """
+    cmd_str = " ".join(command)
+    print(f"Command: {cmd_str}")
+    subprocess.run(command, check=False)
