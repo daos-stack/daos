@@ -170,15 +170,10 @@ func (svc *mgmtSvc) restartSystemRanks(ctx context.Context, sys string) error {
 	return nil
 }
 
-func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnableReq) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnableReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckEnable RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckEnable RPC: %+v", req)
 
 	if svc.checkerIsEnabled() {
 		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
@@ -195,15 +190,10 @@ func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnab
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDisableReq) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDisableReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckDisable RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckDisable RPC: %+v", req)
 
 	if !svc.checkerIsEnabled() {
 		return &mgmtpb.DaosResp{Status: int32(daos.Already)}, nil
@@ -220,14 +210,10 @@ func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDis
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStartReq) (resp *mgmtpb.CheckStartResp, err error) {
+func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStartReq) (*mgmtpb.CheckStartResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckStart RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
 
 	pm, err := svc.getCheckerPolicyMap()
 	if err != nil {
@@ -243,14 +229,13 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		req.Policies = append(req.Policies, pol)
 	}
 
-	svc.log.Debugf("Received SystemCheckStart RPC: %+v", req)
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp = new(mgmtpb.CheckStartResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+	resp := new(mgmtpb.CheckStartResp)
+	if err := proto.Unmarshal(dResp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CheckStart response")
 	}
 
@@ -265,41 +250,30 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	return resp, nil
 }
 
-func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopReq) (resp *mgmtpb.CheckStopResp, err error) {
+func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopReq) (*mgmtpb.CheckStopResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckStop RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckStop RPC: %+v", req)
 
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStop, req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp = new(mgmtpb.CheckStopResp)
-	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
+	resp := new(mgmtpb.CheckStopResp)
+	if err := proto.Unmarshal(dResp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CheckStop response")
 	}
 
 	return resp, nil
 }
 
-func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQueryReq) (resp *mgmtpb.CheckQueryResp, err error) {
+func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQueryReq) (*mgmtpb.CheckQueryResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckQuery RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckQuery RPC: %+v", req)
-
-	resp = new(mgmtpb.CheckQueryResp)
-
+	resp := new(mgmtpb.CheckQueryResp)
 	if len(req.GetSeqs()) > 0 {
 		req.Shallow = true
 	}
@@ -351,15 +325,10 @@ func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
 	return pm, nil
 }
 
-func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckGetPolicyReq) (resp *mgmtpb.CheckGetPolicyResp, err error) {
+func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckGetPolicyReq) (*mgmtpb.CheckGetPolicyResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckGetPolicy RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckGetPolicy RPC: %+v", req)
 
 	dReq := &mgmtpb.CheckPropReq{Sys: req.Sys}
 	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerProp, dReq)
@@ -388,7 +357,7 @@ func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckG
 		}
 	}
 
-	resp = &mgmtpb.CheckGetPolicyResp{
+	resp := &mgmtpb.CheckGetPolicyResp{
 		Status: getPropResp.Status,
 		Flags:  getPropResp.Flags,
 	}
@@ -425,15 +394,10 @@ func (svc *mgmtSvc) setCheckerPolicyMap(polList []*mgmtpb.CheckInconsistPolicy) 
 	return system.SetMgmtProperty(svc.sysdb, checkerPoliciesKey, string(polStr))
 }
 
-func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckSetPolicyReq) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckSetPolicyReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckSetPolicy RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckSetPolicy RPC: %+v", req)
 
 	if err := svc.setCheckerPolicyMap(req.Policies); err != nil {
 		return nil, err
@@ -442,15 +406,10 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 	return &mgmtpb.DaosResp{}, nil
 }
 
-func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (resp *mgmtpb.CheckActResp, err error) {
+func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (*mgmtpb.CheckActResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to SystemCheckRepair RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received SystemCheckRepair RPC: %+v", req)
 
 	f, err := svc.sysdb.GetCheckerFinding(req.Seq)
 	if err != nil {
@@ -471,7 +430,7 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 	}
 	svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 
-	resp = new(mgmtpb.CheckActResp)
+	resp := new(mgmtpb.CheckActResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
 	}
