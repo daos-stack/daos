@@ -54,9 +54,19 @@ struct dtx_batched_cont_args {
 					 dbca_agg_done:1;
 };
 
-struct dtx_cleanup_stale_cb_args {
-	d_list_t		dcsca_list;
-	int			dcsca_count;
+struct dtx_partial_cmt_item {
+	d_list_t		dpci_link;
+	uint32_t		dpci_inline_mbs:1;
+	struct dtx_entry	dpci_dte;
+};
+
+struct dtx_cleanup_cb_args {
+	/* The list for stale DTX entries. */
+	d_list_t		dcca_st_list;
+	/* The list for partial committed DTX entries. */
+	d_list_t		dcca_pc_list;
+	int			dcca_st_count;
+	int			dcca_pc_count;
 };
 
 static inline void
@@ -164,11 +174,13 @@ dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 }
 
 static int
-dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 {
-	struct dtx_cleanup_stale_cb_args	*dcsca = args;
-	struct dtx_memberships			*mbs;
-	struct dtx_share_peer			*dsp;
+	struct dtx_cleanup_cb_args	*dcca = args;
+	struct dtx_share_peer		*dsp = NULL;
+	struct dtx_partial_cmt_item	*dpci = NULL;
+	struct dtx_memberships		*mbs;
+	struct dtx_entry		*dte;
 
 	/* We commit the DTXs periodically, there will be very limited DTXs
 	 * to be checked when cleanup. So we can load all those uncommitted
@@ -178,10 +190,6 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 */
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
-
-	/* Skip the DTX entry which leader resides on current target and may be still alive. */
-	if (ent->ie_dtx_flags & DTE_LEADER)
-		return 0;
 
 	/* Skip corrupted entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
@@ -202,88 +210,155 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
-	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
-		D_ALLOC_PTR(dsp);
-	else
-		D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+	/*
+	 * NOTE: Usually, the partial committed DTX entries will be handled by batched commit ULT
+	 *	 (if related container is not closed) or DTX resync (after the container re-open).
+	 *	 So here, the left ones are for rare failure cases in these process, they will be
+	 *	 re-committed via dtx_cleanup logic.
+	 */
+	if (unlikely(ent->ie_dtx_flags & DTE_PARTIAL_COMMITTED)) {
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			D_ALLOC_PTR(dpci);
+		else
+			D_ALLOC(dpci, sizeof(*dpci) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+		if (dpci == NULL)
+			return -DER_NOMEM;
 
-	if (dsp == NULL)
-		return -DER_NOMEM;
+		dte = &dpci->dpci_dte;
+		dte->dte_xid = ent->ie_dtx_xid;
+		dte->dte_ver = ent->ie_dtx_ver;
+		dte->dte_refs = 1;
 
-	dsp->dsp_xid = ent->ie_dtx_xid;
-	dsp->dsp_oid = ent->ie_dtx_oid;
-	dsp->dsp_epoch = ent->ie_epoch;
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			goto add;
 
-	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
-		dsp->dsp_inline_mbs = 0;
-		dsp->dsp_mbs = NULL;
+		mbs = (struct dtx_memberships *)(dte + 1);
+		dpci->dpci_inline_mbs = 1;
+		dte->dte_mbs = mbs;
 	} else {
-		mbs = (struct dtx_memberships *)(dsp + 1);
-		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-		mbs->dm_flags = ent->ie_dtx_mbs_flags;
-		mbs->dm_dte_flags = ent->ie_dtx_flags;
-		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+		/* Skip the DTX which leader resides on current target and may be still alive. */
+		if (ent->ie_dtx_flags & DTE_LEADER)
+			return 0;
 
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			D_ALLOC_PTR(dsp);
+		else
+			D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+		if (dsp == NULL)
+			return -DER_NOMEM;
+
+		dsp->dsp_xid = ent->ie_dtx_xid;
+		dsp->dsp_oid = ent->ie_dtx_oid;
+		dsp->dsp_epoch = ent->ie_epoch;
+
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			goto add;
+
+		mbs = (struct dtx_memberships *)(dsp + 1);
 		dsp->dsp_inline_mbs = 1;
 		dsp->dsp_mbs = mbs;
 	}
 
-	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
-	dcsca->dcsca_count++;
+	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+	mbs->dm_flags = ent->ie_dtx_mbs_flags;
+	mbs->dm_dte_flags = ent->ie_dtx_flags;
+	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+add:
+	if (ent->ie_dtx_flags & DTE_PARTIAL_COMMITTED) {
+		d_list_add_tail(&dpci->dpci_link, &dcca->dcca_pc_list);
+		dcca->dcca_pc_count++;
+	} else {
+		d_list_add_tail(&dsp->dsp_link, &dcca->dcca_st_list);
+		dcca->dcca_st_count++;
+	}
 
 	return 0;
 }
 
-static void
-dtx_cleanup_stale(void *arg)
+static inline void
+dtx_dpci_free(struct dtx_partial_cmt_item *dpci)
 {
-	struct dtx_batched_cont_args		*dbca = arg;
-	struct ds_cont_child			*cont = dbca->dbca_cont;
-	struct dtx_share_peer			*dsp;
-	struct dtx_cleanup_stale_cb_args	 dcsca;
-	int					 count;
-	int					 rc;
+	if (dpci->dpci_inline_mbs == 0)
+		D_FREE(dpci->dpci_dte.dte_mbs);
+
+	D_FREE(dpci);
+}
+
+static void
+dtx_cleanup(void *arg)
+{
+	struct dtx_batched_cont_args	*dbca = arg;
+	struct ds_cont_child		*cont = dbca->dbca_cont;
+	struct dtx_share_peer		*dsp;
+	struct dtx_partial_cmt_item	*dpci;
+	struct dtx_entry		*dte;
+	struct dtx_cleanup_cb_args	 dcca;
+	int				 count;
+	int				 rc;
 
 	if (dbca->dbca_cleanup_req == NULL)
 		goto out;
 
-	D_INIT_LIST_HEAD(&dcsca.dcsca_list);
-	dcsca.dcsca_count = 0;
+	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
+	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
+	dcca.dcca_st_count = 0;
+	dcca.dcca_pc_count = 0;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
-			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX, 0);
+			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
 	if (rc < 0)
-		D_WARN("Failed to scan stale DTX entry for "
+		D_WARN("Failed to scan DTX entry for cleanup "
 		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) &&
-	       !d_list_empty(&dcsca.dcsca_list) && dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
-		if (dcsca.dcsca_count > DTX_REFRESH_MAX) {
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+		if (dcca.dcca_st_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
-			dcsca.dcsca_count -= DTX_REFRESH_MAX;
+			dcca.dcca_st_count -= DTX_REFRESH_MAX;
 		} else {
-			D_ASSERT(dcsca.dcsca_count > 0);
+			D_ASSERT(dcca.dcca_st_count > 0);
 
-			count = dcsca.dcsca_count;
-			dcsca.dcsca_count = 0;
+			count = dcca.dcca_st_count;
+			dcca.dcca_st_count = 0;
 		}
 
 		/* Use false as the "failout" parameter that should guarantee
 		 * that all the DTX entries in the check list will be handled
 		 * even if some former ones hit failure.
 		 */
-		rc = dtx_refresh_internal(cont, &count, &dcsca.dcsca_list,
+		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
 					  NULL, NULL, NULL, false);
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
 
-	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
-				       struct dtx_share_peer,
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
+		dcca.dcca_pc_count--;
+
+		dte = &dpci->dpci_dte;
+		if (dte->dte_mbs == NULL)
+			rc = vos_dtx_load_mbs(cont->sc_hdl, &dte->dte_xid, &dte->dte_mbs);
+		if (dte->dte_mbs != NULL)
+			rc = dtx_commit(cont, &dte, NULL, 1);
+
+		D_DEBUG(DB_IO, "Cleanup partial committed DTX "DF_DTI", left %d: %d\n",
+			DP_DTI(&dte->dte_xid), dcca.dcca_pc_count, rc);
+		dtx_dpci_free(dpci);
+	}
+
+	while ((dsp = d_list_pop_entry(&dcca.dcca_st_list, struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		dtx_dsp_free(dsp);
+
+	while ((dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item,
+					dpci_link)) != NULL)
+		dtx_dpci_free(dpci);
 
 	dbca->dbca_cleanup_done = 1;
 
@@ -510,7 +585,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
@@ -622,8 +697,7 @@ dtx_batched_commit(void *arg)
 
 			D_ASSERT(dbca->dbca_cont);
 			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
-			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup_stale,
-								  dbca, 0);
+			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup, dbca, 0);
 			if (dbca->dbca_cleanup_req == NULL) {
 				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
@@ -1259,14 +1333,29 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 sync:
 	if (dth->dth_sync) {
+		/*
+		 * TBD: We need to reserve some space to guarantee that the local commit can be
+		 *	done successfully. That is not only for sync commit, but also for async
+		 *	batched commit.
+		 */
+		vos_dtx_mark_committable(dth);
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1, dth->dth_epoch);
+		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0)
-			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
-				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
-				DP_DTI(&dth->dth_xid), DP_RC(rc));
+			D_WARN(DF_UUID": Fail to sync commit DTX "DF_DTI": "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
 
-		D_GOTO(out, result = rc);
+		/*
+		 * NOTE: The semantics of 'sync' commit does not guarantee that all
+		 *	 participants of the DTX can commit it on each local target
+		 *	 successfully, instead, we try to commit the DTX immediately
+		 *	 after all participants claiming 'prepared'. But even if we
+		 *	 failed to commit it, we will not rollback the commit since
+		 *	 the DTX has been marked as 'committable' and may has been
+		 *	 accessed by others. The subsequent dtx_cleanup logic will
+		 *	 handle (re-commit) current failed commit.
+		 */
+		D_GOTO(out, result = 0);
 	}
 
 abort:
@@ -1448,26 +1537,27 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
 					    NULL, DAOS_EPOCH_MAX, &dtes, &dcks);
-		if (cnt <= 0) {
-			rc = cnt;
-			break;
-		}
+		if (cnt <= 0)
+			D_GOTO(out, rc = cnt);
 
 		total += cnt;
 		/* When flush_on_deregister, nobody will add more DTX
 		 * into the CoS cache. So if accumulated commit count
 		 * is more than the total committable ones, then some
 		 * DTX entries cannot be removed from the CoS cache.
+		 * Under such case, have to break the dtx_flush.
 		 */
-		D_ASSERTF(total <= stat.dtx_committable_count,
-			  "Some DTX in CoS may cannot be removed: %lu/%lu\n",
-			  (unsigned long)total,
-			  (unsigned long)stat.dtx_committable_count);
+		if (unlikely(total > stat.dtx_committable_count)) {
+			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
+			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			D_GOTO(out, rc = -DER_MISC);
+		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
+out:
 	if (rc < 0)
 		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
 			DP_UUID(cont->sc_uuid), rc);
@@ -2080,7 +2170,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
