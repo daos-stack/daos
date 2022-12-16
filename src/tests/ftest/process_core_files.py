@@ -374,14 +374,10 @@ class CoreFileProcessing():
         self.log.debug("Deleting core.gdb.*.* core files located in %s", core_path)
         other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
         try:
-            run_local(self.log, [find_command(core_path, "core.gdb.*.*", 1, other)], check=True)
+            run_local(self.log, [find_command(core_path, "core.gdb.*.*", 1, other)])
         except FileNotFoundError:
             self.log.debug("No core.gdb.*.* files found")
             return 0
-        except RunException:
-            self.log.error("Unable to find local core file pattern")
-            self.log.debug("Stacktrace", exc_info=True)
-            return 1
         return 0
 
 
