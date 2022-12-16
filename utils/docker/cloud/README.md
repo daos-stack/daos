@@ -81,9 +81,9 @@ docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.y
 
 ### Running DAOS Client Docker Image
 
-This section presents two ways of running the `daos pool autotest` subcommand with a docker image
-build according to the previous section.  For both method the following environment variables of the
-docker environment file `utils/docker/cloud/.env` must be defined:
+This section presents how to run the `daos pool autotest` subcommand with a docker image build
+according to the previous section.  Firstly the following environment variables of the docker
+environment file `utils/docker/cloud/.env` must be defined:
 - `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
 - `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
 
@@ -91,7 +91,8 @@ It could also be needed to define the following environment variable according t
 of DAOS agent running on the docker host:
 - `DAOS_AGENT_RUNTIME_DIR`: Directory containing the DAOS agent socket (default `/var/run/daos_agent`)
 
-The easiest ways is use the docker subcommand `docker compose run` subcommand in the following way:
+When the environment file has been properly filled, the `daos pool autotest` could be run thanks to
+the following command:
 ```bash
 docker compose --file utils/docker/cloud/docker-compose.daos_client.standalone.yml run --rm daos_client
 $ daos pool autotest <POOL ID>
@@ -99,7 +100,7 @@ $ daos pool autotest <POOL ID>
 
 ### Docker Host Configuration
 
-When a Docker Enging service is installed on a node it creates a virtual interface `docker0` which
+When a Docker Engine service is installed on a node it creates a virtual interface `docker0` which
 could be misused by the DAOS agent.  To overcome this issue, the `fabric_ifaces` section of the
 `daos_agent.yml` configuration file could be used, as illustrated on the following example:
 ```yaml
