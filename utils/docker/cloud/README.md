@@ -121,3 +121,97 @@ fabric_ifaces:
   - iface: eth0
     domain: eth0
 ```
+
+
+## DAOS Client and Agent Containerized
+
+With the deployment solution presented in this section, the DAOS client and the DAOS Agent are
+running in two different docker containers.
+
+### Building DAOS Client Docker Image
+
+This image is using the same environment variables as the DAOS Client Docker image of the previous
+section.
+
+When the environment file has been properly filled, the docker image could be created thanks to the
+following command:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_client
+```
+
+### Building DAOS Agent Docker Image
+
+This section describes how to build the Docker container running the DAOS agent service allowing the
+DAOS client container to access a DAOS file system.  The following environment variables must be
+defined for being able to properly build the docker image:
+- `DAOS_ACCESS_POINTS`: List of DAOS management server access points (e.g. "['hostname1',
+  'hostname2']")
+- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the DAOS client docker image (default "rocky8.6")
+
+The following environment variables allow to customize the Docker images to build:
+- `DAOS_PORT`: DAOS access point port number to connect (default "1001")
+- `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
+- `DAOS_IFACE_CFG`: Enable manual configuration of the interface to use by the agent (default "yes")
+- `DAOS_IFACE_NUMA_NODE`: Numa node of the interface to use by the agent (default "0").  Defining
+  this variable is mandatory when `DAOS_IFACE_CFG` is enabled.
+- `DAOS_IFACE_NAME`: Name of the interface to use by the agent (default "").  Defining this variable
+  is mandatory when `DAOS_IFACE_CFG` is enabled.
+- `DAOS_IFACE_DOMAIN_NAME`: Domain name of the interface to use by the agent (default "eth0").
+  Defining this variable is mandatory when `DAOS_IFACE_CFG` is enabled.
+
+!!! warning
+    On most of the system the`DAOS_IFACE_CFG` should be enabled to avoid the DAOS agent service of
+    using an invalid network interface such as the `docker0` virtual network interface.
+
+When the environment file has been properly filled, the docker image could be created thanks to the
+following command:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml build daos_agent
+```
+
+### Running DAOS Docker Images
+
+This section presents how to run some relevant use cases with a docker image build according to the
+previous section.  In a first time the following environment variables of the docker environment
+file `utils/docker/cloud/.env` must be defined:
+- `DAOS_CLIENT_UID`: User id of the client (e.g.,  "666")
+- `DAOS_CLIENT_GID`: Group id of the client (e.g., "999")
+
+In a second time, a tarball (i.e. `tar` archive compressed with `xz`) of the DAOS certificate files
+should be created when the DAOS authentication is enabled.  For using Docker Compose the tarball of
+the certificates file path readable by all users and its file path defined in the following variable
+of the docker environment file `utils/docker/cloud/.env`:
+- `DAOS_AGENT_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS agent
+  (e.g. "secrets/daos\_agent-certs.txz")
+
+!!! note
+    As [Docker Secret](https://docs.docker.com/engine/swarm/secrets/) is a Docker Swarm service, it
+    could not be used properly with Docker Compose.  With Docker Compose, secret are managed as
+    standard Docker Volume mounted in `/run/secrets` directory.  More details could be found at:
+    https://github.com/docker/compose/issues/9139#issuecomment-1098137264
+
+!!! note
+    For properly managing secret, Docker Stack should be used instead of Docker Compose.  Sadly, the
+    `pid=host` option is not yet supported in swarm mode, and this last one is mandatory to allow
+    the DAOS Agent to monitor its associated clients. More details could be found at:
+    https://github.com/docker/docs/issues/5624 and https://github.com/moby/swarmkit/issues/1605
+
+When the environment file has been properly filled, then an application such as `daos pool autotest`
+could be run in the following way:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
+$ daos pool autotest <POOL ID>
+```
+
+With the same prerequites, the [fio](https://fio.readthedocs.io/) file system benchmark tool could
+be run thanks to the following commands:
+```bash
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml up --detach daos_agent
+docker compose --file utils/docker/cloud/docker-compose.daos_client_agent.standalone.yml run --rm daos_client
+$ mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
+$ daos container create --type=posix --label=posix-fs tank
+$ dfuse --mountpoint="/home/<DAOS_CLIENT_UNAME>/mnt" --pool=tank --container=posix-fs
+$ df --human-readable --type=fuse.daos
+$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
+```
