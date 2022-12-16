@@ -292,8 +292,6 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
-	c.log.Debugf("received StorageScan RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -325,8 +323,6 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 		return nil, err
 	}
 
-	c.log.Debug("responding to StorageScan RPC")
-
 	return resp, nil
 }
 
@@ -344,8 +340,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
-
-	c.log.Debugf("received StorageFormat RPC %v", req)
 
 	engineIdxs := make([]uint, len(instances))
 	for i, eng := range instances {
@@ -425,8 +419,6 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 // StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
-	c.log.Debugf("received StorageNvmeRebind RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -457,8 +449,6 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 		return resp, nil // report prepare call result in response
 	}
 
-	c.log.Debug("responding to StorageNvmeRebind RPC")
-
 	return resp, nil
 }
 
@@ -466,8 +456,6 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 //
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
-	c.log.Debugf("received StorageNvmeAddDevice RPC %v", req)
-
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -518,8 +506,6 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 			Status: ctlpb.ResponseStatus_CTL_ERR_NVME,
 		}
 	}
-
-	c.log.Debug("responding to StorageNvmeAddDevice RPC")
 
 	return resp, nil
 }
