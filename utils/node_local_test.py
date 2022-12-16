@@ -670,7 +670,6 @@ class DaosServer():
         with open(join(self_dir, 'nlt_server.yaml'), 'r') as scfd:
             scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
