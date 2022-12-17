@@ -339,7 +339,7 @@ class AvocadoInfo():
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
             try:
-                result = run_local(logger, ["avocado", "-v"], check=True)
+                result = run_local(logger, "avocado -v", check=True)
             except RunException as error:
                 message = "Error obtaining avocado version after failed avocado.core.version import"
                 raise LaunchException(message) from error
@@ -389,7 +389,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            result = run_local(logger, ["avocado", "config"], check=True)
+            result = run_local(logger, "avocado config", check=True)
             try:
                 return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
             except IndexError:
@@ -1690,7 +1690,7 @@ class Launch():
 
         # Find all the test files that contain tests matching the tags
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, command, check=True)
+        output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
@@ -1706,7 +1706,7 @@ class Launch():
         """
         logger.debug("Checking for fault injection enablement via 'fault_status':")
         try:
-            run_local(logger, ["fault_status"], check=True)
+            run_local(logger, "fault_status", check=True)
             logger.debug("  Fault injection is enabled")
             return True
         except RunException:
@@ -1739,7 +1739,7 @@ class Launch():
             if args.extra_yaml:
                 command.extend(args.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, command, check=False)
+            run_local(logger, " ".join(command), check=False)
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
@@ -2105,7 +2105,7 @@ class Launch():
             # Optionally display a diff of the yaml file
             if args.verbose > 0:
                 command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(logger, command, check=False)
+                run_local(logger, " ".join(command), check=False)
 
         # Return the untouched or modified yaml file
         return yaml_file
@@ -2319,7 +2319,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, ["df", "-h", path], check=False)
+            run_local(logger, " ".join(["df", "-h", path]), check=False)
         except RunException:
             pass
 
@@ -2462,8 +2462,8 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, ["/usr/bin/rm", "-rf", certs_dir])
-            run_local(logger, [command, daos_test_log_dir])
+            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
+            run_local(logger, " ".join([command, daos_test_log_dir]))
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2492,7 +2492,8 @@ class Launch():
         start_time = int(time.time())
 
         try:
-            return_code = run_local(logger, command, capture_output=False, check=False).returncode
+            return_code = run_local(
+                logger, " ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
             elif return_code == 2:
@@ -2532,9 +2533,10 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, ["mkdir", "-p", latest_crash_dir], check=True)
+                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
                     for crash_file in crash_files:
-                        run_local(logger, ["mv", crash_file, latest_crash_dir], check=True)
+                        run_local(
+                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
@@ -3079,7 +3081,7 @@ class Launch():
         command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(logger, command, check=True, timeout=timeout)
+            run_local(logger, " ".join(command), check=True, timeout=timeout)
 
         except RunException:
             message = f"Error copying remote files to {destination}"
