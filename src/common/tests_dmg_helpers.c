@@ -1133,7 +1133,7 @@ out:
 	return rc;
 }
 
-int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char* arg)
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char *arg)
 {
 	int			argcount = 0;
 	char			**args = NULL;
