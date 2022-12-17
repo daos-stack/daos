@@ -5,7 +5,7 @@
 """
 from socket import gethostname
 import subprocess   # nosec
-import shellex
+import shlex
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -261,7 +261,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     try:
         # pylint: disable=subprocess-run-check
-        result = subprocess.run(shellex.split(command), **kwargs)     # nosec
+        result = subprocess.run(shlex.split(command), **kwargs)     # nosec
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
