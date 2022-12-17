@@ -5,8 +5,8 @@
 """
 import argparse
 import time
-import yaml
 import subprocess
+import yaml
 from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable,\
     check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum,\
     pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
@@ -15,7 +15,6 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
 
 # Need to use at least "scm_size: 15" for server config to create 8 1GB-pools.
 POOL_SIZE_1GB = "1GB"
-POOL_SIZE_5GB = "5GB"
 POOL_LABEL = "tank"
 CONT_LABEL = "bucket"
 # Rank to create F5 pool.
@@ -187,9 +186,9 @@ system_start()
 ####################################################################
 input("\n6. Show the faults inserted for each pool/container except "
       "F2, F6, F7. Hit enter...")
-print(f"\n6-F1. Show dangling pool entry. {POOL_LABEL_1} doesn't exist on engine.")
+print(f"6-F1. Show dangling pool entry for {POOL_LABEL_1}.")
 # F3 part 1
-print(f"\n6-F3. MS doesn't recognize {POOL_LABEL_3}.")
+print(f"6-F3. MS doesn't recognize {POOL_LABEL_3}.")
 # F4 part 1
 print(f"6-F4-1. Label ({POOL_LABEL_4}) in MS are corrupted with -fault added.")
 list_pool(no_query=True)
