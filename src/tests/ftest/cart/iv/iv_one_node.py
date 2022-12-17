@@ -486,7 +486,7 @@ class CartIvOneNodeTest(CartTest):
 
         # Shutdown Servers
 
-        num_servers = 10
+        num_servers = 1
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 

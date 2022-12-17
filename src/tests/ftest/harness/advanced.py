@@ -11,7 +11,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import get_avocado_config_value
-from run_utils import run_remote
+from run_utils import run_remote, run_local, RunException
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
 
@@ -44,6 +44,19 @@ class HarnessAdvancedTest(TestWithServers):
         :avocado: tags=harness,harness_advanced_test,core_files
         :avocado: tags=HarnessAdvancedTest,test_core_files
         """
+        # create a core.gdb file
+        self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
+        try:
+            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
+        except RunException:
+            self.fail("Unable to find local core file pattern")
+        core_path = os.path.split(results.stdout.splitlines()[-1])[0]
+        command = f"touch {core_path}/core.gdb.harness.advanced"
+        try:
+            run_local(self.log, " ".join(command), check=True)
+        except RunException:
+            self.fail("Failed to touch core.gdb file in %s", )
+
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         ranks = self.server_managers[0].get_host_ranks(host)
