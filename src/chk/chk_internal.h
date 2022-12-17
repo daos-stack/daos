@@ -205,6 +205,7 @@ CRT_RPC_DECLARE(chk_pool_start, DAOS_ISEQ_CHK_POOL_START, DAOS_OSEQ_CHK_POOL_STA
 	((uint32_t)		(cpmi_flags)		CRT_VAR)		\
 	((uint32_t)		(cpmi_phase)		CRT_VAR)		\
 	((d_string_t)		(cpmi_label)		CRT_VAR)		\
+	((uint64_t)		(cpmi_label_seq)	CRT_VAR)		\
 	((struct chk_pool_mbs)	(cpmi_targets)		CRT_ARRAY)		\
 
 #define DAOS_OSEQ_CHK_POOL_MBS							\
@@ -385,7 +386,7 @@ struct chk_bookmark {
  *   The 'reset' flag does not affect check property. If want to change check property, need to
  *   overwrite related property explicitly when check start.
  *
- *   NOTE: If a pool has been 'checked' (as CHK__CHECK_SCAN_PHASE__DSP_DONE) in former instance,
+ *   NOTE: If a pool has been 'checked' (as CHK__CHECK_SCAN_PHASE__CSP_DONE) in former instance,
  *	   then current check instance will skip it directly unless explicitly set 'reset' flag
  *	   or reset is triggered for other reason, such as check ranks changes.
  *
@@ -495,6 +496,7 @@ struct chk_instance {
 
 	uint32_t		 ci_is_leader:1,
 				 ci_sched_running:1,
+				 ci_for_orphan:1,
 				 ci_starting:1,
 				 ci_stopping:1,
 				 ci_started:1,
@@ -535,6 +537,7 @@ struct chk_pool_rec {
 				 cpr_stop:1,
 				 cpr_done:1,
 				 cpr_skip:1,
+				 cpr_dangling:1,
 				 cpr_for_orphan:1,
 				 cpr_notified_exit:1,
 				 cpr_destroyed:1,
@@ -552,6 +555,7 @@ struct chk_pool_rec {
 	struct chk_instance	*cpr_ins;
 	struct chk_pool_mbs	*cpr_mbs;
 	char			*cpr_label;
+	uint64_t		 cpr_label_seq;
 	ABT_mutex		 cpr_mutex;
 	ABT_cond		 cpr_cond;
 	int			 cpr_refs;
@@ -562,6 +566,7 @@ struct chk_pending_rec {
 	d_list_t		 cpr_ins_link;
 	/* Link into chk_rank_rec::crr_pending_list. */
 	d_list_t		 cpr_rank_link;
+	uuid_t			 cpr_uuid;
 	uint64_t		 cpr_seq;
 	d_rank_t		 cpr_rank;
 	uint32_t		 cpr_class;
@@ -622,7 +627,7 @@ void chk_ranks_dump(uint32_t rank_nr, d_rank_t *ranks);
 
 void chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[]);
 
-void  chk_pool_remove_nowait(struct chk_pool_rec *cpr, bool destroy);
+void  chk_pool_remove_nowait(struct chk_pool_rec *cpr);
 
 void chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret);
 
@@ -643,9 +648,10 @@ int chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv);
 
 int chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
 		       struct chk_bookmark *bk, struct chk_instance *ins,
-		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb);
+		       uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
+		       struct chk_pool_rec **cpr);
 
-int chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
+int chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uuid_t uuid, uint64_t seq,
 		    uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr);
 
 int chk_pending_del(struct chk_instance *ins, uint64_t seq, struct chk_pending_rec **cpr);
@@ -680,7 +686,7 @@ int chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_
 
 int chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase);
 
-int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label,
+int chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label, uint64_t seq,
 			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
 			struct rsvc_hint *hint);
 
@@ -743,8 +749,8 @@ int chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t lis
 int chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase);
 
 int chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
-			uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
-			struct rsvc_hint *hint);
+			uint64_t seq, uint32_t flags, uint32_t mbs_nr,
+			struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint);
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
 		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label,
@@ -1046,18 +1052,22 @@ chk_pools_add_from_dir(uuid_t uuid, void *args)
 }
 
 static inline uint32_t
-chk_pools_find_slowest(struct chk_instance *ins, bool *done)
+chk_pools_find_slowest(struct chk_instance *ins, bool *done, bool *dangling)
 {
 	struct chk_pool_rec	*cpr;
-	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 
 	*done = true;
+	if (dangling != NULL)
+		*dangling = false;
 
 	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
 		if (cpr->cpr_skip || cpr->cpr_done)
 			continue;
 
 		*done = false;
+		if (cpr->cpr_dangling && dangling != NULL)
+			*dangling = true;
 
 		if (cpr->cpr_bk.cb_phase < phase)
 			phase = cpr->cpr_bk.cb_phase;

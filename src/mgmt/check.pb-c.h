@@ -282,7 +282,7 @@ struct  _Mgmt__CheckQueryTarget
   Chk__CheckInstStatus status;
   /*
    * Inconsistency statistics during the phases range
-   * [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+   * [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
    */
   Mgmt__CheckQueryInconsist *inconsistency;
   /*

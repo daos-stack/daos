@@ -353,11 +353,11 @@ typedef enum _Chk__CheckScanPhase {
   /*
    * EC aggregation & VOS aggregation.
    */
-  CHK__CHECK_SCAN_PHASE__OSP_AGGREGATION = 9,
+  CHK__CHECK_SCAN_PHASE__CSP_AGGREGATION = 9,
   /*
    * All done.
    */
-  CHK__CHECK_SCAN_PHASE__DSP_DONE = 10
+  CHK__CHECK_SCAN_PHASE__CSP_DONE = 10
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CHK__CHECK_SCAN_PHASE)
 } Chk__CheckScanPhase;
 

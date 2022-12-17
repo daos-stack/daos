@@ -415,6 +415,7 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 	d_sg_list_t			*details = NULL;
 	Chk__CheckInconsistClass	 cla;
 	Chk__CheckInconsistAction	 act;
+	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	uint64_t			 seq = 0;
@@ -476,7 +477,10 @@ chk_engine_pm_dangling(struct chk_pool_rec *cpr, struct pool_map *map, struct po
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
 			option_nr = 2;
 
-			strs[0] = "Change pool map for the dangling map entry [suggested].";
+			snprintf(suggested, CHK_MSG_BUFLEN - 1,
+				 "Change pool map for the dangling map entry as %u [suggested].",
+				 status);
+			strs[0] = suggested;
 			strs[1] = "Keep the dangling map entry in pool map, repair nothing.";
 
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
@@ -816,7 +820,7 @@ chk_engine_bad_pool_label(struct chk_pool_rec *cpr, struct ds_pool_svc *svc)
 	Chk__CheckInconsistAction	 act;
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
-	uint64_t			 seq = 0;
+	uint64_t			 seq = cpr->cpr_label_seq;
 	int				 result = 0;
 	int				 rc = 0;
 
@@ -1327,7 +1331,7 @@ interact:
 
 		if (rc > 0) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			strs[0] = "Repair the container label in container property [suggested].";
+			strs[0] = "Trust the container label in container service [suggested].";
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 
 			if (chk_engine_cont_target_label_empty(ccr)) {
@@ -1335,14 +1339,14 @@ interact:
 				sgl.sg_nr = 2;
 			} else {
 				options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-				strs[2] = "Repair the container label in container service.";
+				strs[2] = "Trust the container label in container property.";
 				d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
 				option_nr = 3;
 				sgl.sg_nr = 3;
 			}
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-			strs[0] = "Repair the container label in container service [suggested].";
+			strs[0] = "Trust the container label in container property [suggested].";
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 
 			if (chk_engine_cont_cs_label_empty(ccr)) {
@@ -1350,7 +1354,7 @@ interact:
 				sgl.sg_nr = 2;
 			} else {
 				options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-				strs[2] = "Repair the container label in container property.";
+				strs[2] = "Trust the container label in container service.";
 				d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
 				option_nr = 3;
 				sgl.sg_nr = 3;
@@ -1659,7 +1663,7 @@ chk_engine_pool_ult(void *args)
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP;
 		chk_engine_pool_notify(cpr, pool);
 		/* QUEST: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0 || cpr->cpr_stop)
 			goto out;
@@ -1719,7 +1723,7 @@ cont:
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST;
 		chk_engine_pool_notify(cpr, pool);
 		/* QUEST: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0 || cpr->cpr_stop)
 			goto out;
@@ -1741,7 +1745,7 @@ cont:
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP;
 		chk_engine_pool_notify(cpr, pool);
 		/* QUEST: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0 || cpr->cpr_stop)
 			goto out;
@@ -1774,8 +1778,8 @@ out:
 			 * status. It will be synced this time.
 			 */
 			cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
-			if (likely(cbk->cb_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE))
-				cbk->cb_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+			if (likely(cbk->cb_phase != CHK__CHECK_SCAN_PHASE__CSP_DONE))
+				cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 			else
 				update = false;
 		}
@@ -1827,7 +1831,7 @@ chk_engine_sched(void *args)
 
 		dss_sleep(300);
 
-		phase = chk_pools_find_slowest(ins, &done);
+		phase = chk_pools_find_slowest(ins, &done, NULL);
 		if (done) {
 			D_INFO(DF_ENGINE" on rank %u has done\n", DP_ENGINE(ins), myrank);
 			D_GOTO(out, rc = 1);
@@ -1839,7 +1843,7 @@ chk_engine_sched(void *args)
 
 			cbk->cb_phase = phase;
 			/* QUEST: How to estimate the left time? */
-			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 			rc = chk_bk_update_engine(cbk);
 			if (rc != 0)
 				goto out;
@@ -1858,7 +1862,7 @@ out:
 			ins_status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
 		/* pool_status is useless under this case since all pools have done. */
 		pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
-		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	} else if (rc == 0) {
 		if (ins->ci_implicated) {
 			ins_status = CHK__CHECK_INST_STATUS__CIS_IMPLICATED;
@@ -2006,13 +2010,13 @@ chk_engine_start_post(struct chk_instance *ins)
 	struct chk_bookmark	*ins_cbk = &ins->ci_bk;
 	struct chk_bookmark	*pool_cbk;
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
-	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int			 rc = 0;
 
 	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
 		pool_cbk = &cpr->cpr_bk;
 
-		if (pool_cbk->cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE)
+		if (pool_cbk->cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
 			continue;
 
 		if (phase > pool_cbk->cb_phase)
@@ -2023,7 +2027,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		/* Always refresh the start time. */
 		pool_cbk->cb_time.ct_start_time = time(NULL);
 		/* QUEST: How to estimate the left time? */
-		pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+		pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 						 pool_cbk->cb_phase;
 
 		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
@@ -2034,7 +2038,7 @@ chk_engine_start_post(struct chk_instance *ins)
 
 	if (rc == 0) {
 		/*
-		 * The phase may be CHK__CHECK_SCAN_PHASE__DSP_DONE, it is fine.
+		 * The phase may be CHK__CHECK_SCAN_PHASE__CSP_DONE, it is fine.
 		 *
 		 * The phase in engine bookmark may be larger than the phase in
 		 * some pools that may be new added into current check instance.
@@ -2045,7 +2049,7 @@ chk_engine_start_post(struct chk_instance *ins)
 		/* Always refresh the start time. */
 		ins_cbk->cb_time.ct_start_time = time(NULL);
 		/* QUEST: How to estimate the left time? */
-		ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+		ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 						ins_cbk->cb_phase;
 		rc = chk_bk_update_engine(ins_cbk);
 		if (rc == 0) {
@@ -2547,7 +2551,7 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 		ABT_mutex_unlock(cpr->cpr_mutex);
 	}
 
-	if (rc == -DER_NONEXIST && flags & CAF_FOR_ALL)
+	if ((rc == -DER_NONEXIST || rc == -DER_NO_HDL) && flags & CAF_FOR_ALL)
 		rc = 0;
 
 	if (rc == 0 && flags & CAF_FOR_ALL && likely(prop->cp_policies[cla] != act)) {
@@ -2758,7 +2762,7 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase)
 	if (cbk->cb_phase < phase) {
 		cbk->cb_phase = cbk->cb_phase;
 		/* QUEST: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0) {
@@ -2773,7 +2777,7 @@ put:
 	if (rc != 0) {
 		if (rc > 0) {
 			chk_pool_stop_one(ins, uuid, CHK__CHECK_POOL_STATUS__CPS_CHECKED,
-					  CHK__CHECK_SCAN_PHASE__DSP_DONE, NULL);
+					  CHK__CHECK_SCAN_PHASE__CSP_DONE, NULL);
 			rc = 0;
 		} else {
 			chk_ins_set_fail(ins, cbk->cb_phase > phase ? cbk->cb_phase : phase);
@@ -2792,8 +2796,9 @@ out:
 }
 
 int
-chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label, uint32_t flags,
-		    uint32_t mbs_nr, struct chk_pool_mbs *mbs_array, struct rsvc_hint *hint)
+chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label, uint64_t seq,
+		    uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+		    struct rsvc_hint *hint)
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_bookmark		*cbk;
@@ -2852,13 +2857,14 @@ chk_engine_pool_mbs(uint64_t gen, uuid_t uuid, uint32_t phase, const char *label
 	if (rc != 0)
 		goto put;
 
+	cpr->cpr_label_seq = seq;
 	if (flags & CMF_REPAIR_LABEL)
 		cpr->cpr_delay_label = 1;
 
 	if (cbk->cb_phase < phase) {
 		cbk->cb_phase = phase;
 		/* QUEST: How to estimate the left time? */
-		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 		if (rc != 0)
@@ -2913,7 +2919,12 @@ chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_pending_rec	*cpr = NULL;
+	struct chk_pool_rec	*pool = NULL;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
+
+	D_ASSERT(cru->cru_pool != NULL);
 
 	rc = chk_report_remote(ins->ci_prop.cp_leader, ins->ci_bk.cb_gen, cru->cru_cla,
 			       cru->cru_act, cru->cru_result, cru->cru_rank, cru->cru_target,
@@ -2924,8 +2935,19 @@ chk_engine_report(struct chk_report_unit *cru, int *decision, uint64_t *seq)
 	if (rc != 0)
 		goto log;
 
-	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)
-		rc = chk_pending_add(ins, NULL, *seq, cru->cru_rank, cru->cru_cla, &cpr);
+	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, cru->cru_pool, sizeof(uuid_t));
+		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+		if (rc != 0)
+			goto log;
+
+		pool = (struct chk_pool_rec *)riov.iov_buf;
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
+
+		rc = chk_pending_add(ins, NULL, *cru->cru_pool, *seq, cru->cru_rank,
+				     cru->cru_cla, &cpr);
+	}
 
 log:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
@@ -2960,6 +2982,9 @@ again:
 	goto again;
 
 out:
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+
 	if (cpr != NULL)
 		chk_pending_destroy(cpr);
 
