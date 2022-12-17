@@ -212,6 +212,13 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			else
 				dtx_dsp_free(dsp);
 			break;
+		case -DER_INPROGRESS:
+			rc1 = vos_dtx_check(dra->dra_cont->sc_hdl, &dsp->dsp_xid,
+					    NULL, NULL, NULL, NULL, false);
+			dtx_dsp_free(dsp);
+			if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED && rc != -DER_NONEXIST)
+				D_GOTO(out, rc = *ret);
+			break;
 		default:
 			dtx_dsp_free(dsp);
 			D_GOTO(out, rc = *ret);
