@@ -176,7 +176,11 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		}
 	}
 
-	D_ASSERTF(status != NULL, "Can not find rank %u\n", rank);
+	if (status == NULL) {
+		D_INFO("rank %u is not included in this rebuild.\n", rank);
+		return;
+	}
+
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
