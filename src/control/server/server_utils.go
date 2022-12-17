@@ -206,24 +206,27 @@ func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) 
 	return netDevClass, nil
 }
 
-// Detect if any engines share numa nodes and if that's the case, allocate only on the shared numa
-// node and notify user.
-func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) []string {
-	nodeMap := make(map[string]bool)
-	nodes := make([]string, 0, len(engineCfgs))
+// Detect the number of engine configs assigned to each NUMA node and return error if engines are
+// distributed unevenly across NUMA nodes. Otherwise return sorted list of NUMA nodes in use.
+// Configurations where all engines are on a single NUMA node will be allowed.
+func getEngineNUMANodes(log logging.Logger, engineCfgs []*engine.Config) ([]string, error) {
+	nodeMap := make(map[int]int)
 	for _, ec := range engineCfgs {
-		nn := fmt.Sprintf("%d", ec.Storage.NumaNodeIndex)
-		if nodeMap[nn] {
-			log.Noticef("Multiple engines assigned to NUMA node %s, "+
-				"allocating all hugepages on this node.", nn)
-			nodes = []string{nn}
-			break
-		}
-		nodeMap[nn] = true
-		nodes = append(nodes, nn)
+		nodeMap[int(ec.Storage.NumaNodeIndex)] += 1
 	}
 
-	return nodes
+	var lastCount int
+	nodes := make([]string, 0, len(engineCfgs))
+	for k, v := range nodeMap {
+		if lastCount != 0 && v != lastCount {
+			return nil, FaultEngineNUMAImbalance(nodeMap)
+		}
+		lastCount = v
+		nodes = append(nodes, fmt.Sprintf("%d", k))
+	}
+	sort.Strings(nodes)
+
+	return nodes, nil
 }
 
 // Prepare bdev storage. Assumes validation has already been performed on server config. Hugepages
@@ -279,9 +282,13 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 
 	if bdevCfgs.HaveBdevs() {
 		// The NrHugepages config value is a total for all engines. Distribute allocation
-		// of hugepages equally across each engine's numa node (as validation ensures that
-		// TargetsCount is equal for each engine).
-		numaNodes := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		// of hugepages across each engine's numa node (as validation ensures that
+		// TargetsCount is equal for each engine). Assumes an equal number of engine's per
+		// numa node.
+		numaNodes, err := getEngineNUMANodes(srv.log, srv.cfg.Engines)
+		if err != nil {
+			return err
+		}
 
 		if len(numaNodes) == 0 {
 			return errors.New("invalid number of numa nodes detected (0)")
@@ -612,8 +619,9 @@ func registerLeaderSubscriptions(srv *server) {
 }
 
 // getGrpcOpts generates a set of gRPC options for the server based on the supplied configuration.
-func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
+func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		unaryLoggingInterceptor(log), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
 		unaryVersionInterceptor,
