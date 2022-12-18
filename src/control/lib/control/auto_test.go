@@ -985,14 +985,12 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			t.Logf("ssds: %+v", tc.sd.NumaSSDs)
 			gotNumaSet, gotErr := filterDevicesByAffinity(log, tc.nrEngines,
 				tc.minNrSSDs, &tc.nd, &tc.sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-			t.Logf("ssds: %+v", tc.sd.NumaSSDs)
 
 			if diff := cmp.Diff(tc.expNumaSet, gotNumaSet); diff != "" {
 				t.Fatalf("unexpected numa set selected (-want, +got):\n%s\n", diff)
@@ -1370,41 +1368,28 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 		expNrHlprs    int
 		expErr        error
 	}{
-		"no cores": {
-			expErr: errors.Errorf(errInvalNrCores, 0),
-		},
+		"no cores":         {0, 0, 0, 0, errors.Errorf(errInvalNrCores, 0)},
+		"simplest case":    {5, 1, 4, 1, nil},
 		"24 cores no ssds": {24, 0, 16, 0, nil},
-		"24 cores 1 ssds":  {24, 1, 23, 0, nil},
-		"24 cores 2 ssds":  {24, 2, 22, 1, nil},
-		"24 cores 3 ssds":  {24, 3, 21, 2, nil},
-		"24 cores 4 ssds":  {24, 4, 20, 3, nil},
-		"24 cores 5 ssds":  {24, 5, 20, 3, nil},
-		"24 cores 8 ssds":  {24, 8, 16, 7, nil},
-		"24 cores 9 ssds":  {24, 9, 18, 5, nil},
-		"24 cores 10 ssds": {24, 10, 20, 3, nil},
-		"24 cores 16 ssds": {24, 16, 16, 7, nil},
+		"24 cores 1 ssds":  {24, 1, 19, 4, nil},
+		"24 cores 2 ssds":  {24, 2, 18, 4, nil},
+		"24 cores 3 ssds":  {24, 3, 18, 4, nil},
+		"24 cores 4 ssds":  {24, 4, 16, 4, nil},
+		"24 cores 5 ssds":  {24, 5, 15, 3, nil},
+		"24 cores 8 ssds":  {24, 8, 16, 4, nil},
+		"24 cores 9 ssds":  {24, 9, 18, 4, nil},
+		"24 cores 10 ssds": {24, 10, 10, 2, nil},
+		"24 cores 16 ssds": {24, 16, 16, 4, nil},
 		"18 cores no ssds": {18, 0, 16, 0, nil},
-		"18 cores 1 ssds":  {18, 1, 17, 0, nil},
-		"18 cores 2 ssds":  {18, 2, 16, 1, nil},
-		"18 cores 3 ssds":  {18, 3, 15, 2, nil},
-		"18 cores 4 ssds":  {18, 4, 16, 1, nil},
-		"18 cores 5 ssds":  {18, 5, 15, 2, nil},
-		"18 cores 8 ssds":  {18, 8, 16, 1, nil},
-		"18 cores 9 ssds":  {18, 9, 9, 8, nil},
-		"18 cores 10 ssds": {18, 10, 10, 7, nil},
-		"18 cores 16 ssds": {18, 16, 16, 1, nil},
-		"16 cores no ssds": {16, 0, 15, 0, nil},
-		"16 cores 1 ssds":  {16, 1, 15, 0, nil},
-		"16 cores 2 ssds":  {16, 2, 14, 1, nil},
-		"16 cores 3 ssds":  {16, 3, 15, 0, nil},
-		"16 cores 4 ssds":  {16, 4, 12, 3, nil},
-		"16 cores 5 ssds":  {16, 5, 15, 0, nil},
-		"16 cores 6 ssds":  {16, 6, 12, 3, nil},
-		"16 cores 7 ssds":  {16, 7, 14, 1, nil},
-		"16 cores 8 ssds":  {16, 8, 8, 7, nil},
-		"16 cores 9 ssds":  {16, 9, 9, 6, nil},
-		"16 cores 10 ssds": {16, 10, 10, 5, nil},
-		"16 cores 16 ssds": {16, 16, 16, 1, errors.New("need more")},
+		"18 cores 1 ssds":  {18, 1, 14, 3, nil},
+		"18 cores 2 ssds":  {18, 2, 14, 3, nil},
+		"18 cores 3 ssds":  {18, 3, 12, 3, nil},
+		"18 cores 4 ssds":  {18, 4, 12, 3, nil},
+		"18 cores 5 ssds":  {18, 5, 10, 2, nil},
+		"18 cores 8 ssds":  {18, 8, 8, 2, nil},
+		"18 cores 9 ssds":  {18, 9, 9, 2, nil},
+		"18 cores 10 ssds": {18, 10, 10, 2, nil},
+		"18 cores 16 ssds": {18, 16, 16, 0, nil},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())

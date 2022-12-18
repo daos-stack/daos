@@ -82,14 +82,14 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	fs := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	if cmd.FabricProvider == "" {
-		cmd.FabricProvider = cmd.config.Fabric.Provider
-	}
-	if cmd.FabricProvider == "" {
-		cmd.FabricProvider = allProviders
+	prov := allProviders
+	if cmd.FabricProvider != "" {
+		prov = cmd.FabricProvider
+	} else if cmd.config.Fabric.Provider != "" {
+		prov = cmd.config.Fabric.Provider
 	}
 
-	hf, err := GetLocalFabricIfaces(ctx, fs, cmd.FabricProvider)
+	hf, err := GetLocalFabricIfaces(ctx, fs, prov)
 	if err != nil {
 		return err
 	}

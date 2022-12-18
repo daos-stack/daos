@@ -32,6 +32,7 @@ const (
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	minDMABuffer          = 1024
+	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
 
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNrIfaces     = "insufficient matching fabric interfaces, want %d got %d %v"
@@ -942,56 +943,67 @@ type threadCounts struct {
 }
 
 // getThreadCounts validates and returns recommended values for I/O service and offload thread
-// counts. The target count should be a multiplier of the number of SSDs and typically daos gets
-// the best performance with 16x targets per I/O Engine so target count will typically be between
-// 12 and 20.  Check number of targets + 1 cores are available per IO engine, not usually a problem
-// as sockets normally have at least 18 cores.  Create helper threads for the remaining available
-// cores, e.g. with 24 cores, allocate 7 helper threads. Number of helper threads should never be
-// more than number of targets.
-func getThreadCounts(log logging.Logger, ec *engine.Config, numaCoreCount int) (*threadCounts, error) {
+// counts. The following algorithm is implemented after validating against edge cases:
+//
+// targets_per_ssd = ROUNDDOWN(#cores_per_engine * 0.8 / #ssds_per_engine; 0)
+// targets_per_engine = #ssds_per_engine * #targets_per_ssd
+// xs_streams_per_engine = ROUNDDOWN(#targets_per_engine / 4; 0)
+//
+// Here, 0.8 = 4/5 = #targets / (#targets + #xs_streams).
+func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) (*threadCounts, error) {
 	if ec == nil {
 		return nil, errors.Errorf("nil %T parameter", ec)
 	}
-	if numaCoreCount < 2 {
-		return nil, errors.Errorf(errInvalNrCores, numaCoreCount)
+	if coresPerEngine < 2 {
+		return nil, errors.Errorf(errInvalNrCores, coresPerEngine)
 	}
 
-	// TODO DAOS-11859: Do we want to calculate based on data role SSDs only?
-	var numTargets int
-	numSSDs := ec.Storage.Tiers.NVMeBdevs().Len()
-	if numSSDs == 0 {
-		numTargets = defaultTargetCount
-		if numTargets >= numaCoreCount {
-			numTargets = numaCoreCount - 1
+	ssdsPerEngine := ec.Storage.Tiers.NVMeBdevs().Len()
+
+	// first handle atypical edge cases
+	if ssdsPerEngine == 0 {
+		tgtsPerEngine := defaultTargetCount
+		if tgtsPerEngine >= coresPerEngine {
+			tgtsPerEngine = coresPerEngine - 1
 		}
-		log.Debugf("nvme disabled, %d targets assigned and 0 helper threads",
-			numTargets)
+		log.Debugf("nvme disabled, %d targets assigned and 0 helper threads", tgtsPerEngine)
+
 		return &threadCounts{
-			nrTgts:  numTargets,
+			nrTgts:  tgtsPerEngine,
 			nrHlprs: 0,
 		}, nil
-	} else if numSSDs >= numaCoreCount {
-		return nil, errors.Errorf("need more cores than ssds, got %d want %d",
-			numaCoreCount, numSSDs)
-	} else {
-		for tgts := numSSDs; tgts < numaCoreCount; tgts += numSSDs {
-			numTargets = tgts
+	}
+
+	// TODO DAOS-11859: Calculate based on data role SSDs only.
+	tgtsPerSSD := int((float64(coresPerEngine) * numaCoreUsage) / float64(ssdsPerEngine))
+	tgtsPerEngine := ssdsPerEngine * tgtsPerSSD
+
+	if tgtsPerSSD == 0 {
+		if ssdsPerEngine > (coresPerEngine - 1) {
+			tgtsPerEngine = coresPerEngine - 1
+		} else {
+			tgtsPerEngine = ssdsPerEngine
 		}
+
+		log.Debugf("80-percent-of-cores:ssd ratio is less than 1 (%.2f:%.2f), use %d tgts",
+			float64(coresPerEngine)*numaCoreUsage, float64(ssdsPerEngine),
+			tgtsPerEngine)
+
+		return &threadCounts{
+			nrTgts:  tgtsPerEngine,
+			nrHlprs: 0,
+		}, nil
 	}
 
-	log.Debugf("%d targets assigned with %d ssds", numTargets, numSSDs)
-
-	numHelpers := numaCoreCount - numTargets - 1
-	if numHelpers > 1 && numHelpers > numTargets {
-		log.Debugf("adjusting num helpers (%d) to < num targets (%d), new: %d",
-			numHelpers, numTargets, numTargets-1)
-		numHelpers = numTargets - 1
+	tc := threadCounts{
+		nrTgts:  tgtsPerEngine,
+		nrHlprs: tgtsPerEngine / 4,
 	}
 
-	return &threadCounts{
-		nrTgts:  numTargets,
-		nrHlprs: numHelpers,
-	}, nil
+	log.Debugf("per-engine %d targets assigned with %d ssds (based on %d cores available), "+
+		"%d helper xstreams", tc.nrTgts, ssdsPerEngine, coresPerEngine, tc.nrHlprs)
+
+	return &tc, nil
 }
 
 // Generate a server config file from the constituent hardware components. Enforce consistent
