@@ -35,7 +35,8 @@ var storageHashOpts = hashstructure.HashOptions{
 // retrieved from the storage scan. For the purposes of the storage
 // scan, we only care about the system hugepage size.
 type HugePageInfo struct {
-	PageSizeKb int `json:"page_size_kb"`
+	PageSizeKb   int `json:"page_size_kb"`
+	MemAvailable int `json:"mem_available"`
 }
 
 // HostStorage describes a host storage configuration which

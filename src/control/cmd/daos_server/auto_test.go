@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -109,6 +110,17 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			errors.New("Invalid value"),
 		},
 		{
+			"Generate with tmpfs scm",
+			"config generate -a foo --use-tmpfs-scm",
+			printCommand(t, &configGenCmd{
+				AccessPoints: "foo",
+				MinNrSSDs:    1,
+				NetClass:     "infiniband",
+				UseTmpfsSCM:  true,
+			}),
+			nil,
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -132,50 +144,53 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	ib1 := &control.HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
-	exmplEngineCfg := control.DefaultEngineCfg(0).
-		WithPinnedNumaNode(0).
-		WithFabricInterface("ib0").
-		WithFabricInterfacePort(31416).
-		WithFabricProvider("ofi+psm2").
-		WithStorage(
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmDeviceList("/dev/pmem0").
-				WithScmMountPoint("/mnt/daos0"),
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(
-					storage.MockNvmeController(2).PciAddr,
-					storage.MockNvmeController(4).PciAddr),
-		).
-		WithTargetCount(18).
-		WithHelperStreamCount(4)
-	exmplEngineCfgs := []*engine.Config{
-		exmplEngineCfg,
-		control.DefaultEngineCfg(1).
-			WithPinnedNumaNode(1).
-			WithFabricInterface("ib1").
-			WithFabricInterfacePort(32416).
+	newEngineCfg := func(nn int, paIDs ...int) *engine.Config {
+		pciAddrs := make([]string, len(paIDs))
+		for i, paID := range paIDs {
+			pciAddrs[i] = storage.MockNvmeController(int32(paID)).PciAddr
+		}
+		return control.DefaultEngineCfg(nn).
+			WithPinnedNumaNode(uint(nn)).
+			WithFabricInterface(fmt.Sprintf("ib%d", nn)).
+			WithFabricInterfacePort(31416+nn*1000).
 			WithFabricProvider("ofi+psm2").
-			WithFabricNumaNodeIndex(1).
+			WithFabricNumaNodeIndex(uint(nn)).
 			WithStorage(
 				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
+					WithNumaNodeIndex(uint(nn)).
 					WithStorageClass(storage.ClassDcpm.String()).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1"),
+					WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", nn)).
+					WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", nn)),
 				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
+					WithNumaNodeIndex(uint(nn)).
 					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(
-						storage.MockNvmeController(1).PciAddr,
-						storage.MockNvmeController(3).PciAddr),
+					WithBdevDeviceList(pciAddrs...),
 			).
-			WithStorageNumaNodeIndex(1).
+			WithStorageNumaNodeIndex(uint(nn)).
 			WithTargetCount(18).
-			WithHelperStreamCount(4),
+			WithHelperStreamCount(4)
+	}
+	exmplEngineCfgs := []*engine.Config{
+		newEngineCfg(0, 2, 4),
+		newEngineCfg(1, 1, 3),
+	}
+	mockMemAvail := humanize.GiByte * 12
+	mockRamdiskSize := ((mockMemAvail / 100) * 75) / 2
+	tmpfsEngineCfg0 := newEngineCfg(0, 2, 4)
+	tmpfsEngineCfg0.Storage.Tiers[0] = storage.NewTierConfig().
+		WithNumaNodeIndex(0).
+		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithStorageClass("ram").
+		WithScmMountPoint("/mnt/daos0")
+	tmpfsEngineCfg1 := newEngineCfg(1, 1, 3)
+	tmpfsEngineCfg1.Storage.Tiers[0] = storage.NewTierConfig().
+		WithNumaNodeIndex(1).
+		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithStorageClass("ram").
+		WithScmMountPoint("/mnt/daos1")
+	tmpfsEngineCfgs := []*engine.Config{
+		tmpfsEngineCfg0,
+		tmpfsEngineCfg1,
 	}
 	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
 		for idx, ec := range ecs {
@@ -194,6 +209,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		nrEngines    int
 		minNrSSDs    int
 		netClass     string
+		tmpfsSCM     bool
 		hf           *control.HostFabric
 		hfErr        error
 		hs           *control.HostStorage
@@ -213,7 +229,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expErr: errors.New("zero numa nodes"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"fetching host storage fails": {
 			hf: &control.HostFabric{
@@ -245,7 +261,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				CoresPerNuma: 1,
 			},
 			hs:     &control.HostStorage{},
-			expErr: errors.New("insufficient number of pmem"),
+			expErr: errors.New("requires nonzero"),
 		},
 		"single engine; dcpm on numa 1": {
 			hf: &control.HostFabric{
@@ -373,6 +389,36 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
+		"tmpfs scm": {
+			tmpfsSCM: true,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				HugePageInfo: control.HugePageInfo{
+					PageSizeKb:   2048,
+					MemAvailable: int(mockMemAvail),
+				},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expCfg: baseConfig("ofi+psm2", tmpfsEngineCfgs).
+				WithNrHugePages(18432).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -394,6 +440,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				NrEngines:    tc.nrEngines,
 				MinNrSSDs:    tc.minNrSSDs,
 				NetClass:     tc.netClass,
+				UseTmpfsSCM:  tc.tmpfsSCM,
 			}
 			cmd.Logger = log
 

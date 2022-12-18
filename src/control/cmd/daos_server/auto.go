@@ -38,6 +38,7 @@ type configGenCmd struct {
 	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
 	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM  bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
 }
 
 type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
@@ -74,7 +75,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		return nil, errors.Wrapf(err, "scm scan")
 	}
 
-	hpi, err := common.GetHugePageInfo()
+	hpi, err := common.GetHugePageInfo(log)
 	if err != nil {
 		return nil, errors.Wrapf(err, "get hugepage info")
 	}
@@ -84,7 +85,8 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
 		HugePageInfo: control.HugePageInfo{
-			PageSizeKb: hpi.PageSizeKb,
+			PageSizeKb:   hpi.PageSizeKb,
+			MemAvailable: hpi.MemAvailable,
 		},
 	}, nil
 }
@@ -123,6 +125,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		NetClass:     ndc,
 		NetProvider:  cmd.NetProvider,
 		AccessPoints: accessPoints,
+		UseTmpfsSCM:  cmd.UseTmpfsSCM,
 	}
 
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)

@@ -13,6 +13,7 @@ import (
 	"math/bits"
 	"sort"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -33,6 +34,8 @@ const (
 	defaultControlLogFile = "/tmp/daos_server.log"
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
+	memAvailToUse         = 75  // percentage of available memory to use for scm ramdisks
+	ramdiskMinSize        = humanize.GiByte * 4
 
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNrIfaces     = "insufficient matching fabric interfaces, want %d got %d %v"
@@ -53,6 +56,7 @@ type (
 		MinNrSSDs    int
 		NetClass     hardware.NetDevClass
 		NetProvider  string
+		UseTmpfsSCM  bool
 		AccessPoints []string
 		Log          logging.Logger
 	}
@@ -115,7 +119,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// process host storage scan results to retrieve storage details
-	sd, err := getStorageDetails(req.Log, hs)
+	sd, err := getStorageDetails(req.Log, req.UseTmpfsSCM, nd.NumaCount, hs)
 	if err != nil {
 		return nil, err
 	}
@@ -445,32 +449,57 @@ func (nsm numaSSDsMap) fromNVMe(ssds storage.NvmeControllers) error {
 
 type storageDetails struct {
 	HugePageSize int
+	MemAvailable int
 	NumaSCMs     numaSCMsMap
 	NumaSSDs     numaSSDsMap
+	scmCls       storage.Class
 }
 
 // getStorageDetails retrieves mappings of NUMA node to PMem and NVMe SSD devices.  Returns storage
 // details struct or host error response and outer error.
-func getStorageDetails(log logging.Logger, hs *HostStorage) (*storageDetails, error) {
+func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *HostStorage) (*storageDetails, error) {
 	if hs == nil {
 		return nil, errors.New("nil HostStorage")
 	}
 
-	numaSSDs := make(numaSSDsMap)
-	if err := numaSSDs.fromNVMe(hs.NvmeDevices); err != nil {
+	sd := storageDetails{
+		NumaSCMs:     make(numaSCMsMap),
+		NumaSSDs:     make(numaSSDsMap),
+		HugePageSize: hs.HugePageInfo.PageSizeKb,
+		MemAvailable: hs.HugePageInfo.MemAvailable,
+		scmCls:       storage.ClassDcpm,
+	}
+	if sd.HugePageSize == 0 {
+		return nil, errors.New("getStorageDetails() requires nonzero HugePageSize")
+	}
+
+	if err := sd.NumaSSDs.fromNVMe(hs.NvmeDevices); err != nil {
 		return nil, errors.Wrap(err, "mapping ssd addresses to numa node")
 	}
 
-	numaSCMDevs := make(numaSCMsMap)
-	if err := numaSCMDevs.fromSCM(hs.ScmNamespaces); err != nil {
+	// if tmpfs scm mode is requested, init scm map to init entry for each numa node
+	if useTmpfs {
+		if numaCount <= 0 {
+			return nil, errors.New("getStorageDetails() requires nonzero numaCount")
+		}
+		if sd.MemAvailable == 0 {
+			return nil, errors.New("getStorageDetails() requires nonzero MemAvailable")
+		}
+
+		log.Debugf("using tmpfs for scm, one for each numa node [0-%d]", numaCount-1)
+		for i := 0; i < numaCount; i++ {
+			sd.NumaSCMs[i] = sort.StringSlice{""}
+		}
+		sd.scmCls = storage.ClassRam
+
+		return &sd, nil
+	}
+
+	if err := sd.NumaSCMs.fromSCM(hs.ScmNamespaces); err != nil {
 		return nil, errors.Wrap(err, "mapping scm block device names to numa node")
 	}
 
-	return &storageDetails{
-		NumaSCMs:     numaSCMDevs,
-		NumaSSDs:     numaSSDs,
-		HugePageSize: hs.HugePageInfo.PageSizeKb,
-	}, nil
+	return &sd, nil
 }
 
 // Filters PMem and SSD groups to include only the NUMA IDs that have sufficient number of devices
@@ -878,6 +907,69 @@ func correctSSDCounts(log logging.Logger, minNrSSDs int, sd *storageDetails) err
 	return nil
 }
 
+// Calculate RAM-disk size based on available memory as reported by /proc/meminfo and the number of
+// requested disks (one per engine). Size = (((totalRAM / 100) * 75) / nrRamdisks.
+func getRamdiskSize(nrRamdisks, memAvail int) (int, error) {
+	if nrRamdisks == 0 {
+		return 0, errors.New("getRamdiskSize() requires nonzero nrRamdisks")
+	}
+	if memAvail == 0 {
+		return 0, errors.New("getRamdiskSize() requires nonzero memAvail")
+	}
+
+	return ((memAvail / 100) * memAvailToUse) / nrRamdisks, nil
+}
+
+func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails) (*storage.TierConfig, error) {
+	scmTier := storage.NewTierConfig().WithStorageClass(sd.scmCls.String()).
+		WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, numaID))
+
+	switch sd.scmCls {
+	case storage.ClassRam:
+		log.Debugf("scm tier for numa %d, nr nodes: %d, mem: %d", numaID, nrNumaNodes,
+			sd.MemAvailable)
+
+		size, err := getRamdiskSize(nrNumaNodes, sd.MemAvailable)
+		if err != nil {
+			return nil, errors.Wrapf(err, "calculate scm ram size")
+		}
+		if size < ramdiskMinSize {
+			log.Errorf("available memory for scm ramdisk too small, want %s have %s",
+				humanize.Bytes(uint64(ramdiskMinSize)), humanize.Bytes(uint64(size)))
+		}
+		scmTier.WithScmRamdiskSize(uint(size))
+	case storage.ClassDcpm:
+		scmTier.WithScmDeviceList(sd.NumaSCMs[numaID][0])
+	default:
+		return nil, errors.Errorf("unrecognised scm tier class %q", sd.scmCls)
+	}
+
+	return scmTier, nil
+}
+
+func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAddressSet) (tiers storage.TierConfigs, err error) {
+	nrSSDs := ssds.Len()
+	if nrSSDs == 0 {
+		log.Debugf("skip assigning ssd tiers as no ssds are available")
+		return
+	}
+
+	// TODO DAOS-11859: On MD-on-SSD branch assign SSDs to multiple tiers with explicit role
+	//                  assignments when scm class is ram (use tmpfs).
+	switch scmCls {
+	case storage.ClassDcpm, storage.ClassRam:
+		tiers = storage.TierConfigs{
+			storage.NewTierConfig().
+				WithStorageClass(storage.ClassNvme.String()).
+				WithBdevDeviceList(ssds.Strings()...),
+		}
+	default:
+		err = errors.New("only scm classes dcpm (pmem) and ram supported")
+	}
+
+	return
+}
+
 type newEngineCfgFn func(int) *engine.Config
 
 func genEngineConfigs(log logging.Logger, minNrSSDs int, newEngineCfg newEngineCfgFn, nodeSet []int, nd *networkDetails, sd *storageDetails) ([]*engine.Config, error) {
@@ -901,22 +993,24 @@ func genEngineConfigs(log logging.Logger, minNrSSDs int, newEngineCfg newEngineC
 
 	cfgs := make([]*engine.Config, 0, len(nodeSet))
 
+	log.Debugf("calculating storage tiers for engines based on scm class %q", sd.scmCls)
+
 	for _, numaID := range nodeSet {
 		ssds := sd.NumaSSDs[numaID]
 		iface := nd.NumaIfaces[numaID]
 
-		tiers := storage.TierConfigs{
-			storage.NewTierConfig().
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, numaID)).
-				WithScmDeviceList(sd.NumaSCMs[numaID][0]),
+		scmTier, err := getSCMTier(log, numaID, len(nodeSet), sd)
+		if err != nil {
+			return nil, err
 		}
-		// TODO DAOS-11859: Assign SSDs to multiple tiers for MD-on-SSD
-		if ssds.Len() > 0 {
-			tiers = append(tiers, storage.NewTierConfig().
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(ssds.Strings()...))
+		tiers := storage.TierConfigs{scmTier}
+
+		bdevTiers, err := getBdevTiers(log, sd.scmCls, ssds)
+		if err != nil {
+			return nil, errors.Wrapf(err, "calculating bdev tiers")
 		}
+		tiers = append(tiers, bdevTiers...)
+
 		cfg := newEngineCfg(len(cfgs)).WithStorage(tiers...)
 
 		pnn := uint(numaID)

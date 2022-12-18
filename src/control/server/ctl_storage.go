@@ -85,7 +85,7 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}, sys, scm, bdev),
-		func() (*common.HugePageInfo, error) {
+		func(l logging.Logger) (*common.HugePageInfo, error) {
 			return nil, nil
 		},
 	)

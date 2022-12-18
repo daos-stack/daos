@@ -14,12 +14,15 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCommon_getHugePageInfo(t *testing.T) {
+	log, _ := logging.NewTestLogger(t.Name())
+
 	// Just a simple test to verify that we get something -- it should
 	// pretty much never error.
-	_, err := GetHugePageInfo()
+	_, err := GetHugePageInfo(log)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +41,7 @@ func TestCommon_parseHugePageInfo(t *testing.T) {
 		},
 		"2MB pagesize": {
 			input: `
+MemAvailable:       1024 kB
 HugePages_Total:    1024
 HugePages_Free:     1023
 HugePages_Rsvd:        0
@@ -45,14 +49,16 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &HugePageInfo{
-				Total:      1024,
-				Free:       1023,
-				PageSizeKb: 2048,
+				Total:        1024,
+				Free:         1023,
+				PageSizeKb:   2048,
+				MemAvailable: 1024,
 			},
 			expFreeMB: 2046,
 		},
 		"1GB pagesize": {
 			input: `
+MemAvailable:       1024 kB
 HugePages_Total:      16
 HugePages_Free:       16
 HugePages_Rsvd:        0
@@ -60,9 +66,10 @@ HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
 			expOut: &HugePageInfo{
-				Total:      16,
-				Free:       16,
-				PageSizeKb: 1048576,
+				Total:        16,
+				Free:         16,
+				PageSizeKb:   1048576,
+				MemAvailable: 1024,
 			},
 			expFreeMB: 16384,
 		},
@@ -76,13 +83,14 @@ Hugepagesize:       blerble 1 GB
 			input: `
 Hugepagesize:       1 GB
 			`,
-			expErr: errors.New("unhandled page size"),
+			expErr: errors.New("unhandled size unit \"GB\""),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, _ := logging.NewTestLogger(t.Name())
 			rdr := strings.NewReader(tc.input)
 
-			gotOut, gotErr := parseHugePageInfo(rdr)
+			gotOut, gotErr := parseHugePageInfo(log, rdr)
 			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

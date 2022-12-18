@@ -36,6 +36,7 @@ type configGenCmd struct {
 	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
 	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
 	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM  bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
@@ -61,6 +62,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 			NetClass:     ndc,
 			NetProvider:  cmd.NetProvider,
 			AccessPoints: accessPoints,
+			UseTmpfsSCM:  cmd.UseTmpfsSCM,
 		},
 		Client: cmd.ctlInvoker,
 	}

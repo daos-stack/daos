@@ -680,7 +680,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return
 			}
 
-			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+			mockGetHugePageInfo := func(_ logging.Logger) (*common.HugePageInfo, error) {
 				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
 				return &common.HugePageInfo{
 					PageSizeKb: 2048,

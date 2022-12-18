@@ -315,7 +315,7 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
-	hpi, err := c.getHugePageInfo()
+	hpi, err := c.getHugePageInfo(c.log)
 	if err != nil {
 		return nil, err
 	}

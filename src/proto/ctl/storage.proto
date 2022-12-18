@@ -27,6 +27,7 @@ message HugePageInfo {
 	uint64 reserved = 3;
 	uint64 surplus = 4;
 	uint32 page_size_kb = 5;
+	uint64 mem_available = 6;
 }
 
 message StorageScanResp {

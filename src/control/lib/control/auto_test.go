@@ -101,13 +101,14 @@ var (
 	}
 )
 
-var pciSetCmpOpts = append([]cmp.Option{
+var defStorCmpOpts = append([]cmp.Option{
 	cmp.Comparer(func(x, y *hardware.PCIAddressSet) bool {
 		if x == nil && y == nil {
 			return true
 		}
 		return x.String() == y.String()
 	}),
+	cmpopts.IgnoreFields(storageDetails{}, "scmCls"),
 }, defResCmpOpts()...)
 
 func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface, ndc hardware.NetDevClass) providerIfaceMap {
@@ -508,7 +509,10 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					NvmeDevices:   storage.NvmeControllers{storage.MockNvmeController()},
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
-					HugePageInfo:  HugePageInfo{PageSizeKb: humanize.KiByte * 2},
+					HugePageInfo: HugePageInfo{
+						PageSizeKb:   humanize.KiByte * 2,
+						MemAvailable: humanize.GiByte * 16,
+					},
 				},
 			},
 		},
@@ -555,11 +559,15 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	withSSDs := newMockHostResponses(t, "withSpaceUsage")
 	withSSDsBadPCI := newMockHostResponses(t, "badPciAddr")
+	withSSDsNoMemAvail := newMockHostResponses(t, "noMemAvail")
+	withSSDsNoHugepageSz := newMockHostResponses(t, "noHugepageSz")
 	noSSDsOnNUMA1 := newMockHostResponses(t, "noNvmeOnNuma1")
 
 	for name, tc := range map[string]struct {
 		hostResponses []*HostResponse
 		expErr        error
+		useTmpfs      bool
+		numaCount     int
 		expPMems      [][]string
 		expSSDs       [][]string
 	}{
@@ -588,6 +596,33 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				noSSDsOnNUMA1.getNUMASSDs(t, 0),
 			},
 		},
+		"scm tmpfs; zero numa count": {
+			hostResponses: withSSDs.resps,
+			useTmpfs:      true,
+			expErr:        errors.New("requires nonzero numaCount"),
+		},
+		"scm tmpfs; zero hugepage size": {
+			hostResponses: withSSDsNoHugepageSz.resps,
+			useTmpfs:      true,
+			numaCount:     2,
+			expErr:        errors.New("requires nonzero HugePageSize"),
+		},
+		"scm tmpfs; zero memory available": {
+			hostResponses: withSSDsNoMemAvail.resps,
+			useTmpfs:      true,
+			numaCount:     2,
+			expErr:        errors.New("requires nonzero MemAvail"),
+		},
+		"scm tmpfs": {
+			hostResponses: withSSDs.resps,
+			useTmpfs:      true,
+			numaCount:     2,
+			expPMems:      [][]string{{""}, {""}},
+			expSSDs: [][]string{
+				withSSDs.getNUMASSDs(t, 0),
+				withSSDs.getNUMASSDs(t, 1),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -604,7 +639,8 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotStorage, gotErr := getStorageDetails(log, storageSet.HostStorage)
+			gotStorage, gotErr := getStorageDetails(log, tc.useTmpfs, tc.numaCount,
+				storageSet.HostStorage)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -998,7 +1034,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			if diff := cmp.Diff(tc.expND, tc.nd); diff != "" {
 				t.Fatalf("unexpected network details (-want, +got):\n%s\n", diff)
 			}
-			if diff := cmp.Diff(tc.expSD, tc.sd, pciSetCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expSD, tc.sd, defStorCmpOpts...); diff != "" {
 				t.Fatalf("unexpected storage details (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -1074,7 +1110,7 @@ func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expSD, tc.sd, pciSetCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expSD, tc.sd, defStorCmpOpts...); diff != "" {
 				t.Fatalf("unexpected storage details (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -1089,6 +1125,8 @@ func mockEngineCfg(idx int) *engine.Config {
 
 func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
+		scmCls     storage.Class
+		memAvail   int
 		minNrSSDs  int
 		numaSet    []int            // set of numa nodes (by-ID) to be used for engine configs
 		numaPMems  numaSCMsMap      // numa to pmem mappings
@@ -1186,17 +1224,11 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 					WithHelperStreamCount(2),
 			},
 		},
-		"dual pmem dual ssd": {
+		"dual pmem multiple ssd": {
 			numaSet: []int{0, 1},
 			// ndctl doesn't guarantee that pmem0 will be created on numa0
-			numaPMems: numaSCMsMap{
-				0: []string{"/dev/pmem1"},
-				1: []string{"/dev/pmem0"},
-			},
-			numaIfaces: numaNetIfaceMap{
-				0: ib0,
-				1: ib1,
-			},
+			numaPMems:  numaSCMsMap{0: []string{"/dev/pmem1"}, 1: []string{"/dev/pmem0"}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
 				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
@@ -1242,16 +1274,112 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 					WithHelperStreamCount(2),
 			},
 		},
+		"dual tmpfs; single ssd per numa": {
+			scmCls:     storage.ClassRam,
+			memAvail:   humanize.GiByte * 25,
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(1)...),
+			},
+			expCfgs: []*engine.Config{
+				DefaultEngineCfg(0).
+					WithPinnedNumaNode(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(test.MockPCIAddrs(0)...),
+					).
+					WithTargetCount(16).
+					WithHelperStreamCount(2),
+				DefaultEngineCfg(1).
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib1").
+					WithFabricInterfacePort(int(defaultFiPort+defaultFiPortInterval)).
+					WithFabricProvider("ofi+psm2").
+					WithFabricNumaNodeIndex(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmMountPoint("/mnt/daos1"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(test.MockPCIAddrs(1)...),
+					).
+					WithStorageNumaNodeIndex(1).
+					WithTargetCount(16).
+					WithHelperStreamCount(2),
+			},
+		},
+		"dual tmpfs; multiple ssds per numa": {
+			scmCls:     storage.ClassRam,
+			memAvail:   humanize.GiByte * 25,
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
+			},
+			expCfgs: []*engine.Config{
+				DefaultEngineCfg(0).
+					WithPinnedNumaNode(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
+					).
+					WithTargetCount(16).
+					WithHelperStreamCount(2),
+				DefaultEngineCfg(1).
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib1").
+					WithFabricInterfacePort(int(defaultFiPort+defaultFiPortInterval)).
+					WithFabricProvider("ofi+psm2").
+					WithFabricNumaNodeIndex(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassRam.String()).
+							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmMountPoint("/mnt/daos1"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(test.MockPCIAddrs(3, 4, 5)...),
+					).
+					WithStorageNumaNodeIndex(1).
+					WithTargetCount(16).
+					WithHelperStreamCount(2),
+			},
+		},
 		"vmd enabled; balanced nr ssds": {
-			numaSet: []int{0, 1},
-			numaPMems: numaSCMsMap{
-				0: []string{"/dev/pmem0"},
-				1: []string{"/dev/pmem1"},
-			},
-			numaIfaces: numaNetIfaceMap{
-				0: ib0,
-				1: ib1,
-			},
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
 				0: hardware.MustNewPCIAddressSet("5d0505:01:00.0", "5d0505:02:00.0"),
 				1: hardware.MustNewPCIAddressSet("d70701:03:00.0", "d70701:05:00.0"),
@@ -1299,15 +1427,9 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			},
 		},
 		"vmd enabled; imbalanced nr ssds": {
-			numaSet: []int{0, 1},
-			numaPMems: numaSCMsMap{
-				0: []string{"/dev/pmem0"},
-				1: []string{"/dev/pmem1"},
-			},
-			numaIfaces: numaNetIfaceMap{
-				0: ib0,
-				1: ib1,
-			},
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
 			numaSSDs: numaSSDsMap{
 				0: hardware.MustNewPCIAddressSet(test.MockVMDPCIAddrs(5, 2, 4)...),
 				1: hardware.MustNewPCIAddressSet(test.MockVMDPCIAddrs(13, 1, 2, 3)...),
@@ -1324,8 +1446,15 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			}
 			sd := &storageDetails{
 				HugePageSize: 2048,
+				MemAvailable: tc.memAvail,
 				NumaSCMs:     tc.numaPMems,
 				NumaSSDs:     tc.numaSSDs,
+				scmCls:       storage.ClassDcpm,
+			}
+			if tc.scmCls.String() != "" {
+				sd.scmCls = tc.scmCls
+			} else {
+				sd.scmCls = storage.ClassDcpm
 			}
 			if tc.minNrSSDs == 0 {
 				tc.minNrSSDs = 1
@@ -1362,7 +1491,7 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 		WithScmDeviceList("/dev/pmem0")
 
 	for name, tc := range map[string]struct {
-		numaCoreCount int // physical cores per NUMA node
+		numaCoreCount int // physical( cores per NUMA node
 		nrSSDs        int32
 		expNrTgts     int
 		expNrHlprs    int

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -102,6 +103,14 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("Invalid value"),
 		},
 		{
+			"Generate with tmpfs scm",
+			"config generate -a foo --use-tmpfs-scm",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no host responses"),
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -131,54 +140,53 @@ func TestAuto_confGen(t *testing.T) {
 		Addr:    "host1",
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
-	exmplEngineCfg := control.DefaultEngineCfg(0).
-		WithPinnedNumaNode(0).
-		WithFabricInterface("ib0").
-		WithFabricInterfacePort(31416).
-		WithFabricProvider("ofi+psm2").
-		WithStorage(
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmDeviceList("/dev/pmem0").
-				WithScmMountPoint("/mnt/daos0"),
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(
-					storage.MockNvmeController(2).PciAddr,
-					storage.MockNvmeController(4).PciAddr,
-					storage.MockNvmeController(6).PciAddr,
-					storage.MockNvmeController(8).PciAddr),
-		).
-		WithTargetCount(16).
-		WithHelperStreamCount(4)
-	exmplEngineCfgs := []*engine.Config{
-		exmplEngineCfg,
-		control.DefaultEngineCfg(1).
-			WithPinnedNumaNode(1).
-			WithFabricInterface("ib1").
-			WithFabricInterfacePort(32416).
+	newEngineCfg := func(nn int, paIDs ...int) *engine.Config {
+		pciAddrs := make([]string, len(paIDs))
+		for i, paID := range paIDs {
+			pciAddrs[i] = storage.MockNvmeController(int32(paID)).PciAddr
+		}
+		return control.DefaultEngineCfg(nn).
+			WithPinnedNumaNode(uint(nn)).
+			WithFabricInterface(fmt.Sprintf("ib%d", nn)).
+			WithFabricInterfacePort(31416+nn*1000).
 			WithFabricProvider("ofi+psm2").
-			WithFabricNumaNodeIndex(1).
+			WithFabricNumaNodeIndex(uint(nn)).
 			WithStorage(
 				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
+					WithNumaNodeIndex(uint(nn)).
 					WithStorageClass(storage.ClassDcpm.String()).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1"),
+					WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", nn)).
+					WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", nn)),
 				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
+					WithNumaNodeIndex(uint(nn)).
 					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(
-						storage.MockNvmeController(1).PciAddr,
-						storage.MockNvmeController(3).PciAddr,
-						storage.MockNvmeController(5).PciAddr,
-						storage.MockNvmeController(7).PciAddr),
+					WithBdevDeviceList(pciAddrs...),
 			).
-			WithStorageNumaNodeIndex(1).
+			WithStorageNumaNodeIndex(uint(nn)).
 			WithTargetCount(16).
-			WithHelperStreamCount(4),
+			WithHelperStreamCount(4)
+	}
+	exmplEngineCfgs := []*engine.Config{
+		newEngineCfg(0, 2, 4, 6, 8),
+		newEngineCfg(1, 1, 3, 5, 7),
+	}
+	mockMemAvail := humanize.GiByte * 16
+	mockRamdiskSize := ((mockMemAvail / 100) * 75) / 2
+	tmpfsEngineCfg0 := newEngineCfg(0, 2, 4, 6, 8)
+	tmpfsEngineCfg0.Storage.Tiers[0] = storage.NewTierConfig().
+		WithNumaNodeIndex(0).
+		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithStorageClass("ram").
+		WithScmMountPoint("/mnt/daos0")
+	tmpfsEngineCfg1 := newEngineCfg(1, 1, 3, 5, 7)
+	tmpfsEngineCfg1.Storage.Tiers[0] = storage.NewTierConfig().
+		WithNumaNodeIndex(1).
+		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithStorageClass("ram").
+		WithScmMountPoint("/mnt/daos1")
+	tmpfsEngineCfgs := []*engine.Config{
+		tmpfsEngineCfg0,
+		tmpfsEngineCfg1,
 	}
 	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
 		for idx, ec := range ecs {
@@ -198,6 +206,7 @@ func TestAuto_confGen(t *testing.T) {
 		nrEngines        int
 		minNrSSDs        int
 		netClass         string
+		tmpfsSCM         bool
 		uErr             error
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
@@ -268,6 +277,16 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
+		"successful fetch of host storage and fabric; tmpfs scm": {
+			tmpfsSCM: true,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expCfg: baseConfig("ofi+psm2", tmpfsEngineCfgs).
+				WithNrHugePages(16384).
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -289,6 +308,7 @@ func TestAuto_confGen(t *testing.T) {
 				NrEngines:    tc.nrEngines,
 				MinNrSSDs:    tc.minNrSSDs,
 				NetClass:     tc.netClass,
+				UseTmpfsSCM:  tc.tmpfsSCM,
 			}
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist

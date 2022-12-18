@@ -435,7 +435,7 @@ func updateMemValues(srv *server, engine *EngineInstance, getHugePageInfo common
 	engine.RUnlock()
 
 	// Retrieve up-to-date hugepage info to check that we got the requested number of hugepages.
-	hpi, err := getHugePageInfo()
+	hpi, err := getHugePageInfo(srv.log)
 	if err != nil {
 		return err
 	}

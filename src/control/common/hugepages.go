@@ -13,10 +13,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
-type GetHugePageInfoFn func() (*HugePageInfo, error)
+type GetHugePageInfoFn func(log logging.Logger) (*HugePageInfo, error)
 
 const (
 	// MinTargetHugePageSize is the minimum amount of hugepage space that
@@ -29,11 +30,12 @@ const (
 
 // HugePageInfo contains information about system hugepages.
 type HugePageInfo struct {
-	Total      int `json:"total"`
-	Free       int `json:"free"`
-	Reserved   int `json:"reserved"`
-	Surplus    int `json:"surplus"`
-	PageSizeKb int `json:"page_size_kb"`
+	Total        int `json:"total"`
+	Free         int `json:"free"`
+	Reserved     int `json:"reserved"`
+	Surplus      int `json:"surplus"`
+	PageSizeKb   int `json:"page_size_kb"`
+	MemAvailable int `json:"mem_available"`
 }
 
 func (hpi *HugePageInfo) TotalMB() int {
@@ -52,12 +54,14 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
+func parseHugePageInfo(log logging.Logger, input io.Reader) (*HugePageInfo, error) {
 	hpi := new(HugePageInfo)
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
-		keyVal := strings.Split(scn.Text(), ":")
+		txt := scn.Text()
+		log.Debugf("hugepages: reading %s", txt)
+		keyVal := strings.Split(txt, ":")
 		if len(keyVal) < 2 {
 			continue
 		}
@@ -71,7 +75,7 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 			parseInt(keyVal[1], &hpi.Reserved)
 		case "HugePages_Surp":
 			parseInt(keyVal[1], &hpi.Surplus)
-		case "Hugepagesize":
+		case "Hugepagesize", "MemAvailable":
 			sf := strings.Fields(keyVal[1])
 			if len(sf) != 2 {
 				return nil, errors.Errorf("unable to parse %q", keyVal[1])
@@ -79,9 +83,15 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 			// units are hard-coded to kB in the kernel, but doesn't hurt
 			// to double-check...
 			if sf[1] != "kB" {
-				return nil, errors.Errorf("unhandled page size unit %q", sf[1])
+				return nil, errors.Errorf("unhandled size unit %q", sf[1])
 			}
-			parseInt(sf[0], &hpi.PageSizeKb)
+
+			if keyVal[0] == "Hugepagesize" {
+				parseInt(sf[0], &hpi.PageSizeKb)
+			} else {
+				parseInt(sf[0], &hpi.MemAvailable)
+				log.Debugf("mem_available: %s", hpi.MemAvailable)
+			}
 		default:
 			continue
 		}
@@ -91,15 +101,15 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 }
 
 // GetHugePageInfo reads /proc/meminfo and returns information about
-// system hugepages.
-func GetHugePageInfo() (*HugePageInfo, error) {
+// system hugepages and available memory (RAM).
+func GetHugePageInfo(log logging.Logger) (*HugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return parseHugePageInfo(f)
+	return parseHugePageInfo(log, f)
 }
 
 // CalcMinHugePages returns the minimum number of hugepages that should be
