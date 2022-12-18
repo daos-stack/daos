@@ -378,7 +378,7 @@ class CoreFileProcessing():
         other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
         try:
             run_local(
-                self.log, find_command(core_path, "core.gdb.*.*", 1, other), check=False)
+                self.log, find_command(core_path, "core.gdb.*.*", 1, other), check=True)
         except RunException:
             self.log.debug("core.gdb.*.* files could not be removed")
             return 1
