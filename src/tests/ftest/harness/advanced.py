@@ -51,9 +51,9 @@ class HarnessAdvancedTest(TestWithServers):
         except RunException:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
-        command = f"touch {core_path}/core.gdb.harness.advanced"
+        command = "touch {}/core.gdb.harness.advanced".format(core_path)
         try:
-            run_local(self.log, " ".join(command), check=True)
+            run_local(self.log, command, check=True)
         except RunException:
             self.fail("Failed to touch core.gdb file in %s", )
 
