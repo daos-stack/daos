@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -38,7 +39,7 @@ func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Get DAOS pool ACL request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Get DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Overwrite DAOS pool ACL request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Overwrite DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -123,7 +124,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Update DAOS pool ACL request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Update DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -165,7 +166,7 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDeleteACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Delete DAOS pool ACL request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Delete DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
