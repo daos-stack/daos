@@ -175,13 +175,13 @@ func TestAuto_confGen(t *testing.T) {
 	tmpfsEngineCfg0 := newEngineCfg(0, 2, 4, 6, 8)
 	tmpfsEngineCfg0.Storage.Tiers[0] = storage.NewTierConfig().
 		WithNumaNodeIndex(0).
-		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithScmRamdiskSize(uint(mockRamdiskSize / humanize.GiByte)).
 		WithStorageClass("ram").
 		WithScmMountPoint("/mnt/daos0")
 	tmpfsEngineCfg1 := newEngineCfg(1, 1, 3, 5, 7)
 	tmpfsEngineCfg1.Storage.Tiers[0] = storage.NewTierConfig().
 		WithNumaNodeIndex(1).
-		WithScmRamdiskSize(uint(mockRamdiskSize)).
+		WithScmRamdiskSize(uint(mockRamdiskSize / humanize.GiByte)).
 		WithStorageClass("ram").
 		WithScmMountPoint("/mnt/daos1")
 	tmpfsEngineCfgs := []*engine.Config{

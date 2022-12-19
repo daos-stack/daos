@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -31,12 +32,21 @@ var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
 
-// HugePageInfo is a cut-down version of the hugepage information
-// retrieved from the storage scan. For the purposes of the storage
-// scan, we only care about the system hugepage size.
+// HugePageInfo is a cut-down version of the hugepage information retrieved from the storage scan.
+// For the purposes of the storage scan, we only care about the system hugepage size and memory
+// available.
 type HugePageInfo struct {
 	PageSizeKb   int `json:"page_size_kb"`
-	MemAvailable int `json:"mem_available"`
+	MemAvailable int `json:"mem_available" hash:"ignore"`
+}
+
+func (hpi *HugePageInfo) Summary() string {
+	if hpi == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("hugepage size: %s, mem available: %s",
+		humanize.IBytes(uint64(hpi.PageSizeKb*humanize.KiByte)),
+		humanize.IBytes(uint64(hpi.MemAvailable*humanize.KiByte)))
 }
 
 // HostStorage describes a host storage configuration which
@@ -66,8 +76,7 @@ type HostStorage struct {
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
 
-	// HugePageInfo contains information about the host's
-	// hugepages.
+	// HugePageInfo contains information about the host's hugepages.
 	HugePageInfo HugePageInfo `json:"huge_page_info"`
 }
 

@@ -510,8 +510,9 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					HugePageInfo: HugePageInfo{
-						PageSizeKb:   humanize.KiByte * 2,
-						MemAvailable: humanize.GiByte * 16,
+						PageSizeKb: humanize.KiByte * 2,
+						// convert 16gib to kib
+						MemAvailable: (humanize.GiByte * 16) / humanize.KiByte,
 					},
 				},
 			},
@@ -1126,7 +1127,7 @@ func mockEngineCfg(idx int) *engine.Config {
 func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmCls     storage.Class
-		memAvail   int
+		memAvail   int // available system memory for ramdisks in units of bytes
 		minNrSSDs  int
 		numaSet    []int            // set of numa nodes (by-ID) to be used for engine configs
 		numaPMems  numaSCMsMap      // numa to pmem mappings
@@ -1294,7 +1295,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassRam.String()).
-							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmRamdiskSize(9). // RoundDown(25*0.75/2)
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
@@ -1313,7 +1314,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassRam.String()).
-							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmRamdiskSize(9). // RoundDown(25*0.75/2)
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
@@ -1345,7 +1346,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassRam.String()).
-							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmRamdiskSize(9). // RoundDown(25*0.75/2)
 							WithScmMountPoint("/mnt/daos0"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
@@ -1364,7 +1365,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassRam.String()).
-							WithScmRamdiskSize(humanize.GiByte*25*0.375).
+							WithScmRamdiskSize(9). // RoundDown(25*0.75/2)
 							WithScmMountPoint("/mnt/daos1"),
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
@@ -1445,8 +1446,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				NumaIfaces: tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				HugePageSize: 2048,
-				MemAvailable: tc.memAvail,
+				HugePageSize: 2048,                          // in kib
+				MemAvailable: tc.memAvail / humanize.KiByte, // convert to kib
 				NumaSCMs:     tc.numaPMems,
 				NumaSSDs:     tc.numaSSDs,
 				scmCls:       storage.ClassDcpm,

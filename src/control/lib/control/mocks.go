@@ -288,8 +288,9 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 // MockHugePageInfo returns a mock HugePageInfo result.
 func MockHugePageInfo(t *testing.T) *ctlpb.HugePageInfo {
 	return &ctlpb.HugePageInfo{
-		PageSizeKb:   2048,
-		MemAvailable: humanize.GiByte * 16,
+		PageSizeKb: 2048,
+		// convert 16gib to kib units
+		MemAvailable: (humanize.GiByte * 16) / humanize.KiByte,
 	}
 }
 

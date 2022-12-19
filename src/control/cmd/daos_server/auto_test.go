@@ -175,7 +175,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		newEngineCfg(1, 1, 3),
 	}
 	mockMemAvail := humanize.GiByte * 12
-	mockRamdiskSize := ((mockMemAvail / 100) * 75) / 2
+	mockRamdiskSize := 4 // RoundDown(12*0.75/2)
 	tmpfsEngineCfg0 := newEngineCfg(0, 2, 4)
 	tmpfsEngineCfg0.Storage.Tiers[0] = storage.NewTierConfig().
 		WithNumaNodeIndex(0).
@@ -405,7 +405,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				HugePageInfo: control.HugePageInfo{
 					PageSizeKb:   2048,
-					MemAvailable: int(mockMemAvail),
+					MemAvailable: int(mockMemAvail / humanize.KiByte),
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),

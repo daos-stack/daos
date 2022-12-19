@@ -370,10 +370,11 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 	}
 
 	storageSet := scanResp.HostStorage[scanResp.HostStorage.Keys()[0]]
+	hostStorage := storageSet.HostStorage
 
-	log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s",
-		storageSet.HostSet.String(), storageSet.HostStorage.ScmNamespaces.Summary(),
-		storageSet.HostStorage.NvmeDevices.Summary())
+	log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s\n\t%s",
+		storageSet.HostSet.String(), hostStorage.ScmNamespaces.Summary(),
+		hostStorage.NvmeDevices.Summary(), hostStorage.HugePageInfo.Summary())
 
 	return storageSet, nil
 }
@@ -907,9 +908,9 @@ func correctSSDCounts(log logging.Logger, minNrSSDs int, sd *storageDetails) err
 	return nil
 }
 
-// Calculate RAM-disk size based on available memory as reported by /proc/meminfo and the number of
-// requested disks (one per engine). Size = (((totalRAM / 100) * 75) / nrRamdisks.
-func getRamdiskSize(nrRamdisks, memAvail int) (int, error) {
+// Calculate RAM-disk size (in bytes) based on available memory as reported by /proc/meminfo and the
+// number of requested disks (one per engine). SizeBytes = (((totalRAM / 100) * 75) / nrRamdisks.
+func getRamdiskSize(nrRamdisks int, memAvail uint64) (uint64, error) {
 	if nrRamdisks == 0 {
 		return 0, errors.New("getRamdiskSize() requires nonzero nrRamdisks")
 	}
@@ -917,7 +918,7 @@ func getRamdiskSize(nrRamdisks, memAvail int) (int, error) {
 		return 0, errors.New("getRamdiskSize() requires nonzero memAvail")
 	}
 
-	return ((memAvail / 100) * memAvailToUse) / nrRamdisks, nil
+	return ((memAvail / 100) * memAvailToUse) / uint64(nrRamdisks), nil
 }
 
 func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails) (*storage.TierConfig, error) {
@@ -926,22 +927,26 @@ func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails)
 
 	switch sd.scmCls {
 	case storage.ClassRam:
-		log.Debugf("scm tier for numa %d, nr nodes: %d, mem: %d", numaID, nrNumaNodes,
-			sd.MemAvailable)
+		// convert available memory from kib to bytes
+		memAvail := uint64(sd.MemAvailable * humanize.KiByte)
 
-		size, err := getRamdiskSize(nrNumaNodes, sd.MemAvailable)
+		log.Debugf("scm tier for numa %d, nr nodes: %d, total mem: %s", numaID, nrNumaNodes,
+			humanize.IBytes(memAvail))
+
+		size, err := getRamdiskSize(nrNumaNodes, memAvail)
 		if err != nil {
 			return nil, errors.Wrapf(err, "calculate scm ram size")
 		}
 		if size < ramdiskMinSize {
 			log.Errorf("available memory for scm ramdisk too small, want %s have %s",
-				humanize.Bytes(uint64(ramdiskMinSize)), humanize.Bytes(uint64(size)))
+				humanize.IBytes(uint64(ramdiskMinSize)), humanize.IBytes(uint64(size)))
 		}
-		scmTier.WithScmRamdiskSize(uint(size))
+		// convert from bytes to gib for server config ramdisk size param
+		scmTier.WithScmRamdiskSize(uint(size / humanize.GiByte))
 	case storage.ClassDcpm:
 		scmTier.WithScmDeviceList(sd.NumaSCMs[numaID][0])
 	default:
-		return nil, errors.Errorf("unrecognised scm tier class %q", sd.scmCls)
+		return nil, errors.Errorf("unrecognized scm tier class %q", sd.scmCls)
 	}
 
 	return scmTier, nil
