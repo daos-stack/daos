@@ -115,7 +115,7 @@ class DaosBuild(DfuseTestBase):
         self.run_build_test("nocache")
 
     def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
-        """"Run an actual test from above."""
+        """Run an actual test from above."""
 
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -144,7 +144,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             if intercept:
-                build_time = 360
+                build_time = 60 * 10
                 cont_attrs['dfuse-attr-time'] = '0'
 
             self.dfuse.disable_wb_cache.value = True
