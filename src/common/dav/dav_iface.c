@@ -278,8 +278,7 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	size = (size_t)statbuf.st_size;
 
 	if (store->stor_priv != NULL &&
-	    (strcmp(basename(path), "sys_db") != 0) &&
-	    (strcmp(basename(path), "rdb-pool") != 0)) {
+	    (strcmp(basename(path), "sys_db") != 0)) {
 		if (ftruncate(fd, 0) == -1) {
 			close(fd);
 			return NULL;
