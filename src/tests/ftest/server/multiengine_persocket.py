@@ -227,7 +227,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("===(%s)===Start server", step)
         start_server_cmds = [
             'lsblk|grep -E "NAME|pmem"',
-            "sudo cp /etc/daos/daos_server.yml_2 /etc/daos/daos_server.yml",
+            "sudo cp /etc/daos/daos_server.yml_4 /etc/daos/daos_server.yml",
             "sudo systemctl start daos_server.service"]
         for cmd in start_server_cmds:
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
