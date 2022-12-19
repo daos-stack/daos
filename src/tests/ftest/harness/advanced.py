@@ -51,11 +51,12 @@ class HarnessAdvancedTest(TestWithServers):
         except RunException:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
-        command = "echo \"Test core file \" > {}/core.gdb.harness.advanced".format(core_path)
+        core_file = "{}/core.gdb.harness.advanced".format(core_path)
+        command = ["touch {}".format(core_file), "echo \"Test core file\" > {}".format(core_file)]
         try:
-            run_local(self.log, command, check=True)
+            run_local(self.log, ";".join(command), check=True)
         except RunException:
-            self.fail("Failed to touch core.gdb file in %s", )
+            self.fail("Failed to create core.gdb file in %s", )
 
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
