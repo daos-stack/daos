@@ -100,7 +100,7 @@ pipeline {
                      description: 'Run the CI Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium-tcp-provider_TEST',
                      defaultValue: true,
-                     description: 'Run the CI Functional Hardware Medium test stage')
+                     description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large test stage')
@@ -109,7 +109,7 @@ pipeline {
                description: 'Label to use for 5 node Functional Hardware Medium stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium stage')
+               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large stage')
