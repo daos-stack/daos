@@ -8,9 +8,11 @@ import os
 from os.path import join
 import re
 import ctypes
+
+from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
+
 from exception_utils import CommandFailure
 from test_utils_container import TestContainer
-from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
@@ -83,6 +85,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Define processes and np for each datamover tool, which defaults to the "datamover" one.
         self.processes = None
         self.ppn = None
+        self.datamover_np = None
+        self.datamover_ppn = None
         self.ior_np = None
         self.ior_ppn = None
         self.mdtest_np = None
@@ -124,20 +128,20 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.daos_cmd = self.get_daos_command()
 
         # Get the processes and np for all datamover tools, as well as for individual tools.
-        self.processes = self.params.get("np", '/run/datamover/*', 1)
-        self.ppn = self.params.get("ppn", '/run/datamover/*', 1)
+        self.datamover_np = self.params.get("np", '/run/datamover/*', 1)
+        self.datamover_ppn = self.params.get("ppn", '/run/datamover/*', 1)
         self.ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
         self.ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
         self.mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
         self.mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
-        self.dcp_np = self.params.get("np", "/run/dcp/*", self.processes)
-        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.ppn)
-        self.dsync_np = self.params.get("np", "/run/dsync/*", self.processes)
-        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.ppn)
-        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.processes)
-        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.ppn)
-        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.processes)
-        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.ppn)
+        self.dcp_np = self.params.get("np", "/run/dcp/*", self.datamover_np)
+        self.dcp_ppn = self.params.get("ppn", "/run/dcp/*", self.datamover_ppn)
+        self.dsync_np = self.params.get("np", "/run/dsync/*", self.datamover_np)
+        self.dsync_ppn = self.params.get("ppn", "/run/dsync/*", self.datamover_ppn)
+        self.dserialize_np = self.params.get("np", "/run/dserialize/*", self.datamover_np)
+        self.dserialize_ppn = self.params.get("ppn", "/run/dserialize/*", self.datamover_ppn)
+        self.ddeserialize_np = self.params.get("np", "/run/ddeserialize/*", self.datamover_np)
+        self.ddeserialize_ppn = self.params.get("ppn", "/run/ddeserialize/*", self.datamover_ppn)
 
         self.posix_root.update_default(self.tmp)
         self.posix_root.get_yaml_value("posix_root", self, "/run/datamover/*")
@@ -260,8 +264,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             str: the posix path.
 
         """
-        # make dirname unique to datamover test
-        method = self.get_test_info()["method"]
+        # make directory name unique to datamover test
+        method = self.get_test_name()
         dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
         path = join(parent or self.posix_root.value, dir_name)
@@ -335,63 +339,67 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.fail("Invalid param_type: {}".format(_type))
         return None
 
-    def create_pool(self):
+    def create_pool(self, **params):
         """Create a TestPool object and adds to self.pool.
 
         Returns:
             TestPool: the created pool
 
         """
-        pool = self.get_pool(connect=False)
-
-        # Continue using the uuid until there are tests for both uuid and label
-        pool.use_label = False
+        pool = self.get_pool(connect=False, **params)
 
         # Save the pool
         self.pool.append(pool)
 
         return pool
 
-    def get_cont(self, pool, cont_uuid):
+    def get_cont(self, pool, cont):
         """Get an existing container.
 
         Args:
             pool (TestPool): pool to open the container in.
-            cont_uuid (str): container uuid.
+            cont (str): container uuid or label.
 
         Returns:
             TestContainer: the container object
 
         """
-        # Open the container
-        # Create a TestContainer instance
-        container = TestContainer(pool, daos_command=self.get_daos_command())
+        # Query the container for existence and to get the uuid from a label
+        query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
+        cont_uuid = query_response['container_uuid']
 
-        # Create the underlying DaosContainer instance
+        # Convert default label to None
+        cont_label = query_response['container_label']
+        if cont_label == 'container_label_not_set':
+            cont_label = None
+
+        # Create a TestContainer and DaosContainer instance
+        container = TestContainer(pool, daos_command=self.daos_cmd)
         container.container = DaosContainer(pool.context)
         container.container.uuid = str_to_c_uuid(cont_uuid)
-        container.uuid = container.container.get_uuid_str()
         container.container.poh = pool.pool.handle
+        container.uuid = container.container.get_uuid_str()
+        container.label.value = cont_label
 
         return container
 
-    def parse_create_cont_uuid(self, output):
-        """Parse a uuid from some output.
+    def parse_create_cont_label(self, output):
+        """Parse a uuid or label from create container output.
 
         Format:
-            Successfully created container (.*-.*-.*-.*-.*)
+            Successfully created container (.*)
 
         Args:
-            output (str): The string to parse for the uuid.
+            output (str): The string to parse for the uuid or label
 
         Returns:
-            str: The parsed uuid.
+            str: The parsed uuid or label
 
         """
-        uuid_search = re.search(r"Successfully created container (.*-.*-.*-.*-.*)", output)
-        if not uuid_search:
-            self.fail("Failed to parse container uuid")
-        return uuid_search.group(1)
+        label_search = re.search(r"Successfully created container (.*)", output)
+        if not label_search:
+            self.fail("Failed to parse container label")
+        return label_search.group(1).strip()
 
     def dataset_gen(self, cont, num_objs, num_dkeys, num_akeys_single,
                     num_akeys_array, akey_sizes, akey_extents):
@@ -986,12 +994,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 expected_rc, actual_rc, test_desc))
 
         # Check for expected output
-        for s in expected_output:
-            if s not in result.stdout_text:
-                self.fail("stdout expected {}: {}".format(s, test_desc))
-        for s in expected_err:
-            if s not in result.stderr_text:
-                self.fail("stderr expected {}: {}".format(s, test_desc))
+        for expected in expected_output:
+            if expected not in result.stdout_text:
+                self.fail("stdout expected {}: {}".format(expected, test_desc))
+        for expected in expected_err:
+            if expected not in result.stderr_text:
+                self.fail("stderr expected {}: {}".format(expected, test_desc))
 
         return result
 
@@ -1021,7 +1029,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 self.test_id + " (cont to cont2)",
                 src_path=format_path(pool, cont),
                 dst_path=format_path(pool))
-            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
+            read_back_cont = self.parse_create_cont_label(result.stdout_text)
             read_back_pool = pool
         elif tool == 'DSERIAL':
             # Create pool2
@@ -1038,7 +1046,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 dst_pool=pool2)
 
             # Get the destination cont2 uuid
-            read_back_cont = self.parse_create_cont_uuid(result.stdout_text)
+            read_back_cont = self.parse_create_cont_label(result.stdout_text)
             read_back_pool = pool2
         elif tool in ['FS_COPY', 'DCP']:
             # copy from daos cont to cont2
@@ -1068,11 +1076,13 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 dst_path=format_path(pool, cont3))
             read_back_cont = cont3
             read_back_pool = pool
-        # the result is that a NEW directory is created in the destination
-        if tool == 'FS_COPY':
-            daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
+        if tool in ['FS_COPY', 'DCP']:
+            # the result is that a NEW directory is created in the destination
+            daos_path = os.path.join(os.sep, os.path.basename(posix_path), 'testfile')
+        elif tool in ['CONT_CLONE', 'DSERIAL']:
+            daos_path = os.path.join(os.sep, 'testfile')
         else:
-            daos_path = self.ior_cmd.test_file.value
+            self.fail("Invalid tool: {}".format(tool))
         # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
             "DAOS", daos_path, read_back_pool, read_back_cont,

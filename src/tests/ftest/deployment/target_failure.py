@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -45,9 +44,7 @@ class TargetFailure(IorTestBase):
         testfile = os.path.join("/", file_name)
         ior_cmd.test_file.update(testfile)
 
-        manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich")
+        manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
@@ -332,9 +329,9 @@ class TargetFailure(IorTestBase):
         # available storage.
         self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_40/*"))
         self.pool.append(self.get_pool(namespace="/run/pool_size_ratio_66/*"))
-        for i in range(2):
+        for idx in range(2):
             self.container.append(
-                self.get_container(pool=self.pool[i], namespace="/run/container_wo_rf/*"))
+                self.get_container(pool=self.pool[idx], namespace="/run/container_wo_rf/*"))
 
         # 2. Run IOR with oclass SX on all containers at the same time.
         ior_results = {}

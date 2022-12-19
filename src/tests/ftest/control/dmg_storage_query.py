@@ -5,9 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-import avocado
 import re
+import avocado
 from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -24,7 +23,7 @@ class DmgStorageQuery(ControlTestBase):
     """
 
     def setUp(self):
-        "Set up for dmg storage query."
+        """Set up for dmg storage query."""
         super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
@@ -49,16 +48,17 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,storage_query,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(
-            len(self.bdev_list), len(list(devs_info.values())[0]), msg)
+        self.assertEqual(len(self.bdev_list), len(list(devs_info.values())[0]), msg)
 
         # Check that number of targets match the config
         targets = 0
@@ -74,8 +74,10 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
-        :avocado: tags=dmg
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,storage_query,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
         # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
@@ -111,22 +113,24 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,storage_query,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_health
         """
         dmg_info = self.get_device_info(health=True)
 
         # Cleanup output
         if dmg_info:
-            for idx, info in enumerate(dmg_info):
-                dmg_info[idx] = [i for i in info if i]
-        parsed = [dmg_info[i:(i + 19)] for i in range(0, len(dmg_info), 19)]
+            for index, info in enumerate(dmg_info):
+                dmg_info[index] = [entry for entry in info if entry]
+        parsed = [dmg_info[index:(index + 19)] for index in range(0, len(dmg_info), 19)]
         _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
         health_info = []
-        for i in parsed:
-            h = [elem[0] for elem in i]
-            health_info.append(h)
+        for index in parsed:
+            health_info.append([elem[0] for elem in index])
 
         self.log.info("Found health info: %s", str(health_info))
 
@@ -148,7 +152,10 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=control,dmg,storage_query,basic
+        :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()

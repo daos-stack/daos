@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +8,8 @@
 import os
 import io
 import yaml
-from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
+from general_utils import distribute_files, run_command, DaosTestError
+from run_utils import get_clush_command
 
 # a lookup table of predefined faults
 #

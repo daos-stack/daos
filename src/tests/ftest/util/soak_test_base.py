@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -12,15 +11,18 @@ import multiprocessing
 import threading
 import random
 from filecmp import cmp
-from apricot import TestWithServers
-from general_utils import run_command, DaosTestError
-from exception_utils import CommandFailure
-import slurm_utils
-from ClusterShell.NodeSet import NodeSet
 from getpass import getuser
 import socket
+
+from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
+
 from agent_utils import include_local_host
-from utils import DDHHMMSS_format, add_pools, get_remote_dir, \
+from exception_utils import CommandFailure
+from general_utils import run_command, DaosTestError
+from host_utils import get_local_host
+import slurm_utils
+from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     launch_snapshot, launch_exclude_reintegrate, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -43,7 +45,6 @@ class SoakTestBase(TestWithServers):
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
         self.soaktest_dir = None
-        self.exclude_slurm_nodes = NodeSet()
         self.loop = None
         self.outputsoak_dir = None
         self.test_name = None
@@ -68,6 +69,8 @@ class SoakTestBase(TestWithServers):
         self.resv_cont = None
         self.mpi_module = None
         self.sudo_cmd = None
+        self.slurm_exclude_servers = True
+        self.control = get_local_host()
 
     def setUp(self):
         """Define test setup to be done."""
@@ -93,29 +96,23 @@ class SoakTestBase(TestWithServers):
         # Partition and reservation names are updated in the yaml file.
         # It is assumed that if there is no reservation (CI only), then all
         # the nodes in the partition will be used for soak.
-        if not self.client_partition:
+        if not self.host_info.clients.partition.name:
             raise SoakTestError(
                 "<<FAILED: Partition is not correctly setup for daos "
                 "slurm partition>>")
-        self.srun_params = {"partition": self.client_partition}
-        if self.client_reservation:
-            self.srun_params["reservation"] = self.client_reservation
-        # Check if the server nodes are in the client list;
-        # this will happen when only one partition is specified
-        for host_server in self.hostlist_servers:
-            if host_server in self.hostlist_clients:
-                self.hostlist_clients.remove(host_server)
-                self.exclude_slurm_nodes.add(host_server)
+        self.srun_params = {"partition": self.host_info.clients.partition.name}
+        if self.host_info.clients.partition.reservation:
+            self.srun_params["reservation"] = self.host_info.clients.partition.reservation
         # Include test node for log cleanup; remove from client list
         local_host_list = include_local_host(None)
-        self.exclude_slurm_nodes.add(local_host_list)
+        self.slurm_exclude_nodes.add(local_host_list)
         if local_host_list[0] in self.hostlist_clients:
             self.hostlist_clients.remove((local_host_list[0]))
         if not self.hostlist_clients:
             self.fail(
                 "There are no valid nodes in this partition to run "
                 "soak. Check partition {} for valid nodes".format(
-                    self.client_partition))
+                    self.host_info.clients.partition.name))
 
     def pre_tear_down(self):
         """Tear down any test-specific steps prior to running tearDown().
@@ -134,7 +131,7 @@ class SoakTestBase(TestWithServers):
             try:
                 run_command(
                     "scancel --partition {} -u {} {}".format(
-                        self.client_partition, self.username, job_id))
+                        self.host_info.clients.partition.name, self.username, job_id))
             except DaosTestError as error:
                 # Exception was raised due to a non-zero exit status
                 errors.append("Failed to cancel jobs {}: {}".format(
@@ -152,8 +149,8 @@ class SoakTestBase(TestWithServers):
                 errors.append("<<FAILED: Soak reserved container read failed>>")
 
             if not cmp(self.initial_resv_file, final_resv_file):
-                errors.append("<<FAILED: Data verification error on reserved pool"
-                                        " after SOAK completed>>")
+                errors.append(
+                    "<<FAILED: Data verification error on reserved pool after SOAK completed>>")
 
             for file in [self.initial_resv_file, final_resv_file]:
                 os.remove(file)
@@ -311,7 +308,7 @@ class SoakTestBase(TestWithServers):
                 # nodesperjob = -1 indicates to use all nodes in client hostlist
                 if npj < 0:
                     npj = len(self.hostlist_clients)
-                if len(self.hostlist_clients)/npj < 1:
+                if len(self.hostlist_clients) / npj < 1:
                     raise SoakTestError(
                         "<<FAILED: There are only {} client nodes for this job."
                         " Job requires {}".format(
@@ -344,12 +341,12 @@ class SoakTestBase(TestWithServers):
 
         Args:
             job_cmdlist (list): list of jobs to execute
+
         Returns:
             job_id_list: IDs of each job submitted to slurm.
 
         """
-        self.log.info(
-            "<<Job Startup - %s >> at %s", self.test_name, time.ctime())
+        self.log.info("<<Job Startup - %s >> at %s", self.test_name, time.ctime())
         job_id_list = []
         # before submitting the jobs to the queue, check the job timeout;
         if time.time() > self.end_time:
@@ -359,7 +356,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(str(script))
+                job_id = slurm_utils.run_slurm_script(self.log, self.control, str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
@@ -368,16 +365,14 @@ class SoakTestBase(TestWithServers):
                 self.log.info(
                     "<<Job %s started with %s >> at %s",
                     job_id, script, time.ctime())
-                slurm_utils.register_for_job_results(
-                    job_id, self, maxwait=self.test_timeout)
+                slurm_utils.register_for_job_results(job_id, self, max_wait=self.test_timeout)
                 # keep a list of the job_id's
                 job_id_list.append(int(job_id))
             else:
                 # one of the jobs failed to queue; exit on first fail for now.
                 err_msg = "Slurm failed to submit job for {}".format(script)
                 job_id_list = []
-                raise SoakTestError(
-                    "<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
+                raise SoakTestError("<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
         return job_id_list
 
     def job_completion(self, job_id_list):
@@ -412,7 +407,8 @@ class SoakTestBase(TestWithServers):
                         "<< SOAK test timeout in Job Completion at %s >>",
                         time.ctime())
                     for job in job_id_list:
-                        _ = slurm_utils.cancel_jobs(int(job))
+                        if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
+                            self.fail("Error canceling Job {}".format(job))
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
@@ -486,16 +482,16 @@ class SoakTestBase(TestWithServers):
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), "mkdir -p {}".format(
-                self.soaktest_dir), self.srun_params)
-        if result.exit_status > 0:
+            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
+            "mkdir -p {}".format(self.soaktest_dir), self.srun_params)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: logfile directory not"
-                "created on clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: logfile directory not created on clients>>: {}".format(
+                    self.hostlist_clients))
         # Create local avocado log directory for this pass
         os.makedirs(outputsoaktest_dir)
         # Create shared log directory for this pass
-        os.makedirs(self.sharedsoaktest_dir)
+        os.makedirs(self.sharedsoaktest_dir, exist_ok=True)
         # Create local test log directory for this pass
         os.makedirs(self.soaktest_dir)
         # create the batch scripts
@@ -578,15 +574,15 @@ class SoakTestBase(TestWithServers):
 
         # cleanup soak log directories before test on all nodes
         result = slurm_utils.srun(
-            NodeSet.fromlist(self.hostlist_clients), "rm -rf {}".format(
-                self.soak_dir), self.srun_params)
-        if result.exit_status > 0:
+            self.log, self.control, NodeSet.fromlist(self.hostlist_clients),
+            "rm -rf {}".format(self.soak_dir), self.srun_params)
+        if not result.passed:
             raise SoakTestError(
-                "<<FAILED: Soak directories not removed"
-                "from clients>>: {}".format(self.hostlist_clients))
+                "<<FAILED: Soak directories not removed from clients>>: {}".format(
+                    self.hostlist_clients))
         # cleanup test_node
         for log_dir in [self.soak_dir, self.sharedsoak_dir]:
-            cmd = "rm -rf {}".format(log_dir)
+            cmd = "rm -rf {}/*".format(log_dir)
             try:
                 result = run_command(cmd, timeout=30)
             except DaosTestError as error:

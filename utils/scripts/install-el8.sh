@@ -62,6 +62,7 @@ dnf -y --nodocs install \
     python3-pip \
     python3-pyelftools \
     python3-pyxattr \
+    python3-scons \
     python3-tabulate \
     python3-yaml \
     sg3_utils \

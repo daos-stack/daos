@@ -6,6 +6,7 @@
 import time
 
 from ior_test_base import IorTestBase
+from general_utils import DaosTestError
 
 SCM_THRESHOLD = 400000
 
@@ -32,9 +33,9 @@ class MultipleContainerDelete(IorTestBase):
             Verify both the SCM and NVMe pool spaces are recovered
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=multi_container_delete,test_multiple_container_delete
+        :avocado: tags=MultipleContainerDelete,test_multiple_container_delete
         """
         self.add_pool(connect=False)
 
@@ -63,7 +64,11 @@ class MultipleContainerDelete(IorTestBase):
         self.log.info("SCM = %d, NVMe = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying NVMe space is recovered")
-        self.check_pool_free_space(self.pool, expected_nvme=initial_ssd_fs)
+        try:
+            self.pool.check_free_space(expected_nvme=initial_ssd_fs)
+        except DaosTestError as error:
+            self.fail("NVMe space is not recovered after 50 "
+                      "create-write-destroy iterations {}".format(error))
 
         # Verify SCM space recovery. About 198KB of the SCM free space isn't recovered
         # even after waiting for 180 sec, so apply the threshold. Considered not a bug.

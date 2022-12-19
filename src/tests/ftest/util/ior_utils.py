@@ -13,6 +13,7 @@ from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from general_utils import get_subprocess_stdout
+from general_utils import get_log_file
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
@@ -76,7 +77,7 @@ class IorCommand(ExecutableCommand):
         >>> ior_cmd.set_daos_params(self.server_group, self.pool)
         >>> mpirun = Mpirun()
         >>> server_manager = self.server_manager[0]
-        >>> env = self.ior_cmd.get_environment(server_manager, self.client_log)
+        >>> env = self.ior_cmd.get_default_env(server_manager, self.client_log)
         >>> mpirun.assign_hosts(self.hostlist_clients, self.workdir, None)
         >>> mpirun.assign_processes(len(self.hostlist_clients))
         >>> mpirun.assign_environment(env)
@@ -166,9 +167,6 @@ class IorCommand(ExecutableCommand):
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
-
         # Attributes used to determine command success when run as a subprocess
         # See self.check_ior_subprocess_status() for details.
         self.pattern = None
@@ -195,7 +193,7 @@ class IorCommand(ExecutableCommand):
 
         Args:
             group (str): DAOS server group name
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             cont_uuid (str, optional): the container uuid. If not specified one
                 is generated. Defaults to None.
             display (bool, optional): print updated params. Defaults to True.
@@ -211,12 +209,15 @@ class IorCommand(ExecutableCommand):
         """Set the IOR parameters that are based on a DAOS pool.
 
         Args:
-            pool (TestPool): DAOS test pool object
+            pool (TestPool/str): DAOS test pool object or pool uuid/label
             display (bool, optional): print updated params. Defaults to True.
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_pool.update(
-                pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+            try:
+                dfs_pool = pool.pool.get_uuid_str()
+            except AttributeError:
+                dfs_pool = pool
+            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -280,8 +281,9 @@ class IorCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
         env["FI_PSM2_DISCONNECT"] = "1"
 
         # ior POSIX api does not require the below options.
@@ -293,8 +295,7 @@ class IorCommand(ExecutableCommand):
                 env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
                                                                 self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
-                    env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                        self.dfs_oclass.value
+                    env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
         return env
 
     @staticmethod

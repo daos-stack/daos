@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,6 +127,3 @@ class DaosPerfCommand(ExecutableCommand):
         #   -g <string>
         #       dmg configuration file
         self.dmg_config_file = FormattedParameter("-g {}")
-
-        # Environment variable names to export when running daos_perf
-        self._env_names = ["D_LOG_FILE"]

@@ -323,7 +323,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		plugin_idx;
 	int		prov;
 	bool		set_sep = false;
-	int		max_num_ctx = 256;
+	int		max_num_ctx = CRT_SRV_CONTEXT_NUM;
 	uint32_t	ctx_num;
 	bool		share_addr;
 	int		rc = 0;
@@ -432,19 +432,21 @@ do_init:
 		prov = crt_gdata.cg_init_prov;
 
 		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep)
+			if (opt->cio_use_sep) {
 				set_sep = true;
-			max_num_ctx = opt->cio_ctx_max_num;
+				max_num_ctx = opt->cio_ctx_max_num;
+			}
 		} else {
 			share_addr = false;
 			ctx_num = 0;
 
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr)
-				set_sep = true;
-
 			d_getenv_int("CRT_CTX_NUM", &ctx_num);
-			max_num_ctx = ctx_num;
+
+			if (share_addr) {
+				set_sep = true;
+				max_num_ctx = ctx_num;
+			}
 		}
 
 		uint32_t max_expect_size = 0;

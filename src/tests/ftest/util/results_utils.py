@@ -50,8 +50,6 @@ class TestResult():
         Args:
             class_name (str): the test class name, e.g. FTEST_<name>
             name (TestName): the test uid, name, and variant
-            uid (str): the test uid
-            variant (str): the test variant
             log_file (str): the log file for a single test
             log_dir (str): the log file directory for a single test
         """
@@ -66,6 +64,7 @@ class TestResult():
         self.status = None
         self.fail_class = None
         self.fail_reason = None
+        self.fail_count = 0
         self.traceback = None
 
     def __getitem__(self, name, default=None):
@@ -303,6 +302,7 @@ class Job():
             "stdout_claimed_by": None,
         }
         self.logdir = log_dir
+        self.args = None
 
         # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"

@@ -1,5 +1,7 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
+   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
+*/
 /* Copyright 2019-2022 Intel Corporation
  * All rights reserved.
  *
@@ -125,16 +127,21 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for this run.  Specifies the default provider ' +
-                            'to use the daos_server config file when running functional tests' +
-                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
-                            '"ofi+tcp")')
+               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
+                            'stages.  Specifies the default provider to use the daos_server ' +
+                            'config file when running functional tests (the launch.py ' +
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
+        // TODO: add parameter support for per-distro CI_PR_REPOS
+        string(name: 'CI_PR_REPOS',
+               defaultValue: '',
+               description: 'Additional repository used for locating packages for the build and ' +
+                            'test nodes, in the project@PR-number[:build] format.')
         string(name: 'CI_HARDWARE_DISTRO',
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
@@ -167,77 +174,72 @@ pipeline {
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
                      defaultValue: true,
-                     description: 'Run the Unit CI tests')
+                     description: 'Run the Unit Test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
                      defaultValue: true,
-                     description: 'Run the Unit Memcheck CI tests')
+                     description: 'Run the Unit Test with memcheck stage')
         booleanParam(name: 'CI_FI_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the Fault Injection on EL 8 CI tests')
+                     description: 'Run the Fault injection testing stage')
         booleanParam(name: 'CI_FUNCTIONAL_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 7 CI tests')
+                     description: 'Run the Functional on CentOS 7 stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_VALGRIND_TEST',
                      defaultValue: false,
-                     description: 'Run the functional CentOS 8 CI tests' +
-                                  ' with Valgrind')
+                     description: 'Run the Functional on EL 8 with Valgrind stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 8 CI tests')
+                     description: 'Run the Functional on EL 8 stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
-                     description: 'Run the functional OpenSUSE Leap 15 CI tests' +
+                     description: 'Run the Functional on Leap 15 stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the functional Ubuntu 20 CI tests' +
+                     description: 'Run the Functional on Ubuntu 20.04 stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_RPMS_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the CentOS 7 RPM CI tests')
+                     description: 'Run the Test CentOS 7 RPMs stage')
         booleanParam(name: 'CI_SCAN_RPMS_el7_TEST',
                      defaultValue: true,
-                     description: 'Run the Malware Scan for CentOS 7 RPM CI tests')
-        booleanParam(name: 'CI_small_TEST',
-                     defaultValue: true,
-                     description: 'Run the Small Cluster CI tests')
+                     description: 'Run the Scan CentOS 7 RPMs stage')
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
-                     description: 'Run the Medium Cluster CI tests')
+                     description: 'Run the Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
-                     description: 'Run the Large Cluster CI tests')
+                     description: 'Run the Functional Hardware Large stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
-        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+        string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
-        string(name: 'CI_NVME_3_LABEL',
-               defaultValue: 'ci_nvme3',
-               description: 'Label to use for 3 node NVMe tests')
-        string(name: 'CI_NVME_5_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
-        string(name: 'CI_NVME_9_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large tests')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
         string(name: 'CI_PROVISIONING_POOL',
                defaultValue: '',
                description: 'The pool of images to provision test nodes from')
-        // TODO: add parameter support for per-distro CI_PR_REPOS
-        string(name: 'CI_PR_REPOS',
-               defaultValue: '',
-               description: 'Repos to add to the build and test ndoes')
         string(name: 'CI_BUILD_DESCRIPTION',
                defaultValue: '',
                description: 'A description of the build')
@@ -258,6 +260,22 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
                                             returnStdout: true).trim()
+                    Map pragmas = [:]
+                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                    env.COMMIT_MESSAGE.split('\n').each { line ->
+                        String key, value
+                        try {
+                            (key, value) = line.split(':')
+                            if (key.contains(' ')) {
+                                return
+                            }
+                            pragmas[key.toLowerCase()] = value
+                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                        } catch (ArrayIndexOutOfBoundsException ignored) {
+                            // ignore and move on to the next line
+                        }
+                    }
+                    env.pragmas = pragmas
                 }
             }
         }
@@ -527,35 +545,40 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7') {
+                stage('Build on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: quickBuild()) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
+                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
-                        sconsBuild parallel_build: parallelBuild(),
+                        sconsBuild parallel_build: true,
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   build_deps: 'no',
+                                   stash_opt: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
                             sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc
+                                      mv config.log config.log-el8-gcc
                                   fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc',
+                            archiveArtifacts artifacts: 'config.log-el8-gcc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -563,36 +586,42 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on CentOS 7 Bullseye') {
+                stage('Build on EL 8 Bullseye') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true,
+                                                                parallel_build: true,
                                                                 qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
+                                   build_deps: 'no',
+                                   stash_opt: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: sconsFaultsArgs() +
+                                               ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
                     post {
                         unsuccessful {
-                            sh '''if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-covc
-                                  fi'''
-                            archiveArtifacts artifacts: 'config.log-centos7-covc',
+                            sh label: 'Save failed Bullseye logs',
+                               script: '''if [ -f config.log ]; then
+                                          mv config.log config.log-el8-covc
+                                       fi'''
+                            archiveArtifacts artifacts: 'config.log-el8-covc',
                                              allowEmptyArchive: true
                         }
                         cleanup {
@@ -642,7 +671,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test') {
+                stage('Unit Test on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -652,6 +681,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
                     }
@@ -662,7 +692,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT') {
+                stage('NLT on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -672,6 +702,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  inst_repos: prRepos(),
                                  test_script: 'ci/unit/test_nlt.sh',
                                  inst_rpms: unitPackages()
@@ -681,7 +712,8 @@ pipeline {
                             unitTestPost artifacts: ['nlt_logs/*'],
                                          testResults: 'nlt-junit.xml',
                                          always_script: 'ci/unit/test_nlt_post.sh',
-                                         valgrind_stash: 'centos7-gcc-nlt-memcheck'
+                                         referenceJobName: 'daos-stack/daos/release%252F2.2',
+                                         valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreFailedBuilds: true,
@@ -695,7 +727,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye') {
+                stage('Unit Test Bullseye on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -705,6 +737,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -721,8 +754,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit test Bullseye')
-                stage('Unit Test with memcheck') {
+                } // stage('Unit test Bullseye on EL 8')
+                stage('Unit Test with memcheck on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
@@ -732,6 +765,7 @@ pipeline {
                     }
                     steps {
                         unitTest timeout_time: 60,
+                                 unstash_opt: true,
                                  ignore_failure: true,
                                  inst_repos: prRepos(),
                                  inst_rpms: unitPackages()
@@ -740,11 +774,11 @@ pipeline {
                         always {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/*.log'],
-                                         valgrind_stash: 'centos7-gcc-unit-memcheck'
+                                         valgrind_stash: 'el8-gcc-unit-memcheck'
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck')
+                } // stage('Unit Test with memcheck on EL 8')
             }
         }
         stage('Test') {
@@ -753,40 +787,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Coverity on CentOS 7') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7', true) + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild coverity: 'daos-stack/daos',
-                                   parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3'
-                    }
-                    post {
-                        success {
-                            coverityPost condition: 'success'
-                        }
-                        unsuccessful {
-                            coverityPost condition: 'unsuccessful'
-                        }
-                        cleanup {
-                            job_status_update()
-                        }
-                    }
-                } // stage('Coverity on CentOS 7')
                 stage('Functional on CentOS 7') {
                     when {
                         beforeAgent true
@@ -833,7 +833,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -853,7 +853,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -873,7 +873,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -924,71 +924,14 @@ pipeline {
                         }
                     }
                 } // stage('Test EL 8.5 RPMs')
-                stage('Scan CentOS 7 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan CentOS 7 RPMs')
-                stage('Scan EL 8 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version)
-                    }
-                    post {
-                        always {
-                            junit 'maldetect.xml'
-                            job_status_update()
-                        }
-                    }
-                } // stage('Scan Leap 15 RPMs')
-                stage('Fault injection testing') {
+                stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
@@ -1002,7 +945,7 @@ pipeline {
                                    scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                    build_deps: 'no'
                         sh label: 'Fault injection testing using NLT',
-                           script: './utils/docker_nlt.sh --class-name centos7.fault-injection fi'
+                           script: './utils/docker_nlt.sh --class-name el8.fault-injection fi'
                     }
                     post {
                         always {
@@ -1023,7 +966,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
                             job_status_update()
                         }
                     }
@@ -1054,27 +997,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional Hardware Small') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
-                    }
-                    steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version, '{client,server}-tests-openmpi'),
-                                       test_function: 'runTestFunctionalV2'
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Small')
                 stage('Functional Hardware Medium') {
                     when {
                         beforeAgent true
@@ -1082,7 +1004,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1096,6 +1018,27 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
+                stage('Functional Hardware Medium Verbs Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium Verbs Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -1103,7 +1046,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1121,34 +1064,38 @@ pipeline {
         } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
-                stage('Bullseye Report') {
+                stage('Bullseye Report on EL 8') {
                     when {
                       beforeAgent true
                       expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-centos7 " +
+                                " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
                                 ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('centos7') + '"' +
+                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        cloverReportPublish coverage_stashes: ['centos7-covc-unit-cov'],
+                        cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
+                                                               'func-vm-cov',
+                                                               'func-hw-small-cov',
+                                                               'func-hw-medium-cov',
+                                                               'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
                                             ignore_failure: true
                     }
-                } // stage('Bullseye Report')
+                } // stage('Bullseye Report on EL 8')
             } // parallel
         } // stage ('Test Report')
     } // stages
@@ -1156,8 +1103,8 @@ pipeline {
         always {
             job_status_update('final_status')
             job_status_write()
-            valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+            valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
+                                                     'el8-gcc-unit-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

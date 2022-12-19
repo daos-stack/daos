@@ -217,7 +217,6 @@ struct rebuild_task {
 	daos_epoch_t			dst_reclaim_eph;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
-	uint32_t			dst_rebuild_gen;
 };
 
 /* Per pool structure in TLS to check pool rebuild status

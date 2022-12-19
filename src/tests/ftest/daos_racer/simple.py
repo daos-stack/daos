@@ -29,10 +29,10 @@ class DaosRacerTest(TestWithServers):
         Use Cases:
             Running simultaneous, conflicting I/O requests.
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,large
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
         :avocado: tags=io,daosracer
-        :avocado: tags=daosracer_simple
+        :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer_simple
 
         """
         dmg = self.get_dmg_command()
@@ -41,6 +41,4 @@ class DaosRacerTest(TestWithServers):
             "This test requires one client: {}".format(self.hostlist_clients))
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], dmg)
         daos_racer.get_params(self)
-        daos_racer.set_environment(
-            daos_racer.get_environment(self.server_managers[0]))
         daos_racer.run()

@@ -78,6 +78,12 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	resp.ClientNetHint = svc.clientNetworkHint
 	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
 
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
+
 	// For resp.RankUris may be large, we make a resp copy with a limited
 	// number of rank URIs, to avoid flooding the debug log.
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v len(RankUris):%d\n",
@@ -668,6 +674,12 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
+
 	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))
 
 	return resp, nil
@@ -978,7 +990,6 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 // Signal to the data plane to find all resources associated with a given machine
 // and release them. This includes releasing all container and pool handles associated
 // with the machine.
-//
 func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanupReq) (*mgmtpb.SystemCleanupResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err

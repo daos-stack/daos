@@ -15,6 +15,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -68,6 +69,7 @@ type NUMAFabric struct {
 
 	currentNumaDevIdx map[int]int // current device idx to use on each NUMA node
 	currentNUMANode   int         // current NUMA node to search
+	ignoreIfaces      common.StringSet
 
 	getAddrInterface func(name string) (addrFI, error)
 }
@@ -83,6 +85,14 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 
 	n.numaMap[numaNode] = append(n.numaMap[numaNode], fi)
 	return nil
+}
+
+// WithIgnoredDevices adds a set of fabric interface names that should be ignored when
+// selecting a device.
+func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
+	n.ignoreIfaces = ifaces
+	n.log.Debugf("NUMAFabric ignoring devices: %s", n.ignoreIfaces)
+	return n
 }
 
 // NumDevices gets the number of devices on a given NUMA node.
@@ -172,17 +182,23 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 	for checked := 0; checked < n.getNumDevices(numaNode); checked++ {
 		fabricIF := n.getNextDevice(numaNode)
 
+		if n.ignoreIfaces.Has(fabricIF.Name) {
+			n.log.Debugf("Excluding device: %q (domain: %q). Device is on ignore list: %s", fabricIF.Name,
+				fabricIF.Domain, n.ignoreIfaces.String())
+			continue
+		}
+
 		// Manually-provided interfaces can be assumed to support what's needed by the system.
 		if fabricIF.NetDevClass != FabricDevClassManual {
 			if fabricIF.NetDevClass != netDevClass {
-				n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
-					fabricIF.Name, fabricIF.NetDevClass, netDevClass)
+				n.log.Debugf("Excluding device: %q (domain: %q), network device class: %s. Does not match requested network device class: %s",
+					fabricIF.Name, fabricIF.Domain, fabricIF.NetDevClass, netDevClass)
 				continue
 			}
 
 			if !fabricIF.HasProvider(provider) {
-				n.log.Debugf("Excluding device: %s, network device class: %s. Doesn't support provider",
-					fabricIF.Name, fabricIF.NetDevClass)
+				n.log.Debugf("Excluding device: %q (domain: %q), network device class: %s. Doesn't support provider",
+					fabricIF.Name, fabricIF.Domain, fabricIF.NetDevClass)
 				continue
 			}
 		}

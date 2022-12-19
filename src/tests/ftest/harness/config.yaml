@@ -6,3 +6,5 @@ setup:
   access_points_suffix: .wolf.hpdd.intel.com
 server_config:
   name: daos_server
+agent_config:
+  exclude_fabric_ifaces: ["fake_iface1", "fake_iface2"]

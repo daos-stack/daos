@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -109,7 +110,15 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Barrier(0).Error()
+		err := svc.Barrier(0).Error()
+		if IsRaftLeadershipError(err) {
+			db.log.Errorf("lost leadership during Barrier(): %s", err)
+			return &ErrNotLeader{
+				LeaderHint: db.leaderHint(),
+				Replicas:   db.cfg.stringReplicas(db.replicaAddr.get()),
+			}
+		}
+		return err
 	})
 }
 
@@ -303,7 +312,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, m.Member.LastUpdate)
+	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, common.FormatTime(m.Member.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -315,7 +324,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
+	db.log.Debugf("pool %s (%s) updated @ %s", dbgUuidStr(ps.PoolUUID), ps.State, common.FormatTime(ps.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -381,6 +390,10 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
 		return nil
 	}
+
+	f.data.Lock()
+	f.data.Version++ // Successful updates should increment this value.
+	f.data.Unlock()
 
 	return nil
 }
@@ -467,7 +480,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		return nil, err
 	}
 
-	f.log.Debugf("created raft db snapshot (map version %d)", f.data.MapVersion)
+	f.log.Debugf("created raft db snapshot (map version %d; data version %d)", f.data.MapVersion, f.data.Version)
 	return &fsmSnapshot{data}, nil
 }
 
@@ -488,8 +501,9 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Version = db.data.Version
 	f.data.Unlock()
-	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
+	f.log.Debugf("db snapshot loaded (map version %d; data version %d)", db.data.MapVersion, db.data.Version)
 	return nil
 }
 

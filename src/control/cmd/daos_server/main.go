@@ -27,6 +27,8 @@ const (
 	defaultConfigFile = "daos_server.yml"
 )
 
+type execTestFn func() error
+
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
@@ -43,13 +45,15 @@ type mainOpts struct {
 	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version  versionCmd             `command:"version" description:"Print daos_server version"`
 	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+
+	// Allow a set of tests to be run before executing commands.
+	preExecTests []execTestFn
 }
 
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
 	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
-	os.Exit(0)
 	return nil
 }
 
@@ -81,6 +85,19 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if len(cmdArgs) > 0 {
 			// don't support positional arguments, extra cmdArgs are unexpected
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
+		switch cmd.(type) {
+		case *versionCmd:
+			// No pre-exec tests or setup needed for these commands; just
+			// execute them directly.
+			return cmd.Execute(nil)
+		default:
+			for _, test := range opts.preExecTests {
+				if err := test(); err != nil {
+					return err
+				}
+			}
 		}
 
 		if !opts.AllowProxy {
@@ -141,11 +158,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 func main() {
 	log := logging.NewCommandLineLogger()
-	var opts mainOpts
-
-	// Check this right away to avoid lots of annoying failures later.
-	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
-		exitWithError(log, err)
+	opts := mainOpts{
+		preExecTests: []execTestFn{
+			// Check that the privileged helper is installed and working.
+			func() error {
+				return pbin.CheckHelper(log, pbin.DaosAdminName)
+			},
+		},
 	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {

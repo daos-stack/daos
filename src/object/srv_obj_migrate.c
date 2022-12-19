@@ -2702,6 +2702,17 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version)
 	if (tls->mpt_opc == RB_OP_REINT)
 		pool->sp_reintegrating--;
 	migrate_pool_tls_put(tls);
+	tls->mpt_fini = 1;
+	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
+	if (tls->mpt_ult_running) {
+		rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			D_WARN("failed to migrate wait "DF_UUID": "DF_RC"\n",
+			       DP_UUID(pool->sp_uuid), DP_RC(rc));
+		}
+	}
+
 	migrate_pool_tls_put(tls);
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
@@ -3151,7 +3162,7 @@ migrate_ult(void *arg)
 	int			rc;
 
 	D_ASSERT(pool_tls != NULL);
-	while (!dbtree_is_empty(pool_tls->mpt_root_hdl)) {
+	while (!dbtree_is_empty(pool_tls->mpt_root_hdl) && !pool_tls->mpt_fini) {
 		rc = dbtree_iterate(pool_tls->mpt_root_hdl,
 				    DAOS_INTENT_PURGE, false,
 				    migrate_cont_iter_cb, pool_tls);

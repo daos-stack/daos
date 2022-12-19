@@ -78,6 +78,22 @@ type InteropRule struct {
 	Description   string
 	StopOnSuccess bool // If set, and the rule is satisfied, stop checking rules.
 	Check         func(self, other *VersionedComponent) bool
+	Match         func(self, other *VersionedComponent) bool
+}
+
+// Matches returns true if the rule matches the components.
+func (rule *InteropRule) Matches(self, other *VersionedComponent) bool {
+	// Basic test.
+	if !(rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component)) {
+		return false
+	}
+
+	// Apply custom match logic if the rule has it.
+	if rule.Match != nil {
+		return rule.Match(self, other)
+	}
+
+	return true
 }
 
 // defaultRules are a set of default rules which should apply regardless
@@ -114,13 +130,15 @@ var defaultRules = []*InteropRule{
 	},
 }
 
-var (
-	Server22xAgent20x = &InteropRule{
+// releaseRules are a set of rules which apply to a specific release,
+// and are likely to change between releases.
+var releaseRules = []*InteropRule{
+	{
 		Self:          ComponentServer,
 		Other:         ComponentAgent,
 		Description:   "server v2.2.x is compatible with agent v2.0.x",
 		StopOnSuccess: true,
-		Check: func(self, other *VersionedComponent) bool {
+		Match: func(self, other *VersionedComponent) bool {
 			// We assume that an unversioned agent is 2.0.x.
 			v0_0_0 := MustNewVersion("0.0.0")
 			v2_2_0 := MustNewVersion("2.1.100")
@@ -130,8 +148,9 @@ var (
 				(other.Version.GreaterThanOrEquals(v0_0_0) &&
 					other.Version.LessThan(v2_2_0))
 		},
-	}
-)
+		Check: func(self, other *VersionedComponent) bool { return true },
+	},
+}
 
 // CheckCompatibility checks a pair of versioned components
 // for compatibility based on specific interoperability constraints
@@ -153,11 +172,11 @@ func CheckCompatibility(self, other *VersionedComponent, customRules ...*Interop
 	}
 
 	// Apply custom rules first (if any), then apply the default rules.
-	for _, rule := range append(customRules, defaultRules...) {
-		if rule == nil {
-			return errors.New("nil rule")
+	for _, rule := range append(customRules, append(releaseRules, defaultRules...)...) {
+		if rule == nil && rule.Check == nil {
+			return errors.New("nil rule or check")
 		}
-		if rule.Self.Matches(self.Component) && rule.Other.Matches(other.Component) {
+		if rule.Matches(self, other) {
 			if !rule.Check(self, other) {
 				return errors.Wrap(errIncompatComponents(self, other), rule.Description)
 			}

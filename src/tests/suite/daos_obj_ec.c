@@ -1749,6 +1749,64 @@ ec_few_partial_stripe_aggregation(void **state)
 	free(data);
 }
 
+static void
+ec_rec_parity_list(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		i;
+	char		*data;
+	int		stripe_size = 4 * ec_cell_size;
+	daos_anchor_t	anchor = { 0 };
+	daos_size_t	size;
+	uint64_t	start = UINT64_MAX;
+	uint64_t	end = 0;
+
+	data = (char *)malloc(stripe_size);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = stripe_size;  /* full stripe write */
+		recx.rx_idx = i * stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+	}
+
+	for (i = 0; i < 5; i++) {
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = ec_cell_size;  /* partial stripe write */
+		recx.rx_idx = i * stripe_size;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+	}
+
+	/* Verify the recx */
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_recx_t	   recxs[10];
+		daos_epoch_range_t eprs[10];
+		uint32_t	   number = 10;
+
+		enumerate_rec(DAOS_TX_NONE, "d_key", "a_key", &size,
+			      &number, recxs, eprs, &anchor, true, &req);
+		for (i = 0; i < number; i++) {
+			start = min(start, recxs[i].rx_idx);
+			end = max(end, recxs[i].rx_idx + recxs[i].rx_nr);
+		}
+	}
+	assert_rc_equal((int)start, 0);
+	assert_rc_equal((int)end, 5 * stripe_size);
+	free(data);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -1791,6 +1849,7 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC18: ec conditional fetch", ec_cond_fetch, async_disable, test_case_teardown},
 	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
 	 test_case_teardown},
+	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
 };
 
 int

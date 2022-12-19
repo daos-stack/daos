@@ -1562,9 +1562,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
 		if (rc) {
-			D_ERROR("failed to copy properties (%d)\n", rc);
-			rc = daos_der2errno(rc);
-			D_GOTO(err_prop, rc);
+			D_ERROR("failed to copy properties "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_prop, rc = daos_der2errno(rc));
 		}
 	}
 
@@ -4837,8 +4836,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(uid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_UID;
-		rstat.st_mtim.tv_sec = stbuf->st_mtim.tv_sec;
-		rstat.st_mtim.tv_nsec = stbuf->st_mtim.tv_nsec;
+		rstat.st_uid = stbuf->st_uid;
 	}
 	if (flags & DFS_SET_ATTR_GID) {
 		d_iov_set(&sg_iovs[i], &stbuf->st_gid, sizeof(gid_t));
@@ -4846,8 +4844,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		recx[i].rx_nr = sizeof(gid_t);
 		i++;
 		flags &= ~DFS_SET_ATTR_GID;
-		rstat.st_mtim.tv_sec = stbuf->st_mtim.tv_sec;
-		rstat.st_mtim.tv_nsec = stbuf->st_mtim.tv_nsec;
+		rstat.st_gid = stbuf->st_gid;
 	}
 	if (flags & DFS_SET_ATTR_SIZE) {
 		/* It shouldn't be possible to set the size of something which

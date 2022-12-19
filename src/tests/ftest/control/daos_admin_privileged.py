@@ -1,11 +1,8 @@
-#!/usr/bin/python
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 import stat
 import getpass
@@ -32,8 +29,9 @@ class DaosAdminPrivTest(TestWithServers):
             operations while daos_server is run as normal user.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=daos_admin,basic
+        :avocado: tags=hw,medium
+        :avocado: tags=control,basic,daos_admin
+        :avocado: tags=DaosPrivHelperTest,test_daos_server_helper_format
         """
         # Verify that daos_admin has the correct permissions
         self.log.info("Checking daos_admin binary permissions")
@@ -49,8 +47,7 @@ class DaosAdminPrivTest(TestWithServers):
         self.log.info("(0)Preparing to run daos_server as non-root user")
         self.add_server_manager()
         self.configure_manager(
-            "server", self.server_managers[0], self.hostlist_servers,
-            self.hostfile_servers_slots)
+            "server", self.server_managers[0], self.hostlist_servers, self.hostfile_servers_slots)
         self.server_managers[0].prepare(False)
 
         # Get user
@@ -75,8 +72,7 @@ class DaosAdminPrivTest(TestWithServers):
             self.server_managers[0].detect_format_ready()
         except ServerFailed as error:
             self.fail(
-                "##(3)Failed starting server before format as non-root user: "
-                "{}".format(error))
+                "##(3)Failed starting server before format as non-root user: {}".format(error))
 
         # Run format command under non-root user
         self.log.info("(4)Performing SCM format")
@@ -86,12 +82,9 @@ class DaosAdminPrivTest(TestWithServers):
 
         # Verify format success when all the daos_engine start.
         # Use dmg to detect server start.
-        self.log.info(
-            "(5)Verify format success when all the daos_engine start")
+        self.log.info("(5)Verify format success when all the daos_engine start")
         try:
             self.server_managers[0].detect_start_via_dmg = True
             self.server_managers[0].detect_engine_start()
         except ServerFailed as error:
-            self.fail(
-                "##(5)Failed starting server after format as non-root user: "
-                "{}".format(error))
+            self.fail("##(5)Failed starting server after format as non-root user: {}".format(error))

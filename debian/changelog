@@ -1,3 +1,9 @@
+daos (2.2.0-6) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Use latest Mercury (remove pin to 2.2.0-1).
+
+ -- Joseph Moore <joseph.moore@intel.com>  Tue, 1 Nov 2022 20:32:00 -0100
+
 daos (2.2.0-4) unstable; urgency=medium
   [ Jeff Olivier ]
   * Third release candidate for 2.2.0

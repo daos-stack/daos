@@ -25,6 +25,37 @@ if [ -z "$DAOS_BASE" ]; then
     DAOS_BASE="."
 fi
 
+produce_output()
+{
+    echo "$2"
+
+    cname="run_test.${RUN_TEST_VALGRIND:-native}"
+    name="run_test"
+    fname="${DAOS_BASE}/test_results/test_run_test.sh.${RUN_TEST_VALGRIND:-native}.xml"
+
+    if [ "$1" -eq 0 ]; then
+       teststr="    <testcase classname=\"$cname\" name=\"$name\" />"
+    else
+       teststr="    <testcase classname=\"$cname\" name=\"$name\">
+      <failure type=\"format\">
+        <![CDATA[$2
+          ]]>
+      </failure>
+    </testcase>"
+    fi
+
+    cat > "${fname}" << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites>
+  <testsuite tests="1" failures="$1" errors="0" skipped="0" >
+EOF
+echo "${teststr}" >> "${fname}"
+cat >> "${fname}" << EOF
+  </testsuite>
+</testsuites>
+EOF
+}
+
 run_test()
 {
     local in="$*"
@@ -50,6 +81,7 @@ run_test()
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
+    # shellcheck disable=SC2294
     if ! time eval "${VALGRIND_CMD}" "$@"; then
         retcode=${PIPESTATUS[0]}
         echo "Test $* failed with exit status ${retcode}."
@@ -71,11 +103,6 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
@@ -116,10 +143,16 @@ if [ -d "/mnt/daos" ]; then
         sed -i "s+\"filename\": \".*\"+\"filename\": \"${AIO_DEV}\"+g" ${NVME_CONF}
 
         export VOS_BDEV_CLASS="AIO"
+        export UCX_HANDLE_ERRORS=none
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
+
+        run_test src/vos/tests/evt_stress.py
+        run_test src/vos/tests/evt_stress.py --algo dist_even
+        run_test src/vos/tests/evt_stress.py --algo soff
+
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -129,6 +162,7 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
+                                          --fair-sched=try \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --error-exitcode=42 \
                                           --xml=yes \
@@ -228,13 +262,16 @@ if [ -d "/mnt/daos" ]; then
     # Reporting
     if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
-        echo "SUCCESS! NO TEST FAILURES"
+        produce_output 0 "SUCCESS! NO TEST FAILURES"
     else
-        echo "FAILURE: $failed tests failed (listed below)"
+        fail_msg="FAILURE: $failed tests failed (listed below)
+"
         for ((i = 0; i < ${#failures[@]}; i++)); do
-            echo "    ${failures[$i]}"
+            fail_msg=$"$fail_msg    ${failures[$i]}
+"
         done
-        if ! ${OLD_CI:-true}; then
+        produce_output 1 "$fail_msg"
+        if ! ${IS_CI:-false}; then
             exit 1
         fi
     fi
