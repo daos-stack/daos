@@ -2726,7 +2726,8 @@ class Launch():
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=1200)
+        result = run_remote(
+            logger, hosts, find_command(source, pattern, depth, other), timeout=1200)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
