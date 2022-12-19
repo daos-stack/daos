@@ -113,6 +113,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 			return nil
 		}
 		ei.log.Debugf("instance %d: superblock needed", idx)
+		return nil
 	}
 
 	cfg, err := ei.storage.GetScmConfig()
