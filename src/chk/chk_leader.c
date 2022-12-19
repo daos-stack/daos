@@ -285,7 +285,7 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_status, uint32_t pool_sta
 static uint32_t
 chk_leader_find_slowest(struct chk_instance *ins)
 {
-	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+	uint32_t		 phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	struct chk_rank_rec	*crr;
 
 	d_list_for_each_entry(crr, &ins->ci_rank_list, crr_link) {
@@ -322,7 +322,7 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 				iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_FAILED;
 			} else if (cpr->cpr_destroyed) {
 				/* Since the pool is destroyed, then mark its phase as DONE. */
-				iv.ci_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+				iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 				iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
 			} else {
 				iv.ci_phase = cpr->cpr_bk.cb_phase;
@@ -522,8 +522,9 @@ out:
 }
 
 static int
-chk_leader_dangling_pool(struct chk_instance *ins, struct chk_list_pool *clp)
+chk_leader_dangling_pool(struct chk_pool_rec *cpr)
 {
+	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	struct chk_report_unit		 cru = { 0 };
@@ -560,7 +561,7 @@ chk_leader_dangling_pool(struct chk_instance *ins, struct chk_list_pool *clp)
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
-			result = ds_chk_deregpool_upcall(seq, clp->clp_uuid);
+			result = ds_chk_deregpool_upcall(seq, cpr->cpr_uuid);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
 			else
@@ -613,8 +614,8 @@ report:
 	cru.cru_rank = dss_self_rank();
 	cru.cru_option_nr = option_nr;
 	cru.cru_detail_nr = detail_nr;
-	cru.cru_pool = (uuid_t *)&clp->clp_uuid;
-	cru.cru_pool_label = clp->clp_label;
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
 	cru.cru_msg = "Check leader detects dangling pool.\n";
 	cru.cru_options = options;
 	cru.cru_details = details;
@@ -625,7 +626,7 @@ report:
 	D_CDEBUG(result != 0 || rc != 0, DLOG_ERR, DLOG_INFO,
 		 DF_LEADER" detects dangling pool "DF_UUIDF", action %u (%s), seq "
 		 DF_X64", handle_rc %d, report_rc %d, decision %d\n",
-		 DP_LEADER(ins), DP_UUID(clp->clp_uuid),
+		 DP_LEADER(ins), DP_UUID(cpr->cpr_uuid),
 		 act, option_nr ? "need interact" : "no interact", seq, result, rc, decision);
 
 	if (rc != 0 && option_nr > 0) {
@@ -643,7 +644,7 @@ report:
 	default:
 		D_ERROR(DF_LEADER" got invalid decision %d for dangling pool "
 			DF_UUIDF" with seq "DF_X64". Ignore the inconsistency.\n",
-			DP_LEADER(ins), decision, DP_UUID(clp->clp_uuid), seq);
+			DP_LEADER(ins), decision, DP_UUID(cpr->cpr_uuid), seq);
 		/*
 		 * Invalid option, ignore the inconsistency.
 		 *
@@ -658,7 +659,7 @@ report:
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
-			result = ds_chk_deregpool_upcall(seq, clp->clp_uuid);
+			result = ds_chk_deregpool_upcall(seq, cpr->cpr_uuid);
 			if (result != 0)
 				cbk->cb_statistics.cs_failed++;
 			else
@@ -1344,7 +1345,6 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
 	char				*strs[3];
-	char				 suggested[CHK_MSG_BUFLEN] = { 0 };
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
@@ -1395,9 +1395,6 @@ try_ps:
 			break;
 		}
 
-		D_FREE(cpr->cpr_label);
-		cpr->cpr_label = label;
-
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
 		} else {
@@ -1444,25 +1441,18 @@ try_ps:
 		if (cpr->cpr_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
-			snprintf(suggested, CHK_MSG_BUFLEN - 1,
-				 "Inconsistent pool label: (null) (MS) vs %s (PS), "
-				 "Trust PS pool label [suggested].", clue->pc_label);
+			strs[0] = "Trust PS pool label [suggested].";
 			strs[1] = "Trust MS pool label.";
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			snprintf(suggested, CHK_MSG_BUFLEN - 1,
-				 "Inconsistent pool label: %s (MS) vs %s (PS), "
-				 "Trust MS pool label [suggested]", cpr->cpr_label,
-				 clue->pc_label != NULL ? clue->pc_label : "(null)");
+			strs[0] = "Trust MS pool label [suggested].";
 			strs[1] = "Trust PS pool label.";
 		}
 
 		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		option_nr = 3;
-
-		strs[0] = suggested;
 		strs[2] = "Keep the inconsistent pool label, repair nothing.";
+		option_nr = 3;
 
 		d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 		d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
@@ -1512,8 +1502,14 @@ report:
 		result = rc;
 	}
 
-	if (result != 0 || option_nr == 0)
+	if (result != 0 || option_nr == 0) {
+		if (act == CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS && label != clue->pc_label) {
+			D_FREE(cpr->cpr_label);
+			cpr->cpr_label = label;
+		}
+
 		goto out;
+	}
 
 	option_nr = 0;
 	detail_nr = 0;
@@ -1538,6 +1534,7 @@ report:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 		/* Delay pool label update on PS until CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP. */
 		cpr->cpr_delay_label = 1;
+		cpr->cpr_label_seq = seq;
 		goto out;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
@@ -1551,9 +1548,6 @@ report:
 			label = clue->pc_label;
 			break;
 		}
-
-		D_FREE(cpr->cpr_label);
-		cpr->cpr_label = label;
 
 		if (prop->cp_flags & CHK__CHECK_FLAG__CF_DRYRUN) {
 			cbk->cb_statistics.cs_repaired++;
@@ -1578,6 +1572,24 @@ out:
 	chk_leader_post_repair(ins, cpr, &result, cpr->cpr_delay_label ? false : true, false);
 
 	return result;
+}
+
+static void
+chk_leader_dp_ult(void *arg)
+{
+	struct chk_pool_rec	*cpr = arg;
+	struct chk_bookmark	*cbk = &cpr->cpr_bk;
+	int			 rc;
+
+	cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+	rc = chk_leader_dangling_pool(cpr);
+	if (rc != 0)
+		cpr->cpr_skip = 1;
+	else
+		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
+
+	cpr->cpr_done = 1;
+	chk_pool_put(cpr);
 }
 
 static void chk_leader_pool_ult(void *arg);
@@ -1619,20 +1631,29 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 
 			/* No engine report shard for the pool, it is dangling pool. */
 			if (d_list_empty(&cpr->cpr_shard_list)) {
-				rc = chk_leader_dangling_pool(ins, &clp[i]);
-				if (rc != 0)
-					goto out;
-
-				/* Remove the cpr for dangling pool. */
-				chk_pool_remove_nowait(cpr, true);
+				chk_pool_get(cpr);
+				cpr->cpr_dangling = 1;
+				rc = dss_ult_create(chk_leader_dp_ult, cpr, DSS_XS_SYS, 0,
+						    DSS_DEEP_STACK_SZ, &cpr->cpr_thread);
+				if (rc != 0) {
+					D_ERROR("Failed to create ULT for pool "DF_UUIDF
+						" with %s (3): "DF_RC"\n", DP_UUID(cpr->cpr_uuid),
+						exit ? "failout" : "continue", DP_RC(rc));
+					cpr->cpr_skip = 1;
+					chk_pool_put(cpr);
+					if (exit)
+						goto out;
+					rc = 0;
+				}
+				continue;
 			}
 
 			/*
-			 * It is for check orphan pool, since exist on both MS and engine,
-			 * normally, remove the @cpr, then handle next one.
+			 * For check orphan pool, since exist on both MS and engine,
+			 * then it is normally, not orphan pool, remove the @cpr.
 			 */
 			if (cpr->cpr_for_orphan) {
-				chk_pool_remove_nowait(cpr, false);
+				chk_pool_remove_nowait(cpr);
 				continue;
 			}
 
@@ -1664,10 +1685,45 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			 * the pools tree. So if it is not there, then unless the check is for all
 			 * pools, otherwise, skip it.
 			 */
-			if (ins->ci_start_flags & CSF_ORPHAN_POOL)
-				rc = chk_leader_dangling_pool(ins, &clp[i]);
-			else
+			if (!(ins->ci_start_flags & CSF_ORPHAN_POOL)) {
 				rc = 0;
+				continue;
+			}
+
+			rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list,
+						clp[i].clp_uuid, -1 /* unused rank */,
+						NULL /* bookmark */, ins, NULL /* shard_nr */,
+						NULL /* data */, NULL, &cpr);
+			if (rc != 0) {
+				D_ERROR("Failed to create record for dangling pool "
+					DF_UUIDF" with %s: "DF_RC"\n", DP_UUID(clp[i].clp_uuid),
+					exit ? "failout" : "continue", DP_RC(rc));
+				if (!exit)
+					rc = 0;
+			} else {
+				cpr->cpr_exist_on_ms = 1;
+				rc = chk_dup_string(&cpr->cpr_label, clp[i].clp_label,
+						    clp[i].clp_label != NULL ?
+						    strlen(clp[i].clp_label) : 0);
+				if (rc != 0) {
+					cpr->cpr_skip = 1;
+					goto out;
+				}
+
+				chk_pool_get(cpr);
+				cpr->cpr_dangling = 1;
+				rc = dss_ult_create(chk_leader_dp_ult, cpr, DSS_XS_SYS, 0,
+						    DSS_DEEP_STACK_SZ, &cpr->cpr_thread);
+				if (rc != 0) {
+					D_ERROR("Failed to create ULT for pool "DF_UUIDF
+						" with %s (4): "DF_RC"\n", DP_UUID(cpr->cpr_uuid),
+						exit ? "failout" : "continue", DP_RC(rc));
+					cpr->cpr_skip = 1;
+					chk_pool_put(cpr);
+					if (!exit)
+						rc = 0;
+				}
+			}
 		} else {
 			D_ERROR("Failed to verify pool "DF_UUIDF" existence with %s: "DF_RC"\n",
 				DP_UUID(clp[i].clp_uuid), exit ? "failout" : "continue", DP_RC(rc));
@@ -1684,7 +1740,7 @@ chk_leader_handle_pools_list(struct chk_instance *ins)
 			continue;
 
 		/* The cpr is only for check dangling, can be remove from the list now. */
-		if (cpr->cpr_bk.cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
+		if (cpr->cpr_bk.cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE) {
 			cpr->cpr_done = 1;
 			continue;
 		}
@@ -1776,7 +1832,7 @@ again:
 		goto out_client;
 
 	rc = chk_pool_mbs_remote(ep.ep_rank, CHK__CHECK_SCAN_PHASE__CSP_POOL_MBS, cbk->cb_gen,
-				 cpr->cpr_uuid, cpr->cpr_label,
+				 cpr->cpr_uuid, cpr->cpr_label, cpr->cpr_label_seq,
 				 cpr->cpr_delay_label ? CMF_REPAIR_LABEL : 0,
 				 cpr->cpr_shard_nr, cpr->cpr_mbs, &hint);
 
@@ -1816,8 +1872,20 @@ out_post:
 static inline int
 chk_leader_need_stop(struct chk_instance *ins)
 {
-	if (d_list_empty(&ins->ci_rank_list))
-		return 1;
+	struct chk_pool_rec	*cpr;
+	bool			 dangling = false;
+
+	if (d_list_empty(&ins->ci_rank_list)) {
+		d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+			if (!cpr->cpr_skip && !cpr->cpr_done && cpr->cpr_dangling) {
+				dangling = true;
+				break;
+			}
+		}
+
+		if (!dangling)
+			return 1;
+	}
 
 	if (!ins->ci_sched_running)
 		return 0;
@@ -1978,6 +2046,7 @@ chk_leader_sched(void *args)
 	int			 rc = 0;
 	bool			 bcast = false;
 	bool			 done = false;
+	bool			 dangling = false;
 
 	D_INFO(DF_LEADER" scheduler enter at phase %u\n", DP_LEADER(ins), cbk->cb_phase);
 
@@ -2001,6 +2070,12 @@ again:
 handle:
 	if (!d_list_empty(&ins->ci_rank_list) || ins->ci_start_flags & CSF_ORPHAN_POOL) {
 		rc = chk_leader_handle_pools_list(ins);
+		if (ins->ci_for_orphan) {
+			cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
+			if (rc == 0)
+				rc = 1;
+		}
+
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 	}
@@ -2018,14 +2093,14 @@ handle:
 		 *	then the leader will be blocked there.
 		 */
 
-		phase = chk_pools_find_slowest(ins, &done);
+		phase = chk_pools_find_slowest(ins, &done, &dangling);
 		if (cbk->cb_phase == CHK_INVAL_PHASE || cbk->cb_phase < phase) {
 			D_INFO(DF_LEADER" moves (1) from phase %u to phase %u\n",
 			       DP_LEADER(ins), cbk->cb_phase, phase);
 
 			cbk->cb_phase = phase;
 			/* QUEST: How to estimate the left time? */
-			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 			rc = chk_bk_update_leader(cbk);
 			if (rc != 0)
 				D_GOTO(out, bcast = true);
@@ -2036,12 +2111,15 @@ handle:
 			D_GOTO(out, rc = 1);
 		}
 
+		if (dangling)
+			continue;
+
 		/*
 		 * NOTE: Some check engine may exited with only reporting the rank's status instead
 		 *	 of each pool's detailed status. So let's check the ranks' status for sure.
 		 */
 		phase = chk_leader_find_slowest(ins);
-		if (phase == CHK__CHECK_SCAN_PHASE__DSP_DONE) {
+		if (phase == CHK__CHECK_SCAN_PHASE__CSP_DONE) {
 			D_INFO(DF_LEADER" has done (2)\n", DP_LEADER(ins));
 			D_GOTO(out, rc = 1);
 		}
@@ -2052,7 +2130,7 @@ handle:
 
 			cbk->cb_phase = phase;
 			/* QUEST: How to estimate the left time? */
-			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE - cbk->cb_phase;
+			cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 			rc = chk_bk_update_leader(cbk);
 			if (rc != 0)
 				D_GOTO(out, bcast = true);
@@ -2070,7 +2148,7 @@ out:
 		else
 			ins_status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
 		pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
-		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	} else if (rc == 0) {
 		if (ins->ci_implicated) {
 			ins_status = CHK__CHECK_INST_STATUS__CIS_IMPLICATED;
@@ -2330,8 +2408,8 @@ chk_leader_start_post(struct chk_instance *ins)
 	struct chk_bookmark	*ins_cbk = &ins->ci_bk;
 	struct chk_bookmark	*pool_cbk;
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
-	uint32_t		 ins_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
-	uint32_t		 pool_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+	uint32_t		 ins_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
+	uint32_t		 pool_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	int			 rc = 0;
 
 	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
@@ -2367,12 +2445,12 @@ chk_leader_start_post(struct chk_instance *ins)
 		}
 
 		pool_cbk->cb_phase = pool_phase;
-		if (likely(pool_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE)) {
+		if (likely(pool_phase != CHK__CHECK_SCAN_PHASE__CSP_DONE)) {
 			pool_cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
 			/* Always refresh the start time. */
 			pool_cbk->cb_time.ct_start_time = time(NULL);
 			/* QUEST: How to estimate the left time? */
-			pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+			pool_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 							 pool_cbk->cb_phase;
 		} else {
 			pool_cbk->cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
@@ -2388,10 +2466,10 @@ chk_leader_start_post(struct chk_instance *ins)
 		 * NOTE: The pool has been checked, notify the engines to drop their cpr.
 		 *	 But keek the leader's cpr for handling dangling pool.
 		 */
-		if (unlikely(pool_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE)) {
+		if (unlikely(pool_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)) {
 			iv.ci_gen = ins_cbk->cb_gen;
 			uuid_copy(iv.ci_uuid, cpr->cpr_uuid);
-			iv.ci_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+			iv.ci_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 			iv.ci_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKED;
 
 			/*
@@ -2411,23 +2489,25 @@ chk_leader_start_post(struct chk_instance *ins)
 		}
 
 next:
-		pool_phase = CHK__CHECK_SCAN_PHASE__DSP_DONE;
+		pool_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
 	}
 
 	if (rc == 0) {
 		/*
-		 * The phase in leader bookmark may be larger then the phase in
+		 * The phase in leader bookmark may be larger than the phase in
 		 * some pools that may be new added into current check instance.
 		 * So we allow the phase to backward.
 		 */
 		ins_cbk->cb_phase = ins_phase;
-		if (likely(ins_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE) ||
+		if (likely(ins_phase != CHK__CHECK_SCAN_PHASE__CSP_DONE) ||
 		    ins->ci_start_flags & CSF_ORPHAN_POOL) {
+			if (ins_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
+				ins->ci_for_orphan = 1;
 			ins_cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_RUNNING;
 			/* Always refresh the start time. */
 			ins_cbk->cb_time.ct_start_time = time(NULL);
 			/* QUEST: How to estimate the left time? */
-			ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__DSP_DONE -
+			ins_cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE -
 							ins_cbk->cb_phase;
 		} else {
 			ins_cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_COMPLETED;
@@ -2440,9 +2520,16 @@ next:
 		 *	 then still need to further check for dangling/orphan pools. Otherwise
 		 *	 we can return 1 to directly exit the check.
 		 */
-		if (rc == 0 && ins_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE &&
-		    d_list_empty(&ins->ci_pool_list) && !(ins->ci_start_flags & CSF_ORPHAN_POOL))
-			rc = 1;
+		if (rc == 0 && ins_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE) {
+			if (ins->ci_for_orphan)
+				/*
+				 * Mark instance bookmark as 'CSP_PREPARED' in DRAM to avoid
+				 * confused 'CSP_DONE' but with check RUNNING for check query.
+				 */
+				ins_cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_PREPARE;
+			else if (d_list_empty(&ins->ci_pool_list))
+				rc = 1;
+		}
 	}
 
 	return rc;
@@ -2549,7 +2636,8 @@ chk_leader_start_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 			goto out;
 
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, clue->pc_uuid,
-					clue->pc_rank, NULL, ins, NULL, clue, chk_leader_free_clue);
+					clue->pc_rank, NULL, ins, NULL, clue,
+					chk_leader_free_clue, NULL);
 		if (rc != 0) {
 			chk_leader_free_clue(clue);
 			goto out;
@@ -2594,6 +2682,7 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 	ins->ci_starting = 1;
 	ins->ci_started = 0;
 	ins->ci_start_flags = 0;
+	ins->ci_for_orphan = 0;
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_rank_hdl));
 	D_ASSERT(d_list_empty(&ins->ci_rank_list));
@@ -2913,7 +3002,7 @@ chk_leader_query_cb(void *args, uint32_t rank, int result, void *data, uint32_t 
 
 		rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, shard->cqps_uuid,
 					shard->cqps_rank, NULL, cqa->cqa_ins, &cqa->cqa_count,
-					shard, chk_leader_free_shard);
+					shard, chk_leader_free_shard, NULL);
 		if (rc != 0) {
 			chk_leader_free_shard(shard);
 			goto out;
@@ -2971,13 +3060,17 @@ int
 chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 		 chk_query_pool_cb_t pool_cb, void *buf)
 {
-	struct chk_instance	*ins = chk_leader;
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_query_args	*cqa = NULL;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_shard	*cps;
-	uint32_t		 idx = 0;
-	int			 rc;
+	struct chk_instance		*ins = chk_leader;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct chk_query_args		*cqa = NULL;
+	struct chk_pool_rec		*cpr;
+	struct chk_pool_rec		*tmp;
+	struct chk_pool_shard		*cps;
+	struct chk_query_pool_shard	*shard;
+	uint32_t			 idx = 0;
+	int				 rc;
+	int				 i;
+	bool				 skip;
 
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
@@ -3007,6 +3100,37 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 			      pools, chk_leader_query_cb, cqa);
 	if (rc != 0)
 		goto out;
+
+	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
+		if (!cpr->cpr_dangling)
+			continue;
+
+		skip = false;
+		if (pool_nr != 0) {
+			skip = true;
+			for (i = 0; i < pool_nr && skip; i++) {
+				if (uuid_compare(cpr->cpr_uuid, pools[i]) == 0)
+					skip = false;
+			}
+		}
+
+		if (!skip) {
+			D_ALLOC_PTR(shard);
+			if (shard == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			uuid_copy(shard->cqps_uuid, cpr->cpr_uuid);
+			shard->cqps_status = cpr->cpr_bk.cb_pool_status;
+			shard->cqps_phase = cpr->cpr_bk.cb_phase;
+			shard->cqps_rank = -1;
+
+			rc = chk_pool_add_shard(cqa->cqa_hdl, &cqa->cqa_list, cpr->cpr_uuid,
+						-1 /* unknown rank */, NULL, ins, &cqa->cqa_count,
+						shard, chk_leader_free_shard, NULL);
+			if (rc != 0)
+				goto out;
+		}
+	}
 
 	rc = head_cb(cbk->cb_ins_status, cbk->cb_phase, &cbk->cb_statistics, &cbk->cb_time,
 		     cqa->cqa_count, buf);
@@ -3096,6 +3220,9 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_property	*prop = &ins->ci_prop;
 	struct chk_pending_rec	*cpr = NULL;
+	struct chk_pool_rec	*pool = NULL;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
@@ -3131,6 +3258,15 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 			rc = chk_prop_update(prop, NULL);
 		}
 	} else  {
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, cpr->cpr_uuid, sizeof(uuid_t));
+		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+		if (rc == 0) {
+			pool = (struct chk_pool_rec *)riov.iov_buf;
+			if (pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING)
+				pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+		}
+
 		rc = chk_act_remote(ins->ci_ranks, cbk->cb_gen, seq,
 				    cpr->cpr_class, act, cpr->cpr_rank, for_all);
 	}
@@ -3152,7 +3288,12 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pending_rec	*cpr = NULL;
+	struct chk_pool_rec	*pool = NULL;
+	struct chk_rank_rec	*crr = NULL;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
+	bool			 exit = false;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
 		D_GOTO(out, rc = -DER_NOTLEADER);
@@ -3170,8 +3311,30 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	       cru->cru_act, cru->cru_result);
 
 	if (cru->cru_act == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT) {
-		rc = chk_pending_add(ins, &ins->ci_pending_list, *seq,
-				     cru->cru_rank, cru->cru_cla, &cpr);
+		if (cru->cru_pool == NULL)
+			D_GOTO(log, rc = -DER_INVAL);
+
+		d_iov_set(&riov, NULL, 0);
+		d_iov_set(&kiov, cru->cru_pool, sizeof(uuid_t));
+		rc = dbtree_lookup(ins->ci_pool_hdl, &kiov, &riov);
+		if (rc != 0)
+			goto log;
+
+		pool = (struct chk_pool_rec *)riov.iov_buf;
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_PENDING;
+
+		if (decision == NULL) {
+			d_iov_set(&riov, NULL, 0);
+			d_iov_set(&kiov, &cru->cru_rank, sizeof(cru->cru_rank));
+			rc = dbtree_lookup(ins->ci_rank_hdl, &kiov, &riov);
+			if (rc != 0)
+				goto log;
+
+			crr = (struct chk_rank_rec *)riov.iov_buf;
+		}
+
+		rc = chk_pending_add(ins, crr != NULL ? &crr->crr_pending_list : NULL,
+				     *cru->cru_pool, *seq, cru->cru_rank, cru->cru_cla, &cpr);
 		if (rc != 0)
 			goto log;
 
@@ -3206,6 +3369,7 @@ log:
 
 again:
 	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+		exit = true;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;
 	}
@@ -3221,6 +3385,11 @@ again:
 	goto again;
 
 out:
+	if (pool != NULL && pool->cpr_bk.cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING &&
+	    (rc != 0 || exit || (cpr != NULL &&
+				 cpr->cpr_action != CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT)))
+		pool->cpr_bk.cb_pool_status = CHK__CHECK_POOL_STATUS__CPS_CHECKING;
+
 	if ((rc != 0 || decision != NULL) && cpr != NULL)
 		chk_pending_destroy(cpr);
 
@@ -3280,7 +3449,7 @@ chk_leader_notify(struct chk_iv *iv)
 		 *	 Then the completed phase will be either container cleanup or all done.
 		 */
 		if (unlikely(iv->ci_phase != CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP &&
-			     iv->ci_phase != CHK__CHECK_SCAN_PHASE__DSP_DONE))
+			     iv->ci_phase != CHK__CHECK_SCAN_PHASE__CSP_DONE))
 			rc = -DER_INVAL;
 		else
 			rc = chk_rank_del(ins, iv->ci_rank);
@@ -3289,7 +3458,7 @@ chk_leader_notify(struct chk_iv *iv)
 		chk_ins_set_fail(ins, iv->ci_phase);
 		rc = chk_rank_del(ins, iv->ci_rank);
 		if (rc != 0 || !(prop->cp_flags & CHK__CHECK_FLAG__CF_FAILOUT))
-			D_GOTO(out, rc = (rc == -DER_NONEXIST ? 0 : rc));
+			D_GOTO(out, rc = (rc == -DER_NONEXIST || rc == -DER_NO_HDL ? 0 : rc));
 
 		ins->ci_implicated = 1;
 		chk_stop_sched(ins);

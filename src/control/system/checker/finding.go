@@ -137,7 +137,7 @@ func descAction(class chkpb.CheckInconsistClass, action chkpb.CheckInconsistActi
 		case contObj:
 			switch class {
 			case chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL:
-				return fmt.Sprintf("Update the PS label to use the container property value for %s", detMap[1])
+				return fmt.Sprintf("Update the CS label to use the container property value for %s", detMap[1])
 			}
 		}
 		return fmt.Sprintf("Trust the %s result", ro)

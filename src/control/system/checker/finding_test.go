@@ -244,7 +244,7 @@ func TestChecker_AnnotateFinding(t *testing.T) {
 					Timestamp: "Mon Dec  5 19:25:49 2022",
 					Msg:       "Check engine detects inconsistent container label: new-label (CS) vs six-cont (property).",
 					ActMsgs: []string{
-						"Update the PS label to use the container property value for 00c841c8-4e01-4001-bd58-7de5ad602926",
+						"Update the CS label to use the container property value for 00c841c8-4e01-4001-bd58-7de5ad602926",
 					},
 				}),
 		},

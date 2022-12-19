@@ -383,8 +383,8 @@ const (
 	SystemCheckScanPhaseDtxResync        = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DTX_RESYNC)
 	SystemCheckScanPhaseObjectScrub      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_OBJ_SCRUB)
 	SystemCheckScanPhaseObjectRebuild    = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_REBUILD)
-	SystemCheckScanPhaseAggregation      = SystemCheckScanPhase(chkpb.CheckScanPhase_OSP_AGGREGATION)
-	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_DSP_DONE)
+	SystemCheckScanPhaseAggregation      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_AGGREGATION)
+	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DONE)
 )
 
 type SystemCheckRepairChoice struct {

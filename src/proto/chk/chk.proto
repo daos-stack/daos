@@ -186,9 +186,9 @@ enum CheckScanPhase {
 	CSP_DTX_RESYNC = 6; // DTX resync and cleanup.
 	CSP_OBJ_SCRUB = 7; // RP/EC shards consistency verification with checksum scrub if have.
 	CSP_REBUILD = 8; // Object rebuild.
-	OSP_AGGREGATION = 9; // EC aggregation & VOS aggregation.
+	CSP_AGGREGATION = 9; // EC aggregation & VOS aggregation.
 
-	DSP_DONE = 10; // All done.
+	CSP_DONE = 10; // All done.
 }
 
 // DAOS check engine reports the found inconsistency and repair result to control plane.
