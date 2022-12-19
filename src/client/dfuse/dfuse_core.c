@@ -951,7 +951,6 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 		use = true;
 
 		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
-		use = true;
 
 		if (timeout)
 			*timeout = time_left;
