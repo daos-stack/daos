@@ -8,20 +8,19 @@ from telemetry_test_base import TestWithTelemetry
 from apricot import TestWithServers
 from telemetry_utils import TelemetryUtils
 
-class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-nested-blocks
+
+class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
+    # pylint: disable=too-many-ancestors,too-many-nested-blocks
     """Test telemetry engine NVMe metrics.
 
     :avocado: recursive
     """
 
     def display_nvme_test_metrics(self, metrics_data):
-        """ Display NVMe metrics_data.
+        """Display NVMe metrics_data.
 
         Args:
-            metrics_data (dict): a dictionary of host keys linked to a
-                                 list of NVMe metric names.
+            metrics_data (dict): a dictionary of host keys linked to a list of NVMe metric names.
         """
         for key in sorted(metrics_data):
             self.log.info(
@@ -29,7 +28,7 @@ class TestWithTelemetryNvme(TestWithTelemetry,TestWithServers):
                 "Initial " if key == 0 else "Test Loop {}".format(key), metrics_data[key])
 
     def test_nvme_telemetry_metrics(self):
-        """JIRA ID: DAOS-7833
+        """JIRA ID: DAOS-7833.
 
             Verify the telemetry engine NVMe metrics.
 

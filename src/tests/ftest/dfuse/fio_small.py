@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -35,8 +35,8 @@ class FioSmall(FioBase):
             numjobs: 1
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=fio,checksum,tx,dfuse
-        :avocado: tags=fiosmall
+        :avocado: tags=hw,medium
+        :avocado: tags=dfuse,fio,checksum,tx
+        :avocado: tags=FioSmall,test_fio_small
         """
         self.execute_fio()

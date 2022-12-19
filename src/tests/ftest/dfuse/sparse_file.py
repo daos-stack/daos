@@ -45,7 +45,7 @@ class SparseFile(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfuse,daosio
         :avocado: tags=SparseFile,test_sparsefile
         """
         # Create a pool, container and start dfuse.
@@ -62,8 +62,7 @@ class SparseFile(IorTestBase):
                           "sparsefile.txt")
         self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
-                      get_remote_file_size(
-                          self.hostlist_clients[0], sparse_file))
+                      get_remote_file_size(self.hostlist_clients[0], sparse_file))
 
         # create and open a connection on remote node to open file on that
         # remote node
@@ -88,15 +87,13 @@ class SparseFile(IorTestBase):
         dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
-        fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0],
-                                                   sparse_file)
-        self.log.info("File size (in bytes) after writing first byte: %s",
-                      fsize_write_1stbyte)
-        # verify file did not got overriten after dd write.
+        fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0], sparse_file)
+        self.log.info("File size (in bytes) after writing first byte: %s", fsize_write_1stbyte)
+        # verify file did not got overwritten after dd write.
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file
-        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023  bs=1 count=1".format(
+        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 bs=1 count=1".format(
             sparse_file)
         self.execute_cmd(dd_1024_byte)
         fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0], sparse_file)
