@@ -15,7 +15,7 @@ class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir="/tmp"):
+    def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
         """Initialize a TransportConfig object."""
         super().__init__("/run/server_config/transport_config/*", "transport_config", log_dir)
 
@@ -103,7 +103,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         self.provider = BasicParameter(None, default_provider)
         self.crt_timeout = BasicParameter(None, 10)
@@ -374,7 +374,7 @@ class EngineYamlParameters(YamlParameters):
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         # Parameters
         #   targets:                I/O service threads per engine
@@ -745,7 +745,7 @@ class StorageTierYamlParameters(YamlParameters):
         """Create a SingleServerConfig object.
 
         Args:
-            engine (int) index number for the server engine namespace path.
+            base_namespace (str): namespace for the server engine configuration
             tier (int) index number for the storage tier namespace path.
         """
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["storage", str(tier), "*"]

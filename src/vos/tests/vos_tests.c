@@ -42,6 +42,7 @@ print_usage()
 	print_message("vos_tests -A|--all <size>\n");
 	print_message("vos_tests -m|--punch_model\n");
 	print_message("vos_tests -C|--mvcc\n");
+	print_message("vos_tests -w|--wal\n");
 	print_message("vos_tests -r|--run_vos_cmd <command>\n");
 	print_message("-S|--storage <storage path>\n");
 	print_message("vos_tests -h|--help\n");
@@ -89,6 +90,7 @@ run_all_tests(int keys, bool nest_iterators)
 		failed += run_dtx_tests(cfg_desc_io);
 		failed += run_ilog_tests(cfg_desc_io);
 		failed += run_csum_extent_tests(cfg_desc_io);
+		failed += run_wal_tests(cfg_desc_io);
 
 		it = "standalone";
 	} else {
@@ -114,7 +116,7 @@ main(int argc, char **argv)
 	int	keys;
 	bool	nest_iterators = false;
 	const char          *vos_command    = NULL;
-	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCr:";
+	const char          *short_options  = "apcdglzni:mXA:S:hf:e:tCwr:";
 	static struct option long_options[] = {
 	    {"all", required_argument, 0, 'A'},
 	    {"pool", no_argument, 0, 'p'},
@@ -129,6 +131,7 @@ main(int argc, char **argv)
 	    {"ilog", no_argument, 0, 'l'},
 	    {"epoch_cache", no_argument, 0, 't'},
 	    {"mvcc", no_argument, 0, 'C'},
+	    {"wal", no_argument, 0, 'w'},
 	    {"csum", no_argument, 0, 'z'},
 	    {"run_vos_cmd", required_argument, 0, 'r'},
 	    {"help", no_argument, 0, 'h'},
@@ -277,6 +280,10 @@ main(int argc, char **argv)
 			break;
 		case 'C':
 			nr_failed += run_mvcc_tests("");
+			test_run = true;
+			break;
+		case 'w':
+			nr_failed += run_wal_tests("");
 			test_run = true;
 			break;
 		case 'S':

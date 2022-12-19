@@ -32,6 +32,62 @@
 #include <daos_pool.h>
 #include <daos_srv/policy.h>
 
+static int
+vos_meta_rwv(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl, bool update)
+{
+	struct bio_sglist	bsgl;
+	struct bio_iov		local_biov, *biov;
+	bio_addr_t		addr = { 0 };
+	uint32_t		off_bytes;
+	int			i, rc;
+
+	D_ASSERT(store && store->stor_priv != NULL);
+	D_ASSERT(iod->io_nr > 0);
+	D_ASSERT(sgl->sg_nr > 0);
+	off_bytes = store->stor_hdr_blks * store->stor_blk_size;
+
+	if (iod->io_nr == 1) {
+		bio_addr_set(&addr, DAOS_MEDIA_NVME, iod->io_region.sr_addr + off_bytes);
+		bio_iov_set(&local_biov, addr, iod->io_region.sr_size);
+		bsgl.bs_iovs = &local_biov;
+		bsgl.bs_nr = bsgl.bs_nr_out = 1;
+	} else {
+		rc = bio_sgl_init(&bsgl, iod->io_nr);
+		if (rc)
+			return rc;
+
+		for (i = 0; i < iod->io_nr; i++) {
+			biov = &bsgl.bs_iovs[i];
+
+			bio_addr_set(&addr, DAOS_MEDIA_NVME,
+				     iod->io_regions[i].sr_addr + off_bytes);
+			bio_iov_set(biov, addr, iod->io_regions[i].sr_size);
+		}
+	}
+
+	if (update)
+		rc = bio_meta_writev(store->stor_priv, &bsgl, sgl);
+	else
+		rc = bio_meta_readv(store->stor_priv, &bsgl, sgl);
+
+	if (iod->io_nr > 1)
+		bio_sgl_fini(&bsgl);
+
+	return rc;
+}
+
+static inline int
+vos_meta_readv(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl)
+{
+	return vos_meta_rwv(store, iod, sgl, false);
+}
+
+static inline int
+vos_meta_writev(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl)
+{
+	return vos_meta_rwv(store, iod, sgl, true);
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
@@ -46,12 +102,27 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	return bio_wal_commit(store->stor_priv, wal_tx, data_iod);
 }
 
-/* TODO Expand umem_store_ops and implement VOS store ops */
+static inline int
+vos_wal_replay(struct umem_store *store, int (*replay_cb)(uint64_t tx_id, struct umem_action *act))
+{
+	D_ASSERT(store && store->stor_priv != NULL);
+	return bio_wal_replay(store->stor_priv, replay_cb);
+}
+
+static inline int
+vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
+{
+	D_ASSERT(store && store->stor_priv != NULL);
+	return bio_wal_id_cmp(store->stor_priv, id1, id2);
+}
+
 struct umem_store_ops vos_store_ops = {
-	.so_read	= NULL,
-	.so_write	= NULL,
+	.so_read	= vos_meta_readv,
+	.so_write	= vos_meta_writev,
 	.so_wal_reserv	= vos_wal_reserve,
 	.so_wal_submit	= vos_wal_commit,
+	.so_wal_replay	= vos_wal_replay,
+	.so_wal_id_cmp	= vos_wal_id_cmp,
 };
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
@@ -126,8 +197,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
-	bio_meta_get_attr(mc, &store.stor_size, (uint32_t *)&store.stor_blk_size);
-	store.stor_addr = 0;
+	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
 
@@ -183,8 +253,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 		return rc;
 	}
 
-	bio_meta_get_attr(mc, &store.stor_size, (uint32_t *)&store.stor_blk_size);
-	store.stor_addr = 0;
+	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
 

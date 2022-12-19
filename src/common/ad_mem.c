@@ -715,7 +715,6 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	bd = blob->bb_df;
 	bd->bd_magic		= BLOB_MAGIC;
 	bd->bd_version		= AD_MEM_VERSION;
-	bd->bd_addr		= store->stor_addr;
 	bd->bd_size		= blob_size(blob);
 	bd->bd_arena_size	= ARENA_SIZE;
 	bd->bd_incarnation	= d_timeus_secdiff(0);
@@ -841,7 +840,6 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 		bd->bd_magic = BLOB_MAGIC;
 		bd->bd_version = 1;
 		bd->bd_size = store->stor_size;
-		bd->bd_addr = store->stor_addr;
 	}
 
 	if (bd->bd_magic != BLOB_MAGIC || bd->bd_version == 0) {
@@ -850,7 +848,6 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 		goto failed;
 	}
 	store->stor_size = bd->bd_size;
-	store->stor_addr = bd->bd_addr;
 
 	blob->bb_store	= *store;
 	blob->bb_pgs_nr	= ((blob_size(blob) + ARENA_SIZE_MASK) >> ARENA_SIZE_BITS);
@@ -1146,12 +1143,6 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	int			 rc;
 
 	D_ASSERT(store_extern == NULL); /* XXX: not supported yet */
-	if (store_extern && store_extern->stor_addr == 0) {
-		/* cannot register an arena starts from 0 address, because 0 is reserved
-		 * for failed allocation.
-		 */
-		return -DER_INVAL;
-	}
 
 	if (type >= ARENA_SPEC_MAX) {
 		D_ERROR("Invalid arena type=%d\n", type);

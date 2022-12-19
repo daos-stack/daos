@@ -1001,7 +1001,8 @@ int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_replay(struct bio_meta_context *mc, int (*replay_cb)(struct umem_action *act));
+int bio_wal_replay(struct bio_meta_context *mc,
+		   int (*replay_cb)(uint64_t tx_id, struct umem_action *act));
 
 /*
  * Flush back WAL header
@@ -1057,8 +1058,22 @@ int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_li
 int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 /*
- * Query meta capacity & meta block size.
+ * Query meta capacity & meta block size & meta blob header blocks.
  */
-void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz);
+void bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
+		       uint32_t *hdr_blks);
+
+struct bio_wal_info {
+	uint32_t	wi_tot_blks;	/* Total blocks */
+	uint32_t	wi_used_blks;	/* Used blocks */
+	uint64_t	wi_ckp_id;	/* Last check-pointed ID */
+	uint64_t	wi_commit_id;	/* Last committed ID */
+	uint64_t	wi_unused_id;	/* Next unused ID */
+};
+
+/*
+ * Qeury WAL total blocks & used blocks.
+ */
+void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 
 #endif /* __BIO_API_H__ */

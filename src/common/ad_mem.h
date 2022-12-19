@@ -278,8 +278,6 @@ struct ad_blob_df {
 	uint64_t		bd_incarnation;
 	/** it is DRAM reference of blob */
 	uint64_t		bd_back_ptr;
-	/** start address in the SPDK blob */
-	uint64_t		bd_addr;
 	/** capacity managed by the allocator */
 	uint64_t		bd_size;
 	/** size of each arena, default size is 16MB */
@@ -390,7 +388,7 @@ blob_size(struct ad_blob *blob)
 static inline daos_size_t
 blob_addr(struct ad_blob *blob)
 {
-	return blob->bb_store.stor_addr;
+	return 0;
 }
 
 static inline int

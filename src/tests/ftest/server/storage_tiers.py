@@ -3,14 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import yaml
 
-from apricot import TestWithoutServers
+from apricot import TestWithServers
 from command_utils_base import CommonConfig
 from server_utils import DaosServerTransportCredentials, DaosServerYamlParameters
 
 
-class StorageTiers(TestWithoutServers):
+class StorageTiers(TestWithServers):
     """Daos server storage configuration tests.
 
     Test Class Description:
@@ -34,12 +35,19 @@ class StorageTiers(TestWithoutServers):
         for engine in range(2):
             storage = []
             for tier in range(5):
-                namespace = "/run/configurations/*/server_config/engines/{}/storage/{}/*".format(
-                    engine, tier)
+                namespace = os.path.join(
+                    self.server_config_namespace[:-1], "engines", str(engine), "storage", str(tier),
+                    "*")
                 storage_class = self.params.get("class", namespace, None)
                 if not storage_class:
                     break
-                if storage_class in ["dcpm", "ram"]:
+                if storage_class in ["dcpm"]:
+                    data = {
+                        "class": storage_class,
+                        "scm_mount": self.params.get("scm_mount", namespace),
+                        "scm_list": self.params.get("scm_list", namespace)
+                    }
+                elif storage_class in ["ram"]:
                     data = {
                         "class": storage_class,
                         "scm_mount": self.params.get("scm_mount", namespace),
@@ -59,7 +67,7 @@ class StorageTiers(TestWithoutServers):
 
         common_config = CommonConfig("daos_server", DaosServerTransportCredentials())
         config = DaosServerYamlParameters(None, common_config)
-        config.namespace = "/run/configurations/*/server_config/*"
+        config.namespace = self.server_config_namespace
         config.get_params(self)
         data = config.get_yaml_data()
         self.log.info("server config:\n%s", yaml.dump(data, default_flow_style=False))

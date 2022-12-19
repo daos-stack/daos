@@ -288,10 +288,14 @@ struct  _Mgmt__GetAttachInfoResp
   size_t n_ms_ranks;
   uint32_t *ms_ranks;
   Mgmt__ClientNetHint *client_net_hint;
+  /*
+   * Version of the system database.
+   */
+  uint64_t data_version;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL }
+    , 0, 0,NULL, 0,NULL, NULL, 0 }
 
 
 struct  _Mgmt__PrepShutdownReq
