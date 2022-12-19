@@ -58,7 +58,7 @@ class DfuseCachingCheck(IorTestBase):
         base_read_arr.append(IorCommand.get_ior_metrics(out))
 
         # the index of max_mib
-        max_mib = int(IorMetrics.Max_MiB)
+        max_mib = IorMetrics.MAX_MIB
 
         # unmount dfuse and mount again with caching enabled
         self.dfuse.unmount(tries=1)
