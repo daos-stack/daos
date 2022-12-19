@@ -453,7 +453,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *base)
 		p = (uint64_t *)(base + off);
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
-		ASSERT_rt(pos >=0 && (pos + num) <= 64);
+		ASSERT_rt((pos >= 0) && (pos + num) <= 64);
 		mask = ((1ULL << num) - 1) << pos;
 		if (act->ac_opc == UMEM_ACT_SET_BITS)
 			*p |= mask;

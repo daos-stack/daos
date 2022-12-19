@@ -16,6 +16,45 @@
 #include <vos_internal.h>
 #include "vts_io.h"
 
+#define WAL_IO_KEYS		31
+#define WAL_IO_MULTI_KEYS	10000
+#define WAL_OBJ_KEYS		31
+
+static int type_list[] = {
+	0,
+	DAOS_OT_AKEY_UINT64,
+	DAOS_OT_AKEY_LEXICAL,
+	DAOS_OT_DKEY_UINT64,
+	DAOS_OT_DKEY_LEXICAL,
+	DAOS_OT_MULTI_UINT64,
+	DAOS_OT_MULTI_LEXICAL
+};
+
+static int num_keys;
+static enum daos_otype_t otype;
+
+struct io_test_flag {
+	char		*tf_str;
+	unsigned int	 tf_bits;
+};
+
+static struct io_test_flag io_test_flags[] = {
+	{ .tf_str = "default", .tf_bits = 0, },
+	{ .tf_str = "ZC", .tf_bits = TF_ZERO_COPY, },
+	{ .tf_str = "extent", .tf_bits = TF_REC_EXT, },
+	{ .tf_str = "ZC + extent", .tf_bits = TF_ZERO_COPY | TF_REC_EXT, },
+	{ .tf_str = NULL, },
+};
+
+/* mirror of enum in vos/tests/vts_common.c */
+enum {
+	TCX_NONE,
+	TCX_PO_CREATE_OPEN,
+	TCX_CO_CREATE,
+	TCX_CO_OPEN,
+	TCX_READY,
+};
+
 struct wal_test_args {
 	char	*wta_clone;
 	void	*wta_buf;
@@ -205,52 +244,6 @@ wal_tst_01(void **state)
 }
 
 /* Basic I/O tests */
-static int type_list[] = {
-	0,
-	DAOS_OT_AKEY_UINT64,
-	DAOS_OT_AKEY_LEXICAL,
-	DAOS_OT_DKEY_UINT64,
-	DAOS_OT_DKEY_LEXICAL,
-	DAOS_OT_MULTI_UINT64,
-	DAOS_OT_MULTI_LEXICAL
-};
-
-#define WAL_IO_KEYS		31
-#define WAL_IO_MULTI_KEYS	10000
-#define WAL_OBJ_KEYS		31
-
-static int num_keys;
-static enum daos_otype_t otype;
-
-/**
- * Stores the last key and can be used for
- * punching or overwrite
- */
-extern char		last_dkey[UPDATE_DKEY_SIZE];
-extern char		last_akey[UPDATE_AKEY_SIZE];
-
-struct io_test_flag {
-	char		*tf_str;
-	unsigned int	 tf_bits;
-};
-
-static struct io_test_flag io_test_flags[] = {
-	{ .tf_str = "default", .tf_bits = 0, },
-	{ .tf_str = "ZC", .tf_bits = TF_ZERO_COPY, },
-	{ .tf_str = "extent", .tf_bits = TF_REC_EXT, },
-	{ .tf_str = "ZC + extent", .tf_bits = TF_ZERO_COPY | TF_REC_EXT, },
-	{ .tf_str = NULL, },
-};
-
-/* mirror of enum in vos/tests/vts_common.c */
-enum {
-        TCX_NONE,
-        TCX_PO_CREATE_OPEN,
-        TCX_CO_CREATE,
-        TCX_CO_OPEN,
-        TCX_READY,
-};
-
 static void
 wal_pool_refill(struct vos_test_ctx *tcx)
 {
@@ -409,9 +402,12 @@ wal_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	/* Verify reconstructed data */
 	if (fetch) {
 		d_iov_set(&val_iov, fetch_buf, UPDATE_BUF_SIZE);
-		set_iov(&iod.iod_name, akey_buf, is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
-		set_iov(&dkey, dkey_buf, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
-		rex.rx_idx = hash_key(&dkey, is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+		set_iov(&iod.iod_name, akey_buf,
+			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+		set_iov(&dkey, dkey_buf,
+			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+		rex.rx_idx = hash_key(&dkey,
+				      is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
 		iod.iod_size = DAOS_REC_ANY;
 
 		rc = io_test_obj_fetch(arg, fetch_epoch, 0, &dkey, &iod, &sgl, true);
@@ -649,7 +645,7 @@ wal_io_query_key_punch_update(void **state)
 #define WAL_UPDATE_BUF_NR_SIZE 4
 static uint64_t wal_key;
 
-static void inline
+static inline void
 wal_print_buf(char *buf, int val)
 {
 	char b[12];
@@ -658,7 +654,7 @@ wal_print_buf(char *buf, int val)
 	memcpy(buf, b, WAL_UPDATE_BUF_NR_SIZE);
 }
 
-static void inline
+static inline void
 wal_akey_gen(daos_key_t *akey, struct io_test_args *arg)
 {
 	char *buf = akey->iov_buf;
@@ -674,7 +670,7 @@ wal_akey_gen(daos_key_t *akey, struct io_test_args *arg)
 	wal_key++;
 }
 
-static void inline
+static inline void
 wal_dkey_gen(d_iov_t *dkey, struct io_test_args *arg)
 {
 	char *buf = dkey->iov_buf;
@@ -804,21 +800,10 @@ wal_objs_update_and_fetch(struct io_test_args *arg, daos_epoch_t epoch)
 				rc = io_test_obj_fetch(arg, ep++, 0, &dkey, &iod, &sgl, true);
 				assert_rc_equal(rc, 0);
 
-				if (arg->ta_flags & TF_REC_EXT) {
+				if (arg->ta_flags & TF_REC_EXT)
 					assert_int_equal(iod.iod_size, UPDATE_REC_SIZE);
-				} else
+				else
 					assert_int_equal(iod.iod_size, UPDATE_BUF_SIZE);
-	if (memcmp(update_buf, fetch_buf, UPDATE_BUF_SIZE)) {
-		print_message("oidx:%d didx:%d aidx:%d\n", oidx, didx, aidx);
-		print_message("update_buf=");
-		for (int i=0; i<UPDATE_BUF_SIZE; i++)
-			print_message("%02X ", update_buf[i]);
-		print_message("\n");
-		print_message(" fetch_buf=");
-		for (int i=0; i<UPDATE_BUF_SIZE; i++)
-			print_message("%02X ", (unsigned char)fetch_buf[i]);
-		print_message("\n");
-	}
 				assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 			}
 		}
@@ -863,7 +848,10 @@ wal_io_multiple_objects_ovwr(void **state)
 		arg->ta_flags = io_test_flags[i].tf_bits;
 		arg->ta_flags |= TF_OVERWRITE;
 
-		/* Update same key value in num_keys objects, refill pool and fetch/verify the values */
+		/*
+		 * Update same key value in num_keys objects,
+		 * refill pool and fetch/verify the values
+		 **/
 		wal_objs_update_and_fetch(arg, epoch);
 	}
 }
