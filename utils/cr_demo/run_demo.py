@@ -99,7 +99,7 @@ f5_host_list = f"{rank_to_ip[F5_RANK_ORIG]},{rank_to_ip[F5_RANK_FAULT]}"
 storage_query_usage(host_list=f5_host_list)
 
 ####################################################################
-print("\n4. Inject fault with dmg (except F5, F6).")
+print("\n4. Inject fault with dmg for F1, F3, F4, F7, F8.")
 # F1
 inject_fault_pool(pool_label=POOL_LABEL_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
 
@@ -184,8 +184,8 @@ print("\n5-2. Restart servers.")
 system_start()
 
 ####################################################################
-input("\n6. Show the faults inserted for each pool/container except "
-      "F2, F6, F7. Hit enter...")
+input("\n6. Show the faults injected for each pool/container for F1, F3, F4, F5, F8. "
+      "Hit enter...")
 print(f"6-F1. Show dangling pool entry for {POOL_LABEL_1}.")
 # F3 part 1
 print(f"6-F3. MS doesn't recognize {POOL_LABEL_3}.")
@@ -196,7 +196,7 @@ list_pool(no_query=True)
 # F2: (optional) Try to create a container, which will hang.
 
 # F4 part 2
-print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS are still original.")
+print(f"\n6-F4-2. Label ({POOL_LABEL_4}) in PS is still original.")
 POOL_LABEL_4_FAULT = POOL_LABEL_4 + "-fault"
 pool_get_prop(pool_label=POOL_LABEL_4_FAULT, properties="label")
 
@@ -312,7 +312,7 @@ pool_query(pool_label=POOL_LABEL_6)
 # target count.
 
 # F8: Verify that the inconsistency is fixed. The label is back to the original.
-print(f"\n13-F8. Show container label inconsistency for {CONT_LABEL_8} was fixed.")
+print(f"\n13-F8. Container label inconsistency for {CONT_LABEL_8} was fixed.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8, properties="label")
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
