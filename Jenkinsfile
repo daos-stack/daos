@@ -609,7 +609,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    stash_files: 'ci/test_files_to_stash.txt',
-                                   build_deps: 'yes',
+                                   build_deps: 'no',
                                    stash_opt: true,
                                    scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() +
