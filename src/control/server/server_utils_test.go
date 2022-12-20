@@ -831,7 +831,7 @@ func TestServer_setEngineBdevs(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList("0000:80:00.0"),
+						WithBdevDeviceList("0000:00:00.0"),
 				),
 			engineIdx:        1,
 			scanResp:         &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},

@@ -35,7 +35,7 @@ const (
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
 	memAvailToUse         = 75  // percentage of available memory to use for scm ramdisks
-	ramdiskMinSize        = humanize.GiByte * 4
+	ramdiskMinSizeGiB     = 4
 
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
 	errInsufNrIfaces     = "insufficient matching fabric interfaces, want %d got %d %v"
@@ -930,19 +930,24 @@ func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails)
 		// convert available memory from kib to bytes
 		memAvail := uint64(sd.MemAvailable * humanize.KiByte)
 
-		log.Debugf("scm tier for numa %d, nr nodes: %d, total mem: %s", numaID, nrNumaNodes,
-			humanize.IBytes(memAvail))
-
 		size, err := getRamdiskSize(nrNumaNodes, memAvail)
 		if err != nil {
 			return nil, errors.Wrapf(err, "calculate scm ram size")
 		}
-		if size < ramdiskMinSize {
-			log.Errorf("available memory for scm ramdisk too small, want %s have %s",
-				humanize.IBytes(uint64(ramdiskMinSize)), humanize.IBytes(uint64(size)))
-		}
+
 		// convert from bytes to gib for server config ramdisk size param
-		scmTier.WithScmRamdiskSize(uint(size / humanize.GiByte))
+		sizeGiB := uint(size / humanize.GiByte)
+		if sizeGiB < ramdiskMinSizeGiB {
+			log.Errorf("available memory for scm ramdisk too small, want %d GiB have "+
+				"%s (%d bytes)", ramdiskMinSizeGiB, humanize.IBytes(uint64(size)),
+				size)
+		}
+
+		log.Debugf("scm tier for numa %d, nr nodes: %d, total mem: %s, ramdisk size: %s",
+			numaID, nrNumaNodes, humanize.IBytes(memAvail),
+			humanize.IBytes(uint64(sizeGiB*humanize.GiByte)))
+
+		scmTier.WithScmRamdiskSize(sizeGiB)
 	case storage.ClassDcpm:
 		scmTier.WithScmDeviceList(sd.NumaSCMs[numaID][0])
 	default:
