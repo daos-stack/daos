@@ -1147,7 +1147,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
  */
 static int
 init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
-	      uint32_t map_version)
+	      uint32_t map_version, uint64_t term)
 {
 	struct ds_pool *pool;
 	int		rc;
@@ -1163,7 +1163,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 		ds_pool_put(pool);
 		return rc;
 	}
-	ds_pool_iv_ns_update(pool, dss_self_rank());
+	ds_pool_iv_ns_update(pool, dss_self_rank(), term);
 
 	D_ASSERT(svc->ps_pool == NULL);
 	svc->ps_pool = pool;
@@ -1374,7 +1374,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = init_svc_pool(svc, map_buf, map_version);
+	rc = init_svc_pool(svc, map_buf, map_version, svc->ps_rsvc.s_term);
 	if (rc != 0)
 		goto out;
 
@@ -5991,9 +5991,10 @@ out:
 }
 
 void
-ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank)
+ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
+		     uint64_t term)
 {
-	ds_iv_ns_update(pool->sp_iv_ns, master_rank);
+	ds_iv_ns_update(pool->sp_iv_ns, master_rank, term);
 }
 
 int

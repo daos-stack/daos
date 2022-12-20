@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,6 +91,7 @@ struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
 	daos_epoch_t	pik_eph;
+	uint64_t	pik_term;
 };
 
 struct pool_iv_hdl {

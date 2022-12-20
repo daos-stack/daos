@@ -993,6 +993,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *value)
 {
 	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*pool_key;
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
@@ -1014,7 +1015,9 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
-	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
+	pool_key = (struct pool_iv_key *)key->key_buf;
+	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank,
+			     pool_key->pik_term);
 
 	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
@@ -1083,7 +1086,7 @@ retry:
 }
 
 static int
-pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
+pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 	       struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
 	       unsigned int sync_mode, bool retry)
@@ -1106,6 +1109,7 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
 	pool_key->pik_eph = crt_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
