@@ -50,7 +50,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
-	hpi, err := common.GetHugePageInfo(log)
+	hpi, err := common.GetHugePageInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}

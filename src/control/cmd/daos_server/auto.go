@@ -75,7 +75,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		return nil, errors.Wrapf(err, "scm scan")
 	}
 
-	hpi, err := common.GetHugePageInfo(log)
+	hpi, err := common.GetHugePageInfo()
 	if err != nil {
 		return nil, errors.Wrapf(err, "get hugepage info")
 	}

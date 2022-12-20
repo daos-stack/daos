@@ -13,11 +13,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
-type GetHugePageInfoFn func(log logging.Logger) (*HugePageInfo, error)
+type GetHugePageInfoFn func() (*HugePageInfo, error)
 
 const (
 	// MinTargetHugePageSize is the minimum amount of hugepage space that
@@ -54,13 +53,12 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func parseHugePageInfo(log logging.Logger, input io.Reader) (*HugePageInfo, error) {
+func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 	hpi := new(HugePageInfo)
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
 		txt := scn.Text()
-		log.Debugf("hugepages: reading %s", txt)
 		keyVal := strings.Split(txt, ":")
 		if len(keyVal) < 2 {
 			continue
@@ -90,7 +88,6 @@ func parseHugePageInfo(log logging.Logger, input io.Reader) (*HugePageInfo, erro
 				parseInt(sf[0], &hpi.PageSizeKb)
 			} else {
 				parseInt(sf[0], &hpi.MemAvailable)
-				log.Debugf("mem_available: %s", hpi.MemAvailable)
 			}
 		default:
 			continue
@@ -102,14 +99,14 @@ func parseHugePageInfo(log logging.Logger, input io.Reader) (*HugePageInfo, erro
 
 // GetHugePageInfo reads /proc/meminfo and returns information about
 // system hugepages and available memory (RAM).
-func GetHugePageInfo(log logging.Logger) (*HugePageInfo, error) {
+func GetHugePageInfo() (*HugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return parseHugePageInfo(log, f)
+	return parseHugePageInfo(f)
 }
 
 // CalcMinHugePages returns the minimum number of hugepages that should be

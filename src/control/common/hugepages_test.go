@@ -14,15 +14,12 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCommon_getHugePageInfo(t *testing.T) {
-	log, _ := logging.NewTestLogger(t.Name())
-
 	// Just a simple test to verify that we get something -- it should
 	// pretty much never error.
-	_, err := GetHugePageInfo(log)
+	_, err := GetHugePageInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,10 +84,9 @@ Hugepagesize:       1 GB
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, _ := logging.NewTestLogger(t.Name())
 			rdr := strings.NewReader(tc.input)
 
-			gotOut, gotErr := parseHugePageInfo(log, rdr)
+			gotOut, gotErr := parseHugePageInfo(rdr)
 			CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
