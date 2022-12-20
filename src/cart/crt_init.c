@@ -464,7 +464,8 @@ do_init:
 
 		/* rxm and verbs providers only works with regular EP */
 		if ((prov == CRT_NA_OFI_VERBS_RXM ||
-		     prov == CRT_NA_OFI_TCP_RXM) &&
+		     prov == CRT_NA_OFI_TCP_RXM ||
+		     crt_na_type_is_ucx(prov)) &&
 		    crt_provider_is_sep(prov)) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 			       "for current provider, ignoring it.\n");
