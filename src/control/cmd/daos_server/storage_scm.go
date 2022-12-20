@@ -45,7 +45,7 @@ type scmCmd struct {
 type prepareSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-	cfgCmd         `json:"-"`
+	optCfgCmd      `json:"-"`
 	scmSocketCmd   `json:"-"`
 
 	NrNamespacesPerSocket uint `short:"S" long:"scm-ns-per-socket" description:"Number of PMem namespaces to create per socket" default:"1"`
@@ -222,7 +222,7 @@ func (cmd *prepareSCMCmd) Execute(args []string) error {
 type resetSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-	cfgCmd         `json:"-"`
+	optCfgCmd      `json:"-"`
 	scmSocketCmd   `json:"-"`
 
 	Force bool `short:"f" long:"force" description:"Perform PMem prepare operation without waiting for confirmation"`

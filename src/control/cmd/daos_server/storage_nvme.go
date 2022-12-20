@@ -146,7 +146,7 @@ type prepareNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
-	cfgCmd          `json:"-"`
+	optCfgCmd       `json:"-"`
 
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
@@ -260,7 +260,7 @@ type resetNVMeCmd struct {
 	cmdutil.LogCmd  `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
-	cfgCmd          `json:"-"`
+	optCfgCmd       `json:"-"`
 
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
