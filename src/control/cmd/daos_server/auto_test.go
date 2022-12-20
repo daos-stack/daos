@@ -276,7 +276,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -303,7 +303,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -331,7 +331,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -355,7 +355,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -379,7 +379,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{PageSizeKb: 2048},
+				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -403,9 +403,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				HugePageInfo: control.HugePageInfo{
-					PageSizeKb:   2048,
-					MemAvailable: int(mockMemAvail / humanize.KiByte),
+				MemInfo: control.MemInfo{
+					HugePageSizeKb: 2048,
+					MemAvailable:   int(mockMemAvail / humanize.KiByte),
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),

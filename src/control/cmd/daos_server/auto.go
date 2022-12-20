@@ -75,7 +75,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		return nil, errors.Wrapf(err, "scm scan")
 	}
 
-	hpi, err := common.GetHugePageInfo()
+	hpi, err := common.GetMemInfo()
 	if err != nil {
 		return nil, errors.Wrapf(err, "get hugepage info")
 	}
@@ -84,9 +84,9 @@ func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStor
 		NvmeDevices:   nvmeResp.Controllers,
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
-		HugePageInfo: control.HugePageInfo{
-			PageSizeKb:   hpi.PageSizeKb,
-			MemAvailable: hpi.MemAvailable,
+		MemInfo: control.MemInfo{
+			HugePageSizeKb: hpi.HugePageSizeKb,
+			MemAvailable:   hpi.MemAvailable,
 		},
 	}, nil
 }

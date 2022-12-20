@@ -509,10 +509,9 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					NvmeDevices:   storage.NvmeControllers{storage.MockNvmeController()},
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
-					HugePageInfo: HugePageInfo{
-						PageSizeKb: humanize.KiByte * 2,
-						// convert 16gib to kib
-						MemAvailable: (humanize.GiByte * 16) / humanize.KiByte,
+					MemInfo: MemInfo{
+						HugePageSizeKb: humanize.KiByte * 2,
+						MemAvailable:   (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 					},
 				},
 			},

@@ -255,7 +255,7 @@ func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanRes
 	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
 		t.Fatal(err)
 	}
-	if err := convert.Types(pbResp.GetHugePageInfo(), &hss.HostStorage.HugePageInfo); err != nil {
+	if err := convert.Types(pbResp.GetMemInfo(), &hss.HostStorage.MemInfo); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,10 +285,10 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 	return hsm
 }
 
-// MockHugePageInfo returns a mock HugePageInfo result.
-func MockHugePageInfo(t *testing.T) *ctlpb.HugePageInfo {
-	return &ctlpb.HugePageInfo{
-		PageSizeKb: 2048,
+// MockMemInfo returns a mock MemInfo result.
+func MockMemInfo(t *testing.T) *ctlpb.MemInfo {
+	return &ctlpb.MemInfo{
+		HugepageSizeKb: 2048,
 		// convert 16gib to kib units
 		MemAvailable: (humanize.GiByte * 16) / humanize.KiByte,
 	}
@@ -296,9 +296,9 @@ func MockHugePageInfo(t *testing.T) *ctlpb.HugePageInfo {
 
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
-		Nvme:         &ctlpb.ScanNvmeResp{},
-		Scm:          &ctlpb.ScanScmResp{},
-		HugePageInfo: MockHugePageInfo(t),
+		Nvme:    &ctlpb.ScanNvmeResp{},
+		Scm:     &ctlpb.ScanScmResp{},
+		MemInfo: MockMemInfo(t),
 	}
 	nvmeControllers := storage.NvmeControllers{
 		storage.MockNvmeController(),
@@ -474,13 +474,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
-		ssr.HugePageInfo.PageSizeKb = (1 << 30) >> 10
+		ssr.MemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
 	case "badPciAddr":
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "noHugepageSz":
-		ssr.HugePageInfo.PageSizeKb = 0
+		ssr.MemInfo.HugepageSizeKb = 0
 	case "noMemAvail":
-		ssr.HugePageInfo.MemAvailable = 0
+		ssr.MemInfo.MemAvailable = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)

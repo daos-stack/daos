@@ -32,21 +32,21 @@ var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
 
-// HugePageInfo is a cut-down version of the hugepage information retrieved from the storage scan.
+// MemInfo is a cut-down version of the memory information retrieved from the storage scan.
 // For the purposes of the storage scan, we only care about the system hugepage size and memory
 // available.
-type HugePageInfo struct {
-	PageSizeKb   int `json:"page_size_kb"`
-	MemAvailable int `json:"mem_available" hash:"ignore"`
+type MemInfo struct {
+	HugePageSizeKb int `json:"hugepage_size_kb"`
+	MemAvailable   int `json:"mem_available" hash:"ignore"`
 }
 
-func (hpi *HugePageInfo) Summary() string {
-	if hpi == nil {
+func (mi *MemInfo) Summary() string {
+	if mi == nil {
 		return "<nil>"
 	}
 	return fmt.Sprintf("hugepage size: %s, mem available: %s",
-		humanize.IBytes(uint64(hpi.PageSizeKb*humanize.KiByte)),
-		humanize.IBytes(uint64(hpi.MemAvailable*humanize.KiByte)))
+		humanize.IBytes(uint64(mi.HugePageSizeKb*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemAvailable*humanize.KiByte)))
 }
 
 // HostStorage describes a host storage configuration which
@@ -76,8 +76,8 @@ type HostStorage struct {
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
 
-	// HugePageInfo contains information about the host's hugepages.
-	HugePageInfo HugePageInfo `json:"huge_page_info"`
+	// MemInfo contains information about the host's hugepages.
+	MemInfo MemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -225,7 +225,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
-	if err := convert.Types(pbResp.GetHugePageInfo(), &hs.HugePageInfo); err != nil {
+	if err := convert.Types(pbResp.GetMemInfo(), &hs.MemInfo); err != nil {
 		return err
 	}
 

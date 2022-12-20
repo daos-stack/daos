@@ -374,7 +374,7 @@ func getStorageSet(ctx context.Context, log logging.Logger, hostList []string, c
 
 	log.Debugf("Storage hardware is consistent for hosts %s:\n\t%s\n\t%s\n\t%s",
 		storageSet.HostSet.String(), hostStorage.ScmNamespaces.Summary(),
-		hostStorage.NvmeDevices.Summary(), hostStorage.HugePageInfo.Summary())
+		hostStorage.NvmeDevices.Summary(), hostStorage.MemInfo.Summary())
 
 	return storageSet, nil
 }
@@ -466,8 +466,8 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 	sd := storageDetails{
 		NumaSCMs:     make(numaSCMsMap),
 		NumaSSDs:     make(numaSSDsMap),
-		HugePageSize: hs.HugePageInfo.PageSizeKb,
-		MemAvailable: hs.HugePageInfo.MemAvailable,
+		HugePageSize: hs.MemInfo.HugePageSizeKb,
+		MemAvailable: hs.MemInfo.MemAvailable,
 		scmCls:       storage.ClassDcpm,
 	}
 	if sd.HugePageSize == 0 {
