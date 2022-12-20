@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,7 +30,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "localhost",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
@@ -40,39 +39,38 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --min-ssds 0",
+			"config generate -a foo --scm-only",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
+				SCMOnly:      true,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2 --min-ssds 4",
+			"config generate -a foo --num-engines 2",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
 				NrEngines:    2,
-				MinNrSSDs:    4,
 				NetClass:     "infiniband",
 			}),
 			nil,
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s 4",
+			"config generate -a foo -e 2 -s",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
 				NrEngines:    2,
-				MinNrSSDs:    4,
 				NetClass:     "infiniband",
+				SCMOnly:      true,
 			}),
 			nil,
 		},
@@ -81,7 +79,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --net-class ethernet",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "ethernet",
 			}),
 			nil,
@@ -91,7 +88,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --net-class infiniband",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 			}),
 			nil,
@@ -113,7 +109,6 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"config generate -a foo --use-tmpfs-scm",
 			printCommand(t, &configGenCmd{
 				AccessPoints: "foo",
-				MinNrSSDs:    1,
 				NetClass:     "infiniband",
 				UseTmpfsSCM:  true,
 			}),
@@ -159,7 +154,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	for name, tc := range map[string]struct {
 		accessPoints string
 		nrEngines    int
-		minNrSSDs    int
+		scmOnly      bool
 		netClass     string
 		tmpfsSCM     bool
 		hf           *control.HostFabric
@@ -270,7 +265,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"unmet min nr ssds": {
-			minNrSSDs: 8,
 			hf: &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					eth0, eth1, ib0, ib1,
@@ -283,13 +277,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: control.MemInfo{HugePageSizeKb: 2048},
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
+				MemInfo:     control.MemInfo{HugePageSizeKb: 2048},
+				NvmeDevices: storage.NvmeControllers{},
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
@@ -377,9 +366,6 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Mimic go-flags default values.
-			if tc.minNrSSDs == 0 {
-				tc.minNrSSDs = 1
-			}
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
@@ -390,7 +376,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			cmd := &configGenCmd{
 				AccessPoints: tc.accessPoints,
 				NrEngines:    tc.nrEngines,
-				MinNrSSDs:    tc.minNrSSDs,
+				SCMOnly:      tc.scmOnly,
 				NetClass:     tc.netClass,
 				UseTmpfsSCM:  tc.tmpfsSCM,
 			}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -670,7 +670,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		nrEngines  int
-		minNrSSDs  int
+		scmOnly    bool
 		sd         storageDetails
 		nd         networkDetails
 		expErr     error
@@ -696,8 +696,9 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			expErr: errors.Errorf(errInsufNrPMemGroups, singlePMemMap, 2, 1),
 		},
-		"missing ssds; zero min nr; no fabric": {
+		"missing ssds; nvme disabled; no fabric": {
 			nrEngines: 1,
+			scmOnly:   true,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -706,8 +707,9 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			expErr: errors.New(errInsufNrProvGroups),
 		},
-		"missing ssds; zero min nr; no matching fabric": {
+		"missing ssds; nvme disabled; no matching fabric": {
 			nrEngines: 1,
+			scmOnly:   true,
 			sd: storageDetails{
 				NumaSCMs: singlePMemMap,
 			},
@@ -719,8 +721,9 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			expErr: errors.New(errInsufNrProvGroups),
 		},
-		"missing ssds; zero min nr; matching fabric": {
+		"missing ssds; nvme disabled; matching fabric": {
 			nrEngines: 1,
+			scmOnly:   true,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -744,9 +747,8 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaIfaces: numaNetIfaceMap{1: ib1},
 			},
 		},
-		"missing ssds; 1 min nr": {
+		"missing ssds": {
 			nrEngines: 1,
-			minNrSSDs: 1,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -755,9 +757,8 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 			expErr: errors.Errorf(errInsufNrSSDs, 0, 1, 0),
 		},
-		"insufficient ssds; 3 min nr; numa 1 has 2": {
+		"insufficient ssds; numa 1 has 0": {
 			nrEngines: 2,
-			minNrSSDs: 3,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -765,13 +766,12 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				},
 				NumaSSDs: numaSSDsMap{
 					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
-					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4)...),
+					1: hardware.MustNewPCIAddressSet(),
 				},
 			},
-			expErr: errors.Errorf(errInsufNrSSDs, 1, 3, 2),
+			expErr: errors.Errorf(errInsufNrSSDs, 1, 1, 0),
 		},
-		"sufficient ssds; 3 min nr; matching fabric": {
-			minNrSSDs: 3,
+		"sufficient ssds; matching fabric": {
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -805,8 +805,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
 			},
 		},
-		"sufficient ssds; 3 min nr; matching ether fabric": {
-			minNrSSDs: 3,
+		"sufficient ssds; matching ether fabric": {
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -839,29 +838,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaIfaces: numaNetIfaceMap{0: eth0, 1: eth1},
 			},
 		},
-		"sufficient ssds; 3 min nr; matching fabric on one numa only": {
-			minNrSSDs: 3,
-			sd: storageDetails{
-				NumaSCMs: numaSCMsMap{
-					0: []string{"/dev/pmem0"},
-					1: []string{"/dev/pmem1"},
-				},
-				NumaSSDs: numaSSDsMap{
-					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
-					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5, 6)...),
-				},
-			},
-			nd: networkDetails{
-				NumaCount: 2,
-				ProviderIfaces: providerIfaceMap{
-					"ofi+psm2": {0: ib0},
-					"ofi+tcp":  {0: ib0},
-				},
-			},
-			expErr: errors.New(errInsufNrProvGroups),
-		},
-		"sufficient ssds; 3 min nr; matching ethernet fabric": {
-			minNrSSDs: 3,
+		"sufficient ssds; matching ethernet fabric": {
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -901,9 +878,28 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 				NumaIfaces: numaNetIfaceMap{0: eth0, 1: eth1},
 			},
 		},
+		"matching fabric on one numa only and two expected": {
+			sd: storageDetails{
+				NumaSCMs: numaSCMsMap{
+					0: []string{"/dev/pmem0"},
+					1: []string{"/dev/pmem1"},
+				},
+				NumaSSDs: numaSSDsMap{
+					0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2)...),
+					1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5, 6)...),
+				},
+			},
+			nd: networkDetails{
+				NumaCount: 2,
+				ProviderIfaces: providerIfaceMap{
+					"ofi+psm2": {0: ib0},
+					"ofi+tcp":  {0: ib0},
+				},
+			},
+			expErr: errors.New(errInsufNrProvGroups),
+		},
 		"single engine requested; both numa match criteria; select max nr ssds": {
 			nrEngines: 1,
-			minNrSSDs: 3,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -940,7 +936,6 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 		},
 		"single engine requested; both numa match criteria; select best fabric": {
 			nrEngines: 1,
-			minNrSSDs: 3,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -970,7 +965,6 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			},
 		},
 		"both numa match criteria; typical fabric scan output": {
-			minNrSSDs: 1,
 			sd: storageDetails{
 				NumaSCMs: numaSCMsMap{
 					0: []string{"/dev/pmem0"},
@@ -1022,7 +1016,7 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			gotNumaSet, gotErr := filterDevicesByAffinity(log, tc.nrEngines,
-				tc.minNrSSDs, &tc.nd, &tc.sd)
+				tc.scmOnly, &tc.nd, &tc.sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1043,10 +1037,9 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 
 func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 	for name, tc := range map[string]struct {
-		sd           storageDetails
-		nvmeDisabled bool
-		expErr       error
-		expSD        storageDetails // expected details after updates
+		sd     storageDetails
+		expErr error
+		expSD  storageDetails // expected details after updates
 	}{
 		"no ssds": {
 			sd: storageDetails{
@@ -1056,21 +1049,6 @@ func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 				},
 			},
 			expErr: errors.New("could not be calculated"),
-		},
-		"no ssds; nvme disabled": {
-			nvmeDisabled: true,
-			sd: storageDetails{
-				NumaSCMs: numaSCMsMap{
-					0: []string{"/dev/pmem0"},
-					1: []string{"/dev/pmem1"},
-				},
-			},
-			expSD: storageDetails{
-				NumaSCMs: numaSCMsMap{
-					0: []string{"/dev/pmem0"},
-					1: []string{"/dev/pmem1"},
-				},
-			},
 		},
 		"adjust ssd count to global minimum": {
 			sd: storageDetails{
@@ -1099,12 +1077,7 @@ func TestControl_AutoConfig_correctSSDCounts(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			minNrSSDs := 1
-			if tc.nvmeDisabled {
-				minNrSSDs = 0
-			}
-
-			gotErr := correctSSDCounts(log, minNrSSDs, &tc.sd)
+			gotErr := correctSSDCounts(log, &tc.sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1126,8 +1099,8 @@ func testEngineCfg(idx int) *engine.Config {
 func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmCls     storage.Class
-		memAvail   int // available system memory for ramdisks in units of bytes
-		minNrSSDs  int
+		scmOnly    bool
+		memAvail   int              // available system memory for ramdisks in units of bytes
 		numaSet    []int            // set of numa nodes (by-ID) to be used for engine configs
 		numaPMems  numaSCMsMap      // numa to pmem mappings
 		numaSSDs   numaSSDsMap      // numa to ssds mappings
@@ -1152,6 +1125,26 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			numaPMems: numaSCMsMap{0: []string{"/dev/pmem0"}},
 			numaSSDs:  numaSSDsMap{0: hardware.MustNewPCIAddressSet()},
 			expErr:    errors.New("no fabric"),
+		},
+		"no ssds; nvme disabled": {
+			scmOnly: true,
+			numaSet: []int{0, 1},
+			numaPMems: numaSCMsMap{
+				0: []string{"/dev/pmem0"},
+				1: []string{"/dev/pmem1"},
+			},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(),
+				1: hardware.MustNewPCIAddressSet(),
+			},
+			numaIfaces: numaNetIfaceMap{
+				0: ib0,
+				1: ib1,
+			},
+			expCfgs: []*engine.Config{
+				MockEngineCfg(t, 0),
+				MockEngineCfg(t, 1),
+			},
 		},
 		"missing scm on second numa": {
 			numaSet:   []int{0, 1},
@@ -1348,12 +1341,9 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			} else {
 				sd.scmCls = storage.ClassDcpm
 			}
-			if tc.minNrSSDs == 0 {
-				tc.minNrSSDs = 1
-			}
 
-			gotCfgs, gotErr := genEngineConfigs(log, tc.minNrSSDs, testEngineCfg,
-				tc.numaSet, nd, sd)
+			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet,
+				nd, sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

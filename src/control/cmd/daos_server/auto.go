@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,7 +35,7 @@ type configGenCmd struct {
 
 	AccessPoints string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NrEngines    int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	MinNrSSDs    int    `default:"1" short:"s" long:"min-ssds" description:"Minimum number of NVMe SSDs required per DAOS Engine (SSDs must reside on the host that is managing the engine). Set to 0 to generate a config with no NVMe."`
+	SCMOnly      bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
 	NetClass     string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
 	NetProvider  string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
 	UseTmpfsSCM  bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
@@ -121,7 +121,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	req := control.ConfGenerateReq{
 		Log:          cmd.Logger,
 		NrEngines:    cmd.NrEngines,
-		MinNrSSDs:    cmd.MinNrSSDs,
+		SCMOnly:      cmd.SCMOnly,
 		NetClass:     ndc,
 		NetProvider:  cmd.NetProvider,
 		AccessPoints: accessPoints,

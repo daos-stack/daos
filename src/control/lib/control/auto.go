@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ const (
 	defaultTargetCount    = 16
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
+	minNrSSDs             = 1
 	minDMABuffer          = 1024
 	numaCoreUsage         = 0.8 // fraction of numa cores to use for targets
 	memAvailToUse         = 75  // percentage of available memory to use for scm ramdisks
@@ -53,9 +54,9 @@ type (
 	// ConGenerateReq contains the inputs for the request.
 	ConfGenerateReq struct {
 		NrEngines    int
-		MinNrSSDs    int
 		NetClass     hardware.NetDevClass
 		NetProvider  string
+		SCMOnly      bool // generate a config without nvme
 		UseTmpfsSCM  bool
 		AccessPoints []string
 		Log          logging.Logger
@@ -125,13 +126,13 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// evaluate device affinities to enforce locality constraints
-	nodeSet, err := filterDevicesByAffinity(req.Log, req.NrEngines, req.MinNrSSDs, nd, sd)
+	nodeSet, err := filterDevicesByAffinity(req.Log, req.NrEngines, req.SCMOnly, nd, sd)
 	if err != nil {
 		return nil, err
 	}
 
 	// populate engine configs with storage and network devices
-	ecs, err := genEngineConfigs(req.Log, req.MinNrSSDs, newEngineCfg, nodeSet, nd, sd)
+	ecs, err := genEngineConfigs(req.Log, req.SCMOnly, newEngineCfg, nodeSet, nd, sd)
 	if err != nil {
 		return nil, err
 	}
@@ -506,9 +507,7 @@ func getStorageDetails(log logging.Logger, useTmpfs bool, numaCount int, hs *Hos
 // Filters PMem and SSD groups to include only the NUMA IDs that have sufficient number of devices
 // with appropriate affinity. Returns error if not enough satisfied NUMA ID groupings for required
 // engine count.
-//
-// TODO DAOS-9932: set bdev_class to ram if --use-tmpfs-scm is set
-func checkNvmeAffinity(log logging.Logger, engineCount, minNrSSDs int, sd *storageDetails) error {
+func checkNvmeAffinity(log logging.Logger, engineCount int, scmOnly bool, sd *storageDetails) error {
 	log.Debugf("numa to pmem mappings: %v", sd.NumaSCMs)
 	log.Debugf("numa to nvme mappings: %v", sd.NumaSSDs)
 
@@ -516,7 +515,7 @@ func checkNvmeAffinity(log logging.Logger, engineCount, minNrSSDs int, sd *stora
 		return errors.Errorf(errInsufNrPMemGroups, sd.NumaSCMs, engineCount, len(sd.NumaSCMs))
 	}
 
-	if minNrSSDs == 0 {
+	if scmOnly {
 		log.Debug("nvme disabled, skip validation")
 
 		// set empty ssd lists for relevant numa ids
@@ -832,7 +831,7 @@ func chooseEngineAffinity(log logging.Logger, engineCount int, nd *networkDetail
 	return bestNumaSet, nil
 }
 
-func filterDevicesByAffinity(log logging.Logger, nrEngines, minNrSSDs int, nd *networkDetails, sd *storageDetails) ([]int, error) {
+func filterDevicesByAffinity(log logging.Logger, nrEngines int, scmOnly bool, nd *networkDetails, sd *storageDetails) ([]int, error) {
 	// if unset, assign number of engines based on number of NUMA nodes
 	if nrEngines == 0 {
 		nrEngines = nd.NumaCount
@@ -843,7 +842,7 @@ func filterDevicesByAffinity(log logging.Logger, nrEngines, minNrSSDs int, nd *n
 
 	log.Debugf("attempting to generate config with %d engines", nrEngines)
 
-	if err := checkNvmeAffinity(log, nrEngines, minNrSSDs, sd); err != nil {
+	if err := checkNvmeAffinity(log, nrEngines, scmOnly, sd); err != nil {
 		return nil, err
 	}
 
@@ -859,12 +858,7 @@ func filterDevicesByAffinity(log logging.Logger, nrEngines, minNrSSDs int, nd *n
 	return nodeSet, nil
 }
 
-func correctSSDCounts(log logging.Logger, minNrSSDs int, sd *storageDetails) error {
-	if minNrSSDs == 0 {
-		// the use of ssds has been intentionally disabled, skip corrections
-		return nil
-	}
-
+func correctSSDCounts(log logging.Logger, sd *storageDetails) error {
 	// calculate ssd count lowest value across numa nodes
 	minSSDsInCfg, err := lowestCommonNrSSDs(sd.NumaSSDs.keys(), sd.NumaSSDs)
 	if err != nil {
@@ -982,7 +976,7 @@ func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAd
 
 type newEngineCfgFn func(int) *engine.Config
 
-func genEngineConfigs(log logging.Logger, minNrSSDs int, newEngineCfg newEngineCfgFn, nodeSet []int, nd *networkDetails, sd *storageDetails) ([]*engine.Config, error) {
+func genEngineConfigs(log logging.Logger, scmOnly bool, newEngineCfg newEngineCfgFn, nodeSet []int, nd *networkDetails, sd *storageDetails) ([]*engine.Config, error) {
 	// first sanity check required component groups
 	for _, numaID := range nodeSet {
 		if len(sd.NumaSCMs[numaID]) == 0 {
@@ -996,9 +990,11 @@ func genEngineConfigs(log logging.Logger, minNrSSDs int, newEngineCfg newEngineC
 		}
 	}
 
-	// make ssd counts consistent across numa groupings
-	if err := correctSSDCounts(log, minNrSSDs, sd); err != nil {
-		return nil, err
+	// if nvme is enabled, make ssd counts consistent across numa groupings
+	if !scmOnly {
+		if err := correctSSDCounts(log, sd); err != nil {
+			return nil, err
+		}
 	}
 
 	cfgs := make([]*engine.Config, 0, len(nodeSet))

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,7 +47,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --min-ssds 0",
+			"config generate -a foo --scm-only",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -55,7 +55,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2 --min-ssds 4",
+			"config generate -a foo --num-engines 2",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -63,7 +63,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s 4",
+			"config generate -a foo -e 2 -s",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -155,7 +155,7 @@ func TestAuto_confGen(t *testing.T) {
 		hostlist         []string
 		accessPoints     string
 		nrEngines        int
-		minNrSSDs        int
+		scmOnly          bool
 		netClass         string
 		tmpfsSCM         bool
 		uErr             error
@@ -205,10 +205,14 @@ func TestAuto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"successful fetch of host storage and fabric; unmet min nr ssds": {
-			minNrSSDs: 8,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
-				{storHostResp},
+				{
+					&control.HostResponse{
+						Addr:    "host1",
+						Message: control.MockServerScanResp(t, "nvmeSingle"),
+					},
+				},
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
@@ -244,9 +248,6 @@ func TestAuto_confGen(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Mimic go-flags default values.
-			if tc.minNrSSDs == 0 {
-				tc.minNrSSDs = 1
-			}
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
@@ -257,7 +258,7 @@ func TestAuto_confGen(t *testing.T) {
 			cmd := &configGenCmd{
 				AccessPoints: tc.accessPoints,
 				NrEngines:    tc.nrEngines,
-				MinNrSSDs:    tc.minNrSSDs,
+				SCMOnly:      tc.scmOnly,
 				NetClass:     tc.netClass,
 				UseTmpfsSCM:  tc.tmpfsSCM,
 			}

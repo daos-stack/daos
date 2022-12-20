@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -704,23 +704,27 @@ func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCr
 func MockEngineCfg(t *testing.T, numaID int, pciAddrIDs ...int) *engine.Config {
 	t.Helper()
 
+	tcs := storage.TierConfigs{
+		storage.NewTierConfig().
+			WithNumaNodeIndex(uint(numaID)).
+			WithStorageClass(storage.ClassDcpm.String()).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numaID)).
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID)),
+	}
+	if len(pciAddrIDs) > 0 {
+		tcs = append(tcs, storage.NewTierConfig().
+			WithNumaNodeIndex(uint(numaID)).
+			WithStorageClass(storage.ClassNvme.String()).
+			WithBdevDeviceList(test.MockPCIAddrs(pciAddrIDs...)...))
+	}
+
 	return DefaultEngineCfg(numaID).
 		WithPinnedNumaNode(uint(numaID)).
 		WithFabricInterface(fmt.Sprintf("ib%d", numaID)).
-		WithFabricInterfacePort(defaultFiPort+numaID*defaultFiPortInterval).
+		WithFabricInterfacePort(defaultFiPort + numaID*defaultFiPortInterval).
 		WithFabricProvider("ofi+psm2").
 		WithFabricNumaNodeIndex(uint(numaID)).
-		WithStorage(
-			storage.NewTierConfig().
-				WithNumaNodeIndex(uint(numaID)).
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numaID)).
-				WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID)),
-			storage.NewTierConfig().
-				WithNumaNodeIndex(uint(numaID)).
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(test.MockPCIAddrs(pciAddrIDs...)...),
-		).
+		WithStorage(tcs...).
 		WithStorageNumaNodeIndex(uint(numaID))
 }
 
