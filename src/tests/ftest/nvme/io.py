@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,9 +29,9 @@ class NvmeIo(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,nvme_io
+        :avocado: tags=nvme,daosio,nvme_io
+        :avocado: tags=NvmeIo,test_nvme_io
         """
-
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
         object_type = self.params.get("object_type", '/run/ior/*')

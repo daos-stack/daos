@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 import stat
 import getpass
@@ -48,8 +47,7 @@ class DaosAdminPrivTest(TestWithServers):
         self.log.info("(0)Preparing to run daos_server as non-root user")
         self.add_server_manager()
         self.configure_manager(
-            "server", self.server_managers[0], self.hostlist_servers,
-            self.hostfile_servers_slots)
+            "server", self.server_managers[0], self.hostlist_servers, self.hostfile_servers_slots)
         self.server_managers[0].prepare(False)
 
         # Get user
@@ -84,8 +82,7 @@ class DaosAdminPrivTest(TestWithServers):
 
         # Verify format success when all the daos_engine start.
         # Use dmg to detect server start.
-        self.log.info(
-            "(5)Verify format success when all the daos_engine start")
+        self.log.info("(5)Verify format success when all the daos_engine start")
         try:
             self.server_managers[0].detect_start_via_dmg = True
             self.server_managers[0].detect_engine_start()

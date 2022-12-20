@@ -1,22 +1,47 @@
 hosts:
-  test_servers: 7
+  test_servers: 3
   test_clients: 1
+
 timeouts:
-  test_create_pool_quantity: 690
+  test_create_pool_quantity: 1200
+
 server_config:
   name: daos_server
+  engines_per_host: 2
   servers:
     0:
-      targets: 4
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
       log_mask: DEBUG
+      targets: 4
       env_vars:
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
+      scm_class: dcpm
+      scm_list: ["/dev/pmem0"]
+      scm_mount: /mnt/daos0
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a"]
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG
+      targets: 4
+      env_vars:
+        - DD_MASK=group_metadata_only
+        - D_LOG_FLUSH=DEBUG
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+
 pool:
   name: daos_server
   control_method: dmg

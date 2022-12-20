@@ -136,6 +136,30 @@ class DaosServerManager(SubprocessManager):
         self.storage_prepare_timeout = BasicParameter(None, 40)
         self.storage_format_timeout = BasicParameter(None, 40)
 
+        # Optional external yaml data to use to create the server config file, bypassing the values
+        # defined in the self.manager.job.yaml object.
+        self._external_yaml_data = None
+
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: value["host"] for rank, value in self._expected_states.items()}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -395,6 +419,7 @@ class DaosServerManager(SubprocessManager):
         complete = False
         timed_out = False
         start = time.time()
+        elapsed = 0.0
 
         # Search for patterns in the dmg system query output:
         #   - the expected number of pattern matches are detected (success)
@@ -404,12 +429,14 @@ class DaosServerManager(SubprocessManager):
                 and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
-            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            elapsed = time.time() - start
+            timed_out = elapsed > self.manager.job.pattern_timeout.value
             if not complete and not timed_out:
                 time.sleep(1)
 
         # Summarize results
-        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+        self.manager.job.report_subprocess_status(
+            elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 
