@@ -92,6 +92,7 @@ type mainOpts struct {
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`
 	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support       SupportCmd             `command:"support" description:"Perform tasks related to debug the system to help support team"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn

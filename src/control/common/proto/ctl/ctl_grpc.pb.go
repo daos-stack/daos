@@ -52,6 +52,8 @@ type CtlSvcClient interface {
 	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
+	// Perform a Log collection on Servers for support/debug purpose
+	CollectLog(ctx context.Context, in *CollectLogReq, opts ...grpc.CallOption) (*CollectLogResp, error)
 }
 
 type ctlSvcClient struct {
@@ -197,6 +199,15 @@ func (c *ctlSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grp
 	return out, nil
 }
 
+func (c *ctlSvcClient) CollectLog(ctx context.Context, in *CollectLogReq, opts ...grpc.CallOption) (*CollectLogResp, error) {
+	out := new(CollectLogResp)
+	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/CollectLog", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CtlSvcServer is the server API for CtlSvc service.
 // All implementations must embed UnimplementedCtlSvcServer
 // for forward compatibility
@@ -231,6 +242,8 @@ type CtlSvcServer interface {
 	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	StartRanks(context.Context, *RanksReq) (*RanksResp, error)
+	// Perform a Log collection on Servers for support/debug purpose
+	CollectLog(context.Context, *CollectLogReq) (*CollectLogResp, error)
 	mustEmbedUnimplementedCtlSvcServer()
 }
 
@@ -282,6 +295,9 @@ func (UnimplementedCtlSvcServer) ResetFormatRanks(context.Context, *RanksReq) (*
 }
 func (UnimplementedCtlSvcServer) StartRanks(context.Context, *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartRanks not implemented")
+}
+func (UnimplementedCtlSvcServer) CollectLog(context.Context, *CollectLogReq) (*CollectLogResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CollectLog not implemented")
 }
 func (UnimplementedCtlSvcServer) mustEmbedUnimplementedCtlSvcServer() {}
 
@@ -566,6 +582,24 @@ func _CtlSvc_StartRanks_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CtlSvc_CollectLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CollectLogReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).CollectLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.CtlSvc/CollectLog",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).CollectLog(ctx, req.(*CollectLogReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CtlSvc_ServiceDesc is the grpc.ServiceDesc for CtlSvc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -632,6 +666,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartRanks",
 			Handler:    _CtlSvc_StartRanks_Handler,
+		},
+		{
+			MethodName: "CollectLog",
+			Handler:    _CtlSvc_CollectLog_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

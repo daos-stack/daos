@@ -38,6 +38,7 @@ type cliOptions struct {
 	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
 	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
+	Support    SupportCmd             `command:"support" description:"Perform tasks related to debug the system to help support team"`
 }
 
 type (

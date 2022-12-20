@@ -1,0 +1,22 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package ctl;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+message CollectLogReq {
+  string TargetFolder = 1;
+  string CustomLogs = 2;
+  bool JsonOutput = 3;
+  string LogFunction = 4;
+  string LogCmd = 5;
+}
+
+message CollectLogResp {
+  int32 status = 1; // DAOS error code
+}

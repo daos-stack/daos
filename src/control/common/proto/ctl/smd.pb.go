@@ -1310,7 +1310,6 @@ type SmdManageReq struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Op:
-	//
 	//	*SmdManageReq_Led
 	//	*SmdManageReq_Replace
 	//	*SmdManageReq_Faulty
