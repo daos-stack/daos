@@ -2364,7 +2364,7 @@ class Launch():
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
-                "timeout": 900,
+                "timeout": 1200,
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
@@ -2372,7 +2372,7 @@ class Launch():
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 2,
-                "timeout": 900,
+                "timeout": 1200,
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
@@ -2380,7 +2380,7 @@ class Launch():
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
-                "timeout": 900,
+                "timeout": 1200,
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
@@ -2388,7 +2388,7 @@ class Launch():
                 "pattern": "valgrind*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
-                "timeout": 900,
+                "timeout": 1200,
             }
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
