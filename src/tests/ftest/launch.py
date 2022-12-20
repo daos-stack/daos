@@ -37,6 +37,7 @@ from logger_utils import get_console_handler, get_file_handler                # 
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
 from run_utils import run_local, run_remote, RunException                     # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
 from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
@@ -89,21 +90,6 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
-
-
-def find_pci_address(value):
-    """Find PCI addresses in the specified string.
-
-    Args:
-        value (str): string to search for PCI addresses
-
-    Returns:
-        list: a list of all the PCI addresses found in the string
-
-    """
-    digit = "0-9a-fA-F"
-    pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
-    return re.findall(pattern, str(value))
 
 
 def find_command(source, pattern, depth, other=None):
@@ -849,16 +835,6 @@ class Launch():
         except LaunchException as error:
             return self.get_exit_status(1, str(error), "Setup", sys.exc_info())
 
-        # Auto-detect nvme test yaml replacement values if requested
-        if args.nvme and args.nvme.startswith("auto") and not args.list:
-            try:
-                args.nvme = self._get_device_replacement(args.test_servers, args.nvme)
-            except LaunchException:
-                message = "Error auto-detecting NVMe test yaml file replacement values"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        elif args.nvme and args.nvme.startswith("vmd:"):
-            args.nvme = args.nvme.replace("vmd:", "")
-
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
             self.list_tests(args.tags)
@@ -891,6 +867,9 @@ class Launch():
             self.setup_test_files(yaml_dir, args)
         except (RunException, YamlException):
             message = "Error modifying the test yaml files"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        except StorageException:
+            message = "Error detecting storage information for test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
             return self.get_exit_status(0, "Modifying test yaml files complete")
@@ -1358,198 +1337,6 @@ class Launch():
             os.environ["PYTHONPATH"] = python_path
         logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
-    def _get_device_replacement(self, servers, nvme):
-        """Determine the value to use for the '--nvme' command line argument.
-
-        Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
-        controlled) and use these values to replace placeholder devices in avocado test yaml files.
-
-        Supported auto '--nvme' arguments:
-            auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
-                                (connected to a VMD enabled NVMe device) in the homogeneous
-                                'lspci -D' output from each server.  Optionally grep the list of
-                                NVMe or VMD enabled NVMe devices for 'filter'.
-            auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device
-                                in the homogeneous 'lspci -D' output from each server.  Optionally
-                                grep this output for 'filter'.
-            auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a
-                                VMD enabled NVMe device in the homogeneous 'lspci -D' output from
-                                each server.  Optionally grep the list of VMD enabled NVMe devices
-                                for 'filter'.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            nvme (str): the --nvme argument value
-
-        Raises:
-            LaunchException: if there is a problem finding a device replacement
-
-        Returns:
-            str: a comma-separated list of nvme device pci addresses available on all of the
-                specified test servers
-
-        """
-        logger.debug("-" * 80)
-        logger.debug("Detecting devices that match: %s", nvme)
-        devices = []
-        device_types = []
-
-        # Separate any optional filter from the key
-        dev_filter = None
-        nvme_args = nvme.split(":")
-        if len(nvme_args) > 1:
-            dev_filter = nvme_args[1]
-
-        # First check for any VMD disks, if requested
-        if nvme_args[0] in ["auto", "auto_vmd"]:
-            vmd_devices = self._auto_detect_devices(servers, "NVMe", "5", dev_filter)
-            if vmd_devices:
-                # Find the VMD controller for the matching VMD disks
-                vmd_controllers = self._auto_detect_devices(servers, "VMD", "4", None)
-                devices.extend(
-                    self._get_vmd_address_backed_nvme(servers, vmd_devices, vmd_controllers))
-            elif not dev_filter:
-                # Use any VMD controller if no VMD disks found w/o a filter
-                devices = self._auto_detect_devices(servers, "VMD", "4", None)
-            if devices:
-                device_types.append("VMD")
-
-        # Second check for any non-VMD NVMe disks, if requested
-        if nvme_args[0] in ["auto", "auto_nvme"]:
-            dev_list = self._auto_detect_devices(servers, "NVMe", "4", dev_filter)
-            if dev_list:
-                devices.extend(dev_list)
-                device_types.append("NVMe")
-
-        # If no VMD or NVMe devices were found exit
-        if not devices:
-            raise LaunchException(
-                f"Error: Unable to auto-detect devices for the '--nvme {nvme}' argument")
-
-        logger.debug(
-            "Auto-detected %s devices on %s: %s", " & ".join(device_types), servers, devices)
-        logger.info("Testing with %s devices: %s", " & ".join(device_types), devices)
-        self.details[f"{' & '.join(device_types)} devices"] = devices
-        return ",".join(devices)
-
-    @staticmethod
-    def _auto_detect_devices(hosts, device_type, length, device_filter=None):
-        """Get a list of NVMe/VMD devices found on each specified host.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            hosts (NodeSet): hosts on which to find the NVMe/VMD devices
-            device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
-            length (str): number of digits to match in the first PCI domain number
-            device_filter (str, optional): optional filter to apply to device searching. Defaults to
-                None.
-
-        Raises:
-            LaunchException: if there is a problem finding a devices
-
-        Returns:
-            list: A list of detected devices - empty if none found
-
-        """
-        found_devices = {}
-
-        # Find the devices on each host
-        if device_type == "VMD":
-            # Exclude the controller revision as this causes heterogeneous clush output
-            command_list = [
-                "/sbin/lspci -D",
-                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-                "grep -E 'Volume Management Device NVMe RAID Controller'",
-                r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
-        elif device_type == "NVMe":
-            command_list = [
-                "/sbin/lspci -D",
-                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-                "grep -E 'Non-Volatile memory controller:'"]
-            if device_filter and device_filter.startswith("-"):
-                command_list.append(f"grep -v '{device_filter[1:]}'")
-            elif device_filter:
-                command_list.append(f"grep '{device_filter}'")
-        else:
-            raise LaunchException(
-                f"ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {device_type}")
-        command = " | ".join(command_list) + " || :"
-
-        # Find all the VMD PCI addresses common to all hosts
-        result = run_remote(logger, hosts, command)
-        if result.passed:
-            for data in result.output:
-                for line in data.stdout:
-                    if line not in found_devices:
-                        found_devices[line] = NodeSet()
-                    found_devices[line].update(data.hosts)
-
-            # Remove any non-homogeneous devices
-            for key in list(found_devices):
-                if found_devices[key] != hosts:
-                    logger.debug(
-                        "  device '%s' not found on all hosts: %s", key, found_devices[key])
-                    found_devices.pop(key)
-
-        if not found_devices:
-            raise LaunchException("Error: Non-homogeneous {device_type} PCI addresses.")
-
-        # Get the devices from the successful, homogeneous command output
-        return find_pci_address("\n".join(found_devices))
-
-    @staticmethod
-    def _get_vmd_address_backed_nvme(hosts, vmd_disks, vmd_controllers):
-        """Find valid VMD address which has backing NVMe.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            hosts (NodeSet): hosts on which to find the VMD addresses
-            vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
-            vmd_controllers (list): list of PCI domain numbers for each VMD controller
-
-        Raises:
-            LaunchException: if there is a problem finding a devices
-
-        Returns:
-            list: a list of the VMD controller PCI domain numbers which are connected to the VMD
-                disks
-
-        """
-        disk_controllers = {}
-        command_list = ["ls -l /sys/block/", "grep nvme"]
-        if vmd_disks:
-            command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
-        command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
-        command = " | ".join(command_list) + " || :"
-        result = run_remote(logger, hosts, command)
-
-        # Verify the command was successful on each server host
-        if not result.passed:
-            raise LaunchException(f"Error issuing command '{command}'")
-
-        # Collect a list of NVMe devices behind the same VMD addresses on each host.
-        logger.debug("Checking for %s in command output", vmd_controllers)
-        if result.passed:
-            for data in result.output:
-                for device in vmd_controllers:
-                    if device in data.stdout:
-                        if device not in disk_controllers:
-                            disk_controllers[device] = NodeSet()
-                        disk_controllers[device].update(data.hosts)
-
-            # Remove any non-homogeneous devices
-            for key in list(disk_controllers):
-                if disk_controllers[key] != hosts:
-                    logger.debug(
-                        "  device '%s' not found on all hosts: %s", key, disk_controllers[key])
-                    disk_controllers.pop(key)
-
-        # Verify each server host has the same NVMe devices behind the same VMD addresses.
-        if not disk_controllers:
-            raise LaunchException("Error: Non-homogeneous NVMe device behind VMD addresses.")
-
-        return disk_controllers
-
     def list_tests(self, tags):
         """List the test files matching the tags.
 
@@ -1629,11 +1416,43 @@ class Launch():
         Raises:
             RunException: if there is a problem updating the test yaml files
             YamlException: if there is an error getting host information from the test yaml files
+            StorageException: if there is an error getting storage information
 
         """
+        # Detect available disk options for test yaml replacement
+        # Supported --nvme options:
+        #   auto[:filter]           = select any PCI domain number of a NVMe device or VMD
+        #                             controller (connected to a VMD enabled NVMe device) in the
+        #                             homogeneous 'lspci -D' output from each host. Optionally
+        #                             grep the list of NVMe or VMD enabled NVMe devices for
+        #                             'filter'.
+        #   auto_nvme[:filter]      = select any PCI domain number of a non-VMD controlled NVMe
+        #                             device in the homogeneous 'lspci -D' output from each
+        #                             host. Optionally grep this output for 'filter'.
+        #   auto_vmd[:filter]       = select any PCI domain number of a VMD controller connected
+        #                             to a VMD enabled NVMe device in the homogeneous 'lspci -D'
+        #                             output from each host. Optionally grep the list of VMD
+        #                             enabled NVMe devices for 'filter'.
+        #   <address>[,<address>]   = verify that each specified device exists on each host.
+        #
+        storage_info = StorageInfo(logger, args.test_servers)
+        if args.nvme and args.nvme.startswith("auto"):
+            # Separate any optional filter from the key
+            scan_args = args.nvme.split(":")
+            if len(scan_args) == 1:
+                scan_args.append(None)
+            if scan_args[0] == "auto_nvme" or scan_args[0] == "auto_vmd":
+                match_mode = scan_args[0].split("_")[-1].upper().replace("E", "e")
+                storage_info.scan(scan_args[1], match_mode)
+            else:
+                storage_info.scan(scan_args[1])
+        elif args.nvme:
+            scan_args = f"'({'|'.join(args.nvme.split(','))})'"
+            storage_info.scan(scan_args)
+
         updater = YamlUpdater(
-            logger, args.test_servers, args.test_clients, args.nvme, args.timeout_multiplier,
-            args.override, args.verbose)
+            logger, args.test_servers, args.test_clients, ",".join(storage_info.devices),
+            args.timeout_multiplier, args.override, args.verbose)
 
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
@@ -1795,234 +1614,6 @@ class Launch():
         for config in fuse_configs:
             if not run_remote(logger, hosts, command.format(config)).passed:
                 raise LaunchException(f"Failed to setup {config}")
-
-    @staticmethod
-    def _replace_yaml_file(yaml_file, args, yaml_dir):
-        # pylint: disable=too-many-nested-blocks,too-many-branches
-        """Create a temporary test yaml file with any requested values replaced.
-
-        Optionally replace the following test yaml file values if specified by the
-        user via the command line arguments:
-
-            test_servers:   Use the list specified by the --test_servers (-ts)
-                            argument to replace any host name placeholders listed
-                            under "test_servers:"
-
-            test_clients    Use the list specified by the --test_clients (-tc)
-                            argument (or any remaining names in the --test_servers
-                            list argument, if --test_clients is not specified) to
-                            replace any host name placeholders listed under
-                            "test_clients:".
-
-            bdev_list       Use the list specified by the --nvme (-n) argument to
-                            replace the string specified by the "bdev_list:" yaml
-                            parameter.  If multiple "bdev_list:" entries exist in
-                            the yaml file, evenly divide the list when making the
-                            replacements.
-
-        Any replacements are made in a copy of the original test yaml file.  If no
-        replacements are specified return the original test yaml file.
-
-        Args:
-            yaml_file (str): test yaml file
-            args (argparse.Namespace): command line arguments for this program
-            yaml_dir (str): directory in which to write the modified yaml files
-
-        Raises:
-            RunException: if a yaml file placeholder is missing a value
-
-        Returns:
-            str: the test yaml file; None if the yaml file contains placeholders
-                w/o replacements
-
-        """
-        logger.debug("-" * 80)
-        replacements = {}
-
-        if args.test_servers or args.nvme or args.timeout_multiplier:
-            # Find the test yaml keys and values that match the replaceable fields
-            yaml_data = get_yaml_data(yaml_file)
-            logger.debug("Detected yaml data: %s", yaml_data)
-            yaml_keys = list(YAML_KEYS.keys())
-            yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
-
-            # Generate a list of values that can be used as replacements
-            user_values = OrderedDict()
-            for key, value in list(YAML_KEYS.items()):
-                args_value = getattr(args, value)
-                if isinstance(args_value, NodeSet):
-                    user_values[key] = list(args_value)
-                elif isinstance(args_value, str):
-                    user_values[key] = args_value.split(",")
-                elif args_value:
-                    user_values[key] = [args_value]
-                else:
-                    user_values[key] = None
-
-            # Assign replacement values for the test yaml entries to be replaced
-            logger.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
-            logger.debug("  Found values: %s", yaml_find)
-            logger.debug("  User values:  %s", dict(user_values))
-
-            node_mapping = {}
-            for key, user_value in user_values.items():
-                # If the user did not provide a specific list of replacement
-                # test_clients values, use the remaining test_servers values to
-                # replace test_clients placeholder values
-                if key == "test_clients" and not user_value:
-                    user_value = user_values["test_servers"]
-
-                # Replace test yaml keys that were:
-                #   - found in the test yaml
-                #   - have a user-specified replacement
-                if key in yaml_find and user_value:
-                    if key.startswith("test_"):
-                        # The entire server/client test yaml list entry is replaced
-                        # by a new test yaml list entry, e.g.
-                        #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
-                        #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
-                        if not isinstance(yaml_find[key], list):
-                            yaml_find[key] = [yaml_find[key]]
-
-                        for yaml_find_item in yaml_find[key]:
-                            replacement = NodeSet()
-                            try:
-                                # Replace integer placeholders with the number of nodes from the
-                                # user provided list equal to the quantity requested by the test
-                                # yaml
-                                quantity = int(yaml_find_item)
-                                if args.override and args.test_clients:
-                                    # When individual lists of server and client nodes are provided
-                                    # with the override flag set use the full list of nodes
-                                    # specified by the test_server/test_client arguments
-                                    quantity = len(user_value)
-                                elif args.override:
-                                    logger.warning(
-                                        "Warning: In order to override the node quantity a "
-                                        "'--test_clients' argument must be specified: %s: %s",
-                                        key, yaml_find_item)
-                                for _ in range(quantity):
-                                    try:
-                                        replacement.add(user_value.pop(0))
-                                    except IndexError:
-                                        # Not enough nodes provided for the replacement
-                                        if not args.override:
-                                            replacement = None
-                                        break
-
-                            except ValueError:
-                                try:
-                                    # Replace clush-style placeholders with nodes from the user
-                                    # provided list using a mapping so that values used more than
-                                    # once yield the same replacement
-                                    for node in NodeSet(yaml_find_item):
-                                        if node not in node_mapping:
-                                            try:
-                                                node_mapping[node] = user_value.pop(0)
-                                            except IndexError:
-                                                # Not enough nodes provided for the replacement
-                                                if not args.override:
-                                                    replacement = None
-                                                break
-                                            logger.debug(
-                                                "  - %s replacement node mapping: %s -> %s",
-                                                key, node, node_mapping[node])
-                                        replacement.add(node_mapping[node])
-
-                                except TypeError:
-                                    # Unsupported format
-                                    replacement = None
-
-                            hosts_key = r":\s+".join([key, str(yaml_find_item)])
-                            hosts_key = hosts_key.replace("[", r"\[")
-                            hosts_key = hosts_key.replace("]", r"\]")
-                            if replacement:
-                                replacements[hosts_key] = ": ".join([key, str(replacement)])
-                            else:
-                                replacements[hosts_key] = None
-
-                    elif key == "bdev_list":
-                        # Individual bdev_list NVMe PCI addresses in the test yaml
-                        # file are replaced with the new NVMe PCI addresses in the
-                        # order they are found, e.g.
-                        #   0000:81:00.0 --> 0000:12:00.0
-                        for yaml_find_item in yaml_find[key]:
-                            bdev_key = f"\"{yaml_find_item}\""
-                            if bdev_key in replacements:
-                                continue
-                            try:
-                                replacements[bdev_key] = f"\"{user_value.pop(0)}\""
-                            except IndexError:
-                                replacements[bdev_key] = None
-
-                    else:
-                        # Timeouts - replace the entire timeout entry (key + value)
-                        # with the same key with its original value multiplied by the
-                        # user-specified value, e.g.
-                        #   timeout: 60 -> timeout: 600
-                        if isinstance(yaml_find[key], int):
-                            timeout_key = r":\s+".join([key, str(yaml_find[key])])
-                            timeout_new = max(1, round(yaml_find[key] * user_value[0]))
-                            replacements[timeout_key] = ": ".join([key, str(timeout_new)])
-                            logger.debug(
-                                "  - Timeout adjustment (x %s): %s -> %s",
-                                user_value, timeout_key, replacements[timeout_key])
-                        elif isinstance(yaml_find[key], dict):
-                            for timeout_test, timeout_val in list(yaml_find[key].items()):
-                                timeout_key = r":\s+".join([timeout_test, str(timeout_val)])
-                                timeout_new = max(1, round(timeout_val * user_value[0]))
-                                replacements[timeout_key] = ": ".join(
-                                    [timeout_test, str(timeout_new)])
-                                logger.debug(
-                                    "  - Timeout adjustment (x %s): %s -> %s",
-                                    user_value, timeout_key, replacements[timeout_key])
-
-            # Display the replacement values
-            for value, replacement in list(replacements.items()):
-                logger.debug("  - Replacement: %s -> %s", value, replacement)
-
-        if replacements:
-            # Read in the contents of the yaml file to retain the !mux entries
-            logger.debug("Reading %s", yaml_file)
-            with open(yaml_file, encoding="utf-8") as yaml_buffer:
-                yaml_data = yaml_buffer.read()
-
-            # Apply the placeholder replacements
-            missing_replacements = []
-            logger.debug("Modifying contents: %s", yaml_file)
-            for key in sorted(replacements):
-                value = replacements[key]
-                if value:
-                    # Replace the host entries with their mapped values
-                    logger.debug("  - Replacing: %s --> %s", key, value)
-                    yaml_data = re.sub(key, value, yaml_data)
-                else:
-                    # Keep track of any placeholders without a replacement value
-                    logger.debug("  - Missing:   %s", key)
-                    missing_replacements.append(key)
-            if missing_replacements:
-                # Report an error for all of the placeholders w/o a replacement
-                logger.error(
-                    "Error: Placeholders missing replacements in %s:\n  %s",
-                    yaml_file, ", ".join(missing_replacements))
-                raise LaunchException(f"Error: Placeholders missing replacements in {yaml_file}")
-
-            # Write the modified yaml file into a temporary file.  Use the path to
-            # ensure unique yaml files for tests with the same filename.
-            orig_yaml_file = yaml_file
-            yaml_name = get_test_category(yaml_file)
-            yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
-            logger.debug("Creating copy: %s", yaml_file)
-            with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
-                yaml_buffer.write(yaml_data)
-
-            # Optionally display a diff of the yaml file
-            if args.verbose > 0:
-                command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(logger, command, check=False)
-
-        # Return the untouched or modified yaml file
-        return yaml_file
 
     def _get_core_file_pattern(self, servers, clients, process_cores):
         """Get the core file pattern information from the hosts if collecting core files.
@@ -3401,9 +2992,6 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
-
-        # TODO Remove debug
-        args.verbose = 2
 
     # Perform the steps defined by the arguments specified
     try:
