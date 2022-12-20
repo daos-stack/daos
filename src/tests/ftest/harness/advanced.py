@@ -55,8 +55,8 @@ class HarnessAdvancedTest(TestWithServers):
         command = "touch {}".format(core_file)
         command2 = "echo \"Test core file\" > {}".format(core_file)
         try:
-            run_local(self.log, ";".join(command), check=True)
-            run_local(self.log, ";".join(command2), check=True)
+            run_local(self.log, command, check=True)
+            run_local(self.log, command2, check=True)
         except RunException:
             self.fail("Failed to create core.gdb.harness.advanced in %s", core_path)
 
