@@ -110,6 +110,7 @@ struct btr_context {
 	/** cached tree depth, avoid loading from slow memory */
 	uint16_t			 tc_depth;
 	/** credits for drain, see dbtree_drain */
+	/** Test whether this fails to compiler with Intel compiler */
 	int				 tc_creds:30;
 	/**
 	 * credits is turned on, \a tcx::tc_creds should be checked
