@@ -575,7 +575,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 
 	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
@@ -641,7 +641,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 
 	rc = read_config(nvme_conf, ctx);
 	if (rc != 0)
-		return rc;
+		D_GOTO(out, rc);
 
 	/* Capture daos object */
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
