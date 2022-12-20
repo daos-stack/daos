@@ -334,7 +334,7 @@ func (cmd *resetNVMeCmd) Execute(args []string) error {
 type scanNVMeCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
-	cfgCmd         `json:"-"`
+	optCfgCmd      `json:"-"`
 
 	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
 }

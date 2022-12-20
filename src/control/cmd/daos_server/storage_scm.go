@@ -314,6 +314,7 @@ func (cmd *resetSCMCmd) Execute(args []string) error {
 type scanSCMCmd struct {
 	cmdutil.LogCmd `json:"-"`
 	helperLogCmd   `json:"-"`
+	optCfgCmd      `json:"-"`
 }
 
 func (cmd *scanSCMCmd) Execute(args []string) error {
