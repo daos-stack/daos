@@ -605,7 +605,7 @@ pipeline {
                                    stash_files: 'ci/test_files_to_stash.txt',
                                    build_deps: 'yes',
                                    stash_opt: true,
-                                   scons_exe: 'scons-3',
+                        //           scons_exe: 'scons-3',
                                    scons_args: sconsFaultsArgs() +
                                                ' PREFIX=/opt/daos TARGET_TYPE=release'
                     }
@@ -1060,7 +1060,6 @@ pipeline {
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
                                                                'func-vm-cov',
-                                                               'func-hw-small-cov',
                                                                'func-hw-medium-cov',
                                                                'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
