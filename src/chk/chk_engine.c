@@ -2162,7 +2162,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 		if (rc != 0)
 			goto out_group;
 
-		ds_iv_ns_update(ins->ci_iv_ns, leader);
+		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term+1);
 	}
 
 	rc = chk_engine_start_post(ins);
@@ -3114,7 +3114,7 @@ chk_engine_rejoin(void *args)
 	if (rc != 0)
 		goto out_group;
 
-	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader);
+	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader, ins->ci_iv_ns->iv_master_term+1);
 
 	/* Ask leader whether this engine can rejoin or not. */
 	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, &pool_nr, &pools);

@@ -2269,7 +2269,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_leader_term);
 
 	rc = ds_pool_iv_prop_fetch(pool, &prop);
 	if (rc)
