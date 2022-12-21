@@ -95,10 +95,6 @@ type (
 		shutdownErrCh      chan error
 		poolLocks          poolLockMap
 
-		// FIXME: Remove this in favor of raft-aware checker state store.
-		// Using it for scaffolding at the moment.
-		InMemCheckerDatabase
-
 		data *dbData // raft-backed system data
 	}
 

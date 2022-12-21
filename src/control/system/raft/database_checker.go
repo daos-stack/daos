@@ -7,8 +7,6 @@
 package raft
 
 import (
-	"sync"
-
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
@@ -21,20 +19,29 @@ var (
 )
 
 type (
+	errFindingNotFound struct {
+		seq uint64
+	}
+
 	CheckerFindingMap map[uint64]*checker.Finding
 
 	CheckerDatabase struct {
 		Findings CheckerFindingMap
 	}
-
-	// InMemCheckerDatabase is a checker.StateStore implementation that
-	// does not persist data to raft, and is only suitable for ephemeral
-	// checker operations.
-	InMemCheckerDatabase struct {
-		sync.RWMutex
-		CheckerDatabase
-	}
 )
+
+func (e *errFindingNotFound) Error() string {
+	return errors.Errorf("finding 0x%x not found", e.seq).Error()
+}
+
+func ErrFindingNotFound(seq uint64) error {
+	return &errFindingNotFound{seq: seq}
+}
+
+func IsFindingNotFound(err error) bool {
+	_, ok := errors.Cause(err).(*errFindingNotFound)
+	return ok
+}
 
 func copyFinding(in *checker.Finding) (out *checker.Finding) {
 	out = new(checker.Finding)
@@ -43,59 +50,105 @@ func copyFinding(in *checker.Finding) (out *checker.Finding) {
 	return
 }
 
-func (mdb *InMemCheckerDatabase) AddCheckerFinding(finding *checker.Finding) error {
-	mdb.Lock()
-	defer mdb.Unlock()
+func (cdb *CheckerDatabase) resetFindings() {
+	cdb.Findings = make(CheckerFindingMap)
+}
 
-	if mdb.Findings == nil {
-		mdb.Findings = make(CheckerFindingMap)
-	}
-
-	if _, found := mdb.Findings[finding.Seq]; found {
+func (cdb *CheckerDatabase) addFinding(finding *checker.Finding) error {
+	if _, found := cdb.Findings[finding.Seq]; found {
 		return errFindingExists
 	}
-	mdb.Findings[finding.Seq] = finding
+	cdb.Findings[finding.Seq] = copyFinding(finding)
 
 	return nil
 }
 
-func (mdb *InMemCheckerDatabase) UpdateCheckerFinding(finding *checker.Finding) error {
-	mdb.Lock()
-	defer mdb.Unlock()
-
-	_, found := mdb.Findings[finding.Seq]
+func (cdb *CheckerDatabase) updateFinding(finding *checker.Finding) error {
+	_, found := cdb.Findings[finding.Seq]
 	if !found {
-		return errors.Errorf("finding 0x%x not found", finding.Seq)
+		return ErrFindingNotFound(finding.Seq)
 	}
 	// TODO: Selectively update fields?
-	mdb.Findings[finding.Seq] = finding
+	cdb.Findings[finding.Seq] = finding
 
 	return nil
 }
 
-func (mdb *InMemCheckerDatabase) AddOrUpdateCheckerFinding(finding *checker.Finding) error {
-	if err := mdb.AddCheckerFinding(finding); err != nil {
-		if err == errFindingExists {
-			return mdb.UpdateCheckerFinding(finding)
-		}
+func (db *Database) AddCheckerFinding(finding *checker.Finding) error {
+	db.Lock()
+	defer db.Unlock()
+
+	return db.submitCheckerUpdate(raftOpAddCheckerFinding, finding)
+}
+
+func (db *Database) AddOrUpdateCheckerFinding(finding *checker.Finding) error {
+	db.Lock()
+	defer db.Unlock()
+
+	if _, err := db.GetCheckerFinding(finding.Seq); IsFindingNotFound(err) {
+		return db.submitCheckerUpdate(raftOpAddCheckerFinding, finding)
+	}
+
+	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, finding)
+}
+
+func (db *Database) UpdateCheckerFinding(finding *checker.Finding) error {
+	db.Lock()
+	defer db.Unlock()
+
+	if _, err := db.GetCheckerFinding(finding.Seq); err != nil {
+		return err
+	}
+	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, finding)
+}
+
+func (db *Database) SetCheckerFindingAction(seq uint64, action int32) error {
+	if _, ok := chk.CheckInconsistAction_name[action]; !ok {
+		return errors.Errorf("invalid action %d", action)
+	}
+	chkAction := chk.CheckInconsistAction(action)
+
+	db.Lock()
+	defer db.Unlock()
+
+	f, err := db.GetCheckerFinding(seq)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	for i, d := range f.ActChoices {
+		if d != chkAction {
+			continue
+		}
+		f.Action = chkAction
+		if len(f.ActMsgs) > i {
+			f.ActMsgs = []string{f.ActMsgs[i]}
+		}
+		f.ActChoices = nil
+	}
+
+	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, f)
 }
 
-func (mdb *InMemCheckerDatabase) GetCheckerFindings(searchList ...uint64) ([]*checker.Finding, error) {
-	mdb.RLock()
-	defer mdb.RUnlock()
+func (db *Database) ResetCheckerData() error {
+	db.Lock()
+	defer db.Unlock()
 
-	out := make([]*checker.Finding, 0, len(mdb.Findings))
+	return db.submitCheckerUpdate(raftOpClearCheckerFindings, nil)
+}
+
+func (db *Database) GetCheckerFindings(searchList ...uint64) ([]*checker.Finding, error) {
+	db.data.RLock()
+	defer db.data.RUnlock()
+
+	out := make([]*checker.Finding, 0, len(db.data.Checker.Findings))
 	if len(searchList) == 0 {
-		for _, finding := range mdb.Findings {
+		for _, finding := range db.data.Checker.Findings {
 			out = append(out, copyFinding(finding))
 		}
 	} else {
 		for _, seq := range searchList {
-			finding, found := mdb.Findings[seq]
+			finding, found := db.data.Checker.Findings[seq]
 			if !found {
 				return nil, errors.Errorf("finding 0x%x not found", seq)
 			}
@@ -105,49 +158,13 @@ func (mdb *InMemCheckerDatabase) GetCheckerFindings(searchList ...uint64) ([]*ch
 	return out, nil
 }
 
-func (mdb *InMemCheckerDatabase) GetCheckerFinding(seq uint64) (*checker.Finding, error) {
-	mdb.RLock()
-	defer mdb.RUnlock()
+func (db *Database) GetCheckerFinding(seq uint64) (*checker.Finding, error) {
+	db.data.RLock()
+	defer db.data.RUnlock()
 
-	if f, found := mdb.Findings[seq]; found {
+	if f, found := db.data.Checker.Findings[seq]; found {
 		return copyFinding(f), nil
 	}
 
-	return nil, errors.Errorf("finding 0x%x not found", seq)
-}
-
-func (mdb *InMemCheckerDatabase) SetCheckerFindingAction(seq uint64, action int32) error {
-	mdb.Lock()
-	defer mdb.Unlock()
-
-	if _, ok := chk.CheckInconsistAction_name[action]; !ok {
-		return errors.Errorf("invalid action %d", action)
-	}
-	chkAction := chk.CheckInconsistAction(action)
-
-	if finding, found := mdb.Findings[seq]; found {
-		for i, d := range finding.ActChoices {
-			if d != chkAction {
-				continue
-			}
-			finding.Action = chkAction
-			if len(finding.ActMsgs) > i {
-				finding.ActMsgs = []string{finding.ActMsgs[i]}
-			}
-			finding.ActChoices = nil
-			return nil
-		}
-		return errors.Errorf("action %s not found", chkAction)
-	}
-
-	return errors.Errorf("finding 0x%x not found", seq)
-}
-
-func (mdb *InMemCheckerDatabase) ResetCheckerData() error {
-	mdb.Lock()
-	defer mdb.Unlock()
-
-	mdb.Findings = nil
-
-	return nil
+	return nil, ErrFindingNotFound(seq)
 }

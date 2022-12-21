@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -33,6 +34,7 @@ import (
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	. "github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
@@ -226,6 +228,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
 	maxAttrs := 4096
+	maxFindings := 512
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -281,6 +284,18 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		(*fsm)(db0).Apply(rl)
 	}
 
+	for i := 0; i < maxFindings; i++ {
+		f := checker.MockFinding(i)
+		data, err := createRaftUpdate(raftOpAddCheckerFinding, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rl := &raft.Log{
+			Data: data,
+		}
+		(*fsm)(db0).Apply(rl)
+	}
+
 	attrs := make(map[string]string)
 	for i := 0; i < maxAttrs; i++ {
 		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
@@ -314,6 +329,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
 		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
+		protocmp.Transform(),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
