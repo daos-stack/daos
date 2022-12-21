@@ -137,6 +137,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN ls -l /home/daos/pre
-RUN ls -l /home/daos/pre/site_scons
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

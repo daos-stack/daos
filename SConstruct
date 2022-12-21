@@ -332,9 +332,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
             if value is not None:
                 deps_env['ENV'][key] = value
 
-    if 'COVFILE' in os.environ:
-        deps_env['ENV']['COVFILE'] = os.environ['COVFILE']
-
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
 
@@ -348,14 +345,13 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         deps_env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
         deps_env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
-    prereqs = PreReqComponent(deps_env, opts, commits_file)
     config = Configure(deps_env)
     if not config.CheckHeader('stdatomic.h'):
         Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
     config.Finish()
-    build_prefix = prereqs.get_src_build_dir()
-    prereqs.init_build_targets(build_prefix)
-    prereqs.load_defaults()
+
+    prereqs = PreReqComponent(deps_env, opts, commits_file)
+    build_prefix = prereqs.init_build_targets()
     if prereqs.check_component('valgrind_devel'):
         deps_env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 

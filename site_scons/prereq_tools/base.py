@@ -20,12 +20,6 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
-# pylint: disable=too-few-public-methods
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=broad-except
-# pylint: disable=bare-except
-# pylint: disable=exec-used
-# pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
 import os
 import traceback
@@ -299,7 +293,7 @@ def default_libpath():
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
@@ -582,7 +576,7 @@ def ensure_dir_exists(dirname, dry_run):
             return
         try:
             os.makedirs(dirname)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             if not os.path.isdir(dirname):
                 raise error
 
@@ -590,7 +584,7 @@ def ensure_dir_exists(dirname, dry_run):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
 
-# pylint: disable-next=function-redefined,too-many-public-methods
+# pylint: disable-next=function-redefined
 class PreReqComponent():
     """A class for defining and managing external components required by a project.
 
@@ -612,7 +606,7 @@ class PreReqComponent():
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
                     "MODULESHOME", "MODULESLOADED",
-                    "I_MPI_ROOT"]:
+                    "I_MPI_ROOT", "COVFILE"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
@@ -623,7 +617,7 @@ class PreReqComponent():
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
-        self.has_icx = False
+        self._has_icx = False
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -717,8 +711,9 @@ class PreReqComponent():
         self.include = env.subst("$INCLUDE").split(" ")
         self._build_targets = []
 
-    def init_build_targets(self, build_dir):
+    def init_build_targets(self):
         """Setup default build targets"""
+        build_dir = self.__env.get('BUILD_DIR')
         targets = ['test', 'server', 'client']
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
@@ -733,6 +728,8 @@ class PreReqComponent():
             if 'server' in BUILD_TARGETS:
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
+        self._load_defaults()
+        return build_dir
 
     def _setup_user_prefix(self):
         """setup ALT_PREFIX option"""
@@ -760,7 +757,7 @@ class PreReqComponent():
         """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
-            self.has_icx = True
+            self._has_icx = True
         except InternalError:
             print("No oneapi compiler, trying legacy")
             env = self.__env.Clone(tools=['intelc'])
@@ -774,7 +771,7 @@ class PreReqComponent():
         self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
         self.__env.Replace(LINK=env.get("LINK"))
         # disable the warning about Cilk since we don't use it
-        if not self.has_icx:
+        if not self._has_icx:
             self.__env.AppendUnique(LINKFLAGS=["-static-intel",
                                                "-diag-disable=10237"])
             self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
@@ -803,7 +800,7 @@ class PreReqComponent():
             compiler_map['icc'] = self._setup_intelc()
 
         if warning_level == 'error':
-            if compiler == 'icc' and not self.has_icx:
+            if compiler == 'icc' and not self._has_icx:
                 warning_flag = '-Werror-all'
             else:
                 warning_flag = '-Werror'
@@ -890,10 +887,6 @@ class PreReqComponent():
                   default=False,
                   help='Fail the build if check_component fails')
 
-        # There is another case here which isn't handled, we want Jenkins
-        # builds to download tar packages but not git source code.  For now
-        # just have a single flag and set this for the Jenkins builds which
-        # need this.
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
@@ -901,7 +894,7 @@ class PreReqComponent():
                   default='no',
                   help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
-        # We want to be able to check what dependencies are needed with out
+        # We want to be able to check what dependencies are needed without
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
         # the dependencies.  So we need a new option
@@ -914,8 +907,7 @@ class PreReqComponent():
         # Need to be able to look for an alternate build.config file.
         AddOption('--build-config',
                   dest='build_config',
-                  default=os.path.join(Dir('#').abspath,
-                                       'utils', 'build.config'),
+                  default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
                   help='build config file to use. [%default]')
 
         # We need to sometimes use alternate tools for building and need
@@ -996,13 +988,10 @@ class PreReqComponent():
         use_installed = False
         if 'all' in self.installed or name in self.installed:
             use_installed = True
-        comp = _Component(self,
-                          name,
-                          use_installed,
-                          **kw)
+        comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
-    def load_definitions(self, **kw):
+    def _load_definitions(self, **kw):
         """Load default definitions
 
         Keyword arguments:
@@ -1023,7 +1012,7 @@ class PreReqComponent():
             env = self.__env.Clone()
             self.require(env, comp)
 
-    def load_defaults(self):
+    def _load_defaults(self):
         """Setup default build parameters"""
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
@@ -1047,7 +1036,7 @@ class PreReqComponent():
         if GetOption('build_deps') == 'only':
             # Optionally, limit the deps we build in this pass
             reqs = self.__env.get('DEPS')
-        self.load_definitions(prebuild=reqs)
+        self._load_definitions(prebuild=reqs)
 
     def server_requested(self):
         """return True if server build is requested"""
@@ -1144,7 +1133,7 @@ class PreReqComponent():
         env = self.__env.Clone()
         try:
             self.require(env, *comps, **kw)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             if self.__require_optional:
                 raise error
             return False
@@ -1228,10 +1217,6 @@ class PreReqComponent():
         self._save_component_prefix(comp_prefix, target_prefix)
 
         return (target_prefix, prefix)
-
-    def get_src_build_dir(self):
-        """Get the location of a temporary directory for hosting intermediate build files"""
-        return self.__env.get('BUILD_DIR')
 
     def get_src_path(self, name):
         """Get the location of the sources for an external component"""
