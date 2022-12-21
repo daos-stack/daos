@@ -101,5 +101,5 @@ document for further information on how to save existing user data before the up
 Note that there is **no** backwards compatibility of DAOS Version 2.x with
 DAOS Version 1.y, so an update from DAOS Version 1.0 or 1.2 to
 DAOS Version 2.2 is essentially a new installation. Please refer to the
-[Updating to DAOS Version 2.0](https://docs.daos.io/v2.0/release/updating_to_v2_0/)
+[Updating to DAOS Version 2.0](https://docs.daos.io/v2.0/release/updating/)
 document for further information - those notes apply to DAOS Version 2.2 as well.
