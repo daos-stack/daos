@@ -274,7 +274,7 @@ vos_ts_set_allocate(struct vos_ts_set **ts_set, uint64_t flags,
 	vos_kh_clear(standalone);
 
 	*ts_set = NULL;
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_valid_handle(dth) || dth->dth_local) {
 		if ((flags & cond_mask) == 0)
 			return 0;
 	} else {

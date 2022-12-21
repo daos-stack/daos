@@ -1429,7 +1429,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_real_handle(dth)) {
 		dtx_set_committed(tx_id);
 		return 0;
 	}
@@ -2856,7 +2856,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	int			 rc;
 
 	if (!dtx_is_valid_handle(dth) ||
-	    (!dth->dth_active && dth->dth_ent == NULL))
+	    (!dth->dth_active && dth->dth_ent == NULL) || dth->dth_local)
 		return;
 
 	dth->dth_active = 0;

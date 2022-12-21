@@ -1435,6 +1435,29 @@ struct scrub_ctx {
 	    sc_first_pass_done                  : 1; /* Is this the first pass of the scrubber */
 };
 
+/**
+ * Start a local transaction with intent to execute one or more VOS update operations
+ *
+ * \param[in]	poh	Open pool handle
+ * \param[in]	dth	Returned opaque dtx handle to pass to subsequent vos operations
+ *
+ * \return	0 on success, error otherwise
+ */
+int
+vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dth);
+
+/**
+ * End a local transaction.
+ *
+ * \param[in]	dth	Opaque dtx handle returned from vos_local_tx_begin
+ * \param[in]	err	Error from prior operations. If any operation failed, this should be
+ *					non-zero. If 0, the transaction will be committed.
+ *
+ * \return	0 on successful commit, error otherwise
+ */
+int
+vos_local_tx_end(struct dtx_handle *dth, int err);
+
 /*
  * It is expected that the pool uuid/handle and any functional dependencies are
  * set in the scrubbing context. The container/object info should not be set.

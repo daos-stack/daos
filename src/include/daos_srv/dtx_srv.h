@@ -92,7 +92,11 @@ struct dtx_handle {
 					 /* Need validation on leader before commit/committable. */
 					 dth_need_validation:1,
 					 /* Ignore other uncommitted DTXs. */
-					 dth_ignore_uncommitted:1;
+					 dth_ignore_uncommitted:1,
+					 /* Local transaction */
+					 dth_local:1,
+					 /* Flag to commit the local transaction */
+					 dth_local_complete:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -316,6 +320,13 @@ static inline bool
 dtx_is_valid_handle(const struct dtx_handle *dth)
 {
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
+}
+
+/** Return true if it's a real dtx (valid and not a local tx) */
+static inline bool
+dtx_is_real_handle(const struct dtx_handle *dth)
+{
+	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid) && !dth->dth_local;
 }
 
 struct dtx_scan_args {

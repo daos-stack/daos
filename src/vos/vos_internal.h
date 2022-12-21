@@ -1261,7 +1261,7 @@ umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 		daos_size_t size);
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm,
 		bool publish);
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
