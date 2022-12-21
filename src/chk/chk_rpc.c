@@ -619,7 +619,7 @@ out:
 
 int
 chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
-		    uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+		    uint64_t seq, uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
 		    struct rsvc_hint *hint)
 {
 	crt_rpc_t		*req;
@@ -637,6 +637,7 @@ chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, ch
 	cpmi->cpmi_flags = flags;
 	cpmi->cpmi_phase = phase;
 	cpmi->cpmi_label = label;
+	cpmi->cpmi_label_seq = seq;
 	cpmi->cpmi_targets.ca_count = mbs_nr;
 	cpmi->cpmi_targets.ca_arrays = mbs_array;
 
@@ -653,9 +654,9 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Sent pool ("DF_UUIDF") members and label %s to rank %u with phase %d gen "
-		 DF_X64": "DF_RC"\n",
-		 DP_UUID(uuid), label != NULL ? label : "(null)", rank, phase, gen, DP_RC(rc));
+		 "Sent pool ("DF_UUIDF") members and label %s ("
+		 DF_X64") to rank %u with phase %d gen "DF_X64": "DF_RC"\n",
+		 DP_UUID(uuid), label != NULL ? label : "(null)", seq, rank, phase, gen, DP_RC(rc));
 
 	return rc;
 }

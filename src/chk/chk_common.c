@@ -94,6 +94,8 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 			(*cpb->cpb_shard_nr)++;
 	}
 
+	d_iov_set(val_out, cpr, sizeof(*cpr));
+
 out:
 	if (rc != 0 && cpr != NULL) {
 		if (cpr->cpr_mutex != ABT_MUTEX_NULL)
@@ -161,6 +163,8 @@ chk_pool_update(struct btr_instance *tins, struct btr_record *rec,
 	if (cpb->cpb_shard_nr != NULL)
 		(*cpb->cpb_shard_nr)++;
 
+	d_iov_set(val_out, cpr, sizeof(*cpr));
+
 out:
 	return rc;
 }
@@ -178,6 +182,7 @@ struct chk_pending_bundle {
 	d_list_t		*cpb_ins_head;
 	d_list_t		*cpb_rank_head;
 	d_rank_t		 cpb_rank;
+	uuid_t			 cpb_uuid;
 	uint32_t		 cpb_class;
 	uint64_t		 cpb_seq;
 };
@@ -219,6 +224,7 @@ chk_pending_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	if (rc != 0)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
+	uuid_copy(cpr->cpr_uuid, cpb->cpb_uuid);
 	cpr->cpr_seq = cpb->cpb_seq;
 	cpr->cpr_rank = cpb->cpb_rank;
 	cpr->cpr_class = cpb->cpb_class;
@@ -364,20 +370,12 @@ chk_pools_dump(d_list_t *head, int pool_nr, uuid_t pools[])
 }
 
 void
-chk_pool_remove_nowait(struct chk_pool_rec *cpr, bool destroy)
+chk_pool_remove_nowait(struct chk_pool_rec *cpr)
 {
 	d_iov_t		kiov;
-	char		uuid_str[DAOS_UUID_STR_SIZE];
 	int		rc;
 
 	cpr->cpr_skip = 1;
-	if (destroy) {
-		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-		rc = chk_bk_delete_pool(uuid_str);
-		if (rc != 0 && rc != -DER_NONEXIST)
-			D_WARN("Failed to destroy pool bookmark: "DF_RC"\n", DP_RC(rc));
-	}
-
 	d_iov_set(&kiov, cpr->cpr_uuid, sizeof(uuid_t));
 	rc = dbtree_delete(cpr->cpr_ins->ci_pool_hdl, BTR_PROBE_EQ, &kiov, NULL);
 	if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_NO_HDL)
@@ -493,7 +491,7 @@ chk_pools_cleanup_cb(struct sys_db *db, char *table, d_iov_t *key, void *args)
 		goto out;
 
 	if (ctpa->ctpa_ins->ci_start_flags & CSF_RESET_NONCOMP) {
-		if (cbk.cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE)
+		if (cbk.cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
 			goto out;
 
 		cbk.cb_gen = ctpa->ctpa_gen;
@@ -531,7 +529,7 @@ chk_pool_start_one(struct chk_instance *ins, uuid_t uuid, uint64_t gen)
 
 	cbk.cb_gen = gen;
 	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
-				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
+				dss_self_rank(), &cbk, ins, NULL, NULL, NULL, NULL);
 
 out:
 	return rc;
@@ -575,7 +573,7 @@ chk_pools_load_list(struct chk_instance *ins, uint64_t gen, uint32_t flags,
 		 */
 		cbk.cb_gen = gen;
 		rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, pools[i],
-					myrank, &cbk, ins, NULL, NULL, NULL);
+					myrank, &cbk, ins, NULL, NULL, NULL, NULL);
 		if (rc != 0)
 			break;
 	}
@@ -600,7 +598,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 	if (rc != 0)
 		goto out;
 
-	if (cbk.cb_phase == CHK__CHECK_SCAN_PHASE__DSP_DONE)
+	if (cbk.cb_phase == CHK__CHECK_SCAN_PHASE__CSP_DONE)
 		goto out;
 
 	uuid_parse(uuid_str, uuid);
@@ -614,7 +612,7 @@ chk_pools_load_from_db(struct sys_db *db, char *table, d_iov_t *key, void *args)
 
 	cbk.cb_gen = ctpa->ctpa_gen;
 	rc = chk_pool_add_shard(ins->ci_pool_hdl, &ins->ci_pool_list, uuid,
-				dss_self_rank(), &cbk, ins, NULL, NULL, NULL);
+				dss_self_rank(), &cbk, ins, NULL, NULL, NULL, NULL);
 
 out:
 	return rc;
@@ -708,11 +706,13 @@ out:
 int
 chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank,
 		   struct chk_bookmark *bk, struct chk_instance *ins,
-		   uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb)
+		   uint32_t *shard_nr, void *data, chk_pool_free_data_t free_cb,
+		   struct chk_pool_rec **cpr)
 {
 	struct chk_pool_bundle	rbund;
 	d_iov_t			kiov;
 	d_iov_t			riov;
+	d_iov_t			viov;
 	int			rc;
 
 	rbund.cpb_head = head;
@@ -726,7 +726,10 @@ chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank
 
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 	d_iov_set(&kiov, uuid, sizeof(uuid_t));
-	rc = dbtree_upsert(hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
+	d_iov_set(&viov, NULL, 0);
+	rc = dbtree_upsert(hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &kiov, &riov, &viov);
+	if (rc == 0 && cpr != NULL)
+		*cpr = (struct chk_pool_rec *)viov.iov_buf;
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
 		 "Add pool shard "DF_UUIDF" for rank %u: "DF_RC"\n",
@@ -736,7 +739,7 @@ chk_pool_add_shard(daos_handle_t hdl, d_list_t *head, uuid_t uuid, d_rank_t rank
 }
 
 int
-chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
+chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uuid_t uuid, uint64_t seq,
 		uint32_t rank, uint32_t cla, struct chk_pending_rec **cpr)
 {
 	struct chk_pending_bundle	rbund;
@@ -748,6 +751,7 @@ chk_pending_add(struct chk_instance *ins, d_list_t *rank_head, uint64_t seq,
 	D_ASSERT(cpr != NULL);
 
 	rbund.cpb_ins_head = &ins->ci_pending_list;
+	uuid_copy(rbund.cpb_uuid, uuid);
 	rbund.cpb_rank_head = rank_head;
 	rbund.cpb_seq = seq;
 	rbund.cpb_rank = rank;

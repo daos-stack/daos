@@ -638,7 +638,7 @@ type CheckQueryTarget struct {
 	Target uint32              `protobuf:"varint,2,opt,name=target,proto3" json:"target,omitempty"`                          // Target index in the rank.
 	Status chk.CheckInstStatus `protobuf:"varint,3,opt,name=status,proto3,enum=chk.CheckInstStatus" json:"status,omitempty"` // Check instance status on this target - see CheckInstStatus.
 	// Inconsistency statistics during the phases range
-	// [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	// [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
 	Inconsistency *CheckQueryInconsist `protobuf:"bytes,4,opt,name=inconsistency,proto3" json:"inconsistency,omitempty"`
 	// Time information for the pool shard on the target if applicable.
 	Time *CheckQueryTime `protobuf:"bytes,5,opt,name=time,proto3" json:"time,omitempty"`

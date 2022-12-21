@@ -188,8 +188,9 @@ ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
 	int			 rc;
 
 	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_phase,
-				 cpmi->cpmi_label, cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
-				 cpmi->cpmi_targets.ca_arrays, &cpmo->cpmo_hint);
+				 cpmi->cpmi_label, cpmi->cpmi_label_seq, cpmi->cpmi_flags,
+				 cpmi->cpmi_targets.ca_count, cpmi->cpmi_targets.ca_arrays,
+				 &cpmo->cpmo_hint);
 
 	cpmo->cpmo_status = rc;
 	rc = crt_reply_send(rpc);

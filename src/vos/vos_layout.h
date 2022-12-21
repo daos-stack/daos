@@ -127,7 +127,7 @@ struct vos_pool_df {
 	/**
 	 * Offset to area for DAOS check related information (chk_pool_info) for this pool.
 	 * The chk_pool_info::cpi_statistics contains the inconsistency statistics during
-	 * the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	 * the phases range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
 	 */
 	umem_off_t				pd_chk;
 	/** Unique PoolID for each VOS pool assigned on creation */

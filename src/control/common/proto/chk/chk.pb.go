@@ -491,8 +491,8 @@ const (
 	CheckScanPhase_CSP_DTX_RESYNC   CheckScanPhase = 6  // DTX resync and cleanup.
 	CheckScanPhase_CSP_OBJ_SCRUB    CheckScanPhase = 7  // RP/EC shards consistency verification with checksum scrub if have.
 	CheckScanPhase_CSP_REBUILD      CheckScanPhase = 8  // Object rebuild.
-	CheckScanPhase_OSP_AGGREGATION  CheckScanPhase = 9  // EC aggregation & VOS aggregation.
-	CheckScanPhase_DSP_DONE         CheckScanPhase = 10 // All done.
+	CheckScanPhase_CSP_AGGREGATION  CheckScanPhase = 9  // EC aggregation & VOS aggregation.
+	CheckScanPhase_CSP_DONE         CheckScanPhase = 10 // All done.
 )
 
 // Enum value maps for CheckScanPhase.
@@ -507,8 +507,8 @@ var (
 		6:  "CSP_DTX_RESYNC",
 		7:  "CSP_OBJ_SCRUB",
 		8:  "CSP_REBUILD",
-		9:  "OSP_AGGREGATION",
-		10: "DSP_DONE",
+		9:  "CSP_AGGREGATION",
+		10: "CSP_DONE",
 	}
 	CheckScanPhase_value = map[string]int32{
 		"CSP_PREPARE":      0,
@@ -520,8 +520,8 @@ var (
 		"CSP_DTX_RESYNC":   6,
 		"CSP_OBJ_SCRUB":    7,
 		"CSP_REBUILD":      8,
-		"OSP_AGGREGATION":  9,
-		"DSP_DONE":         10,
+		"CSP_AGGREGATION":  9,
+		"CSP_DONE":         10,
 	}
 )
 
