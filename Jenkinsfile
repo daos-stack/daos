@@ -15,7 +15,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@kccain/daos_12257_repro_from_daos_eed16e9') _
 
 job_status_internal = [:]
 
