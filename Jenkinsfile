@@ -147,7 +147,7 @@ pipeline {
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_CENTOS7_TARGET',
                defaultValue: '',
-               description: 'Image to used for Centos 7 CI tests.  I.e. el7, el7.9, etc.')
+               description: 'Image to used for CentOS 7 CI tests.  I.e. el7, el7.9, etc.')
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
@@ -793,7 +793,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -813,7 +813,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label params.FUNCTIONAL_VM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
