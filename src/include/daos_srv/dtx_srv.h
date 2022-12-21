@@ -58,42 +58,43 @@ struct dtx_handle {
 	 */
 	daos_unit_oid_t			 dth_leader_oid;
 
-	uint32_t			 dth_sync:1, /* commit synchronously. */
-					 /* Pin the DTX entry in DRAM. */
-					 dth_pinned:1,
-					 /* DTXs in CoS list are committed. */
-					 dth_cos_done:1,
-					 dth_resent:1, /* For resent case. */
-					 /* Only one participator in the DTX. */
-					 dth_solo:1,
-					 /* Do not keep committed entry. */
-					 dth_drop_cmt:1,
-					 /* Modified shared items: object/key */
-					 dth_modify_shared:1,
-					 /* The DTX entry is in active table. */
-					 dth_active:1,
-					 /* Leader oid is touched. */
-					 dth_touched_leader_oid:1,
-					 /* Local TX is started. */
-					 dth_local_tx_started:1,
-					 /* The DTX share lists are inited. */
-					 dth_shares_inited:1,
-					 /* Distributed transaction. */
-					 dth_dist:1,
-					 /* For data migration. */
-					 dth_for_migration:1,
-					 /* Has prepared locally, for resend. */
-					 dth_prepared:1,
-					 /* The DTX handle has been verified. */
-					 dth_verified:1,
-					 /* The DTX handle is aborted. */
-					 dth_aborted:1,
-					 /* The modification is done by others. */
-					 dth_already:1,
-					 /* Need validation on leader before commit/committable. */
-					 dth_need_validation:1,
-					 /* Ignore other uncommitted DTXs. */
-					 dth_ignore_uncommitted:1;
+	uint32_t                         dth_sync : 1, /* commit synchronously. */
+	    /* Pin the DTX entry in DRAM. */
+	    dth_pinned                            : 1,
+	    /* DTXs in CoS list are committed. */
+	    dth_cos_done : 1, dth_resent : 1, /* For resent case. */
+	    /* Only one participator in the DTX. */
+	    dth_solo               : 1,
+	    /* Do not keep committed entry. */
+	    dth_drop_cmt           : 1,
+	    /* Modified shared items: object/key */
+	    dth_modify_shared      : 1,
+	    /* The DTX entry is in active table. */
+	    dth_active             : 1,
+	    /* Leader oid is touched. */
+	    dth_touched_leader_oid : 1,
+	    /* Local TX is started. */
+	    dth_local_tx_started   : 1,
+	    /* The DTX share lists are inited. */
+	    dth_shares_inited      : 1,
+	    /* Distributed transaction. */
+	    dth_dist               : 1,
+	    /* For data migration. */
+	    dth_for_migration      : 1,
+	    /* Has prepared locally, for resend. */
+	    dth_prepared           : 1,
+	    /* The DTX handle has been verified. */
+	    dth_verified           : 1,
+	    /* The DTX handle is aborted. */
+	    dth_aborted            : 1,
+	    /* The modification is done by others. */
+	    dth_already            : 1,
+	    /* Need validation on leader before commit/committable. */
+	    dth_need_validation    : 1,
+	    /* Ignore other uncommitted DTXs. */
+	    dth_ignore_uncommitted : 1,
+	    /** Local transaction */
+	    dth_local              : 1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;

@@ -487,6 +487,7 @@ struct umem_instance {
 	/** Slabs of the umem pool */
 	struct umem_slab_desc	 umm_slabs[UMM_SLABS_CNT];
 #endif
+	int umm_tx_cnt;
 };
 
 #ifdef DAOS_PMEM_BUILD

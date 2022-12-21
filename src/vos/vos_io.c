@@ -2207,15 +2207,14 @@ dkey_update_begin(struct vos_io_context *ioc)
 }
 
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		bool publish)
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish)
 {
 	int	rc = 0;
 
 	if (publish)
-		rc = umem_tx_publish(vos_cont2umm(cont), rsrvd_scm);
+		rc = umem_tx_publish(umm, rsrvd_scm);
 	else
-		umem_cancel(vos_cont2umm(cont), rsrvd_scm);
+		umem_cancel(umm, rsrvd_scm);
 
 	return rc;
 }
@@ -2299,7 +2298,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	tx_started = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	if (dtx_is_valid_handle(dth) && !dth->dth_local && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
@@ -2363,6 +2362,8 @@ abort:
 	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
 			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0) {
+		if (dtx_is_valid_handle(dth) && dth->dth_local)
+			dth->dth_op_seq++;
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
 			vos_dtx_post_handle(ioc->ic_cont, daes, dces,

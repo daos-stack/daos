@@ -25,7 +25,6 @@
 #define TXD_CB_NUM		(1 << 5)	/* 32 callbacks */
 #define TXD_CB_MAX		(1 << 20)	/* 1 million callbacks */
 
-
 struct umem_tx_stage_item {
 	int		 txi_magic;
 	umem_tx_cb_t	 txi_fn;

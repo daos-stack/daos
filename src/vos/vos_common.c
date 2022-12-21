@@ -176,7 +176,9 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 static int
 vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
-	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
+	struct vos_pool         *pool = NULL;
+	struct vos_container    *cont = NULL;
+	struct umem_instance    *umm;
 	struct dtx_rsrvd_uint	*dru;
 	struct umem_rsrvd_act	*scm;
 	int			 rc;
@@ -185,9 +187,18 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 	if (dth->dth_rsrvds == NULL)
 		return 0;
 
+	if (dth->dth_local) {
+		/** We stored the pool handle in this field in this case */
+		pool = vos_hdl2pool(dth->dth_coh);
+		umm  = vos_pool2umm(pool);
+	} else {
+		cont = vos_hdl2cont(dth->dth_coh);
+		umm  = vos_cont2umm(cont);
+	}
+
 	for (i = 0; i < dth->dth_rsrvd_cnt; i++) {
 		dru = &dth->dth_rsrvds[i];
-		rc = vos_publish_scm(cont, dru->dru_scm, publish);
+		rc  = vos_publish_scm(umm, dru->dru_scm, publish);
 		D_FREE(dru->dru_scm);
 
 		/* FIXME: Currently, vos_publish_blocks() will release
@@ -204,6 +215,9 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		if (rc && publish)
 			return rc;
 
+		D_ASSERTF(!dth->dth_local || d_list_empty(&dru->dru_nvme),
+			  "NVMe allocations not supported for local transactions\n");
+
 		/** Function checks if list is empty */
 		rc = vos_publish_blocks(cont, &dru->dru_nvme,
 					publish, VOS_IOS_GENERIC);
@@ -213,13 +227,15 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 
 	for (i = 0; i < dth->dth_deferred_cnt; i++) {
 		scm = dth->dth_deferred[i];
-		rc = vos_publish_scm(cont, scm, publish);
+		rc  = vos_publish_scm(umm, scm, publish);
 		D_FREE(dth->dth_deferred[i]);
 
 		if (rc && publish)
 			return rc;
 	}
 
+	D_ASSERTF(!dth->dth_local || d_list_empty(&dth->dth_deferred_nvme),
+		  "NVMe allocations not supported for local transactions\n");
 	/** Handle the deferred NVMe cancellations */
 	vos_publish_blocks(cont, &dth->dth_deferred_nvme, false, VOS_IOS_GENERIC);
 
@@ -243,6 +259,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 		vos_dth_set(dth);
 		return 0;
 	}
+	printf("tx_begin is called and will call tx_begin\n");
 
 	rc = umem_tx_begin(umm, vos_txd_get());
 	if (rc == 0) {
@@ -254,24 +271,65 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 }
 
 int
-vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
-	   bool started, struct bio_desc *biod, int err)
+vos_local_tx_begin(daos_handle_t poh, daos_epoch_t epoch, struct dtx_handle **dthp)
 {
-	struct dtx_handle	*dth = dth_in;
-	struct dtx_rsrvd_uint	*dru;
-	struct vos_dtx_cmt_ent	*dce = NULL;
-	struct dtx_handle	 tmp = {0};
+	struct dtx_handle    *dth;
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	int                   rc;
 
-	if (!dtx_is_valid_handle(dth)) {
-		/** Created a dummy dth handle for publishing extents */
-		dth = &tmp;
-		tmp.dth_modification_cnt = dth->dth_op_seq = 1;
-		tmp.dth_local_tx_started = started ? 1 : 0;
-		tmp.dth_rsrvds = &dth->dth_rsrvd_inline;
-		tmp.dth_coh = vos_cont2hdl(cont);
-		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
+	D_ASSERTF(daos_handle_is_valid(poh), "Invalid pool handle");
+	D_ASSERTF(dthp != NULL, "NULL output parameter");
+
+	D_ALLOC_PTR(dth);
+	if (dth == NULL)
+		return -DER_NOMEM;
+
+	/** Use field to store pool handle */
+	dth->dth_coh = poh;
+	/** Set the epoch information */
+	dth->dth_xid.dti_hlc = dth->dth_epoch = dth->dth_epoch_bound = epoch;
+	/** Mark it as special local handle, skip dtx internals */
+	dth->dth_local = 1;
+
+	/** Set this to high value to avoid internal commit...since this causes a large allocation
+	 *  in vos_dtx_rsrvd_init, perhaps we can pick a smaller maximum value.
+	 */
+	dth->dth_modification_cnt    = (uint16_t)-1;
+	dth->dth_op_seq              = 1;
+
+	rc = vos_dtx_rsrvd_init(dth);
+	if (rc != 0) {
+		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
+		goto error1;
 	}
+
+	pool = vos_hdl2pool(poh);
+	umm  = vos_pool2umm(pool);
+
+	rc = vos_tx_begin(dth, umm);
+	if (rc != 0) {
+		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
+		goto error2;
+	}
+
+	*dthp = dth;
+	return 0;
+
+error2:
+	vos_dtx_rsrvd_fini(dth);
+error1:
+	D_FREE(dth);
+	return rc;
+}
+
+static inline int
+vos_tx_end_internal(struct vos_pool *pool, struct dtx_handle *dth,
+		    struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts, struct bio_desc *biod,
+		    int err)
+{
+	struct dtx_rsrvd_uint  *dru;
+	struct vos_dtx_cmt_ent *dce = NULL;
 
 	if (rsrvd_scmp != NULL) {
 		D_ASSERT(nvme_exts != NULL);
@@ -294,7 +352,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	dth->dth_local_tx_started = 0;
 
-	if (dtx_is_valid_handle(dth_in) && err == 0)
+	if (dtx_is_valid_handle(dth) && err == 0 && !dth->dth_local)
 		err = vos_dtx_prepared(dth, &dce);
 
 	if (err == 0)
@@ -302,28 +360,72 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	vos_dth_set(NULL);
 
+	printf("tx_end is called and will call tx_end %d\n", err);
+
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
-		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);
+		err = umem_tx_end_ex(vos_pool2umm(pool), err, biod);
 	else
-		err = umem_tx_end(vos_cont2umm(cont), err);
+		err = umem_tx_end(vos_pool2umm(pool), err);
+	printf("error after end is %d\n", err);
 
 cancel:
 	if (err != 0) {
 		/* The transaction aborted or failed to commit. */
 		vos_tx_publish(dth, false);
-		if (dtx_is_valid_handle(dth_in))
+		if (dtx_is_valid_handle(dth))
 			vos_dtx_cleanup_internal(dth);
 	}
 
 	if (dce != NULL) {
-		struct vos_dtx_act_ent	*dae = dth_in->dth_ent;
+		struct vos_dtx_act_ent *dae = dth->dth_ent;
+		struct vos_container   *cont;
+
+		D_ASSERT(!dth->dth_local);
+		cont = vos_hdl2cont(dth->dth_coh);
 
 		vos_dtx_post_handle(cont, &dae, &dce, 1, false,
 				    err != 0 ? true : false);
-		dth_in->dth_ent = NULL;
+		dth->dth_ent = NULL;
 	}
 
 	return err;
+}
+
+int
+vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
+	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts, bool started,
+	   struct bio_desc *biod, int err)
+{
+	struct dtx_handle *dth = dth_in;
+	struct dtx_handle  tmp = {0};
+
+	if (!dtx_is_valid_handle(dth)) {
+		/** Created a dummy dth handle for publishing extents */
+		dth                      = &tmp;
+		tmp.dth_modification_cnt = dth->dth_op_seq = 1;
+		tmp.dth_local_tx_started                   = started ? 1 : 0;
+		tmp.dth_rsrvds                             = &dth->dth_rsrvd_inline;
+		tmp.dth_coh                                = vos_cont2hdl(cont);
+		D_INIT_LIST_HEAD(&tmp.dth_deferred_nvme);
+	}
+
+	return vos_tx_end_internal(cont->vc_pool, dth, rsrvd_scmp, nvme_exts, biod, err);
+}
+
+int
+vos_local_tx_end(struct dtx_handle *dth, int err)
+{
+	int rc;
+
+	/** Indicate to local tx that we want to actually commit */
+	dth->dth_modification_cnt = dth->dth_op_seq;
+
+	rc = vos_tx_end_internal(vos_hdl2pool(dth->dth_coh), dth, NULL, NULL, NULL, err);
+
+	vos_dtx_rsrvd_fini(dth);
+	D_FREE(dth);
+
+	return rc;
 }
 
 /**
@@ -748,7 +850,7 @@ vos_self_fini_locked(void)
 		vos_tls_fini(self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
-	ABT_finalize();
+	// ABT_finalize();
 }
 
 void

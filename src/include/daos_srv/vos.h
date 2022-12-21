@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1337,6 +1337,29 @@ struct scrub_ctx {
 	enum scrub_status	 sc_status;
 	bool			 sc_did_yield;
 };
+
+/**
+ * Start a local transaction with intent to execute one or more VOS update operations
+ *
+ * \param[in]	poh	Open pool handle
+ * \param[in]	dth	Returned opaque dtx handle to pass to subsequent vos operations
+ *
+ * \return	0 on success, error otherwise
+ */
+int
+vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dth);
+
+/**
+ * End a local transaction.
+ *
+ * \param[in]	dth	Opaque dtx handle returned from vos_local_tx_begin
+ * \param[in]	err	Error from prior operations.   If any operation failed, this should be
+ *			non-zero.  If 0, the transaction will be committed.
+ *
+ * \return	0 on successful commit, error otherwise
+ */
+int
+    vos_local_tx_end(struct dtx_handle *dth, int err);
 
 /*
  * It is expected that the pool uuid/handle and any functional dependencies are

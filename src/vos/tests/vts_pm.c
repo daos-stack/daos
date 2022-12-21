@@ -2629,6 +2629,104 @@ start_over:
 	start_epoch = epoch + 1;
 }
 
+static void
+local_transaction(void **state)
+{
+	struct io_test_args *arg = *state;
+	int                  rc  = 0;
+	int                  passed_rc;
+	daos_key_t           dkey[2];
+	daos_key_t           akey;
+	daos_iod_t           iod;
+	d_sg_list_t          sgl;
+	d_sg_list_t          fetch_sgl;
+	char                 buf[32];
+	char                 buf2[32];
+	daos_epoch_t         epoch = start_epoch;
+	struct dtx_handle   *dth;
+	const char          *first = "Hello";
+	char                 dkey_buf[2][UPDATE_DKEY_SIZE];
+	char                 akey_buf[UPDATE_AKEY_SIZE];
+	daos_unit_oid_t      oid;
+	int                  i;
+
+	test_args_reset(arg, VPOOL_SIZE);
+
+	memset(&iod, 0, sizeof(iod));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+	rc = d_sgl_init(&fetch_sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	/* Set up dkey and akey */
+	oid = gen_oid(arg->otype);
+	for (i = 0; i < 2; i++) {
+		vts_key_gen(&dkey_buf[i][0], arg->dkey_size, true, arg);
+		set_iov(&dkey[i], &dkey_buf[i][0],
+			is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	}
+	vts_key_gen(&akey_buf[0], arg->akey_size, true, arg);
+	set_iov(&akey, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+	iod.iod_type  = DAOS_IOD_SINGLE;
+	iod.iod_size  = strlen(first);
+	iod.iod_name  = akey;
+	iod.iod_recxs = NULL;
+	iod.iod_nr    = 1;
+
+	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
+
+	for (i = 0; i < 2; i++) {
+		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, epoch, &dth);
+		assert_rc_equal(rc, 0);
+
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey[0], 1, &iod,
+				       NULL, &sgl, dth);
+		assert_rc_equal(rc, 0);
+
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey[1], 1, &iod,
+				       NULL, &sgl, dth);
+		assert_rc_equal(rc, 0);
+
+		memset(buf2, 'x', sizeof(buf2));
+		if (i == 0) {
+			/** Abort first time */
+			passed_rc = -DER_EXIST;
+		} else {
+			/** Commit second time */
+			passed_rc = 0;
+			memcpy(buf2, first, strlen(first));
+		}
+
+		rc = vos_local_tx_end(dth, passed_rc);
+		assert_rc_equal(rc, passed_rc);
+
+		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+		iod.iod_size = strlen(first);
+		memset(buf, 'x', sizeof(buf));
+		rc =
+		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[0], 1, &iod, &fetch_sgl);
+		assert_rc_equal(rc, 0);
+		assert_memory_equal(buf, buf2, sizeof(buf));
+
+		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+		iod.iod_size = strlen(first);
+		memset(buf, 'x', sizeof(buf));
+		rc =
+		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[1], 1, &iod, &fetch_sgl);
+		assert_rc_equal(rc, 0);
+		assert_memory_equal(buf, buf2, sizeof(buf));
+		printf("pass #%d finished\n", i);
+		fflush(stdout);
+
+		epoch++;
+	}
+
+	d_sgl_fini(&sgl, false);
+	d_sgl_fini(&fetch_sgl, false);
+	start_epoch = epoch + 1;
+}
+
 static struct dtx_id
 execute_op(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	   daos_key_t *dkey, daos_key_t *akey, d_sg_list_t *sgl,
@@ -3043,32 +3141,25 @@ static const struct CMUnitTest punch_model_tests_pmdk[] = {
 };
 
 static const struct CMUnitTest punch_model_tests_all[] = {
-	{ "VOS800: VOS punch model array set/get size",
-	  array_set_get_size, pm_setup, pm_teardown },
-	{ "VOS801: VOS punch model array read/write/punch int32_t",
-	  array_1, pm_setup, pm_teardown },
-	{ "VOS802: VOS punch model array read/write/punch char",
-	  array_2, pm_setup, pm_teardown },
-	{ "VOS803: VOS punch model array read/write/punch int32_t static",
-	  array_3, pm_setup, pm_teardown },
-	{ "VOS804: VOS punch model array read/write/punch char static",
-	  array_4, pm_setup, pm_teardown },
-	{ "VOS805: Simple punch model test", punch_model_test, NULL, NULL},
-	{ "VOS806: Multi update", simple_multi_update, NULL, NULL},
-	{ "VOS807: Array Set/get size, write, punch",
-	  array_size_write, pm_setup, pm_teardown },
-	{ "VOS808: Object punch and fetch",
-	  object_punch_and_fetch, NULL, NULL },
-	{ "VOS809: SGL test", sgl_test, NULL, NULL },
-	{ "VOS810: Small SGL test", small_sgl, NULL, NULL },
-	{ "VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL },
-	{ "VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL },
-	{ "VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL,
-		NULL },
-	{ "VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL,
-		NULL },
-	{ "VOS815: Many keys in one tree", many_keys, NULL, NULL },
-	{ "VOS816: Simulate EC array size", ec_size, NULL, NULL },
+    {"VOS817: Local transaction test", local_transaction, NULL, NULL},
+    {"VOS800: VOS punch model array set/get size", array_set_get_size, pm_setup, pm_teardown},
+    {"VOS801: VOS punch model array read/write/punch int32_t", array_1, pm_setup, pm_teardown},
+    {"VOS802: VOS punch model array read/write/punch char", array_2, pm_setup, pm_teardown},
+    {"VOS803: VOS punch model array read/write/punch int32_t static", array_3, pm_setup,
+     pm_teardown},
+    {"VOS804: VOS punch model array read/write/punch char static", array_4, pm_setup, pm_teardown},
+    {"VOS805: Simple punch model test", punch_model_test, NULL, NULL},
+    {"VOS806: Multi update", simple_multi_update, NULL, NULL},
+    {"VOS807: Array Set/get size, write, punch", array_size_write, pm_setup, pm_teardown},
+    {"VOS808: Object punch and fetch", object_punch_and_fetch, NULL, NULL},
+    {"VOS809: SGL test", sgl_test, NULL, NULL},
+    {"VOS810: Small SGL test", small_sgl, NULL, NULL},
+    {"VOS811: Test vos_obj_array_remove", remove_test, NULL, NULL},
+    {"VOS812: Minor epoch punch sv", minor_epoch_punch_sv, NULL, NULL},
+    {"VOS813: Minor epoch punch array", minor_epoch_punch_array, NULL, NULL},
+    {"VOS814: Minor epoch punch rebuild", minor_epoch_punch_rebuild, NULL, NULL},
+    {"VOS815: Many keys in one tree", many_keys, NULL, NULL},
+    {"VOS816: Simulate EC array size", ec_size, NULL, NULL},
 };
 
 int
