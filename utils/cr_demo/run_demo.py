@@ -53,16 +53,16 @@ for member in generated_yaml["response"]["members"]:
 
 # Add input here to make sure all ranks are joined before starting the script.
 input("\n2. Create 8 pools and containers. Hit enter...")
-POOL_LABEL_1 = POOL_LABEL + "_1"
-POOL_LABEL_2 = POOL_LABEL + "_2"
-POOL_LABEL_3 = POOL_LABEL + "_3"
-POOL_LABEL_4 = POOL_LABEL + "_4"
-POOL_LABEL_5 = POOL_LABEL + "_5"
-POOL_LABEL_6 = POOL_LABEL + "_6"
-POOL_LABEL_7 = POOL_LABEL + "_7"
-POOL_LABEL_8 = POOL_LABEL + "_8"
-CONT_LABEL_7 = CONT_LABEL + "_7"
-CONT_LABEL_8 = CONT_LABEL + "_8"
+POOL_LABEL_1 = POOL_LABEL + "_F1"
+POOL_LABEL_2 = POOL_LABEL + "_F2"
+POOL_LABEL_3 = POOL_LABEL + "_F3"
+POOL_LABEL_4 = POOL_LABEL + "_F4"
+POOL_LABEL_5 = POOL_LABEL + "_F5"
+POOL_LABEL_6 = POOL_LABEL + "_F6"
+POOL_LABEL_7 = POOL_LABEL + "_F7"
+POOL_LABEL_8 = POOL_LABEL + "_F8"
+CONT_LABEL_7 = CONT_LABEL + "_F7"
+CONT_LABEL_8 = CONT_LABEL + "_F8"
 
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
 create_pool(pool_size=POOL_SIZE_1GB, pool_label=POOL_LABEL_1)
@@ -225,7 +225,7 @@ print()
 repeat_check_query()
 
 ####################################################################
-input("\n8. Select repair options and repair. Hit enter...")
+input("\n8-1. Select repair options for F1 to F4. Hit enter...")
 print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
 SEQ_NUM_1 = str(hex(uuid_to_seqnum[label_to_uuid[POOL_LABEL_1]]))
@@ -254,6 +254,11 @@ check_repair(sequence_num=SEQ_NUM_3, action="2")
 print(f"\n{POOL_LABEL_4} - 2: Trust PS pool label.")
 check_repair(sequence_num=SEQ_NUM_4, action="2")
 
+print()
+# Call dmg check query until n is entered.
+repeat_check_query()
+
+input("\n8-2. Select repair options for F5 to F8. Hit enter...")
 # F5: 1: Discard the orphan pool shard to release space [suggested].
 print(f"\n{POOL_LABEL_5} - 1: Discard the orphan pool shard to release space "
       f"[suggested].")
@@ -272,52 +277,53 @@ print(f"\n{POOL_LABEL_8} - 2: Trust the container label in container property.")
 check_repair(sequence_num=SEQ_NUM_8, action="2")
 
 print()
+# Call dmg check query until n is entered.
 repeat_check_query()
 
 print("\n9. Disable the checker.")
 check_disable()
 
 ####################################################################
-input("\n13. Show the issues fixed. Hit enter...")
-print(f"13-F1. Dangling pool ({POOL_LABEL_1}) was removed.")
-print(f"13-F3. Orphan pool ({POOL_LABEL_3}) was reconstructed.")
+input("\n10. Show the issues fixed. Hit enter...")
+print(f"10-F1. Dangling pool ({POOL_LABEL_1}) was removed.")
+print(f"10-F3. Orphan pool ({POOL_LABEL_3}) was reconstructed.")
 list_pool()
 
-print(f"13-F2. Create a container on {POOL_LABEL_2}. Pool can be started now, so it "
+print(f"10-F2. Create a container on {POOL_LABEL_2}. Pool can be started now, so it "
       f"should succeed.")
 CONT_LABEL_2 = CONT_LABEL + "_2"
 create_container(pool_label=POOL_LABEL_2, cont_label=CONT_LABEL_2)
 # (optional) Show that rdb-pool file in rank 0 and 2 are recovered.
 
-print(f"\n13-F4. Label inconsistency for {POOL_LABEL_4} was resolved. "
+print(f"\n10-F4. Label inconsistency for {POOL_LABEL_4} was resolved. "
       f"See pool list above.")
 pool_get_prop(pool_label=POOL_LABEL_4, properties="label")
 
 # F5: Call dmg storage query usage to verify the storage was reclaimed. - Not working due
 # to a bug. Instead, show that pool directory on dst node (rank 3 for 4-VM) was removed.
-print(f"\n13-F5-1. Print storage usage to show that storage used by {POOL_LABEL_5} is "
+print(f"\n10-F5-1. Print storage usage to show that storage used by {POOL_LABEL_5} is "
       f"reclaimed after pool directory is removed from {rank_to_ip[F5_RANK_FAULT]}.")
 storage_query_usage(host_list=f5_host_list)
 
-print(f"\n13-F5-2. {label_to_uuid[POOL_LABEL_5]} pool directory on rank 3 "
+print(f"\n10-F5-2. {label_to_uuid[POOL_LABEL_5]} pool directory on rank 3 "
       f"({rank_to_ip[3]}) was removed.")
 LS_CMD = "sudo ls /mnt/daos"
 clush_ls_cmd = ["clush", "-w", rank_to_ip[3], LS_CMD]
 print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"\n13-F6. {POOL_LABEL_6} has one less ranks (4 -> 3).")
+print(f"\n10-F6. {POOL_LABEL_6} has one less ranks (4 -> 3).")
 pool_query(pool_label=POOL_LABEL_6)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
 
 # F8: Verify that the inconsistency is fixed. The label is back to the original.
-print(f"\n13-F8. Container label inconsistency for {CONT_LABEL_8} was fixed.")
+print(f"\n10-F8. Container label inconsistency for {CONT_LABEL_8} was fixed.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8, properties="label")
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
 # shard.
-print(f"\n13-F7. Use ddb to verify that the container in {POOL_LABEL_8} is removed "
+print(f"\n10-F7. Use ddb to verify that the container in {POOL_LABEL_8} is removed "
       f"from shards.")
 system_stop()
 print(f"Command: {clush_ddb_cmd}")
