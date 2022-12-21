@@ -126,6 +126,7 @@ COPY --chown=daos_server:daos_server site_scons/stack_analyzer.py site_scons/sta
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
 
+RUN ls -l site_scons
 # Control what to build.  By default Dockerfiles build everything to allow for
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.

@@ -320,7 +320,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    deps_env = Environment(tools=['default', 'textfile'])
+    deps_env = Environment()
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
