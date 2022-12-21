@@ -27,10 +27,13 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
             Six clients and two servers.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=io,DAOS_5610,dfuse
-        :avocado: tags=macsio
+        :avocado: tags=hw,medium
+        :avocado: tags=io,macsio,dfuse
+        :avocado: tags=MacsioTest,test_macsio
+        :avocado: tags=DAOS_5610
         """
+        processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
+
         # Create a pool
         self.add_pool()
         self.pool.display_pool_daos_space()
@@ -42,8 +45,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.log.info("Running MACSio")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid),
+                self.pool.uuid, convert_list(self.pool.svc_ranks), processes, self.container.uuid),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")
@@ -59,11 +61,13 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
             Six clients and two servers.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=io,DAOS_5610,dfuse
-        :avocado: tags=macsio_daos_vol
+        :avocado: tags=hw,medium
+        :avocado: tags=io,macsio,dfuse,daos_vol
+        :avocado: tags=MacsioTest,test_macsio_daos_vol
+        :avocado: tags=DAOS_5610
         """
         plugin_path = self.params.get("plugin_path", "/run/job_manager/*")
+        processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
         self.add_pool()
@@ -84,8 +88,8 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.log.info("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, convert_list(self.pool.svc_ranks),
-                self.container.uuid, plugin_path),
+                self.pool.uuid, convert_list(self.pool.svc_ranks), processes, self.container.uuid,
+                plugin_path),
             self.hostlist_clients)
         if status:
             self.log.info("Test passed")

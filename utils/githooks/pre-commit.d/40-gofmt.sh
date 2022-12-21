@@ -26,16 +26,26 @@ else
         TARGET=origin/master
 fi
 
-output=
+go_files=
 if [ $TARGET = "HEAD" ]
 then
         echo "Checking against HEAD"
-        output=$(git diff HEAD^ --name-only | grep -e '.go$' | xargs gofmt -d)
+	go_files=$(git diff HEAD --name-only | grep -e '.go$' || exit 0)
 else
         echo "Checking against branch ${TARGET}"
-        output=$(git diff $TARGET... --name-only | grep -e '.go$' | xargs gofmt -d)
+        go_files=$(git diff $TARGET... --name-only | grep -e '.go$' || exit 0)
 fi
 
+if [ -z "$go_files" ]; then
+	exit 0
+fi
+
+if ! which gofmt >/dev/null 2>&1; then
+	echo "ERROR: Changed .go files found but gofmt is not in your PATH"
+	exit 1
+fi
+
+output=$(echo "$go_files" | xargs gofmt -d)
 if [ -n "$output" ]; then
         echo "ERROR: Your code hasn't been run through gofmt!"
         echo "Please configure your editor to run gofmt on save."

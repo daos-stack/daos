@@ -278,7 +278,7 @@ class IorTestBase(DfuseTestBase):
             # ior thread (eg: thread1 --> thread2 --> ior)
             if out_queue is not None:
                 out_queue.put("IOR Failed")
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("IOR Failed")
         finally:
             if not self.subprocess and display_space:
                 self.display_pool_space(pool)
@@ -300,7 +300,7 @@ class IorTestBase(DfuseTestBase):
             return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("Failed to stop in-progress IOR command")
         finally:
             self.display_pool_space()
 
@@ -403,8 +403,8 @@ class IorTestBase(DfuseTestBase):
 
         except CommandFailure as error:
             # Report an error if any command fails
-            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.log.error("Failed to execute command: %s", str(error))
+            self.fail("Failed to execute command")
 
         return result
 
