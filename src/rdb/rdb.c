@@ -9,10 +9,8 @@
 
 #define D_LOGFAC	DD_FAC(rdb)
 
-#include <sys/stat.h>
-#include <fcntl.h>
-
 #include <daos_srv/rdb.h>
+
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
@@ -22,55 +20,6 @@
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 			     struct rdb **dbp);
-
-static int
-rdb_vos_preallocate(const char *path, const uuid_t uuid, daos_size_t size)
-{
-	int			 fd = -1;
-	int			 rc = 0;
-
-	D_DEBUG(DB_MGMT, DF_UUID": creating rdb vos file %s\n", DP_UUID(uuid), path);
-
-	fd = open(path, O_CREAT|O_RDWR, 0600);
-	if (fd < 0) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to create rdb vos file %s: "DF_RC"\n",
-			DP_UUID(uuid), path, DP_RC(rc));
-		return rc;
-	}
-
-	/** Align to 4K or locking the region based on the size will fail */
-	size = D_ALIGNUP(size, 1ULL << 12);
-	/**
-	 * Pre-allocate blocks for vos files in order to provide
-	 * consistent performance and avoid entering into the backend
-	 * filesystem allocator through page faults.
-	 * Use fallocate(2) instead of posix_fallocate(3) since the
-	 * latter is bogus with tmpfs.
-	 */
-	rc = fallocate(fd, 0, 0, size);
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to allocate vos file %s with size: "DF_U64": "DF_RC"\n",
-			DP_UUID(uuid), path, size, DP_RC(rc));
-		goto out;
-	}
-
-	rc = fsync(fd);
-	(void)close(fd);
-	fd = -1;
-	if (rc) {
-		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to sync rdb vos pool %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-	}
-
-out:
-	if (fd != -1)
-		close(fd);
-
-	return rc;
-}
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
@@ -100,22 +49,15 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas: caller_term="DF_X64"\n",
 		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term);
 
-	rc = rdb_vos_preallocate(path, uuid, size);
-	if (rc != 0)
-		goto out;
-
-	D_DEBUG(DB_MD, DF_UUID": preallocated rdb vos file %s\n", DP_UUID(uuid), path);
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
 	 * basic system memory reservation and VOS_POF_EXCL for concurrent
-	 * access protection. A zero scm_sz accommodates the preallocated file.
+	 * access protection.
 	 */
-	rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* scm_sz */, 0 /* nvme_sz */,
+	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
 			     VOS_POF_SMALL | VOS_POF_EXCL, &pool);
 	if (rc != 0)
 		goto out;
-	D_DEBUG(DB_MD, DF_UUID": created rdb vos file %s\n", DP_UUID(uuid), path);
-
 	ABT_thread_yield();
 
 	/* Create and open the metadata container. */
@@ -125,7 +67,6 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
 	if (rc != 0)
 		goto out_pool_hdl;
-	D_DEBUG(DB_MD, DF_UUID": created/opened rdb metadata container\n", DP_UUID(uuid));
 
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
@@ -138,7 +79,6 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	rc = rdb_raft_init(pool, mc, replicas);
 	if (rc != 0)
 		goto out_mc_hdl;
-	D_DEBUG(DB_MD, DF_UUID": initialized raft\n", DP_UUID(uuid));
 
 	/*
 	 * Mark this replica as fully initialized by storing its UUID.
@@ -166,7 +106,6 @@ out_pool_hdl:
 		if (rc_tmp != 0)
 			D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 				DP_UUID(uuid), path, rc_tmp);
-		D_DEBUG(DB_MD, DF_UUID": cleaned up failed rdb create\n", DP_UUID(uuid));
 	}
 out:
 	return rc;
