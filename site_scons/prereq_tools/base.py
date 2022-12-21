@@ -45,7 +45,6 @@ from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
 from SCons.Errors import UserError
-from prereq_tools import mocked_tests
 
 OPTIONAL_COMPS = ['psm2']
 
@@ -598,7 +597,7 @@ class PreReqComponent():
         self.__errors = {}
         self.__env = env
         self.__opts = variables
-        self.configs = None
+        self._configs = None
 
         real_env = self.__env['ENV']
 
@@ -614,8 +613,6 @@ class PreReqComponent():
         self.__dry_run = GetOption('no_exec')
         self._add_options()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
-        self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
-                             'BuildMockingUnitTests')
         self.__require_optional = GetOption('require_optional')
         self._has_icx = False
         self.download_deps = False
@@ -623,7 +620,6 @@ class PreReqComponent():
         self.__parse_build_deps()
         self._replace_env(LIBTOOLIZE='libtoolize')
         self.__env.Replace(ENV=real_env)
-        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -640,10 +636,12 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
-        self._setup_user_prefix()
+        self.add_opts(('ALT_PREFIX',
+                       f'Specifies {os.pathsep} separated list of alternative paths to add',
+                       None))
 
         self.__top_dir = Dir('#').abspath
-        self._setup_compiler(warning_level)
+        self._setup_compiler()
         self.add_opts(PathVariable('BUILD_ROOT',
                                    'Alternative build root dierctory', "build",
                                    PathVariable.PathIsDirCreate))
@@ -702,17 +700,14 @@ class PreReqComponent():
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
         self._setup_parallel_build()
 
-        self.config_file = config_file
         if config_file is not None:
-            self.configs = configparser.ConfigParser()
-            self.configs.read(config_file)
+            self._configs = configparser.ConfigParser()
+            self._configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
         self.include = env.subst("$INCLUDE").split(" ")
         self._build_targets = []
 
-    def init_build_targets(self):
-        """Setup default build targets"""
         build_dir = self.__env.get('BUILD_DIR')
         targets = ['test', 'server', 'client']
         self.__env.Alias('client', build_dir)
@@ -728,14 +723,42 @@ class PreReqComponent():
             if 'server' in BUILD_TARGETS:
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
-        self._load_defaults()
-        return build_dir
 
-    def _setup_user_prefix(self):
-        """setup ALT_PREFIX option"""
-        self.add_opts(('ALT_PREFIX',
-                       f'Specifies {os.pathsep} separated list of alternative paths to add',
-                       None))
+        # argobots is not really needed by client but it's difficult to separate
+        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
+        client_reqs = ['fuse', 'json-c']
+        server_reqs = ['pmdk', 'spdk']
+        test_reqs = ['cmocka']
+
+        reqs = []
+        if not self._build_targets:
+            raise ValueError("Call init_build_targets before load_defaults")
+        reqs = common_reqs
+        if self.test_requested():
+            reqs.extend(test_reqs)
+        if self.server_requested():
+            reqs.extend(server_reqs)
+        if self.client_requested():
+            reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'all', reqs))
+        if GetOption('build_deps') == 'only':
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
+
+        try:
+            # pylint: disable-next=import-outside-toplevel
+            from components import define_components
+            define_components(self)
+        except Exception as old:
+            raise BadScript("components", traceback.format_exc()) from old
+
+        # Go ahead and prebuild some components
+
+        for comp in reqs:
+            env = self.__env.Clone()
+            self.require(env, comp)
 
     def _setup_build_type(self):
         """set build type"""
@@ -780,7 +803,7 @@ class PreReqComponent():
                                              "-diag-disable:1338"])
         return {'CC': env.get("CC"), "CXX": env.get("CXX")}
 
-    def _setup_compiler(self, warning_level):
+    def _setup_compiler(self):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
                         'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
@@ -799,7 +822,7 @@ class PreReqComponent():
         if compiler == 'icc':
             compiler_map['icc'] = self._setup_intelc()
 
-        if warning_level == 'error':
+        if self.__env.subst("$WARNING_LEVEL") == 'error':
             if compiler == 'icc' and not self._has_icx:
                 warning_flag = '-Werror-all'
             else:
@@ -874,10 +897,6 @@ class PreReqComponent():
     def get_build_info(self):
         """Retrieve the BuildInfo"""
         return self.__build_info
-
-    def get_config_file(self):
-        """Retrieve the Config File"""
-        return self.config_file
 
     def _add_options(self):
         """Add common options to environment"""
@@ -991,53 +1010,6 @@ class PreReqComponent():
         comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
-    def _load_definitions(self, **kw):
-        """Load default definitions
-
-        Keyword arguments:
-            prebuild -- A list of components to prebuild
-        """
-        try:
-            # pylint: disable=import-outside-toplevel
-            from components import define_components
-            # pylint: enable=import-outside-toplevel
-            define_components(self)
-        except Exception as old:
-            raise BadScript("components", traceback.format_exc()) from old
-
-        # Go ahead and prebuild some components
-
-        prebuild = kw.get("prebuild", [])
-        for comp in prebuild:
-            env = self.__env.Clone()
-            self.require(env, comp)
-
-    def _load_defaults(self):
-        """Setup default build parameters"""
-        # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk', 'spdk']
-        test_reqs = ['cmocka']
-
-        reqs = []
-        if not self._build_targets:
-            raise ValueError("Call init_build_targets before load_defaults")
-        reqs = common_reqs
-        if self.test_requested():
-            reqs.extend(test_reqs)
-        if self.server_requested():
-            reqs.extend(server_reqs)
-        if self.client_requested():
-            reqs.extend(client_reqs)
-        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
-                                   'all', reqs))
-        if GetOption('build_deps') == 'only':
-            # Optionally, limit the deps we build in this pass
-            reqs = self.__env.get('DEPS')
-        self._load_definitions(prebuild=reqs)
-
     def server_requested(self):
         """return True if server build is requested"""
         return "server" in self._build_targets
@@ -1050,17 +1022,15 @@ class PreReqComponent():
         """return True if test build is requested"""
         return "test" in self._build_targets
 
-    def _modify_prefix(self, comp_def, env):  # pylint: disable=unused-argument
+    def _modify_prefix(self, comp_def):
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        prebuilt1 = os.path.join(self.prereq_prefix, comp_def.name)
-        prebuilt2 = self.__env.get(f'{comp_def.name.upper()}_PREFIX')
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
-           not os.path.exists(prebuilt1) and \
-           not os.path.exists(prebuilt2):
+           not os.path.exists(os.path.join(self.prereq_prefix, comp_def.name)) and \
+           not os.path.exists(self.__env.get(f'{comp_def.name.upper()}_PREFIX')):
             self._save_component_prefix(f'{comp_def.name.upper()}_PREFIX', '/usr')
 
     def require(self, env, *comps, **kw):
@@ -1109,7 +1079,7 @@ class PreReqComponent():
                     self.__required[comp] = False
                     changes = True
                 else:
-                    self._modify_prefix(comp_def, env)
+                    self._modify_prefix(comp_def)
                 # If we get here, just set the environment again, new directories may be present
                 comp_def.set_environment(env, needed_libs)
             except Exception as error:
@@ -1218,6 +1188,10 @@ class PreReqComponent():
 
         return (target_prefix, prefix)
 
+    def get_src_build_dir(self):
+        """Get the location of a temporary directory for hosting intermediate build files"""
+        return self.__env.get('BUILD_DIR')
+
     def get_src_path(self, name):
         """Get the location of the sources for an external component"""
         if name in self.__src_path:
@@ -1229,14 +1203,14 @@ class PreReqComponent():
 
     def get_config(self, section, name):
         """Get commit/patch versions"""
-        if self.configs is None:
+        if self._configs is None:
             return None
-        if not self.configs.has_section(section):
+        if not self._configs.has_section(section):
             return None
 
-        if not self.configs.has_option(section, name):
+        if not self._configs.has_option(section, name):
             return None
-        return self.configs.get(section, name)
+        return self._configs.get(section, name)
 
     def load_config(self, comp, path):
         """If the component has a config file to load, load it"""
@@ -1245,7 +1219,7 @@ class PreReqComponent():
             return
         full_path = os.path.join(path, config_path)
         print(f'Reading config file for {comp} from {full_path}')
-        self.configs.read(full_path)
+        self._configs.read(full_path)
 
 
 class _Component():

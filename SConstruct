@@ -351,7 +351,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     config.Finish()
 
     prereqs = PreReqComponent(deps_env, opts, commits_file)
-    build_prefix = prereqs.init_build_targets()
     if prereqs.check_component('valgrind_devel'):
         deps_env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
@@ -382,6 +381,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         base_env_mpi = None
 
     env.compiler_setup()
+    build_prefix = prereqs.get_src_build_dir()
 
     args = GetOption('analyze_stack')
     if args is not None:
