@@ -23,8 +23,6 @@ import (
 // caller's request parameters. It can fetch firmware information for NVMe, SCM,
 // or both.
 func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.FirmwareQueryReq) (*ctlpb.FirmwareQueryResp, error) {
-	svc.log.Debug("received FirmwareQuery RPC")
-
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
 	if pbReq.QueryScm {
@@ -43,7 +41,6 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 		pbResp.NvmeResults = nvmeResults
 	}
 
-	svc.log.Debug("responding to FirmwareQuery RPC")
 	return pbResp, nil
 }
 
@@ -104,8 +101,6 @@ func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*
 //
 // It updates the firmware on the storage devices of the specified type.
 func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.FirmwareUpdateReq) (*ctlpb.FirmwareUpdateResp, error) {
-	svc.log.Debug("received FirmwareUpdate RPC")
-
 	instances := svc.harness.Instances()
 	for _, srv := range instances {
 		if srv.IsStarted() {
@@ -132,7 +127,6 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 		return nil, err
 	}
 
-	svc.log.Debug("responding to FirmwareUpdate RPC")
 	return pbResp, nil
 }
 

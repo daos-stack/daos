@@ -1,6 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
+timeout: 120
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -18,6 +19,3 @@ pool:
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
-  multi_user: true
