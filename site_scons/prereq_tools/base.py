@@ -950,16 +950,11 @@ class PreReqComponent():
         """Resolve the real path"""
         return os.path.realpath(os.path.join(self.__top_dir, path))
 
-    def _setup_path_var(self, var, multiple=False):
+    def _setup_path_var(self, var):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            if multiple:
-                value = []
-                for path in tmp.split(os.pathsep):
-                    value.append(self._sub_path(path))
-            else:
-                value = self._sub_path(tmp)
+            value = self._sub_path(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -1349,7 +1344,7 @@ class _Component():
             if "https://" not in raw:
                 patches[raw] = patch_subdir
                 continue
-            patch_name = f'{self.name}_patch_{patchnum:3d}'
+            patch_name = f'{self.name}_patch_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
@@ -1722,6 +1717,9 @@ class _Component():
 
         if build_dep:
 
+            if self._has_missing_system_deps(self.prereqs.system_env):
+                raise MissingSystemLibs(self.name)
+
             self.get()
 
             self.prereqs.load_config(self.name, self.src_path)
@@ -1729,9 +1727,6 @@ class _Component():
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires, needed_libs=None)
                 self.set_environment(envcopy, self.libs)
-
-            if self._has_missing_system_deps(self.prereqs.system_env):
-                raise MissingSystemLibs(self.name)
 
             ensure_dir_exists(self.prereqs.prereq_prefix, self.__dry_run)
             changes = True

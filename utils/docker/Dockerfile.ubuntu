@@ -63,9 +63,9 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
+COPY --chown=daos_server:daos_server site_scons/stack_analyzer.py site_scons/stack_analyzer.py
 COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
 COPY --chown=daos_server:daos_server site_scons/build_info site_scons/build_info
-COPY --chown=daos_server:daos_server site_scons/stack_analyzer.py site_scons/stack_analyzer.py
 COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
 
@@ -137,4 +137,6 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
+RUN ls -l /home/daos/pre
+RUN ls -l /home/daos/pre/site_scons
 RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre
