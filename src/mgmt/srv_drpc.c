@@ -683,9 +683,9 @@ out:
 }
 
 static int
-pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
-			 size_t n_targetidx, uint32_t *targetidx,
-			 uint32_t rank, pool_comp_state_t state)
+pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
+			 uint32_t *targetidx, uint32_t rank, pool_comp_state_t state,
+			 size_t scm_size, size_t nvme_size)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -714,7 +714,8 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks,
 		target_addr_list.pta_addrs[0].pta_rank = rank;
 	}
 
-	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state);
+	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
+					      nvme_size);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -752,9 +753,9 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks,
-				      req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_DOWN);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
+				      0 /* nvme_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -802,8 +803,9 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx,
-			req->targetidx, req->rank, PO_COMP_ST_DRAIN);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
+				      0 /* nvme_size */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -918,6 +920,8 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t			*svc_ranks = NULL;
 	uint8_t				*body;
 	size_t				len;
+	uint64_t			scm_bytes;
+	uint64_t			nvme_bytes = 0;
 	int				rc;
 
 	mgmt__pool_reintegrate_resp__init(&resp);
@@ -933,13 +937,23 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
+	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
+	}
+
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = pool_change_target_state(req->id, svc_ranks,
-				      req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_UP);
+	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
 
 	d_rank_list_free(svc_ranks);
 
