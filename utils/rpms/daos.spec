@@ -529,7 +529,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Dec 06 2022 Joseph G. Moore <joseph.moore@intel.com> 2.1.101-5
+* Tue Dec 06 2022 Joseph G. Moore <joseph.moore@intel.com> 2.3.101-5
 - Update Mercury to 2.2.0-5
 
 * Thu Dec 01 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.101-4
