@@ -3044,7 +3044,7 @@ class Launch():
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
             logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
             try:
