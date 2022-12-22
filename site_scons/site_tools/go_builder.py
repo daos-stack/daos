@@ -3,20 +3,33 @@
 import subprocess  # nosec B404
 import os
 import re
+import json
 
 from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.16.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
-GOINC_PREFIX = '"github.com/daos-stack/daos/src/'
 
 
-def _scan_go_file(node, _env, _path):
+def _scan_go_file(node, env, _path):
     """Scanner for go code"""
-    contents = node.get_contents()
+
     src_dir = os.path.dirname(str(node))
     includes = []
+    path_name = str(node)[12:]
+    rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
+                        cwd='src/control', stdout=subprocess.PIPE, check=True)
+    data = json.loads(rc.stdout.decode('utf-8'))
+    for dep in data['Deps']:
+        if not dep.startswith('github.com/daos-stack/daos'):
+            continue
+
+        deps_dir = dep[31:]
+        includes.extend(Glob(f'src/{deps_dir}/*.go'))
+
+    contents = node.get_contents()
+    src_dir = os.path.dirname(str(node))
     for my_line in contents.splitlines():
         line = my_line.decode('utf-8')
         if line == 'import "C"':
@@ -33,9 +46,6 @@ def _scan_go_file(node, _env, _path):
                     includes.append(File(os.path.join(src_dir, header)))
                 else:
                     includes.append(f'../../../include/{header}')
-        elif line.strip().startswith(GOINC_PREFIX):
-            deps_dir = line[len(GOINC_PREFIX) + 1:-1]
-            includes.extend(Glob(f'src/{deps_dir}/*.go'))
 
     return includes
 
