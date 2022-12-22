@@ -9,7 +9,6 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-gdwarf-4',
                  '-Wframe-larger-than=4096']
 
 # Compiler flags to prevent optimizing out security checks
