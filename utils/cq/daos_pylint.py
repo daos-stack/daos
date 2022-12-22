@@ -9,6 +9,7 @@ import tempfile
 import subprocess  # nosec
 import argparse
 import json
+from io import TextIOWrapper
 for arg in sys.argv:
     if arg.startswith('--import='):
         sys.path.append(arg[9:])
@@ -164,7 +165,6 @@ class WrapScript():
     @staticmethod
     def write_header(outfile):
         """write the header"""
-
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
@@ -186,6 +186,7 @@ class FileTypeList():
     Consumes a list of file/module names and sorts them into categories so that later on each
     category can be run in parallel.
     """
+
     def __init__(self):
         self.ftest_files = []
         self.scons_files = []
@@ -208,7 +209,6 @@ class FileTypeList():
 
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
-
             if filename == 'SConstruct' or filename.endswith('SConscript'):
                 return True
 
@@ -241,6 +241,7 @@ class FileTypeList():
         self.files.append(file)
 
     def __str__(self):
+        """Convert object to a nicely formatted string"""
         desc = "FileTypeList\n"
         if self.files:
             desc += f'files: {",".join(self.files)}\n'
@@ -281,13 +282,12 @@ class FileTypeList():
     def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
         """Parse a list of targets.
 
-        Returns True if warnings issued to GitHub."""
-
+        Returns True if warnings issued to GitHub.
+        """
         # pylint: disable=too-many-branches,too-many-locals
 
         def word_is_allowed(word, code):
             """Return True if misspelling is permitted"""
-
             # pylint: disable=too-many-return-statements
 
             # Skip short words for now to cut down on noise whilst we resolve existing issues.
@@ -341,6 +341,9 @@ class FileTypeList():
             if wrapper:
                 vals['path'] = target_file
                 vals['line'] = wrapper.convert_line(msg.line)
+            elif datafile:
+                vals['path'] = target_file
+                vals['line'] = msg.line
             else:
                 vals['path'] = msg.path
                 vals['line'] = msg.line
@@ -350,6 +353,28 @@ class FileTypeList():
             # pylint: disable-next=consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
                 **vals))
+
+        def _read_stdin() -> str:
+            # See https://github.com/python/typeshed/pull/5623 for rationale behind assertion
+            assert isinstance(sys.stdin, TextIOWrapper)
+            sys.stdin = TextIOWrapper(sys.stdin.detach(), encoding="utf-8")
+            return sys.stdin.read()
+
+        datafile = None
+
+        if args.from_stdin:
+            data = _read_stdin()
+            if isinstance(target_file, list):
+                target_file = target_file[0]
+            file_dir = os.path.dirname(target_file)
+            datafile = tempfile.NamedTemporaryFile(mode='w+', prefix='.pylint_tmp_', suffix='.py',
+                                                   dir=file_dir)
+            datafile.write(data)
+
+            datafile.flush()
+            p_file = datafile.name
+        else:
+            p_file = target_file
 
         failed = False
         rep = CollectingReporter()
@@ -363,14 +388,14 @@ class FileTypeList():
             ignore = ['ungrouped-imports']
             if target_file.endswith('__init__.py'):
                 ignore.append('relative-beyond-top-level')
-            wrapper = WrapScript(target_file)
+            wrapper = WrapScript(p_file)
             target = [wrapper.wrap_file]
             target.extend(['--disable', ','.join(ignore)])
             init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
         else:
-            target = [target_file]
+            target = [p_file]
 
         if fake_scons:
             # Do not warn on module name for fake_scons files, we don't get to pick their name.
@@ -504,7 +529,6 @@ sys.path.append('site_scons')"""
 
 def get_git_files(directory=None):
     """Run pylint on contents of 'git ls-files'"""
-
     all_files = FileTypeList()
 
     cmd = ['git', 'ls-files']
@@ -538,7 +562,6 @@ class OutPutRegion:
 
 def main():
     """Main program"""
-
     # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
@@ -546,7 +569,7 @@ def main():
 
     # Basic options.
     parser.add_argument('--git', action='store_true')
-    parser.add_argument('--from-stdin')
+    parser.add_argument('--from-stdin', action='store_true')
 
     spellings = True
     try:
@@ -582,9 +605,6 @@ def main():
 
     if args.output_format == 'json':
         args.reports = 'n'
-
-    if args.from_stdin:
-        args.files = [args.from_stdin]
 
     if args.version:
         print(full_version)
@@ -653,8 +673,11 @@ def main():
         return
     all_files = FileTypeList()
     all_dirs = []
+
     for file in args.files:
-        if os.path.isfile(file):
+        if args.from_stdin:
+            all_files.add(file)
+        elif os.path.isfile(file):
             all_files.add(file)
         elif os.path.isdir(file):
             all_dirs.append(file)
