@@ -775,6 +775,14 @@ func (svc *mgmtSvc) PoolReintegrate(ctx context.Context, req *mgmtpb.PoolReinteg
 		return nil, err
 	}
 
+	// Look up the pool service record to find the storage allocations
+	// used at creation.
+	ps, err := svc.getPoolService(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	req.Tierbytes = ps.Storage.PerRankTierStorage
+
 	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolReintegrate, req)
 	if err != nil {
 		return nil, err
