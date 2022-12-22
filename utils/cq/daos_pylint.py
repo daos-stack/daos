@@ -262,15 +262,12 @@ class FileTypeList():
         if self.files:
             if self.parse_file(args, self.files):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.ftest_files:
             if self.parse_file(args, self.ftest_files, ftest=True):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.fake_scons:
             if self.parse_file(args, self.fake_scons, fake_scons=True):
                 failed = True
-            pylinter.MANAGER.clear_cache()
         if self.scons_files:
             for file in self.scons_files:
                 if self.parse_file(args, file, scons=True):
