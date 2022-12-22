@@ -829,23 +829,24 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	struct json_object	*dmg_out = NULL;
 	int			rc = 0;
 
-	uuid_unparse_lower(uuid, uuid_str);
-	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	if (grp != NULL) {
-		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
-		if (args == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
 	rank_list.rl_ranks = ranks;
 	rank_list.rl_nr = rank_nr;
 
 	rank_str = d_rank_list_to_str(&rank_list);
 	if (rank_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out_rankstr, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out_rankstr, rc = -DER_NOMEM);
+	}
+
 	args = cmd_push_arg(args, &argcount, "--ranks=%s ", rank_str);
 	if (args == NULL)
 		D_GOTO(out_rankstr, rc = -DER_NOMEM);

@@ -3164,7 +3164,7 @@ tgt_idx_change_retry(void **state)
 		assert_rc_equal(rc, 0);
 
 		/** exclude target of the replica */
-		print_message("rank 0 excluding target rank %u ...\n", rank);
+		print_message("rank 0 excluding rank %u ...\n", rank);
 		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
 				      arg->group, rank, -1);
 		assert_success(rc);
@@ -3222,7 +3222,7 @@ tgt_idx_change_retry(void **state)
 	}
 
 	if (arg->myrank == 0) {
-		print_message("rank 0 adding target rank %u ...\n", rank);
+		print_message("rank 0 adding rank %u ...\n", rank);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  rank, -1);
 		assert_success(rc);
