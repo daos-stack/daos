@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 3
-  test_clients: 5
+  test_servers: 2
+  test_clients: 2
 timeout: 300
 server_config:
   name: daos_server
@@ -58,7 +58,7 @@ mdtest: &mdtest_base
   num_of_files_dirs: 100000000
   stonewall_timer: 30
   stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_destroy: False
+  dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_base
   dfs_oclass: S1

@@ -591,6 +591,7 @@ rebuild_object_local(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 	rpt_get(rpt);
 	arg->rpt = rpt;
 	arg->oid = oid;
+	arg->oid.id_shard = shard; /* Convert the OID to rebuilt one */
 	arg->epoch = eph;
 	arg->punched_epoch = punched_eph;
 	uuid_copy(arg->co_uuid, co_uuid);
@@ -1107,7 +1108,7 @@ out:
 		rpt_put(rpt);
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
-	ro->rso_stable_epoch = crt_hlc_get();
+	ro->rso_stable_epoch = d_hlc_get();
 	dss_rpc_reply(rpc, DAOS_REBUILD_DROP_SCAN);
 }
 

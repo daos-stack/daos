@@ -1564,7 +1564,7 @@ out:
 static void
 dc_tx_dump(struct dc_tx *tx)
 {
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Dump TX %p:\n"
 		"ID: "DF_DTI"\n"
 		"epoch: "DF_U64"\n"
@@ -1753,7 +1753,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+	D_RWLOCK_RDLOCK(&tx->tx_pool->dp_map_lock);
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
+	D_RWLOCK_UNLOCK(&tx->tx_pool->dp_map_lock);
 	D_ASSERT(tgt_cnt != 0);
 
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
@@ -1835,7 +1837,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.
