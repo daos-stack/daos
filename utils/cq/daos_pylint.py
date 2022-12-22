@@ -9,7 +9,6 @@ import tempfile
 import subprocess  # nosec
 import argparse
 import json
-from io import TextIOWrapper
 for arg in sys.argv:
     if arg.startswith('--import='):
         sys.path.append(arg[9:])
@@ -57,14 +56,17 @@ class WrapScript():
     can do if they wish, this code is importing for all files however.
     """
 
-    def __init__(self, fname):
+    def __init__(self, fname, from_stdin):
 
         self.line_map = {}
         # pylint: disable-next=consider-using-with
         self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
         self.wrap_file = self._outfile.name
-        with open(fname, 'r') as infile:
-            self._read_files(infile, self._outfile)
+        if from_stdin:
+            self._read_files(sys.stdin, self._outfile)
+        else:
+            with open(fname, 'r') as infile:
+                self._read_files(infile, self._outfile)
         self._outfile.flush()
 
     def _read_files(self, infile, outfile):
@@ -204,12 +206,12 @@ class FileTypeList():
         return len(self.ftest_files) + len(self.scons_files) \
             + len(self.files) + len(self.fake_scons)
 
-    def add(self, file):
+    def add(self, file, force=False):
         """Add a filename to the correct list"""
 
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
-            if filename == 'SConstruct' or filename.endswith('SConscript'):
+            if filename.endswith('SConstruct') or filename.endswith('SConscript'):
                 return True
 
             if not file.endswith('.py'):
@@ -221,8 +223,9 @@ class FileTypeList():
             self.scons_files.append(file)
             return
 
-        if not file.endswith('.py'):
-            return
+        if not force:
+            if not file.endswith('.py'):
+                return
 
         # If files are in a subdir under ftest then they need to be treated differently.
         if 'src/tests/ftest/' in file:
@@ -338,9 +341,6 @@ class FileTypeList():
             if wrapper:
                 vals['path'] = target_file
                 vals['line'] = wrapper.convert_line(msg.line)
-            elif datafile:
-                vals['path'] = target_file
-                vals['line'] = msg.line
             else:
                 vals['path'] = msg.path
                 vals['line'] = msg.line
@@ -350,28 +350,6 @@ class FileTypeList():
             # pylint: disable-next=consider-using-f-string
             print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
                 **vals))
-
-        def _read_stdin() -> str:
-            # See https://github.com/python/typeshed/pull/5623 for rationale behind assertion
-            assert isinstance(sys.stdin, TextIOWrapper)
-            sys.stdin = TextIOWrapper(sys.stdin.detach(), encoding="utf-8")
-            return sys.stdin.read()
-
-        datafile = None
-
-        if args.from_stdin:
-            data = _read_stdin()
-            if isinstance(target_file, list):
-                target_file = target_file[0]
-            file_dir = os.path.dirname(target_file)
-            datafile = tempfile.NamedTemporaryFile(mode='w+', prefix='.pylint_tmp_', suffix='.py',
-                                                   dir=file_dir)
-            datafile.write(data)
-
-            datafile.flush()
-            p_file = datafile.name
-        else:
-            p_file = target_file
 
         failed = False
         rep = CollectingReporter()
@@ -385,14 +363,16 @@ class FileTypeList():
             ignore = ['ungrouped-imports']
             if target_file.endswith('__init__.py'):
                 ignore.append('relative-beyond-top-level')
-            wrapper = WrapScript(p_file)
+            wrapper = WrapScript(target_file, args.from_stdin)
             target = [wrapper.wrap_file]
             target.extend(['--disable', ','.join(ignore)])
             init_hook = """import sys
 sys.path.append('site_scons')
 sys.path.insert(0, 'utils/sl/fake_scons')"""
         else:
-            target = [p_file]
+            target = [target_file]
+            if args.from_stdin:
+                target.append('--from-stdin')
 
         if fake_scons:
             # Do not warn on module name for fake_scons files, we don't get to pick their name.
@@ -415,7 +395,7 @@ sys.path.append('site_scons')"""
         if args.rcfile:
             target.extend(['--rcfile', args.rcfile])
 
-        results = Run(target, reporter=rep, do_exit=False)
+        results = Run(target, reporter=rep, exit=False)
 
         types = Counter()
         symbols = Counter()
@@ -673,7 +653,7 @@ def main():
 
     for file in args.files:
         if args.from_stdin:
-            all_files.add(file)
+            all_files.add(file, force=True)
         elif os.path.isfile(file):
             all_files.add(file)
         elif os.path.isdir(file):
