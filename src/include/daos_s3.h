@@ -26,7 +26,7 @@ extern "C" {
 #define DS3_MAX_BUCKET_NAME DAOS_PROP_MAX_LABEL_BUF_LEN
 
 /** Maximum key length, allows adding [latest] */
-#define DS3_MAX_KEY         DFS_MAX_PATH - 8
+#define DS3_MAX_KEY         (DFS_MAX_PATH - 8)
 
 /** Maximum key buffer length */
 #define DS3_MAX_KEY_BUFF    DFS_MAX_PATH
@@ -44,79 +44,79 @@ extern "C" {
 #define DS3_LATEST_INSTANCE "latest"
 
 /** DAOS S3 Pool handle */
-typedef struct ds3		ds3_t;
+typedef struct ds3        ds3_t;
 
 /** DAOS S3 Bucket handle */
-typedef struct ds3_bucket	ds3_bucket_t;
+typedef struct ds3_bucket ds3_bucket_t;
 
 /** DAOS S3 Object handle */
-typedef struct ds3_obj		ds3_obj_t;
+typedef struct ds3_obj    ds3_obj_t;
 
 /** DAOS S3 Upload Part handle */
-typedef struct ds3_part		ds3_part_t;
+typedef struct ds3_part   ds3_part_t;
 
 /** S3 User information */
 struct ds3_user_info {
 	/** User name */
-	const char	*name;
+	const char  *name;
 	/** User email */
-	const char	*email;
+	const char  *email;
 	/** User access ids */
-	const char	**access_ids;
+	const char **access_ids;
 	/** Length of access_ids */
-	const size_t	access_ids_nr;
+	const size_t access_ids_nr;
 	/** Opaque encoded user info */
-	void		*encoded;
+	void        *encoded;
 	/** Length of encoded data */
-	size_t		encoded_length;
+	size_t       encoded_length;
 };
 
 /** S3 Bucket information */
 struct ds3_bucket_info {
 	/** Bucket name */
-	char	name[DS3_MAX_BUCKET_NAME];
+	char   name[DS3_MAX_BUCKET_NAME];
 	/** Opaque encoded bucket info */
-	void	*encoded;
+	void  *encoded;
 	/** Length of encoded data */
-	size_t	encoded_length;
+	size_t encoded_length;
 };
 
 /** S3 Object information */
 struct ds3_object_info {
 	/** Object key */
-	char	key[DS3_MAX_KEY_BUFF];
+	char   key[DS3_MAX_KEY_BUFF];
 	/** Opaque encoded object info */
-	void	*encoded;
+	void  *encoded;
 	/** Length of encoded data */
-	size_t	encoded_length;
+	size_t encoded_length;
 };
 
 /** S3 Common Prefix information */
 struct ds3_common_prefix_info {
 	/** Common Prefix */
-	char	prefix[DS3_MAX_KEY_BUFF];
+	char prefix[DS3_MAX_KEY_BUFF];
 };
 
 /** S3 Multipart Upload information */
 struct ds3_multipart_upload_info {
 	/** Upload id */
-	char	upload_id[DS3_MAX_UPLOAD_ID];
+	char   upload_id[DS3_MAX_UPLOAD_ID];
 	/** Object key */
-	char	key[DS3_MAX_KEY_BUFF];
+	char   key[DS3_MAX_KEY_BUFF];
 	/** Opaque encoded upload info */
-	void	*encoded;
+	void  *encoded;
 	/** Length of encoded data */
-	size_t	encoded_length;
+	size_t encoded_length;
 };
 
 /** S3 Multipart part information */
 struct ds3_multipart_part_info {
 	/** Part number */
-	uint64_t	part_num;
+	uint64_t part_num;
 	/** Opaque encoded part info */
-	void		*encoded;
+	void    *encoded;
 	/** Length of encoded data */
-	size_t		encoded_length;
+	size_t   encoded_length;
 };
 
 /* General S3 */
@@ -172,7 +172,7 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
  *
  * \param[in]	name		Name of the S3 user to look up.
  * \param[in]	info		User info.
- * \param[in]	olf_info	(Optional) Old user info.
+ * \param[in]	old_info	(Optional) Old user info.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
  *				Function will run in blocking mode if \a ev is NULL.

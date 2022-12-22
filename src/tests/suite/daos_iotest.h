@@ -212,8 +212,8 @@ struct test_update_fetch_arg {
 	int			*ua_values;
 	int			ua_recx_num;
 	int			ua_single_value;
-	int			ua_array:1, /* false for single */
-				ua_verify:1;
+	uint32_t                 ua_array : 1, /* false for single */
+	    ua_verify                     : 1;
 	bool			snap;
 };
 

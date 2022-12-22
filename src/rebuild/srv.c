@@ -176,7 +176,11 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		}
 	}
 
-	D_ASSERTF(status != NULL, "Can not find rank %u\n", rank);
+	if (status == NULL) {
+		D_INFO("rank %u is not included in this rebuild.\n", rank);
+		return;
+	}
+
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
@@ -1251,7 +1255,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		    task->dst_rebuild_op == RB_OP_FAIL_RECLAIM) {
 			rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_stable_epoch,
 						 task->dst_new_layout_version, &task->dst_tgts,
-						 RB_OP_RECLAIM, 5);
+						 task->dst_rebuild_op, 5);
 			return rc;
 		}
 
@@ -2266,7 +2270,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_leader_term);
 
 	rc = ds_pool_iv_prop_fetch(pool, &prop);
 	if (rc)

@@ -1,8 +1,8 @@
 hosts:
-  test_servers: server-[1-2]
+  test_servers: server-1
   test_clients: 1
 extra_servers:
-  test_servers: server-[3-4]
+  test_servers: server-[2-3]
 timeout: 1100
 setup:
   start_servers_once: false
@@ -48,7 +48,7 @@ server_config:
 pool:
   scm_size: 6000000000
   nvme_size: 54000000000
-  svcn: 4
+  svcn: 2
   control_method: dmg
   properties: scrub:lazy
 container:
@@ -94,7 +94,6 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_2G8
-    - RP_3G6
     - S1
     - EC_2P1G1
 loop_test:
@@ -108,4 +107,4 @@ checksum:
 snapshot:
   test_with_snapshot: true
 test_ranks:
-  rank_list: ["4", "5", ["6", "7"]]
+  rank_list: ["2", "3", ["4", "5"]]
