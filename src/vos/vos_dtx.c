@@ -49,6 +49,8 @@ enum {
 			    DAE_EPOCH(dae));				\
 	} while (0)
 
+/* Only for test. */
+
 static inline void
 dtx_memcpy_nodrain(struct umem_instance *umm, void *dest, const void *src,
 		   size_t size)
