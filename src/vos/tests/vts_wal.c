@@ -186,18 +186,6 @@ restore_pool(struct wal_test_args *arg, const char *pool_name)
 	return copy_pool_file(arg, arg->wta_clone, pool_name);
 }
 
-static inline void
-skip_wal_test(void)
-{
-	unsigned int	val = 0;
-
-	d_getenv_int("DAOS_MD_ON_SSD", &val);
-	if (val == 0) {
-		print_message("MD_ON_SSD isn't enabled, skip test\n");
-		skip();
-	}
-}
-
 /* Create pool, clear content in tmpfs, open pool by meta blob loading & WAL replay */
 static void
 wal_tst_01(void **state)
@@ -207,8 +195,6 @@ wal_tst_01(void **state)
 	uuid_t			 pool_id;
 	daos_handle_t		 poh;
 	int			 rc;
-
-	skip_wal_test();
 
 	uuid_generate(pool_id);
 
@@ -884,9 +870,17 @@ run_wal_tests(const char *cfg)
 	const char	*akey = "hashed";
 	const char	*dkey = "hashed";
 	int		 i, rc;
+	unsigned int	 val = 0;
 
 	dts_create_config(test_name, "WAL Pool tests %s", cfg);
 	D_PRINT("Running %s\n", test_name);
+
+	d_getenv_int("DAOS_MD_ON_SSD", &val);
+	if (val == 0) {
+		print_message("MD_ON_SSD isn't enabled, skip test\n");
+		return 0;
+	}
+
 	rc = cmocka_run_group_tests_name(test_name, wal_tests, setup_wal_test,
 					   teardown_wal_test);
 
