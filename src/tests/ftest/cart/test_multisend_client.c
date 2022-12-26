@@ -18,7 +18,9 @@ rpc_cb_common(const struct crt_cb_info *info)
 
 	p_blk = (crt_bulk_t *)info->cci_arg;
 
-	D_ASSERTF(info->cci_rc == 0, "rpc response failed. rc: %d\n", info->cci_rc);
+	D_ASSERTF(info->cci_rc == 0 || info->cci_rc == -DER_TIMEDOUT ||
+		  info->cci_rc == -DER_CANCELED || info->cci_rc == -DER_HG,
+		  "rpc response failed. rc: %d\n", info->cci_rc);
 
 	if (p_blk && *p_blk) {
 		rc = crt_bulk_free(*p_blk);
@@ -34,6 +36,28 @@ static int
 handler_ping(crt_rpc_t *rpc)
 {
 	return 0;
+}
+
+static void *
+aborter_fn(void *arg)
+{
+	while (crtu_get_opts()->shutdown == 0) {
+		d_rank_t	rank;
+		int		rc;
+
+		if (test.tg_force_rank == -1)
+			rank = d_rand() % test.tg_remote_group_size;
+		else
+			rank = test.tg_force_rank;
+
+		rc = crt_rank_abort(rank);
+		if (rc != 0) {
+			D_ERROR("failed to abort RPCs to rank %u: "DF_RC"\n", rank, DP_RC(rc));
+			break;
+		}
+	}
+
+	return NULL;
 }
 
 static void
@@ -53,6 +77,7 @@ test_run()
 	d_rank_list_t		*rank_list = NULL;
 	crt_rpc_t		*rpc_req = NULL;
 	crt_endpoint_t		 server_ep = {0};
+	pthread_t		 aborter;
 	struct timeval		 tv_start;
 	struct timeval		 tv_end;
 	int			 i, ctx_idx;
@@ -117,6 +142,9 @@ test_run()
 	ctx = test.tg_crt_ctx[0];
 
 	gettimeofday(&tv_start, NULL);
+
+	rc = pthread_create(&aborter, 0, aborter_fn, &test.tg_crt_ctx[i]);
+	D_ASSERTF(rc == 0, "pthread_create() failed\n");
 
 	ctx_idx = 0;
 

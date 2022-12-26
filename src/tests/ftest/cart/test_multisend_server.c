@@ -24,16 +24,12 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	void	*buff;
 	int	rc;
 
-	if (info->bci_rc != 0) {
+	if (info->bci_rc != 0)
 		D_ERROR("Bulk transfer failed with rc=%d\n", info->bci_rc);
-		error_exit();
-	}
 
 	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("Failed to send response\n");
-		error_exit();
-	}
 
 	crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
 
