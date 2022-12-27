@@ -2815,7 +2815,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 	if (info->bci_rc != 0) {
 		D_ERROR("bulk update transfer failed; "DF_RC"\n", DP_RC(info->bci_rc));
-		D_GOTO(send_error, rc = info->bci_rC);
+		D_GOTO(send_error, rc = info->bci_rc);
 	}
 
 	update_rc = iv_ops->ivo_on_update(ivns_internal,
