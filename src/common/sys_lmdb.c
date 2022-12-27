@@ -193,7 +193,10 @@ lmm_db_generate_key(char *table, d_iov_t *key, MDB_val *db_key)
 	char	*new_key;
 	int	 table_len;
 
-	table_len = strnlen(table, MAX_SMD_TABLE_LEN);
+	table_len = strnlen(table, MAX_SMD_TABLE_LEN + 1);
+	if (table_len > MAX_SMD_TABLE_LEN)
+		return -DER_INVAL;
+
 	db_key->mv_size = key->iov_len + table_len;
 	D_ALLOC(new_key, db_key->mv_size);
 	if (new_key == NULL)
@@ -209,9 +212,12 @@ lmm_db_generate_key(char *table, d_iov_t *key, MDB_val *db_key)
 static int
 lmm_db_unpack_key(char *table, d_iov_t *key, MDB_val *db_key)
 {
-	int	 table_len = strnlen(table, MAX_SMD_TABLE_LEN);
+	int	 table_len = strnlen(table, MAX_SMD_TABLE_LEN + 1);
 	char	*buf;
 	int	 len;
+
+	if (table_len > MAX_SMD_TABLE_LEN)
+		return -DER_INVAL;
 
 	if (db_key->mv_size < table_len)
 		return -DER_INVAL;
@@ -358,7 +364,6 @@ lmm_db_traverse(struct sys_db *db, char *table, sys_db_trav_cb_t cb, void *args)
 		if (rc)
 			break;
 
-		d_iov_set(&key, db_key.mv_data, db_key.mv_size);
 		rc = cb(db, table, &key, args);
 		D_FREE(key.iov_buf);
 		if (rc)

@@ -1246,8 +1246,24 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 			D_ERROR("Failed to assign roles. "DF_RC"\n", DP_RC(rc));
 			return NULL;
 		}
-
-		d_bdev->bb_tgt_cnt++;
+		/*
+		 * Now a device will be assigned to SYS_TGT_ID for RDB
+		 * (the mapping will be recorded in target table), but we should not
+		 * treat the SYS_TGT mapping equally with other VOS targets mappings.
+		 *
+		 * Let's take an example, if there is a config having 4 meta SSDs and 3 targets,
+		 * how should we assign SSDs?
+		 *
+		 * 1. Assign 3 SSDs to 3 VOS targets and sys target (sys target share SSD with
+		 * one of VOS target), leave one SSD unused, or;
+		 * 2. Assign 1 SSD to sys target, assign the other 3 SSDs to VOS targets
+		 *
+		 * We use the 1st policy to assign SSDs and @bb_tgt_cnt won't be increased for
+		 * sys tgt id.
+		 *
+		 */
+		if (tgt_id != BIO_SYS_TGT_ID)
+			d_bdev->bb_tgt_cnt++;
 		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d to tgt %d\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, tgt_id);
 
