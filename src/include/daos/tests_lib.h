@@ -242,6 +242,58 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Exclude an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for exclusion
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to exclude (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to exclude (ignored if -1)
+ */
+int dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
+		     const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Reintegrate an entire rank or a target on that rank to a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to reintegrate (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to reintegrate (ignored if -1)
+ */
+int dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
+			 const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Drain an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to drain (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to drain (ignored if -1)
+ */
+int dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
+		   const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Extend a pool by adding ranks.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param ranks		[IN]	Ranks to add to the pool
+ * \param ranks_nr	[IN]	Number of ranks to add to the pool
+ */
+int dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
+		    const char *grp, d_rank_t *ranks, int ranks_nr);
+
+/**
  * Set property of the pool with \a pool_uuid.
  *
  * \param dmg_config_file	[IN] DMG config file.
