@@ -321,6 +321,43 @@ class DmgCommand(DmgCommandBase):
             ("storage", "query", "list-pools"), uuid=uuid, rank=rank,
             verbose=verbose)
 
+    def storage_identify_vmd(self, uuid, verbose=False):
+        """Get the result of the 'dmg storage identify vmd".
+
+        Args:
+            uuid (str): Device UUID to query.
+            verbose (bool, optional): create verbose output. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "identify", "vmd"), uuid=uuid,
+            verbose=verbose)
+
+    def storage_replace_nvme(self, old_uuid, new_uuid, no_reint=False):
+        """Get the result of the 'dmg storage replace nvme' command.
+
+        Args:
+            old_uuid (str): Old NVME Device ID.
+            new_uuid (str): New NVME Device ID replacing the old device.
+            no_reint (bool, optional): Don't perform reintegration. Defaults to False.
+
+        Returns:
+            dict: JSON formatted dmg command result.
+
+        Raises:
+            CommandFailure: if the dmg storage query command fails.
+
+        """
+        return self._get_json_result(
+            ("storage", "replace", "nvme"), old_uuid=old_uuid,
+            new_uuid=new_uuid, no_reint=no_reint)
+
     def storage_query_device_health(self, uuid):
         """Get the result of the 'dmg storage query device-health' command.
 
@@ -446,9 +483,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self):
+    def server_set_logmasks(self, masks=None, raise_exception=None):
         """Set engine log-masks at runtime.
 
+        Args:
+            masks (str, optional): log masks to set. Defaults to None.
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
         Raises:
             CommandFailure: if the dmg server set logmasks command fails.
 
@@ -464,7 +506,13 @@ class DmgCommand(DmgCommandBase):
         #   "error": null,
         #   "status": 0
         # }
-        return self._get_json_result(("server", "set-logmasks"))
+
+        kwargs = {
+            "masks": masks,
+        }
+
+        return self._get_json_result(("server", "set-logmasks"),
+                                     raise_exception=raise_exception, **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -547,6 +595,7 @@ class DmgCommand(DmgCommandBase):
         if output["response"] is None:
             return data
 
+        data["status"] = output["status"]
         data["uuid"] = output["response"]["uuid"]
         data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])

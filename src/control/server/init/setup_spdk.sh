@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Wrap spdk setup script. This script will be called by daos_admin process which will be
+## Wrap spdk setup script. This script will be called by daos_server_helper process which will be
 ## running with elevated privileges. Activities include changing directory permissions (which
 ## enables spdk to be run by an unprivileged user).
 

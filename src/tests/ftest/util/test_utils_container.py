@@ -266,6 +266,8 @@ class TestContainer(TestDaosApiBase):
         self.path = BasicParameter(None)
         self.type = BasicParameter(None)
         self.oclass = BasicParameter(None)
+        self.dir_oclass = BasicParameter(None)
+        self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
@@ -338,10 +340,10 @@ class TestContainer(TestDaosApiBase):
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
-                cop.rf_lvl = con_in[5]
+                cop.rd_lvl = con_in[5]
             else:
-                # Default to RANK fault domain (rf_lvl:1) when not specified
-                cop.rf_lvl = ctypes.c_uint64(1)
+                # Default to RANK fault domain (rd_lvl:1) when not specified
+                cop.rd_lvl = ctypes.c_uint64(1)
 
             kwargs["con_prop"] = cop
 
@@ -359,6 +361,8 @@ class TestContainer(TestDaosApiBase):
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
+                "dir_oclass": self.dir_oclass.value,
+                "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": acl_file,

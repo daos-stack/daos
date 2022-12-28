@@ -47,8 +47,6 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0],
                                            self.dmg_command)
         self.daos_racer.get_params(self)
-        self.daos_racer.set_environment(
-            self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
     def run_online_reintegration_test(self, num_pool, racer=False,
@@ -160,7 +158,6 @@ class OSAOnlineReintegration(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
@@ -185,7 +182,6 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : System stop/start")
         self.run_online_reintegration_test(1, server_boot=True)
 
-    @skipForTicket("DAOS-7420")
     def test_osa_online_reintegration_without_csum(self):
         """Test ID: DAOS-5075.
 

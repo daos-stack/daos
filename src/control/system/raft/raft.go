@@ -8,6 +8,7 @@ package raft
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -116,7 +118,24 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Barrier(0).Error()
+		barrierStart := time.Now()
+		err := svc.Barrier(0).Error()
+		barrierElapsed := time.Since(barrierStart)
+		if barrierElapsed > 100*time.Millisecond {
+			var errMsg string
+			if err != nil {
+				errMsg = fmt.Sprintf("; err: %s", err)
+			}
+			db.log.Debugf("raft Barrier() complete after %s%s", barrierElapsed, errMsg)
+		}
+		if IsRaftLeadershipError(err) {
+			db.log.Errorf("lost leadership during Barrier(): %s", err)
+			return &system.ErrNotLeader{
+				LeaderHint: db.leaderHint(),
+				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+			}
+		}
+		return err
 	})
 }
 
@@ -411,7 +430,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, m.Member.LastUpdate)
+	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, common.FormatTime(m.Member.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -423,7 +442,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
+	db.log.Debugf("pool %s (%s) updated @ %s", dbgUuidStr(ps.PoolUUID), ps.State, common.FormatTime(ps.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 

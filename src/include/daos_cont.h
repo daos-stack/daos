@@ -48,22 +48,8 @@ extern "C" {
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
-/** Container information */
-typedef struct {
-	/** Container UUID */
-	uuid_t			ci_uuid;
-	/** Epoch of latest persistent snapshot */
-	daos_epoch_t		ci_lsnapshot;
-	/** Redundancy factor */
-	uint32_t		ci_redun_fac;
-	/** Number of snapshots */
-	uint32_t		ci_nsnapshots;
-	/** Latest open time (hybrid logical clock) */
-	uint64_t		ci_md_otime;
-	/** Latest close/modify time (hybrid logical clock) */
-	uint64_t		ci_md_mtime;
-	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} daos_cont_info_t;
+/** Maximum length for container hints */
+#define DAOS_CONT_HINT_MAX_LEN	128
 
 /**
  * Generate a rank list from a string with a separator argument. This is a

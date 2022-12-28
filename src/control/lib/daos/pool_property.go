@@ -125,7 +125,7 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
-		"rf": {
+		"rd_fac": {
 			Property: PoolProperty{
 				Number:      PoolPropertyRedunFac,
 				Description: "Pool redundancy factor",
@@ -340,6 +340,12 @@ func PoolProperties() PoolPropertyMap {
 				},
 			},
 		},
+	}
+}
+
+func PoolDeprecatedProperties() map[string]string {
+	return map[string]string{
+		"rf": "rd_fac",
 	}
 }
 

@@ -47,8 +47,8 @@ type containerCmd struct {
 	GetAttribute    containerGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
 	SetAttribute    containerSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropCmd `command:"get-prop" alias:"getprop" description:"get container properties"`
+	SetProperty containerSetPropCmd `command:"set-prop" alias:"setprop" description:"set container properties"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
@@ -133,13 +133,15 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
 	var cType [10]C.char
 
-	props, entries, err := allocProps(2)
+	props, entries, err := allocProps(3)
 	if err != nil {
 		return nil, err
 	}
 	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
 	props.dpp_nr++
 	entries[1].dpe_type = C.DAOS_PROP_CO_LABEL
+	props.dpp_nr++
+	entries[2].dpe_type = C.DAOS_PROP_CO_REDUN_FAC
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
@@ -159,10 +161,14 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		ci.ContainerLabel = C.GoString(cStr)
 	}
 
+	ci.RedundancyFactor = uint32(C.get_dpe_val(&entries[2]))
+
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
 		var attr C.dfs_attr_t
-		var oclass [10]C.char
+		var oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+		var dir_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
+		var file_oclass [C.MAX_OBJ_CLASS_NAME_LEN]C.char
 
 		rc := C.dfs_mount(cmd.cPoolHandle, cmd.cContHandle, C.O_RDONLY, &dfs)
 		if err := dfsError(rc); err != nil {
@@ -175,6 +181,11 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		}
 		C.daos_oclass_id2name(attr.da_oclass_id, &oclass[0])
 		ci.ObjectClass = C.GoString(&oclass[0])
+		C.daos_oclass_id2name(attr.da_dir_oclass_id, &dir_oclass[0])
+		ci.DirObjectClass = C.GoString(&dir_oclass[0])
+		C.daos_oclass_id2name(attr.da_file_oclass_id, &file_oclass[0])
+		ci.FileObjectClass = C.GoString(&file_oclass[0])
+		ci.CHints = C.GoString(&attr.da_hints[0])
 		ci.ChunkSize = uint64(attr.da_chunk_size)
 
 		if err := dfsError(C.dfs_umount(dfs)); err != nil {
@@ -204,16 +215,19 @@ func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) 
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        ContTypeFlag         `long:"type" short:"t" description:"container type"`
-	Path        string               `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	Args        struct {
+	Type            ContTypeFlag         `long:"type" short:"t" description:"container type"`
+	Path            string               `long:"path" short:"p" description:"container namespace path"`
+	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
+	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
+	CHints          string               `long:"hints" short:"h" description:"container hints"`
+	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User            string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group           string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
 }
@@ -291,8 +305,18 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.ObjectClass.Set {
 			ap.oclass = cmd.ObjectClass.Class
 		}
+		if cmd.DirObjectClass.Set {
+			ap.dir_oclass = cmd.DirObjectClass.Class
+		}
+		if cmd.FileObjectClass.Set {
+			ap.file_oclass = cmd.FileObjectClass.Class
+		}
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
+		}
+		if cmd.CHints != "" {
+			ap.hints = C.CString(cmd.CHints)
+			defer freeString(ap.hints)
 		}
 	}
 
@@ -720,7 +744,8 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Container redundancy factor": fmt.Sprintf("%d", ci.RedundancyFactor)},
+			{"Number of open handles": fmt.Sprintf("%d", *ci.NumHandles)},
 			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
 			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
@@ -731,6 +756,15 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		}
 		if ci.ObjectClass != "" {
 			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
+		}
+		if ci.DirObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Dir Object Class": ci.DirObjectClass})
+		}
+		if ci.FileObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"File Object Class": ci.FileObjectClass})
+		}
+		if ci.CHints != "" {
+			rows = append(rows, txtfmt.TableRow{"Hints": ci.CHints})
 		}
 		if ci.ChunkSize > 0 {
 			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
@@ -746,12 +780,16 @@ type containerInfo struct {
 	ContainerUUID    *uuid.UUID `json:"container_uuid"`
 	ContainerLabel   string     `json:"container_label,omitempty"`
 	LatestSnapshot   *uint64    `json:"latest_snapshot"`
-	RedundancyFactor *uint32    `json:"redundancy_factor"`
+	RedundancyFactor uint32     `json:"redundancy_factor"`
+	NumHandles       *uint32    `json:"num_handles"`
 	NumSnapshots     *uint32    `json:"num_snapshots"`
 	OpenTime         *uint64    `json:"open_time"`
 	CloseModifyTime  *uint64    `json:"close_modify_time"`
 	Type             string     `json:"container_type"`
 	ObjectClass      string     `json:"object_class,omitempty"`
+	DirObjectClass   string     `json:"dir_object_class,omitempty"`
+	FileObjectClass  string     `json:"file_object_class,omitempty"`
+	CHints           string     `json:"hints,omitempty"`
 	ChunkSize        uint64     `json:"chunk_size,omitempty"`
 }
 
@@ -772,7 +810,7 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.PoolUUID = poolUUID
 	ci.ContainerUUID = contUUID
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
-	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
+	ci.NumHandles = (*uint32)(&ci.dci.ci_nhandles)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
 	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
 	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)

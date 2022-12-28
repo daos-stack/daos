@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,6 +7,7 @@ import os
 
 from fio_test_base import FioBase
 from general_utils import run_pcmd, get_remote_file_size
+
 
 class Ecodtruncate(FioBase):
     # pylint: disable=too-many-ancestors

@@ -124,6 +124,7 @@ message PoolReintegrateReq {
 	uint32 rank = 3; // target to move to the up state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -146,6 +147,7 @@ message ListPoolsResp {
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
+	uint64 data_version = 3; // Version of the system database.
 }
 
 // ListContainers

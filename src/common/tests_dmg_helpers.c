@@ -10,6 +10,7 @@
 #include <json-c/json.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -65,6 +66,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	char		*cmd_str = NULL;
 	size_t		size, old;
 	int		i;
+	void		*addr;
 
 	if (cmd_base == NULL)
 		return NULL;
@@ -92,7 +94,16 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 		old = size;
 	}
 
-	return cmd_str;
+	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	if (addr == MAP_FAILED) {
+		D_ERROR("mmap() failed : %s\n", strerror(errno));
+		D_FREE(cmd_str);
+		return NULL;
+	}
+	memcpy(addr, cmd_str, size);
+	D_FREE(cmd_str);
+
+	return (char *)addr;
 }
 
 static void
@@ -335,7 +346,8 @@ out_jbuf:
 out_close:
 	close(stdoutfd);
 out:
-	D_FREE(cmd_str);
+	if (munmap(cmd_str, strlen(cmd_str) + 1) == -1)
+		D_ERROR("munmap() failed : %s\n", strerror(errno));
 
 	if (obj != NULL) {
 		struct json_object *tmp;
@@ -734,6 +746,124 @@ out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+static int
+dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
+		const char *grp, d_rank_t rank, int tgt_idx)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (tgt_idx >= 0) {
+		args = cmd_push_arg(args, &argcount, "--target-idx=%d ", tgt_idx);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	args = cmd_push_arg(args, &argcount, "--rank=%d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe(cmd, dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
+		 const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool exclude", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
+		     const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool reintegrate", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
+	       const char *grp, d_rank_t rank, int tgt_idx)
+{
+	return dmg_pool_target("pool drain", dmg_config_file, uuid, grp, rank, tgt_idx);
+}
+
+int
+dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
+		const char *grp, d_rank_t *ranks, int rank_nr)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	d_rank_list_t		rank_list = { 0 };
+	char			*rank_str = NULL;
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	rank_list.rl_ranks = ranks;
+	rank_list.rl_nr = rank_nr;
+
+	rank_str = d_rank_list_to_str(&rank_list);
+	if (rank_str == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out_rankstr, rc = -DER_NOMEM);
+
+	if (grp != NULL) {
+		args = cmd_push_arg(args, &argcount, "--sys=%s ", grp);
+		if (args == NULL)
+			D_GOTO(out_rankstr, rc = -DER_NOMEM);
+	}
+
+	args = cmd_push_arg(args, &argcount, "--ranks=%s ", rank_str);
+	if (args == NULL)
+		D_GOTO(out_rankstr, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool extend", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out_rankstr:
+	D_FREE(rank_str);
 out:
 	return rc;
 }

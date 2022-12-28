@@ -51,11 +51,11 @@ def _supports_correct_style(clang_exe):
     except subprocess.CalledProcessError:
         return False
 
-    match = re.search(r'version ([\d+\.]+) ', output)
+    match = re.search(r'version ([\d+\.]+)', output)
     if match:
         parts = match.group(1).split('.')
-        if int(parts[0]) < 14:
-            return False
+        if int(parts[0]) != 14:
+            return int(parts[0]) > 14
         if int(parts[1]) > 0:
             return True
         if int(parts[2]) < 5:

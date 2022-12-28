@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -554,6 +556,54 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
+		"4 engines; hugepage alloc across numa 0,1": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+				)
+			},
+			hugePagesFree: 16384,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugeNodes:     "0,1",
+				TargetUser:    username,
+				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),
+					storage.BdevPciAddrSep),
+				EnableVMD: true,
+			},
+			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
+			expHugePageSize: 2,
+		},
+		"4 engines; uneven numa distribution": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(22000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+				)
+			},
+			expPrepErr: errors.New("uneven distribution"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -581,12 +631,12 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
-			sp := scm.NewMockSysProvider(log, nil)
+			sp := sysprov.NewMockSysProvider(log, nil)
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}
@@ -595,7 +645,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srv.runningUser = &user.User{Username: tc.overrideUser}
 			}
 
-			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
+			gotPrepErr := prepBdevStorage(srv, !tc.iommuDisabled)
 
 			mbb.RLock()
 			if tc.expPrepCall != nil {
@@ -610,7 +660,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 			mbb.RUnlock()
 
-			test.CmpErr(t, tc.expPrepErr, gotErr)
+			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
 			if tc.expPrepErr != nil {
 				return
 			}
@@ -630,8 +680,8 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
 
-			gotErr = updateMemValues(srv, ei, mockGetHugePageInfo)
-			test.CmpErr(t, tc.expMemChkErr, gotErr)
+			gotMemChkErr := updateMemValues(srv, ei, mockGetHugePageInfo)
+			test.CmpErr(t, tc.expMemChkErr, gotMemChkErr)
 			if tc.expMemChkErr != nil {
 				return
 			}
@@ -697,12 +747,12 @@ func TestServer_scanBdevStorage(t *testing.T) {
 
 			mbb := bdev.NewMockBackend(tc.bmbc)
 			mbp := bdev.NewProvider(log, mbb)
-			sp := scm.NewMockSysProvider(log, nil)
+			sp := sysprov.NewMockSysProvider(log, nil)
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
 					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp),
+					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}
@@ -937,6 +987,86 @@ func (m *mockReplicaAddrSrc) ReplicaAddr() (*net.TCPAddr, error) {
 	return m.replicaAddrResult, m.replicaAddrErr
 }
 
+func TestServerUtils_resolveFirstAddr(t *testing.T) {
+	for name, tc := range map[string]struct {
+		host    string
+		lookup  ipLookupFn
+		expAddr *net.TCPAddr
+		expErr  error
+	}{
+		"host without port": {
+			host:   "localhost",
+			expErr: errors.New("missing port"),
+		},
+		"invalid port": {
+			host:   "localhost:daos",
+			expErr: errors.New("strconv.Atoi"),
+		},
+		"lookup failure": {
+			host:   "localhost:42",
+			lookup: func(string) ([]net.IP, error) { return nil, errors.New("lookup") },
+			expErr: errors.New("lookup"),
+		},
+		"no addresses": {
+			host:   "localhost:42",
+			lookup: func(string) ([]net.IP, error) { return nil, nil },
+			expErr: errors.New("no addresses"),
+		},
+		"localhost resolves to ipv6 & ipv4; prefer ipv4": {
+			host: "localhost:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("::1"),
+					net.ParseIP("127.0.0.1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"localhost resolves to ipv4 & ipv6; prefer ipv4": {
+			host: "localhost:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("127.0.0.1"),
+					net.ParseIP("::1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"host resolves to 2 ipv4; prefer lower": {
+			host: "host:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("127.0.0.2"),
+					net.ParseIP("127.0.0.1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001},
+		},
+		"host resolves to 2 ipv6; prefer lower": {
+			host: "host:10001",
+			lookup: func(host string) ([]net.IP, error) {
+				return []net.IP{
+					net.ParseIP("::2"),
+					net.ParseIP("::1"),
+				}, nil
+			},
+			expAddr: &net.TCPAddr{IP: net.ParseIP("::1"), Port: 10001},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddr, gotErr := resolveFirstAddr(tc.host, tc.lookup)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if !common.CmpTCPAddr(tc.expAddr, gotAddr) {
+				t.Fatalf("unexpected address: want %s, got %s", tc.expAddr, gotAddr)
+			}
+		})
+	}
+}
+
 func TestServerUtils_getControlAddr(t *testing.T) {
 	testTCPAddr := &net.TCPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
@@ -954,10 +1084,9 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 				replicaAddrSrc: &mockReplicaAddrSrc{
 					replicaAddrErr: errors.New("not a replica"),
 				},
-				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
-					test.AssertEqual(t, "tcp", net, "")
-					test.AssertEqual(t, "[0.0.0.0]:1234", addr, "")
-					return testTCPAddr, nil
+				lookupHost: func(addr string) ([]net.IP, error) {
+					test.AssertEqual(t, "0.0.0.0", addr, "")
+					return []net.IP{testTCPAddr.IP}, nil
 				},
 			},
 			expAddr: testTCPAddr,
@@ -968,17 +1097,31 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 				replicaAddrSrc: &mockReplicaAddrSrc{
 					replicaAddrResult: testTCPAddr,
 				},
-				resolveAddr: func(net, addr string) (*net.TCPAddr, error) {
-					test.AssertEqual(t, "tcp", net, "")
-					test.AssertEqual(t, "[127.0.0.1]:1234", addr, "")
-					return testTCPAddr, nil
+				lookupHost: func(addr string) ([]net.IP, error) {
+					test.AssertEqual(t, "127.0.0.1", addr, "")
+					return []net.IP{testTCPAddr.IP}, nil
+				},
+			},
+			expAddr: testTCPAddr,
+		},
+		"hostname with multiple IPs resolves to single replica address": {
+			params: ctlAddrParams{
+				port: testTCPAddr.Port,
+				replicaAddrSrc: &mockReplicaAddrSrc{
+					replicaAddrResult: testTCPAddr,
+				},
+				lookupHost: func(addr string) ([]net.IP, error) {
+					return []net.IP{
+						{testTCPAddr.IP[0], testTCPAddr.IP[1], testTCPAddr.IP[2], testTCPAddr.IP[3] + 1},
+						testTCPAddr.IP,
+					}, nil
 				},
 			},
 			expAddr: testTCPAddr,
 		},
 		"resolve fails": {
 			params: ctlAddrParams{
-				resolveAddr: func(_, _ string) (*net.TCPAddr, error) {
+				lookupHost: func(addr string) ([]net.IP, error) {
 					return nil, errors.New("mock resolve")
 				},
 			},
@@ -986,9 +1129,9 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.params.resolveAddr == nil {
-				tc.params.resolveAddr = func(_, _ string) (*net.TCPAddr, error) {
-					return testTCPAddr, nil
+			if tc.params.lookupHost == nil {
+				tc.params.lookupHost = func(_ string) ([]net.IP, error) {
+					return []net.IP{testTCPAddr.IP}, nil
 				}
 			}
 

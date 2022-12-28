@@ -327,6 +327,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_EC_PDA:
 		case DAOS_PROP_PO_RP_PDA:
 		case DAOS_PROP_PO_GLOBAL_VERSION:
+		case DAOS_PROP_PO_OBJ_VERSION:
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
@@ -507,6 +508,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
 		case DAOS_PROP_CO_GLOBAL_VERSION:
+		case DAOS_PROP_CO_OBJ_VERSION:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -673,8 +675,7 @@ daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_siz
 		D_ERROR("Entry type does not expect a string value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_str != NULL)
-		D_FREE(entry->dpe_str);
+	D_FREE(entry->dpe_str);
 	if (str == NULL || len == 0)
 		return 0;
 
@@ -706,8 +707,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 		D_ERROR("Entry type does not expect a ptr value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_val_ptr != NULL)
-		D_FREE(entry->dpe_val_ptr);
+	D_FREE(entry->dpe_val_ptr);
 	if (ptr == NULL || size == 0)
 		return 0;
 
@@ -1031,7 +1031,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC_OLD) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		if (!strcmp(val, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -1059,12 +1060,14 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL_OLD) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
-		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0) {
+		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_OBJ_VERSION) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {
