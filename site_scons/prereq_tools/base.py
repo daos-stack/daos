@@ -272,7 +272,7 @@ class Runner():
             cmd = []
             for part in command:
                 if part == 'make':
-                    cmd.extend(['make', '-j', str(GetOption('num_jobs'))])
+                    cmd.extend(['make', '-j', '1'])
                 else:
                     cmd.append(self.env.subst(part))
             if self.__dry_run:
