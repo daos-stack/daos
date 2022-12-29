@@ -228,7 +228,7 @@ blob_bmap_size(struct ad_blob *blob)
 	return (blob->bb_pgs_nr + 63) >> 6;
 }
 
-#define GROUP_LRU_MAX	(256U << 10)
+#define GROUP_LRU_MAX	(512U << 10)
 #define ARENA_LRU_MAX	(64U << 10)
 
 static bool
@@ -2316,6 +2316,49 @@ arena_tx_free_addr(struct ad_arena *arena, daos_off_t addr, struct ad_tx *tx)
 	return rc;
 }
 
+enum {
+	ARENA_SEL_MIN,
+	ARENA_SEL_REUSE,
+	ARENA_SEL_NEW,
+	ARENA_SEL_MAX,
+};
+
+static int
+arena_select(struct ad_blob *blob, int sel, int type, struct ad_arena **arena_p)
+{
+	struct d_binheap_node	*bn;
+	struct ad_maxheap_node  *an;
+	struct ad_arena		*arena;
+	int			 rc;
+
+	switch (sel) {
+	default:
+		D_ASSERT(0);
+	case ARENA_SEL_NEW:
+		rc = arena_reserve(blob, type, NULL, &arena);
+		if (rc == 0)
+			break;
+
+		D_DEBUG(DB_TRACE, "Failed to reserve new arena, rc=%d.\n", rc);
+		return rc;
+
+	case ARENA_SEL_REUSE:
+		bn = d_binheap_remove_root(&blob->bb_arena_free_heap);
+		if (!bn)
+			return -DER_NOSPACE;
+
+		an = container_of(bn, struct ad_maxheap_node, mh_node);
+		rc = arena_load(blob, an->mh_arena_id, &arena);
+		if (rc == 0)
+			break;
+
+		D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", an->mh_arena_id, rc);
+		return rc;
+	}
+	*arena_p = arena;
+	return 0;
+}
+
 /**
  * Reserve storage space with specified @size, the space should be allocated from
  * default arena if @arena_id is set to zero, otherwise it is allocated from the
@@ -2328,10 +2371,8 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 	struct ad_arena		*arena = NULL;
 	daos_off_t		 addr;
 	uint32_t		 id;
-	bool			 tried;
 	int			 rc;
-	struct d_binheap_node	*node;
-	struct ad_maxheap_node  *ad_node;
+	int			 sel = ARENA_SEL_MIN + 1;
 
 	if (arena_id && *arena_id != AD_ARENA_ANY)
 		id = *arena_id;
@@ -2340,7 +2381,6 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 
 	if (id != AD_ARENA_ANY) {
 		D_DEBUG(DB_TRACE, "Loading arena=%u\n", id);
-		arena_remove_free_entry(blob, id);
 		rc = arena_load(blob, id, &arena);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
@@ -2349,30 +2389,20 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
 			arena_decref(arena);
 			arena = NULL;
+		} else {
+			/* remove it from the heap */
+			arena_remove_free_entry(blob, id);
 		}
 	}
 
-	tried = false;
 	while (1) {
 		if (arena == NULL) {
-			node = d_binheap_remove_root(&blob->bb_arena_free_heap);
-			if (node == NULL) {
-				rc = arena_reserve(blob, type, NULL, &arena);
-				if (rc) {
-					D_ERROR("Failed to reserve new arena, rc=%d.\n", rc);
+			rc = arena_select(blob, sel++, type, &arena);
+			if (rc) {
+				if (sel == ARENA_SEL_MAX || rc != -DER_NOSPACE)
 					return 0;
-				}
-			} else {
-				ad_node = container_of(node, struct ad_maxheap_node, mh_node);
-				rc = arena_load(blob, ad_node->mh_arena_id, &arena);
-				if (rc) {
-					D_DEBUG(DB_TRACE, "failed to load arena %u: %d\n",
-						ad_node->mh_arena_id, rc);
-					arena = NULL;
-					continue;
-				}
+				continue;
 			}
-			tried = true;
 		}
 
 		D_DEBUG(DB_TRACE, "reserve space in arena=%d\n", arena2id(arena));
@@ -2381,12 +2411,12 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 			struct ad_maxheap_node *mn = arena2heap_node(arena);
 
 			D_DEBUG(DB_TRACE, "Failed to reserve size=%d from arena=%d (rc=%d), "
-				"grps=%d, tried=%d, active=%d, weight=%d, free=%d, frag=%d\n",
-				(int)size, arena2id(arena), rc, arena->ar_grp_nr, tried,
+				"grps=%d, sel=%d, active=%d, weight=%d, free=%d, frag=%d\n",
+				(int)size, arena2id(arena), rc, arena->ar_grp_nr, sel,
 				!mn->mh_inactive, mn->mh_weight, mn->mh_free_size,
 				mn->mh_frag_size);
 			arena_decref(arena);
-			if (tried || rc != -DER_NOSPACE)
+			if (sel == ARENA_SEL_MAX || rc != -DER_NOSPACE)
 				return 0;
 
 			arena = NULL;
