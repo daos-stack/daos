@@ -348,33 +348,33 @@ class IorMetrics(IntEnum):
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
     # blksiz    xsize aggs(MiB)   API RefNum
-    Operation = 0
-    Max_MiB = 1
-    Min_MiB = 2
-    Mean_MiB = 3
-    StdDev_MiB = 4
-    Max_OPs = 5
-    Min_OPs = 6
-    Mean_OPs = 7
-    StdDev_OPs = 8
-    Mean_seconds = 9
-    Stonewall_seconds = 10
-    Stonewall_MiB = 11
-    Test_No = 12
-    Num_Tasks = 13
-    tPN = 14
-    reps = 15
-    fPP = 16
-    reord = 17
-    reordoff = 18
-    reordrand = 19
-    seed = 20
-    segcnt = 21
-    blksiz = 22
-    xsize = 23
-    aggs_MiB = 24
+    OPERATION = 0
+    MAX_MIB = 1
+    MIN_MIB = 2
+    MEAN_MIB = 3
+    STDDEV_MIB = 4
+    MAX_OPS = 5
+    MIN_OPS = 6
+    MEAN_OPS = 7
+    STDDEV_OPS = 8
+    MEAN_SECONDS = 9
+    STONEWALL_SECONDS = 10
+    STONEWALL_MIB = 11
+    TEST_NO = 12
+    NUM_TASKS = 13
+    TPN = 14
+    REPS = 15
+    FPP = 16
+    REORD = 17
+    REORDOFF = 18
+    REORDRAND = 19
+    SEED = 20
+    SEGCNT = 21
+    BLKSIZ = 22
+    XSIZE = 23
+    AGGS_MIB = 24
     API = 25
-    RefNum = 26
+    REFNUM = 26
 
 
 class Ior:
