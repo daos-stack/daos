@@ -662,8 +662,8 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 		return errors.Errorf("nil %T", req)
 	}
 
+	req.CheckActReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckActReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRepair(ctx, &req.CheckActReq)
 	})
 

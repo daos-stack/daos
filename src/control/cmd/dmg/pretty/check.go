@@ -38,6 +38,19 @@ func PrintCheckerPolicies(out io.Writer, flags control.SystemCheckFlags, policie
 	tf.Format(table)
 }
 
+func countResultPools(resp *control.SystemCheckQueryResp) int {
+	if resp == nil {
+		return 0
+	}
+
+	poolMap := make(map[string]struct{})
+	for _, report := range resp.Reports {
+		poolMap[report.PoolUuid] = struct{}{}
+	}
+
+	return len(poolMap)
+}
+
 func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verbose bool) {
 	fmt.Fprintln(out, "DAOS System Checker Info")
 
@@ -48,8 +61,20 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 	fmt.Fprintf(out, "  %s\n", statusMsg)
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())
 
+	// Toggle this output based on the status. If the checker is still running, we
+	// should show the number of pools being checked. If the checker has completed,
+	// we should show the number of unique pools found in the reports.
+	action := "Checking"
+	poolCount := len(resp.Pools)
+	if resp.Status == control.SystemCheckStatusCompleted {
+		action = "Checked"
+		poolCount = countResultPools(resp)
+	}
+	if poolCount > 0 {
+		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(poolCount, "pool", ""))
+	}
+
 	if len(resp.Pools) > 0 {
-		fmt.Fprintf(out, "  Checking %s\n", english.Plural(len(resp.Pools), "pool", ""))
 		if verbose {
 			fmt.Fprintln(out, "\nPer-Pool Checker Info:")
 			for _, pool := range resp.Pools {
