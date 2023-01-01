@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	MaxKeyPerm  os.FileMode = 0700
+	MaxKeyPerm  os.FileMode = 0600
 	MaxCertPerm os.FileMode = 0664
 	MaxDirPerm  os.FileMode = 0700
 )
