@@ -32,10 +32,11 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         Test Description: Performs tests to generate large data sets over
                           various middleware, perform various system admin
                           operations, datamover operations.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=datamover,ior,mdtest
-        :avocado: tags=iosysadmin
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,datamover,ior,mdtest
+        :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
         new_test_user = self.params.get("new_user", "/run/container_acl/*")
@@ -76,6 +77,8 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].create_snap()
         # overwrite the last ior file
         self.ior_cmd.signature.update('456')
+        self.processes = self.ior_np
+        self.ppn = self.ior_ppn
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         nvme_free_space_before_snap_destroy = self.get_free_space()[1]
@@ -106,5 +109,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
         self.log.info("#####Starting DSERIAL Test")
         self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
+        self.log.info("#####Starting CONT_CLONE Test")
+        self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)
