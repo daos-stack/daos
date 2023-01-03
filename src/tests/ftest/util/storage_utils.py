@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -203,8 +203,14 @@ class StorageInfo():
                         self._log.error('    - device: %s', info['device'])
                         self._log.error('    - numa:   %s', info['numa'])
                         continue
+                    
+                    if device_filter and device_filter.startswith("-"):
+                        if re.findall(device_filter[1:], device.description):
+                            self._log.debug(
+                            "  excluding device matching '%s': %s", device_filter[1:], device)
+                            continue
 
-                    if device_filter and not re.findall(device_filter, device.description):
+                    elif device_filter and not re.findall(device_filter, device.description):
                         self._log.debug(
                             "  excluding device not matching '%s': %s", device_filter, device)
                         continue
