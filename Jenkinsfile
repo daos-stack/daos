@@ -114,32 +114,25 @@ pipeline {
     }
 
     stages {
-        stage('Get Commit Message') {
+        stage('Set Description') {
             steps {
                 script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':')
-                            if (key.contains(' ')) {
-                                return
-                            }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
-                        }
+                    if (params.CI_BUILD_DESCRIPTION) {
+                        buildDescription params.CI_BUILD_DESCRIPTION
                     }
-                    env.pragmas = pragmas
                 }
             }
         }
+        stage('Get Commit Message') {
+            steps {
+                pragmasToEnv()
+            }
+        }
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
