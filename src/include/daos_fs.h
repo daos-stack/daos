@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1123,16 +1123,20 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
 
 enum {
+	/** just print the OIDS */
 	DFS_CHECK_PRINT		= (1 << 0),
+	/** remove / punch the leaked objects */
 	DFS_CHECK_REMOVE	= (1 << 1),
+	/** add leaked oids to a "lost+found" directory */
 	DFS_CHECK_LINK_LF	= (1 << 2),
 };
 
 /**
- * Scan the DFS namespace and check if there are any leaked objects. Add those object to
- * "Lost+Found" directory.
+ * Scan the DFS namespace and check if there are any leaked objects. Depending on the flag passed,
+ * either remove those leaked objects to reclaim space, add those object to "Lost+Found" directory,
+ * or just print the oids to stdout.
  *
- * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	poh	Open pool handle.
  * \param[in]	cont	Name of POSIX container.
  * \param[in]	flags	Flags to indicate what to do with leaked objects:
  *			punch, link to l+f, or just print to stdout.

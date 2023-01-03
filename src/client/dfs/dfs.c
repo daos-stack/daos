@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -6496,7 +6496,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
 	/** open the entry name and get the oid */
 	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
 	if (rc) {
-		D_ERROR("dfs_open() if %s failed: %d\n", name, rc);
+		D_ERROR("dfs_lookup_rel() if %s failed: %d\n", name, rc);
 		return rc;
 	}
 
@@ -6511,7 +6511,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
 	 * not been written to, so it doesn't exist in the OIT. The mark operation would return
 	 * NONEXIST in this case, so check and avoid returning an error in this case.
 	 */
-	if (rc && rc != DER_NONEXIST) {
+	if (rc && rc != -DER_NONEXIST) {
 		D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_obj, rc = daos_der2errno(rc));
 	}
@@ -6552,6 +6552,9 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 	d_iov_t			marker;
 	bool			mark_data = true;
 	daos_epoch_range_t	epr;
+	struct timespec		now;
+	uid_t			uid;
+	gid_t			gid;
 	int			rc, rc2;
 
 	if (flags & DFS_CHECK_LINK_LF && flags & DFS_CHECK_REMOVE) {
@@ -6621,13 +6624,19 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 		}
 	}
 
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_oit, rc = errno);
+	uid = geteuid();
+	gid = getegid();
+
 	/** list all unmarked oids */
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_entries = DFS_NR_ITERATE;
 		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
 		if (rc) {
-			D_ERROR("daos_oit_list_unmarked failed: "DF_RC"\n", DP_RC(rc));
+			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lf, rc = daos_der2errno(rc));
 		}
 
@@ -6657,20 +6666,17 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 			if (flags & DFS_CHECK_LINK_LF) {
 				struct dfs_entry	entry = {0};
 				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
-				struct timespec		now;
 				char			name[DFS_MAX_NAME + 1];
 				daos_size_t		len;
 
-				entry.uid = geteuid();
-				entry.gid = getegid();
+				entry.uid = uid;
+				entry.gid = gid;
 				oid_cp(&entry.oid, oids[i]);
 				if (daos_is_array_type(otype))
 					entry.mode = S_IFREG | 0755;
 				else
 					entry.mode = S_IFDIR | 0755;
-				rc = clock_gettime(CLOCK_REALTIME, &now);
-				if (rc)
-					D_GOTO(out_lf, rc = errno);
+
 				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
 				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
 					now.tv_nsec;
