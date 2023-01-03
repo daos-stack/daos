@@ -357,10 +357,10 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, deps_env)
 
-    env.AddMethod(prereqs.require, 'd_add_requires')
-    env.AddMethod(prereqs.server_requested, 'd_server_requested')
-    env.AddMethod(prereqs.client_requested, 'd_client_requested')
-    env.AddMethod(prereqs.test_requested, 'd_tests_requested')
+    deps_env.AddMethod(prereqs.require, 'd_add_requires')
+    deps_env.AddMethod(prereqs.server_requested, 'd_server_requested')
+    deps_env.AddMethod(prereqs.client_requested, 'd_client_requested')
+    deps_env.AddMethod(prereqs.test_requested, 'd_tests_requested')
 
     if GetOption('build_deps') == 'only':
         print('Exiting because --build-deps=only was set')

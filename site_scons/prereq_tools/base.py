@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -1010,7 +1010,7 @@ class PreReqComponent():
         comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
-    def server_requested(self):
+    def server_requested(self, *_args):
         """return True if server build is requested"""
         return "server" in self._build_targets
 
