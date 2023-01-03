@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -332,11 +332,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		}
 	}
 
-	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
-			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_INFO(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
+		       hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
-	DFUSE_TRA_DEBUG(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
-			oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	DFUSE_TRA_INFO(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
+		       oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
 	if (oh->doh_rd_offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
 		struct dfuse_readdir_c *drc;

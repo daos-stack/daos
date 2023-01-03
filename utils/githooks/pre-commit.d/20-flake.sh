@@ -20,12 +20,12 @@ fi
 echo "Checking uncommitted code with flake."
 git diff -u | flake8 --diff
 
-if ! BRANCH=origin/$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
+if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
         echo "Failed to determine branch with git rev-parse"
         exit 1
 fi
 
-if [ "$BRANCH" = "origin/master" ]
+if [ "$BRANCH" = "master" ]
 then
         echo "Checking tree"
         flake8 --statistics
