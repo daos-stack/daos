@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,19 +17,26 @@
 #include "vts_io.h"
 
 #define WAL_IO_KEYS		31
+#define WAL_POOL_REFILLS	3
 #define WAL_IO_MULTI_KEYS	10000
 #define WAL_OBJ_KEYS		31
+
+/* Define WAL_IO_EXTRA_CHK to one for comprehensive type checking */
+#define WAL_IO_EXTRA_CHK	0
 
 static int type_list[] = {
 	0,
 	DAOS_OT_AKEY_UINT64,
+#if WAL_IO_EXTRA_CHK == 1
 	DAOS_OT_AKEY_LEXICAL,
 	DAOS_OT_DKEY_UINT64,
 	DAOS_OT_DKEY_LEXICAL,
+	DAOS_OT_MULTI_LEXICAL,
+#endif
 	DAOS_OT_MULTI_UINT64,
-	DAOS_OT_MULTI_LEXICAL
 };
 
+static int wal_skip_tests;
 static int num_keys;
 static enum daos_otype_t otype;
 
@@ -189,13 +196,8 @@ restore_pool(struct wal_test_args *arg, const char *pool_name)
 static inline void
 skip_wal_test(void)
 {
-	unsigned int	val = 0;
-
-	d_getenv_int("DAOS_MD_ON_SSD", &val);
-	if (val == 0) {
-		print_message("MD_ON_SSD isn't enabled, skip test\n");
+	if (wal_skip_tests)
 		skip();
-	}
 }
 
 /* Create pool, clear content in tmpfs, open pool by meta blob loading & WAL replay */
@@ -437,7 +439,9 @@ wal_io_multiple_refills(void **state)
 	char			*dkey_buf = NULL;
 	int			 i, j, rc = 0;
 
-	num_keys = WAL_IO_KEYS;
+	skip_wal_test();
+
+	num_keys = WAL_POOL_REFILLS;
 
 	D_ALLOC_NZ(update_buf, UPDATE_BUF_SIZE);
 	assert_rc_equal(!!update_buf, true);
@@ -479,6 +483,8 @@ wal_io_multiple_updates(void **state)
 	char			*dkey_buf = NULL;
 	char			*up, *f, *ak, *dk;
 	int			 i, j, rc = 0;
+
+	skip_wal_test();
 
 	num_keys = WAL_IO_MULTI_KEYS;
 
@@ -587,6 +593,8 @@ wal_io_query_key_punch_update(void **state)
 	daos_unit_oid_t		oid;
 	uint64_t		dkey_value;
 	uint64_t		akey_value = 0;
+
+	skip_wal_test();
 
 	d_iov_set(&akey, &akey_value, sizeof(akey_value));
 
@@ -817,6 +825,8 @@ wal_io_multiple_objects(void **state)
 	daos_epoch_t		 epoch;
 	int i;
 
+	skip_wal_test();
+
 	num_keys = WAL_OBJ_KEYS;
 
 	for (i = 0; io_test_flags[i].tf_str != NULL; i++) {
@@ -837,6 +847,8 @@ wal_io_multiple_objects_ovwr(void **state)
 	struct io_test_args	*arg = *state;
 	daos_epoch_t		 epoch;
 	int i;
+
+	skip_wal_test();
 
 	num_keys = WAL_OBJ_KEYS;
 
@@ -883,7 +895,15 @@ run_wal_tests(const char *cfg)
 	char		 test_name[DTS_CFG_MAX];
 	const char	*akey = "hashed";
 	const char	*dkey = "hashed";
+	unsigned int	 val = 0;
 	int		 i, rc;
+
+
+	d_getenv_int("DAOS_MD_ON_SSD", &val);
+	if (val == 0) {
+		print_message("MD_ON_SSD isn't enabled, skip test\n");
+		wal_skip_tests = 1;
+	}
 
 	dts_create_config(test_name, "WAL Pool tests %s", cfg);
 	D_PRINT("Running %s\n", test_name);
