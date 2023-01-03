@@ -121,6 +121,6 @@ class Analyzer():
             size_map[value].append(key)
 
         for key in sorted(size_map.keys(), reverse=True):
-            print("%d bytes:" % key)
+            print(f'{key:d} bytes:')
             for value in size_map[key]:
-                print("    %s" % value)
+                print(f'    {value}')
