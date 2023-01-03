@@ -37,11 +37,9 @@ class HarnessAdvancedTest(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        This test can be run in any CI stage: vm, small, medium, large
-
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_advanced_test,core_files
+        :avocado: tags=harness,core_files
         :avocado: tags=HarnessAdvancedTest,test_core_files
         """
         # Choose a server find the pid of its daos_engine process
@@ -88,11 +86,9 @@ class HarnessAdvancedTest(TestWithServers):
         that it will create a core file, allowing the core file collection code
         in launch.py to be tested.
 
-        This test can be run in any CI stage: vm, small, medium, large
-
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness,harness_advanced_test,core_files
+        :avocado: tags=harness,core_files
         :avocado: tags=HarnessAdvancedTest,test_core_files_hw
         """
         self.test_core_files()
@@ -105,7 +101,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
+        :avocado: tags=harness,pool_timeout
         :avocado: tags=HarnessAdvancedTest,test_pool_timeout
         """
         namespace = "runner.timeout"
@@ -140,7 +136,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
+        :avocado: tags=harness,pool_timeout
         :avocado: tags=HarnessAdvancedTest,test_pool_timeout_hw
         """
         self.test_pool_timeout()
@@ -154,7 +150,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,launch_failures
+        :avocado: tags=harness,launch_failures,failure_expected
         :avocado: tags=HarnessAdvancedTest,test_launch_failures
         """
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
@@ -209,7 +205,7 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=hw,medium,large
-        :avocado: tags=harness,launch_failures
+        :avocado: tags=harness,launch_failures,failure_expected
         :avocado: tags=HarnessAdvancedTest,test_launch_failures_hw
         """
         self.test_launch_failures()

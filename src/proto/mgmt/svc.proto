@@ -98,8 +98,9 @@ message GetAttachInfoResp {
 					// libdaos client to aid in CaRT initialization.
 	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
 	ClientNetHint client_net_hint = 4; // Primary provider hint
-	repeated RankUri secondary_rank_uris = 5; // Rank URIs for additional providers
-	repeated ClientNetHint secondary_client_net_hints = 6; // Hints for additional providers
+	uint64 data_version = 5; // Version of the system database.
+	repeated RankUri secondary_rank_uris = 6; // Rank URIs for additional providers
+	repeated ClientNetHint secondary_client_net_hints = 7; // Hints for additional providers
 }
 
 message PrepShutdownReq {

@@ -62,7 +62,12 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 
 	D_ASSERT(tgts != NULL);
 
-	if (*tgt_cnt == 1 && flags & ORF_CONTAIN_LEADER) {
+	if (!(flags & ORF_CONTAIN_LEADER)) {
+		D_ERROR("Miss DTX leader information, flags %x\n", flags);
+		return -DER_PROTO;
+	}
+
+	if (*tgt_cnt == 1) {
 		*tgt_cnt = 0;
 		*p_tgts = NULL;
 		goto out;
@@ -77,11 +82,12 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 		if (tgts[i].st_rank == DAOS_TGT_IGNORE)
 			continue;
 
-		mbs->dm_tgts[j].ddt_shard = tgts[i].st_shard;
 		mbs->dm_tgts[j++].ddt_id = tgts[i].st_tgt_id;
 	}
 
-	if (j == 0 || (j == 1 && flags & ORF_CONTAIN_LEADER)) {
+	D_ASSERT(j > 0);
+
+	if (j == 1) {
 		D_FREE(mbs);
 		*tgt_cnt = 0;
 		*p_tgts = NULL;
@@ -91,13 +97,10 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 	mbs->dm_tgt_cnt = j;
 	mbs->dm_grp_cnt = 1;
 	mbs->dm_data_size = size;
-	mbs->dm_flags = DMF_SORTED_SAD_IDX;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
-	if (flags & ORF_CONTAIN_LEADER) {
-		mbs->dm_flags |= DMF_CONTAIN_LEADER;
-		--(*tgt_cnt);
-		*p_tgts = ++tgts;
-	}
+	--(*tgt_cnt);
+	*p_tgts = ++tgts;
 
 	if (!(flags & ORF_EC))
 		mbs->dm_flags |= DMF_SRDG_REP;

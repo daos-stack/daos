@@ -52,7 +52,6 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if len(svc.clientNetworkHint) == 0 {
 		return nil, errors.New("clientNetworkHint is missing")
 	}
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
 	groupMap, err := svc.sysdb.GroupMap()
 	if err != nil {
@@ -103,18 +102,11 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 
 	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
-	// For resp.RankUris may be large, we make a resp copy with a limited
-	// number of rank URIs, to avoid flooding the debug log.
-	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, resp:%+v len(RankUris):%d\n",
-		*func(r *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
-			max := 1
-			if len(r.RankUris) <= max {
-				return r
-			}
-			s := *r
-			s.RankUris = s.RankUris[0:max]
-			return &s
-		}(resp), len(resp.RankUris))
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
 
 	return resp, nil
 }
@@ -124,7 +116,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 	if err := svc.checkSystemRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, req:%+v\n", req)
 
 	leaderAddr, replicas, err := svc.sysdb.LeaderQuery()
 	if err != nil {
@@ -136,7 +127,6 @@ func (svc *mgmtSvc) LeaderQuery(ctx context.Context, req *mgmtpb.LeaderQueryReq)
 		Replicas:      replicas,
 	}
 
-	svc.log.Debugf("MgmtSvc.LeaderQuery dispatch, resp:%+v\n", resp)
 	return resp, nil
 }
 
@@ -437,14 +427,6 @@ func (svc *mgmtSvc) Join(ctx context.Context, req *mgmtpb.JoinReq) (resp *mgmtpb
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.Join dispatch, req:%s", mgmtpb.Debug(req))
-	defer func() {
-		if err != nil {
-			svc.log.Errorf("MgmtSvc.Join failed: %s", err)
-			return
-		}
-		svc.log.Debugf("MgmtSvc.Join succeeded, resp:%s", mgmtpb.Debug(resp))
-	}()
 
 	replyAddr, err := getPeerListenAddr(ctx, req.GetAddr())
 	if err != nil {
@@ -670,7 +652,6 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemQuery RPC: %+v", req)
 
 	hitRanks, missRanks, missHosts, err := svc.resolveRanks(req.Hosts, req.Ranks)
 	if err != nil {
@@ -700,7 +681,11 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		resp.Providers = append(resp.Providers, hint.Provider)
 	}
 
-	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))
+	v, err := svc.sysdb.DataVersion()
+	if err != nil {
+		return nil, err
+	}
+	resp.DataVersion = v
 
 	return resp, nil
 }
@@ -816,7 +801,6 @@ func (svc *mgmtSvc) SystemStop(ctx context.Context, req *mgmtpb.SystemStopReq) (
 	if err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Responding to SystemStop RPC: %+v", resp)
 
 	return resp, nil
 }
@@ -877,7 +861,6 @@ func (svc *mgmtSvc) SystemStart(ctx context.Context, req *mgmtpb.SystemStartReq)
 	if err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Responding to SystemStart RPC: %+v", resp)
 
 	return resp, nil
 }
@@ -887,7 +870,6 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemExclude RPC: %s", mgmtpb.Debug(req))
 
 	if req.Hosts == "" && req.Ranks == "" {
 		return nil, errors.New("no hosts or ranks specified")
@@ -927,7 +909,6 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 			Addr:   m.Addr.String(),
 		})
 	}
-	svc.log.Debugf("Responding to SystemExclude RPC: %+v", resp)
 
 	return resp, nil
 }
@@ -1064,7 +1045,6 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemCleanup RPC: %+v", req)
 
 	if req.Machine == "" {
 		return nil, errors.New("SystemCleanup requires a machine name.")
@@ -1112,8 +1092,6 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		})
 	}
 
-	svc.log.Debugf("Responding to SystemCleanup RPC: %+v", resp)
-
 	return resp, nil
 }
 
@@ -1122,10 +1100,6 @@ func (svc *mgmtSvc) SystemSetAttr(ctx context.Context, req *mgmtpb.SystemSetAttr
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemSetAttr RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemSetAttr RPC: (%v)", err)
-	}()
 
 	if err := system.SetAttributes(svc.sysdb, req.GetAttributes()); err != nil {
 		return nil, err
@@ -1139,10 +1113,6 @@ func (svc *mgmtSvc) SystemGetAttr(ctx context.Context, req *mgmtpb.SystemGetAttr
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemGetAttr RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemGetAttr RPC: %+v (%v)", resp, err)
-	}()
 
 	props, err := system.GetAttributes(svc.sysdb, req.GetKeys())
 	if err != nil {
@@ -1158,10 +1128,6 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemSetProp RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemSetProp RPC: (%v)", err)
-	}()
 
 	if err := system.SetUserProperties(svc.sysdb, svc.systemProps, req.GetProperties()); err != nil {
 		return nil, err
@@ -1175,10 +1141,6 @@ func (svc *mgmtSvc) SystemGetProp(ctx context.Context, req *mgmtpb.SystemGetProp
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("Received SystemGetProp RPC: %+v", req)
-	defer func() {
-		svc.log.Debugf("Responding to SystemGetProp RPC: %+v (%v)", resp, err)
-	}()
 
 	props, err := system.GetUserProperties(svc.sysdb, svc.systemProps, req.GetKeys())
 	if err != nil {

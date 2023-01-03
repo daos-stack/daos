@@ -122,7 +122,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						NumCtxs: 1,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 		"Server uses TCP sockets + Ethernet": {
@@ -155,7 +156,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						NumCtxs: 1,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 		"older client (AllRanks: false)": {
@@ -182,7 +184,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 						Uri:  msReplica.PrimaryFabricURI,
 					},
 				},
-				MsRanks: []uint32{0},
+				MsRanks:     []uint32{0},
+				DataVersion: 2,
 			},
 		},
 	} {

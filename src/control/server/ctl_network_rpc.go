@@ -18,8 +18,6 @@ import (
 
 // NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
-	c.log.Debugf("NetworkScanDevices() Received request: %s", req.GetProvider())
-
 	provider, err := c.srvCfg.Fabric.GetPrimaryProvider()
 	if err != nil {
 		return nil, err
@@ -50,9 +48,6 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 
 	resp.Numacount = int32(topo.NumNUMANodes())
 	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
-
-	c.log.Debugf("NetworkScanResp: %d NUMA nodes with %d cores each",
-		resp.GetNumacount(), resp.GetCorespernuma())
 
 	return resp, nil
 }

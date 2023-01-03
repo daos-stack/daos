@@ -1498,7 +1498,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descripto
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__rank_uri__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[6] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[7] =
 {
   {
     "status",
@@ -1549,8 +1549,20 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "secondary_rank_uris",
+    "data_version",
     5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, data_version),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "secondary_rank_uris",
+    6,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__GetAttachInfoResp, n_secondary_rank_uris),
@@ -1562,7 +1574,7 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
   },
   {
     "secondary_client_net_hints",
-    6,
+    7,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__GetAttachInfoResp, n_secondary_client_net_hints),
@@ -1575,16 +1587,17 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
   3,   /* field[3] = client_net_hint */
+  4,   /* field[4] = data_version */
   2,   /* field[2] = ms_ranks */
   1,   /* field[1] = rank_uris */
-  5,   /* field[5] = secondary_client_net_hints */
-  4,   /* field[4] = secondary_rank_uris */
+  6,   /* field[6] = secondary_client_net_hints */
+  5,   /* field[5] = secondary_rank_uris */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
 {
@@ -1594,7 +1607,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   "Mgmt__GetAttachInfoResp",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoResp),
-  6,
+  7,
   mgmt__get_attach_info_resp__field_descriptors,
   mgmt__get_attach_info_resp__field_indices_by_name,
   1,  mgmt__get_attach_info_resp__number_ranges,

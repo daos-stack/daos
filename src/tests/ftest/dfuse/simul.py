@@ -65,6 +65,7 @@ class PosixSimul(DfuseTestBase):
         Test #39: link to one file, individual mode.
         Test #40: link to a file per process, individual mode.
         Test #41: fcntl locking, individual mode.
+
     :avocado: recursive
     """
 
