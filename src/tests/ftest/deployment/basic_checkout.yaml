@@ -148,7 +148,8 @@ ior_dm:
   signature: "5"
   transfer_size: 1M
   block_size: 1M
-  dfs_oclass: "EC_2P2GX"
+  # dfs_oclass: "EC_2P2GX"
+  dfs_oclass: "SX"
   test_file: "/testFile"
   dfs_destroy: false
 
