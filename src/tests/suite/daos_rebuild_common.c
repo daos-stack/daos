@@ -33,6 +33,7 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 		    int tgt_idx, bool kill)
 {
 	int i;
+	int rc = 0;
 
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
@@ -46,9 +47,9 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	}
 
 	for (i = 0; i < arg_cnt; i++) {
-		daos_exclude_target(args[i]->pool.pool_uuid,
-				    args[i]->group, args[i]->dmg_config,
-				    rank, tgt_idx);
+		rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
+				      args[i]->group, rank, tgt_idx);
+		assert_success(rc);
 	}
 }
 
@@ -57,13 +58,14 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		int tgt_idx)
 {
 	int i;
+	int rc = 0;
 
 	for (i = 0; i < args_cnt; i++) {
-		if (!args[i]->pool.destroyed)
-			daos_reint_target(args[i]->pool.pool_uuid,
-					  args[i]->group,
-					  args[i]->dmg_config,
-					  rank, tgt_idx);
+		if (!args[i]->pool.destroyed) {
+			rc = dmg_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
+						  args[i]->group, rank, tgt_idx);
+			assert_success(rc);
+		}
 		sleep(2);
 	}
 }
@@ -73,13 +75,14 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		   int tgt_idx, daos_size_t nvme_size)
 {
 	int i;
+	int rc = 0;
 
 	for (i = 0; i < args_cnt; i++) {
-		if (!args[i]->pool.destroyed)
-			daos_extend_target(args[i]->pool.pool_uuid,
-					   args[i]->group,
-					   args[i]->dmg_config,
-					   rank, tgt_idx, nvme_size);
+		if (!args[i]->pool.destroyed) {
+			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
+					     args[i]->group, &rank, 1);
+			assert_success(rc);
+		}
 		sleep(2);
 	}
 }
@@ -89,13 +92,14 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 		int tgt_idx)
 {
 	int i;
+	int rc = 0;
 
 	for (i = 0; i < args_cnt; i++) {
-		if (!args[i]->pool.destroyed)
-			daos_drain_target(args[i]->pool.pool_uuid,
-					args[i]->group,
-					args[i]->dmg_config,
-					rank, tgt_idx);
+		if (!args[i]->pool.destroyed) {
+			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
+					    args[i]->group, rank, tgt_idx);
+			assert_success(rc);
+		}
 		sleep(2);
 	}
 }
@@ -394,15 +398,18 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 		      int nr)
 {
 	MPI_Barrier(MPI_COMM_WORLD);
+	int rc = 0;
+
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0 && !arg->pool.destroyed) {
 		int i;
 
-		for (i = 0; i < nr; i++)
-			daos_reint_target(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config,
-					  failed_rank,
-					  failed_tgts ? failed_tgts[i] : -1);
+		for (i = 0; i < nr; i++) {
+			rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
+						  arg->group, failed_rank,
+						  failed_tgts ? failed_tgts[i] : -1);
+			assert_success(rc);
+		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }

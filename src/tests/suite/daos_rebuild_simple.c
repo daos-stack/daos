@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -790,6 +790,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	d_rank_t	rank = 2;
 	int		rank_nr = 1;
 	int		i;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -805,15 +806,17 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+			      arg->group, rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
@@ -854,6 +857,7 @@ rebuild_large_object(void **state)
 	d_rank_t	rank = 2;
 	int		i;
 	int		j;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -870,15 +874,17 @@ rebuild_large_object(void **state)
 	}
 
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);

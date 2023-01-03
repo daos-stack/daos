@@ -918,10 +918,9 @@ rebuild_multiple_tgts(void **state)
 
 			if (rank != leader) {
 				exclude_ranks[fail_cnt] = rank;
-				daos_exclude_server(arg->pool.pool_uuid,
-						    arg->group,
-						    arg->dmg_config,
-						    rank);
+				rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+						      arg->group, rank, -1);
+				assert_success(rc);
 				if (++fail_cnt >= 2)
 					break;
 			}
@@ -944,10 +943,11 @@ rebuild_multiple_tgts(void **state)
 
 	/* Add back the target if it is not being killed */
 	if (arg->myrank == 0) {
-		for (i = 0; i < 2; i++)
-			daos_reint_server(arg->pool.pool_uuid, arg->group,
-					  arg->dmg_config,
-					  exclude_ranks[i]);
+		for (i = 0; i < 2; i++) {
+			rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+						  exclude_ranks[i], -1);
+			assert_success(rc);
+		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -1262,7 +1262,7 @@ rebuild_kill_rank_during_rebuild(void **state)
 	test_arg_t	*new_arg = NULL;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc;
+	int		rc = 0;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1289,8 +1289,9 @@ rebuild_kill_rank_during_rebuild(void **state)
 
 	new_arg->rebuild_cb = rebuild_destroy_pool_cb;
 
-	daos_exclude_target(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			    ranks_to_kill[0], -1);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      ranks_to_kill[0], -1);
+	assert_success(rc);
 
 	sleep(2);
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
