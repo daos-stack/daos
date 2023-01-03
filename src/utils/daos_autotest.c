@@ -818,7 +818,7 @@ kv_insert4k(void)
 	new_oid();
 	daos_obj_generate_oid(coh, &oid, DAOS_OT_KV_HASHED, 0, 0, 0);
 
-	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
 		step_fail("failed to open object: %s", d_errdesc(rc));
 		return rc;

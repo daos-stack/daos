@@ -20,19 +20,19 @@ fi
 echo "Checking uncommitted code with flake."
 git diff -u | flake8 --diff
 
-if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
+if ! BRANCH=origin/$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
         echo "Failed to determine branch with git rev-parse"
         exit 1
 fi
 
-if [ "$BRANCH" = "master" ]
+if [ "$BRANCH" = "origin/master" ]
 then
         echo "Checking tree"
         flake8 --statistics
 else
 
         # Try and use the gh command to work out the target branch, or if not installed
-        # then assume master.
+        # then assume origin/master.
         if command -v gh > /dev/null 2>&1
         then
                 # If there is no PR created yet then do not check anything.
@@ -41,18 +41,18 @@ else
                        TARGET=HEAD
                 fi
         else
-                # With no 'gh' command installed then check against master.
-                echo "Install gh command to auto-detect target branch, assuming master."
+                # With no 'gh' command installed then check against origin/master.
+                echo "Install gh command to auto-detect target branch, assuming origin/master."
                 TARGET=origin/master
         fi
 
         if [ $TARGET = "HEAD" ]
         then
                 echo "Checking against branch HEAD"
-                git diff HEAD^ -U10 | flake8 --config .flake8 --diff
+                git diff HEAD -U10 | flake8 --config .flake8 --diff
 
                 echo "Checking scons code against branch ${TARGET}"
-                git diff HEAD^ -U10 | flake8 --config .flake8-scons --diff
+                git diff HEAD -U10 | flake8 --config .flake8-scons --diff
         else
 
                 echo "Checking against branch ${TARGET}"

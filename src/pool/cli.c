@@ -990,6 +990,8 @@ struct dc_pool_glob {
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
 	uint64_t	dpg_capas;
+	/* rebuild version */
+	uint32_t	dpg_rebuild_version;
 	/* poolmap version */
 	uint32_t	dpg_map_version;
 	/* number of component of poolbuf, same as pool_buf::pb_nr */
@@ -1109,6 +1111,7 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
+	pool_glob->dpg_rebuild_version = pool->dp_rebuild_version;
 	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
 	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
@@ -1181,7 +1184,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	pool->dp_capas = pool_glob->dpg_capas;
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
-
+	pool->dp_rebuild_version = pool_glob->dpg_rebuild_version;
 	p = (void *)map_buf + pool_buf_size(map_buf->pb_nr);
 	rc = rsvc_client_decode(p, len - (p - (void *)pool_glob),
 				&pool->dp_client);

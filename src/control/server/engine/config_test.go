@@ -181,7 +181,6 @@ func TestConfig_Constructed(t *testing.T) {
 
 	// just set all values regardless of validity
 	constructed := MockConfig().
-		WithRank(37).
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42"). // qib42 recognized by mock validator
 		WithFabricInterfacePort(100).

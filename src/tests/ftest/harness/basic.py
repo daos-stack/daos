@@ -99,9 +99,11 @@ class HarnessBasicTest(TestWithoutServers):
     def test_no_cmocka_xml(self):
         """Test to verify CmockaUtils detects lack of cmocka file generation.
 
+        If working correctly this test should fail due to a missing cmocka file.
+
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_cmocka
+        :avocado: tags=harness,harness_cmocka,failure_expected
         :avocado: tags=HarnessBasicTest,test_no_cmocka_xml
         """
         self.log.info("=" * 80)
