@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2364,7 +2364,11 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 		if (rc != 0)
 			D_GOTO(out, rc);
 		/* sizeof(DEFAULT_CONT_LABEL) includes \0 at the end */
-		if (strncmp(value.iov_buf, DEFAULT_CONT_LABEL, sizeof(DEFAULT_CONT_LABEL) - 1)) {
+		if (value.iov_len == (sizeof(DEFAULT_CONT_LABEL) - 1) &&
+		    strncmp(value.iov_buf, DEFAULT_CONT_LABEL,
+		    sizeof(DEFAULT_CONT_LABEL) - 1) == 0 ) {
+			prop->dpp_nr--;
+		} else {
 			if (value.iov_len > DAOS_PROP_LABEL_MAX_LEN) {
 				D_ERROR("bad label length %zu (> %d).\n", value.iov_len,
 					DAOS_PROP_LABEL_MAX_LEN);
@@ -2377,8 +2381,6 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			if (prop->dpp_entries[idx].dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			idx++;
-		} else {
-			prop->dpp_nr--;
 		}
 	}
 	if (bits & DAOS_CO_QUERY_PROP_LAYOUT_TYPE) {
