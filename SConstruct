@@ -2,12 +2,10 @@
 import os
 import sys
 import platform
-import subprocess
+import subprocess  # nosec
 import time
 import errno
 import SCons.Warnings
-import daos_build
-import compiler_setup
 from prereq_tools import PreReqComponent
 import stack_analyzer
 # pylint: disable=reimported
@@ -322,20 +320,17 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile', 'go_builder'])
+    deps_env = Environment()
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
     if 'LD_PRELOAD' in os.environ:
-        env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+        deps_env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
         for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
             value = os.environ.get(key, None)
             if value is not None:
-                env['ENV'][key] = value
-
-    if 'COVFILE' in os.environ:
-        env['ENV']['COVFILE'] = os.environ['COVFILE']
+                deps_env['ENV'][key] = value
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
@@ -347,26 +342,26 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     platform_arm = is_platform_arm()
 
     if 'VIRTUAL_ENV' in os.environ:
-        env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
-        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
+        deps_env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        deps_env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
-    prereqs = PreReqComponent(env, opts, commits_file)
-    config = Configure(env)
+    config = Configure(deps_env)
     if not config.CheckHeader('stdatomic.h'):
         Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
     config.Finish()
-    build_prefix = prereqs.get_src_build_dir()
-    prereqs.init_build_targets(build_prefix)
-    prereqs.load_defaults()
+
+    prereqs = PreReqComponent(deps_env, opts, commits_file)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+        deps_env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
-    opts.Save(opts_file, env)
+    opts.Save(opts_file, deps_env)
 
     if GetOption('build_deps') == 'only':
         print('Exiting because --build-deps=only was set')
         Exit(0)
+
+    env = deps_env.Clone(tools=['extra', 'go_builder', 'daos_builder', 'compiler_setup'])
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
@@ -374,10 +369,6 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     daos_version = get_version(env)
 
     set_defaults(env, daos_version)
-
-    # Add project specific methods to SCons environments.
-    daos_build.setup(env)
-    compiler_setup.setup(env)
 
     base_env = env.Clone()
 
@@ -390,6 +381,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         base_env_mpi = None
 
     env.compiler_setup()
+    build_prefix = prereqs.get_src_build_dir()
 
     args = GetOption('analyze_stack')
     if args is not None:

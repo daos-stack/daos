@@ -35,6 +35,7 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
 
 class InstalledComps():
     """Checks for installed components and keeps track of prior checks"""
+
     installed = []
     not_installed = []
 
@@ -78,8 +79,7 @@ def inst(reqs, name):
 
 
 def check(reqs, name, built_str, installed_str=""):
-    """Return a different string based on whether a component is
-       installed or not"""
+    """Return a different string based on whether a component is installed or not"""
     installed = InstalledComps(reqs)
     if installed.check(name):
         return installed_str
@@ -364,7 +364,8 @@ def define_components(reqs):
                           ['make'],
                           ['make', 'install']],
                 libs=['protobuf-c'],
-                headers=['protobuf-c/protobuf-c.h'])
+                headers=['protobuf-c/protobuf-c.h'],
+                package='protobuf-c-devel')
 
 
 __all__ = ['define_components']
