@@ -80,7 +80,7 @@ pipeline {
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
                defaultValue: 'ofi+tcp',
-               description: 'Provider to use for the Functional Hardware Small/Medium/Large stages of this run (i.e. ofi+tcp)')
+               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
@@ -97,13 +97,19 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-tcp-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the CI Functional Hardware Medium TCP Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the CI Functional Hardware Large test stage')
-        string(name: 'CI_NVME_5_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium stage')
-        string(name: 'CI_NVME_9_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium TCP Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
                description: 'Label to use for 9 node Functional Hardware Large stage')
         string(name: 'CI_BUILD_DESCRIPTION',
@@ -139,7 +145,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -155,7 +161,31 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Medium')
+                } // stage('Functional Hardware Medium')
+                stage('Functional Hardware Medium TCP Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_TCP_PROVIDER_LABEL
+                    }
+                    steps {
+                        // Need to get back onto base_branch for ci/
+                        checkoutScm url: 'https://github.com/daos-stack/daos.git',
+                                    branch: env.BaseBranch,
+                                    withSubmodules: true
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, "tests-internal"),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional Hardware Medium TCP Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -163,7 +193,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
@@ -179,7 +209,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional_Hardware_Large')
+                } // stage('Functional Hardware Large')
             } // parallel
         } // stage('Test')
     } //stages
