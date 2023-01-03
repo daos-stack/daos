@@ -187,6 +187,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			iv_prop->pip_obj_version = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
@@ -326,6 +329,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
+			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			prop_entry->dpe_val = iv_prop->pip_obj_version;
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
@@ -1020,6 +1026,7 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 d_sg_list_t *value)
 {
 	struct pool_iv_entry	*v = value->sg_iovs[0].iov_buf;
+	struct pool_iv_key	*pool_key;
 	struct ds_pool		*pool;
 	struct pool_buf		*map_buf = NULL;
 	int			 rc;
@@ -1041,7 +1048,9 @@ pool_iv_pre_sync(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (v->piv_map.piv_pool_buf.pb_nr > 0)
 		map_buf = &v->piv_map.piv_pool_buf;
 
-	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank);
+	pool_key = (struct pool_iv_key *)key->key_buf;
+	ds_pool_iv_ns_update(pool, v->piv_map.piv_master_rank,
+			     pool_key->pik_term);
 
 	rc = ds_pool_tgt_map_update(pool, map_buf,
 				    v->piv_map.piv_pool_map_ver);
@@ -1110,7 +1119,7 @@ retry:
 }
 
 static int
-pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
+pool_iv_update(struct ds_iv_ns *ns, int class_id, uuid_t key_uuid,
 	       struct pool_iv_entry *pool_iv,
 	       uint32_t pool_iv_len, unsigned int shortcut,
 	       unsigned int sync_mode, bool retry)
@@ -1132,7 +1141,8 @@ pool_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	key.class_id = class_id;
 	pool_key = (struct pool_iv_key *)key.key_buf;
 	pool_key->pik_entry_size = pool_iv_len;
-	pool_key->pik_eph = crt_hlc_get();
+	pool_key->pik_eph = d_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	uuid_copy(pool_key->pik_uuid, key_uuid);
 
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
@@ -1188,7 +1198,7 @@ ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 int
 ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			   uint64_t flags, uint64_t sec_capas,
-			   d_iov_t *cred, uint32_t global_ver)
+			   d_iov_t *cred, uint32_t global_ver, uint32_t layout_ver)
 {
 	struct pool_iv_entry	*iv_entry;
 	daos_size_t		iv_entry_size;
@@ -1208,6 +1218,7 @@ ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 	pic->pic_capas = sec_capas;
 	pic->pic_cred_size = cred->iov_len;
 	pic->pic_global_ver = global_ver;
+	pic->pic_obj_ver = layout_ver;
 	memcpy(&pic->pic_creds[0], cred->iov_buf, cred->iov_len);
 
 	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_CONN, hdl_uuid,

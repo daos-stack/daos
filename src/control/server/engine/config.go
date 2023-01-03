@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -138,7 +137,6 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *ranklist.Rank `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -315,12 +313,6 @@ func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	return c
 }
 
-// WithRank sets the instance rank.
-func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = ranklist.NewRankPtr(r)
-	return c
-}
-
 // WithSystemName sets the system name to which the instance belongs.
 func (c *Config) WithSystemName(name string) *Config {
 	c.SystemName = name
@@ -484,6 +476,13 @@ func (c *Config) WithPinnedNumaNode(numa uint) *Config {
 func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits) *Config {
 	c.Storage.AccelProps.Engine = name
 	c.Storage.AccelProps.Options = mask
+	return c
+}
+
+// WithStorageSpdkRpcSrvProps specifies whether a SPDK JSON-RPC server will run in the I/O Engine.
+func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
+	c.Storage.SpdkRpcSrvProps.Enable = enable
+	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
 	return c
 }
 

@@ -41,11 +41,13 @@ from slurm_utils import show_partition, create_partition, delete_partition    # 
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
 
+BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
-DEFAULT_LOGS_THRESHOLD = "2G"
+DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
@@ -757,6 +759,9 @@ class Launch():
         self.job = None
         self.result = None
 
+        # Options for bullseye code coverage
+        self.bullseye_hosts = NodeSet()
+
         # Details about the run
         self.details = OrderedDict()
 
@@ -1025,6 +1030,18 @@ class Launch():
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
+        # Determine if bullseye code coverage collection is enabled
+        logger.debug("Checking for bullseye code coverage configuration")
+        # pylint: disable=unsupported-binary-operation
+        self.bullseye_hosts = args.test_servers | get_local_host()
+        result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
+        if not result.passed:
+            logger.info(
+                "Bullseye code coverage collection not configured on %s", self.bullseye_hosts)
+            self.bullseye_hosts = NodeSet()
+        else:
+            logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+
         # Define options for creating any slurm partitions required by the tests
         try:
             self.slurm_control_node = NodeSet(args.slurm_control_node)
@@ -1138,6 +1155,7 @@ class Launch():
         # /usr/sbin directory.
         usr_sbin = os.path.sep + os.path.join("usr", "sbin")
         path = os.environ.get("PATH")
+        os.environ["COVFILE"] = BULLSEYE_FILE
 
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
@@ -2187,6 +2205,9 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure hosts to collect code coverage
+        self.setup_bullseye()
+
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
             logger.info("-" * 80)
@@ -2236,8 +2257,78 @@ class Launch():
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
 
+        # Collect code coverage files after all test have completed
+        self.finalize_bullseye()
+
         # Summarize the run
         return self._summarize_run(return_code)
+
+    def setup_bullseye(self):
+        """Set up the hosts for bullseye code coverage collection.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        if self.bullseye_hosts:
+            logger.debug("-" * 80)
+            logger.info("Setting up bullseye code coverage on %s:", self.bullseye_hosts)
+
+            logger.debug("Removing any existing %s file", BULLSEYE_FILE)
+            command = ["rm", "-fr", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error removing bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
+            command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error copying bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
+            command = ["chmod", "777", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error updating bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+        return 0
+
+    def finalize_bullseye(self):
+        """Retrieve the bullseye code coverage collection information from the hosts.
+
+        Returns:
+            int: status code: 0 = success, 16 = failure
+
+        """
+        if not self.bullseye_hosts:
+            return 0
+
+        bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
+        bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
+        status = self._archive_files(
+            "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
+        # Rename bullseye_coverage_logs.host/test.cov.* to
+        # bullseye_coverage_logs/test.host.cov.*
+        for item in os.listdir(self.job_results_dir):
+            item_full = os.path.join(self.job_results_dir, item)
+            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    os.makedirs(bullseye_dir, exist_ok=True)
+                    for name in os.listdir(item_full):
+                        old_file = os.path.join(item_full, name)
+                        if os.path.isfile(old_file):
+                            new_name = name.split(".")
+                            new_name.insert(1, host_ext[-1][1:])
+                            new_file_name = ".".join(new_name)
+                            new_file = os.path.join(bullseye_dir, new_file_name)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            os.rename(old_file, new_file)
+        return status
 
     @staticmethod
     def display_disk_space(path):
@@ -2725,7 +2816,7 @@ class Launch():
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                "then daos_server storage prepare -n --reset && "
+                f"then export COVFILE={BULLSEYE_FILE} && daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
@@ -3128,7 +3219,7 @@ class Launch():
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
             logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
             try:

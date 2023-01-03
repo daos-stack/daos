@@ -1133,12 +1133,10 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_cpd_update		*dcu = &dcsr->dcsr_update;
 	struct dc_object		*obj = dcsr->dcsr_obj;
 	struct dcs_layout		*singv_los = NULL;
-	struct daos_oclass_attr		*oca = NULL;
 	struct cont_props		 props;
 	int				 rc = 0;
 
-	oca = obj_get_oca(obj);
-	if (daos_oclass_is_ec(oca)) {
+	if (daos_oclass_is_ec(obj_get_oca(obj))) {
 		struct obj_reasb_req	*reasb_req;
 
 		D_ALLOC_PTR(reasb_req);
@@ -1152,14 +1150,12 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dcsr->dcsr_reasb = reasb_req;
 		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
-					dcsr->dcsr_nr, oca);
+					dcsr->dcsr_nr);
 		if (rc != 0)
 			return rc;
 
-		rc = obj_ec_req_reasb(dcu->dcu_iod_array.oia_iods,
-				      obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
-				      dcsr->dcsr_sgls, obj->cob_md.omd_id, oca,
-				      dcsr->dcsr_reasb, dcsr->dcsr_nr, true);
+		rc = obj_ec_req_reasb(obj, dcu->dcu_iod_array.oia_iods, dcsr->dcsr_dkey_hash,
+				      dcsr->dcsr_sgls, dcsr->dcsr_reasb, dcsr->dcsr_nr, true);
 		if (rc != 0)
 			return rc;
 
@@ -1229,7 +1225,6 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	struct daos_oclass_attr	*oca;
 	struct daos_cpd_update	*dcu = NULL;
 	struct obj_reasb_req	*reasb_req = NULL;
-	uint64_t		dkey_hash = 0;
 	uint32_t		 size;
 	uint32_t		 start_tgt;
 	int			 skipped_parity = 0;
@@ -1270,12 +1265,11 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		}
 	}
 
-	if (daos_oclass_is_ec(oca)) {
-		dkey_hash = obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash);
-		start_tgt = obj_ec_shard_idx(dkey_hash, oca, obj_get_grp_size(obj) - 1);
-	} else {
+	if (daos_oclass_is_ec(oca))
+		start_tgt = obj_ec_shard_idx(obj, dcsr->dcsr_dkey_hash, obj_get_grp_size(obj) - 1);
+	else
 		start_tgt = obj_get_grp_size(obj) - 1;
-	}
+
 	/* Descending order to guarantee that EC parity is handled firstly. */
 	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < obj_get_grp_size(obj);
 	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj)),
@@ -1288,7 +1282,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
-				if (is_ec_parity_shard(idx, dkey_hash, oca))
+				if (is_ec_parity_shard(obj, dcsr->dcsr_dkey_hash, idx))
 					skipped_parity++;
 
 				if (skipped_parity > oca->u.ec.e_p) {
@@ -1570,7 +1564,7 @@ out:
 static void
 dc_tx_dump(struct dc_tx *tx)
 {
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Dump TX %p:\n"
 		"ID: "DF_DTI"\n"
 		"epoch: "DF_U64"\n"
@@ -1759,7 +1753,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	}
 
 	req_cnt = tx->tx_read_cnt + tx->tx_write_cnt;
+	D_RWLOCK_RDLOCK(&tx->tx_pool->dp_map_lock);
 	tgt_cnt = pool_map_target_nr(tx->tx_pool->dp_map);
+	D_RWLOCK_UNLOCK(&tx->tx_pool->dp_map_lock);
 	D_ASSERT(tgt_cnt != 0);
 
 	D_ALLOC_ARRAY(dtrgs, tgt_cnt);
@@ -1841,7 +1837,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.
@@ -1863,8 +1859,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		else
 			bit_map = NIL_BITMAP;
 
-		i = obj_grp_leader_get(obj, grp_idx,
-				       obj_ec_dkey_hash_get(obj, dcsr->dcsr_dkey_hash),
+		i = obj_grp_leader_get(obj, grp_idx, dcsr->dcsr_dkey_hash,
 				       false, tx->tx_pm_ver, bit_map);
 		if (i < 0)
 			D_GOTO(out, rc = i);

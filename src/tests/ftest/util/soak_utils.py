@@ -743,9 +743,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     unique = get_random_string(5, self.used)
     self.used.append(unique)
     mount_dir = dfuse.mount_dir.value + unique
-    dfuse.mount_dir.update(mount_dir)
-    dfuse.set_dfuse_params(pool)
-    dfuse.set_dfuse_cont_param(container)
+    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.uuid)
     dfuse_log = os.path.join(
         self.soaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
@@ -885,8 +883,8 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         job_spec, api, b_size, t_size,
                         o_type, nodesperjob * ppn, nodesperjob, ppn)
                     daos_log = os.path.join(
-                        self.soaktest_dir, self.test_name + "_" + log_name +
-                        "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                        self.soaktest_dir, self.test_name + "_" + log_name
+                        + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                     env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
                     sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
                     # include dfuse cmdlines
@@ -1056,8 +1054,8 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             oclass, nodesperjob * ppn, nodesperjob,
                             ppn)
                         daos_log = os.path.join(
-                            self.soaktest_dir, self.test_name + "_" + log_name +
-                            "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
+                            self.soaktest_dir, self.test_name + "_" + log_name
+                            + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
                         env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
                         sbatch_cmds = [
                             "module purge", "module load {}".format(self.mpi_module)]

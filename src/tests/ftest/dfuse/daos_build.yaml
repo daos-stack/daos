@@ -3,6 +3,9 @@ hosts:
   test_clients: 1
 # Hard limit the test at three hours, however individual tests have lower timeouts.
 timeout: 10800
+timeouts:
+  test_dfuse_daos_build_wt: 23500
+  test_dfuse_daos_build_wt_il: 23500
 server_config:
   name: daos_server
   crt_timeout: 120

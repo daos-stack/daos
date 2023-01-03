@@ -2774,12 +2774,12 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 
 		/* list object ID's */
 		for (i = 0; i < oids_nr; i++) {
-			rc = daos_obj_open(ca.src_coh, oids[i], 0, &oh, NULL);
+			rc = daos_obj_open(ca.src_coh, oids[i], DAOS_OO_RW, &oh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to open source object");
 				D_GOTO(out_oit, rc);
 			}
-			rc = daos_obj_open(ca.dst_coh, oids[i], 0, &dst_oh, NULL);
+			rc = daos_obj_open(ca.dst_coh, oids[i], DAOS_OO_RW, &dst_oh, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to open destination object");
 				D_GOTO(err_dst, rc);
