@@ -137,6 +137,7 @@ struct crt_rpc_priv {
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
+	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
 	hg_addr_t		crp_hg_addr; /* target na address */
@@ -180,7 +181,6 @@ struct crt_rpc_priv {
 				/* RPC originated from a primary provider */
 				crp_src_is_primary:1;
 
-	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;
@@ -579,26 +579,23 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 /* Internal macros for crt_req_(add|dec)ref from within cart.  These take
  * a crt_internal_rpc pointer and provide better logging than the public
  * functions however only work when a private pointer is held.
+ *
+ * Note that we conservatively use the default, strict memory order for both
+ * RPC_ADDREF and RPC_DECREF, leaving relaxations to future work.
  */
 #define RPC_ADDREF(RPC) do {						\
 		int __ref;						\
-		D_SPIN_LOCK(&(RPC)->crp_lock);				\
-		D_ASSERTF((RPC)->crp_refcount != 0,			\
-			  "%p addref from zero\n", (RPC));		\
-		__ref = ++(RPC)->crp_refcount;				\
-		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		RPC_TRACE(DB_NET, RPC, "addref to %d.\n", __ref);	\
+		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);	\
+		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));	\
+		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
 	} while (0)
 
 #define RPC_DECREF(RPC) do {						\
 		int __ref;						\
-		D_SPIN_LOCK(&(RPC)->crp_lock);				\
-		D_ASSERTF((RPC)->crp_refcount != 0,			\
-			  "%p decref from zero\n", (RPC));		\
-		__ref = --(RPC)->crp_refcount;				\
-		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
-		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
-		if (__ref == 0)						\
+		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
+		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
+		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
+		if (__ref == 1)						\
 			crt_req_destroy(RPC);				\
 	} while (0)
 

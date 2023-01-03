@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/cmd/drpc_test/hello"
+	"github.com/daos-stack/daos/src/control/cmd/hello_drpc/hello"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 )

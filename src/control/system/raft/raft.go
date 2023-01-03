@@ -8,6 +8,7 @@ package raft
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -117,7 +118,16 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
+		barrierStart := time.Now()
 		err := svc.Barrier(0).Error()
+		barrierElapsed := time.Since(barrierStart)
+		if barrierElapsed > 100*time.Millisecond {
+			var errMsg string
+			if err != nil {
+				errMsg = fmt.Sprintf("; err: %s", err)
+			}
+			db.log.Debugf("raft Barrier() complete after %s%s", barrierElapsed, errMsg)
+		}
 		if IsRaftLeadershipError(err) {
 			db.log.Errorf("lost leadership during Barrier(): %s", err)
 			return &system.ErrNotLeader{

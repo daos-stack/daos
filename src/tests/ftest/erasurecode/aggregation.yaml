@@ -3,8 +3,8 @@ hosts:
   test_clients: 3
 timeout: 2500
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -51,20 +51,20 @@ ior:
   api: "DFS"
   client_processes:
     np: 48
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     flags: "-w -W -F -k -G 1 -vv"
     read_flags: "-r -R -F -k -G 1 -vv"
   test_file: /testFile
   repetitions: 1
   chunk_block_transfer_sizes:
-    #[ChunkSize, BlocksSize, TransferSize]
+    # [ChunkSize, BlocksSize, TransferSize]
     - [32MB, 64MB, 2K]
     - [32MB, 16MB, 128]
     - [32MB, 1GB, 1M]
   objectclass:
     dfs_oclass_list:
-      #[EC_Object_Class, Minimum number of servers]
+      # [EC_Object_Class, Minimum number of servers]
       - ["EC_2P1G1", 4]
       - ["EC_4P1G1", 6]
       - ["EC_4P2G1", 6]

@@ -34,6 +34,9 @@ const (
 	// AnnotatedSystemErrNotReplica defines an identifier for ErrNotReplica errors
 	// serialized as gRPC status metadata.
 	AnnotatedSystemErrNotReplica = "proto.system.ErrNotReplica"
+	// AnnotatedSystemErrPoolNotFound defines an identifier for ErrPoolNotFound errors
+	// serialized as gRPC status metadata.
+	AnnotatedSystemErrPoolNotFound = "proto.system.ErrPoolNotFound"
 )
 
 // ErrFromMeta converts a map of metadata into an error.
@@ -51,6 +54,8 @@ func ErrFromMeta(meta map[string]string, errType error) error {
 	case *system.ErrNotLeader:
 		et.LeaderHint = meta["LeaderHint"]
 		err = json.Unmarshal([]byte(meta["Replicas"]), &et.Replicas)
+	case *system.ErrPoolNotFound:
+		err = json.Unmarshal([]byte(meta["PoolInfo"]), et)
 	default:
 		err = errors.Errorf("unable to convert %+v into error", meta)
 	}
@@ -122,6 +127,18 @@ func AnnotateError(in error) error {
 				"Replicas":   string(data),
 			},
 		}
+	case *system.ErrPoolNotFound:
+		data, err := json.Marshal(et)
+		if err != nil {
+			break
+		}
+		details = &errdetails.ErrorInfo{
+			Reason: AnnotatedSystemErrPoolNotFound,
+			Domain: "DAOS",
+			Metadata: map[string]string{
+				"PoolInfo": string(data),
+			},
+		}
 	}
 
 	if details == nil {
@@ -158,6 +175,8 @@ func UnwrapError(st *status.Status) error {
 				return ErrFromMeta(t.Metadata, new(system.ErrNotReplica))
 			case AnnotatedSystemErrNotLeader:
 				return ErrFromMeta(t.Metadata, new(system.ErrNotLeader))
+			case AnnotatedSystemErrPoolNotFound:
+				return ErrFromMeta(t.Metadata, new(system.ErrPoolNotFound))
 			}
 		}
 	}

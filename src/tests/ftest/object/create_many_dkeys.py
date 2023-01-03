@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 '''
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -13,6 +12,7 @@ import avocado
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, IORequest, DaosApiError
 from general_utils import create_string_buffer
+
 
 class CreateManyDkeys(TestWithServers):
     """
@@ -60,9 +60,7 @@ class CreateManyDkeys(TestWithServers):
             c_dkey = create_string_buffer("dkey {0}".format(key))
             c_akey = create_string_buffer("akey {0}".format(key))
             the_data = "some data that gets stored with the key {0}".format(key)
-            val = ioreq.single_fetch(c_dkey,
-                                     c_akey,
-                                     len(the_data)+1)
+            val = ioreq.single_fetch(c_dkey, c_akey, len(the_data) + 1)
             exp_value = val.value.decode("utf-8")
             if the_data != exp_value:
                 self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}, "
