@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -379,7 +379,7 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
  * \param rank	[IN]	Rank to stop.
  * \param arg	[IN]	Parameter for -o
  */
-int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char *arg);
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
 

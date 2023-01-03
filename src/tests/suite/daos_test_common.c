@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -908,7 +908,6 @@ void
 daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
-	char	dmg_cmd[DTS_CFG_MAX];
 	int	rc;
 
 	if (d_rank_in_rank_list(svc, rank))
@@ -916,12 +915,7 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system start -r %d", rank);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
-
-	rc = dmg_system_start_rank(dmg_config_file, rank, arg->dmg_config);
+	rc = dmg_system_start_rank(dmg_config_file, rank);
 	print_message(" dmg start: %d, rc %#x\n", rank, rc);
 	assert_rc_equal(rc, 0);
 

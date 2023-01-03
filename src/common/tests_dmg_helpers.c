@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1251,7 +1251,7 @@ out:
 	return rc;
 }
 
-int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char *arg)
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 {
 	int			argcount = 0;
 	char			**args = NULL;
@@ -1259,14 +1259,6 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char
 	int			rc = 0;
 
 	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	args = cmd_push_arg(args, &argcount, "-o ");
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	args = cmd_push_arg(args, &argcount, arg);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
