@@ -438,7 +438,8 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 #define CLI_OBJ_IO_PARMS	8
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph,
+	   uint64_t boundary);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;

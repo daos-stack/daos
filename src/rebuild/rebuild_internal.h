@@ -222,6 +222,10 @@ struct rebuild_task {
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
 	uint32_t			dst_new_layout_version;
+	/* Once the task fail, it will use reclaim version to
+	 * reclaim those half-rebuild/reintegrated job.
+	 */
+	uint32_t			dst_reclaim_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
