@@ -102,11 +102,20 @@ engine_cont_init(struct credit_context *tsc)
 	int		rc = 0;
 
 	if (tsc->tsc_mpi_rank == 0) {
-		char str[37];
+		daos_prop_t	*redun_lvl_prop = NULL;
+		char		 str[37];
 
 		if (tsc_create_cont(tsc)) {
-			rc = daos_cont_create(tsc->tsc_poh, &tsc->tsc_cont_uuid,
-					      NULL, NULL);
+			redun_lvl_prop = daos_prop_alloc(1);
+			if (redun_lvl_prop == NULL) {
+				D_ERROR("failed to allocate prop\n");
+				return -DER_NOMEM;
+			}
+			redun_lvl_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+			redun_lvl_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
+			rc = daos_cont_create(tsc->tsc_poh, &tsc->tsc_cont_uuid, redun_lvl_prop,
+					      NULL);
+			daos_prop_free(redun_lvl_prop);
 			if (rc != 0)
 				goto bcast;
 		}
