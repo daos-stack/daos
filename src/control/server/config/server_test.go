@@ -240,7 +240,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
-			WithRank(0).
 			WithTargetCount(16).
 			WithHelperStreamCount(4).
 			WithServiceThreadCore(0).
@@ -271,7 +270,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
-			WithRank(1).
 			WithTargetCount(16).
 			WithHelperStreamCount(4).
 			WithServiceThreadCore(22).
