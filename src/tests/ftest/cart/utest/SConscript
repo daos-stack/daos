@@ -19,7 +19,7 @@ def scons():
     Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
 
     test_env = env.Clone()
-    prereqs.require(test_env, 'mercury', 'cmocka', 'uuid')
+    prereqs.require(test_env, 'mercury', 'uuid', 'cmocka')
     test_env.AppendUnique(LIBS=['pthread', 'm'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)

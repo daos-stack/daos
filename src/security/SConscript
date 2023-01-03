@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    prereqs.require(denv, 'protobufc', 'argobots')
 
     sec_obj = denv.SharedObject('cli_security.c')
     auth_obj = denv.SharedObject('auth.pb-c.c')

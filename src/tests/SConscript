@@ -25,7 +25,7 @@ def build_tests(prereqs, env):
     denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(denv, 'argobots', 'pmdk', 'isal', 'protobufc')
+    prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'isal')
 
     daos_racer = denv.d_program('daos_racer', ['daos_racer.c'], LIBS=libs_client)
     denv.Install('$PREFIX/bin/', daos_racer)
