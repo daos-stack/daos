@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2397,7 +2397,7 @@ dfs_test_checker(void **state)
 	 */
 	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_obj_open(coh, root_oid, 0, &root_oh, NULL);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < 10; i++) {
 		char		name[24];
@@ -2430,7 +2430,7 @@ dfs_test_checker(void **state)
 	 */
 	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_obj_open(coh, root_oid, 0, &root_oh, NULL);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 10; i < 20; i++) {
 		char		name[24];
