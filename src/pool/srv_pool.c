@@ -1295,7 +1295,7 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
  */
 static int
 init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
-	      uint32_t map_version)
+	      uint32_t map_version, uint64_t term)
 {
 	struct ds_pool *pool;
 	int		rc;
@@ -1311,7 +1311,7 @@ init_svc_pool(struct pool_svc *svc, struct pool_buf *map_buf,
 		ds_pool_put(pool);
 		return rc;
 	}
-	ds_pool_iv_ns_update(pool, dss_self_rank());
+	ds_pool_iv_ns_update(pool, dss_self_rank(), term);
 
 	D_ASSERT(svc->ps_pool == NULL);
 	svc->ps_pool = pool;
@@ -1566,7 +1566,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	if (rc != 0)
 		goto out;
 
-	rc = init_svc_pool(svc, map_buf, map_version);
+	rc = init_svc_pool(svc, map_buf, map_version, svc->ps_rsvc.s_term);
 	if (rc != 0)
 		goto out;
 
@@ -2267,7 +2267,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			obj_ver = 0;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
-			return rc;
+			D_GOTO(out_prop, rc);
 		}
 
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_OBJ_VERSION;
@@ -2980,8 +2980,8 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 		D_GOTO(out, rc);
 
 out:
-	D_DEBUG(DB_MD, DF_UUID": leaving: "DF_RC"\n", DP_UUID(svc->ps_uuid),
-		DP_RC(rc));
+	if (rc == 0)
+		D_INFO(DF_UUID": success\n", DP_UUID(svc->ps_uuid));
 	return rc;
 }
 
@@ -4802,7 +4802,7 @@ static int
 pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 				 bool *schedule_layout_upgrade)
 {
-	daos_epoch_t	upgrade_eph = crt_hlc_get();
+	daos_epoch_t	upgrade_eph = d_hlc_get();
 	d_iov_t		value;
 	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
@@ -5941,7 +5941,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
-	daos_epoch_t			rebuild_eph = crt_hlc_get();
+	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
@@ -6384,10 +6384,9 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 					&n_hdl_uuids, in->pvi_machine);
 	}
 
-	D_DEBUG(DB_MD, "number of handles found was: %d\n", n_hdl_uuids);
-
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
+	D_DEBUG(DB_MD, "number of handles found was: %d\n", n_hdl_uuids);
 
 	if (n_hdl_uuids > 0) {
 		/* If pool destroy but not forcibly, error: the pool is busy */
@@ -6742,9 +6741,10 @@ out:
 }
 
 void
-ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank)
+ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
+		     uint64_t term)
 {
-	ds_iv_ns_update(pool->sp_iv_ns, master_rank);
+	ds_iv_ns_update(pool->sp_iv_ns, master_rank, term);
 }
 
 int
