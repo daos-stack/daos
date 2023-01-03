@@ -110,12 +110,12 @@ struct btr_context {
 	/** cached tree depth, avoid loading from slow memory */
 	uint16_t			 tc_depth;
 	/** credits for drain, see dbtree_drain */
-	int				 tc_creds:30;
+	uint32_t                         tc_creds    : 30;
 	/**
 	 * credits is turned on, \a tcx::tc_creds should be checked
 	 * while draining the tree
 	 */
-	int				 tc_creds_on:1;
+	uint32_t                         tc_creds_on : 1;
 	/**
 	 * returned value of the probe, it should be reset after upsert
 	 * or delete because the probe path could have been changed.
