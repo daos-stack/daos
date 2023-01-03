@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -607,12 +607,14 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = -DER_INVAL);
 
+	cmd_args_print(ap);
+
 	rc = update_props_for_create(ap);
 	if (rc != 0)
 		return rc;
 
-	uuid_copy(dattr.da_puuid, ap->p_uuid);
-	uuid_copy(dattr.da_cuuid, ap->c_uuid);
+	strncpy(dattr.da_pool, ap->pool_str, DAOS_PROP_LABEL_MAX_LEN);
+	strncpy(dattr.da_cont, ap->cont_str, DAOS_PROP_LABEL_MAX_LEN);
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_dir_oclass_id = ap->dir_oclass;
@@ -628,9 +630,6 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_rc, rc = daos_errno2der(rc));
 	}
 
-	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
-	if (uuid_is_null(ap->c_uuid))
-		uuid_parse(ap->cont_str, ap->c_uuid);
 	daos_unparse_ctype(ap->type, type);
 	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 

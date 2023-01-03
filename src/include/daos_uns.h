@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,7 +25,7 @@ enum {
 	/*
 	 * String does not include daos:// prefix
 	 * Path that is passed does not have daos: prefix but is direct:
-	 * (/puuid/cuuid/xyz) and does not need to parse a path UNS attrs.
+	 * (/pool/container/xyz) and does not need to parse a path UNS attrs.
 	 * This is usually not set.
 	 */
 	DUNS_NO_PREFIX = (1 << 0),
@@ -61,21 +61,20 @@ struct duns_attr_t {
 	 * DUNS_NO_CHECK_PATH
 	 */
 	uint32_t		da_flags;
-	/** OUT: Pool UUID or label string.
+	/** IN/OUT: Pool Label
 	 *
-	 * On duns_resolve_path(), a UUID string is returned for the pool that was stored on that
-	 * path. If the path is a direct path, we parse the first entry (pool) in the path as either
-	 * a UUID or a label. This can be used in daos_pool_connect() regardless of whether it's a
-	 * UUID or label.
+	 * On duns_create_path(), user passes the pool label in this buffer.
+	 * On duns_resolve_path(), the pool label that the path corresponds to is copied to this
+	 * buffer. If the path is a direct path, we parse the first entry (pool) in the path as
+	 * a pool label. This can be used in daos_pool_connect() to connect to the pool.
 	 */
 	char			da_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	/** OUT: Container UUID or label string.
+	/** IN/OUT: Container Label
 	 *
-	 * On duns_resolve_path(), a UUID string is returned for the container that was stored on
-	 * that path. If the path is a direct path, we parse the second entry (cont) in the path as
-	 * either a UUID or a label. This can be used in daos_cont_open() regardless of whether it's
-	 * a UUID or label. on duns_create_path(), the uuid of the container created is also
-	 * populated in this field.
+	 * On duns_create_path(), user passes the container label in this buffer.
+	 * On duns_resolve_path(), the container label that the path corresponds to is copied to
+	 * this buffer. If the path is a direct path, we parse the second entry (cont) in the path
+	 * as a container label. This can be used in daos_cont_open() to open the container.
 	 */
 	char			da_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/** OUT: DAOS System Name. (The UNS does not maintain this yet, and this is not set)
@@ -109,9 +108,8 @@ struct duns_attr_t {
 	uuid_t			da_puuid;
 	/** IN/OUT: (Deprecated) Optional UUID of the cont to be created in duns_create_path().
 	 *
-	 * The UUID will be used to create the container in duns_create_path() if set, otherwise a
-	 * random one will be generated. The cont UUID or label is returned as a string in \a
-	 * da_cont with duns_resolve_path().
+	 * This UUID will be used to create the container in duns_create_path() if set, otherwise a
+	 * random one will be generated.
 	 */
 	uuid_t			da_cuuid;
 	/** IN: (Optional) For a POSIX container, set a default object class for all directories. */
@@ -125,32 +123,29 @@ struct duns_attr_t {
 /** extended attribute name that will store the UNS info */
 #define DUNS_XATTR_NAME		"user.daos"
 /** Length of the extended attribute */
-#define DUNS_MAX_XATTR_LEN	170
+#define DUNS_MAX_XATTR_LEN	(DAOS_PROP_LABEL_MAX_LEN * 2 + 100)
 /** Format of daos attributes in the extended attribute */
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
+#define DUNS_XATTR_FMT		"DAOS.%s://%s/%s"
 /**
  * Lustre specific foreign LOV/LMV format (container type will be encoded in
  * lfm_flag field and extra slashes will be added when needed by foreign_symlink
  * Lustre code)
  */
-#define DUNS_LUSTRE_XATTR_FMT		"%36s/%36s"
+#define DUNS_LUSTRE_XATTR_FMT		"%s/%s"
 
 /**
  * Create a special directory (POSIX) or file (HDF5) depending on the container type, and create a
  * new DAOS container. The uuid of the container can be either passed in \a attrp->da_cuuid
- * (deprecated) or generated internally and returned in \a da_cont.
- * The extended attributes are set on the dir/file created that points to pool uuid, container
- * uuid. This is to be used in a unified namespace solution to be able to map a path in the unified
- * namespace to a location in the DAOS tier.  The container and pool can have labels, but the UNS
- * stores the uuids only and so labels are ignored in \a attrp.
+ * (deprecated) or generated internally.
+ * The extended attributes are set on the dir/file created that points to the pool and container.
+ * This is to be used in a unified namespace solution to be able to map a path in the unified
+ * namespace to a location in the DAOS tier.
  * The user is not required to call duns_destory_attrs on \a attrp as this call does not allocate
  * any buffers in attrp.
  *
- * \param[in]	poh	Pool handle
- * \param[in]	path	Valid path in an existing namespace.
- * \param[in,out]
- *		attrp	Struct containing the attributes. The uuid of the
- *			container created is returned in da_cuuid.
+ * \param[in]		poh	Pool handle
+ * \param[in]		path	Valid path in an existing namespace.
+ * \param[in]		attrp	Struct containing the attributes.
  *
  * \return		0 on Success. errno code on failure.
  */
@@ -158,21 +153,21 @@ int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp);
 
 /**
- * Retrieve the pool and container uuids from a path corresponding to a DAOS location. If this was a
- * path created with duns_create_path(), then this call would return the pool, container, and type
+ * Retrieve the pool and container labels from a path corresponding to a DAOS location. If this was
+ * a path created with duns_create_path(), then this call would return the pool, container, and type
  * values in the \a attr struct (the rest of the values are not populated.  By default, this call
  * does a reverse lookup on the realpath until it finds an entry in the path that has the UNS
  * attr. The rest of the path from that entry point is returned in \a attr.da_rel_path.  If the
  * entire path does not have the entry, ENODATA error is returned. To avoid doing the reverse lookup
- * and check only that last entry, set \a attr.da_no_reverse_lookup.
+ * and check only that last entry, set DUNS_NO_REVERSE_LOOKUP in \a attr->da_flags.
  *
- * To avoid going through the UNS if the user knows the pool and container uuids, a special format
+ * To avoid going through the UNS if the user knows the pool and container labels, a special format
  * can be passed as a prefix for a "fast path", and this call would parse those out in the \a attr
  * struct and return whatever is left from the path in \a attr.da_rel_path. This mode is provided as
  * a convenience to IO middleware libraries and to settle on a unified format for a mode where users
- * know the pool and container uuids and would just like to pass them directly instead of a
+ * know the pool and container labels and would just like to pass them directly instead of a
  * traditional path. The format of this path should be:
- *  daos://pool_uuid/container_uuid/xyz
+ *  daos://pool_label/container_label/xyz
  * xyz here can be a path relative to the root of a POSIX container if the user is accessing a posix
  * container, or it can be empty for example in the case of an HDF5 file.
  *

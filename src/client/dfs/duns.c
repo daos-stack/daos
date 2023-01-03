@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -246,8 +246,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	/** da_puuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS LOV/LMV format: pool UUID cannot be parsed\n");
-		return EINVAL;
+		rc = 0;
+		D_DEBUG(DB_TRACE, "Pool UUID is not stored in the UNS\n");
 	}
 	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
 	attr->da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
@@ -261,8 +261,8 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	/** da_cuuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS LMV format: container UUID cannot be parsed\n");
-		return EINVAL;
+		rc = 0;
+		D_DEBUG(DB_TRACE, "Container UUID is not stored in the UNS\n");
 	}
 	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
 	attr->da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
@@ -539,14 +539,12 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	cur_idx = path_len;
 
 	while (1) {
-		s = lgetxattr(dir_path, DUNS_XATTR_NAME, &str,
-			      DUNS_MAX_XATTR_LEN);
+		s = lgetxattr(dir_path, DUNS_XATTR_NAME, &str, DUNS_MAX_XATTR_LEN);
 		if (s < 0 || s > DUNS_MAX_XATTR_LEN) {
 			int err = errno;
 
 			if (err == ENODATA) {
-				if (cur_idx == 0 || (attr->da_flags &
-						     DUNS_NO_REVERSE_LOOKUP))
+				if (cur_idx == 0 || (attr->da_flags & DUNS_NO_REVERSE_LOOKUP))
 					D_INFO("Path does not represent a DAOS link\n");
 				else
 					goto parse;
@@ -557,8 +555,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 				err = EIO;
 				D_ERROR("Invalid xattr length\n");
 			} else {
-				D_ERROR("Invalid DAOS unified namespace xattr:"
-					" %s\n", strerror(err));
+				D_ERROR("Invalid DAOS unified namespace xattr: %s\n",
+					strerror(err));
 			}
 
 			D_GOTO(out, rc = err);
@@ -635,8 +633,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 	/** da_puuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = 0;
+		D_DEBUG(DB_TRACE, "Pool UUID is not stored in the UNS\n");
 	}
 	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
 	attr->da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
@@ -650,8 +648,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 	/** da_cuuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = 0;
+		D_DEBUG(DB_TRACE, "Container UUID is not stored in the UNS\n");
 	}
 	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
 	attr->da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
@@ -786,8 +784,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 
 #ifdef LUSTRE_INCLUDE
 static int
-duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
-			mode_t mode, struct duns_attr_t *attrp)
+duns_create_lustre_path(daos_handle_t poh, const char *path, mode_t mode, struct duns_attr_t *attrp)
 {
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
@@ -802,10 +799,11 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 			return EINVAL;
 	}
 
-	uuid_unparse(info.pi_uuid, attrp->da_pool);
-
 	/* create container */
-	rc = create_cont(poh, attrp, false, NULL);
+	if (daos_label_is_valid(attrp->da_cont))
+		rc = create_cont(poh, attrp, true, NULL);
+	else
+		rc = create_cont(poh, attrp, false, NULL);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err, rc);
@@ -858,7 +856,6 @@ int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
 	char			type[10];
-	daos_pool_info_t	info = {0};
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
 	bool			no_prefix = false;
@@ -901,16 +898,34 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return rc;
 	}
 
-	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
-	if (rc) {
-		D_ERROR("Failed to query pool info" DF_RC "\n", DP_RC(rc));
-		return daos_der2errno(rc);
-	}
+	/** if pool label is not passed, query the one from the pool handle */
+	if (attrp->da_pool[0] == 0) {
+		daos_prop_t		*props;
+		struct daos_prop_entry  *entry;
+		daos_pool_info_t	info = {0};
 
-	if (!uuid_is_null(attrp->da_puuid)) {
-		if (uuid_compare(attrp->da_puuid, info.pi_uuid) != 0) {
-			D_ERROR("Pool open handle must match the passed in uuid\n");
-			return EINVAL;
+		props = daos_prop_alloc(1);
+		if (props == NULL)
+			return ENOMEM;
+		props->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
+
+		rc = daos_pool_query(poh, NULL, &info, props, NULL);
+		if (rc) {
+			daos_prop_free(props);
+			D_ERROR("Failed to query pool info" DF_RC "\n", DP_RC(rc));
+			return daos_der2errno(rc);
+		}
+
+		entry = daos_prop_entry_get(props, DAOS_PROP_PO_LABEL);
+		D_ASSERT(entry != NULL);
+		strcpy(attrp->da_pool, entry->dpe_str);
+		daos_prop_free(props);
+
+		if (!uuid_is_null(attrp->da_puuid)) {
+			if (uuid_compare(attrp->da_puuid, info.pi_uuid) != 0) {
+				D_ERROR("Pool open handle must match the passed in uuid\n");
+				return EINVAL;
+			}
 		}
 	}
 
@@ -921,7 +936,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
+			rc = duns_create_lustre_path(poh, path, mode, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try the normal way... */
@@ -1008,7 +1023,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		D_FREE(dir);
 
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(poh, info, path, mode, attrp);
+			rc = duns_create_lustre_path(poh, path, mode, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try the normal way... */
@@ -1028,11 +1043,13 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return EINVAL;
 	}
 
-	uuid_unparse(info.pi_uuid, attrp->da_pool);
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */
-	rc = create_cont(poh, attrp, false, backend_dfuse ? &dur : NULL);
+	if (daos_label_is_valid(attrp->da_cont))
+		rc = create_cont(poh, attrp, true, backend_dfuse ? &dur : NULL);
+	else
+		rc = create_cont(poh, attrp, false, backend_dfuse ? &dur : NULL);
 	if (rc) {
 		D_ERROR("Failed to create container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_link, rc);
@@ -1092,7 +1109,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	struct duns_attr_t dattr = {0};
 	int	rc;
 
-	/* Resolve pool, container UUIDs from path */
+	/* Resolve pool and container from path */
 	rc = duns_resolve_path(path, &dattr);
 	if (rc) {
 		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n", path, rc);

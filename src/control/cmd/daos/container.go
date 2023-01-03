@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -249,6 +249,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 			return err
 		}
 		cmd.contLabel = cmd.Args.Label
+
+		cLabel := C.CString(cmd.contLabel)
+		defer freeString(cLabel)
+		C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
 	}
 
 	if cmd.Properties.props != nil {
@@ -279,6 +283,12 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 	defer disconnectPool()
+
+	if cmd.PoolID().HasLabel() {
+		pLabel := C.CString(cmd.PoolID().Label)
+		defer freeString(pLabel)
+		C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+	}
 
 	ap.c_op = C.CONT_CREATE
 
