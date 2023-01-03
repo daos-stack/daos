@@ -2318,10 +2318,12 @@ co_rf_simple(void **state)
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 5);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 4);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 5, -1);
+		assert_success(rc);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 4, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2358,9 +2360,11 @@ co_rf_simple(void **state)
 			     NULL);
 	assert_rc_equal(rc, 0);
 
-	if (arg->myrank == 0)
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 3);
+	if (arg->myrank == 0) {
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 3, -1);
+		assert_success(rc);
+	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2382,12 +2386,15 @@ co_rf_simple(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		test_rebuild_wait(&arg, 1);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 3);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 4);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 5);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  3, -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  4, -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  5, -1);
+		assert_success(rc);
 		test_rebuild_wait(&arg, 1);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -2742,8 +2749,12 @@ co_redun_lvl(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      ranks[0], -1);
+		assert_success(rc);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      ranks[1], -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2790,8 +2801,12 @@ co_redun_lvl(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */
-	if (arg->myrank == 0)
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
+	if (arg->myrank == 0) {
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, ranks[2], -1);
+		assert_success(rc);
+	}
+
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2810,9 +2825,15 @@ co_redun_lvl(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		test_rebuild_wait(&arg, 1);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[2], -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[1], -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[0], -1);
+		assert_success(rc);
 		test_rebuild_wait(&arg, 1);
 	}
 	par_barrier(PAR_COMM_WORLD);
