@@ -14,7 +14,6 @@ include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 def _scan_go_file(node, env, _path):
     """Scanner for go code"""
-
     src_dir = os.path.dirname(str(node))
     includes = []
     path_name = str(node)[12:]
