@@ -211,7 +211,7 @@ def _verify_one(path, entry_type, user_perm, verify_mode):
     for perm in 'rwx':
         if perm_to_fun[perm](path) != have[perm]:
             raise VerifyPermsError(
-                f'Expected {perm} to {"pass" if have["perm"] else "fail"} on "{path}"')
+                f'Expected {perm} to {"pass" if have[perm] else "fail"} on "{path}"')
 
 
 def _real_r(entry_type, path):
@@ -288,8 +288,9 @@ def _real_x(entry_type, path):
             return False
     if entry_type == 'dir':
         try:
-            return run_local(logger, ['cd', path], check=True, verbose=False).returncode == 0
-        except RunException:
+            os.chdir(path)
+            return True
+        except PermissionError:
             return False
     return False
 

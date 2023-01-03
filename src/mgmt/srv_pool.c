@@ -309,7 +309,7 @@ out:
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state)
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size)
 {
 	int			rc;
 
@@ -326,19 +326,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		reint_ranks.rl_nr = 1;
 		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
-		/* TODO: The size information and "pmem" type need to be
-		 * determined automatically, perhaps by querying the pool leader
-		 * This works for now because these parameters are ignored if
-		 * the pool already exists on the destination node. This is
-		 * just used to ensure the pool is started.
-		 *
-		 * Fixing this will add the ability to reintegrate with a new
-		 * node, rather than only the previously failed node.
-		 *
-		 * This is tracked in DAOS-5041
-		 */
-		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem",
-						   &reint_ranks, 0, 0);
+		rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, "pmem", &reint_ranks, scm_size,
+						   nvme_size);
 		if (rc != 0) {
 			D_ERROR("creating pool on ranks "DF_UUID" failed: rc "
 				DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));

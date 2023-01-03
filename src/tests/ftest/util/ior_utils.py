@@ -410,20 +410,6 @@ class Ior:
         """
         return self.manager.job
 
-    @staticmethod
-    def display_pool_space(pool):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
-
-        Args:
-            pool (TestPool): The pool for which to display space.
-        """
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
-
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
             dfuse=None, display_space=True, fail_on_warning=False):
         # pylint: disable=too-many-arguments
@@ -485,7 +471,7 @@ class Ior:
 
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             result = self.manager.run()
 
         except CommandFailure as error:
@@ -493,7 +479,7 @@ class Ior:
 
         finally:
             if not self.manager.run_as_subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         if error_message:
             raise CommandFailure(error_message)
@@ -519,6 +505,6 @@ class Ior:
                 error_message = "IOR Failed: {}".format(error)
             finally:
                 if pool:
-                    self.display_pool_space(pool)
+                    pool.display_space()
             if error_message:
                 raise CommandFailure(error_message)

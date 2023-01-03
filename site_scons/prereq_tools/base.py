@@ -20,12 +20,6 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
-# pylint: disable=too-few-public-methods
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=broad-except
-# pylint: disable=bare-except
-# pylint: disable=exec-used
-# pylint: disable=too-many-statements
 # pylint: disable=too-many-lines
 import os
 import traceback
@@ -35,7 +29,6 @@ import errno
 import shutil
 import subprocess  # nosec
 import tarfile
-import copy
 import configparser
 from build_info import BuildInfo
 from SCons.Variables import PathVariable
@@ -70,8 +63,8 @@ class DownloadFailure(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "Failed to get %s from %s" % (self.component, self.repo)
+        """Exception string"""
+        return f'Failed to get {self.component} from {self.repo}'
 
 
 class ExtractionError(Exception):
@@ -87,9 +80,8 @@ class ExtractionError(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-
-        return "Failed to extract %s" % self.component
+        """Exception string"""
+        return f'Failed to extract {self.component}'
 
 
 class UnsupportedCompression(Exception):
@@ -104,8 +96,8 @@ class UnsupportedCompression(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "Don't know how to extract %s" % self.component
+        """Exception string"""
+        return f"Don't know how to extract {self.component}"
 
 
 class BadScript(Exception):
@@ -122,10 +114,8 @@ class BadScript(Exception):
         self.trace = trace
 
     def __str__(self):
-        """ Exception string """
-        return "Failed to execute %s:\n%s %s\n\nTraceback" % (self.script,
-                                                              self.script,
-                                                              self.trace)
+        """Exception string"""
+        return f'Failed to execute {self.script}:\n{self.script} {self.trace}\n\nTraceback'
 
 
 class MissingDefinition(Exception):
@@ -140,8 +130,8 @@ class MissingDefinition(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "No definition for %s" % self.component
+        """Exception string"""
+        return f'No definition for {self.component}'
 
 
 class MissingPath(Exception):
@@ -156,8 +146,8 @@ class MissingPath(Exception):
         self.variable = variable
 
     def __str__(self):
-        """ Exception string """
-        return "%s specifies a path that doesn't exist" % self.variable
+        """Exception string"""
+        return f"{self.variable} specifies a path that doesn't exist"
 
 
 class BuildFailure(Exception):
@@ -172,8 +162,8 @@ class BuildFailure(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "%s failed to build" % self.component
+        """Exception string"""
+        return f'{self.component} failed to build'
 
 
 class MissingTargets(Exception):
@@ -189,12 +179,10 @@ class MissingTargets(Exception):
         self.package = package
 
     def __str__(self):
-        """ Exception string """
+        """Exception string"""
         if self.package is None:
-            return "%s has missing targets after build.  " \
-                   "See config.log for details" % self.component
-        return "Package %s is required. " \
-               "Check config.log" % self.package
+            return f'{self.component} has missing targets after build.  See config.log for details'
+        return f'Package {self.package} is required. Check config.log'
 
 
 class MissingSystemLibs(Exception):
@@ -209,8 +197,8 @@ class MissingSystemLibs(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "%s has unmet dependencies required for build" % self.component
+        """Exception string"""
+        return f'{self.component} has unmet dependencies required for build'
 
 
 class DownloadRequired(Exception):
@@ -225,8 +213,8 @@ class DownloadRequired(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "%s needs to be built, use --build-deps=yes" % self.component
+        """Exception string"""
+        return f'{self.component} needs to be built, use --build-deps=yes'
 
 
 class BuildRequired(Exception):
@@ -241,8 +229,8 @@ class BuildRequired(Exception):
         self.component = component
 
     def __str__(self):
-        """ Exception string """
-        return "%s needs to be built, use --build-deps=yes" % self.component
+        """Exception string"""
+        return f'{self.component} needs to be built, use --build-deps=yes'
 
 
 class Runner():
@@ -266,7 +254,7 @@ class Runner():
         passed_env = env or self.env
 
         if subdir:
-            print('Running commands in {}'.format(subdir))
+            print(f'Running commands in {subdir}')
         for command in commands:
             cmd = []
             for part in command:
@@ -275,10 +263,10 @@ class Runner():
                 else:
                     cmd.append(self.env.subst(part))
             if self.__dry_run:
-                print('Would RUN: %s' % ' '.join(cmd))
+                print(f"Would RUN: {' '.join(cmd)}")
                 retval = True
             else:
-                print('RUN: %s' % ' '.join(cmd))
+                print(f"RUN: {' '.join(cmd)}")
                 if subprocess.call(cmd, shell=False, cwd=subdir, env=passed_env['ENV']) != 0:
                     retval = False
                     break
@@ -304,7 +292,7 @@ def default_libpath():
         if pipe.returncode == 0:
             archpath = stdo.decode().strip()
             return ['lib/' + archpath]
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         print('default_libpath, Exception: subprocess.Popen dpkg-architecture')
     return []
 
@@ -320,17 +308,17 @@ class GitRepoRetriever():
         self.commit_sha = None
 
     def checkout_commit(self, subdir):
-        """ checkout a certain commit SHA or branch """
+        """checkout a certain commit SHA or branch"""
         if self.commit_sha is not None:
             commands = [['git', 'checkout', self.commit_sha]]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
-    def apply_patches(self, subdir, patches):
-        """ git-apply a certain hash """
+    def _apply_patches(self, subdir, patches):
+        """git-apply a certain hash"""
         if patches is not None:
             for patch in patches.keys():
-                print("Applying patch %s" % (patch))
+                print(f'Applying patch {patch}')
                 command = ['git', 'apply']
                 if patches[patch] is not None:
                     command.extend(['--directory', patches[patch]])
@@ -338,8 +326,8 @@ class GitRepoRetriever():
                 if not RUNNER.run_commands([command], subdir=subdir):
                     raise DownloadFailure(self.url, subdir)
 
-    def update_submodules(self, subdir):
-        """ update the git submodules """
+    def _update_submodules(self, subdir):
+        """update the git submodules"""
         if self.has_submodules:
             commands = [['git', 'submodule', 'init'], ['git', 'submodule', 'update']]
             if not RUNNER.run_commands(commands, subdir=subdir):
@@ -347,26 +335,25 @@ class GitRepoRetriever():
 
     def get(self, subdir, **kw):
         """Downloads sources from a git repository into subdir"""
-
         # Now checkout the commit_sha if specified
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is None:
             comp = os.path.basename(subdir)
-            print("""
+            print(f"""
 *********************** ERROR ************************
 No commit_versions entry in utils/build.config for
-%s. Please specify one to avoid breaking the
+{comp}. Please specify one to avoid breaking the
 build with random upstream changes.
-*********************** ERROR ************************\n""" % comp)
+*********************** ERROR ************************\n""")
             raise DownloadFailure(self.url, subdir)
 
         if not os.path.exists(subdir):
             commands = [['git', 'clone', self.url, subdir]]
             if not RUNNER.run_commands(commands):
                 raise DownloadFailure(self.url, subdir)
-        self.get_specific(subdir, **kw)
+        self._get_specific(subdir, **kw)
 
-    def get_specific(self, subdir, **kw):
+    def _get_specific(self, subdir, **kw):
         """Checkout the configured commit"""
         # If the config overrides the branch, use it.  If a branch is
         # specified, check it out first.
@@ -398,9 +385,9 @@ build with random upstream changes.
         command = [['git', 'reset', '--hard', 'HEAD']]
         if not RUNNER.run_commands(command, subdir=subdir):
             raise DownloadFailure(self.url, subdir)
-        self.update_submodules(subdir)
+        self._update_submodules(subdir)
         # Now apply any patches specified
-        self.apply_patches(subdir, kw.get("patches", {}))
+        self._apply_patches(subdir, kw.get("patches", {}))
 
 
 class WebRetriever():
@@ -416,7 +403,6 @@ class WebRetriever():
 
     def check_md5(self, filename):
         """Return True if md5 matches"""
-
         if not os.path.exists(filename):
             return False
 
@@ -459,9 +445,8 @@ class WebRetriever():
 
         return False
 
-    def get(self, subdir, **kw):  # pylint: disable=unused-argument
+    def get(self, subdir, **_kw):
         """Downloads and extracts sources from a url into subdir"""
-
         basename = os.path.basename(self.url)
 
         if os.path.exists(subdir):
@@ -473,7 +458,7 @@ class WebRetriever():
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
             if self.__dry_run:
-                print('Would unpack gzipped tar file: %s' % basename)
+                print(f'Would unpack gzipped tar file: {basename}')
                 return
             try:
                 with tarfile.open(basename, 'r:gz') as tfile:
@@ -524,7 +509,7 @@ def check_flag_helper(context, compiler, ext, flag):
         flags = ["-Werror", test_flag]
     else:
         flags = ["-Werror", flag]
-    context.Message("Checking %s %s " % (compiler, flag))
+    context.Message(f'Checking {compiler} {flag}')
     context.env.Replace(CCFLAGS=flags)
     ret = context.TryCompile("""
 int main() {
@@ -590,7 +575,7 @@ def ensure_dir_exists(dirname, dry_run):
             return
         try:
             os.makedirs(dirname)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             if not os.path.isdir(dirname):
                 raise error
 
@@ -598,25 +583,21 @@ def ensure_dir_exists(dirname, dry_run):
         raise IOError(errno.ENOTDIR, 'Not a directory', dirname)
 
 
-# pylint: disable=too-many-public-methods
 # pylint: disable-next=function-redefined
 class PreReqComponent():
-    """A class for defining and managing external components required
-       by a project.
+    """A class for defining and managing external components required by a project.
 
     If provided arch is a string to embed in any generated directories
     to allow compilation from from multiple systems in one source tree
     """
 
-    # pylint: disable=too-many-branches
-
-    def __init__(self, env, variables, config_file=None, arch=None):
+    def __init__(self, env, variables, config_file=None):
         self.__defined = {}
         self.__required = {}
         self.__errors = {}
         self.__env = env
         self.__opts = variables
-        self.configs = None
+        self._configs = None
 
         real_env = self.__env['ENV']
 
@@ -624,26 +605,21 @@ class PreReqComponent():
                     "http_proxy", "https_proxy",
                     "PKG_CONFIG_PATH", "MODULEPATH",
                     "MODULESHOME", "MODULESLOADED",
-                    "I_MPI_ROOT"]:
+                    "I_MPI_ROOT", "COVFILE"]:
             value = os.environ.get(var)
             if value:
                 real_env[var] = value
 
-        libtoolize = 'libtoolize'
-        if self.__env['PLATFORM'] == 'darwin':
-            libtoolize = 'glibtoolize'
-
         self.__dry_run = GetOption('no_exec')
-        self.add_options()
+        self._add_options()
         self.__env.AddMethod(append_if_supported, "AppendIfSupported")
         self.__require_optional = GetOption('require_optional')
-        self.has_icx = False
+        self._has_icx = False
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
-        self.replace_env(LIBTOOLIZE=libtoolize)
+        self._replace_env(LIBTOOLIZE='libtoolize')
         self.__env.Replace(ENV=real_env)
-        warning_level = self.__env.subst("$WARNING_LEVEL")
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -660,10 +636,12 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
-        self._setup_user_prefix()
+        self.add_opts(('ALT_PREFIX',
+                       f'Specifies {os.pathsep} separated list of alternative paths to add',
+                       None))
 
         self.__top_dir = Dir('#').abspath
-        self._setup_compiler(warning_level)
+        self._setup_compiler()
         self.add_opts(PathVariable('BUILD_ROOT',
                                    'Alternative build root dierctory', "build",
                                    PathVariable.PathIsDirCreate))
@@ -672,25 +650,15 @@ class PreReqComponent():
         self.target_type = self.__env.get("TTYPE_REAL")
         self.__env["BUILD_DIR"] = bdir
         ensure_dir_exists(bdir, self.__dry_run)
-        self.setup_path_var('BUILD_DIR')
+        self._setup_path_var('BUILD_DIR')
         self.__build_info = BuildInfo()
         self.__build_info.update("BUILD_DIR", self.__env.subst("$BUILD_DIR"))
 
-        build_dir_name = os.path.join(self.__env.get("BUILD_ROOT"), "external")
-        install_dir = os.path.join(self.__top_dir, 'install')
-        if arch:
-            build_dir_name += '-%s' % arch
-            install_dir = os.path.join('install', str(arch))
-
-            # Overwrite default file locations to allow multiple builds in the
-            # same tree.
-            env.SConsignFile('.sconsign-%s' % arch)
-            env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
-                        CONFIGURELOG='#/config-%s.log' % arch)
-
         # Build prerequisites in sub-dir based on selected build type
-        build_dir_name = os.path.join(build_dir_name,
+        build_dir_name = os.path.join(self.__env.get("BUILD_ROOT"),
+                                      'external',
                                       self.__env.subst("$TTYPE_REAL"))
+        install_dir = os.path.join(self.__top_dir, 'install')
 
         self.add_opts(PathVariable('ENV_SCRIPT',
                                    "Location of environment script",
@@ -703,8 +671,7 @@ class PreReqComponent():
 
         self.system_env = env.Clone()
 
-        self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
-                                                         build_dir_name))
+        self.__build_dir = self._sub_path(build_dir_name)
         ensure_dir_exists(self.__build_dir, self.__dry_run)
 
         self.__prebuilt_path = {}
@@ -725,24 +692,23 @@ class PreReqComponent():
                                    PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
-                                   "%s/go" % self.__build_dir,
+                                   f'{self.__build_dir}/go',
                                    PathVariable.PathIsDirCreate))
-        self.setup_path_var('PREFIX')
-        self.setup_path_var('GOPATH')
+        self._setup_path_var('PREFIX')
+        self._setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
         self._setup_parallel_build()
 
         if config_file is not None:
-            self.configs = configparser.ConfigParser()
-            self.configs.read(config_file)
+            self._configs = configparser.ConfigParser()
+            self._configs.read(config_file)
 
         self.installed = env.subst("$USE_INSTALLED").split(",")
         self.include = env.subst("$INCLUDE").split(" ")
         self._build_targets = []
 
-    def init_build_targets(self, build_dir):
-        """Setup default build targets"""
+        build_dir = self.__env.get('BUILD_DIR')
         targets = ['test', 'server', 'client']
         self.__env.Alias('client', build_dir)
         self.__env.Alias('server', build_dir)
@@ -758,12 +724,41 @@ class PreReqComponent():
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
 
-# pylint: enable=too-many-branches
-    def _setup_user_prefix(self):
-        """setup ALT_PREFIX option"""
-        self.add_opts(('ALT_PREFIX',
-                       f'Specifies {os.pathsep} separated list of alternative paths to add',
-                       None))
+        # argobots is not really needed by client but it's difficult to separate
+        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
+        client_reqs = ['fuse', 'json-c']
+        server_reqs = ['pmdk', 'spdk']
+        test_reqs = ['cmocka']
+
+        reqs = []
+        if not self._build_targets:
+            raise ValueError("Call init_build_targets before load_defaults")
+        reqs = common_reqs
+        if self.test_requested():
+            reqs.extend(test_reqs)
+        if self.server_requested():
+            reqs.extend(server_reqs)
+        if self.client_requested():
+            reqs.extend(client_reqs)
+        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
+                                   'all', reqs))
+        if GetOption('build_deps') == 'only':
+            # Optionally, limit the deps we build in this pass
+            reqs = self.__env.get('DEPS')
+
+        try:
+            # pylint: disable-next=import-outside-toplevel
+            from components import define_components
+            define_components(self)
+        except Exception as old:
+            raise BadScript("components", traceback.format_exc()) from old
+
+        # Go ahead and prebuild some components
+
+        for comp in reqs:
+            env = self.__env.Clone()
+            self.require(env, comp)
 
     def _setup_build_type(self):
         """set build type"""
@@ -785,7 +780,7 @@ class PreReqComponent():
         """Setup environment to use Intel compilers"""
         try:
             env = self.__env.Clone(tools=['doneapi'])
-            self.has_icx = True
+            self._has_icx = True
         except InternalError:
             print("No oneapi compiler, trying legacy")
             env = self.__env.Clone(tools=['intelc'])
@@ -799,7 +794,7 @@ class PreReqComponent():
         self.__env.Replace(INTEL_C_COMPILER_VERSION=version)
         self.__env.Replace(LINK=env.get("LINK"))
         # disable the warning about Cilk since we don't use it
-        if not self.has_icx:
+        if not self._has_icx:
             self.__env.AppendUnique(LINKFLAGS=["-static-intel",
                                                "-diag-disable=10237"])
             self.__env.AppendUnique(CCFLAGS=["-diag-disable:2282",
@@ -808,7 +803,7 @@ class PreReqComponent():
                                              "-diag-disable:1338"])
         return {'CC': env.get("CC"), "CXX": env.get("CXX")}
 
-    def _setup_compiler(self, warning_level):
+    def _setup_compiler(self):
         """Setup the compiler to use"""
         compiler_map = {'gcc': {'CC': 'gcc', 'CXX': 'g++'},
                         'covc': {'CC': '/opt/BullseyeCoverage/bin/gcc',
@@ -827,8 +822,8 @@ class PreReqComponent():
         if compiler == 'icc':
             compiler_map['icc'] = self._setup_intelc()
 
-        if warning_level == 'error':
-            if compiler == 'icc' and not self.has_icx:
+        if self.__env.subst("$WARNING_LEVEL") == 'error':
+            if compiler == 'icc' and not self._has_icx:
                 warning_flag = '-Werror-all'
             else:
                 warning_flag = '-Werror'
@@ -843,7 +838,7 @@ class PreReqComponent():
 
         for name, prog in compiler_map[compiler].items():
             if not config.CheckProg(prog):
-                print("%s must be installed when COMPILER=%s" % (prog, compiler))
+                print(f'{prog} must be installed when COMPILER={compiler}')
                 if self.__check_only:
                     continue
                 config.Finish()
@@ -903,19 +898,14 @@ class PreReqComponent():
         """Retrieve the BuildInfo"""
         return self.__build_info
 
-    def add_options(self):
+    def _add_options(self):
         """Add common options to environment"""
-
         AddOption('--require-optional',
                   dest='require_optional',
                   action='store_true',
                   default=False,
                   help='Fail the build if check_component fails')
 
-        # There is another case here which isn't handled, we want Jenkins
-        # builds to download tar packages but not git source code.  For now
-        # just have a single flag and set this for the Jenkins builds which
-        # need this.
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
@@ -923,7 +913,7 @@ class PreReqComponent():
                   default='no',
                   help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
 
-        # We want to be able to check what dependencies are needed with out
+        # We want to be able to check what dependencies are needed without
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
         # the dependencies.  So we need a new option
@@ -936,8 +926,7 @@ class PreReqComponent():
         # Need to be able to look for an alternate build.config file.
         AddOption('--build-config',
                   dest='build_config',
-                  default=os.path.join(Dir('#').abspath,
-                                       'utils', 'build.config'),
+                  default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
                   help='build config file to use. [%default]')
 
         # We need to sometimes use alternate tools for building and need
@@ -968,20 +957,15 @@ class PreReqComponent():
         elif build_deps == 'build-only':
             self.build_deps = True
 
-    def realpath(self, path):
+    def _sub_path(self, path):
         """Resolve the real path"""
         return os.path.realpath(os.path.join(self.__top_dir, path))
 
-    def setup_path_var(self, var, multiple=False):
+    def _setup_path_var(self, var):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            if multiple:
-                value = []
-                for path in tmp.split(os.pathsep):
-                    value.append(self.realpath(path))
-            else:
-                value = self.realpath(tmp)
+            value = self._sub_path(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -997,89 +981,36 @@ class PreReqComponent():
             else:
                 raise
 
-    def define(self,
-               name,
-               **kw):
+    def define(self, name, **kw):
         """Define an external prerequisite component
 
-    Args:
-        name -- The name of the component definition
+        Args:
+            name -- The name of the component definition
 
-    Keyword arguments:
-        libs -- A list of libraries to add to dependent components
-        libs_cc -- Optional CC command to test libs with.
-        functions -- A list of expected functions
-        headers -- A list of expected headers
-        pkgconfig -- name of pkgconfig to load for installation check
-        requires -- A list of names of required component definitions
-        required_libs -- A list of system libraries to be checked for
-        defines -- Defines needed to use the component
-        package -- Name of package to install
-        commands -- A list of commands to run to build the component
-        config_cb -- Custom config callback
-        retriever -- A retriever object to download component
-        extra_lib_path -- Subdirectories to add to dependent component path
-        extra_include_path -- Subdirectories to add to dependent component path
-        out_of_src_build -- Build from a different directory if set to True
+        Keyword arguments:
+            libs -- A list of libraries to add to dependent components
+            libs_cc -- Optional CC command to test libs with.
+            functions -- A list of expected functions
+            headers -- A list of expected headers
+            pkgconfig -- name of pkgconfig to load for installation check
+            requires -- A list of names of required component definitions
+            required_libs -- A list of system libraries to be checked for
+            defines -- Defines needed to use the component
+            package -- Name of package to install
+            commands -- A list of commands to run to build the component
+            config_cb -- Custom config callback
+            retriever -- A retriever object to download component
+            extra_lib_path -- Subdirectories to add to dependent component path
+            extra_include_path -- Subdirectories to add to dependent component path
+            out_of_src_build -- Build from a different directory if set to True
         """
         use_installed = False
         if 'all' in self.installed or name in self.installed:
             use_installed = True
-        comp = _Component(self,
-                          name,
-                          use_installed,
-                          **kw)
+        comp = _Component(self, name, use_installed, **kw)
         self.__defined[name] = comp
 
-    def load_definitions(self, **kw):
-        """Load default definitions
-
-        Keyword arguments:
-            prebuild -- A list of components to prebuild
-        """
-
-        try:
-            # pylint: disable=import-outside-toplevel
-            from components import define_components
-            # pylint: enable=import-outside-toplevel
-            define_components(self)
-        except Exception as old:
-            raise BadScript("components", traceback.format_exc()) from old
-
-        # Go ahead and prebuild some components
-
-        prebuild = kw.get("prebuild", [])
-        for comp in prebuild:
-            env = self.__env.Clone()
-            self.require(env, comp)
-
-    def load_defaults(self):
-        """Setup default build parameters"""
-        # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk', 'spdk']
-        test_reqs = ['cmocka']
-
-        reqs = []
-        if not self._build_targets:
-            raise ValueError("Call init_build_targets before load_defaults")
-        reqs = common_reqs
-        if self.test_requested():
-            reqs.extend(test_reqs)
-        if self.server_requested():
-            reqs.extend(server_reqs)
-        if self.client_requested():
-            reqs.extend(client_reqs)
-        self.add_opts(ListVariable('DEPS', "Dependencies to build by default",
-                                   'all', reqs))
-        if GetOption('build_deps') == 'only':
-            # Optionally, limit the deps we build in this pass
-            reqs = self.__env.get('DEPS')
-        self.load_definitions(prebuild=reqs)
-
-    def server_requested(self, *_args):
+    def server_requested(self):
         """return True if server build is requested"""
         return "server" in self._build_targets
 
@@ -1091,27 +1022,21 @@ class PreReqComponent():
         """return True if test build is requested"""
         return "test" in self._build_targets
 
-    def modify_prefix(self, comp_def, env):  # pylint: disable=unused-argument
+    def _modify_prefix(self, comp_def):
         """Overwrite the prefix in cases where we may be using the default"""
         if comp_def.package:
             return
-        prebuilt1 = os.path.join(self.prereq_prefix, comp_def.name)
-        prebuilt2 = self.__env.get('{}_PREFIX'.format(comp_def.name.upper()))
 
         if comp_def.src_path and \
            not os.path.exists(comp_def.src_path) and \
-           not os.path.exists(prebuilt1) and \
-           not os.path.exists(prebuilt2):
-            self.save_component_prefix('%s_PREFIX' %
-                                       comp_def.name.upper(),
-                                       "/usr")
+           not os.path.exists(os.path.join(self.prereq_prefix, comp_def.name)) and \
+           not os.path.exists(self.__env.get(f'{comp_def.name.upper()}_PREFIX')):
+            self._save_component_prefix(f'{comp_def.name.upper()}_PREFIX', '/usr')
 
-    def require(self,
-                env,
-                *comps,
-                **kw):
-        """Ensure a component is built, if necessary, and add necessary
-           libraries and paths to the construction environment.
+    def require(self, env, *comps, **kw):
+        """Ensure a component is built.
+
+        If necessary, and add necessary libraries and paths to the construction environment.
 
         Args:
             env -- The construction environment to modify
@@ -1134,7 +1059,7 @@ class PreReqComponent():
             if headers_only:
                 needed_libs = None
             else:
-                needed_libs = kw.get('%s_libs' % comp, comp_def.libs)
+                needed_libs = kw.get(f'{comp}_libs', comp_def.libs)
             if comp in self.__required:
                 if GetOption('help'):
                     continue
@@ -1154,7 +1079,7 @@ class PreReqComponent():
                     self.__required[comp] = False
                     changes = True
                 else:
-                    self.modify_prefix(comp_def, env)
+                    self._modify_prefix(comp_def)
                 # If we get here, just set the environment again, new directories may be present
                 comp_def.set_environment(env, needed_libs)
             except Exception as error:
@@ -1178,7 +1103,7 @@ class PreReqComponent():
         env = self.__env.Clone()
         try:
             self.require(env, *comps, **kw)
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-except
             if self.__require_optional:
                 raise error
             return False
@@ -1194,7 +1119,7 @@ class PreReqComponent():
         """Get a variable from the construction environment"""
         return self.__env[var]
 
-    def replace_env(self, **kw):
+    def _replace_env(self, **kw):
         """Replace a values in the construction environment
 
         Keyword arguments:
@@ -1241,40 +1166,30 @@ class PreReqComponent():
 
         return None
 
-    def get_defined_components(self):
-        """Get a list of all defined component names"""
-        return copy.copy(list(self.__defined.keys()))
-
-    def get_defined(self):
-        """Get a dictionary of defined components"""
-        return copy.copy(self.__defined)
-
     def get_component(self, name):
         """Get a component definition"""
         return self.__defined[name]
 
-    def save_component_prefix(self, var, value):
-        """Save the component prefix in the environment and
-           in build info"""
-        self.replace_env(**{var: value})
+    def _save_component_prefix(self, var, value):
+        """Save the component prefix in the environment and in build info"""
+        self._replace_env(**{var: value})
         self.__build_info.update(var, value)
 
     def get_prefixes(self, name, prebuilt_path):
         """Get the location of the scons prefix as well as the external component prefix."""
         prefix = self.__env.get('PREFIX')
-        comp_prefix = '%s_PREFIX' % name.upper()
+        comp_prefix = f'{name.upper()}_PREFIX'
         if prebuilt_path:
-            self.save_component_prefix(comp_prefix, prebuilt_path)
+            self._save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
 
         target_prefix = os.path.join(self.prereq_prefix, name)
-        self.save_component_prefix(comp_prefix, target_prefix)
+        self._save_component_prefix(comp_prefix, target_prefix)
 
         return (target_prefix, prefix)
 
     def get_src_build_dir(self):
-        """Get the location of a temporary directory for hosting
-           intermediate build files"""
+        """Get the location of a temporary directory for hosting intermediate build files"""
         return self.__env.get('BUILD_DIR')
 
     def get_src_path(self, name):
@@ -1288,25 +1203,23 @@ class PreReqComponent():
 
     def get_config(self, section, name):
         """Get commit/patch versions"""
-        if self.configs is None:
+        if self._configs is None:
             return None
-        if not self.configs.has_section(section):
+        if not self._configs.has_section(section):
             return None
 
-        if not self.configs.has_option(section, name):
+        if not self._configs.has_option(section, name):
             return None
-        return self.configs.get(section, name)
+        return self._configs.get(section, name)
 
     def load_config(self, comp, path):
         """If the component has a config file to load, load it"""
         config_path = self.get_config("configs", comp)
         if config_path is None:
             return
-        full_path = "%s/%s" % (path, config_path)
-        print("Reading config file for %s from %s" % (comp, full_path))
-        self.configs.read(full_path)
-
-# pylint: enable=too-many-public-methods
+        full_path = os.path.join(path, config_path)
+        print(f'Reading config file for {comp} from {full_path}')
+        self._configs.read(full_path)
 
 
 class _Component():
@@ -1373,17 +1286,7 @@ class _Component():
         self.lib_path.extend(kw.get("extra_lib_path", []))
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
-        self.crc_file = os.path.join(self.prereqs.get_build_dir(),
-                                     '_%s.crc' % self.name)
         self.patch_path = self.prereqs.get_build_dir()
-
-    def _delete_old_file(self, path):
-        """delete the old file"""
-        if os.path.exists(path):
-            if self.__dry_run:
-                print('Would unlink %s' % path)
-            else:
-                os.unlink(path)
 
     def resolve_patches(self):
         """parse the patches variable"""
@@ -1400,7 +1303,7 @@ class _Component():
             if "https://" not in raw:
                 patches[raw] = patch_subdir
                 continue
-            patch_name = "%s_patch_%03d" % (self.name, patchnum)
+            patch_name = f'{self.name}_patch_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
@@ -1415,13 +1318,13 @@ class _Component():
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
-            print('Using prebuilt binaries for %s' % self.name)
+            print(f'Using prebuilt binaries for {self.name}')
             return
         branch = self.prereqs.get_config("branches", self.name)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
 
         if not self.retriever:
-            print('Using installed version of %s' % self.name)
+            print(f'Using installed version of {self.name}')
             return
 
         # Source code is retrieved using retriever
@@ -1429,15 +1332,13 @@ class _Component():
         if not self.prereqs.download_deps:
             raise DownloadRequired(self.name)
 
-        print('Downloading source for %s' % self.name)
-        self._delete_old_file(self.crc_file)
+        print(f'Downloading source for {self.name}')
         patches = self.resolve_patches()
         self.retriever.get(self.src_path, commit_sha=commit_sha,
                            patches=patches, branch=branch)
 
-    def has_missing_system_deps(self, env):
+    def _has_missing_system_deps(self, env):
         """Check for required system libs"""
-
         if self.__check_only:
             # Have to temporarily turn off dry run to allow this check.
             env.SetOption('no_exec', False)
@@ -1459,16 +1360,12 @@ class _Component():
                     env.SetOption('no_exec', True)
                 return True
 
-        try:
-            for prog in self.required_progs:
-                if not config.CheckProg(prog):
-                    config.Finish()
-                    if self.__check_only:
-                        env.SetOption('no_exec', True)
-                    return True
-        except AttributeError:
-            # This feature is new in scons 2.4
-            print('except AttributeError: new in scons 2.4')
+        for prog in self.required_progs:
+            if not config.CheckProg(prog):
+                config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
+                return True
 
         config.Finish()
         if self.__check_only:
@@ -1495,7 +1392,7 @@ class _Component():
                 return
 
         try:
-            env.ParseConfig("pkg-config %s %s" % (opts, self.pkgconfig))
+            env.ParseConfig(f'pkg-config {opts} {self.pkgconfig}')
         except OSError:
             return
 
@@ -1523,6 +1420,8 @@ class _Component():
         if GetOption('help'):
             return True
 
+        print(f"Checking targets for component '{self.name}'")
+
         config = Configure(env)
         if self.config_cb:
             if not self.config_cb(config):
@@ -1548,7 +1447,7 @@ class _Component():
         for lib in self.libs:
             old_cc = env.subst('$CC')
             if self.libs_cc:
-                arg_key = "%s_PREFIX" % self.name.upper()
+                arg_key = f'{self.name.upper()}_PREFIX'
                 args = {arg_key: self.component_prefix}
                 env.Replace(**args)
                 env.Replace(CC=self.libs_cc)
@@ -1605,8 +1504,7 @@ class _Component():
             self.src_path = self.prereqs.get_src_path(self.name)
         self.build_path = self.src_path
         if self.out_of_src_build:
-            self.build_path = os.path.join(self.prereqs.get_build_dir(),
-                                           '{}.build'.format(self.name))
+            self.build_path = os.path.join(self.prereqs.get_build_dir(), f'{self.name}.build')
 
             ensure_dir_exists(self.build_path, self.__dry_run)
 
@@ -1655,21 +1553,21 @@ class _Component():
         for lib in needed_libs:
             env.AppendUnique(LIBS=[lib])
 
-    def check_installed_package(self, env):
+    def _check_installed_package(self, env):
         """Check installed targets"""
         if self.has_missing_targets(env):
             if self.__dry_run:
                 if self.package is None:
-                    print('Missing %s' % self.name)
+                    print(f'Missing {self.name}')
                 else:
-                    print('Missing package %s %s' % (self.package, self.name))
+                    print(f'Missing package {self.package} {self.name}')
                 return
             if self.package is None:
                 raise MissingTargets(self.name, self.name)
 
             raise MissingTargets(self.name, self.package)
 
-    def check_user_options(self, env, needed_libs):
+    def _check_user_options(self, env, needed_libs):
         """check help and clean options"""
         if GetOption('help'):
             if self.requires:
@@ -1684,30 +1582,10 @@ class _Component():
     def _rm_old_dir(self, path):
         """remove the old dir"""
         if self.__dry_run:
-            print('Would empty %s' % path)
+            print(f'Would empty {path}')
         else:
             shutil.rmtree(path)
             os.mkdir(path)
-
-    def _has_changes(self):
-        """check for changes"""
-        has_changes = self.prereqs.build_deps
-        if "all" in self.prereqs.installed:
-            has_changes = False
-        if self.name in self.prereqs.installed:
-            has_changes = False
-        if self.component_prefix and os.path.exists(self.component_prefix):
-            has_changes = False
-
-        return has_changes
-
-    def _check_prereqs_build_deps(self):
-        """check for build dependencies"""
-        if not self.prereqs.build_deps:
-            if self.__dry_run:
-                print('Would do required build of %s' % self.name)
-            else:
-                raise BuildRequired(self.name)
 
     def patch_rpaths(self):
         """Run patchelf binary to add relative rpaths"""
@@ -1742,7 +1620,7 @@ class _Component():
                 path = os.path.join(rootpath, libdir)
                 if not os.path.exists(path):
                     continue
-                rpath.append("$$ORIGIN/../../%s/%s" % (prereq, libdir))
+                rpath.append(f'$$ORIGIN/../../{prereq}/{libdir}')
                 norigin.append(os.path.normpath(path))
                 break
 
@@ -1756,7 +1634,7 @@ class _Component():
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]
                 if not RUNNER.run_commands([cmd]):
-                    print("Skipped patching %s" % full_lib)
+                    print(f'Skipped patching {full_lib}')
 
     def build(self, env, needed_libs):
         """Build the component, if necessary
@@ -1770,32 +1648,44 @@ class _Component():
         changes = False
         envcopy = self.prereqs.system_env.Clone()
 
-        if self.check_user_options(env, needed_libs):
+        if self._check_user_options(env, needed_libs):
             return True
         self.set_environment(envcopy, self.libs)
         if self.prebuilt_path:
-            self.check_installed_package(envcopy)
+            self._check_installed_package(envcopy)
             return False
 
-        # Default to has_changes = True which will cause all deps
-        # to be built first time scons is invoked.
-        has_changes = self._has_changes()
+        build_dep = self.prereqs.build_deps
+        if "all" in self.prereqs.installed:
+            build_dep = False
+        if self.name in self.prereqs.installed:
+            build_dep = False
+        if self.component_prefix and os.path.exists(self.component_prefix):
+            build_dep = False
 
-        if has_changes or self.has_missing_targets(envcopy):
+        # If a component has both a package name and builder then check if the package can be used
+        # before building.  This allows a rpm to be built if available but source to be used
+        # if not.
+        if build_dep:
+            if self.package:
+                missing_targets = self.has_missing_targets(envcopy)
+                if not missing_targets:
+                    build_dep = False
+        else:
+            missing_targets = self.has_missing_targets(envcopy)
 
-            self._check_prereqs_build_deps()
+        if build_dep:
+
+            if self._has_missing_system_deps(self.prereqs.system_env):
+                raise MissingSystemLibs(self.name)
 
             self.get()
 
             self.prereqs.load_config(self.name, self.src_path)
 
             if self.requires:
-                changes = self.prereqs.require(envcopy, *self.requires,
-                                               needed_libs=None)
+                changes = self.prereqs.require(envcopy, *self.requires, needed_libs=None)
                 self.set_environment(envcopy, self.libs)
-
-            if self.has_missing_system_deps(self.prereqs.system_env):
-                raise MissingSystemLibs(self.name)
 
             ensure_dir_exists(self.prereqs.prereq_prefix, self.__dry_run)
             changes = True
@@ -1803,6 +1693,12 @@ class _Component():
                 self._rm_old_dir(self.build_path)
             if not RUNNER.run_commands(self.build_commands, subdir=self.build_path, env=envcopy):
                 raise BuildFailure(self.name)
+
+        elif missing_targets:
+            if self.__dry_run:
+                print(f'Would do required build of {self.name}')
+            else:
+                raise BuildRequired(self.name)
 
         # set environment one more time as new directories may be present
         if self.requires:
