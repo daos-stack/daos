@@ -32,21 +32,21 @@ class StorageException(Exception):
 class StorageDevice():
     """Information about a storage device."""
 
-    def __init__(self, address, storage_class, device, numa_node, storage_type):
+    def __init__(self, address, storage_class, device, numa_node, category):
         """Initialize a StorageDevice object.
 
         Args:
-            address (_type_): _description_
-            storage_class (_type_): _description_
-            device (_type_): _description_
-            numa_node (_type_): _description_
-            storage_type (str):
+            address (str): the address of the device
+            storage_class (str): the device class description
+            device (str): the device description
+            numa_node (str): the NUMA node number
+            category (str): the type of storage device, e.g. 'disk' or 'controller'
         """
         self.address = address
         self.storage_class = storage_class
         self.device = device
         self.numa_node = numa_node
-        self.storage_type = storage_type
+        self.category = category
 
     def __str__(self):
         """Convert this StorageDevice into a string.
@@ -117,6 +117,7 @@ class StorageInfo():
         self._log = logger
         self._hosts = hosts.copy()
         self._devices = []
+        self._controllers = []
 
     @property
     def devices(self):
@@ -124,11 +125,28 @@ class StorageInfo():
 
         Returns:
             list: a list of StorageDevice objects
+
         """
         return self._devices
 
+    def _raise_error(self, message, error=None):
+        """Raise and log the error message.
+
+        Args:
+            message (str): error description
+            error (optional, Exception): exception from which to raise. Defaults to None.
+
+        Raises:
+            StorageException: with the provided error description
+
+        """
+        self._log.error(message)
+        if error:
+            raise StorageException(message) from error
+        raise StorageException(message)
+
     def scan(self, device_filter=None, match_mode=None):
-        """_summary_.
+        """Detect any NVMe or VMD disks/controllers that exist on every host.
 
         Args:
             device_filter (str, optional): device search filter. Defaults to None.
@@ -136,27 +154,32 @@ class StorageInfo():
                 will match all types.
 
         Raises:
-            LaunchException: _description_
+            StorageException: if no homogeneous devices are found or there is an error obtaining the
+                device information
 
         """
-        self._log.debug('Scanning %s for NVMe/VMD devices', self._hosts)
+        self._log.info("-" * 80)
+        self._log.info('Scanning %s for NVMe/VMD devices', self._hosts)
         self._devices.clear()
 
-        all_devices = {}
         for key in sorted(self.TYPE_SEARCH):
             if not match_mode or key == match_mode:
-                all_devices[key] = self.get_disk_information(key, device_filter)
-                if key == "VMD":
-                    self.get_disk_controllers()
+                device_info = self.get_device_information(key, device_filter)
+                if key == "VMD" and device_info:
+                    controller_mapping = self.get_controller_mapping()
+                    for controller in device_info:
+                        if controller.address in controller_mapping:
+                            self._devices.append(controller)
+                            self._devices[-1].category = 'controller'
+                else:
+                    for disk in device_info:
+                        self._devices.append(disk)
 
-        if not all_devices:
+        if not self._devices:
             keys = ' & '.join(sorted(self.TYPE_SEARCH))
-            raise StorageException(f'Error: Non-homogeneous {keys} PCI addresses.')
+            self._raise_error(f'Error: Non-homogeneous {keys} PCI addresses.')
 
-        for device in all_devices:
-            self._devices.append(device)
-
-    def get_disk_information(self, key, device_filter):
+    def get_device_information(self, key, device_filter):
         """Get a list of NVMe or VMD devices that exist on every host.
 
         Args:
@@ -168,7 +191,9 @@ class StorageInfo():
 
         """
         found_devices = {}
-        self._log.debug("Detecting %s devices on %s", key, self._hosts)
+        self._log.debug(
+            'Detecting %s devices on %s%s',
+            key, self._hosts, " with '%s' filter" if device_filter else '')
 
         # Find the NVMe devices that exist on every host in the same NUMA slot
         command_list = [
@@ -193,7 +218,7 @@ class StorageInfo():
                     try:
                         device = StorageDevice(
                             address, info['class'][index], info['device'][index],
-                            info['numa'][index], key)
+                            info['numa'][index], 'disk')
                     except IndexError:
                         self._log.error(
                             '  error creating a StorageDevice object for %s with index %s of the '
@@ -203,11 +228,11 @@ class StorageInfo():
                         self._log.error('    - device: %s', info['device'])
                         self._log.error('    - numa:   %s', info['numa'])
                         continue
-                    
+
                     if device_filter and device_filter.startswith("-"):
                         if re.findall(device_filter[1:], device.description):
                             self._log.debug(
-                            "  excluding device matching '%s': %s", device_filter[1:], device)
+                                "  excluding device matching '%s': %s", device_filter[1:], device)
                             continue
 
                     elif device_filter and not re.findall(device_filter, device.description):
@@ -226,16 +251,23 @@ class StorageInfo():
                         "  device '%s' not found on all hosts: %s", key, found_devices[device])
                     found_devices.pop(device)
 
+        if found_devices:
+            self._log.debug('%s devices found on all hosts:')
+            for device in list(found_devices):
+                self._log.debug('%s', found_devices[device])
+        else:
+            self._log.debug('No %s devices found on all hosts')
+
         return list(found_devices.keys())
 
-    def get_disk_controllers(self):
-        """Get the controller for each VMD disk.
+    def get_controller_mapping(self):
+        """Get the mapping of each VMD disk to its VMD controller.
 
         Raises:
             StorageException: if there is an error creating a mapping of disks to controllers
 
         Returns:
-            dict: disk address keys with controller address values
+            dict: controller address keys with disk address values
 
         """
         controllers = {}
@@ -246,7 +278,7 @@ class StorageInfo():
 
         # Verify the command was successful on each server host
         if not result.passed:
-            raise StorageException(f"Error issuing command '{command}'")
+            self._raise_error(f"Error issuing command '{command}'")
 
         # Map VMD addresses to the disks they control
         controller_mapping = {}
@@ -269,12 +301,15 @@ class StorageInfo():
                             '  - disk %s managed by controller %s not found on all hosts: %s',
                             disk, controller, controller_mapping[disk][controller])
                     else:
-                        self._log.debug('  - disk %s managed by controller %s', disk, controller)
-                        controllers[disk] = controller
+                        controllers[controller] = disk
 
         # Verify each server host has the same NVMe devices behind the same VMD addresses.
         if not controllers:
-            raise StorageException("Error: Non-homogeneous NVMe device behind VMD addresses.")
+            self._raise_error("Error: Non-homogeneous NVMe device behind VMD addresses.")
+
+        self._log.debug('Controller/disk mapping')
+        for controller, disks in controllers.values():
+            self._log.debug('  %s: %s', controller, disks)
 
         return controllers
 
@@ -293,7 +328,7 @@ class StorageInfo():
 
         """
         if tier_type not in self.TIER_KEYWORDS:
-            raise StorageException(f'Error: Invalid storage type \'{tier_type}\'')
+            self._raise_error(f'Error: Invalid storage type \'{tier_type}\'')
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):
@@ -318,4 +353,4 @@ class StorageInfo():
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
                 config_handle.writelines(lines)
         except IOError as error:
-            raise StorageException(f"Error writing avocado config file {yaml_file}") from error
+            self._raise_error(f"Error writing avocado config file {yaml_file}", error)
