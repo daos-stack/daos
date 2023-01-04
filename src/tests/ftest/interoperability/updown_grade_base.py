@@ -321,7 +321,7 @@ class UpgradeDowngradeBase(IorTestBase):
         if prop_value != expected_status:
             self.fail("##prop_value != expected_status {}".format(expected_status))
 
-    def poolUpgrade_with_fault(self, hosts, pool_id):
+    def pool_upgrade_with_fault(self, hosts, pool_id):
         """Execute dmg pool upgrade with fault injection.
 
         Args:
@@ -337,6 +337,7 @@ class UpgradeDowngradeBase(IorTestBase):
 
         # Pool upgrade
         result = run_pcmd(hosts, "dmg pool upgrade {}".format(pool_id))
+        self.check_result(result)
         # Verify pool status during upgrade
         expected_status = "in progress"
         self.verify_pool_upgrade_status(pool_id, expected_status)
@@ -561,7 +562,7 @@ class UpgradeDowngradeBase(IorTestBase):
         testfile_sav2 = os.path.join(mount_dir, "testfile_sav2")
         symlink_testfile = os.path.join(mount_dir, "symlink_testfile")
         # (3.a)ior dfs
-        if ior_api == "DFS" or ior_api == "POSIX":
+        if ior_api in ("DFS" or "POSIX"):
             self.log.info("(3.a)==Run non-HDF5 IOR write and read.")
             self.ior_cmd.flags.update(iorflags_write)
             self.run_ior_with_pool(
@@ -674,7 +675,7 @@ class UpgradeDowngradeBase(IorTestBase):
 
         if fault_on_pool_upgrade and self.has_fault_injection(hosts_client):
             self.log.info("(9.1a)==Pool upgrade with fault-injection.")
-            self.poolUpgrade_with_fault(hosts_client, enable=True)
+            self.pool_upgrade_with_fault(hosts_client, pool_id)
         else:
             self.log.info("(9.1b)==Pool upgrade.")
             result = run_pcmd(hosts_client, "dmg pool upgrade {}".format(pool_id))
