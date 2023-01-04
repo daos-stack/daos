@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -674,8 +674,7 @@ dfs_readdirplus(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 /**
  * User callback defined for dfs_readdir_size.
  */
-typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *arg);
+typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[], void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
@@ -1134,6 +1133,31 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
  */
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
+
+
+enum {
+	/** just print the OIDS */
+	DFS_CHECK_PRINT		= (1 << 0),
+	/** remove / punch the leaked objects */
+	DFS_CHECK_REMOVE	= (1 << 1),
+	/** add leaked oids to a "lost+found" directory */
+	DFS_CHECK_LINK_LF	= (1 << 2),
+};
+
+/**
+ * Scan the DFS namespace and check if there are any leaked objects. Depending on the flag passed,
+ * either remove those leaked objects to reclaim space, add those object to "Lost+Found" directory,
+ * or just print the oids to stdout.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	Name of POSIX container.
+ * \param[in]	flags	Flags to indicate what to do with leaked objects:
+ *			punch, link to l+f, or just print to stdout.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags);
 
 #if defined(__cplusplus)
 }

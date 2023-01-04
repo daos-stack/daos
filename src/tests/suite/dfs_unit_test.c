@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2291,6 +2291,216 @@ dfs_test_multiple_pools(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+#define NR_LIST	128
+
+static void
+get_nr_oids(daos_handle_t poh, const char *cont, uint64_t *nr_oids)
+{
+	daos_epoch_t		snap;
+	daos_handle_t		coh, oit;
+	daos_obj_id_t		oids[NR_LIST];
+	daos_anchor_t		anchor = {0};
+	daos_epoch_range_t	epr;
+	uint32_t		nr_entries;
+	int			rc;
+
+	rc = daos_cont_open(poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_create_snap_opt(coh, &snap, NULL, DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_oit_open(coh, snap, &oit, NULL);
+	assert_rc_equal(rc, 0);
+
+	*nr_oids = 0;
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = NR_LIST;
+		rc = daos_oit_list(oit, oids, &nr_entries, &anchor, NULL);
+		assert_rc_equal(rc, 0);
+		*nr_oids += nr_entries;
+	}
+
+	rc = daos_oit_close(oit, NULL);
+	assert_rc_equal(rc, 0);
+	epr.epr_hi = epr.epr_lo = snap;
+	rc = daos_cont_destroy_snap(coh, epr, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+dfs_test_checker(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_t			*dfs;
+	int			nr = 100, i;
+	dfs_obj_t		*root, *lf;
+	daos_obj_id_t		root_oid;
+	daos_handle_t		root_oh;
+	daos_handle_t		coh;
+	uint64_t		nr_oids = 0;
+	int			rc;
+
+	rc = dfs_init();
+	assert_int_equal(rc, 0);
+
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont_chkr", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+
+	/* save the root object ID for later */
+	rc = dfs_lookup(dfs, "/", O_RDWR, &root, NULL, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_obj2id(root, &root_oid);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(root);
+	assert_int_equal(rc, 0);
+
+	/** create 100 files and dirs */
+	for (i = 0; i < nr; i++) {
+		dfs_obj_t	*dir, *file;
+		d_sg_list_t	sgl;
+		d_iov_t		iov;
+		char		name[24];
+		char		buf[1024];
+
+		sprintf(name, "RD_dir_%d", i);
+		rc = dfs_open(dfs, NULL, name, S_IFDIR | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &dir);
+		assert_int_equal(rc, 0);
+
+		sprintf(name, "RD_file_%d", i);
+		rc = dfs_open(dfs, dir, name, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &file);
+		assert_int_equal(rc, 0);
+
+		d_iov_set(&iov, buf, 1024);
+		sgl.sg_nr = 1;
+		sgl.sg_nr_out = 1;
+		sgl.sg_iovs = &iov;
+
+		rc = dfs_write(dfs, file, &sgl, 1024, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(dir);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+
+	/*
+	 * Using lower level obj API, punch 10 directory entry leaving orphaned directory object and
+	 * the file that was created under it.
+	 */
+	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < 10; i++) {
+		char		name[24];
+		d_iov_t		dkey;
+
+		sprintf(name, "RD_dir_%d", i);
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container before invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 200 + SB + root object */
+	assert_true(nr_oids == 202);
+
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_REMOVE);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container after invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 200 - 20 punched objects + SB + root object */
+	assert_true(nr_oids == 182);
+
+	/*
+	 * Using lower level obj API, punch 10 directory entry leaving orphaned directory object and
+	 * the file that was created under it.
+	 */
+	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_obj_open(coh, root_oid, DAOS_OO_RW, &root_oh, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 10; i < 20; i++) {
+		char		name[24];
+		d_iov_t		dkey;
+
+		sprintf(name, "RD_dir_%d", i);
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container before invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 180 + SB + root object */
+	assert_true(nr_oids == 182);
+
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_LINK_LF);
+	assert_int_equal(rc, 0);
+
+	/** check how many OIDs in container after invoking the checker */
+	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
+	/** should be 180 (since the leaked ones are re-linked) + SB + root object + LF dir */
+	assert_true(nr_oids == 183);
+
+	/** readdir of l+f confirming there are 10 files and dirs */
+	int			num_files = 0;
+	int			num_dirs = 0;
+	daos_anchor_t		anchor = {0};
+	uint32_t		num_ents = 10;
+	struct dirent		ents[10];
+	struct stat		stbufs[10];
+
+	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont_chkr", O_CREAT | O_RDWR, NULL, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR, O_RDWR, 0, 0, NULL, &lf);
+	assert_rc_equal(rc, 0);
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_readdirplus(dfs, lf, &anchor, &num_ents, ents, stbufs);
+		assert_int_equal(rc, 0);
+
+		for (i = 0; i < num_ents; i++) {
+			if (S_ISREG(stbufs[i].st_mode)) {
+				print_message("FILE: %s\n", ents[i].d_name);
+				num_files++;
+			} else if (S_ISDIR(stbufs[i].st_mode)) {
+				print_message("DIR: %s\n", ents[i].d_name);
+				num_dirs++;
+			} else {
+				print_error("Found invalid entry: %s\n", ents[i].d_name);
+				assert_true(S_ISREG(stbufs[i].st_mode) ||
+					    S_ISDIR(stbufs[i].st_mode));
+			}
+		}
+		num_ents = 10;
+	}
+	assert_true(num_files == 10);
+	assert_true(num_dirs == 10);
+	rc = dfs_release(lf);
+	assert_int_equal(rc, 0);
+	rc = dfs_disconnect(dfs);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_destroy(arg->pool.pool_str, arg->group, "cont_chkr", 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_fini();
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -2334,6 +2544,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_oclass_hints, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST21: dfs multiple pools",
 	  dfs_test_multiple_pools, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST21: dfs container checker",
+	  dfs_test_checker, async_disable, test_case_teardown},
 };
 
 static int
