@@ -418,12 +418,14 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
+ * \param[IN] db		persistent database to store SMD data
  * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
+		  unsigned int hugepage_size, unsigned int tgt_nr,
+		  struct sys_db *db, bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -901,8 +903,7 @@ int bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	     struct bio_csum_desc *csum_desc);
 
 enum bio_mc_flags {
-	BIO_MC_FL_SYSDB		= (1UL << 0),	/* for sysdb */
-	BIO_MC_FL_RDB		= (1UL << 1),	/* for RDB */
+	BIO_MC_FL_RDB		= (1UL << 0),	/* for RDB */
 };
 
 /*

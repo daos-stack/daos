@@ -359,11 +359,8 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 			xs_ctxt);
 		if (flags & BIO_MC_FL_RDB)
 			rc = smd_rdb_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
-		else if (!(flags & BIO_MC_FL_SYSDB))
-			rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		else
-			rc = 0; /* No need to clear super blob */
-
+			rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		if (rc)
 			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
 				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),
@@ -383,8 +380,8 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		/* No data blob for sysdb */
-		if (flags & (BIO_MC_FL_SYSDB | BIO_MC_FL_RDB))
+		/* No data blob for rdb */
+		if (flags & BIO_MC_FL_RDB)
 			return 0;
 
 		/* Query SMD to see if data blob exists */
@@ -429,7 +426,6 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 	}
 
 	if (data_blobid != SPDK_BLOBID_INVALID) {
-		D_ASSERT(!(flags & BIO_MC_FL_SYSDB));
 		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc) {
 			D_ERROR("Failed to delete data blob "DF_U64". "DF_RC"\n",
@@ -452,18 +448,6 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 		D_ERROR("Failed to delete meta blob "DF_U64". "DF_RC"\n", wal_blobid, DP_RC(rc));
 
 	return rc;
-}
-
-/*
- * Callback for setting the super blob ID.
- */
-static void
-set_super_cb(void *arg1, int bserrno)
-{
-	struct blob_msg_arg	*bma = arg1;
-	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
-
-	blob_common_cb(ba, bserrno);
 }
 
 static int
@@ -506,9 +490,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 	 * hasn't been created yet.
 	 */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		if (flags & BIO_MC_FL_SYSDB)
-			rc = -DER_NONEXIST;	/* Always re-create without existence check */
-		else if (flags & BIO_MC_FL_RDB)
+		if (flags & BIO_MC_FL_RDB)
 			rc = smd_rdb_get_blob(uuid, xs_ctxt->bxc_tgt_id, st, &blob_id1);
 		else
 			rc = smd_pool_get_blob(uuid, xs_ctxt->bxc_tgt_id, st, &blob_id1);
@@ -549,20 +531,12 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 			ba->bca_id, xs_ctxt, DP_UUID(uuid),
 			bma.bma_opts.num_clusters);
 		if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-			if (flags & BIO_MC_FL_RDB) {
+			if (flags & BIO_MC_FL_RDB)
 				rc = smd_rdb_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
 						     blob_sz);
-			} else if (!(flags & BIO_MC_FL_SYSDB)) {
+			else
 				rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
 						      blob_sz);
-			} else if (st == SMD_DEV_TYPE_META) {
-				ba->bca_inflights = 1;
-				ABT_eventual_reset(ba->bca_eventual);
-				spdk_bs_set_super(bbs->bb_bs, ba->bca_id, set_super_cb, &bma);
-				/* Wait for set super done */
-				blob_wait_completion(xs_ctxt, ba);
-				rc = ba->bca_rc;
-			}
 		} else {
 			rc = smd_pool_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st, blob_sz);
 		}
@@ -652,7 +626,6 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (data_sz > 0 && bio_nvme_configured(SMD_DEV_TYPE_DATA)) {
-		D_ASSERT(!(flags & BIO_MC_FL_SYSDB));
 		D_ASSERT(!(flags & BIO_MC_FL_RDB));
 		rc = bio_blob_create(pool_id, xs_ctxt, data_sz, SMD_DEV_TYPE_DATA, flags,
 				     &data_blobid);
@@ -763,16 +736,6 @@ delete_data:
 	return rc;
 }
 
-static void
-get_super_cb(void *arg1, spdk_blob_id blobid, int bserrno)
-{
-	struct blob_msg_arg	*bma = arg1;
-	struct blob_cp_arg	*ba = &bma->bma_cp_arg;
-
-	bma->bma_blob_id = blobid;
-	ba->bca_rc = daos_errno2der(-bserrno);
-}
-
 int
 bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 	      enum smd_dev_type st, spdk_blob_id open_blobid)
@@ -808,17 +771,12 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		 * Query per-server metadata to get blobID for this pool:target
 		 */
 		if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-			if (flags & BIO_MC_FL_SYSDB) {
-				spdk_bs_get_super(bbs->bb_bs, get_super_cb, bma);
-				rc = ba->bca_rc;
-				blob_id = bma->bma_blob_id;
-			} else if (flags & BIO_MC_FL_RDB) {
+			if (flags & BIO_MC_FL_RDB)
 				rc = smd_rdb_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
 						      st, &blob_id);
-			} else {
+			else
 				rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id,
 						       st, &blob_id);
-			}
 		} else {
 			rc = smd_pool_get_blob(ctxt->bic_pool_id, xs_ctxt->bxc_tgt_id, st,
 					       &blob_id);
@@ -904,8 +862,8 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 
 	*mc = NULL;
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		/* No data blob for sysdb or RDB */
-		if (flags & (BIO_MC_FL_SYSDB | BIO_MC_FL_RDB))
+		/* No data blob for RDB */
+		if (flags & BIO_MC_FL_RDB)
 			return 0;
 
 		/* Query SMD to see if data blob exists */
@@ -938,7 +896,6 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 	D_ALLOC_PTR(bio_mc);
 	if (bio_mc == NULL)
 		return -DER_NOMEM;
-	bio_mc->mc_is_sysdb = (flags & BIO_MC_FL_SYSDB);
 
 	rc = __bio_ioctxt_open(&bio_mc->mc_meta, xs_ctxt, pool_id, flags, SMD_DEV_TYPE_META,
 			       SPDK_BLOBID_INVALID);
@@ -962,7 +919,6 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 
 	data_blobid = bio_mc->mc_meta_hdr.mh_data_blobid;
 	if (data_blobid != SPDK_BLOBID_INVALID) {
-		D_ASSERT(!(flags & BIO_MC_FL_SYSDB));
 		D_ASSERT(!(flags & BIO_MC_FL_RDB));
 		rc = __bio_ioctxt_open(&bio_mc->mc_data, xs_ctxt, pool_id, flags,
 				       SMD_DEV_TYPE_DATA, data_blobid);

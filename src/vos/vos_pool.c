@@ -139,8 +139,6 @@ vos2mc_flags(unsigned int vos_flags)
 {
 	enum bio_mc_flags mc_flags = 0;
 
-	if (vos_flags & VOS_POF_SYSDB)
-		mc_flags |= BIO_MC_FL_SYSDB;
 	if (vos_flags & VOS_POF_RDB)
 		mc_flags |= BIO_MC_FL_RDB;
 
@@ -367,7 +365,7 @@ pool_hop_free(struct d_ulink *hlink)
 		bio_ioctxt_close(pool->vp_dummy_ioctxt);
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, pool->vp_sysdb ? VOS_POF_SYSDB : 0);
+		vos_delete_blob(pool->vp_id, 0);
 
 	D_FREE(pool);
 }
@@ -947,7 +945,6 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	pool->vp_rdb = !!(flags & VOS_POF_RDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
 		pool->vp_feats |= VOS_POOL_FEAT_2_2;
