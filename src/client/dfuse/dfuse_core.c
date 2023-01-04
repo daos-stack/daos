@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1015,11 +1015,20 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 }
 
 void
+dfuse_ie_init(struct dfuse_inode_entry *ie)
+{
+	ie->ie_magic = DFUSE_IE_MAGIC;
+	atomic_init(&ie->ie_ref, 1);
+}
+
+void
 dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	       struct dfuse_inode_entry *ie)
 {
 	int	rc;
 	int	ref;
+
+	D_ASSERT(ie->ie_magic == DFUSE_IE_MAGIC);
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie,
@@ -1183,7 +1192,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_dfs = dfs;
 	ie->ie_root = true;
 	ie->ie_parent = 1;
-	atomic_store_relaxed(&ie->ie_ref, 1);
+	dfuse_ie_init(ie);
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -92,6 +92,10 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_hdl *doh_rd;
 
 	ATOMIC uint32_t           doh_il_calls;
+
+	/** Number of active readdir operations */
+	ATOMIC uint32_t           doh_readir_number;
+
 	ATOMIC uint64_t           doh_write_count;
 
 	/** True if caching is enabled for this file. */
@@ -542,6 +546,8 @@ struct fuse_lowlevel_ops dfuse_ops;
  * be a directory, file, symbolic link or anything else.
  */
 
+#define DFUSE_IE_MAGIC 0xf05ef05ef05e
+
 struct dfuse_inode_entry {
 	/** stat structure for this inode.
 	 * This will be valid, but out-of-date at any given moment in time,
@@ -571,6 +577,8 @@ struct dfuse_inode_entry {
 	 */
 	fuse_ino_t               ie_parent;
 
+	uint64_t                 ie_magic;
+
 	struct dfuse_cont       *ie_dfs;
 
 	/** Hash table of inodes
@@ -587,10 +595,8 @@ struct dfuse_inode_entry {
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
 
-	/** Reference counting for the inode.
-	 * Used by the hash table callbacks
-	 */
-	ATOMIC uint              ie_ref;
+	/** Reference counting for the inode Used by the hash table callbacks */
+	ATOMIC uint32_t          ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
@@ -599,6 +605,9 @@ struct dfuse_inode_entry {
 
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
+
+	/** Number of active readdir operations */
+	ATOMIC uint32_t          ie_readir_number;
 
 	/** file was truncated from 0 to a certain size */
 	bool                     ie_truncated;
@@ -653,6 +662,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
+
+void
+dfuse_ie_init(struct dfuse_inode_entry *ie);
 
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);

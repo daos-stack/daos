@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,6 +405,7 @@ static void
 df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	uint32_t              count;
 
 	if (oh == NULL) {
 		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
@@ -413,7 +414,16 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct 
 		return;
 	}
 
+	count = atomic_fetch_add_relaxed(&oh->doh_readir_number, 1);
+	D_ASSERTF(count == 0, "Multiple readdir per handle");
+
+	count = atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1);
+	D_ASSERTF(count == 0, "Multiple readdir per inode");
+
 	dfuse_cb_readdir(req, oh, size, offset, false);
+
+	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
 }
 
 static void
@@ -421,6 +431,7 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
 	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	uint32_t              count;
 
 	if (oh == NULL) {
 		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
@@ -429,7 +440,15 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		return;
 	}
 
+	count = atomic_fetch_add_relaxed(&oh->doh_readir_number, 1);
+	D_ASSERTF(count == 0, "Multiple readdir per handle");
+
+	count = atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1);
+	D_ASSERTF(count == 0, "Multiple readdir per inode");
+
 	dfuse_cb_readdir(req, oh, size, offset, true);
+	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
 }
 
 void

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,6 +115,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = entry->attr;
 
@@ -147,7 +148,6 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry->ino, ie->ie_stat.st_mode);
 
