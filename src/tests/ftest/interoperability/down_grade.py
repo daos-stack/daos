@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from updown_grade_base import UpgradeDowngradeBase
+from upgrade_downgrade_base import UpgradeDowngradeBase
 
 class DowngradeTest(UpgradeDowngradeBase):
     # pylint: disable=too-many-ancestors

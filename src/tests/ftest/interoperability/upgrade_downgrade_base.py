@@ -63,7 +63,7 @@ class UpgradeDowngradeBase(IorTestBase):
 
         if length != size:
             self.fail(
-                "FAIL: Size does not matching for Names in list attr, Expected "
+                "FAIL: Size does not match for Names in list attr, Expected "
                 "len={} and received len={}".format(length, size))
         # verify the Attributes names in list_attr retrieve
         for key in indata.keys():
@@ -107,8 +107,8 @@ class UpgradeDowngradeBase(IorTestBase):
             pool_attrs = self.daos_cmd.pool_list_attrs(pool=self.pool.uuid, verbose=True)
             self.verify_list_attr(pool_attr_dict, pool_attrs['response'])
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
             self.fail("#Test failed at pool attributes verification.\n")
 
     def check_result(self, result):
