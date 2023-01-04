@@ -92,22 +92,20 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 
 /* Shrink a 64 bit value into 32 bits to avoid hash collisions */
 static uint32_t
-ih_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ih_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	const ino_t *_ino = key;
-	ino_t ino = *_ino;
-	uint32_t hash = ino ^ (ino >> 32);
+	ino_t        ino  = *_ino;
+	uint32_t     hash = ino ^ (ino >> 32);
 
 	return hash;
 }
 
 static bool
-ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
-	   const void *key, unsigned int ksize)
+ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
-	const struct dfuse_inode_entry	*ie;
-	const ino_t			*ino = key;
+	const struct dfuse_inode_entry *ie;
+	const ino_t                    *ino = key;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -117,13 +115,11 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static uint32_t
 ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
-	const struct dfuse_inode_entry	*ie;
+	const struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return ih_key_hash(NULL,
-			   &ie->ie_stat.st_ino,
-			   sizeof(ie->ie_stat.st_ino));
+	return ih_key_hash(NULL, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino));
 }
 
 static void
@@ -147,9 +143,9 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
-	struct dfuse_inode_entry	*ie;
-	uint32_t                         oldref = 0;
-	uint32_t                         newref = 0;
+	struct dfuse_inode_entry *ie;
+	uint32_t                  oldref = 0;
+	uint32_t                  newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -164,8 +160,7 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
 
 	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u",
-				count, oldref);
+		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
 		return -DER_INVAL;
 	}
 
@@ -177,8 +172,8 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
-	struct dfuse_inode_entry	*ie;
+	struct dfuse_projection_info *fs_handle = htable->ht_priv;
+	struct dfuse_inode_entry     *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -187,18 +182,17 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-	.hop_key_cmp		= ih_key_cmp,
-	.hop_key_hash		= ih_key_hash,
-	.hop_rec_hash		= ih_rec_hash,
-	.hop_rec_addref		= ih_addref,
-	.hop_rec_decref		= ih_decref,
-	.hop_rec_ndecref	= ih_ndecref,
-	.hop_rec_free		= ih_free,
+    .hop_key_cmp     = ih_key_cmp,
+    .hop_key_hash    = ih_key_hash,
+    .hop_rec_hash    = ih_rec_hash,
+    .hop_rec_addref  = ih_addref,
+    .hop_rec_decref  = ih_decref,
+    .hop_rec_ndecref = ih_ndecref,
+    .hop_rec_free    = ih_free,
 };
 
 static uint32_t
-ph_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ph_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -214,8 +208,7 @@ ph_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ph_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_pool *dfp;
 
@@ -226,10 +219,10 @@ ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ph_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	 *dfp;
-	uint			 oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_add_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "addref to %u", oldref + 1);
 }
@@ -237,10 +230,10 @@ ph_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ph_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	*dfp;
-	uint			oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -266,15 +259,12 @@ _ph_free(struct dfuse_pool *dfp)
 				rc = -DER_SUCCESS;
 		}
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_disconnect() failed: "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: "DF_RC,
-				DP_RC(rc));
+		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
 	D_FREE(dfp);
 }
@@ -286,17 +276,16 @@ ph_free(struct d_hash_table *htable, d_list_t *link)
 }
 
 static d_hash_table_ops_t pool_hops = {
-	.hop_key_cmp		= ph_key_cmp,
-	.hop_key_hash		= ph_key_hash,
-	.hop_rec_hash		= ph_rec_hash,
-	.hop_rec_addref		= ph_addref,
-	.hop_rec_decref		= ph_decref,
-	.hop_rec_free		= ph_free,
+    .hop_key_cmp    = ph_key_cmp,
+    .hop_key_hash   = ph_key_hash,
+    .hop_rec_hash   = ph_rec_hash,
+    .hop_rec_addref = ph_addref,
+    .hop_rec_decref = ph_decref,
+    .hop_rec_free   = ph_free,
 };
 
 static uint32_t
-ch_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -312,8 +301,7 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ch_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_cont *dfc;
 
@@ -324,10 +312,10 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ch_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint32_t                 oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_add_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "addref to %u", oldref + 1);
 }
@@ -335,10 +323,10 @@ ch_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ch_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint32_t                 oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -358,7 +346,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, "DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, " DF_RC, DP_RC(rc));
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
@@ -369,17 +357,16 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv,
-		 container_of(link, struct dfuse_cont, dfs_entry));
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
 }
 
 d_hash_table_ops_t cont_hops = {
-	.hop_key_cmp		= ch_key_cmp,
-	.hop_key_hash		= ch_key_hash,
-	.hop_rec_hash		= ch_rec_hash,
-	.hop_rec_addref		= ch_addref,
-	.hop_rec_decref		= ch_decref,
-	.hop_rec_free		= ch_free,
+    .hop_key_cmp    = ch_key_cmp,
+    .hop_key_hash   = ch_key_hash,
+    .hop_rec_hash   = ch_rec_hash,
+    .hop_rec_addref = ch_addref,
+    .hop_rec_decref = ch_decref,
+    .hop_rec_free   = ch_free,
 };
 
 /* Connect to a pool.
