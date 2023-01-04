@@ -1055,7 +1055,7 @@ class ValgrindHelper():
                f'--xml-file={self._xml_file}',
                '--xml=yes',
                '--fair-sched=yes',
-               '--gen-suppressions=all'
+               '--gen-suppressions=all',
                '--error-exitcode=42']
 
         if self.full_check:
