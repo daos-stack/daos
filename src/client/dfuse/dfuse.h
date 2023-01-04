@@ -621,7 +621,8 @@ struct dfuse_inode_entry {
 	size_t                   ie_end_off;
 
 	/* Lock for inode  Only used for readdir handles.
-	 * TODO: This isn't universally created or destroyed yet. */
+	 * TODO: This isn't universally created or destroyed yet.
+	 */
 	pthread_spinlock_t        ie_lock;
 
 	/** Reference counting for the inode.
