@@ -13,7 +13,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *par
 {
 	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
 	const struct fuse_ctx        *ctx       = fuse_req_ctx(req);
-	struct dfuse_inode_entry     *ie        = NULL;
+	struct dfuse_inode_entry     *ie;
 	int                           rc;
 
 	D_ALLOC_PTR(ie);
