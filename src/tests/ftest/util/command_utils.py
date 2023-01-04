@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -182,6 +182,14 @@ class ExecutableCommand(CommandWithParameters):
         # Clear any previous run results
         self.result = None
         command = str(self)
+
+        # add strace if a "dmg pool create" command
+        first = command.split()[0]
+        second = command.split()[1]
+        third = command.split()[2]
+        if first is 'dmg' and second is 'pool' and third is 'create':
+            command = ' '.join(['strace', '-f -tt -T -o ', 'dmg.{}.strace'.format(time.time()), command])
+
         if raise_exception is None:
             raise_exception = self.exit_status_exception
 

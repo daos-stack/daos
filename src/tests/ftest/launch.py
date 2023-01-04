@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -2624,6 +2624,14 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
+                "hosts": test.host_info.all_hosts,
+                "depth": 1,
+                "timeout": 900,
+            }
+            remote_files["dmg strace files"] = {
+                "source": daos_test_log_dir,
+                "destination": os.path.join(self.job_results_dir, "latest", "daos_dmg_strace"),
+                "pattern": "dmg.*.strace",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 900,
