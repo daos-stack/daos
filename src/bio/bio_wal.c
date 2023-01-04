@@ -904,10 +904,6 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	struct bio_dma_stats	*stats;
 	int			 iov_nr, rc;
 
-	/* FIXME: Skip WAL commit for sysdb for this moment */
-	if (mc->mc_is_sysdb)
-		return 0;
-
 	/* Bypass WAL commit, used for performance evaluation only */
 	if (daos_io_bypass & IOBP_WAL_COMMIT) {
 		bio_yield(NULL);
@@ -1542,10 +1538,6 @@ bio_wal_replay(struct bio_meta_context *mc,
 	unsigned int		 nr_replayed = 0, tight_loop, dbuf_len = 0;
 	uint64_t		 tx_id;
 	int			 rc;
-
-	/* FIXME: Skip WAL replay for sysdb for this moment */
-	if (mc->mc_is_sysdb)
-		return 0;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
