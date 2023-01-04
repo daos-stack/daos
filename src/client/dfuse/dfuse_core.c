@@ -129,32 +129,27 @@ ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
+	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 }
 
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
-	return oldref == 1;
+	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
 static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
 	struct dfuse_inode_entry	*ie;
-	uint				oldref = 0;
-	uint				newref = 0;
+	uint32_t                         oldref = 0;
+	uint32_t                         newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -174,7 +169,6 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 		return -DER_INVAL;
 	}
 
-	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
 	if (newref == 0)
 		return 1;
 	return 0;
@@ -331,7 +325,7 @@ static void
 ch_addref(struct d_hash_table *htable, d_list_t *link)
 {
 	struct dfuse_cont	*dfc;
-	uint			oldref;
+	uint32_t                 oldref;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_add_relaxed(&dfc->dfs_ref, 1);
@@ -342,7 +336,7 @@ static bool
 ch_decref(struct d_hash_table *htable, d_list_t *link)
 {
 	struct dfuse_cont	*dfc;
-	uint			oldref;
+	uint32_t                 oldref;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfc->dfs_ref, 1);

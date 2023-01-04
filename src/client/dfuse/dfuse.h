@@ -239,7 +239,7 @@ struct dfuse_cont {
 	/** Hash table entry entry in dfp_cont_table */
 	d_list_t		dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfs_ref;
+	ATOMIC uint32_t          dfs_ref;
 
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
