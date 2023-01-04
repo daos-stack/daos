@@ -30,7 +30,7 @@ func ShouldDebug(msg proto.Message) bool {
 		*grpcpb.TimeoutNowRequest, *grpcpb.TimeoutNowResponse,
 		*grpcpb.InstallSnapshotRequest, *grpcpb.InstallSnapshotResponse,
 		*ctlpb.StorageScanResp, *ctlpb.NetworkScanResp,
-		*ctlpb.PrepareScmResp:
+		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp:
 		return false
 	default:
 		return true
