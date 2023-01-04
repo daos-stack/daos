@@ -118,16 +118,25 @@ pipeline {
     }
 
     stages {
-        stage('Get Commit Message') {
+        stage('Set Description') {
             steps {
                 script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
+                    if (params.CI_BUILD_DESCRIPTION) {
+                        buildDescription params.CI_BUILD_DESCRIPTION
+                    }
                 }
             }
         }
+        stage('Get Commit Message') {
+            steps {
+                pragmasToEnv()
+            }
+        }
         stage('Cancel Previous Builds') {
-            when { changeRequest() }
+            when {
+                beforeAgent true
+                expression { !skipStage() }
+            }
             steps {
                 cancelPreviousBuilds()
             }
