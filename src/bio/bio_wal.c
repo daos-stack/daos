@@ -1369,6 +1369,32 @@ verify_tx_data(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *bd,
 	return rc;
 }
 
+/* When tail csum is disableld, verify tx header for each block */
+static int
+verify_tx_blks(struct wal_super_info *si, char *buf, struct wal_blks_desc *blk_desc)
+{
+	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
+	uint64_t		 tx_id = hdr->th_id;
+	unsigned int		 blk_sz = si->si_header.wh_blk_bytes;
+	struct wal_trans_blk	 entry_blk;
+	int			 rc = 0;
+
+	init_entry_blk(&entry_blk, hdr, buf, blk_sz);
+	/* Header of the first block has been verified, start from the second one */
+	while ((entry_blk.tb_idx + 1) < blk_desc->bd_blks) {
+		next_wal_blk(&entry_blk);
+		hdr = (struct wal_trans_head *)entry_blk.tb_buf;
+		rc = verify_tx_hdr(si, hdr, tx_id);
+		if (rc) {
+			D_CDEBUG(rc > 0, DB_IO, DLOG_ERR, "Verify TX block %u/%u failed.\n",
+				 entry_blk.tb_idx, blk_desc->bd_blks);
+			break;
+		}
+	}
+
+	return rc;
+}
+
 static int
 verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc,
 	  char **dbuf, unsigned int *dbuf_len)
@@ -1384,8 +1410,12 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 	if (wal_id_cmp(si, hdr->th_id, si->si_commit_id) <= 0)
 		committed = true;
 
-	if (skip_wal_tx_tail(&mc->mc_wal_info))
+	if (skip_wal_tx_tail(&mc->mc_wal_info)) {
+		rc = verify_tx_blks(si, buf, blk_desc);
+		if (rc)
+			return rc;
 		goto verify_data;
+	}
 
 	csum_len = meta_csum_len(mc);
 	/* Total tx length excluding tail */
