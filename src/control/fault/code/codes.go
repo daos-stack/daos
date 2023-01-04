@@ -174,6 +174,7 @@ const (
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
+	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath
 )
 

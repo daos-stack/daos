@@ -34,7 +34,7 @@ class DaosServerConfigTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=control,server_start,basic
+        :avocado: tags=server,control,server_start,basic
         :avocado: tags=DaosServerConfigTest,test_daos_server_config_basic
         """
         # Setup the servers

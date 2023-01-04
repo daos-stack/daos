@@ -702,6 +702,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (pci_dev_type == NULL) {
 		D_ERROR("nil pci device type returned\n");
 		opts->status = -DER_MISC;
+		return;
 	}
 
 	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
@@ -714,6 +715,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
 		opts->finished = true;
+		return;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);

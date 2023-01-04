@@ -179,6 +179,20 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&stats->bds_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
+			     "bytes", "dmabuff/wal_sz/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
+			     "commits", "dmabuff/wal_qd/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
+			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 struct bio_dma_buffer *
@@ -352,6 +366,7 @@ iod_release_buffer(struct bio_desc *biod)
 	D_FREE(rsrvd_dma->brd_regions);
 	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
+	biod->bd_nvme_bytes = 0;
 
 	/* All DMA chunks are used through cached bulk handle */
 	if (rsrvd_dma->brd_chk_cnt == 0) {
@@ -689,6 +704,10 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 	rsrvd_dma->brd_regions[cnt].brr_end = end;
 	rsrvd_dma->brd_regions[cnt].brr_media = media;
 	rsrvd_dma->brd_rg_cnt++;
+
+	if (media == DAOS_MEDIA_NVME)
+		biod->bd_nvme_bytes += (end - off);
+
 	return 0;
 }
 
@@ -1475,6 +1494,12 @@ bio_iod_post_async(struct bio_desc *biod, int err)
 
 	/* Async post is only for MD on SSD */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto out;
+	/*
+	 * When the value on data blob is too large, don't do async post to
+	 * avoid calculating checksum for large values.
+	 */
+	if (biod->bd_nvme_bytes > bio_max_async_sz)
 		goto out;
 
 	biod->bd_async_post = 1;
