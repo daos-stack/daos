@@ -2379,9 +2379,17 @@ dfs_test_checker(void **state)
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
 
-		rc = dfs_write(dfs, file, &sgl, 1024, NULL);
+		rc = dfs_write(dfs, file, &sgl, 0, NULL);
 		assert_int_equal(rc, 0);
 
+		if (i == 0 || i == 10) {
+			int j;
+
+			for (j = 1; j < 10 ; j++) {
+				rc = dfs_write(dfs, file, &sgl, j * 1048576, NULL);
+				assert_int_equal(rc, 0);
+			}
+		}
 		rc = dfs_release(file);
 		assert_int_equal(rc, 0);
 		rc = dfs_release(dir);
@@ -2416,7 +2424,7 @@ dfs_test_checker(void **state)
 	/** should be 200 + SB + root object */
 	assert_true(nr_oids == 202);
 
-	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_REMOVE);
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_REMOVE, NULL);
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container after invoking the checker */
@@ -2449,15 +2457,15 @@ dfs_test_checker(void **state)
 	/** should be 180 + SB + root object */
 	assert_true(nr_oids == 182);
 
-	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_LINK_LF);
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_LINK_LF, "tlf");
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container after invoking the checker */
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
-	/** should be 180 (since the leaked ones are re-linked) + SB + root object + LF dir */
-	assert_true(nr_oids == 183);
+	/** should be 184 (180 + SB + root object + LF dir + timestamp dir) */
+	assert_true(nr_oids == 184);
 
-	/** readdir of l+f confirming there are 10 files and dirs */
+	/** readdir of /lost+found/tlf confirming there are 10 files and dirs */
 	int			num_files = 0;
 	int			num_dirs = 0;
 	daos_anchor_t		anchor = {0};
@@ -2467,7 +2475,7 @@ dfs_test_checker(void **state)
 
 	rc = dfs_connect(arg->pool.pool_str, arg->group, "cont_chkr", O_CREAT | O_RDWR, NULL, &dfs);
 	assert_int_equal(rc, 0);
-	rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR, O_RDWR, 0, 0, NULL, &lf);
+	rc = dfs_lookup(dfs, "/lost+found/tlf", O_RDWR, &lf, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	while (!daos_anchor_is_eof(&anchor)) {
 		rc = dfs_readdirplus(dfs, lf, &anchor, &num_ents, ents, stbufs);

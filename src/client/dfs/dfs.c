@@ -6504,7 +6504,8 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 	return daos_der2errno(rc);
 }
 
-#define DFS_NR_ITERATE 128
+#define DFS_ITER_NR		128
+#define DFS_ITER_DKEY_BUF	(DFS_ITER_NR * sizeof(uint64_t))
 
 int
 oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
@@ -6544,7 +6545,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
 	/** descend into directories */
 	if (S_ISDIR(obj->mode))	{
 		daos_anchor_t		anchor = {0};
-		uint32_t		nr_entries = DFS_NR_ITERATE;
+		uint32_t		nr_entries = DFS_ITER_NR;
 
 		while (!daos_anchor_is_eof(&anchor)) {
 			rc = dfs_iterate(dfs, obj, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
@@ -6553,7 +6554,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *arg)
 				D_ERROR("dfs_iterate() failed: %d\n", rc);
 				D_GOTO(out_obj, rc);
 			}
-			nr_entries = DFS_NR_ITERATE;
+			nr_entries = DFS_ITER_NR;
 		}
 	}
 
@@ -6563,23 +6564,93 @@ out_obj:
 }
 
 int
-dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
+adjust_chunk_size(daos_handle_t coh, daos_obj_id_t oid, uint64_t *_max_offset)
+{
+	daos_handle_t	oh;
+	char		buf[DFS_ITER_DKEY_BUF];
+	daos_key_desc_t kds[DFS_ITER_NR];
+	daos_anchor_t	anchor = {0};
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	uint64_t	max_offset = *_max_offset;
+	int		rc, rc2;
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	/** iterate over all (integer) dkeys and then query the max record / offset */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, buf, DFS_ITER_DKEY_BUF);
+	sgl.sg_iovs = &iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	nr = DFS_ITER_NR;
+		char		*ptr = &buf[0];
+		uint32_t	i;
+
+		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_dkey() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+
+		if (nr == 0)
+			continue;
+
+		for (i = 0; i < nr; i++) {
+			daos_key_t	dkey, akey;
+			uint64_t	dkey_val, offset;
+			char		akey_val = '0';
+			daos_recx_t	recx;
+
+			memcpy(&dkey_val, ptr, kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+			d_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+			d_iov_set(&akey, &akey_val, 1);
+			rc = daos_obj_query_key(oh, DAOS_TX_NONE, DAOS_GET_RECX | DAOS_GET_MAX,
+						&dkey, &akey, &recx, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_query_key() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+
+			/** maintain the highest offset seen in each dkey */
+			offset = recx.rx_idx + recx.rx_nr;
+			if (max_offset < offset)
+				max_offset = offset;
+		}
+	}
+
+	*_max_offset = max_offset;
+out_obj:
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
+}
+
+int
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name)
 {
 	dfs_t			*dfs;
 	daos_handle_t		coh;
 	daos_handle_t		oit;
 	daos_epoch_t		snap_epoch;
-	dfs_obj_t		*lf;
+	dfs_obj_t		*lf, *now_dir;
 	daos_anchor_t		anchor = {0};
-	uint32_t		nr_entries = DFS_NR_ITERATE, i;
-	daos_obj_id_t		oids[DFS_NR_ITERATE] = {0};
+	uint32_t		nr_entries = DFS_ITER_NR, i;
+	daos_obj_id_t		oids[DFS_ITER_NR] = {0};
 	uint64_t		unmarked_entries = 0;
 	d_iov_t			marker;
 	bool			mark_data = true;
 	daos_epoch_range_t	epr;
 	struct timespec		now;
-	uid_t			uid;
-	gid_t			gid;
+	uid_t			uid = geteuid();
+	gid_t			gid = getegid();
 	int			rc, rc2;
 
 	if (flags & DFS_CHECK_LINK_LF && flags & DFS_CHECK_REMOVE) {
@@ -6636,33 +6707,58 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 			D_GOTO(out_oit, rc);
 		}
 
-		nr_entries = DFS_NR_ITERATE;
+		nr_entries = DFS_ITER_NR;
 	}
 
-	/** Create lost+found directory and properly link unmarked oids there. */
 	if (flags & DFS_CHECK_LINK_LF) {
-		rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL,
-			      &lf);
+		char		now_name[24];
+
+		rc = clock_gettime(CLOCK_REALTIME, &now);
+		if (rc)
+			D_GOTO(out_oit, rc = errno);
+
+		/** Create lost+found directory or just open if it exists. */
+		rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR,
+			      0, 0, NULL, &lf);
 		if (rc) {
-			D_ERROR("Failed to create lost+found directory: %d\n", rc);
+			D_ERROR("Failed to create/open lost+found directory: %d\n", rc);
 			D_GOTO(out_oit, rc);
 		}
-	}
 
-	rc = clock_gettime(CLOCK_REALTIME, &now);
-	if (rc)
-		D_GOTO(out_oit, rc = errno);
-	uid = geteuid();
-	gid = getegid();
+		if (name == NULL) {
+			struct tm	*now_tm;
+			size_t		len;
+			/*
+			 * Create a directory with current timestamp in l+f where leaked oids will
+			 * be linked in this run.
+			 */
+			now_tm = localtime(&now.tv_sec);
+			len = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
+			if (len == 0) {
+				D_ERROR("Invalid time format\n");
+				D_GOTO(out_lf1, rc = EINVAL);
+			}
+			D_PRINT("Leaked OIDs will be inserted in /lost+found/%s\n", now_name);
+		} else {
+			D_PRINT("Leaked OIDs will be inserted in /lost+found/%s\n", name);
+		}
+
+		rc = dfs_open(dfs, lf, name ? name : now_name, S_IFDIR | 0755,
+			      O_CREAT | O_RDWR | O_EXCL, 0, 0, NULL, &now_dir);
+		if (rc) {
+			D_ERROR("Failed to create dir in lost+found: %d\n", rc);
+			D_GOTO(out_lf1, rc);
+		}
+	}
 
 	/** list all unmarked oids */
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
-		nr_entries = DFS_NR_ITERATE;
+		nr_entries = DFS_ITER_NR;
 		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
 		if (rc) {
 			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_lf, rc = daos_der2errno(rc));
+			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
 		for (i = 0; i < nr_entries; i++) {
@@ -6691,34 +6787,59 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 			if (flags & DFS_CHECK_LINK_LF) {
 				struct dfs_entry	entry = {0};
 				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
-				char			name[DFS_MAX_NAME + 1];
+				char			oid_name[DFS_MAX_NAME + 1];
 				daos_size_t		len;
 
 				entry.uid = uid;
 				entry.gid = gid;
 				oid_cp(&entry.oid, oids[i]);
-				if (daos_is_array_type(otype))
-					entry.mode = S_IFREG | 0755;
-				else
-					entry.mode = S_IFDIR | 0755;
-
 				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
 				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
 					now.tv_nsec;
 				entry.chunk_size = dfs->attr.da_chunk_size;
-				/*
-				 * If this is a regular file, get the largest offset of every dkey
-				 * in the array to see if it's larger than the chunk size. if it is,
-				 * adjust the chunk size to that.
-				 */
 
-				len = sprintf(name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+				/*
+				 * Check if the oid corresponds to a file or dir using the oid type
+				 * and set the mode accordingly. symlink oids are never used/written
+				 * to since the value is stored in the entry itself and so will not
+				 * appear in this list.
+				 * Files are always arrays objects, so objects that are not arrays
+				 * have to be directories in this list.
+				 */
+				if (daos_is_array_type(otype)) {
+					entry.mode = S_IFREG | 0755;
+					/*
+					 * If this is a regular file / array object, the user might
+					 * have used a different chunk size than the default
+					 * one. Since we lost the directory entry where the chunks
+					 * size for that file would have been stored, we can make a
+					 * best attempt to set the chunk size. To do that, we get
+					 * the largest offset of every dkey in the array to see if
+					 * it's larger than the default chunk size. If it is, adjust
+					 * the chunk size to that, otherwise leave the chunk size as
+					 * default. This of course does not account for the fact
+					 * that if the chunk size is smaller than the default or is
+					 * larger than the largest offset seen then we have added or
+					 * removed existing holes from the file respectively. This
+					 * can be fixed later by the user by adjusting the chunk
+					 * size to the correct one they know using the daos tool.
+					 */
+					rc = adjust_chunk_size(dfs->coh, oids[i],
+							       &entry.chunk_size);
+					if (rc)
+						D_GOTO(out_lf2, rc);
+				} else {
+					entry.mode = S_IFDIR | 0755;
+				}
+
+				len = sprintf(oid_name, "%"PRIu64".%"PRIu64"",
+					      oids[i].hi, oids[i].lo);
 				D_ASSERT(len <= DFS_MAX_NAME);
-				rc = insert_entry(dfs->layout_v, lf->oh, DAOS_TX_NONE, name, len,
-						  DAOS_COND_DKEY_INSERT, &entry);
+				rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
+						  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
 				if (rc) {
 					D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
-					D_GOTO(out_lf, rc);
+					D_GOTO(out_lf2, rc);
 				}
 			}
 			unmarked_entries++;
@@ -6727,7 +6848,13 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags)
 	if (flags & DFS_CHECK_PRINT)
 		D_PRINT("Number of Leaked OIDs in Namespace = "DF_U64"\n", unmarked_entries);
 
-out_lf:
+out_lf2:
+	if (flags & DFS_CHECK_LINK_LF) {
+		rc2 = dfs_release(now_dir);
+		if (rc == 0)
+			rc = rc2;
+	}
+out_lf1:
 	if (flags & DFS_CHECK_LINK_LF) {
 		rc2 = dfs_release(lf);
 		if (rc == 0)
@@ -6736,12 +6863,12 @@ out_lf:
 out_oit:
 	rc2 = daos_oit_close(oit, NULL);
 	if (rc == 0)
-		rc = rc2;
+		rc = daos_der2errno(rc2);
 out_snap:
 	epr.epr_hi = epr.epr_lo = snap_epoch;
 	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
 	if (rc == 0)
-		rc = rc2;
+		rc = daos_der2errno(rc2);
 out_dfs:
 	rc2 = dfs_umount(dfs);
 	if (rc == 0)
@@ -6749,6 +6876,6 @@ out_dfs:
 out_cont:
 	rc2 = daos_cont_close(coh, NULL);
 	if (rc == 0)
-		rc = rc2;
+		rc = daos_der2errno(rc2);
 	return rc;
 }
