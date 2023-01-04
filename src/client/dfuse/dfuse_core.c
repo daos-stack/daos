@@ -391,7 +391,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 	if (dfp == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	atomic_store_relaxed(&dfp->dfp_ref, 1);
+	atomic_init(&dfp->dfp_ref, 1);
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
@@ -780,7 +780,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	/* No existing container found, so setup dfs and connect to one */
 
-	atomic_store_relaxed(&dfc->dfs_ref, 1);
+	atomic_init(&dfc->dfs_ref, 1);
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
