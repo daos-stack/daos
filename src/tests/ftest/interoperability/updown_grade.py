@@ -49,6 +49,8 @@ class UpgradeDowngradeTest(UpgradeDowngradeBase):
             DAOS-10274: DAOS interoperability test user interface test.
             DAOS-10275: DAOS interoperability test system and pool upgrade basic.
             DAOS-10280: DAOS upgrade from 2.0(old) to 2.2(new) and downgrade back to 2.0(old).
+            DAOS-10288: DAOS interoperability test DAOS system and pool upgrade on 8 servers.
+                        (launch.py -e updown_grade_8svr.yaml)
 
         :avocado: tags=manual
         :avocado: tags=interop
