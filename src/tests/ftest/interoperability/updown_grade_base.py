@@ -350,7 +350,6 @@ class UpgradeDowngradeBase(IorTestBase):
         expected_status = "completed"
         self.verify_pool_upgrade_status(pool_id, expected_status)
 
-
     def diff_versions_agent_server(self):
         """Interoperability of different versions of DAOS agent and server.
         Test step:

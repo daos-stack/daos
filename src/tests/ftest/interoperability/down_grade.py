@@ -6,13 +6,13 @@
 
 from updown_grade_base import UpgradeDowngradeBase
 
-class DowngradeTest(DowngradeBase):
+class DowngradeTest(UpgradeDowngradeBase):
     """Runs DAOS interoperability test upgrade and downgrade.
 
     JIRA ID:
         DAOS-10281: DAOS interoperability formatted 2.2(new) storage downgrade 2.0(old)
 
-    Test description: Test DAOS interoperability downgrade with a formated server storage.
+    Test description: Test DAOS interoperability downgrade with a formatted server storage.
     To launch test:
         (1)sudo yum install all needed RPMs to all hosts
         (2)define repository with RPMs to updown_grade.yaml
