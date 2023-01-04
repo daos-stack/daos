@@ -1051,14 +1051,17 @@ class ValgrindHelper():
                                          suffix='.memcheck', delete=False) as log_file:
             self._xml_file = log_file.name
 
-        cmd = ['valgrind', '--fair-sched=yes']
+        cmd = ['valgrind',
+               f'--xml-file={self._xml_file}',
+               '--xml=yes',
+               '--fair-sched=yes',
+               '--gen-suppressions=all'
+               '--error-exitcode=42']
 
         if self.full_check:
             cmd.extend(['--leak-check=full', '--show-leak-kinds=all'])
         else:
             cmd.append('--leak-check=no')
-
-        cmd.append('--gen-suppressions=all')
 
         src_suppression_file = join('src', 'cart', 'utils', 'memcheck-cart.supp')
         if os.path.exists(src_suppression_file):
@@ -1066,9 +1069,6 @@ class ValgrindHelper():
         else:
             cmd.append(f"--suppressions={join(self.conf['PREFIX'], 'etc', 'memcheck-cart.supp')}")
 
-        cmd.append('--error-exitcode=42')
-
-        cmd.extend(['--xml=yes', f'--xml-file={self._xml_file}'])
         return cmd
 
     def convert_xml(self):
