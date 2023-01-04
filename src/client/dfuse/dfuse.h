@@ -204,7 +204,7 @@ struct dfuse_pool {
 	/** Hash table entry in dpi_pool_table */
 	d_list_t		dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfp_ref;
+	ATOMIC uint32_t         dfp_ref;
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table	dfp_cont_table;
@@ -546,8 +546,6 @@ struct fuse_lowlevel_ops dfuse_ops;
  * be a directory, file, symbolic link or anything else.
  */
 
-#define DFUSE_IE_MAGIC 0xf05ef05ef05e
-
 struct dfuse_inode_entry {
 	/** stat structure for this inode.
 	 * This will be valid, but out-of-date at any given moment in time,
@@ -576,8 +574,6 @@ struct dfuse_inode_entry {
 	 * a reference on the parent so the inode may not be valid.
 	 */
 	fuse_ino_t               ie_parent;
-
-	uint64_t                 ie_magic;
 
 	struct dfuse_cont       *ie_dfs;
 
