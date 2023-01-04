@@ -22,7 +22,7 @@ class DmgStorageQuery(ControlTestBase):
     """
 
     def setUp(self):
-        "Set up for dmg storage query."
+        """Set up for dmg storage query."""
         super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
@@ -49,7 +49,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,storage_query,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_devices
         """
         # Get the storage device information, parse and check devices info
@@ -75,7 +75,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,storage_query,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_pools
         """
         # Create pool and get the storage smd information, then verify info
@@ -114,23 +114,22 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,storage_query,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_health
         """
         dmg_info = self.get_device_info(health=True)
 
         # Cleanup output
         if dmg_info:
-            for idx, info in enumerate(dmg_info):
-                dmg_info[idx] = [i for i in info if i]
-        parsed = [dmg_info[i:(i + 19)] for i in range(0, len(dmg_info), 19)]
+            for index, info in enumerate(dmg_info):
+                dmg_info[index] = [entry for entry in info if entry]
+        parsed = [dmg_info[index:(index + 19)] for index in range(0, len(dmg_info), 19)]
         _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
         health_info = []
-        for idx in parsed:
-            health = [elem[0] for elem in idx]
-            health_info.append(health)
+        for index in parsed:
+            health_info.append([elem[0] for elem in index])
 
         self.log.info("Found health info: %s", str(health_info))
 
@@ -154,7 +153,7 @@ class DmgStorageQuery(ControlTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dmg,storage_query,basic
+        :avocado: tags=control,dmg,storage_query,basic
         :avocado: tags=DmgStorageQuery,test_dmg_storage_query_device_state
         """
         # Get device info and check state is NORMAL

@@ -70,8 +70,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
         """Display metrics_data.
 
         Args:
-            metrics_data (dict): a dictionary of host keys linked to a
-                                 list of io metric names.
+            metrics_data (dict): a dictionary of host keys linked to a list of io metric names.
         """
         for key in sorted(metrics_data):
             self.log.info(
