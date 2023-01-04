@@ -191,8 +191,6 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 //
 // Query SMD info for pools or devices.
 func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp, error) {
-	svc.log.Debugf("CtlSvc.SmdQuery dispatch, req:%+v\n", *req)
-
 	if !svc.harness.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
@@ -219,7 +217,6 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 		}
 	}
 
-	svc.log.Debugf("CtlSvc.SmdQuery dispatch, resp:%+v\n", *resp)
 	return resp, nil
 }
 
@@ -469,6 +466,5 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 
 	resp := &ctlpb.SmdManageResp{Ranks: rankResps}
 
-	svc.log.Debugf("CtlSvc.SmdManage dispatch, resp:%+v\n", *resp)
 	return resp, nil
 }
