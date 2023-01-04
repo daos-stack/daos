@@ -282,7 +282,7 @@ class UpgradeDowngradeBase(IorTestBase):
                           "not shown on stdout".format(step, cmd, agent_server_ver, exp_err))
         self.log.info("==(%s)Test passed, %s, on %s", step, cmd, agent_server_ver)
 
-    def with_faultInjection_rpms(self, hosts):
+    def has_fault_injection(self, hosts):
         """Check if RPMs with fault-injection function.
 
         Args:
@@ -296,7 +296,7 @@ class UpgradeDowngradeBase(IorTestBase):
             status = False
         return status
 
-    def enable_disable_faultInjection(self, hosts, enable=True):
+    def enable_disable_fault_injection(self, hosts, enable=True):
         """Enable and disable fault injection.
 
         Args:
@@ -319,9 +319,9 @@ class UpgradeDowngradeBase(IorTestBase):
         prop_value = self.get_dmg_command().pool_get_prop(
             pool_id, "upgrade_status")['response'][0]['value']
         if prop_value != expected_status:
-            self.fail("##prop_value != expected_status", expected_status)
+            self.fail("##prop_value != expected_status {}".format(expected_status))
 
-    def poolUpgrade_with_faultInjection(self, hosts, pool_id):
+    def poolUpgrade_with_fault(self, hosts, pool_id):
         """Execute dmg pool upgrade with fault injection.
 
         Args:
@@ -333,7 +333,7 @@ class UpgradeDowngradeBase(IorTestBase):
         self.verify_pool_upgrade_status(pool_id, expected_status)
 
         # Enable fault-injection
-        self.enable_disable_faultInjection(hosts, enable=True)
+        self.enable_disable_fault_injection(hosts, enable=True)
 
         # Pool upgrade
         result = run_pcmd(hosts, "dmg pool upgrade {}".format(pool_id))
@@ -345,7 +345,7 @@ class UpgradeDowngradeBase(IorTestBase):
         self.verify_pool_upgrade_status(pool_id, expected_status)
 
         # Disable fault-injection
-        self.enable_disable_faultInjection(hosts, enable=False)
+        self.enable_disable_fault_injection(hosts, enable=False)
         # Verify pool upgrade resume after removal of fault-injection
         expected_status = "completed"
         self.verify_pool_upgrade_status(pool_id, expected_status)
@@ -585,7 +585,7 @@ class UpgradeDowngradeBase(IorTestBase):
         else:
             self.fail("##(3)Unsupported IOR api {}".format(ior_api))
 
-        # (3.c)ior posix testfile with symlink
+        # (3.c)ior posix test file with symlink
         if ior_api == "POSIX":
             self.log.info("(3.c)==Symlink mounted testfile.")
             result = run_pcmd(hosts_client, "cd {}".format(mount_dir))
@@ -672,9 +672,9 @@ class UpgradeDowngradeBase(IorTestBase):
         # (9)Pool property verification after upgraded
         self.log.info("(9)==Dmg pool upgrade and get-prop after RPMs upgraded")
 
-        if fault_on_pool_upgrade and self.with_faultInjection_rpms(hosts_client):
+        if fault_on_pool_upgrade and self.has_fault_injection(hosts_client):
             self.log.info("(9.1a)==Pool upgrade with fault-injection.")
-            self.poolUpgrade_with_faultInjection(hosts_client, enable=True)
+            self.poolUpgrade_with_fault(hosts_client, enable=True)
         else:
             self.log.info("(9.1b)==Pool upgrade.")
             result = run_pcmd(hosts_client, "dmg pool upgrade {}".format(pool_id))
@@ -717,6 +717,6 @@ class UpgradeDowngradeBase(IorTestBase):
         self.restart_servers()
         self._start_manager_list("agent", self.agent_managers)
         self.show_daos_version(all_hosts, hosts_client)
-        if fault_on_pool_upgrade and not self.with_faultInjection_rpms(hosts_client):
+        if fault_on_pool_upgrade and not self.has_fault_injection(hosts_client):
             self.fail("##(12)Upgraded-rpms did not have fault-injection feature.")
         self.log.info("==(12)Test passed")

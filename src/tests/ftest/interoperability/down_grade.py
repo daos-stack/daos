@@ -7,6 +7,7 @@
 from updown_grade_base import UpgradeDowngradeBase
 
 class DowngradeTest(UpgradeDowngradeBase):
+    # pylint: disable=too-many-ancestors
     """Runs DAOS interoperability test upgrade and downgrade.
 
     JIRA ID:
