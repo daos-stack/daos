@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -341,15 +341,14 @@ class AvocadoInfo():
             return r"avocado-instrumented\s+(.*):"
         return r"INSTRUMENTED\s+(.*):"
 
-    def get_run_command(self, test, tag_filters, sparse, failfast, extra_yaml):
+    def get_run_command(self, test, tag_filters, sparse, failfast):
         """Get the avocado run command for this version of avocado.
 
         Args:
             test (TestInfo): the test information
             tag_filters (list): optional '--filter-by-tags' arguments
             sparse (bool): whether or not to provide sparse output of the test execution
-            failfast (bool): _description_
-            extra_yaml (list): additional yaml files to include on the command line
+            failfast (bool): whether or not to fail fast
 
         Returns:
             list: avocado run command
@@ -375,8 +374,8 @@ class AvocadoInfo():
         if failfast:
             command.extend(["--failfast", "on"])
         command.extend(["--mux-yaml", test.yaml_file])
-        if extra_yaml:
-            command.extend(extra_yaml)
+        if test.extra_yaml:
+            command.extend(test.extra_yaml)
         command.extend(["--", str(test)])
         return command
 
@@ -496,7 +495,9 @@ class TestInfo():
         "test_clients",
         "client_partition",
         "client_reservation",
-        "client_users"
+        "client_users",
+        "engines_per_host",
+        "storage",
     ]
 
     def __init__(self, test_file, order):
@@ -515,6 +516,7 @@ class TestInfo():
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
         self.host_info = HostInfo()
         self.yaml_info = {}
+        self.extra_yaml = []
 
     def __str__(self):
         """Get the test file as a string.
@@ -915,8 +917,8 @@ class Launch():
 
         # Execute the tests
         status = self.run_tests(
-            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create)
+            args.sparse, args.failfast, not args.disable_stop_daos, args.archive, args.rename,
+            args.jenkinslog, core_files, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1435,29 +1437,39 @@ class Launch():
         #                             enabled NVMe devices for 'filter'.
         #   <address>[,<address>]   = verify that each specified device exists on each host.
         #
+        storage = None
         storage_info = StorageInfo(logger, args.test_servers)
-        if args.nvme and args.nvme.startswith("auto"):
-            # Separate any optional filter from the key
-            scan_args = args.nvme.split(":")
-            if len(scan_args) == 1:
-                scan_args.append(None)
-            if scan_args[0] == "auto_nvme" or scan_args[0] == "auto_vmd":
-                match_mode = scan_args[0].split("_")[-1].upper().replace("E", "e")
-                storage_info.scan(scan_args[1], match_mode)
+        if args.nvme:
+            kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
+            if args.nvme.startswith("auto"):
+                # Separate any optional filter from the key
+                nvme_args = args.nvme.split(":")
+                kwargs["device_filter"] = nvme_args[1] if len(nvme_args) > 1 else None
+            logger.info("-" * 80)
+            storage_info.scan(**kwargs)
+
+            # Determine which storage device types to use when replacing keywords in the test yaml
+            if args.nvme.startswith("auto_nvme"):
+                storage = ",".join([dev.address for dev in storage_info.nvme_devices])
+            elif args.nvme.startswith("auto_vmd") or storage_info.controller_devices:
+                storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
-                storage_info.scan(scan_args[1])
-        elif args.nvme:
-            scan_args = f"'({'|'.join(args.nvme.split(','))})'"
-            storage_info.scan(scan_args)
+                storage = ",".join([dev.address for dev in storage_info.nvme_devices])
 
         updater = YamlUpdater(
-            logger, args.test_servers, args.test_clients, ",".join(storage_info.devices),
-            args.timeout_multiplier, args.override, args.verbose)
+            logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
+            args.override, args.verbose)
 
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
-            args.extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
+            common_extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
+            for test in self.tests:
+                test.extra_yaml.extend(common_extra_yaml)
 
+        # Generate storage configuration extra yaml files if requested
+        self._add_auto_storage_yaml(storage_info, yaml_dir, "md_on_ssd")
+
+        # Replace any placeholders in the test yaml file
         for test in self.tests:
             new_yaml_file = updater.update(test.yaml_file, yaml_dir)
             if new_yaml_file:
@@ -1469,13 +1481,36 @@ class Launch():
 
             # Display the modified yaml file variants with debug
             command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
-            if args.extra_yaml:
-                command.extend(args.extra_yaml)
+            if test.extra_yaml:
+                command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
             run_local(logger, command, check=False)
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
+
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_type):
+        """Add extra storage yaml definitions for tests requesting automatic storage configurations.
+
+        Args:
+            storage_info (StorageInfo): the collected storage information from the hosts
+            yaml_dir (str): path n which to create the extra storage yaml files
+            tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
+
+        Raises:
+            StorageException: if there is an error creating the extra storage yaml files
+
+        """
+        engine_storage_yaml = {}
+        for test in self.tests:
+            if test.yaml_info["storage"] == "auto":
+                engines = test.yaml_info["engines_per_host"]
+                yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
+                if engines not in engine_storage_yaml:
+                    logger.info("-" * 80)
+                    storage_info.write_storage_yaml(yaml_file, engines, tier_type, scm_size=100)
+                    engine_storage_yaml[engines] = yaml_file
+                test.extra_yaml.extend(engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -1662,15 +1697,14 @@ class Launch():
 
         return core_files
 
-    def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold, user_create):
+    def run_tests(self, sparse, fail_fast, stop_daos, archive, rename, jenkinslog, core_files,
+                  threshold, user_create):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
             sparse (bool): whether or not to display the shortened avocado test output
             fail_fast (bool): whether or not to fail the avocado run command upon the first failure
-            extra_yaml (list): optional test yaml file to use when running the test
             stop_daos (bool): whether or not to stop daos servers/clients after the test
             archive (bool): whether or not to collect remote files generated by the test
             rename (bool): whether or not to rename the default avocado job-results directory names
@@ -1718,7 +1752,7 @@ class Launch():
                 test_result.end()
 
                 # Run the test with avocado
-                return_code |= self.execute(test, repeat, sparse, fail_fast, extra_yaml)
+                return_code |= self.execute(test, repeat, sparse, fail_fast)
 
                 # Mark the continuation of the processing of this test
                 test_result.start()
@@ -1975,7 +2009,7 @@ class Launch():
             return 128
         return 0
 
-    def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
+    def execute(self, test, repeat, sparse, fail_fast):
         """Run the specified test.
 
         Args:
@@ -1983,15 +2017,13 @@ class Launch():
             repeat (int): the test repetition number
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
-            extra_yaml (list): whether to use an exta yaml file with the avocado run command
 
         Returns:
             int: status code: 0 = success, >0 = failure
 
         """
         logger.debug("=" * 80)
-        command = self.avocado.get_run_command(
-            test, self.tag_filters, sparse, fail_fast, extra_yaml)
+        command = self.avocado.get_run_command(test, self.tag_filters, sparse, fail_fast)
         logger.info(
             "Running the %s test on repeat %s/%s: %s", test, repeat, self.repeat, " ".join(command))
         start_time = int(time.time())

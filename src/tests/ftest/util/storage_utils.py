@@ -3,6 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from functools import partial
+import itertools
+from operator import is_not
 import re
 
 from ClusterShell.NodeSet import NodeSet
@@ -32,7 +35,7 @@ class StorageException(Exception):
 class StorageDevice():
     """Information about a storage device."""
 
-    def __init__(self, address, storage_class, device, numa_node, category):
+    def __init__(self, address, storage_class, device, numa_node):
         """Initialize a StorageDevice object.
 
         Args:
@@ -40,13 +43,12 @@ class StorageDevice():
             storage_class (str): the device class description
             device (str): the device description
             numa_node (str): the NUMA node number
-            category (str): the type of storage device, e.g. 'disk' or 'controller'
         """
         self.address = address
         self.storage_class = storage_class
         self.device = device
         self.numa_node = numa_node
-        self.category = category
+        self.managed_devices = []
 
     def __str__(self):
         """Convert this StorageDevice into a string.
@@ -78,6 +80,42 @@ class StorageDevice():
         """
         return str(self) == str(other)
 
+    def __lt__(self, other):
+        """Determine if this StorageDevice is less than the other StorageDevice.
+
+        Args:
+            other (StorageDevice): the other object to compare
+
+        Returns:
+            bool: True if only the other StorageDevice is an Optane device or both StorageDevices
+                are Optane devices and this StorageDevice's address is less than the other
+                StorageDevice's address.
+
+        """
+        if 'optane' in self.device.lower() and 'optane' in other.device.lower():
+            return self.address < other.address
+        if 'optane' in self.device.lower():
+            return False
+        return True
+
+    def __gt__(self, other):
+        """Determine if this StorageDevice is greater than the other StorageDevice.
+
+        Args:
+            other (StorageDevice): the other object to compare
+
+        Returns:
+            bool: True if only this StorageDevice is an Optane device or both StorageDevices
+                are Optane devices and this StorageDevice's address is greater than the other
+                StorageDevice's address.
+
+        """
+        if 'optane' in self.device.lower() and 'optane' in other.device.lower():
+            return self.address > other.address
+        if 'optane' in self.device.lower():
+            return True
+        return False
+
     def __hash__(self):
         """Get the hash value of this StorageDevice object.
 
@@ -96,6 +134,75 @@ class StorageDevice():
 
         """
         return ': '.join([self.storage_class, self.device])
+
+    @property
+    def is_nvme(self):
+        """Is this device a NVMe drive.
+
+        Returns:
+            bool: True if this device a NVMe drive; False otherwise.
+
+        """
+        return len(self.address) == 12 and not self.managed_devices
+
+    @property
+    def is_vmd(self):
+        """Is this device a VMD drive.
+
+        Returns:
+            bool: True if this device a VMD drive; False otherwise.
+
+        """
+        return len(self.address) == 13 and not self.managed_devices
+
+    @property
+    def is_controller(self):
+        """Is this device a VMD controller.
+
+        Returns:
+            bool: True if this device an VMD controller; False otherwise.
+
+        """
+        return bool(self.managed_devices)
+
+
+def is_nvme(device):
+    """Is this device a NVMe drive.
+
+    Args:
+        device (StorageDevice): the device to check
+
+    Returns:
+        bool: True if this device a NVMe drive; False otherwise.
+
+    """
+    return device.is_nvme
+
+
+def is_vmd(device):
+    """Is this device a VMD drive.
+
+    Args:
+        device (StorageDevice): the device to check
+
+    Returns:
+        bool: True if this device a VMD drive; False otherwise.
+
+    """
+    return device.is_vmd
+
+
+def is_controller(device):
+    """Is this device a VMD controller.
+
+    Args:
+        device (StorageDevice): the device to check
+
+    Returns:
+        bool: True if this device an VMD controller; False otherwise.
+
+    """
+    return device.is_controller
 
 
 class StorageInfo():
@@ -117,7 +224,6 @@ class StorageInfo():
         self._log = logger
         self._hosts = hosts.copy()
         self._devices = []
-        self._controllers = []
 
     @property
     def devices(self):
@@ -128,6 +234,36 @@ class StorageInfo():
 
         """
         return self._devices
+
+    @property
+    def nvme_devices(self):
+        """Get the list of detected NVMe devices.
+
+        Returns:
+            list: a list of NVMe StorageDevice objects
+
+        """
+        return list(filter(is_nvme, self.devices))
+
+    @property
+    def vmd_devices(self):
+        """Get the list of detected VMD devices.
+
+        Returns:
+            list: a list of VMD StorageDevice objects
+
+        """
+        return list(filter(is_vmd, self.devices))
+
+    @property
+    def controller_devices(self):
+        """Get the list of detected VMD controller devices.
+
+        Returns:
+            list: a list of VMD controller StorageDevice objects
+
+        """
+        return list(filter(is_controller, self.devices))
 
     def _raise_error(self, message, error=None):
         """Raise and log the error message.
@@ -145,39 +281,40 @@ class StorageInfo():
             raise StorageException(message) from error
         raise StorageException(message)
 
-    def scan(self, device_filter=None, match_mode=None):
+    def scan(self, device_filter=None):
         """Detect any NVMe or VMD disks/controllers that exist on every host.
 
         Args:
             device_filter (str, optional): device search filter. Defaults to None.
-            match_mode (str, optional): disk type to match: 'NVMe' or 'VMD'. Defaults to None which
-                will match all types.
 
         Raises:
             StorageException: if no homogeneous devices are found or there is an error obtaining the
                 device information
 
         """
-        self._log.info("-" * 80)
         self._log.info('Scanning %s for NVMe/VMD devices', self._hosts)
         self._devices.clear()
 
         for key in sorted(self.TYPE_SEARCH):
-            if not match_mode or key == match_mode:
-                device_info = self.get_device_information(key, device_filter)
-                if key == "VMD" and device_info:
-                    controller_mapping = self.get_controller_mapping()
-                    for controller in device_info:
-                        if controller.address in controller_mapping:
-                            self._devices.append(controller)
-                            self._devices[-1].category = 'controller'
-                else:
-                    for disk in device_info:
-                        self._devices.append(disk)
+            device_info = self.get_device_information(key, device_filter)
+            if key == "VMD" and device_info:
+                self._devices.extend(self.get_controller_information(device_info))
+            else:
+                self._devices.extend(device_info)
 
         if not self._devices:
             keys = ' & '.join(sorted(self.TYPE_SEARCH))
             self._raise_error(f'Error: Non-homogeneous {keys} PCI addresses.')
+
+        self._log.debug('NVMe devices detected in the scan:')
+        for device in self.nvme_devices:
+            self._log.debug('  - %s', str(device))
+        self._log.debug('VMD devices detected in the scan:')
+        for device in self.vmd_devices:
+            self._log.debug('  - %s', str(device))
+        self._log.debug('VMD controllers detected in the scan:')
+        for device in self.controller_devices:
+            self._log.debug('  - %s', str(device))
 
     def get_device_information(self, key, device_filter):
         """Get a list of NVMe or VMD devices that exist on every host.
@@ -193,7 +330,7 @@ class StorageInfo():
         found_devices = {}
         self._log.debug(
             'Detecting %s devices on %s%s',
-            key, self._hosts, " with '%s' filter" if device_filter else '')
+            key, self._hosts, f" with '{device_filter}' filter" if device_filter else '')
 
         # Find the NVMe devices that exist on every host in the same NUMA slot
         command_list = [
@@ -218,7 +355,7 @@ class StorageInfo():
                     try:
                         device = StorageDevice(
                             address, info['class'][index], info['device'][index],
-                            info['numa'][index], 'disk')
+                            info['numa'][index])
                     except IndexError:
                         self._log.error(
                             '  error creating a StorageDevice object for %s with index %s of the '
@@ -248,17 +385,36 @@ class StorageInfo():
             for device in list(found_devices):
                 if found_devices[device] != self._hosts:
                     self._log.debug(
-                        "  device '%s' not found on all hosts: %s", key, found_devices[device])
+                        "  device '%s' not found on all hosts, only %s",
+                        str(device), found_devices[device])
                     found_devices.pop(device)
 
         if found_devices:
-            self._log.debug('%s devices found on all hosts:')
+            self._log.debug('%s devices found on all hosts:', key)
             for device in list(found_devices):
-                self._log.debug('%s', found_devices[device])
+                self._log.debug('  - %s', str(device))
         else:
-            self._log.debug('No %s devices found on all hosts')
+            self._log.debug('No %s devices found on all hosts', key)
 
         return list(found_devices.keys())
+
+    def get_controller_information(self, device_info):
+        """Get a list of VMD controllers which have disks to manage.
+
+        Args:
+            device_info (list): a list of detected StorageDevice controller objects
+
+        Returns:
+            list: the StorageDevice controller objects with managed disks
+
+        """
+        controllers = []
+        controller_mapping = self.get_controller_mapping()
+        for device in device_info:
+            if device.address in controller_mapping:
+                device.managed_devices = controller_mapping[device.address]
+                controllers.append(device)
+        return controllers
 
     def get_controller_mapping(self):
         """Get the mapping of each VMD disk to its VMD controller.
@@ -313,13 +469,12 @@ class StorageInfo():
 
         return controllers
 
-    def set_storage_yaml(self, yaml_file, engines, tiers, tier_type, scm_size=100):
+    def write_storage_yaml(self, yaml_file, engines, tier_type, scm_size=100):
         """Generate a storage test yaml sub-section.
 
         Args:
             yaml_file (str): file in which to write the storage yaml entry
             engines (int): number of engines
-            tiers (int): number of storage tiers per engine
             tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
             scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 100.
 
@@ -327,8 +482,54 @@ class StorageInfo():
             StorageException: if an invalid storage type was specified
 
         """
+        tiers = 1
+        self._log.info(
+            'Generating a %s storage yaml for %s engines: %s', tier_type, engines, yaml_file)
+
         if tier_type not in self.TIER_KEYWORDS:
             self._raise_error(f'Error: Invalid storage type \'{tier_type}\'')
+
+        if self.vmd_devices or self.nvme_devices:
+            # Sort the detected devices and place then in lists by NUMA node
+            numa_devices = {}
+            for device in sorted(self.vmd_devices + self.nvme_devices):
+                if device.numa_node not in numa_devices:
+                    numa_devices[device.numa_node] = []
+                numa_devices[device.numa_node].append(device)
+
+            # Interleave the devices for bdev_list distribution.
+            if engines > 1:
+                # This will also even out any uneven NUMA distribution using the shortest list
+                interleaved = list(itertools.chain(*zip(*numa_devices.values())))
+            else:
+                # Include all devices with uneven NUMA distribution
+                interleaved = list(
+                    filter(
+                        partial(is_not, None),
+                        itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
+
+            # Break the interleaved (prioritized) disk list into groups of engine size
+            device_sets = [interleaved[x:x + engines] for x in range(0, len(interleaved), engines)]
+
+            # Tier number device placement order
+            tier_placement_priority = [1, 2, 3, 3, 2]
+
+            # Get the tier number device placement for the available number of devices
+            tier_placement = []
+            while len(tier_placement) < len(device_sets):
+                tier_placement.append(tier_placement_priority)
+            tier_placement = sorted(tier_placement[:len(device_sets)])
+            tiers += max(tier_placement)
+
+            bdev_list = {}
+            for device_set in device_sets:
+                tier = tier_placement.pop(0)
+                for engine, device in enumerate(device_set):
+                    if engine not in bdev_list:
+                        bdev_list[engine] = {}
+                    if tier not in bdev_list[engine]:
+                        bdev_list[engine][tier] = []
+                    bdev_list[engine][tier].append(device)
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):
@@ -347,7 +548,7 @@ class StorageInfo():
                     lines.append(f'          scm_size: {scm_size}')
                 else:
                     lines.append('          class: nvme')
-                    lines.append('          bdev_list: []')
+                    lines.append(f'          bdev_list: [{",".join(bdev_list[engine][tier])}]')
 
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
