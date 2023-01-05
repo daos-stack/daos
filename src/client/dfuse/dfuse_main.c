@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -261,6 +261,7 @@ show_help(char *name)
 	    "\n"
 	    "	-S --singlethread	Single threaded\n"
 	    "	-t --thread-count=count	Number of fuse threads to use\n"
+	    "   -e --eq-count=count     Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
