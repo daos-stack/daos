@@ -332,7 +332,7 @@ class DaosServerCommand(YamlCommand):
                 self.sub_command_class = self.PrepareSubCommand()
             else:
                 self.sub_command_class = None
-##++
+
     class NvmeSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server nvme sub command."""
 
@@ -387,7 +387,7 @@ class DaosServerCommand(YamlCommand):
                 """Create a daos_server nvme reset subcommand object."""
                 super().__init__("/run/daos_server/nvme/reset/*", "reset")
 
-                # daos_server nvme reset command options: 
+                # daos_server nvme reset command options:
                 #   --helper-log-file= Log file location for debug from daos_server_helper binary
                 #   --ignore-config    Ignore parameters set in config file when running command
                 #   --pci-block-list=  Comma-separated list of PCI devices (by address) to be ignored
@@ -490,7 +490,7 @@ class DaosServerCommand(YamlCommand):
                 # daos_server scm scan command option:
                 #   --helper-log-file=   Log file location for debug from daos_admin binary
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-##--
+
         class PrepareSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server storage prepare command."""
 
