@@ -797,7 +797,7 @@ adt_tx_perf_1(void **state)
 	int		     j;
 	uint32_t	     arena = AD_ARENA_ANY;
 
-	printf("transaction performance test\n");
+	printf("transaction performance test: 2 x alloc per tx\n");
 	d_gettime(&then);
 	for (i = 0; i < loop; i++) {
 		/* NB: two reservations per transaction */
@@ -823,6 +823,70 @@ adt_tx_perf_1(void **state)
 
 	ops = (int)((double)loop / ((double)tdiff / NSEC_PER_SEC));
 	printf("TX rate = %d/sec\n", ops);
+}
+
+static void
+adt_tx_perf_2(void **state)
+{
+	const int	     op_per_tx = 3;
+	const int	     alloc_sizes[3] = {64, 128, 256};
+	const int	     loop = 200000;
+	struct ad_tx	     tx;
+	struct ad_reserv_act acts[op_per_tx];
+	struct timespec	     now;
+	struct timespec	     then;
+	daos_off_t	     *addrs;
+	int64_t		     tdiff;
+	int		     ops;
+	int		     rc;
+	int		     i;
+	int		     count;
+	uint32_t	     arena = AD_ARENA_ANY;
+
+	printf("transaction performance test: 3 x alloc + 1 x free per tx\n");
+	addrs = calloc(op_per_tx * loop, sizeof(*addrs));
+	if (!addrs) {
+		fprintf(stderr, "failed allocate\n");
+		return;
+	}
+
+	d_gettime(&then);
+	for (i = count = 0; i < loop; i++) {
+		int	j;
+		int	k;
+
+		/* NB: 3 allocations and 1 free per transaction */
+		for (j = 0; j < op_per_tx; j++) {
+			k = count + j;
+			addrs[k] = ad_reserve(adt_bh, 0, alloc_sizes[j], &arena, &acts[j]);
+			if (addrs[k] == 0) {
+				fprintf(stderr, "failed allocate\n");
+				return;
+			}
+		}
+
+		rc = ad_tx_begin(adt_bh, &tx);
+		assert_rc_equal(rc, 0);
+
+		rc = ad_tx_publish(&tx, acts, op_per_tx);
+		assert_rc_equal(rc, 0);
+
+		count += op_per_tx;
+		if (i > 0) {
+			k = rand() % count;
+			rc = ad_tx_free(&tx, addrs[k]);
+			assert_rc_equal(rc, 0);
+			addrs[k] = addrs[--count];
+		}
+		rc = ad_tx_end(&tx, 0);
+		assert_rc_equal(rc, 0);
+	}
+	d_gettime(&now);
+	tdiff = d_timediff_ns(&then, &now);
+
+	ops = (int)((double)loop / ((double)tdiff / NSEC_PER_SEC));
+	printf("TX rate = %d/sec\n", ops);
+	free(addrs);
 }
 
 static void
@@ -946,6 +1010,7 @@ main(void)
 		cmocka_unit_test(adt_rsv_write_free),
 		cmocka_unit_test(adt_delayed_free_1),
 		cmocka_unit_test(adt_tx_perf_1),
+		cmocka_unit_test(adt_tx_perf_2),
 		/* Must be the last test */
 		cmocka_unit_test(adt_no_space_1),
 	};
