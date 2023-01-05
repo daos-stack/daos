@@ -336,8 +336,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.target_user.value = user
             result = run_remote(
                 self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
-            if not result.passed or \
-                    "No SCM modules detected; skipping operation" in result.all_stdout:
+            if not result.passed or "No SCM modules detected; skipping operation" in \
+                    '\n'.join(result.all_stdout.values()):
                 raise ServerFailed("Error preparing nvme storage")
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
@@ -482,6 +482,7 @@ class DaosServerManager(SubprocessManager):
         cmd.debug.value = False
         cmd.set_sub_command("nvme")
         cmd.sub_command_class.set_sub_command("reset")
+        cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
