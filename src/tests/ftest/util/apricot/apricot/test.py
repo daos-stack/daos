@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1480,12 +1480,17 @@ class TestWithServers(TestWithoutServers):
                 labels = []
 
             # Destroy each pool found
+            # Elevate log_mask to DEBUG, then restore after pool destroy
+            manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
             for label in labels:
                 try:
                     manager.dmg.pool_destroy(pool=label, force=True)
 
                 except CommandFailure as error:
                     error_list.append("Error destroying pool: {}".format(error))
+
+            manager.dmg.server_set_logmasks(raise_exception=False)
 
         return error_list
 
