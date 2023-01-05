@@ -360,7 +360,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         print('Exiting because --build-deps=only was set')
         Exit(0)
 
-    env = deps_env.Clone(tools=['extra', 'daos_builder', 'compiler_setup'])
+    env = deps_env.Clone(tools=['extra', 'textfile', 'daos_builder', 'compiler_setup'])
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
