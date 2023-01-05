@@ -25,6 +25,7 @@ from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
+from run_utils import run_remote
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -339,8 +340,12 @@ class DaosServerManager(SubprocessManager):
                     "No SCM modules detected; skipping operation" in result.all_stdout:
                 raise ServerFailed("Error preparing nvme storage")
 
+        self.log.info("Preparing DAOS server storage: %s", str(cmd))
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+
         # gratuitously lifted from pcmd() and get_current_state()
-        result = {}
+        results = {}
         stdouts = ""
         for res in results:
             stdouts += '\n'.join(res["stdout"] + [''])
