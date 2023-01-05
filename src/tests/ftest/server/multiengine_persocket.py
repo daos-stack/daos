@@ -112,13 +112,11 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd = DaosServerCommand()
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
+        cmd.set_sub_command("scm")
+        cmd.sub_command_class.set_sub_command("reset")
         cmd.sub_command_class.sub_command_class.force.value = True
-        cmd.sub_command_class.sub_command_class.scm_only.value = True
-        cmd.sub_command_class.sub_command_class.reset.value = True
         self.log.info(
-            "===(%s.A)Starting daos_server storage prepare reset: %s", step, str(cmd))
+            "===(%s.A)Starting daos_server scm reset: %s", step, str(cmd))
         results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
         if results[0]['exit_status']:
             self.fail(

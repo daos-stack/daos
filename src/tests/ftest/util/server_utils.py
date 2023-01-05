@@ -309,10 +309,6 @@ class DaosServerManager(SubprocessManager):
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.target_user.value = user
-        cmd.sub_command_class.sub_command_class.force.value = True
 
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
@@ -320,14 +316,28 @@ class DaosServerManager(SubprocessManager):
         if using_nvme is None:
             using_nvme = self.manager.job.using_nvme
 
-        if using_dcpm and not using_nvme:
-            cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif not using_dcpm and using_nvme:
-            cmd.sub_command_class.sub_command_class.nvme_only.value = True
-
-        self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(
-            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        if using_dcpm:
+            # Prepare SCM storage
+            cmd.set_sub_command("scm")
+            cmd.sub_command_class.set_sub_command("prepare")
+            cmd.sub_command_class.sub_command_class.target_user.value = user
+            result = run_remote(
+                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+            if not result.passed:
+                # Add some debug due to the failure
+                run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
+                run_remote(self.log, self._hosts, "ndctl list")
+                raise ServerFailed("Error preparing dcpm storage")
+        if using_nvme:
+            # Prepare NVMe storage
+            cmd.set_sub_command("nvme")
+            cmd.sub_command_class.set_sub_command("prepare")
+            cmd.sub_command_class.sub_command_class.target_user.value = user
+            result = run_remote(
+                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+            if not result.passed or \
+                    "No SCM modules detected; skipping operation" in result.all_stdout:
+                raise ServerFailed("Error preparing nvme storage")
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -465,15 +475,13 @@ class DaosServerManager(SubprocessManager):
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.nvme_only.value = True
-        cmd.sub_command_class.sub_command_class.reset.value = True
+        cmd.set_sub_command("nvme")
+        cmd.sub_command_class.set_sub_command("reset")
         cmd.sub_command_class.sub_command_class.force.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
-        if len(result) > 1 or 0 not in result:
+        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
     def set_scm_mount_ownership(self, user=None, verbose=False):
