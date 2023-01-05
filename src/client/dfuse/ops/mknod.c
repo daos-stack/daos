@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,8 +41,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	ie->ie_truncated = false;
-	D_SPIN_INIT(&ie->ie_lock, 0);
-	atomic_init(&ie->ie_ref, 1);
+	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	LOG_MODES(ie, mode);
 

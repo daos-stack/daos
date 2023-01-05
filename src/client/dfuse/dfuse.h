@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -619,11 +619,6 @@ struct dfuse_inode_entry {
 	/** written region for truncated files (i.e. ie_truncated set) */
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
-
-	/* Lock for inode  Only used for readdir handles.
-	 * TODO: This isn't universally created or destroyed yet.
-	 */
-	pthread_spinlock_t        ie_lock;
 
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
