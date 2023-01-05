@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -475,6 +475,74 @@ free_method:
 	return rc;
 }
 
+#define BDEV_NAME_MAX_LEN	256
+
+static int
+check_name_from_bdev_subsys(struct json_config_ctx *ctx)
+{
+	struct config_entry	 cfg = {};
+	struct spdk_json_val	*key, *value;
+	char			*name;
+	int			 rc = 0;
+
+	D_ASSERT(ctx->config_it != NULL);
+
+	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
+				     SPDK_COUNTOF(config_entry_decoders), &cfg);
+	if (rc < 0) {
+		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0 &&
+	    strcmp(cfg.method, NVME_CONF_AIO_CREATE) != 0) {
+		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
+		goto free_method;
+	}
+
+	if (cfg.params == NULL) {
+		D_ERROR("bad config entry %s with nil params\n", cfg.method);
+		D_GOTO(free_method, rc = -DER_INVAL);
+	}
+
+	D_ALLOC(name, BDEV_NAME_MAX_LEN + 1);
+	if (name == NULL)
+		D_GOTO(free_method, rc = -DER_NOMEM);
+
+	key = spdk_json_object_first(cfg.params);
+	while (key != NULL) {
+		value = json_value(key);
+		if (spdk_json_strequal(key, "name")) {
+			value = json_value(key);
+			if (!value || value->len > BDEV_NAME_MAX_LEN) {
+				D_ERROR("Invalid json value\n");
+				D_GOTO(free_name, rc = -DER_INVAL);
+			}
+			memcpy(name, value->start, value->len);
+			name[value->len] = '\0';
+
+			D_DEBUG(DB_MGMT, "check bdev name: %s\n", name);
+			rc = bdev_name2roles(name);
+			if (rc < 0) {
+				D_ERROR("bdev_name contains invalid roles: %s\n", name);
+				D_GOTO(free_name, rc);
+			}
+			if (rc & NVME_ROLE_META || rc & NVME_ROLE_WAL) {
+				rc = 1;
+				break;
+			}
+			rc = 0;
+		}
+		key = spdk_json_next(key);
+	}
+
+free_name:
+	D_FREE(name);
+free_method:
+	D_FREE(cfg.method);
+	return rc;
+}
+
 static int
 decode_subsystem_configs(struct spdk_json_val *json_val, struct json_config_ctx *ctx)
 {
@@ -524,6 +592,27 @@ add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bo
 }
 
 static int
+check_md_on_ssd_status(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss)
+{
+	int	rc;
+
+	rc = decode_subsystem_configs(bdev_ss, ctx);
+	if (rc != 0)
+		return rc;
+
+	while (ctx->config_it != NULL) {
+		rc = check_name_from_bdev_subsys(ctx);
+		if (rc != 0)
+			return rc;
+		/* Move on to next subsystem config*/
+		ctx->config_it = spdk_json_next(ctx->config_it);
+	}
+
+	return rc;
+
+}
+
+static int
 check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool *vmd_enabled)
 {
 	int	rc;
@@ -545,6 +634,75 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 
+	return rc;
+}
+
+/**
+ * Check if MD-ON-SSD enabled based on attach bdev name roles
+ * in the JSON config file.
+ *
+ * \param[IN]	nvme_conf	JSON config file path
+ *
+ * \returns	0 MD-ON-SSD not enabled
+ *		1 MD-ON-SSD enabled.
+ *		negative on failure (DER)
+ */
+int bio_check_md_on_ssd(const char *nvme_conf)
+{
+	struct json_config_ctx	*ctx;
+	int			 rc = 0;
+	struct spdk_json_val	*bdev_ss = NULL;
+
+	D_ASSERT(nvme_conf != NULL);
+
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
+		return -DER_NOMEM;
+
+	rc = read_config(nvme_conf, ctx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Capture subsystems array */
+	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
+	if (rc < 0) {
+		D_ERROR("Failed to find subsystems key: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* Get first subsystem */
+	ctx->subsystems_it = spdk_json_array_first(ctx->subsystems);
+	if (ctx->subsystems_it == NULL) {
+		D_ERROR("Empty subsystems section\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	while (ctx->subsystems_it != NULL) {
+		/* Capture subsystem name and config array */
+		rc = spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
+					     SPDK_COUNTOF(subsystem_decoders), ctx);
+		if (rc < 0) {
+			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(-rc));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		if (spdk_json_strequal(ctx->subsystem_name, "bdev"))
+			bdev_ss = ctx->subsystems_it;
+
+		/* ? need check vmd? */
+		/* Move on to next subsystem */
+		ctx->subsystems_it = spdk_json_next(ctx->subsystems_it);
+	}
+
+	if (bdev_ss == NULL) {
+		D_ERROR("Config is missing bdev subsystem\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = check_md_on_ssd_status(ctx, bdev_ss);
+
+out:
+	free_json_config_ctx(ctx);
 	return rc;
 }
 

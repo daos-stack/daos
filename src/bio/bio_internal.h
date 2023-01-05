@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -566,6 +566,7 @@ void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
 bool bypass_health_collect(void);
 void drain_inflight_ios(struct bio_xs_context *ctxt, struct bio_xs_blobstore *bbs);
 uint32_t default_cluster_sz(void);
+int bdev_name2roles(const char *bdev_name);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);

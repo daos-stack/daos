@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -684,16 +684,12 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
 #define VOS_NVME_NR_TARGET	1
 
-static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, struct sys_db *db)
-{
-	char	*nvme_conf;
-	int	 rc, fd;
+static bool md_on_ssd_enabled;
 
-	D_ASSERT(vos_path != NULL);
-	D_ASPRINTF(nvme_conf, "%s/%s", vos_path, VOS_NVME_CONF);
-	if (nvme_conf == NULL)
-		return -DER_NOMEM;
+static int
+vos_self_nvme_init(const char *nvme_conf, uint32_t tgt_id, struct sys_db *db)
+{
+	int	 rc;
 
 	/* IV tree used by VEA */
 	rc = dbtree_class_register(DBTREE_CLASS_IV,
@@ -709,17 +705,13 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, struct sys_db *db)
 		goto out;
 
 	/* Only use hugepages if NVME SSD configuration existed. */
-	fd = open(nvme_conf, O_RDONLY, 0600);
-	if (fd < 0) {
+	if (nvme_conf == NULL)
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, db, true);
-	} else {
+				   VOS_NVME_NR_TARGET, db, true, false);
+	else
 		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, db, true);
-		close(fd);
-	}
-
+				   VOS_NVME_NR_TARGET, db, true, md_on_ssd_enabled);
 	if (rc)
 		goto out;
 
@@ -730,18 +722,14 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, struct sys_db *db)
 		goto out;
 	}
 out:
-	D_FREE(nvme_conf);
 	return rc;
 }
-
-static bool md_on_ssd_enabled;
 
 static void
 vos_self_fini_locked(void)
 {
 
 	vos_self_nvme_fini();
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 	if (!md_on_ssd_enabled) {
 		vos_db_fini();
 	} else {
@@ -782,6 +770,13 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	int		 rc = 0;
 	char		*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
 	struct sys_db	*db;
+	char		*nvme_conf = NULL;
+	int		 fd;
+
+	D_ASSERT(db_path != NULL);
+	D_ASPRINTF(nvme_conf, "%s/%s", db_path, VOS_NVME_CONF);
+	if (nvme_conf == NULL)
+		return -DER_NOMEM;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
@@ -790,10 +785,8 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	}
 
 	rc = ABT_init(0, NULL);
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	vos_start_epoch = 0;
 
@@ -801,15 +794,23 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
+		D_GOTO(out, rc);
 	}
 #endif
+	fd = open(nvme_conf, O_RDONLY, 0600);
+	if (fd > 0) {
+		close(fd);
+		rc = bio_check_md_on_ssd(nvme_conf);
+		if (rc < 0)
+			D_GOTO(failed, rc);
+		if (rc > 0)
+			md_on_ssd_enabled = true;
+	}
+
 	rc = vos_mod_init();
 	if (rc)
 		D_GOTO(failed, rc);
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 	if (!md_on_ssd_enabled) {
 		if (use_sys_db)
 			rc = vos_db_init(db_path);
@@ -828,7 +829,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_self_nvme_init(db_path, tgt_id, db);
+	rc = vos_self_nvme_init(fd > 0 ? nvme_conf : NULL, tgt_id, db);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -857,9 +858,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_ref = 1;
 out:
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
-	return 0;
+	D_FREE(nvme_conf);
+	return rc;
 failed:
 	vos_self_fini_locked();
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
+	D_FREE(nvme_conf);
 	return rc;
 }

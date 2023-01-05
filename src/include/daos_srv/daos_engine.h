@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,6 +53,9 @@ extern unsigned int	 dss_instance_idx;
 
 /** Bypass for the nvme health check */
 extern bool		 dss_nvme_bypass_health_check;
+
+/** MD-ON-SSD enabled or not */
+extern bool dss_md_on_ssd_enabled;
 
 /**
  * Stackable Module API

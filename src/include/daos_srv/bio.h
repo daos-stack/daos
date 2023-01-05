@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -420,12 +420,24 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \paran[IN] tgt_nr		Number of targets
  * \param[IN] db		persistent database to store SMD data
  * \param[IN] bypass		Set to bypass health data collection
+ * \param[IN] md_on_ssd		MD-ON-SSD enabled or not
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		  unsigned int hugepage_size, unsigned int tgt_nr,
-		  struct sys_db *db, bool bypass);
+		  struct sys_db *db, bool bypass, bool md_on_ssd);
+
+/**
+ * check MD-ON-SSD enabled or not.
+ *
+ * \param[IN] nvme_conf		NVMe config file
+ *
+ * \return		0 MD-ON-SSD not enabled,
+ *			1 MD-ON-SSD enabled,
+ *			negative value on error
+ */
+int bio_check_md_on_ssd(const char *nvme_conf);
 
 /**
  * Global NVMe finilization.

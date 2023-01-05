@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,7 +94,6 @@ bool		dss_helper_pool;
 bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
-static bool		md_on_ssd_enabled;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -1193,7 +1192,7 @@ static void
 dss_sys_db_fini(void)
 {
 
-	if (!md_on_ssd_enabled) {
+	if (!dss_md_on_ssd_enabled) {
 		vos_db_fini();
 		return;
 	}
@@ -1252,8 +1251,7 @@ dss_sys_db_init(struct sys_db **db)
 	/* walkaround*/
 	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	if (!md_on_ssd_enabled) {
+	if (!dss_md_on_ssd_enabled) {
 		rc = vos_db_init(dss_storage_path);
 		if (rc == 0)
 			*db = vos_db_get();
@@ -1322,6 +1320,13 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
+	if (dss_nvme_conf) {
+		rc = bio_check_md_on_ssd(dss_nvme_conf);
+		if (rc < 0)
+			D_GOTO(failed, rc);
+		if (rc > 0)
+			dss_md_on_ssd_enabled = true;
+	}
 	rc = dss_sys_db_init(&db);
 	if (rc != 0)
 		D_GOTO(failed, rc);
@@ -1329,7 +1334,7 @@ dss_srv_init(void)
 
 	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
 			   dss_nvme_hugepage_size, dss_tgt_nr, db,
-			   dss_nvme_bypass_health_check);
+			   dss_nvme_bypass_health_check, dss_md_on_ssd_enabled);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

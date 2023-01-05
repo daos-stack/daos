@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,8 +59,6 @@ bool bio_spdk_inited;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
-/* FIXME: Remove it once md on SSD feature is fully done */
-static bool md_on_ssd_enabled;
 unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
 
 struct bio_nvme_data {
@@ -84,6 +82,7 @@ struct bio_nvme_data {
 	unsigned int		 bd_nvme_roles;
 	bool			 bd_started;
 	bool			 bd_bypass_health_collect;
+	bool			 bd_md_on_ssd_enabled;
 	/* Setting to enable SPDK JSON-RPC server */
 	bool			 bd_enable_rpc_srv;
 	const char		*bd_rpc_srv_addr;
@@ -200,7 +199,7 @@ set_faulty_criteria(void)
 int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr, struct sys_db *db,
-	      bool bypass_health_collect)
+	      bool bypass_health_collect, bool md_on_ssd_enabled)
 {
 	char		*env;
 	int		 rc, fd;
@@ -223,6 +222,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	nvme_glb.bd_enable_rpc_srv = false;
 	nvme_glb.bd_rpc_srv_addr = NULL;
+	nvme_glb.bd_md_on_ssd_enabled = md_on_ssd_enabled;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
@@ -251,7 +251,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
 
 	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
@@ -774,7 +773,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	}
 }
 
-static int
+int
 bdev_name2roles(const char *name)
 {
 	const char	*dst = strrchr(name, '_');
@@ -1128,7 +1127,7 @@ bio_nvme_configured(enum smd_dev_type type)
 	 * bdev name, that'll fail CI tests before the md on SSD feature is
 	 * fully implemented.
 	 */
-	if (type == SMD_DEV_TYPE_META && !md_on_ssd_enabled)
+	if (type == SMD_DEV_TYPE_META && !nvme_glb.bd_md_on_ssd_enabled)
 		return false;
 
 	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));

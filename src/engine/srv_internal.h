@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -342,12 +342,14 @@ dss_xs2tgt(int xs_id)
 static inline bool
 dss_xstream_has_nvme(struct dss_xstream *dx)
 {
-	/*
-	 * TODO: DAOS engine should parse daos_nvme.conf to see if MD on SSD
-	 * is configured, and avoid allocating NVMe context on sys xstream when
-	 * MD on SSD isn't configured.
-	 */
-	return dx->dx_main_xs != 0 || dx->dx_xs_id == 0;
+
+	if (dx->dx_main_xs != 0)
+		return true;
+
+	if (dss_md_on_ssd_enabled && dx->dx_xs_id == 0)
+		return true;
+
+	return false;
 }
 
 #endif /* __DAOS_SRV_INTERNAL__ */
