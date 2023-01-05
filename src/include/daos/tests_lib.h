@@ -376,8 +376,7 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
  *
  * \param dmg_config_file
  *		[IN]	DMG config file
- * \param rank	[IN]	Rank to stop.
- * \param arg	[IN]	Parameter for -o
+ * \param rank	[IN]	Rank to start.
  */
 int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 

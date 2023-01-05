@@ -962,7 +962,7 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	/* stop the rank */
 	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
-	print_message("dmg stop, rc %#x\n", rc);
+	print_message(" dmg stop, rc %#x\n", rc);
 
 	assert_rc_equal(rc, 0);
 
