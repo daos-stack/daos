@@ -415,7 +415,7 @@ sys.path.append('site_scons')"""
                 promote_to_error = True
 
             # All non-scons code should be clean now.
-            if not scons:
+            if scons:
                 promote_to_error = True
 
             if promote_to_error:
