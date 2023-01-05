@@ -9,11 +9,12 @@ from time import sleep, time
 import ctypes
 import json
 
-from test_utils_base import TestDaosApiBase, LabelGenerator
 from avocado import fail_on, TestFail
+from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
+
+from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
-from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
@@ -958,6 +959,20 @@ class TestPool(TestDaosApiBase):
         elif dev == "nvme":
             free_space = daos_space["s_free"][1]
         return free_space
+
+    def display_space(self):
+        """Display the current pool space.
+
+        If the TestPool object has a DmgCommand object assigned, also display
+        the free pool space per target.
+
+        """
+        if self.dmg:
+            # Display all query data
+            self.set_query_data()
+        else:
+            # Display just the space
+            self.display_pool_daos_space()
 
     def display_pool_daos_space(self, msg=None):
         """Display the pool info daos space attributes.

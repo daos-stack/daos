@@ -478,6 +478,8 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 
 	for {
+		db.log.Debug("(re-)starting leadership monitoring loop")
+
 		select {
 		case <-parent.Done():
 			if cancelGainedCtx != nil {
@@ -499,7 +501,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
 				if err = db.ResignLeadership(err); err != nil {
@@ -507,7 +508,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				}
 				continue // restart the monitoring loop
 			}
-			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
