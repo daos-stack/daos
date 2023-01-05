@@ -46,9 +46,9 @@ class SnapshotAggregation(IorTestBase):
             capacity by half.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=container,snap
-        :avocado: tags=snapshot_aggregation
+        :avocado: tags=SnapshotAggregation,test_snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
         daos = DaosCommand(self.bin)

@@ -1,12 +1,12 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
-import avocado
 import time
+
+import avocado
 
 from pydaos.raw import DaosApiError
 from apricot import TestWithServers
@@ -149,13 +149,12 @@ class NvmeObject(TestWithServers):
             corrupted.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=nvme_object,nvme_object_single_pool
-        :avocado: tags=DAOS_5610
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme
+        :avocado: tags=NvmeObject,test_nvme_object_single_pool
         """
         # perform multiple object writes to a single pool
-        test_runner(self, "/run/pool_1/*", self.record_size[:-1], 0,
-                    self.array_size)
+        test_runner(self, "/run/pool_1/*", self.record_size[:-1], 0, self.array_size)
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_object_multiple_pools(self):
@@ -171,8 +170,9 @@ class NvmeObject(TestWithServers):
             corrupted.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=nvme_object,nvme_object_multiple_pools
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme
+        :avocado: tags=NvmeObject,test_nvme_object_multiple_pools
         """
         # thread to perform simultaneous object writes to multiple pools
         threads = []
@@ -180,8 +180,7 @@ class NvmeObject(TestWithServers):
             time.sleep(1)
             thread = threading.Thread(
                 target=test_runner,
-                args=(self, f"/run/pool_{index + 2}/*", self.record_size,
-                      self.array_size))
+                args=(self, f"/run/pool_{index + 2}/*", self.record_size, self.array_size))
             threads.append(thread)
 
         # starting all the threads

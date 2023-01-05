@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -62,7 +62,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 22.01.1
+BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -70,7 +70,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.1-1401.gc18bcb8%{?dist}
+BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -141,7 +141,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 22.01.1
+Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -436,6 +436,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos
 %{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
+%{_libdir}/libds3.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
@@ -528,7 +529,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.1.101-3
+* Thu Dec 01 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.101-4
+- Update SPDK dependency requirement to greater than or equal to 22.01.2.
+
+* Tue Oct 18 2022 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-3
 - Set flag to build per-subpackage debuginfo packages for Leap 15
 
 * Thu Oct 6 2022 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.101-2
@@ -555,7 +559,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Mon Jul 18 2022 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.100-17
 - Remove now unused openpa dependency
 
-* Fri Jul 15 2022 Tom Nabarro <jeffrey.v.olivier@intel.com> 2.3.100-16
+* Fri Jul 15 2022 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.100-16
 - Add pool_scrubbing_tests to test package
 
 * Wed Jul 13 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.100-15

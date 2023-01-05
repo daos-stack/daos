@@ -29,7 +29,7 @@ class PoolServicesFaultInjection(TestWithServers):
         self.object_class = self.params.get("object_class", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
 
-    def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
+    def look_missed_request(self, cmd_stderr, msg=b"err: DER_TIMEDOUT"):
         """ Read dmg_stderr for the msg string
         If found, the instance attribute self.failed_request is
         increased by 1.
@@ -110,9 +110,9 @@ class PoolServicesFaultInjection(TestWithServers):
                 injected fault of real network issue.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=fault_injection,pool,faults
-        :avocado: tags=pool_with_faults,test_pool_services
+        :avocado: tags=PoolServicesFaultInjection,test_pool_services
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()

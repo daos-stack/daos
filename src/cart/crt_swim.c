@@ -317,7 +317,7 @@ crt_swim_update_delays(struct crt_swim_membs *csm, uint64_t hlc,
 		if (crt_swim_fail_delay && crt_swim_fail_id == id) {
 			uint64_t d = crt_swim_fail_delay;
 
-			crt_swim_fail_hlc = hlc - crt_msec2hlc(l) + crt_sec2hlc(d);
+			crt_swim_fail_hlc = hlc - d_msec2hlc(l) + d_sec2hlc(d);
 			crt_swim_fail_delay = 0;
 		}
 	}
@@ -339,7 +339,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	swim_id_t		 from_id;
 	swim_id_t		 to_id;
 	uint64_t		 max_delay = swim_ping_timeout_get() * 2 / 3;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	uint32_t		 rcv_delay = 0;
 	uint32_t		 snd_delay = 0;
 	int			 rc;
@@ -371,7 +371,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	 * this request.
 	 */
 	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "incoming %s with %zu updates with %u ms delay. %lu: %lu <= %lu\n",
@@ -495,7 +495,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 from_id;
 	swim_id_t		 to_id = rpc->cr_ep.ep_rank;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	uint32_t		 rcv_delay = 0;
 	int			 reply_rc;
 	int			 rc;
@@ -516,7 +516,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	}
 
 	if (hlc > rpc_priv->crp_reply_hdr.cch_hlc)
-		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "
@@ -546,6 +546,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 			/* Simulate ALIVE answer */
 			D_FREE(rpc_out->upds.ca_arrays);
+			rpc_out->upds.ca_count = 0;
 			rc = swim_updates_prepare(ctx, to_id, to_id,
 						  &rpc_out->upds.ca_arrays,
 						  &rpc_out->upds.ca_count);
@@ -585,7 +586,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 out:
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
-		crt_swim_fail_hlc = crt_hlc_get() + crt_sec2hlc(crt_swim_fail_delay);
+		crt_swim_fail_hlc = d_hlc_get() + d_sec2hlc(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 }
@@ -882,7 +883,7 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	uint64_t		 incarnation = crt_hlc_get();
+	uint64_t		 incarnation = d_hlc_get();
 
 	D_ASSERT(state != NULL);
 	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
@@ -922,7 +923,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	if (self_id == SWIM_ID_INVALID)
 		return timeout_us;
 
-	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
+	if (crt_swim_fail_hlc && d_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
 		crt_swim_fail_hlc = 0;
 		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
@@ -947,8 +948,8 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		 */
 		if (csm->csm_alive_count > 2) {
 			uint64_t hlc1 = csm->csm_last_unpack_hlc;
-			uint64_t hlc2 = crt_hlc_get();
-			uint64_t delay = crt_hlc2msec(hlc2 - hlc1);
+			uint64_t hlc2 = d_hlc_get();
+			uint64_t delay = d_hlc2msec(hlc2 - hlc1);
 			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
 
 			if (delay > max_delay) {
@@ -1013,7 +1014,7 @@ int crt_swim_init(int crt_ctx_idx)
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	d_rank_list_t		*grp_membs;
 	d_rank_t		 self = grp_priv->gp_self;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	int			 i;
 	int			 rc;
 	int			 rc_tmp;

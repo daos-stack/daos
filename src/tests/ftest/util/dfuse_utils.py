@@ -5,21 +5,22 @@
 """
 
 import time
+import os
 from ClusterShell.NodeSet import NodeSet
 
-from command_utils_base import FormattedParameter
+from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from general_utils import check_file_exists, get_log_file
-from run_utils import run_remote
+from run_utils import run_remote, command_as_user
 
 
 class DfuseCommand(ExecutableCommand):
     """Defines a object representing a dfuse command."""
 
-    def __init__(self, namespace, command):
+    def __init__(self, namespace, command, path=""):
         """Create a dfuse Command object."""
-        super().__init__(namespace, command)
+        super().__init__(namespace, command, path)
 
         # dfuse options
         self.pool = FormattedParameter("--pool {}")
@@ -48,16 +49,17 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
-    def __init__(self, hosts, tmp, namespace="/run/dfuse/*"):
+    def __init__(self, hosts, tmp, namespace="/run/dfuse/*", path=""):
         """Create a dfuse object.
 
         Args:
             hosts (NodeSet): hosts on which to run dfuse
             tmp (str): tmp directory path
             namespace (str): dfuse namespace. Defaults to /run/dfuse/*
+            path (str, optional): path to location of command binary file. Defaults to "".
 
         """
-        super().__init__(namespace, "dfuse")
+        super().__init__(namespace, "dfuse", path)
 
         # set params
         self.hosts = hosts.copy()
@@ -65,6 +67,9 @@ class Dfuse(DfuseCommand):
 
         # hosts where dfuse is currently running
         self._running_hosts = NodeSet()
+
+        # result of last call to _update_mount_state()
+        self._mount_state = {}
 
         # which fusermount command to use for unmount
         self._fusermount_cmd = ""
@@ -74,44 +79,61 @@ class Dfuse(DfuseCommand):
         if self._running_hosts:
             self.log.error('Dfuse object deleted without shutting down')
 
-    def check_mount_state(self, hosts):
-        """Check the dfuse mount point mounted state on the hosts.
+    def _run_as_owner(self, hosts, command, timeout=120):
+        """Run a command as the dfuse mount owner.
 
         Args:
-            hosts (NodeSet): hosts on which to check if dfuse is mounted.
+            hosts (NodeSet): hosts on which to run the command
+            command (str): command to run
+            timeout (int, optional): number of seconds to wait for the command to complete.
+                Defaults to 120 seconds.
 
         Returns:
-            dict: a dictionary of NodeSets of hosts with the dfuse mount point.
-                Either "mounted", "unmounted", or "nodirectory"
+            RemoteCommandResult: result of the command
 
         """
+        return run_remote(
+            self.log, hosts, command_as_user(command, self.run_user), timeout=timeout)
+
+    def _update_mount_state(self):
+        """Update the mount state for each host."""
         state = {
             "mounted": NodeSet(),
             "unmounted": NodeSet(),
-            "nodirectory": NodeSet()
+            "nodirectory": NodeSet(),
+            "rogue": NodeSet()
         }
 
-        # Detect which hosts have mount point directories created
+        self.log.info("Checking which hosts have the mount point directory created")
         command = f"test -d {self.mount_dir.value} -a ! -L {self.mount_dir.value}"
-        test_result = run_remote(self.log, hosts, command)
+        test_result = self._run_as_owner(self.hosts, command)
         check_mounted = test_result.passed_hosts
         if not test_result.passed:
             command = f"grep 'dfuse {self.mount_dir.value}' /proc/mounts"
-            grep_result = run_remote(self.log, test_result.failed_hosts, command)
-            check_mounted.add(grep_result.passed_hosts)
+            grep_result = self._run_as_owner(test_result.failed_hosts, command)
             state["nodirectory"].add(grep_result.failed_hosts)
+            # Directory does not exist or is unreadable, but dfuse process is still running
+            state["rogue"].add(grep_result.passed_hosts)
 
         if check_mounted:
-            # Detect which hosts with mount point directories have it mounted as a fuseblk device
+            self.log.info("Checking which hosts have dfuse mounted as a fuseblk device")
             command = f"stat -c %T -f {self.mount_dir.value}"
-            stat_result = run_remote(self.log, check_mounted, command)
+            stat_result = self._run_as_owner(check_mounted, command)
             for data in stat_result.output:
                 if data.returncode == 0 and 'fuseblk' in '\n'.join(data.stdout):
                     state["mounted"].add(data.hosts)
                 else:
                     state["unmounted"].add(data.hosts)
 
-        return state
+        # Log the state of each host
+        for _state, _hosts in state.items():
+            self.log.debug("%s: %s", _state, _hosts)
+
+        # Cache the state
+        self._mount_state = state
+
+        # Update the running hosts
+        self._running_hosts = self._mount_state["mounted"].union(self._mount_state["rogue"])
 
     def _get_umount_command(self, force=False):
         """Get the command to umount the dfuse mount point.
@@ -131,28 +153,32 @@ class Dfuse(DfuseCommand):
             self.mount_dir.value
         ]))
 
-    def create_mount_point(self):
-        """Create dfuse directory.
+    def _setup_mount_point(self):
+        """Setup the dfuse mount point.
 
         Raises:
-            CommandFailure: In case of error creating directory
+            CommandFailure: In case of error
 
         """
         # Raise exception if mount point not specified
         if self.mount_dir.value is None:
             raise CommandFailure("Mount point not specified. Check test yaml file")
 
-        # Create the mount point on any host without dfuse already mounted
-        state = self.check_mount_state(self.hosts)
-        if state["nodirectory"]:
+        # Unmount dfuse if already running
+        self.unmount()
+        if self._running_hosts:
+            raise CommandFailure(f"Error stopping dfuse on {self._running_hosts}")
+
+        self.log.info("Creating dfuse mount directory")
+        if self._mount_state["nodirectory"]:
             command = f"mkdir -p {self.mount_dir.value}"
-            result = run_remote(self.log, state["nodirectory"], command, timeout=30)
+            result = self._run_as_owner(self._mount_state["nodirectory"], command, timeout=30)
             if not result.passed:
                 raise CommandFailure(
                     f"Error creating the {self.mount_dir.value} dfuse mount point "
                     f"on the following hosts: {result.failed_hosts}")
 
-    def remove_mount_point(self):
+    def _remove_mount_point(self):
         """Remove dfuse directory.
 
         Try once with a simple rmdir which should succeed, if this does not then
@@ -179,14 +205,14 @@ class Dfuse(DfuseCommand):
         self.log.info(
             "Removing the %s dfuse mount point on %s", self.mount_dir.value, target_nodes)
 
-        # Try removing with rmdir
+        # Try removing cleanly
         command = f"rmdir {self.mount_dir.value}"
-        rmdir_result = run_remote(self.log, target_nodes, command, timeout=30)
+        rmdir_result = self._run_as_owner(target_nodes, command, timeout=30)
         if rmdir_result.passed:
             return
 
-        # Try removing with rm -rf
-        command = f"rm -rf {self.mount_dir.value}"
+        # Try removing as root for good measure
+        command = command_as_user(f"rm -rf {self.mount_dir.value}", "root")
         rm_result = run_remote(self.log, rmdir_result.failed_hosts, command, timeout=30)
         if not rm_result.passed:
             raise CommandFailure(
@@ -222,9 +248,7 @@ class Dfuse(DfuseCommand):
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
 
-        # create dfuse dir if does not exist
-        self.create_mount_point()
-
+        # Determine which fusermount command to use before mounting
         if not self._fusermount_cmd:
             self.log.info('Check which fusermount command to use')
             for fusermount in ('fusermount3', 'fusermount'):
@@ -234,17 +258,17 @@ class Dfuse(DfuseCommand):
             if not self._fusermount_cmd:
                 raise CommandFailure(f'Failed to get fusermount command on: {self.hosts}')
 
-        # run dfuse command
-        cmd = self.env.to_export_str()
-        if bind_cores:
-            cmd += 'taskset -c {} '.format(bind_cores)
-        cmd += str(self)
+        # setup the mount point
+        self._setup_mount_point()
 
-        result = run_remote(self.log, self.hosts, cmd, timeout=30)
+        # run dfuse command
+        if bind_cores:
+            self.bind_cores = bind_cores
+        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30)
         self._running_hosts.add(result.passed_hosts)
         if not result.passed:
             raise CommandFailure(
-                f"Error starting dfuse on the following hosts: {result.failed_hosts}")
+                f"dfuse command failed on hosts {result.failed_hosts}")
 
         if check:
             # Dfuse will block in the command for the mount to complete, even
@@ -275,22 +299,20 @@ class Dfuse(DfuseCommand):
             bool: whether or not dfuse is running
 
         """
-        state = self.check_mount_state(self._running_hosts)
-        if state["unmounted"] or state["nodirectory"]:
+        self._update_mount_state()
+        if self._mount_state["unmounted"] or self._mount_state["nodirectory"]:
             self.log.error(
-                "Error: dfuse not running on %s",
-                str(state["unmounted"].union(state["nodirectory"])))
+                "dfuse not running on %s",
+                str(self._mount_state["unmounted"].union(self._mount_state["nodirectory"])))
             if fail_on_error:
                 raise CommandFailure("dfuse not running")
             return False
+        if self._mount_state["rogue"]:
+            self.log.error("rogue dfuse processes on %s", str(self._mount_state["rogue"]))
+            if fail_on_error:
+                raise CommandFailure("rogue dfuse processes detected")
+            return False
         return True
-
-    def _update_running_hosts(self):
-        """Updating the hosts where dfuse is still running."""
-        if not self._running_hosts:
-            return
-        mount_state = self.check_mount_state(self._running_hosts)
-        self._running_hosts = mount_state['mounted'].copy()
 
     def unmount(self, tries=2):
         """Unmount dfuse.
@@ -299,7 +321,7 @@ class Dfuse(DfuseCommand):
             tries (int, optional): number of times to try unmount. Defaults to 2
 
         """
-        self._update_running_hosts()
+        self._update_mount_state()
 
         for current_try in range(tries):
             if not self._running_hosts:
@@ -308,14 +330,14 @@ class Dfuse(DfuseCommand):
             # Forcibly kill dfuse after the first unmount fails
             if current_try > 0:
                 kill_command = "pkill dfuse --signal KILL"
-                _ = run_remote(self.log, self._running_hosts, kill_command, timeout=30)
+                _ = self._run_as_owner(self._running_hosts, kill_command, timeout=30)
 
             # Try to unmount dfuse on each host, ignoring errors for now
-            _ = run_remote(
-                self.log, self._running_hosts, self._get_umount_command(force=(current_try > 0)))
+            _ = self._run_as_owner(
+                self._running_hosts, self._get_umount_command(force=(current_try > 0)))
             time.sleep(2)
 
-            self._update_running_hosts()
+            self._update_mount_state()
 
     def stop(self):
         """Stop dfuse.
@@ -341,8 +363,6 @@ class Dfuse(DfuseCommand):
             self.log.info("No hosts running dfuse - nothing to stop")
             return
 
-        # Try to unmount on all hosts to account for mount points in any state
-        self._running_hosts.add(self.hosts)
         self.unmount()
 
         error_list = []
@@ -351,7 +371,7 @@ class Dfuse(DfuseCommand):
 
         # Remove mount points
         try:
-            self.remove_mount_point()
+            self._remove_mount_point()
         except CommandFailure as error:
             error_list.append(str(error))
 
@@ -373,10 +393,14 @@ def get_dfuse(test, hosts, namespace=None):
 
     """
     if namespace:
-        dfuse = Dfuse(hosts, test.tmp, namespace)
+        dfuse = Dfuse(hosts, test.tmp, namespace, path=test.bin)
     else:
-        dfuse = Dfuse(hosts, test.tmp)
+        dfuse = Dfuse(hosts, test.tmp, path=test.bin)
     dfuse.get_params(test)
+
+    # Default mount directory to be test-specific
+    if not dfuse.mount_dir.value:
+        dfuse.update_params(mount_dir=os.path.join(os.sep, 'tmp', 'daos_dfuse_' + test.test_id))
     return dfuse
 
 
@@ -402,6 +426,48 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     try:
         dfuse.run(bind_cores=test.params.get('cores', dfuse.namespace, None))
     except CommandFailure as error:
-        test.log.error(
-            "Dfuse command %s failed on hosts %s", str(dfuse), dfuse.hosts, exc_info=error)
+        test.log.error("Failed to start dfuse on hosts %s", dfuse.hosts, exc_info=error)
         test.fail("Failed to start dfuse")
+
+
+class VerifyPermsCommand(ExecutableCommand):
+    """Class defining an object of type VerifyPermsCommand."""
+
+    def __init__(self, hosts, namespace="/run/verify_perms/*"):
+        """Create a VerifyPermsCommand object.
+
+        Args:
+            hosts (NodeSet): hosts on which to run the command
+            namespace (str): command namespace. Defaults to /run/verify_perms/*
+
+        """
+        path = os.path.realpath(os.path.dirname(__file__))
+        super().__init__(namespace, "verify_perms.py", path)
+
+        # verify_perms.py options
+        self.path = BasicParameter(None, position=0)
+        self.perms = BasicParameter(None, position=1)
+        self.owner = FormattedParameter("--owner {}")
+        self.group_user = FormattedParameter("--group-user {}")
+        self.other_user = FormattedParameter("--other-user {}")
+        self.verify_mode = FormattedParameter("--verify-mode {}")
+        self.create_type = FormattedParameter("--create-type {}")
+
+        # run options
+        self.hosts = hosts.copy()
+        self.timeout = 120
+
+        # Most usage requires root permission
+        self.run_user = 'root'
+
+    def run(self):
+        """Run the command.
+
+        Raises:
+            CommandFailure: If the command fails
+
+        """
+        self.log.info('Running verify_perms.py on %s', str(self.hosts))
+        result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
+        if not result.passed:
+            raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')

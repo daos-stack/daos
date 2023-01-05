@@ -116,7 +116,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = -DER_INVAL;
 		goto out;
 	} else if (in->cei_epoch == 0) {
-		epoch = crt_hlc_get();
+		epoch = d_hlc_get();
 	}
 
 out:
@@ -147,7 +147,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
 	uuid_copy(in->tsi_pool_uuid, cont->c_svc->cs_pool_uuid);
 	uuid_copy(in->tsi_cont_uuid, cont->c_uuid);
 	uuid_copy(in->tsi_coh_uuid, coh_uuid);
-	in->tsi_epoch = crt_hlc_get();
+	in->tsi_epoch = d_hlc_get();
 	in->tsi_opts = opts;
 
 	rc = dss_rpc_send(rpc);

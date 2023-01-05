@@ -15,6 +15,7 @@ missing = set()
 
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
+
     # pylint: disable=too-few-public-methods
 
     def __hash__(self):
@@ -64,7 +65,6 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
 
 def _add_build_rpath(env, pathin="."):
     """Add a build directory to rpath"""
-
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
@@ -75,7 +75,10 @@ def _add_build_rpath(env, pathin="."):
 
 
 def _known_deps(env, **kwargs):
-    """Get list of known libraries"""
+    """Get list of known libraries
+
+    SCons is sensitive to dependency order so return a consistent order here
+    """
     shared_libs = []
     static_libs = []
     if 'LIBS' in kwargs:
@@ -85,7 +88,7 @@ def _known_deps(env, **kwargs):
 
     known_libs = libs.intersection(set(libraries.keys()))
     missing.update(libs - known_libs)
-    for item in known_libs:
+    for item in sorted(known_libs):
         shared = libraries[item].get('shared', None)
         if shared is not None:
             shared_libs.append(shared)
@@ -119,8 +122,6 @@ def _run_command(env, target, sources, daos_libs, command):
     """Run Command builder"""
     static_deps, shared_deps = _known_deps(env, LIBS=daos_libs)
     result = env.Command(target, sources + static_deps + shared_deps, command)
-    # Libraries in this case are used to force rebuild, so use Depends
-    Depends(result, static_deps + shared_deps)
     return result
 
 
@@ -190,7 +191,6 @@ def _test_program(env, *args, **kwargs):
 
 def _find_mpicc(env):
     """find mpicc"""
-
     mpicc = WhereIs('mpicc')
     if not mpicc:
         return False
@@ -221,7 +221,6 @@ def _configure_mpi_pkg(env):
 
 def _configure_mpi(self):
     """Check if mpi exists and configure environment"""
-
     if GetOption('help'):
         return None
 
@@ -244,7 +243,7 @@ def _configure_mpi(self):
     return None
 
 
-def setup(env):
+def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
@@ -254,3 +253,8 @@ def setup(env):
     env.AddMethod(_test_program, 'd_test_program')
     env.AddMethod(_library, 'd_library')
     env.AddMethod(_static_library, 'd_static_library')
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True

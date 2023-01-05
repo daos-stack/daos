@@ -689,6 +689,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 {
 	struct led_opts		*opts = ctx;
 	enum spdk_vmd_led_state	 cur_led_state;
+	const char		*pci_dev_type = NULL;
 	char			 addr_buf[ADDR_STR_MAX_LEN + 1];
 	int			 rc;
 
@@ -697,8 +698,15 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (opts->finished)
 		return;
 
-	if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
-		D_ERROR("Found unexpected non-VMD device type\n");
+	pci_dev_type = spdk_pci_device_get_type(pci_device);
+	if (pci_dev_type == NULL) {
+		D_ERROR("nil pci device type returned\n");
+		opts->status = -DER_MISC;
+		return;
+	}
+
+	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
+		D_ERROR("Found unexpected non-VMD device type (%s)\n", pci_dev_type);
 		opts->status = -DER_NOSYS;
 		return;
 	}
@@ -707,6 +715,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
 		opts->finished = true;
+		return;
 	}
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);

@@ -47,7 +47,7 @@ DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
-DEFAULT_LOGS_THRESHOLD = "2G"
+DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
@@ -3219,7 +3219,7 @@ class Launch():
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
             logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
             try:
