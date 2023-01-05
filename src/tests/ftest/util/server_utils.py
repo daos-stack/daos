@@ -345,7 +345,7 @@ class DaosServerManager(SubprocessManager):
             self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
-        results = {}
+        result = {}
         stdouts = ""
         for res in results:
             stdouts += '\n'.join(res["stdout"] + [''])

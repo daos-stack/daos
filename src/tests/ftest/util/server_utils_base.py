@@ -316,23 +316,6 @@ class DaosServerCommand(YamlCommand):
             self.insecure = FormattedParameter("--insecure", False)
             self.recreate = FormattedParameter("--recreate-superblocks", False)
 
-    class StorageSubCommand(CommandWithSubCommand):
-        """Defines an object for the daos_server storage sub command."""
-
-        def __init__(self):
-            """Create a storage subcommand object."""
-            super().__init__("/run/daos_server/storage/*", "storage")
-
-        def get_sub_command_class(self):
-            """Get the daos_server storage sub command object."""
-            # Available sub-commands:
-            #   prepare  Prepare SCM and NVMe storage attached to remote servers
-            #   scan     Scan SCM and NVMe storage attached to local server
-            if self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
-            else:
-                self.sub_command_class = None
-
     class NvmeSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server nvme sub command."""
 
@@ -390,9 +373,9 @@ class DaosServerCommand(YamlCommand):
                 # daos_server nvme reset command options:
                 #   --helper-log-file= Log file location for debug from daos_server_helper binary
                 #   --ignore-config    Ignore parameters set in config file when running command
-                #   --pci-block-list=  Comma-separated list of PCI devices (by address) to be ignored
-                #                      when unbinding devices from Kernel driver to be used with SPDK
-                #                      (default is no PCI devices)
+                #   --pci-block-list=  Comma-separated list of PCI devices (by address) to be
+                #                      ignored when unbinding devices from Kernel driver to be used
+                #                      with SPDK (default is no PCI devices)
                 #   --target-user=     User that will own hugepage mountpoint directory and vfio
                 #                      groups.
                 #   --disable-vfio     Force SPDK to use the UIO driver for NVMe device access
@@ -490,6 +473,23 @@ class DaosServerCommand(YamlCommand):
                 # daos_server scm scan command option:
                 #   --helper-log-file=   Log file location for debug from daos_admin binary
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
+
+    class StorageSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server storage sub command."""
+
+        def __init__(self):
+            """Create a storage subcommand object."""
+            super().__init__("/run/daos_server/storage/*", "storage")
+
+        def get_sub_command_class(self):
+            """Get the daos_server storage sub command object."""
+            # Available sub-commands:
+            #   prepare  Prepare SCM and NVMe storage attached to remote servers
+            #   scan     Scan SCM and NVMe storage attached to local server
+            if self.sub_command.value == "prepare":
+                self.sub_command_class = self.PrepareSubCommand()
+            else:
+                self.sub_command_class = None
 
         class PrepareSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server storage prepare command."""
