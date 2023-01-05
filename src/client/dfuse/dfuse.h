@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -215,7 +215,7 @@ struct dfuse_pool {
 	/** Hash table entry in dpi_pool_table */
 	d_list_t            dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint32_t     dfp_ref;
+	ATOMIC uint         dfp_ref;
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table dfp_cont_table;
@@ -250,7 +250,7 @@ struct dfuse_cont {
 	/** Hash table entry entry in dfp_cont_table */
 	d_list_t		dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint32_t          dfs_ref;
+	ATOMIC uint              dfs_ref;
 
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
@@ -565,11 +565,6 @@ struct fuse_lowlevel_ops dfuse_ops;
  */
 
 struct dfuse_inode_entry {
-	/** Hash table of inodes
-	 * All valid inodes are kept in a hash table, using the hash table locking.
-	 */
-	d_list_t                 ie_htl;
-
 	/** stat structure for this inode.
 	 * This will be valid, but out-of-date at any given moment in time,
 	 * mainly used for the inode number and type.
@@ -600,6 +595,11 @@ struct dfuse_inode_entry {
 
 	struct dfuse_cont       *ie_dfs;
 
+	/** Hash table of inodes
+	 * All valid inodes are kept in a hash table, using the hash table locking.
+	 */
+	d_list_t                 ie_htl;
+
 	/* Time of last kernel cache update.
 	 */
 	struct timespec          ie_cache_last_update;
@@ -611,7 +611,7 @@ struct dfuse_inode_entry {
 	/** Reference counting for the inode.
 	 * Used by the hash table callbacks
 	 */
-	ATOMIC uint32_t          ie_ref;
+	ATOMIC uint              ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
