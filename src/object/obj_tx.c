@@ -834,7 +834,8 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * The TX epoch hasn't been chosen yet, and nobody is choosing
 		 * it. So this task will be the "epoch task".
 		 */
-		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch\n", th.cookie, task);
+		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch value="DF_U64" first="DF_U64"\n",
+			th.cookie, task, tx->tx_epoch.oe_value, tx->tx_epoch.oe_first);
 		tse_task_addref(task);
 		tx->tx_epoch_task = task;
 		rc = tse_task_register_comp_cb(task, complete_epoch_task, &th,
@@ -1564,7 +1565,7 @@ out:
 static void
 dc_tx_dump(struct dc_tx *tx)
 {
-	D_DEBUG(DB_TRACE,
+	D_DEBUG(DB_IO,
 		"Dump TX %p:\n"
 		"ID: "DF_DTI"\n"
 		"epoch: "DF_U64"\n"
@@ -1837,7 +1838,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	mbs = dcsh->dcsh_mbs;
-	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_SORTED_TGT_ID;
+	mbs->dm_flags = DMF_CONTAIN_LEADER;
 
 	/* For the case of modification(s) within single RDG,
 	 * elect leader as standalone modification case does.

@@ -73,8 +73,8 @@ struct agg_rmv_ent {
 	struct evt_rect		re_rect;
 	/** Real entries, if any, contained in a logical rectangle */
 	d_list_t		re_contained;
-	int			re_aggregate:1, /* Aggregate of one or more records */
-				re_child:1;	/* Contained in aggregate record */
+	uint32_t                re_aggregate : 1, /* Aggregate of one or more records */
+	    re_child                         : 1; /* Contained in aggregate record */
 	/** Refcount of physical records that reference this removal */
 	int			re_phy_count;
 };

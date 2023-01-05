@@ -192,7 +192,7 @@ class Test(avocadoTest):
             vals = item.split('|')
             skip_it, ticket = self._check_variant_skip(literal_eval(vals[0]))
             if skip_it:
-                # test is on the skiplist
+                # test is on the skip list
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
@@ -673,8 +673,10 @@ class TestWithServers(TestWithoutServers):
 
         # The server config name should be obtained from each ServerManager
         # object, but some tests still use this TestWithServers attribute.
-        self.server_group = self.params.get(
-            "name", "/server_config/", "daos_server")
+        self.server_group = self.params.get("name", "/server_config/", "daos_server")
+
+        # The optional namespace for the server configuration test yaml parameters.
+        self.server_config_namespace = self.params.get("server_config_namespace", "/run/setup/*")
 
         # Support using different job managers to launch the daos agent/servers
         self.manager_class = self.params.get("manager_class", "/", "Orterun")
@@ -776,7 +778,7 @@ class TestWithServers(TestWithoutServers):
         if self.start_servers_once and not force_agent_start:
             # Check for any existing pools that may still exist in each
             # continually running server group.  Pools may still exists if a
-            # previous test method/varaint's tearDown was unable to complete.
+            # previous test method/variant's tearDown was unable to complete.
             # This will hopefully ensure these errors do not affect the next
             # test.  Since the storage is reformatted and the pool metadata is
             # erased when the servers are restarted this check is only needed
@@ -1108,6 +1110,11 @@ class TestWithServers(TestWithoutServers):
                 dmg_config_file, svr_config_temp, dmg_config_temp,
                 self.server_manager_class, access_points_suffix=self.access_points_suffix)
         )
+        if self.server_config_namespace is not None:
+            self.log.debug(
+                "Updating server manager (%s) config namespace: %s",
+                len(self.server_managers) - 1, self.server_config_namespace)
+            self.server_managers[-1].manager.job.yaml.namespace = self.server_config_namespace
 
     def configure_manager(self, name, manager, hosts, slots, access_points=None):
         """Configure the agent/server manager object.
@@ -1480,12 +1487,17 @@ class TestWithServers(TestWithoutServers):
                 labels = []
 
             # Destroy each pool found
+            # Elevate log_mask to DEBUG, then restore after pool destroy
+            manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
             for label in labels:
                 try:
                     manager.dmg.pool_destroy(pool=label, force=True)
 
                 except CommandFailure as error:
                     error_list.append("Error destroying pool: {}".format(error))
+
+            manager.dmg.server_set_logmasks(raise_exception=False)
 
         return error_list
 
@@ -1726,7 +1738,7 @@ class TestWithServers(TestWithoutServers):
             self.pool.append(self.get_pool(namespace, create, connect, index))
 
     @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, **kwargs):
+    def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):
         """Create a TestContainer object.
 
         Args:
@@ -1734,6 +1746,8 @@ class TestWithServers(TestWithoutServers):
             namespace (str, optional): namespace for TestContainer parameters in
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults to True.
+            daos_command (DaosCommand, optional): daos command object.
+                Defaults to self.get_daos_command()
             kwargs (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
 
@@ -1745,7 +1759,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         # Create a container with params from the config
-        container = TestContainer(pool, daos_command=self.get_daos_command())
+        container = TestContainer(pool, daos_command=(daos_command or self.get_daos_command()))
         if namespace is not None:
             container.namespace = namespace
         container.get_params(self)

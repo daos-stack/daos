@@ -30,9 +30,9 @@ class DaosRacerTest(TestWithServers):
             Running simultaneous, conflicting I/O requests.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=io,daosracer
-        :avocado: tags=daosracer_multi
+        :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer
         """
         dmg = self.get_dmg_command()
         self.assertGreater(
