@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,7 +113,6 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 			return nil
 		}
 		ei.log.Debugf("instance %d: superblock needed", idx)
-		return nil
 	}
 
 	cfg, err := ei.storage.GetScmConfig()
