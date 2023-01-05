@@ -7,7 +7,6 @@ import time
 import errno
 import SCons.Warnings
 from prereq_tools import PreReqComponent
-import stack_analyzer
 # pylint: disable=reimported
 
 if sys.version_info.major < 3:
@@ -385,8 +384,8 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     args = GetOption('analyze_stack')
     if args is not None:
-        analyzer = stack_analyzer.Analyzer(env, build_prefix, args)
-        analyzer.analyze_on_exit()
+        env.Tool('stack_analyzer')
+        env.analyze_setup(build_prefix, args)
 
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
@@ -396,9 +395,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     path = os.path.join(build_prefix, 'src')
     SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
-    buildinfo = prereqs.get_build_info()
-    buildinfo.gen_script('.build_vars.sh')
-    buildinfo.save('.build_vars.json')
+    prereqs.save_build_info()
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
         env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
