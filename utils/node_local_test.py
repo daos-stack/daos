@@ -757,6 +757,7 @@ class DaosServer():
 
         cmd = ['storage', 'format', '--json']
         start_timeout = 0.5
+        forced = False
         while True:
             try:
                 rc = self._sp.wait(timeout=start_timeout)
@@ -776,6 +777,12 @@ class DaosServer():
 
             if 'running system' in data['error']:
                 break
+
+            for err in data['response']['host_errors']:
+                if not forced and 'existing filesystem signature' in err:
+                    cmd.append('--force')
+                    forced = True
+                    break
 
             if start_timeout < 5:
                 start_timeout *= 2
