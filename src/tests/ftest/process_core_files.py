@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -94,7 +94,6 @@ class CoreFileProcessing():
         # Create a stacktrace from each core file and then remove the core file
         for core_dir, core_name_list in core_files.items():
             for core_name in core_name_list:
-                core_file = os.path.join(core_dir, core_name)
                 try:
                     if not create_stacktrace:
                         continue
@@ -116,7 +115,7 @@ class CoreFileProcessing():
                         core_file = os.path.join(core_dir, core_name)
                         self.log.debug("Removing %s", core_file)
                         os.remove(core_file)
-        # remove any core file generated post core processingon the local node
+        # remove any core file generated post core processing on the local node
         errors += self.delete_gdb_core_files()
         if errors:
             raise CoreFileException("Errors detected processing core files")
