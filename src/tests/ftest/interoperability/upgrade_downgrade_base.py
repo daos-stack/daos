@@ -562,7 +562,7 @@ class UpgradeDowngradeBase(IorTestBase):
         testfile_sav2 = os.path.join(mount_dir, "testfile_sav2")
         symlink_testfile = os.path.join(mount_dir, "symlink_testfile")
         # (3.a)ior dfs
-        if ior_api in ("DFS" or "POSIX"):
+        if ior_api in ("DFS", "POSIX"):
             self.log.info("(3.a)==Run non-HDF5 IOR write and read.")
             self.ior_cmd.flags.update(iorflags_write)
             self.run_ior_with_pool(
