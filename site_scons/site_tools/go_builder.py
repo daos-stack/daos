@@ -99,7 +99,7 @@ def _setup_go(env):
 
 def generate(env):
     """Add daos specific methods to environment"""
-    env.AddMethod(_setup_go, 'd_setup_go')
+    _setup_go(env)
 
 
 def exists(_env):

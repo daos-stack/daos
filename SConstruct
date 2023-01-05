@@ -360,7 +360,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
         print('Exiting because --build-deps=only was set')
         Exit(0)
 
-    env = deps_env.Clone(tools=['extra', 'go_builder', 'daos_builder', 'compiler_setup'])
+    env = deps_env.Clone(tools=['extra', 'daos_builder', 'compiler_setup'])
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
@@ -384,8 +384,7 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     args = GetOption('analyze_stack')
     if args is not None:
-        env.Tool('stack_analyzer')
-        env.analyze_setup(build_prefix, args)
+        env.Tool('stack_analyzer', prefix=build_prefix, args=args)
 
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')

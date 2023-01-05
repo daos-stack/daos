@@ -126,14 +126,10 @@ class Analyzer():
                 print(f'    {value}')
 
 
-def _get_object(env, build_prefix, args):
-    analyzer = Analyzer(env, build_prefix, args)
-    analyzer.analyze_on_exit()
-
-
-def generate(env):
+def generate(env, prefix, args):
     """Add daos specific methods to environment"""
-    env.AddMethod(_get_object, 'analyze_setup')
+    analyzer = Analyzer(env, prefix, args)
+    analyzer.analyze_on_exit()
 
 
 def exists(_env):

@@ -85,7 +85,7 @@ class DefaultEnvironment():
         """Fake Zip"""
         return []
 
-    def Tool(self, name):
+    def Tool(self, name, **_kw):
         """Fake Tool"""
         return
 
