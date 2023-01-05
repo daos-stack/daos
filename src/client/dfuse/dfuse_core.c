@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -202,13 +202,13 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-	.hop_key_cmp		= ih_key_cmp,
-	.hop_key_hash		= ih_key_hash,
-	.hop_rec_hash		= ih_rec_hash,
-	.hop_rec_addref		= ih_addref,
-	.hop_rec_decref		= ih_decref,
-	.hop_rec_ndecref	= ih_ndecref,
-	.hop_rec_free		= ih_free,
+    .hop_key_cmp     = ih_key_cmp,
+    .hop_key_hash    = ih_key_hash,
+    .hop_rec_hash    = ih_rec_hash,
+    .hop_rec_addref  = ih_addref,
+    .hop_rec_decref  = ih_decref,
+    .hop_rec_ndecref = ih_ndecref,
+    .hop_rec_free    = ih_free,
 };
 
 static uint32_t
@@ -242,7 +242,7 @@ ph_addref(struct d_hash_table *htable, d_list_t *link)
 	struct dfuse_pool *dfp;
 	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_add_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "addref to %u", oldref + 1);
 }
@@ -253,7 +253,7 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 	struct dfuse_pool *dfp;
 	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -296,12 +296,12 @@ ph_free(struct d_hash_table *htable, d_list_t *link)
 }
 
 static d_hash_table_ops_t pool_hops = {
-	.hop_key_cmp		= ph_key_cmp,
-	.hop_key_hash		= ph_key_hash,
-	.hop_rec_hash		= ph_rec_hash,
-	.hop_rec_addref		= ph_addref,
-	.hop_rec_decref		= ph_decref,
-	.hop_rec_free		= ph_free,
+    .hop_key_cmp    = ph_key_cmp,
+    .hop_key_hash   = ph_key_hash,
+    .hop_rec_hash   = ph_rec_hash,
+    .hop_rec_addref = ph_addref,
+    .hop_rec_decref = ph_decref,
+    .hop_rec_free   = ph_free,
 };
 
 static uint32_t
@@ -335,7 +335,7 @@ ch_addref(struct d_hash_table *htable, d_list_t *link)
 	struct dfuse_cont *dfc;
 	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_add_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "addref to %u", oldref + 1);
 }
@@ -346,7 +346,7 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 	struct dfuse_cont *dfc;
 	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -366,7 +366,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, "DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, " DF_RC, DP_RC(rc));
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
@@ -381,12 +381,12 @@ ch_free(struct d_hash_table *htable, d_list_t *link)
 }
 
 d_hash_table_ops_t cont_hops = {
-	.hop_key_cmp		= ch_key_cmp,
-	.hop_key_hash		= ch_key_hash,
-	.hop_rec_hash		= ch_rec_hash,
-	.hop_rec_addref		= ch_addref,
-	.hop_rec_decref		= ch_decref,
-	.hop_rec_free		= ch_free,
+    .hop_key_cmp    = ch_key_cmp,
+    .hop_key_hash   = ch_key_hash,
+    .hop_rec_hash   = ch_rec_hash,
+    .hop_rec_addref = ch_addref,
+    .hop_rec_decref = ch_decref,
+    .hop_rec_free   = ch_free,
 };
 
 /* Connect to a pool.
