@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -225,7 +225,7 @@ class Dfuse(DfuseCommand):
             f"Error removing the {self.mount_dir.value} dfuse mount point with rmdir on the "
             f"following hosts: {rmdir_result.failed_hosts}")
 
-    def run(self, check=True, bind_cores=None):
+    def run(self, raise_exception=None, check=True, bind_cores=None):
         # pylint: disable=arguments-differ
         """Run the dfuse command.
 
@@ -461,7 +461,7 @@ class VerifyPermsCommand(ExecutableCommand):
         # Most usage requires root permission
         self.run_user = 'root'
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
 
         Raises:
