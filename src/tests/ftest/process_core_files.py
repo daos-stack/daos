@@ -104,11 +104,13 @@ class CoreFileProcessing():
                         core_name = os.path.splitext(core_name)[0]
                     self._create_stacktrace(core_dir, core_name)
                     corefiles_processed += 1
-                    self.log.debug("Successfully processed core file %s", core_file)
+                    self.log.debug(
+                        "Successfully processed core file %s", os.path.join(core_dir, core_name))
                 except Exception as error:      # pylint: disable=broad-except
                     self.log.error(error)
                     self.log.debug("Stacktrace", exc_info=True)
-                    self.log.error("Failed to process core file %s", core_file)
+                    self.log.error(
+                        "Failed to process core file %s", os.path.join(core_dir, core_name))
                     errors += 1
                 finally:
                     if delete:
