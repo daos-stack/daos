@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -356,7 +356,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(self.log, self.control, str(script))
+                job_id = slurm_utils.run_slurm_script(self.log, str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
