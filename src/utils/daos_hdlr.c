@@ -614,7 +614,9 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 		return rc;
 
 	strncpy(dattr.da_pool, ap->pool_str, DAOS_PROP_LABEL_MAX_LEN);
+	dattr.da_pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 	strncpy(dattr.da_cont, ap->cont_str, DAOS_PROP_LABEL_MAX_LEN);
+	dattr.da_cont[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 	dattr.da_type = ap->type;
 	dattr.da_oclass_id = ap->oclass;
 	dattr.da_dir_oclass_id = ap->dir_oclass;

@@ -11,14 +11,13 @@
 
 /* Lookup a container within a pool */
 void
-dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
+dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *cont)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
 	struct dfuse_inode_entry	*ie = NULL;
 	struct dfuse_pool		*dfp = parent->ie_dfs->dfs_dfp;
 	struct dfuse_cont		*dfc = NULL;
 	d_list_t			*rlink;
-	uuid_t				cont;
 	int				rc;
 
 	/* This code is only supposed to support one level of directory descent
@@ -27,21 +26,9 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 */
 	D_ASSERT(parent->ie_stat.st_ino == parent->ie_dfs->dfs_ino);
 
-	/* Dentry names where are not valid uuids cannot possibly be added so in
-	 * this case return the negative dentry with a timeout to prevent future
-	 * lookups.
-	 */
-	if (uuid_parse(name, cont) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
+	DFUSE_TRA_DEBUG(parent, "Lookup of %s", cont);
 
-		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-		return;
-	}
-
-	DFUSE_TRA_DEBUG(parent, "Lookup of "DF_UUID, DP_UUID(cont));
-
-	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
+	rc = dfuse_cont_open(fs_handle, dfp, cont, &dfc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -93,7 +80,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	}
 
 	ie->ie_parent = parent->ie_stat.st_ino;
-	strncpy(ie->ie_name, name, NAME_MAX);
+	strncpy(ie->ie_name, cont, NAME_MAX);
 
 	ie->ie_dfs = dfc;
 

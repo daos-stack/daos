@@ -176,7 +176,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc != 0)
 		D_GOTO(out_err, rc);
 
-	rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cont, &dfs);
+	rc = dfuse_cont_open(fs_handle, dfp, dattr.da_cont, &dfs);
 	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 

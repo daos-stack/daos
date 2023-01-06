@@ -193,12 +193,12 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
  * This represents a pool that DFUSE is accessing.  All pools contain
  * a hash table of open containers.
  *
- * uuid may be NULL for root inode where there is no pool.
+ * uuid/label may be empty for root inode where there is no pool.
  *
  */
 struct dfuse_pool {
-	/** UUID of the pool */
-	uuid_t			dfp_pool;
+	/** pool label / uuid */
+	char			dfp_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/** Pool handle */
 	daos_handle_t		dfp_poh;
 	/** Hash table entry in dpi_pool_table */
@@ -218,7 +218,7 @@ struct dfuse_pool {
  * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's
  * members.
  *
- * uuid may be NULL for pool inodes.
+ * uuid/label may be empty for pool inodes.
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
@@ -230,8 +230,8 @@ struct dfuse_cont {
 	/** dfs mount handle */
 	dfs_t			*dfs_ns;
 
-	/** UUID of the container */
-	uuid_t			dfs_cont;
+	/** Label/UUID of the container */
+	char			dfs_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
 
 	/** Container handle */
 	daos_handle_t		dfs_coh;
@@ -264,7 +264,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle,
-		struct dfuse_pool *dfp, uuid_t *cont,
+		struct dfuse_pool *dfp, const char *cont,
 		struct dfuse_cont **_dfs);
 
 /* Connect to a pool via either a label or uuid.
@@ -279,16 +279,15 @@ int
 dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 		   struct dfuse_pool **_dfp);
 
-/* Return a connection for a pool uuid.
+/* Return a connection for a pool.
  *
  * Queries the hash table for an existing connection and makes a call to dfuse_pool_connect() as
- * necessary.  This function is fast for cases where existing connections exist but only accepts
- * uuids not labels.
+ * necessary.  This function is fast for cases where existing connections exist.
  *
  * Returns a system error code.
  */
 int
-dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
+dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, const char *pool,
 		      struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.

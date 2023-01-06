@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,16 +10,12 @@
 #include "daos_uns.h"
 
 static int
-_dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
+_dfuse_attr_create(char *type, const char *pool, const char *cont, char **_value,
+		   daos_size_t *_out_size)
 {
 	char *value;
-	char pool_str[37];
-	char cont_str[37];
 
-	uuid_unparse(pool, pool_str);
-	uuid_unparse(cont, cont_str);
-
-	D_ASPRINTF(value, DUNS_XATTR_FMT, type, pool_str, cont_str);
+	D_ASPRINTF(value, DUNS_XATTR_FMT, type, pool, cont);
 	if (value == NULL)
 		return ENOMEM;
 

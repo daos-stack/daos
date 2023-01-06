@@ -213,7 +213,7 @@ ph_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigne
 	struct dfuse_pool *dfp;
 
 	dfp = container_of(link, struct dfuse_pool, dfp_entry);
-	return uuid_compare(dfp->dfp_pool, key) == 0;
+	return (strcmp(dfp->dfp_pool, key) == 0);
 }
 
 static void
@@ -306,7 +306,7 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigne
 	struct dfuse_cont *dfc;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
-	return uuid_compare(dfc->dfs_cont, key) == 0;
+	return (strcmp(dfc->dfs_cont, key) == 0);
 }
 
 static void
@@ -413,7 +413,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
-		uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+		strcpy(dfp->dfp_pool, label);
 	}
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, fs_handle,
@@ -432,7 +432,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for " DF_UUID, DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for %s", dfp->dfp_pool);
 
 	*_dfp = dfp;
 	return rc;
@@ -447,21 +447,18 @@ err:
 }
 
 int
-dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
+dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, const char *pool,
 		      struct dfuse_pool **_dfp)
 {
 	d_list_t *rlink;
-	char      uuid_str[37];
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, sizeof(*pool));
+	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, strlen(pool));
 	if (rlink) {
 		*_dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 		return 0;
 	}
 
-	uuid_unparse(pool, uuid_str);
-
-	return dfuse_pool_connect(fs_handle, uuid_str, _dfp);
+	return dfuse_pool_connect(fs_handle, pool, _dfp);
 }
 
 #define ATTR_COUNT 6
@@ -691,7 +688,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
-	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
+	strcpy(dfc->dfs_cont, label);
 
 	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
@@ -717,7 +714,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 			"Caching disabled");
 	}
 
-	rc = dfuse_cont_open(fs_handle, dfp, &c_info.ci_uuid, &dfc);
+	rc = dfuse_cont_open(fs_handle, dfp, label, &dfc);
 	if (rc) {
 		D_FREE(dfc);
 		return rc;
@@ -735,7 +732,7 @@ err_free:
 }
 
 /*
- * Return a container connection by uuid.
+ * Return a container connection.
  *
  * Re-use an existing connection if possible, otherwise open new connection
  * and setup dfs.
@@ -750,7 +747,7 @@ err_free:
  */
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
-		uuid_t *cont, struct dfuse_cont **_dfc)
+		const char *cont, struct dfuse_cont **_dfc)
 {
 	struct dfuse_cont	*dfc = NULL;
 	d_list_t		*rlink;
@@ -763,11 +760,9 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		 * just use it if there is.  The rec_find() will take the
 		 * additional reference for us.
 		 */
-		rlink = d_hash_rec_find(&dfp->dfp_cont_table,
-					cont, sizeof(*cont));
+		rlink = d_hash_rec_find(&dfp->dfp_cont_table, cont, strlen(cont));
 		if (rlink) {
-			*_dfc = container_of(rlink, struct dfuse_cont,
-					     dfs_entry);
+			*_dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 			return 0;
 		}
 
@@ -782,14 +777,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	atomic_init(&dfc->dfs_ref, 1);
 
-	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
-			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "New cont %s in pool %s", cont, dfp->dfp_pool);
 
 	dfc->dfs_dfp = dfp;
 
-	/* Allow for uuid to be NULL, in which case this represents a pool */
-	if (uuid_is_null(*cont)) {
-		if (uuid_is_null(dfp->dfp_pool))
+	/* Allow for cont to be NULL, in which case this represents a pool */
+	if (cont == NULL || cont[0] == 0) {
+		if (dfp->dfp_pool[0] == 0)
 			dfc->dfs_ops = &dfuse_pool_ops;
 		else
 			dfc->dfs_ops = &dfuse_cont_ops;
@@ -802,16 +796,14 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_ndentry_timeout = 5;
 
 	} else if (*_dfc == NULL) {
-		char str[37];
 		int  dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
-		uuid_copy(dfc->dfs_cont, *cont);
-		uuid_unparse(dfc->dfs_cont, str);
-		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
+		strcpy(dfc->dfs_cont, cont);
+		rc = daos_cont_open(dfp->dfp_poh, cont, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
 		if (rc == -DER_NO_PERM) {
 			dfs_flags = O_RDONLY;
-			rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RO, &dfc->dfs_coh, NULL,
+			rc = daos_cont_open(dfp->dfp_poh, cont, DAOS_COO_RO, &dfc->dfs_coh, NULL,
 					    NULL);
 		}
 		if (rc == -DER_NONEXIST) {
@@ -870,8 +862,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfc, "Returning dfs for "DF_UUID" ref %d",
-			DP_UUID(dfc->dfs_cont), dfc->dfs_ref);
+	DFUSE_TRA_DEBUG(dfc, "Returning dfs for %s ref %d", dfc->dfs_cont, dfc->dfs_ref);
 
 	*_dfc = dfc;
 
@@ -1274,8 +1265,7 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 
-	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d "DF_UUID,
-			dfc->dfs_ref, DP_UUID(dfc->dfs_cont));
+	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d %s", dfc->dfs_ref, dfc->dfs_cont);
 	return 0;
 }
 
@@ -1295,8 +1285,7 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
-	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d "DF_UUID,
-			dfp->dfp_ref, DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d %s", dfp->dfp_ref, dfp->dfp_pool);
 
 	d_hash_table_traverse(&dfp->dfp_cont_table,
 			      dfuse_cont_close_cb, NULL);
