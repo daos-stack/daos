@@ -1477,8 +1477,8 @@ copy_payload(struct wal_blks_desc *bd, struct wal_trans_blk *tb, void *addr, uin
 
 static int
 replay_tx(struct wal_super_info *si, char *buf,
-	  int (*replay_cb)(uint64_t tx_id, struct umem_action *act),
-	  struct wal_blks_desc *bd, struct umem_action *act)
+	  int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
+	  void *arg, struct wal_blks_desc *bd, struct umem_action *act)
 {
 	struct wal_trans_head	*hdr = (struct wal_trans_head *)buf;
 	struct wal_trans_entry	*entry;
@@ -1538,7 +1538,7 @@ replay_tx(struct wal_super_info *si, char *buf,
 		}
 
 		if (act->ac_opc != UMEM_ACT_CSUM) {
-			rc = replay_cb(hdr->th_id, act);
+			rc = replay_cb(hdr->th_id, act, arg);
 			if (rc)
 				D_ERROR("Replay CB on action %u failed. "DF_RC"\n",
 					act->ac_opc, DP_RC(rc));
@@ -1556,7 +1556,8 @@ replay_tx(struct wal_super_info *si, char *buf,
 
 int
 bio_wal_replay(struct bio_meta_context *mc,
-	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act))
+	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
+	       void *arg)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct wal_trans_head	*hdr;
@@ -1612,7 +1613,7 @@ load_wal:
 		if (rc)
 			break;
 
-		rc = replay_tx(si, (char *)hdr, replay_cb, &blk_desc, act);
+		rc = replay_tx(si, (char *)hdr, replay_cb, arg, &blk_desc, act);
 		if (rc)
 			break;
 
