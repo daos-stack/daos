@@ -834,7 +834,8 @@ dc_tx_get_epoch(tse_task_t *task, daos_handle_t th, struct dtx_epoch *epoch)
 		 * The TX epoch hasn't been chosen yet, and nobody is choosing
 		 * it. So this task will be the "epoch task".
 		 */
-		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch\n", th.cookie, task);
+		D_DEBUG(DB_IO, DF_X64"/%p: choosing epoch value="DF_U64" first="DF_U64"\n",
+			th.cookie, task, tx->tx_epoch.oe_value, tx->tx_epoch.oe_first);
 		tse_task_addref(task);
 		tx->tx_epoch_task = task;
 		rc = tse_task_register_comp_cb(task, complete_epoch_task, &th,
