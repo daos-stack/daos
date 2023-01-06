@@ -1122,7 +1122,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, min_ssds=None,
-                        net_class=None):
+                        net_class=None, net_provider=None):
         """Produce a server configuration.
 
         Args:
@@ -1132,7 +1132,9 @@ class DmgCommand(DmgCommandBase):
             num_nvme (int): Minimum number of NVMe devices required per storage
                 host in DAOS system. Defaults to None.
             net_class (str): Network class preferred. Defaults to None.
-                i.e. "best-available"|"ethernet"|"infiniband"
+                i.e. "ethernet"|"infiniband"
+            net_provider (str): Network provider preferred. Defaults to None.
+                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1141,7 +1143,8 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(
             ("config", "generate"), access_points=access_points,
-            num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
+            num_engines=num_engines, min_ssds=min_ssds, net_class=net_class,
+            net_provider=net_provider)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

@@ -17,7 +17,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -335,7 +334,7 @@ func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error)
 		cxiFIs = append(cxiFIs, &hardware.FabricInterface{
 			Name:      dev.Name(),
 			OSName:    dev.Name(),
-			Providers: common.NewStringSet("ofi+cxi"),
+			Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+cxi"}),
 		})
 	}
 
