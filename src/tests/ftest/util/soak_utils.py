@@ -302,7 +302,7 @@ def get_daos_server_logs(self):
         os.mkdir(daos_dir)
         command = "clush -w {} --rcopy {} {}".format(self.hostlist_servers, logs_dir, daos_dir)
         try:
-            run_command(command, timeout=30)
+            run_command(command, timeout=600)
         except DaosTestError as error:
             raise SoakTestError("<<FAILED: daos logs file from {} not copied>>".format(
                 self.hostlist_servers)) from error
