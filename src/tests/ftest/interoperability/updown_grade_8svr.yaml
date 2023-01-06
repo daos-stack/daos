@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 3
+  test_servers: 8
   test_clients: 1
 timeout: 950
 server_config:
@@ -19,7 +19,7 @@ pool:
 container:
   control_method: daos
   type: POSIX
-  properties: rf:0
+  properties: rf:3
 attrtests:
   num_attributes: 20
 dfuse:
@@ -30,8 +30,8 @@ ior:
   client_processes:
     np: 2
   test_file: daos:/testFile
-  api: DFS   # POSIX HDF5
-  dfs_oclass: "SX"  # "RP_2GX"
+  api: HDF5  # HDF5, POSIX
+  dfs_oclass: "EC_4P2GX"
   transfer_size: '1M'
   block_size: '128M'
   iorflags:
@@ -43,6 +43,6 @@ interop:
   # Example of upgrade/downgrade RPMs from local tar file
   # upgrade_rpms: ["/home/dinghwah/RPM/2.1.104/daos-2.1.104-1.el8.x86_64.rpm"]
   # downgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc4.signed/daos-2.0.3-5.el8.x86_64.rpm"]
-  # upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
+  #  upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
   downgrade_repo: "/etc/yum.repos.d/test22-1.repo"
   upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
