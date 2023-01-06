@@ -17,3 +17,5 @@ transport_config:
   cert: /etc/daos/certs/agent.crt
   key: /etc/daos/certs/agent.key
 @DAOS_AUTH_SECTION_END@
+
+exclude_fabric_ifaces: ["docker0", "lo"]

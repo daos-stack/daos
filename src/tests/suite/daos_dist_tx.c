@@ -2466,8 +2466,8 @@ dtx_35(void **state)
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
-	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
-	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[0], DAOS_OO_RW, &reqs[0].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[1], DAOS_OO_RW, &reqs[1].oh, NULL));
 
 	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)

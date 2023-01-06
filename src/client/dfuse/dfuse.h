@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/slab.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -49,7 +50,14 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+
+	struct d_slab                    dpi_slab;
+	struct d_slab_type              *dpi_read_slab;
+	struct d_slab_type              *dpi_write_slab;
 };
+
+/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
+#define DFUSE_MAX_READ (1024 * 1024)
 
 /* Launch fuse, and do not return until complete */
 int
@@ -84,6 +92,10 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_hdl *doh_rd;
 
 	ATOMIC uint32_t           doh_il_calls;
+
+	/** Number of active readdir operations */
+	ATOMIC uint32_t           doh_readir_number;
+
 	ATOMIC uint64_t           doh_write_count;
 
 	/** True if caching is enabled for this file. */
@@ -162,13 +174,13 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t            de_req; /**< The fuse request handle */
-	daos_event_t          de_ev;
-	size_t                de_len;          /**< The size returned by daos */
-	off_t                 de_req_position; /**< The file position requested by fuse */
-	d_iov_t               de_iov;
-	d_sg_list_t           de_sgl;
-	struct dfuse_obj_hdl *de_oh;
+	fuse_req_t                    de_req; /**< The fuse request handle */
+	daos_event_t                  de_ev;
+	size_t                        de_len; /**< The size returned by daos */
+	d_iov_t                       de_iov;
+	d_sg_list_t                   de_sgl;
+	d_list_t                      de_list;
+	struct dfuse_projection_info *de_handle;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
@@ -192,7 +204,7 @@ struct dfuse_pool {
 	/** Hash table entry in dpi_pool_table */
 	d_list_t		dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfp_ref;
+	ATOMIC uint32_t         dfp_ref;
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table	dfp_cont_table;
@@ -227,7 +239,7 @@ struct dfuse_cont {
 	/** Hash table entry entry in dfp_cont_table */
 	d_list_t		dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfs_ref;
+	ATOMIC uint32_t          dfs_ref;
 
 	/** Inode number of the root of this container */
 	ino_t			dfs_ino;
@@ -579,10 +591,8 @@ struct dfuse_inode_entry {
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
 
-	/** Reference counting for the inode.
-	 * Used by the hash table callbacks
-	 */
-	ATOMIC uint              ie_ref;
+	/** Reference counting for the inode Used by the hash table callbacks */
+	ATOMIC uint32_t          ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
@@ -591,6 +601,9 @@ struct dfuse_inode_entry {
 
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
+
+	/** Number of active readdir operations */
+	ATOMIC uint32_t          ie_readir_number;
 
 	/** file was truncated from 0 to a certain size */
 	bool                     ie_truncated;
@@ -645,6 +658,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
+
+void
+dfuse_ie_init(struct dfuse_inode_entry *ie);
 
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);

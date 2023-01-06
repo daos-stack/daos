@@ -79,6 +79,7 @@ def umount(path, background=False):
 
 class NLTConf():
     """Helper class for configuration"""
+
     def __init__(self, json_file, args):
 
         with open(json_file, 'r') as ofh:
@@ -425,6 +426,7 @@ def get_base_env(clean=False):
 
 class DaosPool():
     """Class to store data about daos pools"""
+
     def __init__(self, server, pool_uuid, label):
         self._server = server
         self.uuid = pool_uuid
@@ -1454,7 +1456,7 @@ def create_cont(conf,
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties', f'label:{label}'])
+        cmd.append(label)
 
     if path:
         cmd.extend(['--path', path])
@@ -4256,6 +4258,8 @@ class AllocFailTest():
 
         print(f'Completed, fid {fid}')
         print(f'Max in flight {max_count}')
+        if to_rerun:
+            print(f'Number of indexes to re-run {len(to_rerun)}')
 
         for fid in to_rerun:
             rerun = self._run_cmd(fid, valgrind=True)
@@ -4287,7 +4291,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf)
+            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 
@@ -4366,8 +4370,33 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = True
 
-    rc = test_cmd.launch()
-    return rc
+    return test_cmd.launch()
+
+
+def test_alloc_cont_create(server, conf, wf):
+    """Run container creation under fault injection.
+
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
+    """
+
+    pool = server.get_test_pool_id()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                pool,
+                '--properties',
+                f'srv_cksum:on,label:{cont_id}']
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.wf = wf
+    test_cmd.check_post_stdout = False
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = False
+
+    return test_cmd.launch()
 
 
 def test_alloc_fail_cont_create(server, conf):
@@ -4724,6 +4753,9 @@ def run(wf, args):
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
+                # container create with properties test.
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 
