@@ -34,6 +34,8 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+
+	pthread_spinlock_t   di_lock;
 };
 
 struct dfuse_projection_info {
@@ -163,7 +165,7 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_obj_hdl *oh);
+dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
@@ -635,7 +637,10 @@ struct dfuse_inode_entry {
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
 
-	/* Readdir handle, if shared */
+	/* Readdir handle, if shared
+	 * TODO: Verify the locking on this, the code will assert on concurrent readdir however we
+	 * do see readdir and closedir at the same time so protect this with di_lock.
+	 */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
 
 	/** Number of active readdir operations */

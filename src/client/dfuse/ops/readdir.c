@@ -115,22 +115,9 @@ _handle_init(struct dfuse_cont *dfc)
 	return hdl;
 }
 
-/* Ensure a readdir handle is unique.  Handles are only shared if caching so it's enough to check
- * this bit.
- */
-static struct dfuse_readdir_hdl *
-_handle_make_unique(struct dfuse_obj_hdl *oh)
-{
-	if (!oh->doh_rd->dre_caching)
-		return oh->doh_rd;
-
-	dfuse_dre_drop(oh);
-	return _handle_init(oh->doh_ie->ie_dfs);
-}
-
 /* Drop a ref on a readdir handle and release if required. */
 void
-dfuse_dre_drop(struct dfuse_obj_hdl *oh)
+dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
@@ -143,14 +130,12 @@ dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 
 	hdl = oh->doh_rd;
 
-	/* Lock
-	 * TODO: See if the kernel will pass concurrent readdirs for the same inode.
-	 */
+	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
 		DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
-		return;
+		D_GOTO(unlock, 0);
 	}
 
 	DFUSE_TRA_DEBUG(hdl, "Ref was 1, freeing");
@@ -164,8 +149,21 @@ dfuse_dre_drop(struct dfuse_obj_hdl *oh)
 	}
 	D_FREE(hdl);
 	oh->doh_rd = NULL;
+unlock:
+	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+}
 
-	/* Unlock */
+/* Ensure a readdir handle is unique.  Handles are only shared if caching so it's enough to check
+ * this bit.
+ */
+static struct dfuse_readdir_hdl *
+_handle_make_unique(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+{
+	if (!oh->doh_rd->dre_caching)
+		return oh->doh_rd;
+
+	dfuse_dre_drop(fs_handle, oh);
+	return _handle_init(oh->doh_ie->ie_dfs);
 }
 
 static int
@@ -310,6 +308,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	if (reply_buff == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
+	/* Lock oh->doh_ie->ie_rd_hdl against releasedir calls */
+	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+
 	if (oh->doh_rd == NULL) {
 		if (oh->doh_ie->ie_rd_hdl) {
 			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
@@ -317,8 +318,11 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
 		} else {
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
-			if (oh->doh_rd == NULL)
+			if (oh->doh_rd == NULL) {
+				D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+
 				D_GOTO(out, rc = ENOMEM);
+			}
 
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
@@ -326,6 +330,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 				oh->doh_ie->ie_rd_hdl = oh->doh_rd;
 		}
 	}
+
+	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
 
 	hdl = oh->doh_rd;
 
@@ -396,13 +402,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	if (offset && hdl->drh_dre[hdl->drh_dre_index].dre_offset != offset &&
 	    hdl->drh_anchor_index + OFFSET_BASE != offset) {
 		struct dfuse_readdir_hdl *new_hdl;
-
 		uint32_t num;
 
 		oh->doh_kreaddir_invalid = true;
 
 		/* Drop if shared */
-		new_hdl = _handle_make_unique(oh);
+		new_hdl = _handle_make_unique(fs_handle, oh);
 		if (new_hdl != hdl) {
 			hdl        = new_hdl;
 			oh->doh_rd = new_hdl;

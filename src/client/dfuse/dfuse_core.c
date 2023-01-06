@@ -963,6 +963,9 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	atomic_store_relaxed(&fs_handle->dpi_ino_next, 2);
 
+	/* TODO: Close this. */
+	D_SPIN_INIT(&dfuse_info->di_lock, 0);
+
 	rc = daos_eq_create(&fs_handle->dpi_eq);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_iht, rc);

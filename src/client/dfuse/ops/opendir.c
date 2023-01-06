@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,11 +48,18 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl         *oh        = (struct dfuse_obj_hdl *)fi->fh;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
+
+#if 0
+	/* This assertion pops, disable it */
+	D_ASSERTF(atomic_load_relaxed(&oh->doh_ie->ie_readir_number) == 0,
+		  "Releasedir with readdir on same inode");
+#endif
 
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
@@ -68,6 +75,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	}
 
 	DFUSE_REPLY_ZERO(oh, req);
-	dfuse_dre_drop(oh);
+	dfuse_dre_drop(fs_handle, oh);
 	D_FREE(oh);
 };

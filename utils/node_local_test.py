@@ -3673,7 +3673,7 @@ def run_in_fg(server, conf, args):
     dfuse = DFuse(server,
                   conf,
                   pool=pool.uuid,
-                  caching=True,
+                  caching=False,
                   wbcache=False,
                   multi_user=args.multi_user)
 
