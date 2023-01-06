@@ -304,6 +304,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		return;
 	}
 
+	size = 1024;
+
 	D_ALLOC(reply_buff, size);
 	if (reply_buff == NULL)
 		D_GOTO(out, rc = ENOMEM);
@@ -337,13 +339,14 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 
 	/* if starting from the beginning, reset the anchor attached to the open handle. */
 	if (offset == 0) {
+		if (oh->doh_kreaddir_started) {
+			oh->doh_kreaddir_invalid = true;
+		}
+		oh->doh_kreaddir_started = true;
+
 		if (hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
 			DFUSE_TRA_ERROR(hdl, "Offset is zero but anchor has been used");
 		} else {
-			if (oh->doh_kreaddir_started) {
-				oh->doh_kreaddir_invalid = true;
-			}
-			oh->doh_kreaddir_started = true;
 			dfuse_readdir_reset(hdl);
 		}
 	}
@@ -388,7 +391,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			drc = (void *)drc->drc_list.next;
 		}
 
-		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries");
+		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries, added %d", added);
 
 		if (added)
 			D_GOTO(reply, 0);
