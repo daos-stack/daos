@@ -187,7 +187,7 @@ class ExecutableCommand(CommandWithParameters):
         first = command.split()[0]
         second = command.split()[1]
         third = command.split()[2]
-        if first is 'dmg' and second is 'pool' and third is 'create':
+        if first == 'dmg' and second == 'pool' and third == 'create':
             command = ' '.join(['strace', '-f -tt -T -o ', 'dmg.{}.strace'.format(time.time()), command])
 
         if raise_exception is None:
