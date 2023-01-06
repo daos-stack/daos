@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -917,7 +917,8 @@ class DaosServerManager(SubprocessManager):
                 self.log.info("class = %s", storage_tier["class"])
                 self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
+                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(
+                    self.namespace, idx)
                 per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
                 per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
                 per_engine_yaml_parameters.scm_size.update(None)
