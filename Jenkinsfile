@@ -2,7 +2,7 @@
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
    groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
 */
-/* Copyright 2019-2022 Intel Corporation
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -82,7 +82,7 @@ Integer getuid() {
 }
 
 pipeline {
-    agent { label 'lightweight' }
+    agent { label 'new_lightweight' }
 
     triggers {
         cron(env.BRANCH_NAME == 'release/2.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '')
@@ -217,10 +217,10 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large stage')
         string(name: 'CI_UNIT_VM1_LABEL',
-               defaultValue: 'ci_vm1',
+               defaultValue: 'new_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
         string(name: 'FUNCTIONAL_VM_LABEL',
-               defaultValue: 'ci_vm9',
+               defaultValue: 'new_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
@@ -303,7 +303,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.checkpatch'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -371,7 +371,7 @@ pipeline {
                         dockerfile {
                             filename 'Dockerfile.code_scanning'
                             dir 'utils/docker'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(add_repos: false)
                         }
                     }
@@ -410,7 +410,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -446,7 +446,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -482,7 +482,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -518,7 +518,7 @@ pipeline {
                         dockerfile {
                             filename 'packaging/Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
                         }
@@ -553,7 +553,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
@@ -594,7 +594,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
@@ -637,7 +637,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true) +
@@ -932,7 +932,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 parallel_build: true,
                                                                 deps_build: true)
@@ -1072,7 +1072,7 @@ pipeline {
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
-                            label 'docker_runner'
+                            label 'new_docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 qb: quickBuild()) +
                                 " -t ${sanitized_JOB_NAME}-el8 " +
