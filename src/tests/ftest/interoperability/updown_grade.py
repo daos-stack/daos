@@ -39,6 +39,8 @@ class UpgradeDowngradeTest(UpgradeDowngradeBase):
         (2)define repository with RPMs to updown_grade.yaml
         (3)./launch.py test_upgrade_downgrade -ts boro-[..] -tc boro-[..]
 
+    :avocado: recursive
+    """
 
     def test_upgrade_downgrade(self):
         """Run DAOS interoperability upgrade downgrade test suites to use ior.
