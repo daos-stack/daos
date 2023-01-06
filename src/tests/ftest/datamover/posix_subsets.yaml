@@ -34,4 +34,4 @@ dcp:
   client_processes:
     np: 1
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
+  disable_caching: true
