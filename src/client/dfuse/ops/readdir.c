@@ -587,12 +587,9 @@ reply:
 	if (added == 0 && rc != 0)
 		D_GOTO(out_reset, rc);
 
-<<<<<<< HEAD
 	oh->doh_rd_offset = hdl->drh_dre[hdl->drh_dre_index].dre_offset;
-=======
 	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
->>>>>>> master
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);
