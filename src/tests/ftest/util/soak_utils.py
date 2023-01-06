@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -293,23 +293,19 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
 
 def get_daos_server_logs(self):
     """Gather server logs.
-
     Args:
         self (obj): soak obj
-
     """
-    for host in self.hostlist_servers:
-        daos_dir = self.outputsoak_dir + "/daos_logs-" + "{}".format(host)
-        if not os.path.exists(daos_dir):
-            os.mkdir(daos_dir)
-            commands = ["scp {}:/var/tmp/daos_testing/daos*.log.* {}".format(host, daos_dir),
-                        "scp {}:/var/tmp/daos_testing/daos*.log {}".format(host, daos_dir)]
-            for command in commands:
-                try:
-                    run_command(command, timeout=30)
-                except DaosTestError as error:
-                    raise SoakTestError(
-                        "<<FAILED: daos logs file from {} not copied>>".format(host)) from error
+    daos_dir = self.outputsoak_dir + "/daos_logs"
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/var/tmp/daos_testing")
+    if not os.path.exists(daos_dir):
+        os.mkdir(daos_dir)
+        command = "clush -w {} --rcopy {} {}".format(self.hostlist_servers, logs_dir, daos_dir)
+        try:
+            run_command(command, timeout=30)
+        except DaosTestError as error:
+            raise SoakTestError("<<FAILED: daos logs file from {} not copied>>".format(
+                self.hostlist_servers)) from error
 
 
 def run_monitor_check(self):
@@ -737,7 +733,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
-
+    bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
@@ -750,10 +746,14 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     module_load = "module load {}".format(self.mpi_module)
+    if bind_cores:
+        task_set = "taskset -c {} ".format(bind_cores)
+    else:
+        task_set = ""
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
-            dfuse.mount_dir.value, dfuse_env, module_load, str(dfuse)),
+        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}{}\"".format(
+            dfuse.mount_dir.value, dfuse_env, module_load, task_set, str(dfuse)),
         "sleep 10",
         "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
@@ -942,10 +942,10 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             add_containers(self, pool, o_type)
             macsio = MacsioCommand()
             macsio.namespace = macsio_params
-            macsio.get_params(self)
             macsio.daos_pool = pool.uuid
             macsio.daos_svcl = convert_list(pool.svc_ranks)
             macsio.daos_cont = self.container[-1].uuid
+            macsio.get_params(self)
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, o_type, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
@@ -961,7 +961,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.env.copy()
             env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
-
+            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(macsio.daos_pool, macsio.daos_cont)
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
