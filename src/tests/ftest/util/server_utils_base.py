@@ -357,7 +357,7 @@ class DaosServerCommand(YamlCommand):
                 #                       groups.
                 #   --disable-vfio      Force SPDK to use the UIO driver for NVMe device access
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore_config", False)
+                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
@@ -380,7 +380,7 @@ class DaosServerCommand(YamlCommand):
                 #                      groups.
                 #   --disable-vfio     Force SPDK to use the UIO driver for NVMe device access
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore_config", False)
+                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.target_user = FormattedParameter("--target-user={}")
                 self.disable_vfio = FormattedParameter("--disable-vfio", False)
@@ -398,7 +398,7 @@ class DaosServerCommand(YamlCommand):
                 #   --ignore-config     Ignore parameters set in config file when running command
                 #   --disable-vmd       Disable VMD-aware scan.
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore_config", False)
+                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.disable_vmd = FormattedParameter("--disable-vmd", False)
 
     class ScmSubCommand(CommandWithSubCommand):
@@ -439,7 +439,7 @@ class DaosServerCommand(YamlCommand):
                 #   --scm-ns-per-socket= Number of PMem namespaces to create per socket (default:1)
                 #   --force              Perform SCM operations without waiting for confirmation
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore_config", False)
+                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.socket = FormattedParameter("--socket={}")
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
                 self.force = FormattedParameter("--force", False)
@@ -459,7 +459,7 @@ class DaosServerCommand(YamlCommand):
                 #                        region operations will be performed across all sockets.
                 #   --force              Perform SCM operations without waiting for confirmation
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
-                self.ignore_config = FormattedParameter("--ignore_config", False)
+                self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.socket = FormattedParameter("--socket={}")
                 self.force = FormattedParameter("--force", False)
 
