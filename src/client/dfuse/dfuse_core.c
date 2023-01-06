@@ -173,10 +173,12 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 
 	do {
 		oldref = atomic_load_relaxed(&ie->ie_ref);
+
 		if (oldref < count)
 			break;
 
 		newref = oldref - count;
+
 	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
 
 	if (oldref < count) {
