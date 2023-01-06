@@ -58,12 +58,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
 	 */
 
-#if 0
-	/* This assertion pops, disable it */
-	D_ASSERTF(atomic_load_relaxed(&oh->doh_ie->ie_readir_number) == 0,
-		  "Releasedir with readdir on same inode");
-#endif
-
 	if (atomic_load_relaxed(&oh->doh_il_calls) != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);

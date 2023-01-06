@@ -357,6 +357,61 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	DFUSE_TRA_INFO(oh, "Offsets requested %#lx directory %#lx anchor %#lx", offset,
 		       oh->doh_rd_offset, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 
+	/* If the offset is unexpected for this inode handle then ensure the readdir handle
+	 * is uniqie and seek
+	 */
+
+	if (oh->doh_rd_offset != offset) {
+#if 0
+	if (offset && hdl->drh_dre[hdl->drh_dre_index].dre_offset != offset &&
+	    hdl->drh_anchor_index + OFFSET_BASE != offset) {
+#endif
+		struct dfuse_readdir_hdl *new_hdl;
+		uint32_t                  num;
+
+		oh->doh_kreaddir_invalid = true;
+
+		/* Drop if shared */
+		new_hdl = _handle_make_unique(fs_handle, oh);
+		if (new_hdl != hdl) {
+			hdl        = new_hdl;
+			oh->doh_rd = new_hdl;
+			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+		}
+
+		/*
+		 * otherwise we are starting at an earlier offset where we left
+		 * off on last readdir, so restart by first enumerating that
+		 * many entries. This is the telldir/seekdir use case.
+		 */
+
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx(%d) to %#lx (index %d)",
+				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
+				offset, hdl->drh_dre_index);
+
+		dfuse_readdir_reset(hdl);
+		num = (uint32_t)offset - OFFSET_BASE;
+		while (num) {
+			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
+					 (NAME_MAX + 1) * num, NULL, NULL);
+			if (rc)
+				D_GOTO(out_reset, rc);
+
+			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
+				dfuse_readdir_reset(hdl);
+				D_GOTO(reply, rc = 0);
+			}
+
+			hdl->drh_anchor_index += num;
+
+			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
+		}
+		large_fetch = false;
+	}
+
+	/* If there requested offset is not the same as the handle offset then return cached
+	 * data from previous reads on this handle
+	 */
 	if (oh->doh_rd_offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset) {
 		struct dfuse_readdir_c *drc;
 		size_t                  written = 0;
@@ -397,54 +452,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			D_GOTO(reply, 0);
 
 		D_GOTO(out, rc = EIO);
-	}
-
-	/* If there is an offset, and either there is no current offset, or it's
-	 * different then seek
-	 */
-	if (offset && hdl->drh_dre[hdl->drh_dre_index].dre_offset != offset &&
-	    hdl->drh_anchor_index + OFFSET_BASE != offset) {
-		struct dfuse_readdir_hdl *new_hdl;
-		uint32_t num;
-
-		oh->doh_kreaddir_invalid = true;
-
-		/* Drop if shared */
-		new_hdl = _handle_make_unique(fs_handle, oh);
-		if (new_hdl != hdl) {
-			hdl        = new_hdl;
-			oh->doh_rd = new_hdl;
-			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
-		}
-
-		/*
-		 * otherwise we are starting at an earlier offset where we left
-		 * off on last readdir, so restart by first enumerating that
-		 * many entries. This is the telldir/seekdir use case.
-		 */
-
-		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx(%d) to %#lx (index %d)",
-				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
-				offset, hdl->drh_dre_index);
-
-		dfuse_readdir_reset(hdl);
-		num = (uint32_t)offset - OFFSET_BASE;
-		while (num) {
-			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
-					 (NAME_MAX + 1) * num, NULL, NULL);
-			if (rc)
-				D_GOTO(out_reset, rc);
-
-			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
-				dfuse_readdir_reset(hdl);
-				D_GOTO(reply, rc = 0);
-			}
-
-			hdl->drh_anchor_index += num;
-
-			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
-		}
-		large_fetch = false;
 	}
 
 	if (offset == 0)
