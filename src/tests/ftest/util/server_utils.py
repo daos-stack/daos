@@ -139,6 +139,10 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # Flag to determine if the server config file and certificates have already been copied to
+        # the server hosts.  These files must be in place before issue daos_server commands.
+        self._files_prepared = False
+
     @property
     def engines(self):
         """Get the total number of engines.
@@ -203,6 +207,24 @@ class DaosServerManager(SubprocessManager):
             hosts = self._hosts
         self.dmg.hostlist = hosts
 
+    def _prepare_server_files(self, override=False):
+        """Distribute the server config file and certificates to all server hosts.
+
+        Args:
+            override (bool, optional): force the distribution of the files even if they have already
+                been distributed. Defaults to False.
+        """
+        if not self._files_prepared or override:
+            # Create the daos_server yaml file
+            self.manager.job.temporary_file_hosts = self._hosts.copy()
+            self.manager.job.create_yaml_file(self._external_yaml_data)
+
+            # Copy certificates
+            self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
+            self._prepare_dmg_certificates()
+
+            self._files_prepared = True
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
@@ -214,13 +236,8 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Preparing to start daos_server on %s with %s",
             self._hosts, self.manager.command)
 
-        # Create the daos_server yaml file
-        self.manager.job.temporary_file_hosts = self._hosts.copy()
-        self.manager.job.create_yaml_file(self._external_yaml_data)
-
-        # Copy certificates
-        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
-        self._prepare_dmg_certificates()
+        # Ensure the server config file and certificates exist on the server hosts
+        self._prepare_server_files()
 
         # Prepare dmg for running storage format on all server hosts
         self._prepare_dmg_hostlist(self._hosts)
@@ -307,6 +324,8 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage
 
         """
+        self._prepare_server_files()
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
@@ -477,12 +496,13 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error resetting the storage
 
         """
+        self._prepare_server_files()
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("nvme")
         cmd.sub_command_class.set_sub_command("reset")
-        cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
