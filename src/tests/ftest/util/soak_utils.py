@@ -293,19 +293,21 @@ def get_journalctl(self, hosts, since, until, journalctl_type, logging=False):
 
 def get_daos_server_logs(self):
     """Gather server logs.
+
     Args:
         self (obj): soak obj
     """
-    daos_dir = self.outputsoak_dir + "/daos_logs"
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/var/tmp/daos_testing")
+    daos_dir = self.outputsoak_dir + "/daos_server_logs"
+    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/var/tmp/daos_testing/")
+    hosts = self.hostlist_servers
     if not os.path.exists(daos_dir):
         os.mkdir(daos_dir)
-        command = "clush -w {} --rcopy {} {}".format(self.hostlist_servers, logs_dir, daos_dir)
+        command = ["clush", "-w", str(hosts), "-v", "--rcopy", logs_dir, "--dest", daos_dir]
         try:
-            run_command(command, timeout=600)
+            run_command(" ".join(command), timeout=600)
         except DaosTestError as error:
-            raise SoakTestError("<<FAILED: daos logs file from {} not copied>>".format(
-                self.hostlist_servers)) from error
+            raise SoakTestError(
+                "<<FAILED: daos logs file from {} not copied>>".format(hosts)) from error
 
 
 def run_monitor_check(self):
