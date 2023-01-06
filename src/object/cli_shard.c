@@ -2182,8 +2182,6 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		/** if first cb, or dkey changed, set akey */
 		if (first || changed)
 			*cur = *val;
-		else
-			D_ASSERT(is_ec_obj);
 	}
 
 	if (check && flags & DAOS_GET_RECX) {

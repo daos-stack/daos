@@ -3479,6 +3479,13 @@ io_obj_key_query(void **state)
 	assert_int_equal(recx.rx_idx, 50);
 	assert_int_equal(recx.rx_nr, 1);
 
+	flags = DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(*(uint64_t *)akey.iov_buf, 10);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
 	flags = DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, th, flags, &dkey, &akey, &recx, NULL);
 	assert_rc_equal(rc, 0);
