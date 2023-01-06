@@ -225,13 +225,14 @@ class Dfuse(DfuseCommand):
             f"Error removing the {self.mount_dir.value} dfuse mount point with rmdir on the "
             f"following hosts: {rmdir_result.failed_hosts}")
 
-    def run(self, raise_exception=None, check=True, bind_cores=None):
-        # pylint: disable=arguments-differ
+    def run(self, check=True, mount_callback=None):
+        # pylint: disable=arguments-differ,arguments-renamed
         """Run the dfuse command.
 
         Args:
             check (bool): Check if dfuse mounted properly after mount is executed.
-            bind_cores (str): List of CPU cores to pass to taskset
+            mount_callback (method, optional): method to pass RemoteCommandResult to
+                after mount. Default simply raises an exception on failure.
 
         Raises:
             CommandFailure: In case dfuse run command fails
@@ -263,13 +264,12 @@ class Dfuse(DfuseCommand):
         self._setup_mount_point()
 
         # run dfuse command
-        if bind_cores:
-            self.bind_cores = bind_cores
         result = run_remote(self.log, self.hosts, self.with_exports, timeout=30)
         self._running_hosts.add(result.passed_hosts)
-        if not result.passed:
-            raise CommandFailure(
-                f"dfuse command failed on hosts {result.failed_hosts}")
+        if mount_callback:
+            mount_callback(result)
+        elif not result.passed:
+            raise CommandFailure(f"dfuse command failed on hosts {result.failed_hosts}")
 
         if check:
             # Dfuse will block in the command for the mount to complete, even
@@ -398,6 +398,7 @@ def get_dfuse(test, hosts, namespace=None):
     else:
         dfuse = Dfuse(hosts, test.tmp, path=test.bin)
     dfuse.get_params(test)
+    dfuse.set_dfuse_exports(test.client_log)
 
     # Default mount directory to be test-specific
     if not dfuse.mount_dir.value:
@@ -414,6 +415,9 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         container (TestContainer, optional): container to mount. Defaults to None
         params (Object, optional): Dfuse command arguments to update
 
+    Raises:
+        CommandFailure: on failure to start dfuse
+
     """
     if pool:
         params['pool'] = pool.identifier
@@ -421,11 +425,11 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
         params['cont'] = container.uuid
     if params:
         dfuse.update_params(**params)
-    dfuse.set_dfuse_exports(test.client_log)
 
     # Start dfuse
     try:
-        dfuse.run(bind_cores=test.params.get('cores', dfuse.namespace, None))
+        dfuse.bind_cores = test.params.get('cores', dfuse.namespace, None)
+        dfuse.run()
     except CommandFailure as error:
         test.log.error("Failed to start dfuse on hosts %s", dfuse.hosts, exc_info=error)
         test.fail("Failed to start dfuse")
@@ -461,7 +465,8 @@ class VerifyPermsCommand(ExecutableCommand):
         # Most usage requires root permission
         self.run_user = 'root'
 
-    def run(self, raise_exception=None):
+    def run(self):
+        # pylint: disable=arguments-differ
         """Run the command.
 
         Raises:

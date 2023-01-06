@@ -411,7 +411,7 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
 	if (dfp == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	atomic_store_relaxed(&dfp->dfp_ref, 1);
+	atomic_init(&dfp->dfp_ref, 1);
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
@@ -800,7 +800,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	/* No existing container found, so setup dfs and connect to one */
 
-	atomic_store_relaxed(&dfc->dfs_ref, 1);
+	atomic_init(&dfc->dfs_ref, 1);
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
@@ -1052,18 +1052,23 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 }
 
 void
-dfuse_ie_close(struct dfuse_projection_info *fs_handle,
-	       struct dfuse_inode_entry *ie)
+dfuse_ie_init(struct dfuse_inode_entry *ie)
 {
-	int	rc;
-	int	ref;
+	atomic_init(&ie->ie_ref, 1);
+}
+
+void
+dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+{
+	int      rc;
+	uint32_t ref;
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
-	DFUSE_TRA_DEBUG(ie,
-			"closing, inode %#lx ref %u, name '%s', parent %#lx",
+	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name '%s', parent %#lx",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_readir_number) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
 
@@ -1072,17 +1077,15 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 		if (rc == ENOMEM)
 			rc = dfs_release(ie->ie_obj);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)", strerror(rc));
 		}
 	}
 
 	if (ie->ie_root) {
-		struct dfuse_cont	*dfc = ie->ie_dfs;
-		struct dfuse_pool	*dfp = dfc->dfs_dfp;
+		struct dfuse_cont *dfc = ie->ie_dfs;
+		struct dfuse_pool *dfp = dfc->dfs_dfp;
 
-		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d",
-			       daos_handle_is_valid(dfp->dfp_poh),
+		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
@@ -1220,7 +1223,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_dfs = dfs;
 	ie->ie_root = true;
 	ie->ie_parent = 1;
-	atomic_store_relaxed(&ie->ie_ref, 1);
+	dfuse_ie_init(ie);
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
