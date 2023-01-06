@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1457,9 +1457,13 @@ out_pool:
 	}
 
 out_task:
+	D_DEBUG(DB_REBUILD, DF_UUID" rebuild task done by %d\n",
+		DP_UUID(task->dst_pool_uuid), rc);
+
 	rebuild_task_destroy(task);
 	rebuild_gst.rg_inflight--;
 
+	rebuild_debug_print_queue();
 	return;
 }
 
