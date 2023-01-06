@@ -333,7 +333,7 @@ class NvmeEnospace(ServerFillUp):
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
         # Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
+        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         print("IOR Baseline Read MiB {}".format(max_mib_baseline))
 
@@ -343,7 +343,7 @@ class NvmeEnospace(ServerFillUp):
         # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
+        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
 
         # Check if latest IOR read performance is in Tolerance of 5%, when

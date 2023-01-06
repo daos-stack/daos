@@ -1456,7 +1456,7 @@ def create_cont(conf,
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties', f'label:{label}'])
+        cmd.append(label)
 
     if path:
         cmd.extend(['--path', path])
@@ -4403,8 +4403,33 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = True
 
-    rc = test_cmd.launch()
-    return rc
+    return test_cmd.launch()
+
+
+def test_alloc_cont_create(server, conf, wf):
+    """Run container creation under fault injection.
+
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
+    """
+
+    pool = server.get_test_pool_id()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                pool,
+                '--properties',
+                f'srv_cksum:on,label:{cont_id}']
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.wf = wf
+    test_cmd.check_post_stdout = False
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = False
+
+    return test_cmd.launch()
 
 
 def test_alloc_fail_cont_create(server, conf):
@@ -4761,6 +4786,9 @@ def run(wf, args):
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
+                # container create with properties test.
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 

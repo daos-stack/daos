@@ -185,6 +185,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = entry->attr;
 
@@ -217,7 +218,6 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry->ino, ie->ie_stat.st_mode);
 
@@ -289,9 +289,19 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	bool                          large_fetch = true;
 	struct dfuse_readdir_hdl     *hdl;
 
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
+		  "Multiple readdir per handle");
+
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1) == 0,
+		  "Multiple readdir per inode");
+
 	if (offset == READDIR_EOD) {
 		oh->doh_kreaddir_finished = true;
 		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
+
+		atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+
 		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
 		return;
 	}
@@ -577,7 +587,12 @@ reply:
 	if (added == 0 && rc != 0)
 		D_GOTO(out_reset, rc);
 
+<<<<<<< HEAD
 	oh->doh_rd_offset = hdl->drh_dre[hdl->drh_dre_index].dre_offset;
+=======
+	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+>>>>>>> master
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);
@@ -587,6 +602,8 @@ reply:
 out_reset:
 	dfuse_readdir_reset(hdl);
 out:
+	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(reply_buff);
 }

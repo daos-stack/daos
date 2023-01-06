@@ -256,13 +256,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	}
 	if (prop->dpp_nr == 0) {
 		if (prop->dpp_entries != NULL)
-			D_ERROR("invalid properties, NON-NULL dpp_entries with "
-				"zero dpp_nr.\n");
+			D_ERROR("invalid properties, NON-NULL dpp_entries with zero dpp_nr.\n");
 		return prop->dpp_entries == NULL;
 	}
 	if (prop->dpp_entries == NULL) {
-		D_ERROR("invalid properties, NULL dpp_entries with non-zero "
-			"dpp_nr.\n");
+		D_ERROR("invalid properties, NULL dpp_entries with non-zero dpp_nr.\n");
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
@@ -290,10 +288,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_label_is_valid(
-						prop->dpp_entries[i].dpe_str)) {
-				D_ERROR("invalid label \"%s\"\n",
-					prop->dpp_entries[i].dpe_str);
+			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
 				return false;
 			}
 			break;
@@ -402,8 +398,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= (1ULL << 32)) {
-				D_ERROR("invalid chunk size "
-					DF_U64". Should be < 2GiB\n", val);
+				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB\n", val);
 				return false;
 			}
 			break;
@@ -414,8 +409,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
 			    val != DAOS_PROP_CO_CSUM_SV_ON) {
-				D_ERROR("invalid csum server verify property "
-					DF_U64".\n", val);
+				D_ERROR("invalid csum server verify property " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -424,8 +418,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (val != DAOS_PROP_CO_DEDUP_OFF &&
 			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
 			    val != DAOS_PROP_CO_DEDUP_HASH) {
-				D_ERROR("invalid deduplication parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid deduplication parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -472,8 +465,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
-				D_ERROR("invalid compression parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid compression parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -487,8 +479,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256) {
-				D_ERROR("invalid encryption parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid encryption parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
