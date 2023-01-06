@@ -1,0 +1,57 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
+
+version: "3.8"
+
+services:
+
+  daos_agent:
+    image: "daos-agent:${DAOS_DOCKER_IMAGE_TAG}"
+    networks:
+      - docker_host
+    pid: host
+    volumes:
+      - type: volume
+        source: daos_agent-socket
+        target: /var/run/daos_agent
+        volume:
+          nocopy: true
+    secrets:
+      - source: daos_agent-certs
+        target: daos_agent-certs.txz
+        uid: '0'
+        gid: '0'
+        mode: 0600
+
+  daos_client:
+    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+    tty: true
+    networks:
+      - docker_host
+    pid: host
+    user: "${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID}"
+    volumes:
+      - type: volume
+        source: daos_agent-socket
+        target: /var/run/daos_agent
+        volume:
+          nocopy: true
+    depends_on:
+      - daos_agent
+
+
+volumes:
+  daos_agent-socket:
+
+
+secrets:
+  daos_agent-certs:
+    external: true
+
+
+networks:
+  docker_host:
+    name: "host"
+    external: true
