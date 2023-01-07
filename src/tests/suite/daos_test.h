@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -147,7 +147,8 @@ typedef struct {
 	uint32_t		overlap:1,
 				not_check_result:1,
 				idx_no_jump:1,
-				no_rebuild:1;
+				no_rebuild:1,
+				no_stat_clear:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;

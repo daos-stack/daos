@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1261,13 +1261,24 @@ out:
 		rebuild_pool_destroy(args[i]);
 }
 
+static int
+rebuild_kill_rank_cb(void *data)
+{
+	test_arg_t *arg = data;
+
+	arg->no_stat_clear = 1;
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+			 arg->pool.alive_svc, ranks_to_kill[1]);
+	arg->no_stat_clear = 0;
+	return 0;
+}
+
 static void
 rebuild_kill_rank_during_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc = 0;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1288,18 +1299,15 @@ rebuild_kill_rank_during_rebuild(void **state)
 				      0, NULL);
 	}
 
-	arg->rebuild_cb = rebuild_destroy_pool_cb;
+	arg->rebuild_cb = rebuild_kill_rank_cb;
 
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-			      ranks_to_kill[0], -1);
-	assert_success(rc);
+	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
 
-	sleep(2);
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, ranks_to_kill[0]);
+	arg->rebuild_cb = NULL;
 
-	sleep(10);
+	sleep(20);
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	reintegrate_single_pool_rank(arg, ranks_to_kill[1], true);
 }
 
 static void
@@ -1323,8 +1331,11 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	}
 	rebuild_io(arg, oids, OBJ_NR);
 
+	arg->no_stat_clear = 1;
 	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
 			 arg->pool.alive_svc, 6);
+	arg->no_stat_clear = 0;
+
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,

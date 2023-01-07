@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -975,8 +975,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	rc = system(dmg_cmd);
 	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_rc_equal(rc, 0);
-
-	daos_cont_status_clear(arg->coh, NULL);
+	if (!arg->no_stat_clear)
+		daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *
