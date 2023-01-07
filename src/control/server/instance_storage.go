@@ -115,12 +115,14 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 		ei.log.Debugf("instance %d: superblock needed", idx)
 	}
 
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		return err
-	}
-	if skipMissingSuperblock {
-		return FaultScmUnmanaged(cfg.Scm.MountPoint)
+	if needsScmFormat {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return err
+		}
+		if skipMissingSuperblock {
+			return FaultScmUnmanaged(cfg.Scm.MountPoint)
+		}
 	}
 
 	// by this point we need superblock and possibly scm format
