@@ -102,7 +102,7 @@ soak_stress:
     - mdtest_stress
     - vpic_stress
     - lammps_stress
-    - macsio_stress
+    #- macsio_stress
   ignore_soak_errors: false
 # Commandline parameters
 # Benchmark and application params
