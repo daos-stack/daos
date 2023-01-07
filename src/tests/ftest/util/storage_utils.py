@@ -48,7 +48,7 @@ class StorageDevice():
         self.storage_class = storage_class
         self.device = device
         self.numa_node = numa_node
-        self.managed_devices = []
+        self.managed_devices = 0
 
     def __str__(self):
         """Convert this StorageDevice into a string.
@@ -57,7 +57,7 @@ class StorageDevice():
             str: the string version of the parameter's value
 
         """
-        return ', '.join([str(self.address), self.description, str(self.numa_node)])
+        return ' - '.join([str(self.address), self.description, str(self.numa_node)])
 
     def __repr__(self):
         """Convert this StorageDevice into a string representation.
@@ -346,7 +346,7 @@ class StorageInfo():
             for data in result.output:
                 all_output = '\n'.join(data.stdout)
                 info = {
-                    'slots': re.findall(r'Slot:\s+([0-9a-fA-F:]+)', all_output),
+                    'slots': re.findall(r'Slot:\s+([0-9a-fA-F:.]+)', all_output),
                     'class': re.findall(r'Class:\s+(.*)', all_output),
                     'device': re.findall(r'Device:\s+(.*)', all_output),
                     'numa': re.findall(r'NUMANode:\s+(\d)', all_output),
@@ -366,17 +366,23 @@ class StorageInfo():
                         self._log.error('    - numa:   %s', info['numa'])
                         continue
 
+                    # Ignore backing NVMe bound to the kernel driver, e.g., 10005:05:00.0
+                    if len(device.address.split(":")[0]) > 4:
+                        self._log.debug("  excluding device based on address length: %s", device)
+                        continue
+
+                    # Ignore any devices that do not match a filter if specified
                     if device_filter and device_filter.startswith("-"):
                         if re.findall(device_filter[1:], device.description):
                             self._log.debug(
                                 "  excluding device matching '%s': %s", device_filter[1:], device)
                             continue
-
                     elif device_filter and not re.findall(device_filter, device.description):
                         self._log.debug(
                             "  excluding device not matching '%s': %s", device_filter, device)
                         continue
 
+                    # Keep track of which devices were found on which hosts
                     if device not in found_devices:
                         found_devices[device] = NodeSet()
                     found_devices[device].update(data.hosts)
@@ -437,35 +443,36 @@ class StorageInfo():
             self._raise_error(f"Error issuing command '{command}'")
 
         # Map VMD addresses to the disks they control
-        controller_mapping = {}
+        controller_info = {}
         regex = (r'->\s+\.\./devices/pci[0-9a-f:]+/([0-9a-f:\.]+)/'
                  r'pci[0-9a-f:]+/[0-9a-f:\.]+/([0-9a-f:\.]+)')
         if result.passed:
             for data in result.output:
                 for controller, disk in re.findall(regex, '\n'.join(data.stdout)):
-                    if disk not in controller_mapping:
-                        controller_mapping[disk] = {}
-                    if controller not in controller_mapping[disk]:
-                        controller_mapping[disk][controller] = NodeSet()
-                    controller_mapping[disk][controller].update(data.hosts)
+                    if controller not in controller_info:
+                        controller_info[controller] = {'disks': [], 'count': 0, 'hosts': NodeSet()}
+                    if disk not in controller_info[controller]['disks']:
+                        controller_info[controller]['disks'].append(disk)
+                        controller_info[controller]['count'] += 1
+                        controller_info[controller]['hosts'].update(data.hosts)
 
             # Remove any non-homogeneous devices
-            for disk in list(controller_mapping):
-                for controller in list(disk):
-                    if controller_mapping[disk][controller] != self._hosts:
-                        self._log.debug(
-                            '  - disk %s managed by controller %s not found on all hosts: %s',
-                            disk, controller, controller_mapping[disk][controller])
-                    else:
-                        controllers[controller] = disk
+            for controller, info in controller_info.items():
+                if info['hosts'] != self._hosts:
+                    self._log.debug(
+                        '  - controller %s not found on all hosts: %s', controller, info)
+                elif info['count'] == 0:
+                    self._log.debug('  - no disks found for controller %s: %s', controller, info)
+                else:
+                    controllers[controller] = info['count']
 
         # Verify each server host has the same NVMe devices behind the same VMD addresses.
         if not controllers:
             self._raise_error("Error: Non-homogeneous NVMe device behind VMD addresses.")
 
         self._log.debug('Controller/disk mapping')
-        for controller, disks in controllers.values():
-            self._log.debug('  %s: %s', controller, disks)
+        for controller, disk_count in controllers.values():
+            self._log.debug('  %s: %s disk(s)', controller, disk_count)
 
         return controllers
 
@@ -495,7 +502,8 @@ class StorageInfo():
             for device in sorted(self.vmd_devices + self.nvme_devices):
                 if device.numa_node not in numa_devices:
                     numa_devices[device.numa_node] = []
-                numa_devices[device.numa_node].append(device)
+                numa_devices[device.numa_node].append(device.address)
+            self._log.debug('numa_devices:   %s', numa_devices)
 
             # Interleave the devices for bdev_list distribution.
             if engines > 1:
@@ -507,9 +515,11 @@ class StorageInfo():
                     filter(
                         partial(is_not, None),
                         itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
+            self._log.debug('interleaved:    %s', interleaved)
 
             # Break the interleaved (prioritized) disk list into groups of engine size
             device_sets = [interleaved[x:x + engines] for x in range(0, len(interleaved), engines)]
+            self._log.debug('device_sets:    %s', device_sets)
 
             # Tier number device placement order
             tier_placement_priority = [1, 2, 3, 3, 2]
@@ -517,8 +527,9 @@ class StorageInfo():
             # Get the tier number device placement for the available number of devices
             tier_placement = []
             while len(tier_placement) < len(device_sets):
-                tier_placement.append(tier_placement_priority)
+                tier_placement.extend(tier_placement_priority)
             tier_placement = sorted(tier_placement[:len(device_sets)])
+            self._log.debug('tier_placement: %s', tier_placement)
             tiers += max(tier_placement)
 
             bdev_list = {}
@@ -530,6 +541,7 @@ class StorageInfo():
                     if tier not in bdev_list[engine]:
                         bdev_list[engine][tier] = []
                     bdev_list[engine][tier].append(device)
+            self._log.debug('bdev_list:      %s', bdev_list)
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):

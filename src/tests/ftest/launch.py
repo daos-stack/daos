@@ -496,8 +496,6 @@ class TestInfo():
         "client_partition",
         "client_reservation",
         "client_users",
-        "engines_per_host",
-        "storage",
     ]
 
     def __init__(self, test_file, order):
@@ -1503,8 +1501,12 @@ class Launch():
         """
         engine_storage_yaml = {}
         for test in self.tests:
-            if test.yaml_info["storage"] == "auto":
-                engines = test.yaml_info["engines_per_host"]
+            logger.debug("Reading %s", test.yaml_file)
+            yaml_data = get_yaml_data(test.yaml_file)
+            info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
+            logger.debug("info = %s", info)
+            if "storage" in info and info["storage"] == "auto":
+                engines = info["engines_per_host"]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
                     logger.info("-" * 80)

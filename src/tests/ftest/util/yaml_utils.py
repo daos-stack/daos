@@ -1,5 +1,5 @@
 """
-(C) Copyright 2020-2022 Intel Corporation.
+(C) Copyright 2020-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -330,7 +330,7 @@ class YamlUpdater():
                         replacement_nodes.add(replacement.pop(0))
                     except IndexError as error:
                         # Not enough nodes provided for the replacement
-                        message = "Not enough '{key}' placeholder replacements specified"
+                        message = f"Not enough '{key}' placeholder replacements specified"
                         self.log.error("  - %s; required: %s", message, quantity)
                         raise YamlException(message) from error
 
@@ -345,7 +345,7 @@ class YamlUpdater():
                             except IndexError as error:
                                 # Not enough nodes provided for the replacement
                                 if not self._override:
-                                    message = "Not enough '{key}' placeholder replacements remain"
+                                    message = f"Not enough '{key}' placeholder replacements remain"
                                     self.log.error(
                                         "  - %s; required: %s", message, NodeSet(placeholder))
                                     raise YamlException(message) from error
@@ -357,7 +357,7 @@ class YamlUpdater():
 
                 except TypeError as error:
                     # Unsupported format
-                    message = "Unsupported placeholder format: {placeholder}"
+                    message = f"Unsupported placeholder format: {placeholder}"
                     self.log.error(message)
                     raise YamlException(message) from error
 
