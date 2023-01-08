@@ -185,8 +185,11 @@ class ExecutableCommand(CommandWithParameters):
 
         # add strace if a "dmg pool create" command
         first = command.split()[0]
+        self.log.debug("first: %s", first)
         second = command.split()[1]
+        self.log.debug("second: %s", second)
         third = command.split()[2]
+        self.log.debug("third: %s", third)
         if first == 'dmg' and second == 'pool' and third == 'create':
             command = ' '.join(['strace', '-f -tt -T -o ', 'dmg.{}.strace'.format(time.time()), command])
 
