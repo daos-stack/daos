@@ -448,23 +448,37 @@ class StorageInfo():
                  r'pci[0-9a-f:]+/[0-9a-f:\.]+/([0-9a-f:\.]+)')
         if result.passed:
             for data in result.output:
-                for controller, disk in re.findall(regex, '\n'.join(data.stdout)):
+                disks_per_controller = {}
+                for controller, _ in re.findall(regex, '\n'.join(data.stdout)):
+                    # Keep track of which controllers were found on which hosts
                     if controller not in controller_info:
-                        controller_info[controller] = {'disks': [], 'count': 0, 'hosts': NodeSet()}
-                    if disk not in controller_info[controller]['disks']:
-                        controller_info[controller]['disks'].append(disk)
-                        controller_info[controller]['count'] += 1
-                        controller_info[controller]['hosts'].update(data.hosts)
+                        controller_info[controller] = {'hosts': NodeSet(), 'count': set()}
+                    controller_info[controller]['hosts'].update(data.hosts)
+
+                    # Increment the total number of disks found for this controller
+                    if controller not in disks_per_controller:
+                        disks_per_controller[controller] = 0
+                    disks_per_controller[controller] += 1
+
+                # Update the number of disks found for each controller on this set of hosts
+                for controller, count in disks_per_controller.items():
+                    controller_info[controller]['count'].add(count)
 
             # Remove any non-homogeneous devices
             for controller, info in controller_info.items():
+                self._log.debug(
+                    'Controller %s: disks: %s, hosts: %s',
+                    controller, info['count'], str(info['hosts']))
                 if info['hosts'] != self._hosts:
                     self._log.debug(
-                        '  - controller %s not found on all hosts: %s', controller, info)
-                elif info['count'] == 0:
-                    self._log.debug('  - no disks found for controller %s: %s', controller, info)
+                        '  - controller %s not found on all hosts: %s != %s',
+                        controller, str(info['hosts']), str(self._hosts))
+                elif len(info['count']) != 1:
+                    self._log.debug(
+                        '  - non-homogeneous disk count found for controller %s: %s',
+                        controller, info['count'])
                 else:
-                    controllers[controller] = info['count']
+                    controllers[controller] = list(info['count'])[0]
 
         # Verify each server host has the same NVMe devices behind the same VMD addresses.
         if not controllers:
