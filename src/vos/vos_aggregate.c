@@ -1251,7 +1251,7 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (added_csum_segs) {
-		/* Additional data requird to verify checksums is read
+		/* Additional data required to verify checksums is read
 		 * into end of read buffer. This allows the write data
 		 * to be placed as a single contiguous range at beginning
 		 * of the buffer.
