@@ -73,6 +73,8 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
+	/* The global pool map version on all pool targets */
+	uint32_t		ps_global_map_version;
 };
 
 /* Pool service failed to start */
@@ -1501,10 +1503,12 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	}
 
 	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
 			DP_UUID(svc->ps_uuid), map_version, rc);
-
+		D_GOTO(out, rc);
+	}
+	svc->ps_global_map_version = max(svc->ps_global_map_version, map_version);
 out:
 	if (map_buf != NULL)
 		D_FREE(map_buf);
@@ -5995,6 +5999,22 @@ ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 		     uint64_t term)
 {
 	ds_iv_ns_update(pool->sp_iv_ns, master_rank, term);
+}
+
+int
+ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *version)
+{
+	struct pool_svc	*svc;
+	int		rc;
+
+	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
+	if (rc != 0)
+		return rc;
+
+	*version = svc->ps_global_map_version;
+
+	pool_svc_put_leader(svc);
+	return 0;
 }
 
 int
