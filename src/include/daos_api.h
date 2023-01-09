@@ -53,6 +53,10 @@ d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
  * can be used for IOs in this container that need to be committed
  * transactionally.
  *
+ * Invoking operations of one TX with events from multiple event queues,
+ * including with NULL events from multiple threads, is not currently
+ * supported.
+ *
  * \param[in]	coh	Container handle.
  * \param[out]	th	Returned transaction handle.
  * \param[in]	flags	Transaction flags (DAOS_TF_RDONLY, etc.).
