@@ -185,13 +185,8 @@ class ExecutableCommand(CommandWithParameters):
 
         # add strace if a "dmg pool create" command
         # commands are of form '/usr/bin/dmg -o /etc/daos/daos_control.yml -d -j pool create ...'
-        first = command.split()[0]
-        self.log.debug("first: %s", first)
-        sixth = command.split()[5]
-        self.log.debug("sixth: %s", sixth)
-        seventh = command.split()[6]
-        self.log.debug("seventh: %s", seventh)
-        if 'dmg' in first and sixth == 'pool' and seventh == 'create':
+        words = command.split()
+        if len(words) > 6 and 'dmg' in words[0]  and words[5] == 'pool' and words[6] == 'create':
             command = ' '.join(['strace', '-f -tt -T -o ', 'dmg.{}.strace'.format(time.time()), command])
 
         if raise_exception is None:
