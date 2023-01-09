@@ -1,11 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from scrubber_test_base import TestWithScrubber
-from apricot import skipForTicket
 
 
 class TestWithScrubberBasic(TestWithScrubber):
