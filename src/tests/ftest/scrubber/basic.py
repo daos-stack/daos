@@ -44,7 +44,6 @@ class TestWithScrubberBasic(TestWithScrubber):
             self.fail("------Test Failed-----")
         self.log.info("------Test passed------")
 
-    @skipForTicket("DAOS-8906")
     def test_scrubber_disabled_during_pool_creation(self):
         """JIRA ID: DAOS-7371
 
