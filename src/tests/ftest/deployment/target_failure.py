@@ -202,8 +202,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_wo_rf
-        :avocado: tags=test_target_failure_wo_rf
+        :avocado: tags=target_failure_wo_rf,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
@@ -282,8 +281,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_rp
-        :avocado: tags=test_target_failure_with_rp
+        :avocado: tags=target_failure_with_rp ,test_target_failure_with_rp
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_rp/*")
 
@@ -299,8 +297,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_ec
-        :avocado: tags=test_target_failure_with_ec
+        :avocado: tags=target_failure_with_ec test_target_failure_with_ec
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_ec/*")
 
@@ -323,8 +320,7 @@ class TargetFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_parallel
-        :avocado: tags=test_target_failure_parallel
+        :avocado: tags=target_failure_parallel,test_target_failure_parallel
         """
         self.pool = []
         self.container = []

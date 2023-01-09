@@ -33,7 +33,6 @@ class DaosRacerTest(TestWithServers):
         :avocado: tags=hw,medium
         :avocado: tags=io,daosracer
         :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer_simple
-        :avocado: tags=test_daos_racer_simple
         """
         dmg = self.get_dmg_command()
         self.assertGreater(

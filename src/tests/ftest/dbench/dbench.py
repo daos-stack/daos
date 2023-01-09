@@ -32,8 +32,7 @@ class DbenchTest(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=dbench,dfuse
-        :avocado: tags=test_dbench
+        :avocado: tags=dbench,dfuse,test_dbench
         """
 
         self.add_pool(connect=False)

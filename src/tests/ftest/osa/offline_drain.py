@@ -148,8 +148,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain,checksum,ior
-        :avocado: tags=offline_drain,offline_drain_with_csum
-        :avocado: tags=test_osa_offline_drain
+        :avocado: tags=offline_drain,offline_drain_with_csum,test_osa_offline_drain
         """
         self.log.info("Offline Drain : Basic Drain")
         self.run_offline_drain_test(1, True)
@@ -194,8 +193,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain
-        :avocado: tags=offline_drain,offline_drain_oclass
-        :avocado: tags=test_osa_offline_drain_oclass
+        :avocado: tags=offline_drain,offline_drain_oclass,test_osa_offline_drain_oclass
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')

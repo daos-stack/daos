@@ -291,8 +291,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_wo_rf
-        :avocado: tags=test_network_failure_wo_rf
+        :avocado: tags=network_failure_wo_rf,test_network_failure_wo_rf
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_wo_rf/*",
@@ -307,8 +306,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_rp
-        :avocado: tags=test_network_failure_with_rp
+        :avocado: tags=network_failure_with_rp,test_network_failure_with_rp
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_rp/*",
@@ -323,8 +321,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_ec
-        :avocado: tags=test_network_failure_with_ec
+        :avocado: tags=network_failure_with_ec,test_network_failure_with_ec
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_ec/*",
@@ -353,8 +350,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_isolation
-        :avocado: tags=test_network_failure_isolation
+        :avocado: tags=network_failure_isolation,test_network_failure_isolation
         """
         # 1. Determine the four ranks to create the pool and an interface to take down.
         # We'll create a pool on two ranks in hostlist_servers[0] and two ranks in

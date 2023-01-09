@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +36,6 @@ class DfuseCachingCheck(IorTestBase):
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DfuseCachingCheck,test_dfuse_caching_check
-        :avocado: tags=test_caching_check
         """
         # get params
         flags = self.params.get("iorflags", '/run/ior/*')

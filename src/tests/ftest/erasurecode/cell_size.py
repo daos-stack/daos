@@ -29,8 +29,7 @@ class EcodCellSize(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_ior,ior
-        :avocado: tags=ec_cell_size
-        :avocado: tags=test_ec_cell_size
+        :avocado: tags=ec_cell_size,test_ec_cell_size
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

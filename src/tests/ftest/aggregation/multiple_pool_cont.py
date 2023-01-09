@@ -166,8 +166,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_single_pool
-        :avocado: tags=test_aggregation_single_pool
+        :avocado: tags=aggregate_single_pool,test_aggregation_single_pool
         """
         self.longrun_aggregation(1, 2)
 
@@ -193,7 +192,6 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_multiple_pools
-        :avocado: tags=test_aggregation_multiple_pools
+        :avocado: tags=aggregate_multiple_pools,test_aggregation_multiple_pools
         """
         self.longrun_aggregation(2, 3)

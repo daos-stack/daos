@@ -84,8 +84,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_rebuild_agg_disabled
-        :avocado: tags=test_ec_offline_rebuild_agg_disabled
+        :avocado: tags=ec_offline_rebuild_agg_disabled,test_ec_offline_rebuild_agg_disabled
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -109,8 +108,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_rebuild_agg_default
-        :avocado: tags=test_ec_offline_rebuild_agg_default
+        :avocado: tags=ec_offline_rebuild_agg_default,test_ec_offline_rebuild_agg_default
         """
         self.execution(agg_trigger=True)
 
@@ -131,8 +129,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_agg_during_rebuild
-        :avocado: tags=test_ec_offline_agg_during_rebuild
+        :avocado: tags=ec_offline_agg_during_rebuild,test_ec_offline_agg_during_rebuild
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")

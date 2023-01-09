@@ -30,8 +30,7 @@ class AggregationPunching(MdtestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=AggregationPunching,aggregatepunching
-        :avocado: tags=test_aggregation_punching
+        :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
         """
         if self.pool is None:
             self.add_pool(connect=False)

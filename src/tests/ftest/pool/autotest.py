@@ -21,8 +21,7 @@ class PoolAutotestTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool
-        :avocado: tags=autotest,pool_autotest,quick
-        :avocado: tags=test_pool_autotest
+        :avocado: tags=autotest,pool_autotest,quick,test_pool_autotest
         """
         self.log.info("Create a pool")
         self.add_pool()

@@ -129,8 +129,7 @@ class ManagementServiceFailover(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control
-        :avocado: tags=ms_failover
-        :avocado: tags=test_ms_failover
+        :avocado: tags=ms_failover,test_ms_failover
         """
         replicas = self.launch_servers()
         leader = self.verify_leader(replicas)

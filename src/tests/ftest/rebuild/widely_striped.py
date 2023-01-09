@@ -45,8 +45,7 @@ class RbldWidelyStriped(MdtestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=rebuild
-        :avocado: tags=rebuild_widely_striped
-        :avocado: tags=test_rebuild_widely_striped
+        :avocado: tags=rebuild_widely_striped,test_rebuild_widely_striped
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")

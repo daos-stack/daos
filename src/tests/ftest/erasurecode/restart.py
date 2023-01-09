@@ -79,8 +79,7 @@ class EcodServerRestart(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_before_agg
-        :avocado: tags=test_ec_restart_before_agg
+        :avocado: tags=ec_restart_before_agg,test_ec_restart_before_agg
         """
         self.execution(agg_check="Before")
 
@@ -96,8 +95,7 @@ class EcodServerRestart(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_after_agg
-        :avocado: tags=test_ec_restart_after_agg
+        :avocado: tags=ec_restart_after_agg,test_ec_restart_after_agg
         """
         self.execution(agg_check="After")
 
@@ -113,8 +111,7 @@ class EcodServerRestart(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_server_restart,ec_aggregation
-        :avocado: tags=ec_restart_during_agg
-        :avocado: tags=test_ec_restart_during_agg
+        :avocado: tags=ec_restart_during_agg,test_ec_restart_during_agg
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")

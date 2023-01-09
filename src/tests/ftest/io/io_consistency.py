@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -38,7 +38,6 @@ class IoConsistency(IorTestBase):
         :avocado: tags=io,daosio,ior,dfuse
         :avocado: tags=IoConsistency,test_ioconsistency
         :avocado: tags=DAOS_5610
-        :avocado: tags=test_ioconsistency
         """
         # test params
         apis_flags = self.params.get("api_flag", "/run/ior/io_consistency/*")

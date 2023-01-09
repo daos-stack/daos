@@ -39,8 +39,7 @@ class AggregationChecksum(IorTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,checksum,ior
-        :avocado: tags=aggregationchecksum
-        :avocado: tags=test_aggregationchecksum
+        :avocado: tags=aggregationchecksum,test_aggregationchecksum
         """
 
         # test params

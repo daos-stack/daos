@@ -225,8 +225,7 @@ class NvmePoolCapacity(TestWithServers):
         Use case:
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ib2,nvme,nvme_pool_capacity
-        :avocado: tags=test_nvme_pool_capacity
+        :avocado: tags=ib2,nvme,nvme_pool_capacity,test_nvme_pool_capacity
         """
         # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")

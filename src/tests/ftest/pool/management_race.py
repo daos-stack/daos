@@ -92,8 +92,7 @@ class PoolManagementRace(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool,boundary_test
-        :avocado: tags=pool_mgmt_race
-        :avocado: tags=test_pool_management_race
+        :avocado: tags=pool_mgmt_race,test_pool_management_race
         Args:
         """
 

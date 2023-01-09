@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -75,7 +75,6 @@ class RootContainerTest(DfuseTestBase):
         :avocado: tags=hw,medium
         :avocado: tags=container,dfuse
         :avocado: tags=RootContainerTest,test_dfuse_root_container
-        :avocado: tags=test_rootcontainer
         """
         # Create a pool and start dfuse.
         pool = self._create_pool()

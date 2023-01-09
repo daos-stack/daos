@@ -91,8 +91,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
-        :avocado: tags=dm_large_file,dm_large_file_dcp
-        :avocado: tags=test_dm_large_file_dcp
+        :avocado: tags=dm_large_file,dm_large_file_dcp,test_dm_large_file_dcp
         """
         self.run_dm_large_file("DCP")
 
@@ -104,7 +103,6 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=datamover,daos_fs_copy,dfs,ior
-        :avocado: tags=dm_large_file,dm_large_file_fs_copy
-        :avocado: tags=test_dm_large_file_fs_copy
+        :avocado: tags=dm_large_file,dm_large_file_fs_copy,test_dm_large_file_fs_copy
         """
         self.run_dm_large_file("FS_COPY")
