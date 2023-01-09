@@ -118,8 +118,7 @@ struct epoch_io_args {
 	/* cached dkey/akey used last time, so need not specify it every time */
 	char			*op_dkey;
 	char			*op_akey;
-	int			op_no_verify:1,
-				op_ec:1; /* true for EC, false for replica */
+	uint32_t                 op_no_verify : 1, op_ec : 1; /* true for EC, false for replica */
 };
 
 typedef struct {
@@ -391,24 +390,6 @@ int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t *
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
 void test_rebuild_wait(test_arg_t **args, int args_cnt);
-void daos_exclude_target(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank, int tgt);
-void daos_reint_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_drain_target(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank, int tgt);
-void daos_extend_target(const uuid_t pool_uuid, const char *grp,
-			const char *dmg_config,
-			d_rank_t rank, int tgt, daos_size_t nvme_size);
-void daos_exclude_server(const uuid_t pool_uuid, const char *grp,
-			 const char *dmg_config,
-			 d_rank_t rank);
-void daos_reint_server(const uuid_t pool_uuid, const char *grp,
-		       const char *dmg_config,
-		       d_rank_t rank);
 int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 		       const char *value);
 

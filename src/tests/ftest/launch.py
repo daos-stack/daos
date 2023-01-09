@@ -2726,7 +2726,8 @@ class Launch():
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=900)
+        result = run_remote(
+            logger, hosts, find_command(source, pattern, depth, other), timeout=1800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2957,7 +2958,7 @@ class Launch():
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
             logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
             try:

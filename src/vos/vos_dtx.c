@@ -883,6 +883,8 @@ vos_dtx_flags2name(uint32_t flags)
 		return "corrupted";
 	case DTE_ORPHAN:
 		return "orphan";
+	case DTE_PARTIAL_COMMITTED:
+		return "partial_committed";
 	default:
 		return "unknown";
 	}
@@ -1133,16 +1135,13 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_AVAILABLE_DIRTY;
 
 	if (!found) {
-		/** If we move to not marking entries explicitly, this
-		 *  state will mean it is committed
-		 */
 		D_DEBUG(DB_TRACE,
 			"Entry %d "DF_U64" not in lru array, it must be"
 			" committed\n", entry, epoch);
 		return ALB_AVAILABLE_CLEAN;
 	}
 
-	if (dae->dae_committable || dae->dae_committed)
+	if (dae->dae_committable || dae->dae_committed || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 		return ALB_AVAILABLE_CLEAN;
 
 	if (dae->dae_aborted)
@@ -1245,18 +1244,26 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_UNAVAILABLE;
 
 	if (intent == DAOS_INTENT_DEFAULT) {
-		if (!(DAE_FLAGS(dae) & DTE_LEADER) ||
-		    DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
-			/* Non-leader or rebuild case, return -DER_INPROGRESS,
-			 * then the caller will retry the RPC (with leader).
-			 */
-			return dtx_inprogress(dae, dth, false, true, 1);
+		if (DAOS_FAIL_CHECK(DAOS_VOS_NON_LEADER))
+			return dtx_inprogress(dae, dth, false, true, 6);
 
-		/* For transactional read, has to wait the non-committed
+		/*
+		 * For transactional read, has to wait the non-committed
 		 * modification to guarantee the transaction semantics.
 		 */
 		if (dtx_is_valid_handle(dth))
 			return dtx_inprogress(dae, dth, false, true, 2);
+
+		/* Ignore non-prepared DTX in spite of on leader or not. */
+		if (dae->dae_dbd == NULL || dae->dae_dth != NULL)
+			return ALB_UNAVAILABLE;
+
+		if (!(DAE_FLAGS(dae) & DTE_LEADER))
+			/*
+			 * Read on non-leader, return -DER_INPROGRESS, then the caller
+			 * will refresh the DTX or retry related RPC with the leader.
+			 */
+			return dtx_inprogress(dae, dth, false, true, 1);
 
 		/* For stand-alone read on leader, ignore non-committed DTX. */
 		return ALB_UNAVAILABLE;
@@ -1781,10 +1788,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			return DTX_ST_COMMITTED;
 		}
 
-		if (dae->dae_committable) {
+		if (dae->dae_committable || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
 			if (mbs != NULL)
-				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont),
-							dae);
+				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont), dae);
 
 			if (epoch != NULL)
 				*epoch = DAE_EPOCH(dae);
@@ -1795,10 +1801,22 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (dae->dae_aborted)
 			return -DER_NONEXIST;
 
-		if (mbs != NULL)
+		if (for_refresh) {
 			dae->dae_maybe_shared = 1;
+			/*
+			 * If DTX_REFRESH happened on current DTX entry but it was not marked
+			 * as leader, then there must be leader switch and the DTX resync has
+			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
+			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
+			 */
+			if (!(DAE_FLAGS(dae) & DTE_LEADER))
+				return -DER_INPROGRESS;
 
-		if (dae->dae_dbd == NULL || dae->dae_dth != NULL)
+			return dae->dae_prepared ? DTX_ST_PREPARED : DTX_ST_INITED;
+		}
+
+		/* Not committable yet, related RPC handler ULT is still running. */
+		if (dae->dae_dth != NULL)
 			return -DER_INPROGRESS;
 
 		if (epoch != NULL) {
@@ -1809,20 +1827,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 				return -DER_MISMATCH;
 		}
 
-		if (dae->dae_prepared) {
-			/*
-			 * If DTX_REFRESH happened on current DTX entry but it was not marked
-			 * as leader, then there must be leader switch and the DTX resync has
-			 * not completed yet. Under such case, returning "-DER_INPROGRESS" to
-			 * make related DTX_REFRESH sponsor (client) to retry sometime later.
-			 */
-			if (for_refresh && !(DAE_FLAGS(dae) & DTE_LEADER))
-				return -DER_INPROGRESS;
-
-			return DTX_ST_PREPARED;
-		}
-
-		return DTX_ST_INITED;
+		return dae->dae_prepared ? DTX_ST_PREPARED : DTX_ST_INITED;
 	}
 
 	if (rc == -DER_NONEXIST) {
@@ -2076,7 +2081,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 				daes[i]->dae_committed = 1;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
 			}
-			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
+			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN | DTE_PARTIAL_COMMITTED);
 		}
 	}
 }
@@ -2198,10 +2203,9 @@ out:
 	return rc;
 }
 
-int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
+static int
+vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t flags)
 {
-	struct vos_container		*cont;
 	struct umem_instance		*umm;
 	struct vos_dtx_act_ent		*dae;
 	struct vos_dtx_act_ent_df	*dae_df;
@@ -2209,24 +2213,14 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	d_iov_t				 kiov;
 	int				 rc;
 
-	cont = vos_hdl2cont(coh);
-	D_ASSERT(cont != NULL);
-
-	/* Only allow set single flags. */
-	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
-		D_ERROR("Try to set unrecognized flags %x on DTX "
-			DF_DTI"\n", flags, DP_DTI(dti));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
 	d_iov_set(&kiov, dti, sizeof(*dti));
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("Not allow to set flag on committed (1) DTX entry "DF_DTI"\n",
-				DP_DTI(dti));
+			D_ERROR("Not allow to set flag %s on committed (1) DTX entry "DF_DTI"\n",
+				vos_dtx_flags2name(flags), DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
 	}
@@ -2235,9 +2229,12 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 		goto out;
 
 	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+	if (DAE_FLAGS(dae) & flags)
+		goto out;
+
 	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted) {
-		D_ERROR("Not allow to set flag on the %s DTX entry "DF_DTI"\n",
-			dae->dae_committable ? "committable" :
+		D_ERROR("Not allow to set flag %s on the %s DTX entry "DF_DTI"\n",
+			vos_dtx_flags2name(flags), dae->dae_committable ? "committable" :
 			dae->dae_committed ? "committed (2)" : "aborted", DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
@@ -2246,23 +2243,58 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags)
 	dae_df = umem_off2ptr(umm, dae->dae_df_off);
 	D_ASSERT(dae_df != NULL);
 
-	rc = umem_tx_begin(umm, NULL);
-	if (rc != 0)
-		goto out;
-
 	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags, sizeof(dae_df->dae_flags));
-	if (rc == 0)
+	if (rc == 0) {
 		dae_df->dae_flags |= flags;
-
-	rc = umem_tx_end(umm, rc);
-	if (rc == 0)
 		DAE_FLAGS(dae) |= flags;
+	}
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
 		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
 		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
 
+	if ((rc == -DER_NO_PERM || rc == -DER_NONEXIST) && flags == DTE_PARTIAL_COMMITTED)
+		rc = 0;
+
+	return rc;
+}
+
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	int			 rc = 0;
+	int			 i;
+
+	if (unlikely(count == 0))
+		goto out;
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	/* Only allow set single flags. */
+	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN && flags != DTE_PARTIAL_COMMITTED) {
+		D_ERROR("Try to set unrecognized flags %x on DTX "DF_DTI", count %u\n",
+			flags, DP_DTI(&dtis[0]), count);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < count; i++) {
+		rc = vos_dtx_set_flags_one(cont, &dtis[i], flags);
+		if (rc != 0)
+			break;
+	}
+
+	rc = umem_tx_end(umm, rc);
+
+out:
 	return rc;
 }
 
