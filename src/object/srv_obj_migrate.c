@@ -595,6 +595,12 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 #define MAX_BUF_SIZE		2048
 #define CSUM_BUF_SIZE		256
 
+static int
+migrate_update_rc(int rc)
+{
+	return (rc == -DER_RECX_OVERLAP) ? 0 : rc;
+}
+
 /**
  * allocate the memory for the iods_csums and unpack the csum_iov into the
  * into the iods_csums.
@@ -728,6 +734,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 					    0, &mrone->mo_dkey, iod_cnt,
 					    &mrone->mo_iods[start], iod_csums,
 					    &sgls[start]);
+			rc = migrate_update_rc(rc);
 			daos_csummer_free_ic(csummer, &iod_csums);
 
 			if (rc) {
@@ -767,6 +774,7 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 				    0, &mrone->mo_dkey, iod_cnt,
 				    &mrone->mo_iods[start], iod_csums,
 				    &sgls[start]);
+		rc = migrate_update_rc(rc);
 
 		if (rc) {
 			D_ERROR("migrate failed: "DF_RC"\n", DP_RC(rc));
@@ -889,6 +897,7 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 				    parity_eph, mrone->mo_version,
 				    0, &mrone->mo_dkey, 1, iod, iod_csums,
 				    &tmp_sgl);
+		rc = migrate_update_rc(rc);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1181,6 +1190,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 			    mrone->mo_min_epoch, mrone->mo_version,
 			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
+	rc = migrate_update_rc(rc);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		if (iov[i].iov_buf)
@@ -1333,6 +1343,7 @@ post:
 end:
 	rc1 = vos_update_end(ioh, mrone->mo_version, &mrone->mo_dkey, rc, NULL,
 			     NULL);
+	rc1 = migrate_update_rc(rc1);
 	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_csummer_destroy(&csummer);
 	daos_iov_free(&csum_iov_fetch);
@@ -1455,6 +1466,7 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 				    mrone->mo_version, 0, &mrone->mo_dkey,
 				    mrone->mo_punch_iod_num,
 				    mrone->mo_punch_iods, NULL, NULL);
+		rc = migrate_update_rc(rc);
 		D_DEBUG(DB_REBUILD, DF_UOID" mrone %p punch %d eph "DF_U64
 			" records: "DF_RC"\n", DP_UOID(mrone->mo_oid), mrone,
 			mrone->mo_punch_iod_num, mrone->mo_rec_punch_eph,
