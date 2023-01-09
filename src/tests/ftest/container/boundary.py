@@ -41,6 +41,7 @@ class BoundaryTest(TestWithServers):
         self.io_run_time = self.params.get("run_time", '/run/container/execute_io/*')
         self.io_rank = self.params.get("rank", '/run/container/execute_io/*')
         self.io_obj_classs = self.params.get("obj_classs", '/run/container/execute_io/*')
+        self.dmg = self.get_dmg_command()
 
     def create_pool(self):
         """Get a test pool object and append to list.
