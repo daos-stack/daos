@@ -28,7 +28,7 @@ class SegCount(IorTestBase):
         :avocado: tags=all
         :avocado: tags=hw,large
         :avocado: tags=mpiio
-        :avocado: tags=ior_segcount
+        :avocado: tags=ior_segcount,test_segcount
         """
         # Update the hostfile with the requested number of slots per host
         self.hostfile_clients = write_host_file(

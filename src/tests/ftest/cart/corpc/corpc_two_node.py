@@ -18,6 +18,7 @@ class CartCoRpcTwoNodeTest(CartTest):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,corpc,two_node,memcheck
+        :avocado: tags=test_cart_corpc
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)

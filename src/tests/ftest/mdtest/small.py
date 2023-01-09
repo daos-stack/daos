@@ -26,7 +26,7 @@ class MdtestSmall(MdtestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=mdtest,checksum,dfs,dfuse
-        :avocado: tags=mdtest_small
+        :avocado: tags=mdtest_small,test_mdtest_small
         """
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)

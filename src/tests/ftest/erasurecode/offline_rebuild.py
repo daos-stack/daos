@@ -26,8 +26,7 @@ class EcodOfflineRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_offline_rebuild,rebuild
-        :avocado: tags=ec_offline_rebuild_array
-
+        :avocado: tags=ec_offline_rebuild_array,test_ec_offline_rebuild
         """
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()

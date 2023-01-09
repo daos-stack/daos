@@ -363,7 +363,20 @@ func TestIpmctl_prep(t *testing.T) {
 			runOut: []string{
 				verStr, mockXMLRegions(t, "sock-one"), "",
 			},
-			expErr: errors.New("namespace major version (0) to equal numa node (1)"),
+			expPrepResp: &storage.ScmPrepareResponse{
+				Socket: storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+				Namespaces: storage.ScmNamespaces{
+					{
+						UUID:        "842fc847-28e0-4bb6-8dfc-d24afdba1528",
+						BlockDevice: "pmem0",
+						Name:        "namespace0.0",
+						NumaNode:    1,
+						Size:        3012 * humanize.GiByte,
+					},
+				},
+			},
 			expCalls: []string{
 				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
 			},

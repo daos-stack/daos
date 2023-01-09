@@ -26,8 +26,7 @@ class EcodDisabledRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_disabled_rebuild,rebuild
-        :avocado: tags=ec_disabled_rebuild_array
-
+        :avocado: tags=ec_disabled_rebuild_array,test_ec_degrade
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")

@@ -125,7 +125,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_with_csum
+        :avocado: tags=osa_drain,online_drain,online_drain_with_csum,test_osa_online_drain
         """
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
@@ -140,6 +140,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa
         :avocado: tags=osa_drain,online_drain,online_drain_without_csum
+        :avocado: tags=test_osa_online_drain_no_csum
         """
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -155,7 +156,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_oclass
+        :avocado: tags=osa_drain,online_drain,online_drain_oclass,test_osa_online_drain_oclass
         """
         self.log.info("Online Drain : Oclass")
         for oclass in self.test_oclass:
@@ -171,6 +172,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_aggregation
+        :avocado: tags=test_osa_online_drain_with_aggregation
         """
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -186,7 +188,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_mdtest
+        :avocado: tags=osa_drain,online_drain,online_drain_mdtest,test_osa_online_drain_mdtest
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")

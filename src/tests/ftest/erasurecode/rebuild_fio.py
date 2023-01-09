@@ -82,7 +82,7 @@ class EcodFioRebuild(ErasureCodeFio):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,fio,ec_online_rebuild
-        :avocado: tags=ec_online_rebuild_fio
+        :avocado: tags=ec_online_rebuild_fio,test_ec_online_rebuild_fio
         """
         self.execution('on-line')
 
@@ -102,6 +102,6 @@ class EcodFioRebuild(ErasureCodeFio):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,fio,ec_offline_rebuild
-        :avocado: tags=ec_offline_rebuild_fio
+        :avocado: tags=ec_offline_rebuild_fio,test_ec_offline_rebuild_fio
         """
         self.execution('off-line')

@@ -18,6 +18,7 @@ class CartGhostRankRpcOneNodeTest(CartTest):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,ghost_rank_rpc,one_node,memcheck
+        :avocado: tags=test_cart_ghost_rank_rpc
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)

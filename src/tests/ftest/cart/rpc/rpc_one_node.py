@@ -18,6 +18,7 @@ class CartRpcOneNodeTest(CartTest):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,rpc,one_node,memcheck
+        :avocado: tags=test_cart_rpc
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
         clicmd = self.build_cmd(self.env, "test_clients")

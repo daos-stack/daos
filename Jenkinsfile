@@ -26,15 +26,16 @@ void job_status_write() {
     }
     String jobName = env.JOB_NAME.replace('/', '_')
     jobName += '_' + env.BUILD_NUMBER
-    String fileName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName
+    String dirName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName + '/'
 
     String job_status_text = writeYaml data: job_status_internal,
                                        returnText: true
 
     // Need to use shell script for creating files that are not
     // in the workspace.
-    sh label: "Write jenkins_job_status ${fileName}",
-       script: "echo \"${job_status_text}\" >> ${fileName}"
+    sh label: "Write jenkins_job_status ${dirName}jenkins_result",
+       script: """mkdir -p ${dirName}
+                  echo "${job_status_text}" >> ${dirName}jenkins_result"""
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired

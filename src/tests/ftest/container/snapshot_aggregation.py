@@ -27,6 +27,8 @@ class SnapshotAggregation(IorTestBase):
 
     def update_free_space(self):
         """Append to the free space list with the current pool capacities."""
+        self.pool.get_info()
+        self.pool.set_query_data()
         for index, name in enumerate(("scm", "nvme")):
             for tier in self.pool.query_data["response"]["tier_stats"]:
                 if tier["media_type"] == name:
@@ -54,8 +56,6 @@ class SnapshotAggregation(IorTestBase):
 
         # Create a pool and a container that spans the 2 servers.
         self.update_ior_cmd_with_pool()
-        self.pool.get_info()
-        self.pool.set_query_data()
         self.update_free_space()
         self.log.info(
             "Pool free space before writes:\n  SCM:  %s\n  NVMe: %s",
@@ -129,8 +129,6 @@ class SnapshotAggregation(IorTestBase):
             time.sleep(sleep_time)
 
             # Update the utilized capacity of the pool
-            self.pool.get_info()
-            self.pool.set_query_data()
             self.update_free_space()
             self.log.info(
                 "Pool free space %s seconds after deleting the snapshot:"

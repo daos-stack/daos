@@ -73,7 +73,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
             removes principal in ACL.
 
         :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_delete_acl
+        :avocado: tags=cont_delete_acl,test_delete_valid_acl
         """
         for principal in self.principals_table:
             self.daos_cmd.container_delete_acl(
@@ -94,7 +94,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
             remove principal in ACL without permission.
 
         :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_delete_acl_noperms
+        :avocado: tags=cont_delete_acl_noperms,test_no_user_permissions
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

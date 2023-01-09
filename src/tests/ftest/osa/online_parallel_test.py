@@ -202,6 +202,6 @@ class OSAOnlineParallelTest(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_parallel,online_parallel
+        :avocado: tags=osa_parallel,online_parallel,test_osa_online_parallel_test
         """
         self.run_online_parallel_test(1)

@@ -27,8 +27,7 @@ class EcodOfflineRebuildSingle(ErasureCodeSingle):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_single,ec_offline_rebuild,rebuild
-        :avocado: tags=ec_offline_rebuild_single
-
+        :avocado: tags=ec_offline_rebuild_single,test_ec_offline_rebuild_single
         """
         # Write single type data set with all the EC object type
         self.write_single_type_dataset()
