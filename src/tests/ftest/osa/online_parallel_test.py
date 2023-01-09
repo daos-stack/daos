@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -194,7 +194,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum.osa_parallel
-        :avocado: tags=OSAOnlineParallelTest,online_parallel
+        :avocado: tags=osa,checksum,osa_parallel
+        :avocado: tags=OSAOnlineParallelTest,test_osa_online_parallel_test
         """
         self.run_online_parallel_test(1)

@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,7 @@ class PoolCreateQueryTests(PoolTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool
-        :avocado: tags=pool_create_and_query
+        :avocado: tags=pool_create_and_query,test_create_and_query
         """
         # Create pool
         self.add_pool()
