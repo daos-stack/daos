@@ -2629,7 +2629,7 @@ class Launch():
                 "timeout": 900,
             }
             remote_files["dmg strace files"] = {
-                "source": daos_test_log_dir,
+                "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dmg_strace"),
                 "pattern": "dmg.*.strace",
                 "hosts": test.host_info.all_hosts,

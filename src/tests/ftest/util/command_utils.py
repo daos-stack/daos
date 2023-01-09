@@ -187,7 +187,7 @@ class ExecutableCommand(CommandWithParameters):
         # commands are of form '/usr/bin/dmg -o /etc/daos/daos_control.yml -d -j pool create ...'
         words = command.split()
         if len(words) > 6 and 'dmg' in words[0]  and words[5] == 'pool' and words[6] == 'create':
-            command = ' '.join(['strace', '-f -tt -T -o ', 'dmg.{}.strace'.format(time.time()), command])
+            command = ' '.join(['strace', '-f -tt -T -o ', '/tmp/dmg.{}.strace'.format(time.time()), command])
 
         if raise_exception is None:
             raise_exception = self.exit_status_exception
