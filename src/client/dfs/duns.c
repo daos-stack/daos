@@ -960,9 +960,23 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		struct statfs fs;
-		char         *dir, *dirp;
-		mode_t        mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+		struct statfs	fs;
+		char		*dir, *dirp;
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL)
+			return ENOMEM;
+
+		dirp = dirname(dir);
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
+			D_FREE(dir);
+			return err;
+		}
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
@@ -973,12 +987,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 #endif
 
-		D_STRNDUP(dir, path, path_len);
-		if (dir == NULL)
-			return ENOMEM;
-
-		dirp = dirname(dir);
-
 		/** create a new directory if POSIX/MPI-IO container */
 		rc = mkdir(path, mode);
 		if (rc == -1) {
@@ -987,15 +995,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
 			D_FREE(dir);
 			return rc;
-		}
-
-		rc = statfs(dirp, &fs);
-		if (rc == -1) {
-			int err = errno;
-
-			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
-			D_FREE(dir);
-			return err;
 		}
 
 		/* Open the parent directory for the new container so we can call a dfuse iotcl
@@ -1026,9 +1025,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			}
 			backend_dfuse = true;
 		}
-
 		D_FREE(dir);
-
 	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
@@ -1140,7 +1137,8 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 	daos_pool_info_t	pinfo = {0};
 	daos_cont_info_t	cinfo = {0};
 	daos_cont_layout_t	type;
-	char			pool_str[37], cont_str[37];
+	char			pool_str[DAOS_UUID_STR_SIZE];
+	char			cont_str[DAOS_UUID_STR_SIZE];
 	int			len;
 	char			str[DUNS_MAX_XATTR_LEN];
 	char			type_str[10];
@@ -1191,6 +1189,21 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 		size_t		path_len;
 
+		path_len = strnlen(path, PATH_MAX);
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL)
+			D_GOTO(out_cont, rc = ENOMEM);
+		dirp = dirname(dir);
+
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
+			D_FREE(dir);
+			D_GOTO(out_cont, rc = err);
+		}
+		D_FREE(dir);
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
 			rc = duns_link_lustre_path(pool_str, cont_str, type, path, mode);
@@ -1199,28 +1212,13 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 			/* if Lustre specific method fails, fallback to try the normal way... */
 		}
 #endif
-		path_len = strnlen(path, PATH_MAX);
-		D_STRNDUP(dir, path, path_len);
-		if (dir == NULL)
-			D_GOTO(out_cont, rc = ENOMEM);
-		dirp = dirname(dir);
 
 		/** create a new directory if POSIX container */
 		rc = mkdir(path, mode);
 		if (rc == -1) {
 			rc = errno;
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
-			D_FREE(dir);
 			D_GOTO(out_cont, rc);
-		}
-
-		rc = statfs(dirp, &fs);
-		if (rc == -1) {
-			int err = errno;
-
-			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
-			D_FREE(dir);
-			D_GOTO(err_link, rc = err);
 		}
 
 		/* Open the parent directory for the new container so we can call a dfuse iotcl
@@ -1242,7 +1240,6 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 				D_GOTO(err_link, rc);
 			}
 		}
-		D_FREE(dir);
 	} else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
