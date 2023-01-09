@@ -1,11 +1,12 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 from ec_utils import ErasureCodeIor, check_aggregation_status
+
 
 class EcodAggregationOffRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -83,7 +84,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_rebuild_agg_disabled
+        :avocado: tags=ec_offline_rebuild_agg_disabled,test_ec_offline_rebuild_agg_disabled
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -107,7 +108,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_rebuild_agg_default
+        :avocado: tags=ec_offline_rebuild_agg_default,test_ec_offline_rebuild_agg_default
         """
         self.execution(agg_trigger=True)
 
@@ -128,7 +129,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_offline_agg_during_rebuild
+        :avocado: tags=ec_offline_agg_during_rebuild,test_ec_offline_agg_during_rebuild
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")

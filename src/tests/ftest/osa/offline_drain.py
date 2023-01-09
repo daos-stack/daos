@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -148,7 +148,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain,checksum,ior
-        :avocado: tags=offline_drain,offline_drain_with_csum
+        :avocado: tags=offline_drain,offline_drain_with_csum,test_osa_offline_drain
         """
         self.log.info("Offline Drain : Basic Drain")
         self.run_offline_drain_test(1, True)
@@ -162,6 +162,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain
         :avocado: tags=offline_drain,offline_drain_without_csum
+        :avocado: tags=test_osa_offline_drain_without_checksum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -177,6 +178,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain,checksum
         :avocado: tags=offline_drain,offline_drain_during_aggregation
+        :avocado: tags=test_osa_offline_drain_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -191,7 +193,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain
-        :avocado: tags=offline_drain,offline_drain_oclass
+        :avocado: tags=offline_drain,offline_drain_oclass,test_osa_offline_drain_oclass
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -209,6 +211,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain
         :avocado: tags=offline_drain,offline_drain_multiple_pools
+        :avocado: tags=test_osa_offline_drain_multiple_pools
         """
         self.log.info("Offline Drain : Multiple Pools")
         self.run_offline_drain_test(2, data=True)
@@ -222,6 +225,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain
         :avocado: tags=offline_drain,offline_drain_during_rebuild
+        :avocado: tags=test_osa_offline_drain_during_rebuild
         """
         self.test_during_rebuild = self.params.get("test_with_rebuild",
                                                    '/run/rebuild/*')
@@ -237,6 +241,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,osa_drain,checksum
         :avocado: tags=offline_drain,offline_drain_after_snapshot
+        :avocado: tags=test_osa_offline_drain_after_snapsot
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot",
                                                   '/run/snapshot/*')
@@ -250,6 +255,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=all,full_regression,hw,medium,ib2
         :avocado: tags=osa,offline_drain_full
         :avocado: tags=offline_drain_with_less_pool_space
+        :avocado: tags=test_osa_offline_drain_with_less_pool_space
         """
         self.log.info("Offline Drain : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
