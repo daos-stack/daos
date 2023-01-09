@@ -1221,6 +1221,67 @@ int verify_blobstore_state(int state, const char *state_str)
 	return 1;
 }
 
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (force != 0) {
+		args = cmd_push_arg(args, &argcount, " --force ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank, const char *arg)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "-o ");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, arg);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system start", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
 const char *
 daos_target_state_enum_to_str(int state)
 {

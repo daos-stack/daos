@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +54,7 @@ PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
+        ("ucx", "ucx+tcp"),
         ("tcp", "ofi+tcp"),
     ]
 )
