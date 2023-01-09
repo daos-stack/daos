@@ -94,7 +94,11 @@ class BoundaryTest(TestWithServers):
         for _ in range(num_pools):
             pool_manager.add()
         self.log.info('Creating %d pools', num_pools)
+        # Explicitly elevate log mask to DEBUG for multiple pool create scenario and
+        # restore it after.
+        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         result = pool_manager.run()
+        self.dmg.server_set_logmasks(raise_exception=False)
         num_failed = len(list(filter(lambda r: not r.passed, result)))
         if num_failed > 0:
             self.fail('{} pool create threads failed'.format(num_failed))

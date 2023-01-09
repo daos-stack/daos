@@ -15,11 +15,11 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: WARN
+      log_mask: DEBUG
       targets: 4
       env_vars:
         - DD_MASK=group_metadata_only
-        - D_LOG_FLUSH=WARN
+        - D_LOG_FLUSH=DEBUG
       storage:
         0:
           class: dcpm
@@ -53,3 +53,4 @@ pool:
   scm_size: 60%
   nvme_size: 60%
   quantity: 200
+  set_logmasks: False
