@@ -50,7 +50,7 @@ struct test_input_value tst_fn_val;
 
 static struct utest_context	*ts_utx;
 static struct umem_attr		*ts_uma;
-static int			 ts_feats = EVT_FEAT_DEFAULT;
+static int                       ts_feats = EVT_FEAT_DEFAULT | EVT_FEAT_DYNAMIC_ROOT;
 
 #define ORDER_DEF_INTERNAL	13
 #define	ORDER_DEF		16

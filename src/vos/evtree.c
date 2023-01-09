@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1165,7 +1165,13 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
-		tcx->tc_order	= order;
+		if (feats & EVT_FEAT_DYNAMIC_ROOT) {
+			tcx->tc_order     = 1;
+			tcx->tc_max_order = order;
+		} else {
+			tcx->tc_order     = order;
+			tcx->tc_max_order = order;
+		}
 		depth		= 0;
 		V_TRACE(DB_TRACE, "Create context for a new tree\n");
 
@@ -1178,12 +1184,16 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
+		if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+			tcx->tc_max_order = root->tr_max_order;
+		else
+			tcx->tc_max_order = root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
 		V_TRACE(DB_TRACE, "Load tree context from %p\n", root);
 	}
 
-	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
+	policy = tcx->tc_feats & EVT_POLICY_MASK;
 	switch (policy) {
 	case EVT_FEAT_SORT_SOFF:
 		tcx->tc_ops = evt_policies[0];
@@ -1317,7 +1327,7 @@ out:
 static bool
 evt_node_is_full(struct evt_context *tcx, struct evt_node *nd)
 {
-	D_ASSERT(nd->tn_nr <= tcx->tc_order);
+	D_ASSERTF(nd->tn_nr <= tcx->tc_order, "tn_nr=%d tc_order=%d\n", nd->tn_nr, tcx->tc_order);
 	return nd->tn_nr == tcx->tc_order;
 }
 
@@ -1411,8 +1421,14 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	umem_off_t		 nd_off;
 	bool			 leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf),
-			leaf ? VOS_SLAB_EVT_NODE : VOS_SLAB_EVT_NODE_SM);
+	if (tcx->tc_order <= tcx->tc_max_order) {
+		/** Dynamic nodes could use slab with some extra work but keep it simple for now */
+		nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
+	} else {
+		/** Full size nodes should use the slab */
+		nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf),
+					leaf ? VOS_SLAB_EVT_NODE : VOS_SLAB_EVT_NODE_SM);
+	}
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -1659,6 +1675,10 @@ evt_root_init(struct evt_context *tcx)
 
 	root->tr_feats = tcx->tc_feats;
 	root->tr_order = tcx->tc_order;
+	if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+		root->tr_max_order = tcx->tc_max_order;
+	else
+		root->tr_max_order = 0; /** For backward compatibility */
 	root->tr_node  = UMOFF_NULL;
 	root->tr_pool_uuid = umem_get_uuid(evt_umm(tcx));
 
@@ -1823,6 +1843,70 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	return rc < 0 ? nd1 : nd2;
 }
 
+/** Expand the dynamic tree root node if it is currently full and not
+ *  already at full size
+ */
+static inline int
+evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
+{
+	struct evt_node *nd_cur;
+	int              rc;
+	uint8_t          old_order;
+	void            *new_node;
+	int              old_size;
+	umem_off_t       new_off;
+
+	if (tcx->tc_order == tcx->tc_max_order)
+		return 0;
+
+	nd_cur = evt_off2node(tcx, trace->tr_node);
+	D_ASSERT(evt_node_is_leaf(tcx, nd_cur));
+	D_ASSERT(tcx->tc_depth == 1);
+	D_ASSERT(tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT);
+
+	if (!evt_node_is_full(tcx, nd_cur))
+		return 0;
+
+	old_order = tcx->tc_order;
+	old_size  = evt_node_size(tcx, true);
+
+	if (tcx->tc_order == 7)
+		tcx->tc_order = tcx->tc_max_order;
+	else
+		tcx->tc_order = ((tcx->tc_order + 1) << 1) - 1;
+
+	if (tcx->tc_order > tcx->tc_max_order)
+		tcx->tc_order = tcx->tc_max_order;
+
+	rc = evt_node_alloc(tcx, true, &new_off);
+	if (rc != 0)
+		goto failed;
+
+	new_node = umem_off2ptr(evt_umm(tcx), new_off);
+	memcpy(new_node, nd_cur, old_size);
+	rc = umem_free(evt_umm(tcx), trace->tr_node);
+	if (rc != 0) {
+		tcx->tc_order = old_order;
+		goto failed;
+	}
+
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		goto failed;
+
+	tcx->tc_root->tr_order = tcx->tc_order;
+	tcx->tc_root->tr_node  = new_off;
+
+	trace->tr_node     = new_off;
+	trace->tr_tx_added = true;
+
+	return 0;
+
+failed:
+	tcx->tc_order = old_order;
+	return rc;
+}
+
 /**
  * Insert an entry \a entry to the leaf node located by the trace of \a tcx.
  * If the leaf node is full it will be split. The split will bubble up if its
@@ -1848,10 +1932,16 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		umem_off_t		 nm_cur;
 		umem_off_t		 nm_new;
 		bool			 leaf;
+		bool                     changed;
 
 		trace	= &tcx->tc_trace[level];
+		rc      = evt_node_extend(tcx, trace);
+		if (rc != 0)
+			goto failed;
+
 		nm_cur	= trace->tr_node;
 		nd_cur = evt_off2node(tcx, nm_cur);
+
 		if (!trace->tr_tx_added) {
 			rc = evt_node_tx_add(tcx, nd_cur);
 			if (rc != 0)
@@ -1883,8 +1973,6 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		}
 
 		if (!evt_node_is_full(tcx, nd_cur)) {
-			bool	changed;
-
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
 					     &entry, &changed, csum_bufp);
 			if (rc != 0)
@@ -1902,6 +1990,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			level--;
 			continue;
 		}
+
 		/* Try to split */
 
 		V_TRACE(DB_TRACE, "Split node at level %d\n", level);
@@ -3020,8 +3109,9 @@ evt_debug(daos_handle_t toh, int debug_level)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	D_PRINT("Tree depth=%d, order=%d, feats="DF_X64"\n",
-		tcx->tc_depth, tcx->tc_order, tcx->tc_feats);
+	D_PRINT("Tree depth=%d, order=%d, max=%d, feats=" DF_X64 "\n", tcx->tc_depth, tcx->tc_order,
+		tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT ? tcx->tc_max_order : tcx->tc_order,
+		tcx->tc_feats);
 
 	if (tcx->tc_root->tr_node != 0)
 		evt_node_debug(tcx, tcx->tc_root->tr_node, 0, debug_level);
