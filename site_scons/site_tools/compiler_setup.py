@@ -28,7 +28,6 @@ def _base_setup(env):
     Include all our preferred compile options for the chosen
     compiler and build type.
     """
-
     if GetOption('help') or GetOption('clean'):
         return
 
@@ -86,6 +85,11 @@ def _base_setup(env):
     env['BSETUP'] = compiler
 
 
-def setup(env):
+def generate(env):
     """Add daos specific method to environment"""
     env.AddMethod(_base_setup, 'compiler_setup')
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True

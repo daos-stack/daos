@@ -23,9 +23,10 @@ MIN_FORMAT_VERSION = 12
 
 
 def _supports_custom_format(clang_exe):
-    """Checks if the version of clang-format is new enough to parse the settings used by
-    the config file"""
+    """Checks if the version of clang-format is new enough.
 
+    Older versions complain about some of the options used so enforce a minimum version.
+    """
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])
         output = rawbytes.decode('utf-8')
@@ -42,9 +43,10 @@ def _supports_custom_format(clang_exe):
 
 
 def _supports_correct_style(clang_exe):
-    """Checks if the version of clang-format is 14.0.5 or newer which is required to correctly
-    reformat code for landing"""
+    """Checks if the version of clang-format is 14.0.5 or newer.
 
+    Older versions contain bugs so will generate incorrectly formatted code on occasion.
+    """
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])
         output = rawbytes.decode('utf-8')
@@ -118,7 +120,6 @@ def main():
 
 def generate(env):
     """Setup the our custom tools"""
-
     indent = _find_indent()
 
     # pylint: disable-next=unused-argument

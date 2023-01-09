@@ -42,7 +42,7 @@ class DaosAggregationThrottling(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=aggregation,daosio
+        :avocado: tags=aggregation,daosio,ior
         :avocado: tags=DaosAggregationThrottling,test_aggregation_throttling
         """
         # Create pool and container
@@ -89,28 +89,24 @@ class DaosAggregationThrottling(IorTestBase):
            +/- expected_perf_diff % of before_metric_performance.
 
         Args:
-           before_metric (IorMetrics): ior metrics before aggregation
-           after_metric (IorMetrics): ior metrics in concurrent with aggregation
-           read_write_idx (int): Read (1) or Write (0) index in the IorMetrics
+           before_metric (tuple): ior metrics before aggregation, from get_ior_metrics
+           after_metric (tuple): ior metrics in concurrent with aggregation, from get_ior_metrics
+           read_write_idx (int): Read (1) or Write (0) index in the metrics
            expected_perf_diff (float): Expected performance difference between
                                        before_metric and after_metric.
         """
         self.log.info("\n\n %s Performance", "Read" if read_write_idx else "Write")
 
-        max_mib = int(IorMetrics.Max_MiB)
-        min_mib = int(IorMetrics.Min_MiB)
-        mean_mib = int(IorMetrics.Mean_MiB)
-
-        max_prev = float(before_metric[read_write_idx][max_mib])
-        max_curr = float(after_metric[read_write_idx][max_mib])
+        max_prev = float(before_metric[read_write_idx][IorMetrics.MAX_MIB])
+        max_curr = float(after_metric[read_write_idx][IorMetrics.MAX_MIB])
         self.log.info("max_prev = %s, max_curr = %s", max_prev, max_curr)
 
-        min_prev = float(before_metric[read_write_idx][min_mib])
-        min_curr = float(after_metric[read_write_idx][min_mib])
+        min_prev = float(before_metric[read_write_idx][IorMetrics.MIN_MIB])
+        min_curr = float(after_metric[read_write_idx][IorMetrics.MIN_MIB])
         self.log.info("min_prev = %s, min_curr = %s", min_prev, min_curr)
 
-        mean_prev = float(before_metric[read_write_idx][mean_mib])
-        mean_curr = float(after_metric[read_write_idx][mean_mib])
+        mean_prev = float(before_metric[read_write_idx][IorMetrics.MEAN_MIB])
+        mean_curr = float(after_metric[read_write_idx][IorMetrics.MEAN_MIB])
         self.log.info("mean_prev = %s, mean_curr = %s", mean_prev, mean_curr)
 
         max_perf_diff = (abs(max_prev - max_curr) / max_prev) * 100
