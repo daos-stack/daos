@@ -172,7 +172,7 @@ ds3_disconnect(ds3_t *ds3, daos_event_t *ev);
  *
  * \param[in]	name		Name of the S3 user to look up.
  * \param[in]	info		User info.
- * \param[in]	olf_info	(Optional) Old user info.
+ * \param[in]	old_info	(Optional) Old user info.
  * \param[in]	ds3		Pointer to the DAOS S3 pool handle to use.
  * \param[in]	ev		Completion event, it is optional and can be NULL.
  *				Function will run in blocking mode if \a ev is NULL.
