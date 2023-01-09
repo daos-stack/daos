@@ -345,8 +345,7 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 
 	if (dx->dx_main_xs != 0)
 		return true;
-
-	if (dss_md_on_ssd_enabled && dx->dx_xs_id == 0)
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
 		return true;
 
 	return false;

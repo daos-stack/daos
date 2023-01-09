@@ -641,7 +641,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
-int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts);
+int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles);
 int bio_set_hotplug_filter(const char *nvme_conf);
 int bio_read_accel_props(const char *nvme_conf);
 int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);

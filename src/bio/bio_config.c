@@ -484,6 +484,7 @@ check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 	struct spdk_json_val	*key, *value;
 	char			*name;
 	int			 rc = 0;
+	int			 roles = 0;
 
 	D_ASSERT(ctx->config_it != NULL);
 
@@ -527,11 +528,7 @@ check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 				D_ERROR("bdev_name contains invalid roles: %s\n", name);
 				D_GOTO(free_name, rc);
 			}
-			if (rc & NVME_ROLE_META || rc & NVME_ROLE_WAL) {
-				rc = 1;
-				break;
-			}
-			rc = 0;
+			roles |= rc;
 		}
 		key = spdk_json_next(key);
 	}
@@ -540,7 +537,7 @@ free_name:
 	D_FREE(name);
 free_method:
 	D_FREE(cfg.method);
-	return rc;
+	return rc < 0 ?  rc : roles;
 }
 
 static int
@@ -595,6 +592,7 @@ static int
 check_md_on_ssd_status(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss)
 {
 	int	rc;
+	int	roles = 0;
 
 	rc = decode_subsystem_configs(bdev_ss, ctx);
 	if (rc != 0)
@@ -602,14 +600,14 @@ check_md_on_ssd_status(struct json_config_ctx *ctx, struct spdk_json_val *bdev_s
 
 	while (ctx->config_it != NULL) {
 		rc = check_name_from_bdev_subsys(ctx);
-		if (rc != 0)
+		if (rc < 0)
 			return rc;
+		roles |= rc;
 		/* Move on to next subsystem config*/
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 
-	return rc;
-
+	return roles;
 }
 
 static int
@@ -638,85 +636,17 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 }
 
 /**
- * Check if MD-ON-SSD enabled based on attach bdev name roles
- * in the JSON config file.
- *
- * \param[IN]	nvme_conf	JSON config file path
- *
- * \returns	0 MD-ON-SSD not enabled
- *		1 MD-ON-SSD enabled.
- *		negative on failure (DER)
- */
-int bio_check_md_on_ssd(const char *nvme_conf)
-{
-	struct json_config_ctx	*ctx;
-	int			 rc = 0;
-	struct spdk_json_val	*bdev_ss = NULL;
-
-	D_ASSERT(nvme_conf != NULL);
-
-	D_ALLOC_PTR(ctx);
-	if (ctx == NULL)
-		return -DER_NOMEM;
-
-	rc = read_config(nvme_conf, ctx);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Capture subsystems array */
-	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
-	if (rc < 0) {
-		D_ERROR("Failed to find subsystems key: %s\n", strerror(-rc));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	/* Get first subsystem */
-	ctx->subsystems_it = spdk_json_array_first(ctx->subsystems);
-	if (ctx->subsystems_it == NULL) {
-		D_ERROR("Empty subsystems section\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	while (ctx->subsystems_it != NULL) {
-		/* Capture subsystem name and config array */
-		rc = spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
-					     SPDK_COUNTOF(subsystem_decoders), ctx);
-		if (rc < 0) {
-			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(-rc));
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-
-		if (spdk_json_strequal(ctx->subsystem_name, "bdev"))
-			bdev_ss = ctx->subsystems_it;
-
-		/* ? need check vmd? */
-		/* Move on to next subsystem */
-		ctx->subsystems_it = spdk_json_next(ctx->subsystems_it);
-	}
-
-	if (bdev_ss == NULL) {
-		D_ERROR("Config is missing bdev subsystem\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rc = check_md_on_ssd_status(ctx, bdev_ss);
-
-out:
-	free_json_config_ctx(ctx);
-	return rc;
-}
-
-/**
  * Set allowed bdev PCI addresses in provided SPDK environment options based on attach bdev RPCs
  * in the JSON config file.
  *
  * \param[IN]	nvme_conf	JSON config file path
  * \param[OUT]	opts		SPDK environment options
+ * \param[OUT]	roles		global nvme bdev roles
  *
  * \returns	 Zero on success, negative on failure (DER)
  */
 int
-bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*bdev_ss = NULL;
@@ -776,6 +706,11 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts)
 	rc = check_vmd_status(ctx, vmd_ss, &vmd_enabled);
 	if (rc < 0)
 		goto out;
+
+	rc = check_md_on_ssd_status(ctx, bdev_ss);
+	if (rc < 0)
+		goto out;
+	*roles = rc;
 
 	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
 out:

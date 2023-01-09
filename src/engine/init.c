@@ -91,9 +91,6 @@ static bool dss_abt_init;
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
-/** MD-ON-SSD enabled or not */
-bool dss_md_on_ssd_enabled;
-
 d_rank_t
 dss_self_rank(void)
 {
