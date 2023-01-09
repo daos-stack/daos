@@ -239,7 +239,7 @@ func verifyPMem(log logging.Logger, resp *storage.ScmPrepareResponse, regions Re
 		}
 
 		if uint32(maj) != ns.NumaNode {
-			return errors.Errorf("expected namespace major version (%d) to equal numa node (%d)",
+			log.Noticef("expected namespace major version (%d) to equal numa node (%d)",
 				maj, ns.NumaNode)
 		}
 
