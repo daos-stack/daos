@@ -778,20 +778,6 @@ class DaosServer():
             if 'running system' in data['error']:
                 break
 
-            needBreak = False
-            for err in data['response']['host_errors']:
-                if 'existing filesystem signature' in err:
-                    if self.conf.args.no_root:
-                        needBreak = True
-                        break
-                    if not forced:
-                        cmd.append('--force')
-                        forced = True
-                        break
-
-            if needBreak:
-                break
-
             if start_timeout < 5:
                 start_timeout *= 2
 
