@@ -136,7 +136,7 @@ function check_formatting()
 function get_test_runner()
 {
 	test_args="-mod vendor -race -cover -v ./... -tags firmware"
-	test_runner="go test"
+	test_runner="go test -failfast"
 
 	if which gotestsum >/dev/null; then
 		mkdir -p "$(dirname "$GO_TEST_XML")"
@@ -164,7 +164,9 @@ export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
 
-controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+#controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+#controldir="/home/samirrav/daos/src/control/cmd/dmg/"
+controldir="/home/samirrav/daos/src/control/lib/support/"
 
 check_formatting "$controldir"
 

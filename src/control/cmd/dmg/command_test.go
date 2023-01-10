@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -177,6 +177,7 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 }
 
 func runCmdTests(t *testing.T, cmdTests []cmdTest) {
+	t.Logf("---SAMIR in runCmdTests")
 	t.Helper()
 
 	for _, st := range cmdTests {

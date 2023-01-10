@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -62,7 +62,7 @@ var AgentCmd = []string{
 }
 
 var SystemCmd = []string{
-	"iperf3 --help",
+	//"iperf3 --help",
 	"dmesg",
 	"lspci -D",
 	"top -bcn1 -w512",
@@ -103,18 +103,23 @@ type copy struct {
 }
 
 // Print the progress bar during log collect command
-func PrintProgress(progBar *ProgressBar) {
+func PrintProgress(progBar *ProgressBar) string {
 	if !(progBar.JsonOutput) {
-		fmt.Printf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
+		printString := fmt.Sprintf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
 		progBar.Start = progBar.Start + 1
+		return printString
 	}
+
+	return ""
 }
 
 // Print the progress End once the log collection completed.
-func PrintProgressEnd(progBar *ProgressBar) {
+func PrintProgressEnd(progBar *ProgressBar) string {
 	if !(progBar.JsonOutput) {
-		fmt.Printf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
+		return fmt.Sprintf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
 	}
+
+	return ""
 }
 
 // Check if daos_engine process is running and return the bool value accordingly.

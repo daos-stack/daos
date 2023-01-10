@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -110,7 +110,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		support.PrintProgress(&progress)
+		fmt.Printf(support.PrintProgress(&progress))
 	}
 
 	// Rsync the logs from servers
@@ -133,7 +133,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return resp.Errors()
 		}
 	}
-	support.PrintProgress(&progress)
+	fmt.Printf(support.PrintProgress(&progress))
 
 	// Collect dmg command output on Admin node
 	var DmgInfoCollection = map[string][]string{
@@ -160,7 +160,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		support.PrintProgress(&progress)
+		fmt.Printf(support.PrintProgress(&progress))
 	}
 
 	// Archive the logs
@@ -176,7 +176,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	support.PrintProgressEnd(&progress)
+	fmt.Printf(support.PrintProgressEnd(&progress))
 
 	return nil
 }

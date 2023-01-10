@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -73,7 +73,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		support.PrintProgress(&progress)
+		fmt.Printf(support.PrintProgress(&progress))
 	}
 
 	if cmd.Archive == true {
@@ -88,7 +88,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	support.PrintProgressEnd(&progress)
+	fmt.Printf(support.PrintProgressEnd(&progress))
 
 	return nil
 }
