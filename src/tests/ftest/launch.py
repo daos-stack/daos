@@ -1496,15 +1496,15 @@ class Launch():
             tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
 
         Raises:
+            YamlException: if there is an error getting host information from the test yaml files
             StorageException: if there is an error creating the extra storage yaml files
 
         """
         engine_storage_yaml = {}
         for test in self.tests:
-            logger.debug("Reading %s", test.yaml_file)
             yaml_data = get_yaml_data(test.yaml_file)
             info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
-            logger.debug("info = %s", info)
+            logger.debug("Checking for auto-storage request in %s: %s", test.yaml_file, info)
             if "storage" in info and info["storage"] == "auto":
                 engines = info["engines_per_host"]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
@@ -1512,6 +1512,9 @@ class Launch():
                     logger.info("-" * 80)
                     storage_info.write_storage_yaml(yaml_file, engines, tier_type, scm_size=100)
                     engine_storage_yaml[engines] = yaml_file
+                logger.debug(
+                    "  - Adding auto-storage extra yaml %s for %s",
+                    engine_storage_yaml[engines], str(test))
                 test.extra_yaml.append(engine_storage_yaml[engines])
 
     @staticmethod

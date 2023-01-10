@@ -323,6 +323,7 @@ class StorageInfo():
         result = run_remote(self._log, self._hosts, command)
         if result.passed:
             # Collect all the devices defined by the command output
+            self._log.debug('Processing device information')
             for data in result.output:
                 all_output = '\n'.join(data.stdout)
                 info = {
@@ -371,16 +372,16 @@ class StorageInfo():
             for device in list(found_devices):
                 if found_devices[device] != self._hosts:
                     self._log.debug(
-                        "  device '%s' not found on all hosts, only %s",
-                        str(device), found_devices[device])
+                        "  device '%s' not found on all hosts: %s != %s",
+                        str(device), found_devices[device], str(self._hosts))
                     found_devices.pop(device)
 
         if found_devices:
-            self._log.debug('%s devices found on all hosts:', key)
+            self._log.debug('%s devices found on %s', key, str(self._hosts))
             for device in list(found_devices):
                 self._log.debug('  - %s', str(device))
         else:
-            self._log.debug('No %s devices found on all hosts', key)
+            self._log.debug('No %s devices found on %s', key, str(self._hosts))
 
         return list(found_devices.keys())
 
@@ -427,6 +428,7 @@ class StorageInfo():
         regex = (r'->\s+\.\./devices/pci[0-9a-f:]+/([0-9a-f:\.]+)/'
                  r'pci[0-9a-f:]+/[0-9a-f:\.]+/([0-9a-f:\.]+)')
         if result.passed:
+            self._log.debug('Processing controller disk information')
             for data in result.output:
                 disks_per_controller = {}
                 for controller, _ in re.findall(regex, '\n'.join(data.stdout)):
@@ -447,15 +449,15 @@ class StorageInfo():
             # Remove any non-homogeneous devices
             for controller, info in controller_info.items():
                 self._log.debug(
-                    'Controller %s: disks: %s, hosts: %s',
+                    '  Controller %s: disks: %s, hosts: %s',
                     controller, info['count'], str(info['hosts']))
                 if info['hosts'] != self._hosts:
                     self._log.debug(
-                        '  - controller %s not found on all hosts: %s != %s',
+                        '    - controller %s not found on all hosts: %s != %s',
                         controller, str(info['hosts']), str(self._hosts))
                 elif len(info['count']) != 1:
                     self._log.debug(
-                        '  - non-homogeneous disk count found for controller %s: %s',
+                        '    - non-homogeneous disk count found for controller %s: %s',
                         controller, info['count'])
                 else:
                     controllers[controller] = list(info['count'])[0]
@@ -464,8 +466,8 @@ class StorageInfo():
         if not controllers:
             self._raise_error("Error: Non-homogeneous NVMe device behind VMD addresses.")
 
-        self._log.debug('Controller/disk mapping')
-        for controller, disk_count in controllers.values():
+        self._log.debug('Controllers found with equal disk quantity on %s', str(self._hosts))
+        for controller, disk_count in controllers.items():
             self._log.debug('  %s: %s disk(s)', controller, disk_count)
 
         return controllers
