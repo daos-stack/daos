@@ -1700,6 +1700,12 @@ crt_handle_rpc(void *arg)
 	 */
 	if (rpc_priv->crp_srv || (rpc_priv->crp_coll && !rpc_priv->crp_srv))
 		RPC_DECREF(rpc_priv);
+
+	/*
+	 * Corresponding ADDREF in crt_rpc_handler_common before call to
+	 * crt_ctx->cc_rpc_cb()
+	 */
+	RPC_DECREF(rpc_priv);
 }
 
 int
@@ -1758,10 +1764,14 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
 	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
+		/* Corresponding decref in crt_handle_rpc() */
+		RPC_ADDREF(rpc_priv);
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
 					&rpc_priv->crp_pub,
 					crt_handle_rpc,
 					crt_ctx->cc_rpc_cb_arg);
+		if (rc != 0)
+			RPC_DECREF(rpc_priv);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
 		/*

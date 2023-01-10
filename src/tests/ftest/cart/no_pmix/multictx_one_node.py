@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -20,6 +20,7 @@ class CartNoPmixOneNodeTest(CartTest):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,no_pmix,one_node,memcheck
+        :avocado: tags=test_cart_no_pmix
         """
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 

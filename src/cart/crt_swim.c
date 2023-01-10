@@ -546,6 +546,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 			/* Simulate ALIVE answer */
 			D_FREE(rpc_out->upds.ca_arrays);
+			rpc_out->upds.ca_count = 0;
 			rc = swim_updates_prepare(ctx, to_id, to_id,
 						  &rpc_out->upds.ca_arrays,
 						  &rpc_out->upds.ca_count);

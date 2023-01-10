@@ -18,7 +18,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -548,14 +547,22 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 			p: &Provider{},
 			expResult: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:      "cxi0",
-					OSName:    "cxi0",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 				&hardware.FabricInterface{
-					Name:      "cxi1",
-					OSName:    "cxi1",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 			),
 		},
@@ -585,6 +592,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
+				cmp.AllowUnexported(hardware.FabricProviderSet{}),
 			); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
