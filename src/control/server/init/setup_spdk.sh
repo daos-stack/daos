@@ -97,7 +97,7 @@ else
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-		if compgen -G "${glob}"; then
+		if compgen -G "${glob}" > /dev/null; then
 			echo "RUN: chown -R ${_TARGET_USER} ${glob}"
 			chown -R "${_TARGET_USER}" "${glob}"
 		fi
