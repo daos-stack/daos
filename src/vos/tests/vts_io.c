@@ -2902,6 +2902,78 @@ io_query_key_negative(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
+static inline int
+dummy_bulk_create(void *ctxt, d_sg_list_t *sgl, unsigned int perm, void **bulk_hdl)
+{
+	return 0;
+}
+
+static inline int
+dummy_bulk_free(void *bulk_hdl)
+{
+	return 0;
+}
+
+/* Verify the fix of DAOS-10748 */
+static void
+io_allocbuf_failure(void **state)
+{
+	struct io_test_args	*arg = *state;
+	char			 dkey_buf[UPDATE_DKEY_SIZE] = { 0 };
+	char			 akey_buf[UPDATE_AKEY_SIZE] = { 0 };
+	daos_iod_t		 iod = { 0 };
+	d_sg_list_t		 sgl = { 0 };
+	daos_key_t		 dkey_iov, akey_iov;
+	daos_epoch_t		 epoch = 1;
+	char			*buf;
+	daos_handle_t		 ioh;
+	int			 fake_ctxt;
+	daos_size_t		 buf_len = (40UL << 20); /* 40MB, larger than DMA chunk size */
+	int			 rc;
+
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey_iov, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey_iov, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+
+	sgl.sg_iovs[0].iov_buf = buf;
+	sgl.sg_iovs[0].iov_buf_len = buf_len;
+	sgl.sg_iovs[0].iov_len = buf_len;
+
+	iod.iod_name = akey_iov;
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = buf_len;
+	iod.iod_recxs = NULL;
+
+	arg->ta_flags |= TF_ZERO_COPY;
+
+	bio_register_bulk_ops(dummy_bulk_create, dummy_bulk_free);
+	daos_fail_loc_set(DAOS_NVME_ALLOCBUF_ERR | DAOS_FAIL_ONCE);
+
+	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, &dkey_iov,
+			      1, &iod, NULL, 0, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, (void *)&fake_ctxt, 0);
+	assert_rc_equal(rc, -DER_NOMEM);
+	daos_fail_loc_set(0);
+	bio_register_bulk_ops(NULL, NULL);
+
+	rc = vos_update_end(ioh, 0, &dkey_iov, rc, NULL, NULL);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+	arg->ta_flags &= ~TF_ZERO_COPY;
+}
+
 static const struct CMUnitTest io_tests[] = {
     {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
     {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
@@ -2944,6 +3016,8 @@ static const struct CMUnitTest int_tests[] = {
 	{ "VOS300.2: Key query test", io_query_key, NULL, NULL},
 	{ "VOS300.3: Key query negative test",
 		io_query_key_negative, NULL, NULL},
+	{ "VOS300.4: Return error on DMA buffer allocation failure",
+		io_allocbuf_failure, NULL, NULL},
 };
 
 int

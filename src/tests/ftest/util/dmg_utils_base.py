@@ -224,6 +224,7 @@ class DmgCommandBase(YamlCommand):
                 self.num_engines = FormattedParameter("--num-engines={}", None)
                 self.min_ssds = FormattedParameter("--min-ssds={}", None)
                 self.net_class = FormattedParameter("--net-class={}", None)
+                self.net_provider = FormattedParameter("--net-provider={}", None)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""

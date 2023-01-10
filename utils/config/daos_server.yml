@@ -240,15 +240,6 @@
 #
 #engines:
 #-
-#  # Rank to be assigned as identifier for this engine.
-#  # Immutable after running "dmg storage format".
-#  #
-#  # Optional parameter; must be unique across all engines in the DAOS system.
-#  #
-#  # default: will be auto generated if not supplied.
-#
-#  rank: 0
-#
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
 #  #
@@ -426,15 +417,6 @@
 #
 #
 #-
-#  # Rank to be assigned as identifier for this engine.
-#  # Immutable after running "dmg storage format".
-#  #
-#  # Optional parameter; must be unique across all engines in the DAOS system.
-#  #
-#  # default: will be auto generated if not supplied.
-#
-#  rank: 1
-#
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
 #  #
