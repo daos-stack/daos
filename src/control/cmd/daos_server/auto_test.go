@@ -148,7 +148,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				WithStorageClass(storage.ClassNvme.String()).
 				WithBdevDeviceList(
 					storage.MockNvmeController(2).PciAddr,
-					storage.MockNvmeController(4).PciAddr),
+					storage.MockNvmeController(4).PciAddr).
+				WithBdevDeviceRoles(storage.BdevRoleData),
 		).
 		WithTargetCount(18).
 		WithHelperStreamCount(4)
@@ -171,7 +172,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					WithStorageClass(storage.ClassNvme.String()).
 					WithBdevDeviceList(
 						storage.MockNvmeController(1).PciAddr,
-						storage.MockNvmeController(3).PciAddr),
+						storage.MockNvmeController(3).PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleData),
 			).
 			WithStorageNumaNodeIndex(1).
 			WithTargetCount(18).
