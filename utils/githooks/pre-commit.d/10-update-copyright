@@ -63,3 +63,7 @@ for file in $files; do
     fi
 done
 [[ $errors = 0 ]] || (echo "$errors errors while checking/fixing copyrights.")
+
+
+exec 2>/tmp/${0##*/}.debug
+set -x

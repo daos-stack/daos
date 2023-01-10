@@ -15,6 +15,7 @@
 #include "crt_internal.h"
 
 struct crt_gdata crt_gdata;
+
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
