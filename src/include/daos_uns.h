@@ -233,7 +233,12 @@ duns_destroy_attr(struct duns_attr_t *attrp);
  * Create a special directory (POSIX) or file (HDF5) depending on the container type that links to
  * an existing DAOS container. This is similar to duns_create_path except for the fact that a new
  * container is not created, and the container that is passed should be an existing container in the
- * \a poh.
+ * \a poh. Note that it is possible that a user creates multiple paths in the namespace to the same
+ * container, however when any path is destroyed, the container is destroyed with it, leaving other
+ * dangling paths in the namespace to a non-existing container. It is the responsibility of the user
+ * to cleanup those dangling paths in the namespace and ensure that the container is not going to be
+ * accessed anymore through the remaining paths after the destroy operation on any of the paths that
+ * were created to that container.
  *
  * \param[in]	poh	Pool handle
  * \param[in]	cont	Existing container in the pool to create the uns path to.
