@@ -301,6 +301,18 @@ class CartTest(TestWithoutServers):
 
         return env
 
+    def get_srv_cnt(self, host):
+        """Get server count for 'host' test yaml parameter.
+
+        Args:
+            host (str): test yaml parameter name
+
+        Returns:
+            int: length of the 'host' test yaml parameter
+
+        """
+        return len(self.params.get("{}".format(host), "/run/hosts/*/", []))
+
     @staticmethod
     def get_yaml_list_elem(param, index):
         """Get n-th element from YAML param.
