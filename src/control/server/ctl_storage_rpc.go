@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -341,26 +341,50 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
 
-	engineIdxs := make([]uint, len(instances))
-	for i, eng := range instances {
-		engineIdxs[i] = uint(eng.Index())
-	}
+	// Format control metadata first, if needed
+	if needs, err := c.storage.ControlMetadataNeedsFormat(); err != nil {
+		return nil, errors.Wrap(err, "detecting if metadata format is needed")
+	} else if needs || req.Reformat {
+		engineIdxs := make([]uint, len(instances))
+		for i, eng := range instances {
+			engineIdxs[i] = uint(eng.Index())
+		}
 
-	// Format control metadata first, if it exists
-	if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
-		return nil, errors.Wrap(err, "formatting control metadata storage")
-	}
-
-	// TODO: enable per-instance formatting
-	formatting := 0
-	for _, ei := range instances {
-		formatting++
-		go func(e Engine) {
-			scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
-		}(ei)
+		if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
+			return nil, errors.Wrap(err, "formatting control metadata storage")
+		}
 	}
 
 	instanceErrored := make(map[uint32]string)
+	// TODO: enable per-instance formatting
+	formatting := 0
+	for _, ei := range instances {
+		if needs, err := ei.GetStorage().ScmNeedsFormat(); err != nil {
+			return nil, errors.Wrap(err, "detecting if SCM format is needed")
+		} else if needs || req.Reformat {
+			formatting++
+			go func(e Engine) {
+				scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
+			}(ei)
+		} else {
+			var mountpoint string
+			if scmConfig, err := ei.GetStorage().GetScmConfig(); err != nil {
+				c.log.Debugf("unable to get mountpoint: %v", err)
+			} else {
+				mountpoint = scmConfig.Scm.MountPoint
+			}
+
+			instanceErrored[ei.Index()] = fmt.Sprintf("instance %d: SCM is already formatted", ei.Index())
+			resp.Mrets = append(resp.Mrets, &ctlpb.ScmMountResult{
+				Instanceidx: ei.Index(),
+				Mntpoint:    mountpoint,
+				State: &ctlpb.ResponseState{
+					Info: instanceErrored[ei.Index()],
+				},
+			})
+		}
+	}
+
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():

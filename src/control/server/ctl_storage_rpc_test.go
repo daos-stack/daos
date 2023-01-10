@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,7 +28,6 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -1407,8 +1406,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					{
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-							Error:  "instance 0: can't format storage of running instance",
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "instance 0: SCM is already formatted",
 						},
 					},
 				},
@@ -1443,9 +1442,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					{
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-							Error:  scm.FaultFormatNoReformat.Error(),
-							Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "instance 0: SCM is already formatted",
 						},
 					},
 				},
@@ -1512,9 +1510,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 					{
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
-							Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-							Error:  scm.FaultFormatNoReformat.Error(),
-							Info:   fault.ShowResolutionFor(scm.FaultFormatNoReformat),
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "instance 0: SCM is already formatted",
 						},
 					},
 				},
