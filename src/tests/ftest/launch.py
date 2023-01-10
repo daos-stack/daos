@@ -1448,11 +1448,11 @@ class Launch():
 
             # Determine which storage device types to use when replacing keywords in the test yaml
             if args.nvme.startswith("auto_nvme"):
-                storage = ",".join([dev.address for dev in storage_info.nvme_devices])
+                storage = ",".join([dev.address for dev in storage_info.disk_devices])
             elif args.nvme.startswith("auto_vmd") or storage_info.controller_devices:
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
-                storage = ",".join([dev.address for dev in storage_info.nvme_devices])
+                storage = ",".join([dev.address for dev in storage_info.disk_devices])
 
         updater = YamlUpdater(
             logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
@@ -1512,7 +1512,7 @@ class Launch():
                     logger.info("-" * 80)
                     storage_info.write_storage_yaml(yaml_file, engines, tier_type, scm_size=100)
                     engine_storage_yaml[engines] = yaml_file
-                test.extra_yaml.extend(engine_storage_yaml[engines])
+                test.extra_yaml.append(engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):

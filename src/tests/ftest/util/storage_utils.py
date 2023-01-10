@@ -165,31 +165,28 @@ class StorageDevice():
         """
         return bool(self.managed_devices)
 
+    @property
+    def is_disk(self):
+        """Is this device a disk.
 
-def is_nvme(device):
-    """Is this device a NVMe drive.
+        Returns:
+            bool: True if this device a disk; False otherwise.
 
-    Args:
-        device (StorageDevice): the device to check
-
-    Returns:
-        bool: True if this device a NVMe drive; False otherwise.
-
-    """
-    return device.is_nvme
+        """
+        return not self.is_controller
 
 
-def is_vmd(device):
-    """Is this device a VMD drive.
+def is_disk(device):
+    """Is this device a disk.
 
     Args:
         device (StorageDevice): the device to check
 
     Returns:
-        bool: True if this device a VMD drive; False otherwise.
+        bool: True if this device a disk; False otherwise.
 
     """
-    return device.is_vmd
+    return device.is_disk
 
 
 def is_controller(device):
@@ -236,24 +233,14 @@ class StorageInfo():
         return self._devices
 
     @property
-    def nvme_devices(self):
-        """Get the list of detected NVMe devices.
+    def disk_devices(self):
+        """Get the list of detected disk devices.
 
         Returns:
-            list: a list of NVMe StorageDevice objects
+            list: a list of diskStorageDevice objects
 
         """
-        return list(filter(is_nvme, self.devices))
-
-    @property
-    def vmd_devices(self):
-        """Get the list of detected VMD devices.
-
-        Returns:
-            list: a list of VMD StorageDevice objects
-
-        """
-        return list(filter(is_vmd, self.devices))
+        return list(filter(is_disk, self.devices))
 
     @property
     def controller_devices(self):
@@ -307,10 +294,7 @@ class StorageInfo():
             self._raise_error(f'Error: Non-homogeneous {keys} PCI addresses.')
 
         self._log.debug('NVMe devices detected in the scan:')
-        for device in self.nvme_devices:
-            self._log.debug('  - %s', str(device))
-        self._log.debug('VMD devices detected in the scan:')
-        for device in self.vmd_devices:
+        for device in self.disk_devices:
             self._log.debug('  - %s', str(device))
         self._log.debug('VMD controllers detected in the scan:')
         for device in self.controller_devices:
@@ -338,11 +322,7 @@ class StorageInfo():
         command = ' | '.join(command_list) + ' || :'
         result = run_remote(self._log, self._hosts, command)
         if result.passed:
-            # Collect all the devices defined by the following lines in the command output:
-            #   Slot:   0000:81:00.0
-            #   Class:  Non-Volatile memory controller
-            #   Device: NVMe Datacenter SSD [Optane]
-            #   NUMANode:       1
+            # Collect all the devices defined by the command output
             for data in result.output:
                 all_output = '\n'.join(data.stdout)
                 info = {
@@ -423,13 +403,13 @@ class StorageInfo():
         return controllers
 
     def get_controller_mapping(self):
-        """Get the mapping of each VMD disk to its VMD controller.
+        """Get the mapping of each VMD controller to the number of managed devices.
 
         Raises:
-            StorageException: if there is an error creating a mapping of disks to controllers
+            StorageException: if there is an error creating a controller mapping
 
         Returns:
-            dict: controller address keys with disk address values
+            dict: controller address keys with managed disk count values
 
         """
         controllers = {}
@@ -510,10 +490,10 @@ class StorageInfo():
         if tier_type not in self.TIER_KEYWORDS:
             self._raise_error(f'Error: Invalid storage type \'{tier_type}\'')
 
-        if self.vmd_devices or self.nvme_devices:
+        if self.devices:
             # Sort the detected devices and place then in lists by NUMA node
             numa_devices = {}
-            for device in sorted(self.vmd_devices + self.nvme_devices):
+            for device in sorted(self.controller_devices or self.disk_devices):
                 if device.numa_node not in numa_devices:
                     numa_devices[device.numa_node] = []
                 numa_devices[device.numa_node].append(device.address)
@@ -576,6 +556,9 @@ class StorageInfo():
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{",".join(bdev_list[engine][tier])}]')
 
+        self._log.debug('Creating %s', yaml_file)
+        for line in lines:
+            self._log.debug('  %s', line)
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
                 config_handle.writelines(lines)
