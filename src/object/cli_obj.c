@@ -5550,11 +5550,8 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			continue;
 		}
 
-		if (sub_anchor->ssa_kds != NULL) {
-			if (sub_anchors->sa_nr == nr)
-				continue;
-			D_FREE(sub_anchor->ssa_kds);
-		}
+		if (sub_anchor->ssa_kds != NULL)
+			continue;
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_kds, nr);
 		if (sub_anchor->ssa_kds == NULL)
@@ -5571,11 +5568,8 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			req_tgts->ort_shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
 		}
 
-		if (sub_anchor->ssa_recxs != NULL) {
-			if (sub_anchors->sa_nr == nr)
-				continue;
-			D_FREE(sub_anchor->ssa_recxs);
-		}
+		if (sub_anchor->ssa_recxs != NULL)
+			continue;
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_recxs, nr);
 		if (sub_anchor->ssa_recxs == NULL)
