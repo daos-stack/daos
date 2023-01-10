@@ -1216,8 +1216,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...).
-							WithBdevDeviceRoles(storage.BdevRoleData),
+							WithBdevDeviceList(test.MockPCIAddrs(0, 1, 2)...),
 					).
 					WithTargetCount(16).
 					WithHelperStreamCount(2),
@@ -1237,7 +1236,6 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
 							WithBdevDeviceList(test.MockPCIAddrs(3, 4, 5)...),
-						WithBdevDeviceRoles(storage.BdevRoleData),
 					).
 					WithStorageNumaNodeIndex(1).
 					WithTargetCount(16).
@@ -1273,8 +1271,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:5d:05.5").
-							WithBdevDeviceRoles(storage.BdevRoleData),
+							WithBdevDeviceList("0000:5d:05.5"),
 					).
 					WithTargetCount(16).
 					WithHelperStreamCount(2),
@@ -1294,8 +1291,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:d7:07.1").
-							WithBdevDeviceRoles(storage.BdevRoleData),
+							WithBdevDeviceList("0000:d7:07.1"),
 					).
 					WithStorageNumaNodeIndex(1).
 					WithTargetCount(16).

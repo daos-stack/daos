@@ -149,7 +149,8 @@ func TestAuto_confGen(t *testing.T) {
 					storage.MockNvmeController(2).PciAddr,
 					storage.MockNvmeController(4).PciAddr,
 					storage.MockNvmeController(6).PciAddr,
-					storage.MockNvmeController(8).PciAddr),
+					storage.MockNvmeController(8).PciAddr).
+				WithBdevDeviceRoles(storage.BdevRoleData),
 		).
 		WithTargetCount(16).
 		WithHelperStreamCount(4)
@@ -174,7 +175,8 @@ func TestAuto_confGen(t *testing.T) {
 						storage.MockNvmeController(1).PciAddr,
 						storage.MockNvmeController(3).PciAddr,
 						storage.MockNvmeController(5).PciAddr,
-						storage.MockNvmeController(7).PciAddr),
+						storage.MockNvmeController(7).PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleData),
 			).
 			WithStorageNumaNodeIndex(1).
 			WithTargetCount(16).
