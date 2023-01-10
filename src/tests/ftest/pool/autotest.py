@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -21,7 +21,7 @@ class PoolAutotestTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool
-        :avocado: tags=autotest,pool_autotest,quick
+        :avocado: tags=autotest,pool_autotest,quick,test_pool_autotest
         """
         self.log.info("Create a pool")
         self.add_pool()
