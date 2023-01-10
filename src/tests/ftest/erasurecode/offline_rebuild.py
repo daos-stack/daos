@@ -1,10 +1,11 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor
+
 
 class EcodOfflineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -26,8 +27,7 @@ class EcodOfflineRebuild(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_array,ec_offline_rebuild,rebuild
-        :avocado: tags=ec_offline_rebuild_array
-
+        :avocado: tags=ec_offline_rebuild_array,test_ec_offline_rebuild
         """
         # Write IOR data set with different EC object and different sizes
         self.ior_write_dataset()

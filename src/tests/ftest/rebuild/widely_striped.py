@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,7 @@ class RbldWidelyStriped(MdtestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=rebuild
-        :avocado: tags=rebuild_widely_striped
+        :avocado: tags=rebuild_widely_striped,test_rebuild_widely_striped
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")

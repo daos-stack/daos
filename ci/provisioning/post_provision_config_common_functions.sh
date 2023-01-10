@@ -188,7 +188,8 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
+    if [ "$repo_server" = "artifactory" ] &&
+       { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
        [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages

@@ -1,10 +1,11 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeSingle
+
 
 class EcodOnlineRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
@@ -34,7 +35,7 @@ class EcodOnlineRebuildSingle(ErasureCodeSingle):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_single,ec_online_rebuild,rebuild
-        :avocado: tags=ec_online_rebuild_single
+        :avocado: tags=ec_online_rebuild_single,test_ec_online_rebuild_single
         """
         # Kill last server rank
         self.rank_to_kill = self.server_count - 1
