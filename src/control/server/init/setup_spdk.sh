@@ -1,9 +1,57 @@
 #!/usr/bin/env bash
 
 ## Wrap spdk setup script. This script will be called by daos_server_helper process which will be
-## running with elevated privileges.
+## running with elevated privileges. Activities include changing directory permissions (which
+## enables spdk to be run by an unprivileged user).
 
 set +e
+
+#
+# Sets appropriate permissions on /dev/vfio/* files
+#
+set_vfio_permissions()
+{
+	# make sure regular users can read /dev/vfio
+	echo "RUN: chmod /dev/vfio"
+	if ! chmod a+x /dev/vfio; then
+		echo "FAIL"
+		return
+	fi
+	echo "OK"
+
+	# make sure regular user can access everything inside /dev/vfio
+	echo "RUN: chmod /dev/vfio/*"
+	if ! chmod 0666 /dev/vfio/*; then
+		echo "FAIL"
+		return
+	fi
+	echo "OK"
+
+	# since permissions are only to be set when running as
+	# regular user, we only check ulimit here
+	#
+	# warn if regular user is only allowed
+	# to memlock <64M of memory
+	MEMLOCK_AMNT="$(ulimit -l)"
+
+	if [ "$MEMLOCK_AMNT" != "unlimited" ] ; then
+		MEMLOCK_MB="$((MEMLOCK_AMNT / 1024))"
+		echo ""
+		echo "Current user memlock limit: ${MEMLOCK_MB} MB"
+		echo ""
+		echo "This is the maximum amount of memory you will be"
+		echo "able to use with DPDK and VFIO if run as current user."
+		echo -n "To change this, please adjust limits.conf memlock "
+		echo "limit for current user."
+
+		if [ "$MEMLOCK_AMNT" -lt 65536 ] ; then
+			echo ""
+			echo "## WARNING: memlock limit is less than 64MB"
+			echo -n "## DPDK with VFIO may not be able to "
+			echo "initialize if run as current user."
+		fi
+	fi
+}
 
 thisscriptname="$(basename "$0")"
 thisscriptpath="$(dirname "$(readlink -f "$0")")"
@@ -42,4 +90,22 @@ else
 	PATH=/sbin:${PATH}			\
 	${scriptpath}
 	set +x
+
+	# build arglist manually to filter missing directories/files
+	# so we don't error on non-existent entities
+	for glob in '/dev/hugepages' '/dev/uio*'		\
+		'/sys/class/uio/uio*/device/config'	\
+		'/sys/class/uio/uio*/device/resource*'; do
+
+		# shellcheck disable=SC2086
+		if list=$(ls -d $glob); then
+			echo -n "RUN: ls -d $glob | xargs -r chown -R "
+			echo "$_TARGET_USER"
+			echo "$list" | xargs -r chown -R "$_TARGET_USER"
+		fi
+	done
+
+	echo "Setting VFIO file permissions for unprivileged access"
+	set_vfio_permissions
 fi
+
