@@ -2424,7 +2424,8 @@ dfs_test_checker(void **state)
 	/** should be 200 + SB + root object */
 	assert_true(nr_oids == 202);
 
-	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_REMOVE, NULL);
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr",
+			    DFS_CHECK_PRINT | DFS_CHECK_REMOVE | DFS_CHECK_VERIFY, NULL);
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container after invoking the checker */
@@ -2457,7 +2458,8 @@ dfs_test_checker(void **state)
 	/** should be 180 + SB + root object */
 	assert_true(nr_oids == 182);
 
-	rc = dfs_cont_check(arg->pool.poh, "cont_chkr", DFS_CHECK_PRINT | DFS_CHECK_LINK_LF, "tlf");
+	rc = dfs_cont_check(arg->pool.poh, "cont_chkr",
+			    DFS_CHECK_PRINT | DFS_CHECK_RELINK | DFS_CHECK_VERIFY, "tlf");
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container after invoking the checker */

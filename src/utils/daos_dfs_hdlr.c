@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,7 @@
 
 #include "daos_types.h"
 #include "daos_fs.h"
+#include "dfs_internal.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
 
@@ -198,4 +199,74 @@ out_umount:
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to umount DFS container\n");
 	return rc;
+}
+
+int
+fs_set_cs_hdlr(struct cmd_args_s *ap)
+{
+	dfs_t		*dfs;
+	dfs_obj_t	*obj;
+	int		rc, rc2;
+
+	rc = dfs_mount(ap->pool, ap->cont, O_RDWR, &dfs);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+			ap->cont_str, strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_set_prefix(dfs, ap->dfs_prefix);
+		if (rc)
+			D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_lookup(dfs, ap->dfs_path, O_RDWR, &obj, NULL, NULL);
+	if (rc) {
+		fprintf(ap->errstream, "failed to lookup %s (%s)\n", ap->dfs_path, strerror(rc));
+		D_GOTO(out_umount, rc);
+	}
+
+	rc = dfs_update_chunk_size(dfs, obj, ap->chunk_size);
+	if (rc) {
+		fprintf(ap->errstream, "failed to update chunk size: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+out_release:
+	rc2 = dfs_release(obj);
+	if (rc == 0)
+		rc = rc2;
+out_umount:
+	rc2 = dfs_umount(dfs);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
+}
+
+int
+fs_recreate_sb_hdlr(struct cmd_args_s *ap)
+{
+	dfs_attr_t	attr = {0};
+	int		rc;
+
+	attr.da_id = 0;
+	attr.da_oclass_id = ap->oclass;
+	attr.da_dir_oclass_id = ap->dir_oclass;
+	attr.da_file_oclass_id = ap->file_oclass;
+	attr.da_chunk_size = ap->chunk_size;
+	attr.da_mode = ap->mode;
+	if (ap->hints)
+		strncpy(attr.da_hints, ap->hints, DAOS_CONT_HINT_MAX_LEN - 1);
+
+	rc = dfs_recreate_sb(ap->cont, &attr);
+	if (rc)
+		D_ERROR("Failed to created DFS SB: %d (%s)\n", rc, strerror(rc));
+	return rc;
+}
+
+int
+fs_relink_root_hdlr(struct cmd_args_s *ap)
+{
+	return dfs_relink_root(ap->cont);
 }
