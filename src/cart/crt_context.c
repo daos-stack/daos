@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -512,6 +512,7 @@ pointers_append(struct pointers *pointers, void *pointer)
 		pointers->p_cap = cap;
 	}
 
+	D_ASSERTF(pointers->p_len < pointers->p_cap, "%u < %u\n", pointers->p_len, pointers->p_cap);
 	pointers->p_buf[pointers->p_len] = pointer;
 	pointers->p_len++;
 	return 0;
@@ -584,8 +585,10 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		RPC_ADDREF(rpc_priv);
 		rc = pointers_append(&rpcs, rpc_priv);
-		if (rc != 0)
+		if (rc != 0) {
+			RPC_DECREF(rpc_priv);
 			D_GOTO(out_mutex, rc);
+		}
 	}
 
 	/* take references to RPCs in inflight queue */
@@ -605,8 +608,10 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		RPC_ADDREF(rpc_priv);
 		rc = pointers_append(&rpcs, rpc_priv);
-		if (rc != 0)
+		if (rc != 0) {
+			RPC_DECREF(rpc_priv);
 			D_GOTO(out_mutex, rc);
+		}
 	}
 
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
@@ -826,8 +831,10 @@ crt_rank_abort(d_rank_t rank)
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		CTX_ADDREF(ctx);
 		rc = pointers_append(&ctxs, ctx);
-		if (rc != 0)
+		if (rc != 0) {
+			CTX_DECREF(ctx);
 			D_GOTO(out_epis, rc);
+		}
 	}
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -1040,10 +1047,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	case RPC_STATE_QUEUED:
 		RPC_ERROR(rpc_priv, "aborting waiting to group %s, rank %d, tgt_uri %s\n",
 			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
-		D_MUTEX_LOCK(&rpc_priv->crp_epi->epi_mutex);
-		d_list_del_init(&rpc_priv->crp_epi_link);
-		rpc_priv->crp_epi->epi_req_wait_num--;
-		D_MUTEX_UNLOCK(&rpc_priv->crp_epi->epi_mutex);
+		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_TIMEDOUT);
 		break;
 	case RPC_STATE_URI_LOOKUP:
@@ -1311,7 +1315,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		return;
 	}
 
-	D_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED    ||
+	D_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED ||
+		 rpc_priv->crp_state == RPC_STATE_QUEUED ||
 		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
 		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		 rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
@@ -1335,10 +1340,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		return;
 	}
 
-	/* remove from inflight queue */
+	/* remove from wait or inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
 	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
+	} else if (rpc_priv->crp_state == RPC_STATE_QUEUED) {
+		epi->epi_req_wait_num--;
 	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
 	}
