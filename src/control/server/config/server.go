@@ -47,12 +47,12 @@ type Server struct {
 	NrHugepages         int                       `yaml:"nr_hugepages"` // total for all engines
 	DisableHugepages    bool                      `yaml:"disable_hugepages"`
 	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile      string                    `yaml:"control_log_file"`
+	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
 	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                    `yaml:"helper_log_file"`
-	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file"`
+	HelperLogFile       string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file,omitempty"`
 	RecreateSuperblocks bool                      `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string                    `yaml:"fault_path"`
+	FaultPath           string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
 
@@ -657,6 +657,9 @@ func detectEngineAffinity(log logging.Logger, engineCfg *engine.Config, affSourc
 
 // SetEngineAffinities sets the NUMA node affinity for all engines in the configuration.
 func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineAffinityFn) error {
+	if len(affSources) == 0 {
+		return errors.New("SetEngineAffinities() requires at least one affinity source")
+	}
 	defaultAffinity := uint(0)
 
 	for idx, engineCfg := range cfg.Engines {
@@ -665,8 +668,8 @@ func (cfg *Server) SetEngineAffinities(log logging.Logger, affSources ...EngineA
 			if err != ErrNoAffinityDetected {
 				return errors.Wrap(err, "failure while detecting engine affinity")
 			}
-
-			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx, defaultAffinity)
+			log.Debugf("no NUMA affinity detected for engine %d; defaulting to %d", idx,
+				defaultAffinity)
 			numaAffinity = defaultAffinity
 		} else {
 			log.Debugf("detected NUMA affinity %d for engine %d", numaAffinity, idx)
