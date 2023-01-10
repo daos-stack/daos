@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -200,8 +200,8 @@ class Snapshot(TestWithServers):
                 " {}".format(str(error)))
         self.log.info("==(2)snapshot_list[ind]=%s", snapshot)
         self.log.info("==snapshot.epoch=  %s", snapshot.epoch)
-        self.log.info("==written thedata=%s", thedata)
-        self.log.info("==thedata2.value= %s", thedata2.value)
+        self.log.info("==written thedata[:200]=%s", thedata[:200])
+        self.log.info("==thedata2.value[:200] =%s", thedata2.value[:200])
         if thedata2.value != thedata:
             self.fail("##(2)The data in the snapshot is not the same as the "
                       "original data")
@@ -292,8 +292,7 @@ class Snapshot(TestWithServers):
                           test_data[ind]["tst_obj"])
             self.log.info("  ==snapshot tst_data_size= %s",
                           len(test_data[ind]["tst_data"]) + 1)
-            self.log.info("  ==original tst_data =%s",
-                          test_data[ind]["tst_data"])
+            self.log.info("  ==original tst_data[:200] =%s", test_data[ind]["tst_data"][:200])
 
     def test_snapshots(self):
         # pylint: disable=no-member,too-many-locals
@@ -412,7 +411,7 @@ class Snapshot(TestWithServers):
                 self.fail("##(3.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
             self.display_snapshot_test_data(test_data, ss_number)
-            self.log.info("  ==thedata3.value= %s", thedata3.value)
+            self.log.info("  ==thedata3.value[:200]= %s", thedata3.value[:200])
             if thedata3.value != thedata:
                 raise Exception("##(3.2)The data in the snapshot is not the "
                                 "same as the original data")
@@ -455,7 +454,7 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(5.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
-            self.log.info("  ==snapshot tst_data =%s", thedata5.value)
+            self.log.info("  ==snapshot tst_data[:200] =%s", thedata5.value[:200])
             if thedata5.value != tst_data:
                 raise Exception("##(5.2)Snapshot #{}, test data Mis-matches"
                                 "the original data written.".format(ss_number))
@@ -485,8 +484,8 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(7)Error when retrieving the snapshot data: {}"
                       .format(str(error)))
-        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s",
-                      thedata7.value)
+        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value[:200]= %s",
+                      thedata7.value[:200])
         self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
 
         # Still able to open the snapshot and read data after destroyed.
