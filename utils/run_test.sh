@@ -200,6 +200,12 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test "${SL_PREFIX}/bin/vea_stress -d 60"
+    # regression test for DAOS-12256
+    export D_LOG_MASK=DEBUG
+    export DD_SUBSYS=all
+    export DD_MASK=all
+    run_test "${SL_PREFIX}/bin/vea_ut"
+    unset D_LOG_MASK DD_SUBSYS DD_MASK
 
     COMP="UTEST_bio"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
