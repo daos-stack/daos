@@ -1218,6 +1218,7 @@ init_events(struct pool_svc *svc)
 
 	D_ASSERT(d_list_empty(&events->pse_queue));
 	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
+	D_ASSERT(events->pse_stop == false);
 
 	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
 	if (rc != 0) {
@@ -1273,6 +1274,7 @@ fini_events(struct pool_svc *svc)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
+	events->pse_stop = false;
 }
 
 static void
