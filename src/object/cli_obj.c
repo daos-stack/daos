@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1170,7 +1170,6 @@ shard_open:
 
 ec_deg_get:
 	if (ec_degrade) {
-		D_ASSERT(!obj_auxi->spec_shard);
 		rc = obj_ec_get_degrade(&obj_auxi->reasb_req,
 					shard - start_shard, &ec_deg_tgt,
 					false);
@@ -1416,8 +1415,6 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		D_ASSERT(shard_cnt == 1);
 		D_ASSERT(bit_map == NIL_BITMAP);
 		D_ASSERT(req_tgts->ort_srv_disp == 0);
-
-		tgt = req_tgts->ort_shard_tgts;
 
 		req_tgts->ort_grp_nr = 1;
 		req_tgts->ort_grp_size = 1;
