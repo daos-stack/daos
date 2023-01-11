@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-1%{?dist}
+%global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -558,13 +558,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Jan 6 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-5
+* Fri Jan 6 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-6
 - Don't need to O: cart any more
 - Add %%doc to all packages
 - _datadir -> _datarootdir
 - Don't use PREFIX= with scons in %%build
 - Fix up some hard-coded paths to use macros instead
 - Use some guards to prevent creating empty scriptlets
+
+* Tue Dec 06 2022 Joseph G. Moore <joseph.moore@intel.com> 2.3.101-5
+- Update Mercury to 2.2.0-6
 
 * Thu Dec 01 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.101-4
 - Update SPDK dependency requirement to greater than or equal to 22.01.2.
