@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -92,7 +92,7 @@ func IsRaftLeadershipError(err error) bool {
 // leadership state. No-op if there is only one replica configured
 // or the cause is a raft leadership error.
 func (db *Database) ResignLeadership(cause error) error {
-	if IsRaftLeadershipError(cause) {
+	if IsNotLeader(cause) || IsRaftLeadershipError(cause) {
 		// no-op
 		return nil
 	}
@@ -102,6 +102,13 @@ func (db *Database) ResignLeadership(cause error) error {
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
 	return db.raft.withReadLock(func(svc raftService) error {
+		// One more belt-and-suspenders check to make sure we're
+		// actually the leader before we try to transfer leadership.
+		// This is important because trying to transfer leadership
+		// if we're not the leader will result in a blocked channel, i.e. hang.
+		if svc.State() != raft.Leader {
+			return nil
+		}
 		return svc.LeadershipTransfer().Error()
 	})
 }
@@ -113,10 +120,7 @@ func (db *Database) Barrier() error {
 		err := svc.Barrier(0).Error()
 		if IsRaftLeadershipError(err) {
 			db.log.Errorf("lost leadership during Barrier(): %s", err)
-			return &ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr.get()),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return err
 	})
@@ -338,10 +342,7 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 		// signal some callers to retry the operation on the
 		// new leader.
 		if IsRaftLeadershipError(err) {
-			return &ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.getReplica()),
-			}
+			return errNotSysLeader(svc, db)
 		}
 
 		return err

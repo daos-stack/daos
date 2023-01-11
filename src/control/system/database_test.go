@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -916,6 +916,10 @@ func Test_Database_ResignLeadership(t *testing.T) {
 		},
 		"cause: raft.ErrLeadershipTransferInProgress": {
 			cause:     raft.ErrLeadershipTransferInProgress,
+			expLeader: true,
+		},
+		"cause: system.ErrNotLeader": {
+			cause:     &ErrNotLeader{},
 			expLeader: true,
 		},
 		// Also check to see what happens if we get a raft error during

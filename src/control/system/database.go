@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -315,6 +315,15 @@ func (db *Database) CheckReplica() error {
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
+// errNotSysLeader returns an error indicating that the node is not
+// the current system leader.
+func errNotSysLeader(svc raftService, db *Database) error {
+	return &ErrNotLeader{
+		LeaderHint: string(svc.Leader()),
+		Replicas:   db.cfg.stringReplicas(db.replicaAddr.get()),
+	}
+}
+
 // CheckLeader returns an error if the node is not a replica
 // or is not the current system leader. The error can be inspected
 // for hints about where to find the current leader.
@@ -325,10 +334,7 @@ func (db *Database) CheckLeader() error {
 
 	if err := db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.getReplica()),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return nil
 	}); err != nil {
