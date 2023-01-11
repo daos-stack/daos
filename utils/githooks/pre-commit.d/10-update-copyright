@@ -41,7 +41,8 @@ targets=(
 
 os=$(uname -s)
 
-# shellcheck disable=SC1091
+. utils/githooks/git-version.sh
+
 . utils/githooks/find_base.sh
 
 if [ -z "$files" ]; then
@@ -57,7 +58,8 @@ fi
 for file in $files; do
     if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]]    ||
        [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]] ||
-       [ "$(git diff -I Copyright "$file")" = '' ]; then
+       { [ "$git_vercode" -ge 2030000 ] &&
+         [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
         continue
     fi
     read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
