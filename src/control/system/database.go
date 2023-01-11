@@ -471,7 +471,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					cancelGainedCtx()
 				}
 				runOnLeadershipLost()
-				continue // restart the monitoring loop
+				break
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
@@ -481,7 +481,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				if err = db.ResignLeadership(err); err != nil {
 					db.log.Errorf("raft ResignLeadership() failed: %s", err)
 				}
-				continue // restart the monitoring loop
+				break
 			}
 			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
@@ -494,7 +494,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					if err = db.ResignLeadership(err); err != nil {
 						db.log.Errorf("raft ResignLeadership() failed: %s", err)
 					}
-					break // break out of the inner loop; restart the monitoring loop
+					break
 				}
 			}
 		}
