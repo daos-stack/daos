@@ -1421,22 +1421,39 @@ class Launch():
         """
         # Detect available disk options for test yaml replacement
         # Supported --nvme options:
-        #   auto[:filter]           = select any PCI domain number of a NVMe device or VMD
-        #                             controller (connected to a VMD enabled NVMe device) in the
-        #                             homogeneous 'lspci -D' output from each host. Optionally
-        #                             grep the list of NVMe or VMD enabled NVMe devices for
-        #                             'filter'.
-        #   auto_nvme[:filter]      = select any PCI domain number of a non-VMD controlled NVMe
-        #                             device in the homogeneous 'lspci -D' output from each
-        #                             host. Optionally grep this output for 'filter'.
-        #   auto_vmd[:filter]       = select any PCI domain number of a VMD controller connected
-        #                             to a VMD enabled NVMe device in the homogeneous 'lspci -D'
-        #                             output from each host. Optionally grep the list of VMD
-        #                             enabled NVMe devices for 'filter'.
-        #   <address>[,<address>]   = verify that each specified device exists on each host.
+        #
+        #   auto[:filter]           = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: dcpm' first storage tier.
+        #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
+        #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
+        #                             found to exist on all server hosts. If a 'filter' is specified
+        #                             use it to find devices with the 'filter' in the device
+        #                             description. If generating automatic storage extra files, use
+        #                             a 'class: dcpm' first storage tier.
+        #
+        #   auto_vmd[:filter]       = replace any test bdev_list placeholders with any VMD
+        #                             controller address found to exist on all server hosts. If a
+        #                             'filter' is specified use it to find devices with the 'filter'
+        #                             in the device description. If generating automatic storage
+        #                             extra files, use a 'class: dcpm' first storage tier.
+        #
+        #   <address>[,<address>]   = replace any test bdev_list placeholders with the addresses
+        #                             specified as long as the address exists on each server host.
+        #                             If generating automatic storage extra files, use a
+        #                             'class: dcpm' first storage tier.
         #
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
+        tier_type = "pmem"
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
             if args.nvme.startswith("auto"):
@@ -1454,6 +1471,13 @@ class Launch():
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
 
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_type = "md_on_ssd"
+
+            # Temporarily force all HW stages to use md_on_ssd
+            tier_type = "md_on_ssd"
+
         updater = YamlUpdater(
             logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
             args.override, args.verbose)
@@ -1465,7 +1489,7 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, "md_on_ssd")
+        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_type)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -2801,22 +2825,9 @@ def main():
         "DAOS functional test launcher",
         "",
         "Launches tests by specifying a test tag.  For example:",
-        "\tbadconnect  --run pool connect tests that pass NULL ptrs, etc.",
-        "\tbadevict    --run pool client evict tests that pass NULL ptrs, "
-        "etc.",
-        "\tbadexclude  --run pool target exclude tests that pass NULL ptrs, "
-        "etc.",
-        "\tbadparam    --run tests that pass NULL ptrs, etc.",
-        "\tbadquery    --run pool query tests that pass NULL ptrs, etc.",
-        "\tmulticreate --run tests that create multiple pools at once",
-        "\tmultitarget --run tests that create pools over multiple servers",
         "\tpool        --run all pool related tests",
-        "\tpoolconnect --run all pool connection related tests",
-        "\tpooldestroy --run all pool destroy related tests",
-        "\tpoolevict   --run all client pool eviction related tests",
-        "\tpoolinfo    --run all pool info retrieval related tests",
-        "\tquick       --run tests that complete quickly, with minimal "
-        "resources",
+        "\tcontainer   --run all container related tests",
+        "\tcontol      --run all control plane related tests",
         "",
         "Multiple tags can be specified:",
         "\ttag_a,tag_b -- run all tests with both tag_a and tag_b",
@@ -2824,24 +2835,49 @@ def main():
         "",
         "Specifying no tags will run all of the available tests.",
         "",
-        "Tests can also be launched by specifying a path to the python script "
-        "instead of its tag.",
+        "Tests can also be launched by specifying a path to the python script instead of its tag.",
         "",
-        "The placeholder server and client names in the yaml file can also be "
-        "replaced with the following options:",
-        "\tlaunch.py -ts node1,node2 -tc node3 <tag>",
+        "The placeholder server and client names in the yaml file can also be replaced with the "
+        "following options:",
+        "\tlaunch.py -ts node[1-2] -tc node3 <tag>",
         "\t  - Use node[1-2] to run the daos server in each test",
         "\t  - Use node3 to run the daos client in each test",
-        "\tlaunch.py -ts node1,node2 <tag>",
+        "\tlaunch.py -ts node[1-2] <tag>",
         "\t  - Use node[1-2] to run the daos server or client in each test",
-        "\tlaunch.py -ts node1,node2 -d <tag>",
-        "\t  - Use node[1-2] to run the daos server or client in each test",
-        "\t  - Discard of any additional server or client placeholders for "
-        "each test",
+        "\tlaunch.py -ts node1 -tc node2 -o <tag>",
+        "\t  - Use node1 to run the daos server in each test",
+        "\t  - Use node2 to run the daos client in each test",
+        "\t  - Override the number of servers and clients specified by the test",
         "",
-        "You can also specify the sparse flag -s to limit output to "
-        "pass/fail.",
-        "\tExample command: launch.py -s pool"
+        "You can also specify the sparse flag -s to limit output to pass/fail.",
+        "\tExample command: launch.py -s pool",
+        "",
+        "The placeholder server storage configuration in the test yaml can also be replaced with "
+        "the following --nvme argument options:",
+        "\tauto[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
+        "\tauto_nvme[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
+        "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' in ",
+        "\t\tthe device description. If generating automatic storage extra files, use a ",
+        "\t\t'class: dcpm' first storage tier.",
+        "\tauto_vmd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any VMD controller address found to ",
+        "\t\texist on all server hosts. If a 'filter' is specified use it to find devices with the",
+        "\t\t'filter' in the device description. If generating automatic storage extra files, use",
+        "\t\ta 'class: dcpm' first storage tier.",
+        "\t<address>[,<address>]",
+        "\t\treplace any test bdev_list placeholders with the addresses specified as long as the",
+        "\t\taddress exists on each server host. If generating automatic storage extra files, use ",
+        "\t\ta 'class: dcpm' first storage tier."
     ]
     parser = ArgumentParser(
         prog="launcher.py",
@@ -2909,17 +2945,10 @@ def main():
     parser.add_argument(
         "-n", "--nvme",
         action="store",
-        help="comma-separated list of NVMe device PCI addresses to use as "
-             "replacement values for the bdev_list in each test's yaml file.  "
-             "Using the 'auto[:<filter>]' keyword will auto-detect any VMD "
-             "controller or NVMe PCI address list on each of the '--test_servers' "
-             "hosts - the optional '<filter>' can be used to limit auto-detected "
-             "NVMe addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.  "
-             "To limit the device detection to either VMD controller or NVMe "
-             "devices the 'auto_vmd[:filter]' or 'auto_nvme[:<filter>]' keywords "
-             "can be used, respectively.  When using 'filter' with VMD controllers, "
-             "the filter is applied to devices managed by the controller, therefore "
-             "only selecting controllers that manage the matching devices.")
+        help="Detect available disk options for replacing the devices specified in the server "
+             "storage yaml configuration file. Supported options include:  auto[:filter], "
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",

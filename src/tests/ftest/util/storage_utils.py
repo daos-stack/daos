@@ -136,24 +136,14 @@ class StorageDevice():
         return ': '.join([self.storage_class, self.device])
 
     @property
-    def is_nvme(self):
-        """Is this device a NVMe drive.
+    def is_backing(self):
+        """Is this device a backing device behind a VMD controller.
 
         Returns:
-            bool: True if this device a NVMe drive; False otherwise.
+            bool: True if this device a backing device; False otherwise.
 
         """
-        return len(self.address) == 12 and not self.managed_devices
-
-    @property
-    def is_vmd(self):
-        """Is this device a VMD drive.
-
-        Returns:
-            bool: True if this device a VMD drive; False otherwise.
-
-        """
-        return len(self.address) == 13 and not self.managed_devices
+        return self.is_disk and len(self.address.split(':')[0]) > 4
 
     @property
     def is_controller(self):
@@ -348,19 +338,21 @@ class StorageInfo():
                         continue
 
                     # Ignore backing NVMe bound to the kernel driver, e.g., 10005:05:00.0
-                    if len(device.address.split(":")[0]) > 4:
-                        self._log.debug("  excluding device based on address length: %s", device)
+                    if device.is_backing:
+                        self._log.debug("  excluding backing device: %s", device)
                         continue
 
                     # Ignore any devices that do not match a filter if specified
                     if device_filter and device_filter.startswith("-"):
                         if re.findall(device_filter[1:], device.description):
                             self._log.debug(
-                                "  excluding device matching '%s': %s", device_filter[1:], device)
+                                "  excluding device matching '%s' filter: %s",
+                                device_filter[1:], device)
                             continue
                     elif device_filter and not re.findall(device_filter, device.description):
                         self._log.debug(
-                            "  excluding device not matching '%s': %s", device_filter, device)
+                            "  excluding device not matching '%s' filter: %s",
+                            device_filter, device)
                         continue
 
                     # Keep track of which devices were found on which hosts
