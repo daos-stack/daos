@@ -87,16 +87,17 @@ class StorageDevice():
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only the other StorageDevice is an Optane device or both StorageDevices
-                are Optane devices and this StorageDevice's address is less than the other
-                StorageDevice's address.
+            bool: True if only the other StorageDevice is more performant, False if this
+                StorageDevice is more performant, or an StorageDevice address compare
 
         """
-        if 'optane' in self.device.lower() and 'optane' in other.device.lower():
-            return self.address < other.address
-        if 'optane' in self.device.lower():
+        if 'optane' in self.device.lower() and 'optane' not in other.device.lower():
+            # This device is more performant than the other device
             return False
-        return True
+        if 'optane' not in self.device.lower() and 'optane' in other.device.lower():
+            # The other device is more performant than this device
+            return True
+        return self.address < other.address
 
     def __gt__(self, other):
         """Determine if this StorageDevice is greater than the other StorageDevice.
@@ -105,16 +106,11 @@ class StorageDevice():
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only this StorageDevice is an Optane device or both StorageDevices
-                are Optane devices and this StorageDevice's address is greater than the other
-                StorageDevice's address.
+            bool: True if only this StorageDevice is more performant, False if the other
+                StorageDevice is more performant, or an StorageDevice address compare
 
         """
-        if 'optane' in self.device.lower() and 'optane' in other.device.lower():
-            return self.address > other.address
-        if 'optane' in self.device.lower():
-            return True
-        return False
+        return not self.__lt__(other)
 
     def __hash__(self):
         """Get the hash value of this StorageDevice object.
@@ -140,7 +136,7 @@ class StorageDevice():
         """Is this device a backing device behind a VMD controller.
 
         Returns:
-            bool: True if this device a backing device; False otherwise.
+            bool: True if this device is a backing device; False otherwise.
 
         """
         return self.is_disk and len(self.address.split(':')[0]) > 4
@@ -164,32 +160,6 @@ class StorageDevice():
 
         """
         return not self.is_controller
-
-
-def is_disk(device):
-    """Is this device a disk.
-
-    Args:
-        device (StorageDevice): the device to check
-
-    Returns:
-        bool: True if this device a disk; False otherwise.
-
-    """
-    return device.is_disk
-
-
-def is_controller(device):
-    """Is this device a VMD controller.
-
-    Args:
-        device (StorageDevice): the device to check
-
-    Returns:
-        bool: True if this device an VMD controller; False otherwise.
-
-    """
-    return device.is_controller
 
 
 class StorageInfo():
@@ -230,7 +200,7 @@ class StorageInfo():
             list: a list of diskStorageDevice objects
 
         """
-        return list(filter(is_disk, self.devices))
+        return list(filter(StorageDevice.is_disk.fget, self.devices))
 
     @property
     def controller_devices(self):
@@ -240,7 +210,7 @@ class StorageInfo():
             list: a list of VMD controller StorageDevice objects
 
         """
-        return list(filter(is_controller, self.devices))
+        return list(filter(StorageDevice.is_controller.fget, self.devices))
 
     def _raise_error(self, message, error=None):
         """Raise and log the error message.
@@ -464,14 +434,13 @@ class StorageInfo():
 
         return controllers
 
-    def write_storage_yaml(self, yaml_file, engines, tier_type, scm_size=100):
+    def write_storage_yaml(self, yaml_file, engines, tier_type):
         """Generate a storage test yaml sub-section.
 
         Args:
             yaml_file (str): file in which to write the storage yaml entry
             engines (int): number of engines
             tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
-            scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 100.
 
         Raises:
             StorageException: if an invalid storage type was specified
@@ -533,17 +502,17 @@ class StorageInfo():
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):
-            lines.append(f'    {str(engine)}:')
-            lines.append('      storage:')
+            lines.append(f'    {str(engine)}:\n')
+            lines.append('      storage:\n')
             for tier in range(tiers):
-                lines.append(f'        {str(tier)}:')
+                lines.append(f'        {str(tier)}:\n')
                 if tier == 0 and tier_type == self.TIER_KEYWORDS[0]:
-                    lines.append('          class: dcpm')
-                    lines.append(f'          scm_list: ["/dev/pmem{engine}"]')
-                    lines.append(f'          scm_mount: /mnt/daos{engine}')
+                    lines.append('          class: dcpm\n')
+                    lines.append(f'          scm_list: ["/dev/pmem{engine}"]\n')
+                    lines.append(f'          scm_mount: /mnt/daos{engine}\n')
                 else:
-                    lines.append('          class: nvme')
-                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
+                    lines.append('          class: nvme\n')
+                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]\n')
 
         self._log.debug('Creating %s', yaml_file)
         for line in lines:

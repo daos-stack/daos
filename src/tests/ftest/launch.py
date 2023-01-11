@@ -1493,7 +1493,7 @@ class Launch():
             if test.extra_yaml:
                 command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, command, check=False)
+            run_local(logger, command)
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
@@ -2856,8 +2856,8 @@ def main():
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
-        "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' in ",
-        "\t\tthe device description. If generating automatic storage extra files, use a ",
+        "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
+        "\t\tin the device description. If generating automatic storage extra files, use a ",
         "\t\t'class: dcpm' first storage tier.",
         "\tauto_vmd[:filter]",
         "\t\treplace any test bdev_list placeholders with any VMD controller address found to ",
