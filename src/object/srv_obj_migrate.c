@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2552,8 +2552,8 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
-			   DIOF_TO_LEADER) {
+		} else if (rc && rc != -DER_SHUTDOWN &&
+			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
@@ -2583,8 +2583,7 @@ retry:
 			 * -DER_NONEXIST, see obj_ioc_init().
 			 */
 			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
-				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
-					" %d\n", DP_UOID(arg->oid), rc);
+				D_WARN("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
