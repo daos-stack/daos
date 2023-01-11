@@ -7,6 +7,11 @@
 
 set -eux
 
+# for pip installed avocado
+if ! command -v avocado; then
+    export PATH=~/.local/bin:$PATH
+fi
+
 # check that vm.max_map_count has been configured/bumped
 if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     echo "vm.max_map_count is not set as expected"
@@ -45,9 +50,9 @@ export D_LOG_FILE="$TEST_TAG_DIR/daos.log"
 
 # apply patches to Avocado
 pydir=""
-for loc in /usr/lib/python2*/site-packages/ \
-           /usr/lib/python3*/site-packages/ \
-           /usr/local/lib/python3*/site-packages/; do
+for loc in /usr/lib/python2*/{dist,site}-packages/           \
+           /usr/lib/python3*/{dist,site}-packages/           \
+           /usr/local/lib/python3*/{dist,site}-packages/; do
     if [ -f "$loc"/avocado/core/runner.py ]; then
         pydir=$loc
         break
@@ -199,8 +204,9 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
-# shellcheck disable=SC2086,SC2090
-if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+# shellcheck disable=SC2086,SC2090,SC2068
+# but why can't ${TEST_TAG_ARR[@]} be quoted as it's supposed to be?
+if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[@]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0

@@ -1,1 +1,10 @@
-usr/lib64/*.so.*
+usr/lib/x86_64-linux-gnu/libdfs.so
+usr/lib/x86_64-linux-gnu/libgurt.so.*
+usr/lib/x86_64-linux-gnu/libdaos_common.so
+usr/lib/x86_64-linux-gnu/libdaos.so.*
+usr/lib/x86_64-linux-gnu/libds3.so
+usr/lib/x86_64-linux-gnu/libduns.so
+usr/lib/x86_64-linux-gnu/libcart.so.*
+usr/lib/x86_64-linux-gnu/libdaos_cmd_hdlrs.so
+usr/lib/x86_64-linux-gnu/libdfuse.so
+usr/lib/x86_64-linux-gnu/libioil.so

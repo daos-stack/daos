@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       1%{?relval}%{?dist}
+Version:       2.3.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -198,6 +198,7 @@ This is the package is a metapackage to install all of the test packages
 Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
 %description tests-internal
@@ -216,6 +217,8 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: mpifileutils-mpich
+Requires: ior
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 %else
@@ -551,6 +554,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Feb 6 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-2
+- Updates
+  - TODO: describe the changes
+
 * Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
 - Bump version to 2.3.103
 

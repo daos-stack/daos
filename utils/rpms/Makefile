@@ -26,6 +26,8 @@ include packaging/Makefile_packaging.mk
 
 PACKAGING_CHECK_DIR ?= ../../../rpm/packaging
 
+# this would be a better way to create the archive, but it needs a bit of work
+#	git ls-files | tar  -T - -cf $$OLDPWD/$(basename $@) --transform 's/^/$(NAME)-$(VERSION)\//'
 $(NAME)-$(VERSION).tar.gz: $(shell git ls-files :/:)
 	echo Creating $@
 	echo $(basename $@)

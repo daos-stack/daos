@@ -1,7 +1,6 @@
 #!/bin/sh
 set -e
 
-addgroup --system daos_agent
-adduser --system --ingroup daos_agent daos_agent
-addgroup --system daos_daemons
-usermod -G -a daos_daemons daos_agent
+getent group daos_agent >/dev/null || groupadd -r daos_agent
+getent group daos_daemons >/dev/null || groupadd -r daos_daemons
+getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent -G daos_daemons daos_agent

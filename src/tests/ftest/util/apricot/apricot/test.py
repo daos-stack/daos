@@ -197,8 +197,7 @@ class Test(avocadoTest):
                 try:
                     with open(os.path.join(os.sep, 'tmp',
                                            'commit_title')) as commit_handle:
-                        if commit_handle.read().strip().startswith(
-                                ticket + " "):
+                        if ticket in commit_handle.read().splitlines():
                             # fix is in this PR
                             self.log.info("This test variant is included "
                                           "in the skip list for ticket %s, "
@@ -269,6 +268,10 @@ class Test(avocadoTest):
                         if self._stage_name is None:
                             self.log.info("Skip variant cannot be verified: %s=%s", name, value)
                         skip_variant &= self._stage_name == value
+                    elif name == 'os':
+                        _os = detect()
+                        skip_variant &= value.lower() in "{}{}.{}".format(_os.name.lower(),
+                                                                          _os.version, _os.release)
                     else:
                         skip_variant &= self.params.get(name) == value
                 except IndexError:
@@ -507,7 +510,10 @@ class TestWithoutServers(Test):
         self.fault_injection = FaultInjection()
         self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
-        self.context = DaosContext(self.prefix + '/lib64/')
+        self.context = DaosContext(os.path.join(self.prefix,
+                                                'lib', 'x86_64-linux-gnu'
+                                                if detect().name.lower() == 'ubuntu'
+                                                else 'lib64'))
         self.d_log = DaosLog(self.context)
         self.test_log.daos_log = self.d_log
 

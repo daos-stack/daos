@@ -3,10 +3,13 @@
 set -eux
 
 distro="$1"
+# shellcheck disable=SC2034
 client_ver="$2"
 
 if [[ $distro = ubuntu20* ]]; then
-    pkgs="openmpi-bin ndctl fio"
+    #pkgs="openmpi-bin ndctl fio"
+    # these should be package dependencies
+    pkgs=""
 elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
      [[ $distro = leap* ]]; then
     openmpi="openmpi"
@@ -22,7 +25,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
     fi
 
     pkgs="$prefix ndctl                \
-          fio patchutils ior           \
+          fio patchutils               \
           romio-tests                  \
           testmpio                     \
           python$pyver-mpi4py-tests    \
@@ -33,8 +36,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           simul-mpich                  \
           simul-$openmpi               \
           MACSio-mpich                 \
-          MACSio-$openmpi              \
-          mpifileutils-mpich"
+          MACSio-$openmpi"
 else
     echo "I don't know which packages should be installed for distro" \
          "\"$distro\""

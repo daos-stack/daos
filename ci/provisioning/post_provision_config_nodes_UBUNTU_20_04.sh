@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+#  (C) Copyright 2021-2023 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 post_provision_config_nodes() {
     # should we port this to Ubuntu or just consider $CONFIG_POWER_ONLY dead?
@@ -11,15 +15,9 @@ post_provision_config_nodes() {
     #                 libpmemblk munge-libs munge slurm             \
     #                 slurm-example-configs slurmctld slurm-slurmmd
     #fi
-    codename=$(lsb_release -s -c)
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-        add-apt-repository \
-            "deb $REPOSITORY_URL/$DAOS_STACK_GROUP_REPO $codename"
-    fi
 
-    if [ -n "$DAOS_STACK_LOCAL_REPO" ]; then
-        echo "deb [trusted=yes] $REPOSITORY_URL/$DAOS_STACK_LOCAL_REPO $codename main" >> /etc/apt/sources.list
-    fi
+    # why, Canonical? just why?
+    sed -i -e "/$HOSTNAME/d" /etc/hosts
 
     if [ -n "$INST_REPOS" ]; then
         for repo in $INST_REPOS; do
@@ -36,25 +34,37 @@ post_provision_config_nodes() {
             echo "deb [trusted=yes] ${JENKINS_URL}job/daos-stack/job/${repo}/job/${branch//\//%252F}/${build_number}/artifact/artifacts/ubuntu20.04 ./" >> /etc/apt/sources.list
         done
     fi
+    # TODO: investigate why this is needed
+    sed -i -e '/daos-stack-daos-ubuntu/d' /etc/apt/sources.list.d/daos_ci-ubuntu*-artifactory.list
+
     apt-get update
+
+    local inst_rpms=()
     if [ -n "$INST_RPMS" ]; then
-        # shellcheck disable=SC2086
-        if ! apt-get -y remove $INST_RPMS; then
+        eval "inst_rpms=($INST_RPMS)"
+        if ! apt-get -y remove "${inst_rpms[@]}"; then
             rc=${PIPESTATUS[0]}
-            if [ $rc -ne 100 ]; then
+            if [ "$rc" -ne 100 ]; then
                 echo "Error $rc removing $INST_RPMS"
-                return $rc
+                return "$rc"
             fi
         fi
     fi
 
-    apt-get -y install avocado python3-avocado-plugins-output-html   \
-                       python3-avocado-plugins-varianter-yaml-to-mux \
-                       lsb-core
+    # maybe in the next release of Ubuntu
+    #apt-get -y install avocado python3-avocado-plugins-output-html   \
+    #                   python3-avocado-plugins-varianter-yaml-to-mux \
 
-    # shellcheck disable=2086
+    apt-get -y install  lsb-core patchutils
+    apt-get -y remove python3-avocado{,-plugins-{varianter-yaml-to-mux,output-html}}
+
+    python3 -m pip install --upgrade pip
+    python3 -m pip install "avocado-framework<70.0"
+    python3 -m pip install "avocado-framework-plugin-result-html<70.0"
+    python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+
     if [ -n "$INST_RPMS" ] &&
-       ! apt-get -y install $INST_RPMS; then
+       ! apt-get -y install "${inst_rpms[@]}"; then
         rc=${PIPESTATUS[0]}
         for file in /etc/apt/sources.list{,.d/*.list}; do
             echo "---- $file ----"
@@ -69,6 +79,16 @@ post_provision_config_nodes() {
 
     # change the default shell to bash -- we write a lot of bash
     chsh -s /bin/bash
+
+    # needed for test_cart_iv
+    echo 0 > /proc/sys/kernel/yama/ptrace_scope
+    cat /proc/sys/kernel/yama/ptrace_scope
+    rm -f /etc/sysctl.d/10-ptrace.conf
+
+    # make sure mpich is the current mpi alternative
+    # TODO: should instead just use mpirun.mpich in testing
+    update-alternatives --set mpi /usr/bin/mpicc.mpich
+    update-alternatives --set mpirun /usr/bin/mpirun.mpich
 
     return 0
 }

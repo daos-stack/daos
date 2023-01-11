@@ -1,9 +1,9 @@
 etc
 usr/bin
-usr/lib64
-usr/lib64/daos
-usr/lib64/python3.8/site-packages/pydaos
-usr/lib64/python3.8/site-packages/pydaos/raw
+usr/lib/python3.8
+usr/lib/python3.8/pydaos
+usr/lib/python3.8/pydaos/raw
 usr/share/daos/daos
 usr/lib/systemd/system
 usr/share/man/man8
+usr/lib/x86_64-linux-gnu/daos/

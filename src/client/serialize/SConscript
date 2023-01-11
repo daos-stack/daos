@@ -6,6 +6,9 @@ def scons():
     Import('env')
 
     denv = env.Clone()
+    denv.AppendUnique(CCFLAGS=['-I/usr/include/hdf5/mpich',
+                               '-I/usr/include/x86_64-linux-gnu/mpich'])
+    denv.AppendUnique(LINKFLAGS=['-L/usr/lib/x86_64-linux-gnu/hdf5/mpich/'])
 
     have_hdf5 = True
 
