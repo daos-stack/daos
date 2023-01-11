@@ -2258,6 +2258,41 @@ class PosixTests():
         print(os.listdir(path))
 
     @needs_dfuse
+    def test_uns_link(self):
+        """Simple test to create a container then create a path for it in dfuse"""
+        container1 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link1')
+        cmd = ['cont', 'query', self.pool.id(), container1]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+
+        container2 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link2')
+        cmd = ['cont', 'query', self.pool.id(), container2]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+
+        path = join(self.dfuse.dir, 'uns_link1')
+        cmd = ['cont', 'link', self.pool.id(), 'mycont_uns_link1', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
+        print(os.listdir(path))
+        cmd = ['cont', 'destroy', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+
+        path = join(self.dfuse.dir, 'uns_link2')
+        cmd = ['cont', 'link', self.pool.id(), container2, '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
+        print(os.listdir(path))
+        cmd = ['cont', 'destroy', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+
+    @needs_dfuse
     def test_rename_clobber(self):
         """Test that rename clobbers files correctly
 
