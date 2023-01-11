@@ -502,23 +502,23 @@ class StorageInfo():
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):
-            lines.append(f'    {str(engine)}:\n')
-            lines.append('      storage:\n')
+            lines.append(f'    {str(engine)}:')
+            lines.append('      storage:')
             for tier in range(tiers):
-                lines.append(f'        {str(tier)}:\n')
+                lines.append(f'        {str(tier)}:')
                 if tier == 0 and tier_type == self.TIER_KEYWORDS[0]:
-                    lines.append('          class: dcpm\n')
-                    lines.append(f'          scm_list: ["/dev/pmem{engine}"]\n')
-                    lines.append(f'          scm_mount: /mnt/daos{engine}\n')
+                    lines.append('          class: dcpm')
+                    lines.append(f'          scm_list: ["/dev/pmem{engine}"]')
+                    lines.append(f'          scm_mount: /mnt/daos{engine}')
                 else:
-                    lines.append('          class: nvme\n')
-                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]\n')
+                    lines.append('          class: nvme')
+                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
 
         self._log.debug('Creating %s', yaml_file)
         for line in lines:
             self._log.debug('  %s', line)
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
-                config_handle.writelines(lines)
+                config_handle.writelines([f'{line}\n' for line in lines])
         except IOError as error:
             self._raise_error(f"Error writing avocado config file {yaml_file}", error)
