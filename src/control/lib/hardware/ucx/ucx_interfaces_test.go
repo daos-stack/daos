@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,9 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -45,4 +42,6 @@ func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	}
 
 	fmt.Printf("FabricInterfaceSet:\n%s\n", result)
+
+	fmt.Printf("captured log output:\n%s", buf.String())
 }

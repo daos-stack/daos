@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,8 +40,16 @@ func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInt
 		return nil, err
 	}
 	defer uctHdl.Close()
+	p.log.Debugf("opened libuct with path: %q", uctHdl.Path)
 
-	components, cleanupComp, err := getUCTComponents(uctHdl)
+	ucxIBHdl, err := dlopen.GetHandle([]string{"libuct_ib.so.0"})
+	if err != nil {
+		p.log.Error("couldn't load libuct_ib -- UCX IB NOT INSTALLED")
+	} else {
+		ucxIBHdl.Close()
+	}
+
+	components, cleanupComp, err := getUCTComponents(p.log, uctHdl)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +67,7 @@ func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInt
 			continue
 		}
 
-		mdResources, err := getMDResourceNames(uctHdl, comp)
+		mdResources, err := getMDResourceNames(p.log, uctHdl, comp)
 		if err != nil {
 			p.log.Error(err.Error())
 			continue
@@ -104,7 +112,7 @@ func (p *Provider) getCompNetworkDevices(uctHdl *dlopen.LibHandle, comp *uctComp
 			}
 		}()
 
-		tlDevs, err := getMDTransportDevices(uctHdl, md)
+		tlDevs, err := getMDTransportDevices(p.log, uctHdl, md)
 		if err != nil {
 			return nil, err
 		}

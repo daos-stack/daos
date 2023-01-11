@@ -17,8 +17,10 @@
 package dlopen
 
 // #cgo LDFLAGS: -ldl
+// #define _GNU_SOURCE
 // #include <stdlib.h>
 // #include <dlfcn.h>
+// #include <link.h>
 import "C"
 import (
 	"errors"
@@ -32,6 +34,7 @@ var ErrSoNotFound = errors.New("unable to open a handle to the library")
 type LibHandle struct {
 	Handle  unsafe.Pointer
 	Libname string
+	Path    string
 }
 
 // GetHandle tries to get a handle to a library (.so), attempting to access it
@@ -44,9 +47,12 @@ func GetHandle(libs []string) (*LibHandle, error) {
 		defer C.free(unsafe.Pointer(libname))
 		handle := C.dlopen(libname, C.RTLD_LAZY)
 		if handle != nil {
+			cStr := make([]C.char, 1024)
+			_ = C.dlinfo(handle, C.RTLD_DI_ORIGIN, unsafe.Pointer(&(cStr[0])))
 			h := &LibHandle{
 				Handle:  handle,
 				Libname: name,
+				Path:    C.GoString(&(cStr[0])),
 			}
 			return h, nil
 		}

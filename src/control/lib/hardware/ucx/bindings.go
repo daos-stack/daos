@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -197,6 +197,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/dlopen"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Load dynamically loads the UCX libraries and provides a method to unload them.
@@ -257,7 +258,7 @@ type uctComponent struct {
 	mdResourceCount uint
 }
 
-func getUCTComponents(uctHdl *dlopen.LibHandle) ([]*uctComponent, func() error, error) {
+func getUCTComponents(log logging.Logger, uctHdl *dlopen.LibHandle) ([]*uctComponent, func() error, error) {
 	cComponents, numComponents, err := uctQueryComponents(uctHdl)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "getting component list")
@@ -277,12 +278,14 @@ func getUCTComponents(uctHdl *dlopen.LibHandle) ([]*uctComponent, func() error, 
 			return nil, nil, errors.Wrap(err, "querying component details")
 		}
 
-		components = append(components, &uctComponent{
+		uctComp := &uctComponent{
 			cComponent:      comp,
 			name:            C.GoString(C.get_component_attr_name(&attr)),
 			flags:           uint64(attr.flags),
 			mdResourceCount: uint(attr.md_resource_count),
-		})
+		}
+		log.Debugf("discovered UCT component %q", uctComp.name)
+		components = append(components, uctComp)
 	}
 
 	return components, func() error {
@@ -316,7 +319,7 @@ func uctReleaseComponentList(uctHdl *dlopen.LibHandle, components *C.uct_compone
 	return nil
 }
 
-func getMDResourceNames(uctHdl *dlopen.LibHandle, component *uctComponent) ([]string, error) {
+func getMDResourceNames(log logging.Logger, uctHdl *dlopen.LibHandle, component *uctComponent) ([]string, error) {
 	var attr C.uct_component_attr_t
 
 	attr.field_mask = C.UCT_COMPONENT_ATTR_FIELD_MD_RESOURCES
@@ -333,6 +336,7 @@ func getMDResourceNames(uctHdl *dlopen.LibHandle, component *uctComponent) ([]st
 	names := make([]string, 0, component.mdResourceCount)
 	for i := uint(0); i < component.mdResourceCount; i++ {
 		name := C.get_md_resource_name_from_list(attr.md_resources, C.uint(i))
+		log.Debugf("discovered MD resource %q", C.GoString(name))
 		names = append(names, C.GoString(name))
 	}
 
@@ -462,7 +466,8 @@ func (d *transportDev) isNetwork() bool {
 	return d.devType == C.UCT_DEVICE_TYPE_NET
 }
 
-func getMDTransportDevices(uctHdl *dlopen.LibHandle, md *uctMD) ([]*transportDev, error) {
+func getMDTransportDevices(log logging.Logger, uctHdl *dlopen.LibHandle, md *uctMD) ([]*transportDev, error) {
+	log.Debugf("getting transport resources for MD %q", md.name)
 	tlResources, tlResourceCount, err := uctMDQueryTLResources(uctHdl, md.cMD)
 	if err != nil {
 		return nil, errors.Wrapf(err, "querying TL resources for %q", md.name)
@@ -471,11 +476,13 @@ func getMDTransportDevices(uctHdl *dlopen.LibHandle, md *uctMD) ([]*transportDev
 
 	tlDevs := make([]*transportDev, 0, int(tlResourceCount))
 	for i := C.uint(0); i < tlResourceCount; i++ {
-		tlDevs = append(tlDevs, &transportDev{
+		dev := &transportDev{
 			transport: C.GoString(C.get_tl_resource_name_from_list(tlResources, i)),
 			device:    C.GoString(C.get_tl_resource_device_from_list(tlResources, i)),
 			devType:   C.get_tl_resource_type_from_list(tlResources, i),
-		})
+		}
+		log.Debugf("  %s", dev)
+		tlDevs = append(tlDevs, dev)
 	}
 
 	return tlDevs, nil
