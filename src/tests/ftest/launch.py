@@ -2142,6 +2142,14 @@ class Launch():
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
 
+        # Mark the test execution as failed if a results.xml file is not found
+        test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
+        results_xml = os.path.join(test_logs_dir, "results.xml")
+        if not os.path.exists(results_xml):
+            message = f"Missing a '{results_xml}' file for {str(test)}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return_code = 16
+
         # Optionally store all of the server and client config files and remote logs along with
         # this test's results. Also report an error if the test generated any log files with a
         # size exceeding the threshold.

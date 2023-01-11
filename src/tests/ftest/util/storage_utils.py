@@ -510,7 +510,10 @@ class StorageInfo():
             self._log.debug('device_sets:    %s', device_sets)
 
             # Tier number device placement order
-            tier_placement_priority = [1, 2, 3, 3, 2]
+            if tier_type == self.TIER_KEYWORDS[1]:
+                tier_placement_priority = [1, 2, 3, 3, 2]
+            else:
+                tier_placement_priority = [1]
 
             # Get the tier number device placement for the available number of devices
             tier_placement = []
@@ -528,7 +531,7 @@ class StorageInfo():
                         bdev_list[engine] = {}
                     if tier not in bdev_list[engine]:
                         bdev_list[engine][tier] = []
-                    bdev_list[engine][tier].append(device)
+                    bdev_list[engine][tier].append(f'"{device}"')
             self._log.debug('bdev_list:      %s', bdev_list)
 
         lines = ['server_config:', '  engines:']
@@ -548,7 +551,7 @@ class StorageInfo():
                     lines.append(f'          scm_size: {scm_size}')
                 else:
                     lines.append('          class: nvme')
-                    lines.append(f'          bdev_list: [{",".join(bdev_list[engine][tier])}]')
+                    lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
 
         self._log.debug('Creating %s', yaml_file)
         for line in lines:
