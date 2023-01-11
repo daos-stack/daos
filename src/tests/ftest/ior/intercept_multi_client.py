@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2019-2022 Intel Corporation.
 
@@ -30,6 +29,6 @@ class IorInterceptMultiClient(IorInterceptTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
-        :avocado: tags=ior_intercept_multi_client,test_ior_intercept_multi_client
+        :avocado: tags=IorInterceptMultiClient,test_ior_intercept_multi_client
         """
         self.run_il_perf_check()
