@@ -42,12 +42,13 @@ class ConfigGenerateRun(TestWithServers):
         scm_only = self.params.get("scm_only", "/run/config_generate_params/*/")
         net_class = self.params.get("net_class", "/run/config_generate_params/*/")
         net_provider = self.params.get("net_provider", "/run/config_generate_params/*/")
+        use_tmpfs_scm = self.params.get("use_tmpfs_scm", "/run/config_generate_params/*/")
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
-            access_points=server_host, num_engines=num_engines,
-            scm_only=scm_only, net_class=net_class, net_provider=net_provider)
+            access_points=server_host, num_engines=num_engines, scm_only=scm_only,
+            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)

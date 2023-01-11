@@ -1122,7 +1122,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None):
+            net_class=None, net_provider=None, use_tmpfs_scm=False):
         """Produce a server configuration.
 
         Args:
@@ -1135,6 +1135,8 @@ class DmgCommand(DmgCommandBase):
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
                 i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+            use_tmpfs_scm (bool, option): Whether to use a ramdisk instead of PMem
+                as SCM. Defaults to False.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other

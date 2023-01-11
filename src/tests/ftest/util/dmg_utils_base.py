@@ -225,6 +225,7 @@ class DmgCommandBase(YamlCommand):
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
                 self.net_provider = FormattedParameter("--net-provider={}", None)
+                self.use_tmpfs_scm = FormattedParameter("--use_tmpfs_scm", False)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""

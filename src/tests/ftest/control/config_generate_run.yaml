@@ -44,3 +44,7 @@ config_generate_params: !mux
     net_class: ethernet
     num_engines: 1
     net_provider: ofi+tcp;ofi_rxm
+  # 7. Use tmpfs for scm instead of pmem.
+  tmpfs_scm_true:
+    use_tmpfs_scm: true
+    net_provider: ofi+tcp;ofi_rxm
