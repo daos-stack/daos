@@ -1135,7 +1135,7 @@ class DmgCommand(DmgCommandBase):
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
                 i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
-            use_tmpfs_scm (bool, option): Whether to use a ramdisk instead of PMem
+            use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
 
         Returns:
@@ -1146,7 +1146,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.

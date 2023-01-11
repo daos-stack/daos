@@ -252,14 +252,14 @@ class ConfigGenerateOutput(TestWithServers):
         # Get necessary storage and network info.
         self.prepare_expected_data()
 
+        errors = []
+
         # Call dmg config generate.
         result = self.get_dmg_command().config_generate(
             access_points="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True)
         if result.exit_status != 0:
             errors.append("Config generate failed with use_tmpfs_scm = True!")
         generated_yaml = yaml.safe_load(result.stdout)
-
-        errors = []
 
         # Iterate engines and verify class, scm_size, bdev_list, and fabric_iface.
         engines = generated_yaml["engines"]
