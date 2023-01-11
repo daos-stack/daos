@@ -387,23 +387,20 @@ def wait_for_pool_rebuild(self, pool, name):
 
     """
     rebuild_status = False
-    self.log.info(
-        "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
+    self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
     try:
         # # Wait for rebuild to start
-        # pool.wait_for_rebuild(True)
+        # pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        pool.wait_for_rebuild(False)
+        pool.wait_for_rebuild_to_end()
         rebuild_status = True
     except DaosTestError as error:
-        self.log.error(
-            "<<<FAILED:{} rebuild timed out: {}".format(
-                name, error), exc_info=error)
+        self.log.error("<<<FAILED:{} rebuild timed out: {}".format(name, error), exc_info=error)
         rebuild_status = False
     except TestFail as error1:
         self.log.error(
-            "<<<FAILED:{} rebuild failed due to test issue: {}".format(
-                name, error1), exc_info=error1)
+            "<<<FAILED:{} rebuild failed due to test issue: {}".format(name, error1),
+            exc_info=error1)
     return rebuild_status
 
 
@@ -524,8 +521,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
             pool.exclude(rank, tgt_idx=tgt_idx)
             status = True
         except TestFail as error:
-            self.log.error(
-                "<<<FAILED:dmg pool exclude failed", exc_info=error)
+            self.log.error("<<<FAILED:dmg pool exclude failed", exc_info=error)
             status = False
         if status:
             status = wait_for_pool_rebuild(self, pool, name)
@@ -539,8 +535,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
                 pool.reintegrate(rank, tgt_idx=tgt_idx)
                 status = True
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg pool reintegrate failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg pool reintegrate failed", exc_info=error)
                 status = False
             if status:
                 status = wait_for_pool_rebuild(self, pool, name)
@@ -598,8 +593,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                     pool.drain(rank)
                 except TestFail as error:
                     self.log.error(
-                        "<<<FAILED:dmg pool {} drain failed".format(
-                            pool.uuid), exc_info=error)
+                        "<<<FAILED:dmg pool {} drain failed".format(pool.uuid), exc_info=error)
                     status = False
                 drain_status &= status
                 if drain_status:
@@ -612,8 +606,7 @@ def launch_server_stop_start(self, pools, name, results, args):
             try:
                 self.dmg_command.system_stop(force=True, ranks=rank)
             except TestFail as error:
-                self.log.error(
-                    "<<<FAILED:dmg system stop failed", exc_info=error)
+                self.log.error("<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
             time.sleep(30)
             if not drain:
