@@ -1440,7 +1440,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 out:
 	/* internally destroy the req when failed */
-	if (rc != 0) {
+	if (rc != 0 && req->cr_ctx != NULL) {
 		if (!rpc_priv->crp_coll) {
 			crt_rpc_complete(rpc_priv, rc);
 			/* failure already reported through complete cb */
