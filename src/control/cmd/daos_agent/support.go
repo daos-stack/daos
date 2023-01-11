@@ -22,6 +22,7 @@ type SupportCmd struct {
 type collectLogCmd struct {
 	configCmd
 	cmdutil.LogCmd
+	ConfigPath   string `short:"o" long:"config-path" required:"1" description:"Path to agent configuration file"`
 	Stop         bool   `short:"s" long:"Stop" description:"Stop the collectlog command on very first error"`
 	TargetFolder string `short:"t" long:"loglocation" description:"Folder location where log is going to be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
@@ -30,13 +31,15 @@ type collectLogCmd struct {
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	var LogCollection = map[string][]string{
+		"CopyAgentConfig":  {""},
+		"CollectAgentLog":  {""},
 		"CollectAgentCmd":  support.AgentCmd,
 		"CollectClientLog": {""},
 		"CollectSystemCmd": support.SystemCmd,
 	}
 
 	// Default 3 steps of log/conf collection.
-	progress := support.ProgressBar{1, 3, 0, false}
+	progress := support.ProgressBar{1, 5, 0, false}
 
 	if cmd.Archive == true {
 		progress.Total = progress.Total + 1
@@ -57,6 +60,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params := support.Params{}
 	params.TargetFolder = cmd.TargetFolder
 	params.CustomLogs = cmd.CustomLogs
+	params.Config = cmd.ConfigPath
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
 			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
@@ -71,7 +75,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		support.PrintProgress(&progress)
+		fmt.Printf(support.PrintProgress(&progress))
 	}
 
 	if cmd.Archive == true {
@@ -86,7 +90,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	support.PrintProgressEnd(&progress)
+	fmt.Printf(support.PrintProgressEnd(&progress))
 
 	return nil
 }

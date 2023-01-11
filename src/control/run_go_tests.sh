@@ -164,9 +164,9 @@ export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
 
-#controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 #controldir="/home/samirrav/daos/src/control/cmd/dmg/"
-controldir="/home/samirrav/daos/src/control/lib/support/"
+#controldir="/home/samirrav/daos/src/control/lib/support/"
 
 check_formatting "$controldir"
 

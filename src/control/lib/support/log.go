@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
@@ -35,6 +36,8 @@ const (
 	serverLogs         = "ServerLogs"       // Copy the server/control and helper logs
 	clientLogs         = "ClientLogs"       // Copy the server/control and helper logs
 	daosConfig         = "ServerConfig"     // Copy the server config
+	agentConfig        = "AgentConfig"      // Copy the Agent config
+	agentLog           = "AgentLog"         // Copy the Agent log
 	customLogs         = "CustomLogs"       // Copy the Custom logs
 )
 
@@ -453,6 +456,49 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 	return nil
 }
 
+// Collect Agent log
+func CollectAgentLog(log logging.Logger, opts ...Params) error {
+	// Create the individual folder on each client
+	targetAgentLog, err := createHostLogFolder(agentLog, log, opts...)
+	if err != nil {
+		return err
+	}
+
+	agentFile, err := ioutil.ReadFile(opts[0].Config)
+	if err != nil {
+		return err
+	}
+
+	data := make(map[interface{}]interface{})
+	err = yaml.Unmarshal(agentFile, &data)
+	if err != nil {
+		return err
+	}
+
+	err = cpLogFile(fmt.Sprintf("%s", data["log_file"]), targetAgentLog, log)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Copy Agent config file.
+func CopyAgentConfig(log logging.Logger, opts ...Params) error {
+	// Create the individual folder on each client
+	targetConfig, err := createHostLogFolder(agentConfig, log, opts...)
+	if err != nil {
+		return err
+	}
+
+	err = cpLogFile(opts[0].Config, targetConfig, log)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Collect the output of all dmg command and copy into individual file.
 func CollectDmgCmd(log logging.Logger, opts ...Params) error {
 	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
@@ -637,6 +683,10 @@ func CollectSupportLog(log logging.Logger, opts ...Params) error {
 		return CollectCmdOutput(daosAgentCmdInfo, log, opts...)
 	case "CollectClientLog":
 		return CollectClientLog(log, opts...)
+	case "CollectAgentLog":
+		return CollectAgentLog(log, opts...)
+	case "CopyAgentConfig":
+		return CopyAgentConfig(log, opts...)
 	case "rsyncLog":
 		return rsyncLog(log, opts...)
 	}
