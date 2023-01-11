@@ -2130,7 +2130,8 @@ class Launch():
             return_code |= self._reset_server_storage(test)
 
         # Mark the test execution as failed if a results.xml file is not found
-        results_xml = os.path.join(self._get_latest_logs_dir(), "results.xml")
+        test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
+        results_xml = os.path.join(test_logs_dir, "results.xml")
         if not os.path.exists(results_xml):
             message = f"Missing a '{results_xml}' file for {str(test)}"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2692,7 +2693,9 @@ class Launch():
             int: status code: 0 = success, 1024 = failure
 
         """
-        test_logs_dir = self._get_latest_logs_dir()
+        avocado_logs_dir = self.avocado.get_logs_dir()
+        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
+        test_logs_dir = os.path.realpath(test_logs_lnk)
 
         logger.debug("=" * 80)
         logger.info("Renaming the avocado job-results directory")
@@ -2767,17 +2770,6 @@ class Launch():
                 return 1024
 
         return 0
-
-    def _get_latest_logs_dir(self):
-        """Get the latest avocado job results directory path.
-
-        Returns:
-            str: path to the latest avocado job results
-
-        """
-        avocado_logs_dir = self.avocado.get_logs_dir()
-        test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
-        return os.path.realpath(test_logs_lnk)
 
     def _summarize_run(self, status):
         """Summarize any failures that occurred during testing.
