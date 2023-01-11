@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -222,7 +222,7 @@ class DmgCommandBase(YamlCommand):
                 self.access_points = FormattedParameter(
                     "--access-points={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
-                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
                 self.net_provider = FormattedParameter("--net-provider={}", None)
 
