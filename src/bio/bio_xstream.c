@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,9 +94,10 @@ static struct bio_nvme_data nvme_glb;
 static int
 bio_spdk_env_init(void)
 {
-	struct spdk_env_opts	 opts;
-	bool			 enable_rpc_srv;
-	int			 rc;
+	struct spdk_env_opts	opts;
+	bool			enable_rpc_srv;
+	int			rc;
+	int			roles = 0;
 
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
@@ -113,12 +114,13 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
+		nvme_glb.bd_nvme_roles = roles;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
@@ -199,8 +201,7 @@ set_faulty_criteria(void)
 
 int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-	      unsigned int hugepage_size, unsigned int tgt_nr, struct sys_db *db,
-	      bool bypass_health_collect)
+	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
 {
 	char		*env;
 	int		 rc, fd;
@@ -252,7 +253,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
 	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
 
 	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
@@ -291,12 +291,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
 	       bio_chk_cnt_max, size_mb);
 
-	rc = smd_init(db);
-	if (rc != 0) {
-		D_ERROR("Initialize SMD store failed. "DF_RC"\n", DP_RC(rc));
-		goto free_cond;
-	}
-
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.num_md_pages = DAOS_BS_MD_PAGES;
@@ -317,15 +311,17 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	rc = bio_spdk_env_init();
 	if (rc) {
 		nvme_glb.bd_nvme_conf = NULL;
-		goto fini_smd;
+		goto free_cond;
 	}
+
+	D_INFO("MD on SSD is %s\n",
+	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+
 	bio_spdk_inited = true;
 	set_faulty_criteria();
 
 	return 0;
 
-fini_smd:
-	smd_fini();
 free_cond:
 	ABT_cond_free(&nvme_glb.bd_barrier);
 free_mutex:
@@ -774,7 +770,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	}
 }
 
-static int
+int
 bdev_name2roles(const char *name)
 {
 	const char	*dst = strrchr(name, '_');
@@ -840,8 +836,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		goto error;
 	}
 
-	/* Update roles in global NVMe config */
-	nvme_glb.bd_nvme_roles |= rc;
 	d_bdev->bb_roles = rc;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {

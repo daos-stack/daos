@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -685,7 +685,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, struct sys_db *db)
+vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -712,11 +712,11 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id, struct sys_db *db)
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		rc = bio_nvme_init(NULL, VOS_NVME_NUMA_NODE, 0, 0,
-				   VOS_NVME_NR_TARGET, db, true);
+				   VOS_NVME_NR_TARGET, true);
 	} else {
 		rc = bio_nvme_init(nvme_conf, VOS_NVME_NUMA_NODE,
 				   VOS_NVME_MEM_SIZE, VOS_NVME_HUGEPAGE_SIZE,
-				   VOS_NVME_NR_TARGET, db, true);
+				   VOS_NVME_NR_TARGET, true);
 		close(fd);
 	}
 
@@ -734,19 +734,15 @@ out:
 	return rc;
 }
 
-static bool md_on_ssd_enabled;
-
 static void
 vos_self_fini_locked(void)
 {
 
 	vos_self_nvme_fini();
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	if (!md_on_ssd_enabled) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		vos_db_fini();
-	} else {
+	else
 		lmm_db_fini();
-	}
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(self_mode.self_tls);
@@ -790,10 +786,8 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	}
 
 	rc = ABT_init(0, NULL);
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	vos_start_epoch = 0;
 
@@ -801,16 +795,14 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
+		D_GOTO(out, rc);
 	}
 #endif
 	rc = vos_mod_init();
 	if (rc)
 		D_GOTO(failed, rc);
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	if (!md_on_ssd_enabled) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		if (use_sys_db)
 			rc = vos_db_init(db_path);
 		else
@@ -828,7 +820,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		D_GOTO(failed, rc);
 
-	rc = vos_self_nvme_init(db_path, tgt_id, db);
+	rc = smd_init(db);
+	if (rc)
+		D_GOTO(failed, rc);
+
+	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
 		D_GOTO(failed, rc);
 
