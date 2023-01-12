@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -43,8 +43,7 @@ class RbldNoCapacity(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool,rebuild
-        :avocado: tags=no_cap
-
+        :avocado: tags=no_cap,test_rebuild_no_capacity
         """
         # Get the test params
         targets = self.server_managers[0].get_config_value("targets")

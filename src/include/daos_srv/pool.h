@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -241,7 +241,7 @@ struct rsvc_hint;
 int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
-void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank, uint64_t term);
 
 int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
@@ -253,6 +253,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);

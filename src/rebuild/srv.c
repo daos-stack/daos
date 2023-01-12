@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -176,7 +176,11 @@ rebuild_leader_set_status(struct rebuild_global_pool_tracker *rgt,
 		}
 	}
 
-	D_ASSERTF(status != NULL, "Can not find rank %u\n", rank);
+	if (status == NULL) {
+		D_INFO("rank %u is not included in this rebuild.\n", rank);
+		return;
+	}
+
 	status->dtx_resync_version = resync_ver;
 	if (flags & SCAN_DONE)
 		status->scan_done = 1;
@@ -1301,6 +1305,7 @@ rebuild_task_ult(void *arg)
 {
 	struct rebuild_task			*task = arg;
 	struct ds_pool				*pool;
+	uint32_t				global_ver = 0;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
 	uint64_t				cur_ts = 0;
@@ -1319,6 +1324,30 @@ rebuild_task_ult(void *arg)
 			DP_UUID(task->dst_pool_uuid), rc);
 		D_GOTO(out_task, rc = -DER_NONEXIST);
 	}
+
+	while (1) {
+		/* Check if the leader pool map has been synced to all other targets
+		 * to avoid -DER_GRP error.
+		 */
+		rc = ds_pool_svc_global_map_version_get(task->dst_pool_uuid, &global_ver);
+		if (rc) {
+			D_ERROR("Get pool service version failed: "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out_pool, rc);
+		}
+
+		D_DEBUG(DB_REBUILD, "global_ver %u map ver %u\n", global_ver,
+			task->dst_map_ver);
+
+		if (pool->sp_stopping)
+			D_GOTO(out_pool, rc = -DER_SHUTDOWN);
+
+		if (pool->sp_map_version <= global_ver)
+			break;
+
+		dss_sleep(1000);
+	}
+
 
 	rc = crt_group_rank(pool->sp_group, &myrank);
 	D_ASSERT(rc == 0);
@@ -2266,7 +2295,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	D_DEBUG(DB_REBUILD, "rebuild coh/poh "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(rpt->rt_coh_uuid), DP_UUID(rpt->rt_poh_uuid));
 
-	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank);
+	ds_pool_iv_ns_update(pool, rsi->rsi_master_rank, rsi->rsi_leader_term);
 
 	rc = ds_pool_iv_prop_fetch(pool, &prop);
 	if (rc)

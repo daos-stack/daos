@@ -33,6 +33,12 @@ dma_alloc_chunk(unsigned int cnt)
 	int rc;
 
 	D_ASSERT(bytes > 0);
+
+	if (DAOS_FAIL_CHECK(DAOS_NVME_ALLOCBUF_ERR)) {
+		D_ERROR("Injected DMA buffer allocation error.\n");
+		return NULL;
+	}
+
 	D_ALLOC_PTR(chunk);
 	if (chunk == NULL) {
 		return NULL;

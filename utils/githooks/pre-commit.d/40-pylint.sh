@@ -12,7 +12,7 @@ if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
 fi
 
 # Try and use the gh command to work out the target branch, or if not installed
-# then assume master.
+# then assume origin/master.
 if command -v gh > /dev/null 2>&1
 then
         # If there is no PR created yet then do not check anything.
@@ -21,15 +21,15 @@ then
                 TARGET=HEAD
         fi
 else
-        # With no 'gh' command installed then check against master.
-        echo "Install gh command to auto-detect target branch, assuming master."
+        # With no 'gh' command installed then check against origin/master.
+        echo "Install gh command to auto-detect target branch, assuming origin/master."
         TARGET=origin/master
 fi
 
 if [ $TARGET = "HEAD" ]
 then
         echo "Checking against HEAD"
-        git diff HEAD^ -U10 | ./utils/cq/daos_pylint.py --diff
+        git diff HEAD -U10 | ./utils/cq/daos_pylint.py --diff
 else
         echo "Checking against branch ${TARGET}"
         git diff $TARGET... -U10 | ./utils/cq/daos_pylint.py --diff

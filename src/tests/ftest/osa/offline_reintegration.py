@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,7 +59,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude ranks [0, 3, 4]
-        rank = [0, 3, 4]
+        rank = [0, 3]
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
@@ -195,6 +195,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_daily,ior
         :avocado: tags=offline_reintegration_without_csum
+        :avocado: tags=test_osa_offline_reintegration_without_checksum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -211,6 +212,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=osa,checksum
         :avocado: tags=offline_reintegration_daily,ior
         :avocado: tags=offline_reintegration_multiple_pools
+        :avocado: tags=test_osa_offline_reintegration_multiple_pools
         """
         self.log.info("Offline Reintegration : Multiple Pools")
         self.run_offline_reintegration_test(5, data=True)
@@ -224,6 +226,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=osa,checksum
         :avocado: tags=offline_reintegration_full,ior
         :avocado: tags=offline_reintegration_srv_stop
+        :avocado: tags=test_osa_offline_reintegration_server_stop
         """
         self.log.info("Offline Reintegration : System Start/Stop")
         self.run_offline_reintegration_test(1, data=True, server_boot=True)
@@ -237,6 +240,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full,ior
         :avocado: tags=offline_reintegrate_during_rebuild
+        :avocado: tags=test_osa_offline_reintegrate_during_rebuild
         """
         self.loop_test_cnt = self.params.get("iterations",
                                              '/run/loop_test/*')
@@ -254,6 +258,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full,ior
         :avocado: tags=offline_reintegration_oclass
+        :avocado: tags=test_osa_offline_reintegration_oclass
         """
         self.log.info("Offline Reintegration : Object Class")
         for oclass in self.test_oclass:
@@ -270,6 +275,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full,ior
         :avocado: tags=offline_reintegrate_during_aggregation
+        :avocado: tags=test_osa_offline_reintegrate_during_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -287,6 +293,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=osa,checksum
         :avocado: tags=offline_reintegration_full,mpich
         :avocado: tags=offline_reintegration_with_rf
+        :avocado: tags=test_osa_offline_reintegration_with_rf
         """
         self.log.info("Offline Reintegration : RF")
         self.test_with_rf = self.params.get("test_with_rf",
@@ -301,6 +308,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_with_blank_node
+        :avocado: tags=test_osa_offline_reintegrate_with_blank_node
         """
         self.test_with_blank_node = self.params.get("test_with_blank_node",
                                                     '/run/blank_node/*')
@@ -314,6 +322,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_after_snapshot
+        :avocado: tags=test_osa_offline_reintegrate_after_snapshot
         """
         self.test_with_snapshot = self.params.get("test_with_snapshot",
                                                   '/run/snapshot/*')
@@ -327,6 +336,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=all,full_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_with_less_pool_space
+        :avocado: tags=test_osa_offline_reintegrate_with_less_pool_space
         """
         self.log.info("Offline Reintegration : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')

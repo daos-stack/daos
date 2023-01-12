@@ -1470,6 +1470,13 @@ iterate_records(struct ioreq *req, char *dkey, char *akey, int iod_size)
 			continue;
 		for (i = 0; i < (number - 1); i++) {
 			assert_true(recxs[i].rx_idx > recxs[i+1].rx_idx);
+			/* Print a subset of enumerated records */
+			if ((i + key_nr) % ENUM_PRINT != 0)
+				continue;
+			print_message("i:%d iod_size:%d rx_nr:%d, rx_idx:%d\n",
+				      i + key_nr, (int)size,
+				      (int)recxs[i].rx_nr,
+				      (int)recxs[i].rx_idx);
 		}
 
 		key_nr += number;
@@ -3157,10 +3164,10 @@ tgt_idx_change_retry(void **state)
 		assert_rc_equal(rc, 0);
 
 		/** exclude target of the replica */
-		print_message("rank 0 excluding target rank %u ...\n", rank);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, rank);
-		assert_int_equal(rc, 0);
+		print_message("rank 0 excluding rank %u ...\n", rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, rank, -1);
+		assert_success(rc);
 
 		/** progress the async IO (not must) */
 		insert_test(&req, 1000);
@@ -3215,9 +3222,10 @@ tgt_idx_change_retry(void **state)
 	}
 
 	if (arg->myrank == 0) {
-		print_message("rank 0 adding target rank %u ...\n", rank);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, rank);
+		print_message("rank 0 adding rank %u ...\n", rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  rank, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
@@ -3235,6 +3243,7 @@ fetch_replica_unavail(void **state)
 	uint32_t		 size = 64;
 	d_rank_t		 rank = 2;
 	char			*buf;
+	int			 rc = 0;
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -3255,8 +3264,9 @@ fetch_replica_unavail(void **state)
 
 	if (arg->myrank == 0) {
 		/** exclude the target of this obj's replicas */
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, rank);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, rank, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3273,12 +3283,12 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 
 		/* add back the excluded targets */
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, rank);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  rank, -1);
+		assert_success(rc);
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
-
 	}
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);

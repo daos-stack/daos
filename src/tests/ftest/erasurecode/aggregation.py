@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -26,7 +26,7 @@ class EcodAggregationOff(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_disabled
+        :avocado: tags=ec_aggregation_disabled,test_ec_aggregation_disabled
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -57,7 +57,7 @@ class EcodAggregationOff(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_default
+        :avocado: tags=ec_aggregation_default,test_ec_aggregation_default
         """
         self.pool.connect()
         self.log.info("pool_percentage Before = %s ",
@@ -91,7 +91,7 @@ class EcodAggregationOff(ErasureCodeIor):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_time
+        :avocado: tags=ec_aggregation_time,test_ec_aggregation_time
         """
         # Set time mode aggregation
         self.pool.set_property("reclaim", "time")
