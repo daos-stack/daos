@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	Link        containerLinkCmd        `command:"link" description:"create a UNS link to an existing container"`
 	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
@@ -239,6 +240,22 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
+	if cmd.Args.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't supply label arg and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
+			return err
+		}
+		cmd.contLabel = cmd.Args.Label
+	}
+
+	if cmd.Properties.props != nil {
+		ap.props = cmd.Properties.props
+	}
+
 	if cmd.PoolID().Empty() {
 		if cmd.Path == "" {
 			return errors.New("no pool ID or dfs path supplied")
@@ -277,22 +294,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if cmd.ACLFile != "" {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
-	}
-
-	if cmd.Args.Label != "" {
-		for key := range cmd.Properties.ParsedProps {
-			if key == "label" {
-				return errors.New("can't supply label arg and --properties label:")
-			}
-		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
-			return err
-		}
-		cmd.contLabel = cmd.Args.Label
-	}
-
-	if cmd.Properties.props != nil {
-		ap.props = cmd.Properties.props
 	}
 
 	ap._type = cmd.Type.Type
@@ -1174,13 +1175,13 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
+	ap.props = cmd.Properties.props
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
-	ap.props = cmd.Properties.props
 
 	rc := C.cont_set_prop_hdlr(ap)
 	if err := daosError(rc); err != nil {
@@ -1262,4 +1263,60 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 
 	return
+}
+
+type containerLinkCmd struct {
+	containerBaseCmd
+
+	Path string `long:"path" short:"p" description:"container namespace path to create"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"Container to link in the namespace"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *containerLinkCmd) ContainerID() ContainerID {
+	return cmd.Args.Container
+}
+
+func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	var cleanup func()
+	cleanup, err = cmd.connectPool(C.DAOS_COO_RO, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	cmd.Debugf("Creating a namespace link %s for container %s", cmd.Path, cmd.ContainerID())
+
+	cPath := C.CString(cmd.Path)
+	defer freeString(cPath)
+
+	var rc C.int
+	switch {
+	case cmd.ContainerID().HasUUID():
+		cmd.contUUID = cmd.ContainerID().UUID
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cUUIDstr, cPath)
+	case cmd.ContainerID().Label != "":
+		cLabel := C.CString(cmd.ContainerID().Label)
+		defer freeString(cLabel)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cLabel, cPath)
+	default:
+		return errors.New("no UUID or label for container")
+	}
+
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to link container %s in the namespace",
+			cmd.ContainerID())
+	}
+
+	return nil
 }

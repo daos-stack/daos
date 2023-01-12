@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1073,11 +1073,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 dst_path=format_path(pool, cont3))
             read_back_cont = cont3
             read_back_pool = pool
+        test_file = os.path.basename(self.ior_cmd.test_file.value)
         if tool in ['FS_COPY', 'DCP']:
             # the result is that a NEW directory is created in the destination
-            daos_path = os.path.join(os.sep, os.path.basename(posix_path), 'testfile')
+            daos_path = os.path.join(os.sep, os.path.basename(posix_path), test_file)
         elif tool in ['CONT_CLONE', 'DSERIAL']:
-            daos_path = os.path.join(os.sep, 'testfile')
+            daos_path = os.path.join(os.sep, test_file)
         else:
             self.fail("Invalid tool: {}".format(tool))
         # update ior params, read back and verify data from cont3
