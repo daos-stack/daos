@@ -15,6 +15,10 @@ class PerServerFaultDomainTest(IorTestBase):
     the ranks in the same node go down, we still count as one. The default mode is engine
     (rf_lvl:1).
 
+    If the number of ranks that has gone down exceeds the rf value, container status would
+    become UNCLEAN. For example, with an rf:1 container, if two ranks go down, the status
+    would be UNCLEAN. If one rank goes down, it would be HEALTHY.
+
     Verify the node mode by stopping one/two ranks in one/two nodes.
 
     Assume that the two ranks in the same node map to the same IP address.
