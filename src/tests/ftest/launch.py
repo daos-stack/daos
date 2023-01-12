@@ -1521,7 +1521,7 @@ class Launch():
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
                     logger.info("-" * 80)
-                    storage_info.write_storage_yaml(yaml_file, engines, tier_type, scm_size=100)
+                    storage_info.write_storage_yaml(yaml_file, engines, tier_type)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
