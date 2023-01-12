@@ -47,6 +47,7 @@ container:
 ior:
     client_processes:
           ppn: 32
+    api: DFS
     test_file: testFile
     write_flags: "-w -C -e -g -G 27 -k -Q 1"
     read_flags: "-r -R -C -e -g -G 27 -k -Q 1"

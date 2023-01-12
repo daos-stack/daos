@@ -21,7 +21,7 @@ class IorPerRank(IorTestBase):
     :avocado: recursive
     """
 
-    def execute_ior_thread(self, rank):
+    def execute_ior_per_rank(self, rank):
         """
         Method to execute ior for different transfer sizes,
         collect the performance numbers and match with the
@@ -120,9 +120,8 @@ class IorPerRank(IorTestBase):
         self.log.info("rank_list: %s", rank_list)
 
         # run ior over DFS
-        self.ior_cmd.api.update("DFS")
         for rank in rank_list:
-            self.execute_ior_thread(rank)
+            self.execute_ior_per_rank(rank)
 
         # list of good nodes
         if self.good_nodes:
