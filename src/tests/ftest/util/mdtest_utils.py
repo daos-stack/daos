@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 import uuid
 import re
 
@@ -89,6 +90,9 @@ class MdtestCommand(ExecutableCommand):
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
+
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""

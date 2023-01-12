@@ -328,7 +328,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -473,7 +474,7 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.force.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
 

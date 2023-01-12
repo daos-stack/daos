@@ -72,6 +72,9 @@ class DaosServerCommand(YamlCommand):
         # command.
         self._exe_names.append("daos_engine")
 
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
         """Get the daos_server sub command object based upon the sub-command."""

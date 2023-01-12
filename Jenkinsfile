@@ -257,26 +257,7 @@ pipeline {
         }
         stage('Get Commit Message') {
             steps {
-                script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':')
-                            if (key.contains(' ')) {
-                                return
-                            }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
-                        }
-                    }
-                    env.pragmas = pragmas
-                }
+                pragmasToEnv()
             }
         }
         stage('Cancel Previous Builds') {
@@ -598,12 +579,12 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
                                                                 parallel_build: true,
-                                                                qb: quickBuild()) +
-                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8') + '"' +
-                                ' --build-arg REPOS="' + prRepos() + '"'
+                                                                qb: true) +
+                                                " -t ${sanitized_JOB_NAME}-el8 " +
+                                                ' --build-arg BULLSEYE=' + env.BULLSEYE +
+                                                ' --build-arg QUICKBUILD_DEPS="' +
+                                                quickBuildDeps('el8', true) + '"' +
+                                                ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
                     steps {
@@ -1087,13 +1068,17 @@ pipeline {
                         // while the code coverage feature is being implemented.
                         cloverReportPublish coverage_stashes: ['el8-covc-unit-cov',
                                                                'func-vm-cov',
-                                                               'func-hw-small-cov',
                                                                'func-hw-medium-cov',
                                                                'func-hw-large-cov'],
                                             coverage_healthy: [methodCoverage: 0,
                                                                conditionalCoverage: 0,
                                                                statementCoverage: 0],
                                             ignore_failure: true
+                    }
+                    post {
+                        cleanup {
+                            job_status_update()
+                        }
                     }
                 } // stage('Bullseye Report on EL 8')
             } // parallel

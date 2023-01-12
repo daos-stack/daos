@@ -3,6 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import re
 import uuid
 from enum import IntEnum
@@ -163,6 +164,9 @@ class IorCommand(SubProcessCommand):
         self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
+
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_ior_subprocess_status() for details.
