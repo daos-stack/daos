@@ -1071,4 +1071,10 @@ struct bio_wal_info {
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 
+/*
+ * Return device owner xstream target id.
+ */
+int
+bio_dev_owner_xs_id(uuid_t dev_id);
+
 #endif /* __BIO_API_H__ */

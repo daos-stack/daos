@@ -647,6 +647,19 @@ lookup_dev_by_name(const char *bdev_name)
 	return NULL;
 }
 
+int
+bio_dev_owner_xs_id(uuid_t dev_id)
+{
+	struct bio_bdev	*d_bdev;
+
+	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
+		if (uuid_compare(d_bdev->bb_uuid, dev_id) == 0)
+			return d_bdev->bb_blobstore->bb_owner_xs->bxc_tgt_id;
+	}
+
+	return -DER_ENOENT;
+}
+
 void
 bio_release_bdev(void *arg)
 {
