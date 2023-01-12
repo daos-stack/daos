@@ -80,6 +80,18 @@ class PerServerFaultDomainTest(IorTestBase):
             status, expected_status,
             "Container status isn't {} with {}!".format(expected_status, properties))
 
+    def create_rank_to_ip(self):
+        """Create rank to IP address dictionary.
+        """
+        system_query_out = self.get_dmg_command().system_query(verbose=True)
+        rank_to_ip = {}
+        for member in system_query_out["response"]["members"]:
+            ip_addr = member["addr"].split(":")[0]
+            rank = member["rank"]
+            rank_to_ip[rank] = ip_addr
+
+        return rank_to_ip
+
     def test_rf1_healthy(self):
         """Jira ID: DAOS-11200
 
@@ -99,8 +111,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_healthy
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
-        dmg_command = self.get_dmg_command()
-        system_query_out = dmg_command.system_query(verbose=True)
+        system_query_out = self.get_dmg_command().system_query(verbose=True)
         ip_to_ranks = defaultdict(list)
         ips = []
         for member in system_query_out["response"]["members"]:
@@ -144,12 +155,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=per_server_fault_domain,rf1_unclean
         """
         # 1. Determine the ranks to stop; two ranks in different node.
-        system_query_out = self.get_dmg_command().system_query(verbose=True)
-        rank_to_ip = {}
-        for member in system_query_out["response"]["members"]:
-            ip_addr = member["addr"].split(":")[0]
-            rank = member["rank"]
-            rank_to_ip[rank] = ip_addr
+        rank_to_ip = self.create_rank_to_ip()
 
         rank_a = 0
         rank_b = None
@@ -190,9 +196,6 @@ class PerServerFaultDomainTest(IorTestBase):
         # 1. Determine the ranks to stop; four ranks in two nodes. We can select up to two
         # ranks from service ranks. If we stop more than two service ranks, many of the
         # dmg commands will hang.
-        dmg_command = self.get_dmg_command()
-        system_query_out = dmg_command.system_query(verbose=True)
-
         # Create a pool to determine the service ranks.
         self.add_pool()
         self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
@@ -206,11 +209,7 @@ class PerServerFaultDomainTest(IorTestBase):
         self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
         # Create rank to IP dictionary.
-        rank_to_ip = {}
-        for member in system_query_out["response"]["members"]:
-            ip = member["addr"].split(":")[0]
-            rank = member["rank"]
-            rank_to_ip[rank] = ip
+        rank_to_ip = self.create_rank_to_ip()
 
         # Select first element in the list and find the other rank that's on the same
         # node using rank to IP dictionary.
@@ -273,8 +272,6 @@ class PerServerFaultDomainTest(IorTestBase):
         # 1. Determine the ranks to stop; three ranks in three nodes. We can select up to
         # two ranks from service ranks. If we stop more than two service ranks, many of
         # the dmg commands will hang.
-        system_query_out = self.get_dmg_command().system_query(verbose=True)
-
         # Create a pool to determine the service ranks.
         self.add_pool()
         self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
@@ -288,11 +285,7 @@ class PerServerFaultDomainTest(IorTestBase):
         self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
         # Create rank to IP dictionary.
-        rank_to_ip = {}
-        for member in system_query_out["response"]["members"]:
-            ip = member["addr"].split(":")[0]
-            rank = member["rank"]
-            rank_to_ip[rank] = ip
+        rank_to_ip = self.create_rank_to_ip()
 
         # Prepare IP set, which contains the IP of selected ranks to stop.
         stop_rank_ip = set()
@@ -306,11 +299,11 @@ class PerServerFaultDomainTest(IorTestBase):
         # Iterate ranks and select the other two using rank to IP dictionary and IP set.
         for rank in range(8):
             if rank not in ranks_to_stop:
-                ip = rank_to_ip[rank]
-                if ip not in stop_rank_ip:
+                ip_addr = rank_to_ip[rank]
+                if ip_addr not in stop_rank_ip:
                     # Rank on different node found.
                     ranks_to_stop.append(rank)
-                    stop_rank_ip.add(ip)
+                    stop_rank_ip.add(ip_addr)
                     if len(ranks_to_stop) == 3:
                         break
         self.log.info("Stop rank list = %s", ranks_to_stop)
