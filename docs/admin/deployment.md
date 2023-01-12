@@ -100,99 +100,159 @@ Refer to the example configuration file
 [`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
 for latest information and examples.
 
-At this point of the process, the servers: and provider: section of the yaml
-file can be left blank and will be populated in the subsequent sections.
+#### Auto Generate Configuration File
 
-#### Auto generate configuration file
+DAOS can attempt to produce a server configuration file that makes optimal use of hardware on a
+given set of hosts either through the `dmg` or `daos_server` tools.
 
-DAOS can attempt to produce a server configuration file that makes optimal use
-of hardware on a given set of hosts through the 'dmg config generate' command:
+##### Generating Configuration File Using daos_server Tool
+
+To generate a configuration file for a single storage server, run the `daos_server config generate`
+command locally. In this case, the `daos_server` service should not be running on the local host.
+
+```bash
+$ daos_server config generate --help
+Usage:
+  daos_server [OPTIONS] config generate [generate-OPTIONS]
+
+Application Options:
+      --allow-proxy                         Allow proxy configuration via environment
+  -o, --config=                             Server config file path
+  -b, --debug                               Enable debug output
+  -J, --json-logging                        Enable JSON-formatted log output
+      --syslog                              Enable logging to syslog
+
+Help Options:
+  -h, --help                                Show this help message
+
+[generate command options]
+      -l, --helper-log-file=                Log file location for debug from daos_server_helper binary
+      -a, --access-points=                  Comma separated list of access point addresses
+                                            <ipv4addr/hostname> (default: localhost)
+      -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
+                                            config file output. If unset then the value will be set to the
+                                            number of NUMA nodes on storage hosts in the DAOS system.
+      -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
+      -c, --net-class=[ethernet|infiniband] Set the network class to be used (default: infiniband)
+      -p, --net-provider=                   Set the network provider to be used
+      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
+```
+
+Note the `--helper-log-file` which can be used to provide a log file path to output debug level
+logging from the privileged server helper binary. This can be used for troubleshooting in addition to
+the main application debug flag.
+
+##### Generating Configuration File Using dmg Tool
+
+To generate a configuration file for a group of storage servers with homogenous hardware installed,
+`dmg config generate` command can be called which will operate over remote addresses specified in
+the `--host-list` application option (the hostlist can also be specified in the dmg client config).
 
 ```bash
 $ dmg config generate --help
-ERROR: dmg: Usage:
+Usage:
   dmg [OPTIONS] config generate [generate-OPTIONS]
 
 Application Options:
-...
-  -l, --host-list=  comma separated list of addresses <ipv4addr/hostname>
-...
+      --allow-proxy                         Allow proxy configuration via environment
+  -l, --host-list=                          A comma separated list of addresses <ipv4addr/hostname> to
+                                            connect to
+  -i, --insecure                            Have dmg attempt to connect without certificates
+  -d, --debug                               Enable debug output
+      --log-file=                           Log command output to the specified file
+  -j, --json                                Enable JSON output
+  -J, --json-logging                        Enable JSON-formatted log output
+  -o, --config-path=                        Client config file path
+
+Help Options:
+  -h, --help                                Show this help message
 
 [generate command options]
-      -a, --access-points=                                 Comma separated list of access point
-                                                           addresses <ipv4addr/hostname>
-      -e, --num-engines=                                   Set the number of DAOS Engine sections to be
-                                                           populated in the config file output. If unset
-                                                           then the value will be set to the number of
-                                                           NUMA nodes on storage hosts in the DAOS
-                                                           system.
-      -s, --min-ssds=                                      Minimum number of NVMe SSDs required per DAOS
-                                                           Engine (SSDs must reside on the host that is
-                                                           managing the engine). Set to 0 to generate a
-                                                           config with no NVMe. (default: 1)
-      -c, --net-class=[best-available|ethernet|infiniband] Network class preferred (default:
-                                                           best-available)
+      -a, --access-points=                  Comma separated list of access point addresses
+                                            <ipv4addr/hostname> (default: localhost)
+      -e, --num-engines=                    Set the number of DAOS Engine sections to be populated in the
+                                            config file output. If unset then the value will be set to the
+                                            number of NUMA nodes on storage hosts in the DAOS system.
+      -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
+      -c, --net-class=[ethernet|infiniband] Set the network class to be used (default: infiniband)
+      -p, --net-provider=                   Set the network provider to be used
+      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
 ```
 
-The command will output recommended config file if supplied requirements are
-met. Requirements will be derived based on the number of NUMA nodes present on
-the hosts if '--num-engines' is not specified on the commandline.
+The `daos_server` service must be running on the remote storage servers and as such a minimal
+server config file must already exist.
 
-- '--num-engines' specifies the number of engine sections to populate in the
-  config file output.
-  Each section will specify a persistent memory (PMem) block devices that must be
-  present on the host in addition to a fabric network interface and SSDs all
-  bound to the same NUMA node.
-  If not set explicitly on the commandline, default is the number of NUMA nodes
-  detected on the host.
+An example of a minimal config file is as follows which will enable basic validation to pass and the
+`daos_server` to start (see the [Server startup](#server-startup) section for help on starting the
+service):
 
-- '--min-ssds' specifies the minimum number of NVMe SSDs per-engine that need
-  to be present on each host.
-  For each engine entry in the generated config, at least this number of SSDs
-  must be bound to the NUMA node that matches the affinity of the PMem device
-  and fabric network interface associated with the engine.
-  If not set on the commandline, default is "1".
-  If set to "0" NVMe SSDs will not be added to the generated config and SSD
-  validation will be disabled.
+```bash
+$ cat /etc/daos/daos_server.yml
+provider: ofi+tcp
+engines:
+- provider: ofi+tcp
+  fabric_iface: ib0
+  fabric_iface_port: 31416
+  storage:
+  - class: ram
+    scm_mount: /mnt/daos0
+    scm_size: 16
+```
 
-- '--net-class' specifies preference for network interface class, options are
-  'ethernet', 'infiband' or 'best-available'.
-  'best-available' will attempt to choose the most performant (as judged by
-  libfabric) sets of interfaces and supported provider that match the number and
-  NUMA affinity of PMem devices.
-  If not set on the commandline, default is "best-available".
+##### Config Generate Command Operation
 
-The configuration file that is generated by the command and output to stdout
-can be copied to a file and used on the relevant hosts and used as server
-config to determine the starting environment for `daos_server` instances.
+The options that can be supplied to the config generate command are as follows:
 
-Config file output will not be generated in the following cases:
+- `--access-points` specifies the access points (identified storage servers that will host the
+management service for the DAOS system across the cluster).
 
-- PMem device count, capacity or NUMA mappings differ on any of the hosts in the
-  hostlist (the hostlist can be specified either in the 'dmg' config file or on
-  the commandline).
+- `--num-engines` specifies the number of engine sections to populate in the config file output.
+If not set explicitly on the commandline, default is the number of NUMA nodes detected on the host.
+Each generated engine section will specify a SCM storage tier (PMem or tmpfs) in addition to one or
+more NVMe storage tiers. All hardware components specified in an engine config section should be
+bound to the same NUMA node (PMem bdev, SSDs and host fabric interface).
 
-- NVMe SSD count, PCI address distribution or NUMA affinity differs on any of
-  the hosts in the host list.
+- `--scm-only` request that a config without NVMe should be generated. This flag will override the
+command's normal behaviour and should be used only in circumstances where NVMe SSDs are unavailable
+or not balanced across NUMA nodes and multiple engines are required per host. Note that DAOS
+performance will be suboptimal without NVMe SSDs.
 
-- NUMA node count can't be detected on the hosts or differs on any host in the
-  host list.
+- `--net-class` selects a specific network device class, options are `ethernet` or `infiniband`.
+If not set explicitly on the commandline, default is `infiniband`. This option will alter the
+command's behaviour and should only be used when normal command operation is not sufficient.
+Note that DAOS performance may be suboptimal if ethernet devices are used instead of infiniband.
 
-- PMem device count or NUMA affinity doesn't meet the 'num-engines' requirement.
+- `--net-provider` selects a specific network provider , this can be set to any provider string
+supported on the hosts e.g. ofi+tcp. This option will alter the command's behaviour and should only
+be used when normal command operation is not sufficient. Note that specifying a provider will
+prevent the command from selecting the best available.
 
-- NVMe device count or NUMA affinity doesn't meet the 'min-ssds' requirement.
+- `--use-tmpfs-scm` will produce a config specifying RAM-disk (tmpfs) devices in the first (SCM)
+storage tier. The RAM-disk sizes will be calculated based on using 75% of the host's available
+memory.
 
-- network device count or NUMA affinity doesn't match the configured PMem
-  devices, taking into account any specified network device class preference
-  (Ethernet or InfiniBand).
+The text generated by the command and output to stdout can be copied and used as the server config
+file on relevant hosts (normally by copying to `/etc/daos/daos_server.yml` and (re)starting service).
 
-!!! warning
-    Some CentOS 7.x kernels from before the 7.9 release were known to have a defect
-    that prevented `ndctl` from being able to report the NUMA affinity for a
-    namespace.
+##### Config Generate Command Troubleshooting
 
-    This prevents generation of dual engine configs using `dmg config generate`
-    when running with one of the above-mentioned affected kernels.
+The config generate command may fail to generate output in the following cases:
+
+- When running with the `dmg` tool, if installed hardware device count or NUMA mappings differ on any
+of the hosts in the hostlist. The output of `daos_server (scm|nvme|network) scan` can be used to
+detect hardware differences between hosts, examples of differences that might prevent a config from
+being generated are NVMe SSD count, PCI address distribution or device NUMA affinities.
+
+- NUMA node count can't be detected on the hosts or differs on any host in the host list.
+
+- NUMA node count doesn't meet the `num-engines` requirement when`--use-tmpfs-scm` specified.
+
+- PMem device count or NUMA affinity doesn't meet the `num-engines` requirement.
+
+- NVMe device NUMA affinity imbalanced (or all bound to one socket).
+
+- Network device count or NUMA affinity doesn't match the `num-engines` requirement.
+Limitations regarding network device class and provider support should also be taken into account.
 
 #### Certificate Configuration
 
