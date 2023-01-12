@@ -69,10 +69,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	err := support.CollectSupportLog(cmd.Logger, params)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
-	}
-
 	if err != nil {
 		return errors.Wrap(err, "DAOS Management Service is down")
 	}
@@ -177,6 +173,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	fmt.Printf(support.PrintProgressEnd(&progress))
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(nil, err)
+	}
 
 	return nil
 }

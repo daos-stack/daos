@@ -190,7 +190,7 @@ func createFolder(target string, log logging.Logger) error {
 	if _, err := os.Stat(target); os.IsNotExist(err) {
 		log.Debugf("Log folder is not Exists, so creating %s", target)
 
-		if err := os.MkdirAll(target, 0700); err != nil && !os.IsExist(err) {
+		if err := os.MkdirAll(target, 0777); err != nil && !os.IsExist(err) {
 			return errors.Wrapf(err, "failed to create log directory %s", target)
 		}
 	}
@@ -324,24 +324,26 @@ func rsyncLog(log logging.Logger, opts ...Params) error {
 		return err
 	}
 
-	cmd := strings.Join([]string{
-		"rsync",
-		"-av",
+	args := []string{
+		"-c",
+		"\"rsync",
+		"-avvv",
 		"--blocking-io",
-		"--remove-source-files",
 		targetLocation,
-		opts[0].LogCmd + ":" + opts[0].TargetFolder}, " ")
+		opts[0].LogCmd + ":" + opts[0].TargetFolder,
+		"\"",
+	}
 
-	rsyncCmd := exec.Command("sh", "-c", cmd)
+	rsyncCmd := exec.Command("sh", args...)
 	var stdout, stderr bytes.Buffer
 	rsyncCmd.Stdout = &stdout
 	rsyncCmd.Stderr = &stderr
 	err = rsyncCmd.Run()
 	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
 	if err != nil {
+		log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
 		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
 	}
-	log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
 
 	return nil
 }

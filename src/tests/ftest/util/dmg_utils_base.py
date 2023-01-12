@@ -102,6 +102,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.TelemetrySubCommand()
         elif self.sub_command.value == "version":
             self.sub_command_class = self.VersionSubCommand()
+        elif self.sub_command.value == "support":
+            self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
 
@@ -485,6 +487,32 @@ class DmgCommandBase(YamlCommand):
                 # Set log masks for a set of facilities to a given level.
                 # Syntax is identical to the 'D_LOG_MASK' environment variable.
                 self.masks = FormattedParameter("{}", None)
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg support sub command."""
+
+        def __init__(self):
+            """Create a dmg support subcommand object."""
+            super().__init__("/run/dmg/server/*", "support")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg support sub command object."""
+            if self.sub_command.value == "collectlog":
+                self.sub_command_class = self.CollectlogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectlogSubCommand(CommandWithParameters):
+            """Defines an object for the dmg support collectlog command."""
+
+            def __init__(self):
+                """Create a dmg support collectlog command object."""
+                super().__init__("/run/dmg/server/support/*", "collectlog")
+                self.stop = FormattedParameter("{}", None)
+                self.target = FormattedParameter("{}", None)
+                self.archive = FormattedParameter("{}", None)
+                self.custom_logs = FormattedParameter("{}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""
