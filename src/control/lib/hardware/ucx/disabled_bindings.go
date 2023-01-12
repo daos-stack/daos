@@ -11,6 +11,7 @@ package ucx
 import (
 	"github.com/daos-stack/daos/src/control/lib/dlopen"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var errNotSupported = hardware.ErrUnsupportedFabric("ucx")
@@ -28,11 +29,11 @@ type uctComponent struct {
 	name string
 }
 
-func getUCTComponents(uctHdl *dlopen.LibHandle) ([]*uctComponent, func() error, error) {
+func getUCTComponents(_ logging.Logger, _ *dlopen.LibHandle) ([]*uctComponent, func() error, error) {
 	return nil, nil, errNotSupported
 }
 
-func getMDResourceNames(uctHdl *dlopen.LibHandle, component *uctComponent) ([]string, error) {
+func getMDResourceNames(_ logging.Logger, _ *dlopen.LibHandle, _ *uctComponent) ([]string, error) {
 	return nil, errNotSupported
 }
 
@@ -63,6 +64,6 @@ func (d *transportDev) isNetwork() bool {
 	return false
 }
 
-func getMDTransportDevices(uctHdl *dlopen.LibHandle, md *uctMD) ([]*transportDev, error) {
+func getMDTransportDevices(_ logging.Logger, uctHdl *dlopen.LibHandle, md *uctMD) ([]*transportDev, error) {
 	return nil, errNotSupported
 }
