@@ -144,7 +144,7 @@ the main application debug flag.
 
 ##### Generating Configuration File Using dmg Tool
 
-To generate a configuration file for a group of storage servers with homogenous hardware installed,
+To generate a configuration file for a group of storage servers with homogeneous hardware installed,
 `dmg config generate` command can be called which will operate over remote addresses specified in
 the `--host-list` application option (the hostlist can also be specified in the dmg client config).
 
@@ -213,17 +213,17 @@ more NVMe storage tiers. All hardware components specified in an engine config s
 bound to the same NUMA node (PMem bdev, SSDs and host fabric interface).
 
 - `--scm-only` request that a config without NVMe should be generated. This flag will override the
-command's normal behaviour and should be used only in circumstances where NVMe SSDs are unavailable
+command's normal behavior and should be used only in circumstances where NVMe SSDs are unavailable
 or not balanced across NUMA nodes and multiple engines are required per host. Note that DAOS
 performance will be suboptimal without NVMe SSDs.
 
 - `--net-class` selects a specific network device class, options are `ethernet` or `infiniband`.
 If not set explicitly on the commandline, default is `infiniband`. This option will alter the
-command's behaviour and should only be used when normal command operation is not sufficient.
+command's behavior and should only be used when normal command operation is not sufficient.
 Note that DAOS performance may be suboptimal if ethernet devices are used instead of infiniband.
 
 - `--net-provider` selects a specific network provider , this can be set to any provider string
-supported on the hosts e.g. ofi+tcp. This option will alter the command's behaviour and should only
+supported on the hosts e.g. ofi+tcp. This option will alter the command's behavior and should only
 be used when normal command operation is not sufficient. Note that specifying a provider will
 prevent the command from selecting the best available.
 
@@ -245,7 +245,7 @@ being generated are NVMe SSD count, PCI address distribution or device NUMA affi
 
 - NUMA node count can't be detected on the hosts or differs on any host in the host list.
 
-- NUMA node count doesn't meet the `num-engines` requirement when`--use-tmpfs-scm` specified.
+- NUMA node count doesn't meet the `num-engines` requirement when `--use-tmpfs-scm` is specified.
 
 - PMem device count or NUMA affinity doesn't meet the `num-engines` requirement.
 
@@ -253,6 +253,224 @@ being generated are NVMe SSD count, PCI address distribution or device NUMA affi
 
 - Network device count or NUMA affinity doesn't match the `num-engines` requirement.
 Limitations regarding network device class and provider support should also be taken into account.
+
+##### Config Generate Example Usage
+
+The following example executes the `daos_server config generate` local command with commandline
+options to select a specific provider and use RAM-disk for SCM. The storage server has balanced
+NUMA Affinity for hardware components and therefore successfully generates a config with one
+fabric interface per socket/NUMA (one NUMA node per socket on the target host) and 8 NVMe SSDs
+per engine. The command redirects stderr to /dev/null and stdout to a temporary file. The
+installation is from a source build.
+
+```bash
+[user@wolf-226 daos]$ install/bin/daos_server config generate -p ofi+tcp --use-tmpfs-scm 2>/dev/null | tee ~/configs/tmp.yml
+port: 10001
+transport_config:
+  allow_insecure: false
+  client_cert_dir: /etc/daos/certs/clients
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/server.crt
+  key: /etc/daos/certs/server.key
+engines:
+- targets: 16
+  nr_xs_helpers: 4
+  first_core: 0
+  log_file: /tmp/daos_engine.0.log
+  storage:
+  - class: ram
+    scm_mount: /mnt/daos0
+    scm_size: 85
+  - class: nvme
+    bdev_list:
+    - 0000:2b:00.0
+    - 0000:2c:00.0
+    - 0000:2d:00.0
+    - 0000:2e:00.0
+    - 0000:63:00.0
+    - 0000:64:00.0
+    - 0000:65:00.0
+    - 0000:66:00.0
+  provider: ofi+tcp
+  fabric_iface: ib0
+  fabric_iface_port: 31416
+  pinned_numa_node: 0
+- targets: 16
+  nr_xs_helpers: 4
+  first_core: 0
+  log_file: /tmp/daos_engine.1.log
+  storage:
+  - class: ram
+    scm_mount: /mnt/daos1
+    scm_size: 85
+  - class: nvme
+    bdev_list:
+    - 0000:a2:00.0
+    - 0000:a3:00.0
+    - 0000:a4:00.0
+    - 0000:a5:00.0
+    - 0000:de:00.0
+    - 0000:df:00.0
+    - 0000:e0:00.0
+    - 0000:e1:00.0
+  provider: ofi+tcp
+  fabric_iface: ib1
+  fabric_iface_port: 32416
+  pinned_numa_node: 1
+disable_vfio: false
+disable_vmd: false
+enable_hotplug: false
+nr_hugepages: 16384
+disable_hugepages: false
+control_log_mask: INFO
+control_log_file: /tmp/daos_server.log
+core_dump_filter: 19
+name: daos_server
+socket_dir: /var/run/daos_server
+provider: ofi+tcp
+access_points:
+- localhost:10001
+fault_cb: ""
+hyperthreads: false
+```
+
+Now we start the `daos_server` service from the generated config which loads successfully
+and runs until the point where a storage format is required, as expected.
+
+```bash
+[user@wolf-226 daos]$ install/bin/daos_server start -i -o ~/configs/tmp.yml
+DAOS Server config loaded from /home/user/configs/tmp.yml
+install/bin/daos_server logging to file /tmp/daos_server.log
+NOTICE: Configuration includes only one access point. This provides no redundancy in the event of an access point failure.
+DAOS Control Server v2.3.101 (pid 1211553) listening on 127.0.0.1:10001
+Checking DAOS I/O Engine instance 0 storage ...
+Checking DAOS I/O Engine instance 1 storage ...
+SCM format required on instance 0
+SCM format required on instance 1
+```
+
+To format the storage and start the engine processes, we run the following on a separate
+terminal window and verify that engine processes (ranks) have registered with the system.
+Note the subsequent system query command may not show ranks started immediately after the
+storage format command returns so leave a short period before invoking.
+
+```bash
+[user@wolf-226 daos]$ install/bin/dmg storage format -i
+Format Summary:
+  Hosts     SCM Devices NVMe Devices
+  -----     ----------- ------------
+  localhost 2           16
+[user@wolf-226 daos]$ install/bin/dmg system query -i
+Rank  State
+----  -----
+[0-1] Joined
+```
+
+The format of storage enables the `daos_server` service started before to format the storage and
+launch the engine processes.
+
+```bash
+Instance 0: starting format of nvme block devices 0000:2b:00.0,0000:2c:00.0,0000:2d:00.0,0000:2e:00.0,0000:63:00.0,0000:64:00.0,0000:65:00.0,0000:66:00.0
+Instance 0: finished format of nvme block devices 0000:2b:00.0,0000:2c:00.0,0000:2d:00.0,0000:2e:00.0,0000:63:00.0,0000:64:00.0,0000:65:00.0,0000:66:00.0
+Format of NVMe storage for DAOS I/O Engine instance 0: 6.15314273s
+Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
+Instance 1: starting format of nvme block devices 0000:a2:00.0,0000:a3:00.0,0000:a4:00.0,0000:a5:00.0,0000:de:00.0,0000:df:00.0,0000:e0:00.0,0000:e1:00.0
+Instance 1: finished format of nvme block devices 0000:a2:00.0,0000:a3:00.0,0000:a4:00.0,0000:a5:00.0,0000:de:00.0,0000:df:00.0,0000:e0:00.0,0000:e1:00.0
+Format of NVMe storage for DAOS I/O Engine instance 1: 6.15925073s
+Writing NVMe config file for engine instance 1 to "/mnt/daos1/daos_nvme.conf"
+DAOS I/O Engine instance 0 storage ready
+DAOS I/O Engine instance 1 storage ready
+SCM @ /mnt/daos1: 91 GB Total/91 GB Avail
+Starting I/O Engine instance 1: /home/user/projects/daos/install/bin/daos_engine
+daos_engine:1 Using NUMA core allocation algorithm
+SCM @ /mnt/daos0: 91 GB Total/91 GB Avail
+Starting I/O Engine instance 0: /home/user/projects/daos/install/bin/daos_engine
+daos_engine:0 Using NUMA core allocation algorithm
+MS leader running on wolf-226.wolf.hpdd.intel.com
+daos_engine:1 DAOS I/O Engine (v2.3.101) process 1215202 started on rank 1 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+Using NUMA node: 1
+daos_engine:0 DAOS I/O Engine (v2.3.101) process 1215209 started on rank 0 with 16 target, 4 helper XS, firstcore 0, host wolf-226.wolf.hpdd.intel.com.
+Using NUMA node: 0
+```
+
+For reference, the hardware scan results for the target storage server are included below.
+
+```bash
+[user@wolf-226 daos]$ install/bin/daos_server nvme scan
+Scan locally-attached NVMe storage...
+NVMe PCI     Model              FW Revision Socket ID Capacity
+--------     -----              ----------- --------- --------
+0000:2b:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:2c:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:2d:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:2e:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:63:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:64:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:65:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:66:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    0         3.8 TB
+0000:a2:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:a3:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:a4:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:a5:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:de:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:df:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:e0:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+0000:e1:00.0 MZXLR3T8HBLS-000H3 MPK7525Q    1         3.8 TB
+
+[user@wolf-226 daos]$ install/bin/daos_server network scan
+---------
+localhost
+---------
+
+    -------------
+    NUMA Socket 0
+    -------------
+
+        Provider          Interfaces
+        --------          ----------
+        ofi+tcp;ofi_rxm   eth0, ib0
+        ucx+all           eth0, ib0, ib0
+        ucx+dc            ib0
+        ucx+rc_x          ib0
+        ucx+tcp           eth0, ib0
+        ofi+sockets       eth0, ib0
+        ucx+dc_x          ib0
+        ucx+rc_v          ib0
+        ucx+ud            ib0
+        ofi+verbs;ofi_rxm ib0
+        ucx+rc            ib0
+        ucx+ud_v          ib0
+        ucx+ud_x          ib0
+        udp;ofi_rxd       eth0, ib0
+        udp               eth0, ib0
+        ofi+tcp           eth0, ib0
+        ofi+verbs         ib0
+
+    -------------
+    NUMA Socket 1
+    -------------
+
+        Provider          Interfaces
+        --------          ----------
+        ofi+tcp           ib1
+        ofi+verbs;ofi_rxm ib1
+        ucx+dc_x          ib1
+        ucx+rc_x          ib1
+        ucx+tcp           ib1
+        ucx+ud            ib1
+        ofi+sockets       ib1
+        udp;ofi_rxd       ib1
+        udp               ib1
+        ucx+dc            ib1
+        ucx+all           ib1, ib1
+        ofi+verbs         ib1
+        ucx+rc            ib1
+        ucx+rc_v          ib1
+        ucx+ud_v          ib1
+        ucx+ud_x          ib1
+        ofi+tcp;ofi_rxm   ib1
+
+```
 
 #### Certificate Configuration
 
