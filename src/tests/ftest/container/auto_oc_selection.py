@@ -74,7 +74,7 @@ class AutoOCSelectionTest(TestWithServers):
             oclass = prop_oclass[1]
             failure_expected = prop_oclass[2]
 
-            for item in ['oclass', 'dir_oclass', 'file_oclass']:
+            for item in ['oclass', 'dir-oclass', 'file-oclass']:
                 try:
                     self.log.info(
                         "Creating container with rd_fac = %s, %s = %s", properties, item, oclass)

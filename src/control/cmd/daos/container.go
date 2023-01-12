@@ -220,8 +220,8 @@ type containerCreateCmd struct {
 	Path            string               `long:"path" short:"p" description:"container namespace path"`
 	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
-	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
+	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
 	CHints          string               `long:"hints" short:"h" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`

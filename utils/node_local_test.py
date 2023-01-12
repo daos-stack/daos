@@ -1469,10 +1469,10 @@ def create_cont(conf,
         cmd.extend(['--oclass', oclass])
 
     if dir_oclass:
-        cmd.extend(['--dir_oclass', dir_oclass])
+        cmd.extend(['--dir-oclass', dir_oclass])
 
     if file_oclass:
-        cmd.extend(['--file_oclass', file_oclass])
+        cmd.extend(['--file-oclass', file_oclass])
 
     if hints:
         cmd.extend(['--hints', hints])
