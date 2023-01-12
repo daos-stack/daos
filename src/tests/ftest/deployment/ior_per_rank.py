@@ -51,13 +51,13 @@ class IorPerRank(IorTestBase):
 
                 # gather actual and expected perf data to be compared
                 if idx == 0:
-                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.Max_MiB])
-                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.Max_MiB])
+                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.MAX_MIB])
+                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.MAX_MIB])
                     actual_write_x = percent_change(dfs_max_write, self.expected_bw)
                     actual_read_x = percent_change(dfs_max_read, self.expected_bw)
                 else:
-                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.Max_OPs])
-                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.Max_OPs])
+                    dfs_max_write = float(dfs_perf_write[0][IorMetrics.MAX_OPS])
+                    dfs_max_read = float(dfs_perf_read[0][IorMetrics.MAX_OPS])
                     actual_write_x = percent_change(dfs_max_write, self.expected_iops)
                     actual_read_x = percent_change(dfs_max_read, self.expected_iops)
 
