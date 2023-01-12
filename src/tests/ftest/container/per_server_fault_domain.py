@@ -8,6 +8,7 @@ from ior_test_base import IorTestBase
 
 
 class PerServerFaultDomainTest(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description:
     The granularity of redundancy factor can be changed to node (rf_lvl:2). This means
@@ -103,10 +104,10 @@ class PerServerFaultDomainTest(IorTestBase):
         ip_to_ranks = defaultdict(list)
         ips = []
         for member in system_query_out["response"]["members"]:
-            ip = member["addr"].split(":")[0]
+            ip_addr = member["addr"].split(":")[0]
             rank = member["rank"]
-            ip_to_ranks[ip].append(rank)
-            ips.append(ip)
+            ip_to_ranks[ip_addr].append(rank)
+            ips.append(ip_addr)
 
         # Use the first set of ranks (arbitrary). Convert them to string.
         ranks_to_stop = ""
@@ -115,7 +116,7 @@ class PerServerFaultDomainTest(IorTestBase):
                 ranks_to_stop = str(rank)
             else:
                 ranks_to_stop += "," + str(rank)
-        self.log.info("Ranks to stop = {}".format(ranks_to_stop))
+        self.log.info("Ranks to stop = %s", ranks_to_stop)
 
         properties = self.params.get("rf_1", "/run/cont_property/*")
 
@@ -146,9 +147,9 @@ class PerServerFaultDomainTest(IorTestBase):
         system_query_out = self.get_dmg_command().system_query(verbose=True)
         rank_to_ip = {}
         for member in system_query_out["response"]["members"]:
-            ip = member["addr"].split(":")[0]
+            ip_addr = member["addr"].split(":")[0]
             rank = member["rank"]
-            rank_to_ip[rank] = ip
+            rank_to_ip[rank] = ip_addr
 
         rank_a = 0
         rank_b = None
@@ -158,7 +159,7 @@ class PerServerFaultDomainTest(IorTestBase):
                     rank_b = rank
                     break
         ranks_to_stop = f"{str(rank_a)},{str(rank_b)}"
-        self.log.info("Ranks to stop = {}".format(ranks_to_stop))
+        self.log.info("Ranks to stop = %s", ranks_to_stop)
 
         properties = self.params.get("rf_1", "/run/cont_property/*")
 
@@ -194,7 +195,7 @@ class PerServerFaultDomainTest(IorTestBase):
 
         # Create a pool to determine the service ranks.
         self.add_pool()
-        self.log.info("Pool service ranks = {}".format(self.pool.svc_ranks))
+        self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
 
         # Create the list of non-service ranks. Assume there are 5 service ranks and rank
         # numbering is consecutive.
@@ -202,7 +203,7 @@ class PerServerFaultDomainTest(IorTestBase):
         for rank in range(8):
             if rank not in self.pool.svc_ranks:
                 non_svc_ranks.append(rank)
-        self.log.info("non_svc_ranks = {}".format(non_svc_ranks))
+        self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
         # Create rank to IP dictionary.
         rank_to_ip = {}
@@ -220,7 +221,7 @@ class PerServerFaultDomainTest(IorTestBase):
                 if rank_to_ip[rank] == rank_to_ip[stop_rank_1]:
                     stop_rank_2 = rank
                     break
-        self.log.info("Stop rank 1 = {}; 2 = {}".format(stop_rank_1, stop_rank_2))
+        self.log.info("Stop rank 1 = %s; 2 = %s", stop_rank_1, stop_rank_2)
 
         # Check if the rank found in the previous step is in the list. If so, remove it.
         if stop_rank_2 in non_svc_ranks:
@@ -238,10 +239,10 @@ class PerServerFaultDomainTest(IorTestBase):
                 if rank_to_ip[rank] == rank_to_ip[stop_rank_3]:
                     stop_rank_4 = rank
                     break
-        self.log.info("Stop rank 3 = {}; 4 = {}".format(stop_rank_3, stop_rank_4))
+        self.log.info("Stop rank 3 = %s; 4 = %s", stop_rank_3, stop_rank_4)
 
         ranks_to_stop = f"{stop_rank_1},{stop_rank_2},{stop_rank_3},{stop_rank_4}"
-        self.log.info("Ranks to stop = {}".format(ranks_to_stop))
+        self.log.info("Ranks to stop = %s", ranks_to_stop)
 
         properties = self.params.get("rf_2", "/run/cont_property/*")
 
@@ -276,7 +277,7 @@ class PerServerFaultDomainTest(IorTestBase):
 
         # Create a pool to determine the service ranks.
         self.add_pool()
-        self.log.info("Pool service ranks = {}".format(self.pool.svc_ranks))
+        self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
 
         # Create the list of non-service ranks. Assume there are 5 service ranks and rank
         # numbering is consecutive.
@@ -284,7 +285,7 @@ class PerServerFaultDomainTest(IorTestBase):
         for rank in range(8):
             if rank not in self.pool.svc_ranks:
                 non_svc_ranks.append(rank)
-        self.log.info("non_svc_ranks = {}".format(non_svc_ranks))
+        self.log.info("non_svc_ranks = %s", non_svc_ranks)
 
         # Create rank to IP dictionary.
         rank_to_ip = {}
@@ -312,7 +313,7 @@ class PerServerFaultDomainTest(IorTestBase):
                     stop_rank_ip.add(ip)
                     if len(ranks_to_stop) == 3:
                         break
-        self.log.info("Stop rank list = {}".format(ranks_to_stop))
+        self.log.info("Stop rank list = %s", ranks_to_stop)
 
         # Convert the list to string.
         ranks_to_stop_str = ""
@@ -321,7 +322,7 @@ class PerServerFaultDomainTest(IorTestBase):
                 ranks_to_stop_str = str(rank)
             else:
                 ranks_to_stop_str += "," + str(rank)
-        self.log.info("Ranks to stop = {}".format(ranks_to_stop_str))
+        self.log.info("Ranks to stop = %s", ranks_to_stop_str)
 
         properties = self.params.get("rf_2", "/run/cont_property/*")
 
