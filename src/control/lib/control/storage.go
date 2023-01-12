@@ -37,6 +37,8 @@ var storageHashOpts = hashstructure.HashOptions{
 // available.
 type MemInfo struct {
 	HugePageSizeKb int `json:"hugepage_size_kb"`
+	MemTotal       int `json:"mem_total" hash:"ignore"`
+	MemFree        int `json:"mem_free" hash:"ignore"`
 	MemAvailable   int `json:"mem_available" hash:"ignore"`
 }
 
@@ -44,8 +46,10 @@ func (mi *MemInfo) Summary() string {
 	if mi == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("hugepage size: %s, mem available: %s",
+	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
 		humanize.IBytes(uint64(mi.HugePageSizeKb*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemTotal*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemFree*humanize.KiByte)),
 		humanize.IBytes(uint64(mi.MemAvailable*humanize.KiByte)))
 }
 

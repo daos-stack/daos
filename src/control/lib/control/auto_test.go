@@ -511,7 +511,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 					MemInfo: MemInfo{
 						HugePageSizeKb: humanize.KiByte * 2,
-						MemAvailable:   (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
+						MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 					},
 				},
 			},
@@ -559,7 +559,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 	withSSDs := newMockHostResponses(t, "withSpaceUsage")
 	withSSDsBadPCI := newMockHostResponses(t, "badPciAddr")
-	withSSDsNoMemAvail := newMockHostResponses(t, "noMemAvail")
+	withSSDsNoMemTotal := newMockHostResponses(t, "noMemTotal")
 	withSSDsNoHugepageSz := newMockHostResponses(t, "noHugepageSz")
 	noSSDsOnNUMA1 := newMockHostResponses(t, "noNvmeOnNuma1")
 
@@ -608,10 +608,10 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			expErr:        errors.New("requires nonzero HugePageSize"),
 		},
 		"scm tmpfs; zero memory available": {
-			hostResponses: withSSDsNoMemAvail.resps,
+			hostResponses: withSSDsNoMemTotal.resps,
 			useTmpfs:      true,
 			numaCount:     2,
-			expErr:        errors.New("requires nonzero MemAvail"),
+			expErr:        errors.New("requires nonzero MemTotal"),
 		},
 		"scm tmpfs": {
 			hostResponses: withSSDs.resps,
@@ -1100,7 +1100,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmCls     storage.Class
 		scmOnly    bool
-		memAvail   int              // available system memory for ramdisks in units of bytes
+		memTotal   int              // available system memory for ramdisks in units of bytes
 		numaSet    []int            // set of numa nodes (by-ID) to be used for engine configs
 		numaPMems  numaSCMsMap      // numa to pmem mappings
 		numaSSDs   numaSSDsMap      // numa to ssds mappings
@@ -1233,7 +1233,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 		},
 		"dual tmpfs; single ssd per numa": {
 			scmCls:     storage.ClassRam,
-			memAvail:   humanize.GiByte * 25,
+			memTotal:   humanize.GiByte * 25,
 			numaSet:    []int{0, 1},
 			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
 			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
@@ -1248,7 +1248,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 		},
 		"dual tmpfs; multiple ssds per numa": {
 			scmCls:     storage.ClassRam,
-			memAvail:   humanize.GiByte * 25,
+			memTotal:   humanize.GiByte * 25,
 			numaSet:    []int{0, 1},
 			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
 			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
@@ -1331,7 +1331,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 			}
 			sd := &storageDetails{
 				HugePageSize: 2048,                          // in kib
-				MemAvailable: tc.memAvail / humanize.KiByte, // convert to kib
+				MemTotal:     tc.memTotal / humanize.KiByte, // convert to kib
 				NumaSCMs:     tc.numaPMems,
 				NumaSSDs:     tc.numaSSDs,
 				scmCls:       storage.ClassDcpm,

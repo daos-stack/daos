@@ -35,6 +35,8 @@ type MemInfo struct {
 	HugePagesRsvd  int `json:"hugepages_rsvd"`
 	HugePagesSurp  int `json:"hugepages_surp"`
 	HugePageSizeKb int `json:"hugepage_size_kb"`
+	MemTotal       int `json:"mem_total"`
+	MemFree        int `json:"mem_free"`
 	MemAvailable   int `json:"mem_available"`
 }
 
@@ -74,7 +76,7 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 			parseInt(keyVal[1], &mi.HugePagesRsvd)
 		case "HugePages_Surp":
 			parseInt(keyVal[1], &mi.HugePagesSurp)
-		case "Hugepagesize", "MemAvailable":
+		case "Hugepagesize", "MemTotal", "MemFree", "MemAvailable":
 			sf := strings.Fields(keyVal[1])
 			if len(sf) != 2 {
 				return nil, errors.Errorf("unable to parse %q", keyVal[1])
@@ -85,9 +87,14 @@ func parseMemInfo(input io.Reader) (*MemInfo, error) {
 				return nil, errors.Errorf("unhandled size unit %q", sf[1])
 			}
 
-			if keyVal[0] == "Hugepagesize" {
+			switch keyVal[0] {
+			case "Hugepagesize":
 				parseInt(sf[0], &mi.HugePageSizeKb)
-			} else {
+			case "MemTotal":
+				parseInt(sf[0], &mi.MemTotal)
+			case "MemFree":
+				parseInt(sf[0], &mi.MemFree)
+			case "MemAvailable":
 				parseInt(sf[0], &mi.MemAvailable)
 			}
 		default:

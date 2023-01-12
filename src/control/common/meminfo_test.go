@@ -38,6 +38,8 @@ func TestCommon_parseMemInfo(t *testing.T) {
 		},
 		"2MB pagesize": {
 			input: `
+MemTotal:           1024 kB
+MemFree:            1024 kB
 MemAvailable:       1024 kB
 HugePages_Total:    1024
 HugePages_Free:     1023
@@ -49,13 +51,14 @@ Hugepagesize:       2048 kB
 				HugePagesTotal: 1024,
 				HugePagesFree:  1023,
 				HugePageSizeKb: 2048,
+				MemTotal:       1024,
+				MemFree:        1024,
 				MemAvailable:   1024,
 			},
 			expFreeMB: 2046,
 		},
 		"1GB pagesize": {
 			input: `
-MemAvailable:       1024 kB
 HugePages_Total:      16
 HugePages_Free:       16
 HugePages_Rsvd:        0
@@ -66,7 +69,6 @@ Hugepagesize:       1048576 kB
 				HugePagesTotal: 16,
 				HugePagesFree:  16,
 				HugePageSizeKb: 1048576,
-				MemAvailable:   1024,
 			},
 			expFreeMB: 16384,
 		},

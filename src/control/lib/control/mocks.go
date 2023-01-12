@@ -292,7 +292,7 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 func MockMemInfo(t *testing.T) *ctlpb.MemInfo {
 	return &ctlpb.MemInfo{
 		HugepageSizeKb: 2048,
-		MemAvailable:   (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
+		MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 	}
 }
 
@@ -481,8 +481,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "noHugepageSz":
 		ssr.MemInfo.HugepageSizeKb = 0
-	case "noMemAvail":
-		ssr.MemInfo.MemAvailable = 0
+	case "noMemTotal":
+		ssr.MemInfo.MemTotal = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
