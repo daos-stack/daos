@@ -201,6 +201,7 @@ if [ -d "/mnt/daos" ]; then
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test "${SL_PREFIX}/bin/vea_stress -d 60"
     # regression test for DAOS-12256
+    COMP="UTEST_vea_debug"
     export D_LOG_MASK=DEBUG
     export DD_SUBSYS=all
     export DD_MASK=all
