@@ -92,7 +92,7 @@ class DaosCommand(DaosCommandBase):
         """
         # Default to RANK fault domain (rd_lvl:1) when not specified
         if properties:
-            if 'rd_lvl' not in properties:
+            if ('rd_lvl' not in properties) and ('rf_lvl' not in properties):
                 properties += ',rd_lvl:1'
         else:
             properties = 'rd_lvl:1'
