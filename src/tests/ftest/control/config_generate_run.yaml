@@ -8,7 +8,7 @@ server_config:
       storage:
         0:
           class: ram
-          scm_mount: /mnt/daos
+          scm_mount: /mnt/daos0
           scm_size: 16
 pool:
   control_method: dmg
