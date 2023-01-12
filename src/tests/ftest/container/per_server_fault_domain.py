@@ -81,7 +81,7 @@ class PerServerFaultDomainTest(IorTestBase):
             "Container status isn't {} with {}!".format(expected_status, properties))
 
     def create_rank_to_ip(self):
-        """Create rank to IP address dictionary.
+        """Create and return rank to IP address dictionary.
         """
         system_query_out = self.get_dmg_command().system_query(verbose=True)
         rank_to_ip = {}
