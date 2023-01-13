@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,7 +16,8 @@ from command_utils import ExecutableCommand, SystemctlCommand
 from command_utils_base import FormattedParameter, EnvironmentVariables
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
-from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class
+from general_utils import pcmd, stop_processes, run_pcmd, get_job_manager_class, \
+    get_journalctl_command
 from run_utils import run_remote
 from write_host_file import write_host_file
 
@@ -773,8 +774,9 @@ class Systemctl(JobManager):
             return self._run_unit_command(command)
         except CommandFailure as error:
             self.log.info(error)
-            self.display_log_data(
-                self.get_log_data(self._hosts, self.timestamps[command]))
+            command = get_journalctl_command(
+                self.timestamps[command], units=self._systemctl.service.value)
+            self.display_log_data(self.get_log_data(self._hosts, command))
             raise CommandFailure(error) from error
 
     def service_enable(self):
@@ -875,29 +877,7 @@ class Systemctl(JobManager):
             self._systemctl.service.value, ", ".join(data))
         return status
 
-    def get_journalctl_command(self, since, until=None):
-        """Get the journalctl command to capture all unit activity from since to until.
-
-        Args:
-            since (str): show log entries from this date.
-            until (str, optional): show log entries up to this date. Defaults
-                to None, in which case it is not utilized.
-
-        Returns:
-            str: journalctl command to capture all unit activity
-
-        """
-        command = [
-            "sudo",
-            "journalctl",
-            "--unit={}".format(self._systemctl.service.value),
-            "--since=\"{}\"".format(since),
-        ]
-        if until:
-            command.append("--until=\"{}\"".format(until))
-        return " ".join(command)
-
-    def get_log_data(self, hosts, since, until=None, timeout=60):
+    def get_log_data(self, hosts, command, timeout=60):
         """Gather log output for the command running on each host.
 
         Note (from journalctl man page):
@@ -914,9 +894,7 @@ class Systemctl(JobManager):
 
         Args:
             hosts (NodeSet): hosts from which to gather log data.
-            since (str): show log entries from this date.
-            until (str, optional): show log entries up to this date. Defaults
-                to None, in which case it is not utilized.
+            command (str): journalctl command to issue to produce the log data.
             timeout (int, optional): timeout for issuing the command. Defaults
                 to 60 seconds.
 
@@ -926,10 +904,6 @@ class Systemctl(JobManager):
                 "data": <journalctl output>
 
         """
-        # Setup the journalctl command to capture all unit activity from the
-        # specified start date to now or a specified end date
-        #   --output=json?
-        command = self.get_journalctl_command(since, until)
         self.log.info("Gathering log data on %s: %s", str(hosts), command)
 
         # Gather the log information per host
@@ -1029,9 +1003,8 @@ class Systemctl(JobManager):
                 (str)  - string indicating the number of patterns found in what duration
 
         """
-        self.log.info(
-            "Searching for '%s' in '%s' output on %s",
-            pattern, self.get_journalctl_command(since, until), self._hosts)
+        command = get_journalctl_command(since, until, units=self._systemctl.service.value)
+        self.log.info("Searching for '%s' in '%s' output on %s", pattern, command, self._hosts)
 
         log_data = None
         detected = 0
@@ -1046,7 +1019,7 @@ class Systemctl(JobManager):
         #   - the service is no longer running (failure)
         while not complete and not timed_out and self.service_running():
             detected = 0
-            log_data = self.get_log_data(self._hosts, since, until, timeout)
+            log_data = self.get_log_data(self._hosts, command, timeout)
             for entry in log_data:
                 match = re.findall(pattern, "\n".join(entry["data"]))
                 detected += len(match) if match else 0
@@ -1073,6 +1046,7 @@ class Systemctl(JobManager):
             if log_data:
                 details = ":\n{}".format(self.str_log_data(log_data))
             self.log.info("%s - %s %s%s", reason, msg, runtime, details)
+            self.log_additional_debug_data(self._hosts, since, until)
 
         return complete, " ".join([msg, runtime])
 
@@ -1116,7 +1090,23 @@ class Systemctl(JobManager):
         if timestamp:
             if hosts is None:
                 hosts = self._hosts
-            self.display_log_data(self.get_log_data(hosts, timestamp))
+            command = get_journalctl_command(timestamp, units=self._systemctl.service.value)
+            self.display_log_data(self.get_log_data(hosts, command))
+
+    def log_additional_debug_data(self, hosts, since, until):
+        """Log additional information from a different journalctl command.
+
+        Args:
+            hosts (NodeSet): hosts from which to display the journalctl log data.
+            since (str): search log entries from this date.
+            until (str, optional): search log entries up to this date. Defaults
+                to None, in which case it is not utilized.
+        """
+        command = get_journalctl_command(
+            since, until, True, identifiers=["kernel", self._systemctl.service.value])
+        log_data = self.get_log_data(self, hosts, command)
+        details = ":\n{}".format(self.str_log_data(log_data))
+        self.log.info("Additional '%s' output%s", command, details)
 
 
 class Clush(JobManager):

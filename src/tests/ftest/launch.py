@@ -60,24 +60,6 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-YAML_KEYS = OrderedDict(
-    [
-        ("test_servers", "test_servers"),
-        ("test_clients", "test_clients"),
-        ("bdev_list", "nvme"),
-        ("timeout", "timeout_multiplier"),
-        ("timeouts", "timeout_multiplier"),
-        ("clush_timeout", "timeout_multiplier"),
-        ("ior_timeout", "timeout_multiplier"),
-        ("job_manager_timeout", "timeout_multiplier"),
-        ("pattern_timeout", "timeout_multiplier"),
-        ("pool_query_timeout", "timeout_multiplier"),
-        ("rebuild_timeout", "timeout_multiplier"),
-        ("srv_timeout", "timeout_multiplier"),
-        ("storage_prepare_timeout", "timeout_multiplier"),
-        ("storage_format_timeout", "timeout_multiplier"),
-    ]
-)
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -1453,14 +1435,16 @@ class Launch():
         #
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
-        tier_type = "pmem"
+        tier_0_type = "pmem"
+        scm_size = 16
+        max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
             if args.nvme.startswith("auto"):
                 # Separate any optional filter from the key
                 nvme_args = args.nvme.split(":")
                 kwargs["device_filter"] = nvme_args[1] if len(nvme_args) > 1 else None
-            logger.info("-" * 80)
+            logger.debug("-" * 80)
             storage_info.scan(**kwargs)
 
             # Determine which storage device types to use when replacing keywords in the test yaml
@@ -1473,10 +1457,9 @@ class Launch():
 
             # Change the auto-storage extra yaml format if md_on_ssd is requested
             if args.nvme.startswith("auto_md_on_ssd"):
-                tier_type = "md_on_ssd"
-
-            # Temporarily force all HW stages to use md_on_ssd
-            tier_type = "md_on_ssd"
+                tier_0_type = "ram"
+                scm_size = 100
+                max_nvme_tiers = 5
 
         updater = YamlUpdater(
             logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
@@ -1489,7 +1472,7 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_type)
+        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1511,13 +1494,14 @@ class Launch():
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_type):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
             storage_info (StorageInfo): the collected storage information from the hosts
             yaml_dir (str): path n which to create the extra storage yaml files
-            tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
+            scm_size (int): scm_size to use with ram storage tiers
+            tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1533,8 +1517,9 @@ class Launch():
                 engines = info["engines_per_host"]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
-                    logger.info("-" * 80)
-                    storage_info.write_storage_yaml(yaml_file, engines, tier_type, scm_size=100)
+                    logger.debug("-" * 80)
+                    storage_info.write_storage_yaml(
+                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
@@ -2061,12 +2046,12 @@ class Launch():
             return_code = run_local(logger, command, capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
-            elif return_code == 2:
+            elif return_code & 2 == 2:
                 logger.debug("At least one avocado test variant failed")
-            elif return_code == 4:
+            elif return_code & 4 == 4:
                 message = "Failed avocado commands detected"
                 self._fail_test(self.result.tests[-1], "Process", message)
-            elif return_code == 8:
+            elif return_code & 8 == 8:
                 logger.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
@@ -3066,6 +3051,9 @@ def main():
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
         args.slurm_setup = True
         args.user_create = True
+
+        # Temporarily force this setting
+        args.nvme = "auto_md_on_ssd"
 
     # Perform the steps defined by the arguments specified
     try:

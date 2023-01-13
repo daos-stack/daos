@@ -3,9 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from collections import OrderedDict
 from functools import partial
 import itertools
 from operator import is_not
+import os
 import re
 
 from ClusterShell.NodeSet import NodeSet
@@ -83,31 +85,37 @@ class StorageDevice():
     def __lt__(self, other):
         """Determine if this StorageDevice is less than the other StorageDevice.
 
+        Used to sort devices by their addresses, but with more performant devices listed first.
+
         Args:
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only the other StorageDevice is more performant, False if this
-                StorageDevice is more performant, or an StorageDevice address compare
+            bool: True if only the this StorageDevice is more performant, False if the other
+                StorageDevice is more performant, or True if this StorageDevice address is less
+                than the other StorageDevice.
 
         """
         if 'optane' in self.device.lower() and 'optane' not in other.device.lower():
             # This device is more performant than the other device
-            return False
+            return True
         if 'optane' not in self.device.lower() and 'optane' in other.device.lower():
             # The other device is more performant than this device
-            return True
+            return False
         return self.address < other.address
 
     def __gt__(self, other):
         """Determine if this StorageDevice is greater than the other StorageDevice.
 
+        Used to sort devices by their addresses, but with more performant devices listed first.
+
         Args:
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only this StorageDevice is more performant, False if the other
-                StorageDevice is more performant, or an StorageDevice address compare
+            bool: True if only the other StorageDevice is more performant, False if this
+                StorageDevice is more performant, or True if this StorageDevice address is greater
+                than the other StorageDevice.
 
         """
         return not self.__lt__(other)
@@ -159,17 +167,37 @@ class StorageDevice():
             bool: True if this device a disk; False otherwise.
 
         """
-        return not self.is_controller
+        return not self.is_controller and not self.is_pmem
+
+    @property
+    def is_pmem(self):
+        """Is this a PMEM device.
+
+        Returns:
+            bool: True if this a PMEM device; False otherwise.
+
+        """
+        return self.storage_class == "PMEM"
 
 
 class StorageInfo():
     """Information about host storage."""
 
-    TIER_KEYWORDS = ['pmem', 'md_on_ssd']
-    TYPE_SEARCH = {
-        'NVMe': r"grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2",
-        'VMD': r"grep -E 'Device:\s+Volume Management Device NVMe RAID Controller' -B 2 -A 1",
-    }
+    TIER_0_TYPES = ('pmem', 'ram')
+    TIER_NVME_PRIORITY = (1, 2, 3, 3, 2)
+    TYPE_SEARCH = OrderedDict(
+        [
+            ('PMEM', ['ndctl list -c -v']),
+            ('NVMe', [
+                'lspci -vmm -D',
+                "grep -E '^(Slot|Class|Device|NUMANode):'",
+                r"grep -E 'Class:\s+Non-Volatile memory controller' -B 1 -A 2"]),
+            ('VMD', [
+                'lspci -vmm -D',
+                "grep -E '^(Slot|Class|Device|NUMANode):'",
+                r"grep -E 'Device:\s+Volume Management Device NVMe RAID Controller' -B 2 -A 1"]),
+        ]
+    )
 
     def __init__(self, logger, hosts):
         """Initialize a StorageInfo object.
@@ -193,11 +221,21 @@ class StorageInfo():
         return self._devices
 
     @property
+    def pmem_devices(self):
+        """Get the list of detected PMEM devices.
+
+        Returns:
+            list: a list of PMEM StorageDevice objects
+
+        """
+        return list(filter(StorageDevice.is_pmem.fget, self.devices))
+
+    @property
     def disk_devices(self):
         """Get the list of detected disk devices.
 
         Returns:
-            list: a list of diskStorageDevice objects
+            list: a list of disk StorageDevice objects
 
         """
         return list(filter(StorageDevice.is_disk.fget, self.devices))
@@ -229,7 +267,7 @@ class StorageInfo():
         raise StorageException(message)
 
     def scan(self, device_filter=None):
-        """Detect any NVMe or VMD disks/controllers that exist on every host.
+        """Detect any PMEM, NVMe, or VMD disks/controllers that exist on every host.
 
         Args:
             device_filter (str, optional): device search filter. Defaults to None.
@@ -239,32 +277,20 @@ class StorageInfo():
                 device information
 
         """
-        self._log.info('Scanning %s for NVMe/VMD devices', self._hosts)
         self._devices.clear()
-
-        for key in sorted(self.TYPE_SEARCH):
+        self._log.info('Scanning %s for PMEM/NVMe/VMD devices', self._hosts)
+        for key in self.TYPE_SEARCH:
             device_info = self.get_device_information(key, device_filter)
             if key == "VMD" and device_info:
                 self._devices.extend(self.get_controller_information(device_info))
             else:
                 self._devices.extend(device_info)
 
-        if not self._devices:
-            keys = ' & '.join(sorted(self.TYPE_SEARCH))
-            self._raise_error(f'Error: Non-homogeneous {keys} PCI addresses.')
-
-        self._log.debug('NVMe devices detected in the scan:')
-        for device in self.disk_devices:
-            self._log.debug('  - %s', str(device))
-        self._log.debug('VMD controllers detected in the scan:')
-        for device in self.controller_devices:
-            self._log.debug('  - %s', str(device))
-
     def get_device_information(self, key, device_filter):
-        """Get a list of NVMe or VMD devices that exist on every host.
+        """Get a list of PMEM, NVMe, or VMD devices that exist on every host.
 
         Args:
-            key (str): disk type: 'NVMe' or 'VMD'
+            key (str): disk type: 'PMEM', 'NVMe', or 'VMD'
             device_filter (str, optional): device search filter. Defaults to None.
 
         Returns:
@@ -276,35 +302,54 @@ class StorageInfo():
             'Detecting %s devices on %s%s',
             key, self._hosts, f" with '{device_filter}' filter" if device_filter else '')
 
+        if key not in self.TYPE_SEARCH:
+            self._raise_error(f'Error: Invalid storage type \'{key}\'')
+
         # Find the NVMe devices that exist on every host in the same NUMA slot
-        command_list = [
-            'lspci -vmm -D', "grep -E '^(Slot|Class|Device|NUMANode):'", self.TYPE_SEARCH[key]]
-        command = ' | '.join(command_list) + ' || :'
+        command = ' | '.join(self.TYPE_SEARCH[key]) + ' || :'
         result = run_remote(self._log, self._hosts, command)
         if result.passed:
             # Collect all the devices defined by the command output
             self._log.debug('Processing device information')
             for data in result.output:
                 all_output = '\n'.join(data.stdout)
-                info = {
-                    'slots': re.findall(r'Slot:\s+([0-9a-fA-F:.]+)', all_output),
-                    'class': re.findall(r'Class:\s+(.*)', all_output),
-                    'device': re.findall(r'Device:\s+(.*)', all_output),
-                    'numa': re.findall(r'NUMANode:\s+(\d)', all_output),
-                }
-                for index, address in enumerate(info['slots']):
+                if key == 'PMEM':
+                    info_key = 'blockdev'
+                    info = {
+                        'uuid': re.findall(r'"uuid":"([0-9a-fA-F-]+)",', all_output),
+                        'blockdev': re.findall(r'"blockdev":"(.*)",', all_output),
+                        'map': re.findall(r'"map":"(.*)",', all_output),
+                        'numa': re.findall(r'"numa_node":(\d),', all_output),
+                    }
+                else:
+                    info_key = 'slots'
+                    info = {
+                        'slots': re.findall(r'Slot:\s+([0-9a-fA-F:.]+)', all_output),
+                        'class': re.findall(r'Class:\s+(.*)', all_output),
+                        'device': re.findall(r'Device:\s+(.*)', all_output),
+                        'numa': re.findall(r'NUMANode:\s+(\d)', all_output),
+                    }
+                for index, item in enumerate(info[info_key]):
                     try:
-                        device = StorageDevice(
-                            address, info['class'][index], info['device'][index],
-                            info['numa'][index])
+                        if key == 'PMEM':
+                            kwargs = {
+                                'address': os.path.join(os.sep, info['map'][index], item),
+                                'storage_class': key,
+                                'device': info['uuid'][index],
+                                'numa_node': info['numa'][index],
+                            }
+                        else:
+                            kwargs = {
+                                'address': item,
+                                'storage_class': info['class'][index],
+                                'device': info['device'][index],
+                                'numa_node': info['numa'][index],
+                            }
+                        device = StorageDevice(**kwargs)
                     except IndexError:
                         self._log.error(
-                            '  error creating a StorageDevice object for %s with index %s of the '
-                            'following lists:', address, index)
-                        self._log.error('    - slots:  %s', info['slots'])
-                        self._log.error('    - class:  %s', info['class'])
-                        self._log.error('    - device: %s', info['device'])
-                        self._log.error('    - numa:   %s', info['numa'])
+                            '  error creating a StorageDevice object for %s with index %s: %s',
+                            item, index, info)
                         continue
 
                     # Ignore backing NVMe bound to the kernel driver, e.g., 10005:05:00.0
@@ -340,7 +385,7 @@ class StorageInfo():
 
         if found_devices:
             self._log.debug('%s devices found on %s', key, str(self._hosts))
-            for device in list(found_devices):
+            for device in sorted(list(found_devices)):
                 self._log.debug('  - %s', str(device))
         else:
             self._log.debug('No %s devices found on %s', key, str(self._hosts))
@@ -434,14 +479,15 @@ class StorageInfo():
 
         return controllers
 
-    def write_storage_yaml(self, yaml_file, engines, tier_type, scm_size=100):
+    def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=100, max_nvme_tiers=1):
         """Generate a storage test yaml sub-section.
 
         Args:
             yaml_file (str): file in which to write the storage yaml entry
             engines (int): number of engines
-            tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
+            tier_0_type (str): storage tier 0 type: 'pmem' or 'ram'
             scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 100.
+            max_nvme_tiers (int): maximum number of nvme storage tiers. Defaults to 1.
 
         Raises:
             StorageException: if an invalid storage type was specified
@@ -449,48 +495,45 @@ class StorageInfo():
         """
         tiers = 1
         self._log.info(
-            'Generating a %s storage yaml for %s engines: %s', tier_type, engines, yaml_file)
+            'Generating a %s storage yaml for %s engines: %s', tier_0_type, engines, yaml_file)
 
-        if tier_type not in self.TIER_KEYWORDS:
-            self._raise_error(f'Error: Invalid storage type \'{tier_type}\'')
+        if tier_0_type not in self.TIER_0_TYPES:
+            self._raise_error(f'Error: Invalid storage type \'{tier_0_type}\'')
 
-        if self.devices:
+        pmem_list = {}
+        if tier_0_type == self.TIER_0_TYPES[1] and self.pmem_devices:
             # Sort the detected devices and place then in lists by NUMA node
-            numa_devices = {}
-            for device in sorted(self.controller_devices or self.disk_devices):
-                if device.numa_node not in numa_devices:
-                    numa_devices[device.numa_node] = []
-                numa_devices[device.numa_node].append(device.address)
-            self._log.debug('numa_devices:   %s', numa_devices)
+            numa_devices = self._get_numa_devices(self.pmem_devices)
+            self._log.debug('  PMEM numa_devices:   %s', numa_devices)
 
             # Interleave the devices for bdev_list distribution.
-            if engines > 1:
-                # This will also even out any uneven NUMA distribution using the shortest list
-                interleaved = list(itertools.chain(*zip(*numa_devices.values())))
-            else:
-                # Include all devices with uneven NUMA distribution
-                interleaved = list(
-                    filter(
-                        partial(is_not, None),
-                        itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
-            self._log.debug('interleaved:    %s', interleaved)
+            interleaved = self._get_interleaved(engines, numa_devices)
+            self._log.debug('  PMEM interleaved:    %s', interleaved)
+
+            if len(interleaved) >= engines:
+                for engine in range(engines):
+                    pmem_list[engine] = interleaved.pop(0)
+            self._log.debug('  PMEM pmem_list:      %s', pmem_list)
+
+        if self.controller_devices or self.disk_devices:
+            # Sort the detected devices and place then in lists by NUMA node
+            numa_devices = self._get_numa_devices(self.controller_devices or self.disk_devices)
+            self._log.debug('  NVMe/VMD numa_devices:   %s', numa_devices)
+
+            # Interleave the devices for bdev_list distribution.
+            interleaved = self._get_interleaved(engines, numa_devices)
+            self._log.debug('  NVMe/VMD interleaved:    %s', interleaved)
 
             # Break the interleaved (prioritized) disk list into groups of engine size
             device_sets = [interleaved[x:x + engines] for x in range(0, len(interleaved), engines)]
-            self._log.debug('device_sets:    %s', device_sets)
-
-            # Tier number device placement order
-            if tier_type == self.TIER_KEYWORDS[1]:
-                tier_placement_priority = [1, 2, 3, 3, 2]
-            else:
-                tier_placement_priority = [1]
+            self._log.debug('  NVMe/VMD device_sets:    %s', device_sets)
 
             # Get the tier number device placement for the available number of devices
             tier_placement = []
             while len(tier_placement) < len(device_sets):
-                tier_placement.extend(tier_placement_priority)
+                tier_placement.extend(self.TIER_NVME_PRIORITY[:max_nvme_tiers])
             tier_placement = sorted(tier_placement[:len(device_sets)])
-            self._log.debug('tier_placement: %s', tier_placement)
+            self._log.debug('  NVMe/VMD tier_placement: %s', tier_placement)
             tiers += max(tier_placement)
 
             bdev_list = {}
@@ -502,7 +545,7 @@ class StorageInfo():
                     if tier not in bdev_list[engine]:
                         bdev_list[engine][tier] = []
                     bdev_list[engine][tier].append(f'"{device}"')
-            self._log.debug('bdev_list:      %s', bdev_list)
+            self._log.debug('  NVMe/VMD bdev_list:      %s', bdev_list)
 
         lines = ['server_config:', '  engines:']
         for engine in range(engines):
@@ -510,24 +553,63 @@ class StorageInfo():
             lines.append('      storage:')
             for tier in range(tiers):
                 lines.append(f'        {str(tier)}:')
-                if tier == 0 and tier_type == self.TIER_KEYWORDS[0]:
+                if tier == 0 and pmem_list:
                     lines.append('          class: dcpm')
-                    lines.append(f'          scm_list: ["/dev/pmem{engine}"]')
+                    lines.append(f'          scm_list: ["{pmem_list[engine]}"]')
                     lines.append(f'          scm_mount: /mnt/daos{engine}')
                 elif tier == 0:
                     lines.append('          class: ram')
-                    lines.append('          scm_list: None')
                     lines.append(f'          scm_mount: /mnt/daos{engine}')
                     lines.append(f'          scm_size: {scm_size}')
                 else:
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
 
-        self._log.debug('Creating %s', yaml_file)
+        self._log.debug('  Creating %s', yaml_file)
         for line in lines:
-            self._log.debug('  %s', line)
+            self._log.debug('    %s', line)
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
                 config_handle.writelines([f'{line}\n' for line in lines])
         except IOError as error:
             self._raise_error(f"Error writing avocado config file {yaml_file}", error)
+
+    @staticmethod
+    def _get_numa_devices(devices):
+        """Get a dictionary of sorted devices indexed by their NUMA node.
+
+        Args:
+            devices (list): list of StorageDevice devices
+
+        Returns:
+            dict: dictionary of sorted devices indexed by their NUMA node
+
+        """
+        numa_devices = OrderedDict()
+        for device in sorted(devices):
+            if device.numa_node not in numa_devices:
+                numa_devices[device.numa_node] = []
+            numa_devices[device.numa_node].append(device.address)
+        return numa_devices
+
+    @staticmethod
+    def _get_interleaved(engines, numa_devices):
+        """Get an interleaved list of NUMA devices.
+
+        Args:
+            engines (int): number of engines
+            numa_devices (dict): dictionary of sorted devices indexed by their NUMA node
+
+        Returns:
+            list: interleaved list of NUMA devices
+
+        """
+        if engines > 1:
+            # This will also even out any uneven NUMA distribution using the shortest list
+            return list(itertools.chain(*zip(*numa_devices.values())))
+
+        # Include all devices with uneven NUMA distribution for single engine configurations
+        return list(
+            filter(
+                partial(is_not, None),
+                itertools.chain(*itertools.zip_longest(*numa_devices.values()))))
