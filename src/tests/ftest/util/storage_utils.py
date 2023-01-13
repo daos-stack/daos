@@ -316,7 +316,7 @@ class StorageInfo():
                 if key == 'PMEM':
                     info_key = 'blockdev'
                     info = {
-                        'uuid': re.findall(r'"uuid":"([0-9a-fA-F-]+)",', all_output),
+                        'size': re.findall(r'"size":(\d),', all_output),
                         'blockdev': re.findall(r'"blockdev":"(.*)",', all_output),
                         'map': re.findall(r'"map":"(.*)",', all_output),
                         'numa': re.findall(r'"numa_node":(\d),', all_output),
@@ -335,7 +335,7 @@ class StorageInfo():
                             kwargs = {
                                 'address': os.path.join(os.sep, info['map'][index], item),
                                 'storage_class': key,
-                                'device': info['uuid'][index],
+                                'device': info['size'][index],
                                 'numa_node': info['numa'][index],
                             }
                         else:
@@ -421,7 +421,7 @@ class StorageInfo():
 
         """
         controllers = {}
-        self._log.debug("Determining the controllers for each VMD disk")
+        self._log.debug("Determining the number of devices behind each VMD controller")
         command_list = ["ls -l /sys/block/", "grep nvme"]
         command = " | ".join(command_list) + " || :"
         result = run_remote(self._log, self._hosts, command)

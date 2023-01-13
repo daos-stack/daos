@@ -1385,10 +1385,9 @@ def get_journalctl_command(since, until=None, system=False, units=None, identifi
     command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
     if system:
         command.append("--system")
-    for unit in list(units or []):
-        command.append("--unit={}".format(unit))
-    for identifier in list(identifiers or []):
-        command.append("--identifier={}".format(identifier))
+    for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
+        for item in values if isinstance(values, (list, tuple)) else [values]:
+            command.append("--{}={}".format(key, item))
     command.append("--since=\"{}\"".format(since))
     if until:
         command.append("--until=\"{}\"".format(until))
