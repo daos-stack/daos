@@ -44,10 +44,23 @@ error_transient_alloc:
 void
 stats_delete(dav_obj_t *pop, struct stats *s)
 {
-	mo_wal_persist(&pop->p_ops, s->persistent,
-	sizeof(struct stats_persistent));
 	D_FREE(s->transient);
 	D_FREE(s);
+}
+
+/*
+ * stats_persist -- save the persistent statistics to wal
+ */
+void
+stats_persist(dav_obj_t *pop, struct stats *s)
+{
+	if (s->transient->heap_prev_pval !=
+	    s->persistent->heap_curr_allocated) {
+		mo_wal_persist(&pop->p_ops, s->persistent,
+		    sizeof(struct stats_persistent));
+		s->transient->heap_prev_pval =
+		    s->persistent->heap_curr_allocated;
+	}
 }
 
 int
