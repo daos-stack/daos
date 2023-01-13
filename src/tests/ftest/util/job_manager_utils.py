@@ -1104,9 +1104,8 @@ class Systemctl(JobManager):
         """
         command = get_journalctl_command(
             since, until, True, identifiers=["kernel", self._systemctl.service.value])
-        log_data = self.get_log_data(self, hosts, command)
-        details = ":\n{}".format(self.str_log_data(log_data))
-        self.log.info("Additional '%s' output%s", command, details)
+        details = self.str_log_data(self.get_log_data(hosts, command))
+        self.log.info("Additional '%s' output:\n%s", command, details)
 
 
 class Clush(JobManager):
