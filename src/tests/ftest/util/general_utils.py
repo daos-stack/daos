@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -251,6 +251,13 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     """
     log = getLogger()
     msg = None
+    #cmdlist = command.split()
+    #for i in range(len(cmdlist)):
+    #    if cmdlist[i] == 'ior':
+    #        cmdlist[i] = '/bin/true'
+    #newcmd = " ".join(cmdlist)
+    #if newcmd  != command:
+    #    log.info("newcmd = {}".format(newcmd))
     kwargs = {
         "cmd": command,
         "timeout": timeout,
