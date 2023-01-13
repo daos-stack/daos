@@ -48,7 +48,7 @@ class ConfigGenerateOutput(TestWithServers):
             self.fail("dmg storage scan failed!")
 
         # Get nvme_devices and scm_namespaces list that are buried. There's a
-        # uint64 hash of the strcut under HostStorage.
+        # uint64 hash of the struct under HostStorage.
         temp_dict = storage_out["response"]["HostStorage"]
         struct_hash = list(temp_dict.keys())[0]
         nvme_devices = temp_dict[struct_hash]["storage"]["nvme_devices"]
