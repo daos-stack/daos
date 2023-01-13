@@ -46,7 +46,7 @@ container:
   control_method: daos
 ior:
   client_processes:
-      ppn: 32
+    ppn: 32
   api: DFS
   test_file: testFile
   write_flags: "-w -C -e -g -G 27 -k -Q 1"
@@ -59,7 +59,9 @@ ior:
     - 1M
     - 256B
   block_size: 150G
-  write_x: 0.15 # Max 15% performance difference.
-  read_x: 0.35  # Max 35% performance difference (only for CI). Change it to 15% for Aurora.
-  expected_bw: 2250    # For transfer size 1M. Change to 22500 for Aurora.
-  expected_iops: 250000       # For transfer size 256B. Change to 600000 for Aurora.
+  write_x: 0.5             # 0.5 only for CI, due to the varying nature of different
+                           # clusters in CI. Change it to 15% (0.15) for Aurora.
+  read_x: 0.5              # 0.5 only for CI, due to the varying nature of different
+                           # clusters in CI. Change it to 15% (0.15) for Aurora.
+  expected_bw: 2250        # BW is for transfer size 1M. Change to 22500 for Aurora.
+  expected_iops: 450000    # IOPS are for transfer size 256B. Change to 600000 for Aurora.
