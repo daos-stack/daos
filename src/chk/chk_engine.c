@@ -559,7 +559,7 @@ report:
 		cpr->cpr_skip = 1;
 		break;
 	case CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET:
-		act = CHK__CHECK_INCONSIST_ACTION__CIA_DISCARD;
+		act = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
 		/*
 		 * NOTE: For dryrun mode, we will not persistently store the change in
 		 *	 subsequent step. Here we only fix the inconsistency in DRAM.
@@ -2162,7 +2162,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 		if (rc != 0)
 			goto out_group;
 
-		ds_iv_ns_update(ins->ci_iv_ns, leader);
+		ds_iv_ns_update(ins->ci_iv_ns, leader, ins->ci_iv_ns->iv_master_term + 1);
 	}
 
 	rc = chk_engine_start_post(ins);
@@ -2397,7 +2397,7 @@ chk_engine_query_pool(uuid_t uuid, void *args)
 	coll_ops.co_func = chk_engine_query_one;
 	coll_args.ca_func_args = shard;
 
-	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
 
 out:
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_DBG,
@@ -3114,7 +3114,7 @@ chk_engine_rejoin(void *args)
 	if (rc != 0)
 		goto out_group;
 
-	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader);
+	ds_iv_ns_update(ins->ci_iv_ns, prop->cp_leader, ins->ci_iv_ns->iv_master_term + 1);
 
 	/* Ask leader whether this engine can rejoin or not. */
 	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, &pool_nr, &pools);

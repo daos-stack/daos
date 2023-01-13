@@ -425,14 +425,16 @@ func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActR
 		return nil, err
 	}
 
-	if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
-		return nil, err
-	}
-	svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
-
 	resp := new(mgmtpb.CheckActResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal CheckRepair response")
+	}
+
+	if resp.Status == 0 {
+		if err := svc.sysdb.SetCheckerFindingAction(req.Seq, int32(req.Act)); err != nil {
+			return nil, err
+		}
+		svc.log.Debugf("Set action %s for finding %d", req.Act, req.Seq)
 	}
 
 	return resp, nil

@@ -586,7 +586,7 @@ vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ra
 	rc = vos_ilog_fetch_internal(umm, coh, DAOS_INTENT_PURGE, ilog, epr, 0, &punch_rec, NULL,
 				     info);
 
-	if (rc != 0 || !info->ii_full_scan || info->ii_create != 0)
+	if (rc != 0 || !info->ii_full_scan || info->ii_create != 0 || info->ii_uncommitted != 0)
 		return false;
 
 	return true;

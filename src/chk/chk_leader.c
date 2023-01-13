@@ -2070,12 +2070,6 @@ again:
 handle:
 	if (!d_list_empty(&ins->ci_rank_list) || ins->ci_start_flags & CSF_ORPHAN_POOL) {
 		rc = chk_leader_handle_pools_list(ins);
-		if (ins->ci_for_orphan) {
-			cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_DONE;
-			if (rc == 0)
-				rc = 1;
-		}
-
 		if (rc != 0)
 			D_GOTO(out, bcast = true);
 	}
@@ -2085,7 +2079,7 @@ handle:
 
 		rc = chk_leader_need_stop(ins);
 		if (rc >= 0)
-			D_GOTO(out, bcast = false);
+			D_GOTO(out, bcast = (rc > 0 ? true : false));
 
 		/*
 		 * TBD: The leader may need to detect engines' status/phase actively, otherwise
@@ -2746,7 +2740,7 @@ reset:
 	if (rc != 0)
 		goto out_group;
 
-	ds_iv_ns_update(ins->ci_iv_ns, myrank);
+	ds_iv_ns_update(ins->ci_iv_ns, myrank, ins->ci_iv_ns->iv_master_term + 1);
 
 	if (d_list_empty(&ins->ci_pool_list)) {
 		c_pool_nr = pool_nr;
