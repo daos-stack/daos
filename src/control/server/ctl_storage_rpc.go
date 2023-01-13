@@ -340,6 +340,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
+	mdFormatted := false
 
 	// Format control metadata first, if needed
 	if needs, err := c.storage.ControlMetadataNeedsFormat(); err != nil {
@@ -353,9 +354,11 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
 			return nil, errors.Wrap(err, "formatting control metadata storage")
 		}
+		mdFormatted = true
 	}
 
 	instanceErrored := make(map[uint32]string)
+	instanceSkipped := make(map[uint32]bool)
 	// TODO: enable per-instance formatting
 	formatting := 0
 	for _, ei := range instances {
@@ -374,14 +377,15 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 				mountpoint = scmConfig.Scm.MountPoint
 			}
 
-			instanceErrored[ei.Index()] = fmt.Sprintf("instance %d: SCM is already formatted", ei.Index())
 			resp.Mrets = append(resp.Mrets, &ctlpb.ScmMountResult{
 				Instanceidx: ei.Index(),
 				Mntpoint:    mountpoint,
 				State: &ctlpb.ResponseState{
-					Info: instanceErrored[ei.Index()],
+					Info: "SCM is already formatted",
 				},
 			})
+
+			instanceSkipped[ei.Index()] = true
 		}
 	}
 
@@ -402,8 +406,10 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// allow format to complete on one instance even if another fail
 	// TODO: perform bdev format in parallel
 	for _, ei := range instances {
-		if _, hasError := instanceErrored[ei.Index()]; hasError {
-			// if scm errored, indicate skipping bdev format
+		_, hasError := instanceErrored[ei.Index()]
+		_, skipped := instanceSkipped[ei.Index()]
+		if hasError || (skipped && !mdFormatted) {
+			// if scm errored or was already formatted, indicate skipping bdev format
 			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)

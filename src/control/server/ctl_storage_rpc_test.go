@@ -1407,7 +1407,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "instance 0: SCM is already formatted",
+							Info:   "SCM is already formatted",
 						},
 					},
 				},
@@ -1443,7 +1443,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "instance 0: SCM is already formatted",
+							Info:   "SCM is already formatted",
 						},
 					},
 				},
@@ -1511,7 +1511,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						Mntpoint: "/mnt/daos",
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   "instance 0: SCM is already formatted",
+							Info:   "SCM is already formatted",
 						},
 					},
 				},
