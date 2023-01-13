@@ -49,9 +49,8 @@ class BoundaryTest(TestWithServers):
             TestPool: the created test pool object.
 
         """
-        pool = self.get_pool()
+        pool = self.get_pool(set_masks_oncreate=False, set_masks_ondestroy=False)
         self.pool.append(pool)
-        return pool
 
     def create_container_and_test(self, pool=None, cont_num=1):
         """To create single container on pool.
@@ -93,8 +92,13 @@ class BoundaryTest(TestWithServers):
         pool_manager = ThreadManager(self.create_pool, self.get_remaining_time() - 30)
         for _ in range(num_pools):
             pool_manager.add()
+        self.log.info('Elevating engines log_mask to DEBUG in the engines before pool creates')
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
         self.log.info('Creating %d pools', num_pools)
         result = pool_manager.run()
+        self.log.info('Restoring engines log_mask after pool creates')
+        self.get_dmg_command().server_set_logmasks(raise_exception=False)
+
         num_failed = len(list(filter(lambda r: not r.passed, result)))
         if num_failed > 0:
             self.fail('{} pool create threads failed'.format(num_failed))
@@ -137,3 +141,5 @@ class BoundaryTest(TestWithServers):
         num_containers = self.params.get("num_containers", '/run/boundary_test/*')
         self.create_pools(num_pools=num_pools, num_containers=num_containers)
         self.log.info("===>Boundary test passed.")
+        self.log.info("Elevating engines log_mask to DEBUG in the engines before tearDown")
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1351,6 +1351,9 @@ class TestWithServers(TestWithoutServers):
         # Destroy any pools next - eventually this call will encompass all teardown steps
         self._teardown_errors.extend(self._cleanup())
 
+        self.log.info("Restoring engines log_mask after pool destroys in tearDown")
+        self.get_dmg_command().server_set_logmasks(raise_exception=False)
+
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
 
@@ -1487,17 +1490,20 @@ class TestWithServers(TestWithoutServers):
                 labels = []
 
             # Destroy each pool found
-            # Elevate log_mask to DEBUG, then restore after pool destroy
-            manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
+            if len(labels) > 0:
+                self.log.info("Elevating engines log_mask before destroying found pools")
+                manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
 
             for label in labels:
                 try:
                     manager.dmg.pool_destroy(pool=label, force=True)
-
                 except CommandFailure as error:
                     error_list.append("Error destroying pool: {}".format(error))
 
-            manager.dmg.server_set_logmasks(raise_exception=False)
+            if len(labels) > 0:
+                self.log.info("Restoring engines log_mask after destroying found pools")
+                manager.dmg.server_set_logmasks(raise_exception=False)
 
         return error_list
 
@@ -1664,7 +1670,7 @@ class TestWithServers(TestWithoutServers):
         """
         return DaosCommand(self.bin)
 
-    def prepare_pool(self):
+    def prepare_pool(self, set_masks_oncreate=True, set_masks_ondestroy=True):
         """Prepare the self.pool TestPool object.
 
         Create a TestPool object, read the pool parameters from the yaml, create
@@ -1672,9 +1678,10 @@ class TestWithServers(TestWithoutServers):
 
         This sequence is common for a lot of the container tests.
         """
-        self.add_pool(POOL_NAMESPACE, True, True, 0)
+        self.add_pool(POOL_NAMESPACE, True, True, 0, set_masks_oncreate, set_masks_ondestroy)
 
-    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+    def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
+                 set_masks_oncreate=True, set_masks_ondestroy=True, **params):
         """Get a test pool object.
 
         This method defines the common test pool creation sequence.
@@ -1687,14 +1694,21 @@ class TestWithServers(TestWithoutServers):
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
             index (int, optional): Server index for dmg command. Defaults to 0.
+            set_masks_oncreate (bool, optional): should engine log_mask be elevated before create.
+                Defaults to True.
+            set_masks_ondestroy (bool, optional): should engine log_mask be elevated before destroy.
+                Defaults to True.
 
         Returns:
             TestPool: the created test pool object.
 
         """
-        return add_pool(self, namespace, create, connect, index, **params)
 
-    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+        return add_pool(self, namespace, create, connect, index,
+                        set_masks_oncreate, set_masks_ondestroy, **params)
+
+    def add_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
+                 set_masks_oncreate=True, set_masks_ondestroy=True, **params):
         """Add a pool to the test case.
 
         This method defines the common test pool creation sequence.
@@ -1707,11 +1721,19 @@ class TestWithServers(TestWithoutServers):
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
             index (int, optional): Server index for dmg command. Defaults to 0.
-        """
-        self.pool = self.get_pool(namespace, create, connect, index, **params)
+            set_masks_oncreate (bool, optional): should engine log_mask be elevated before create.
+                Defaults to True.
+            set_masks_ondestroy (bool, optional): should engine log_mask be elevated before destroy.
+                Defaults to True.
 
-    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, index=0):
-        """Add multiple pools to the test case.
+        """
+
+        self.pool = self.get_pool(namespace, create, connect, index,
+                                  set_masks_oncreate, set_masks_ondestroy, **params)
+
+    def add_pool_qty(self, quantity, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
+                     set_masks_oncreate=True, set_masks_ondestroy=True):
+        """Add multiple pools to the test case.xs
 
         This method requires self.pool to be defined as a list.  If self.pool is
         undefined it will define it as a list.
@@ -1725,6 +1747,10 @@ class TestWithServers(TestWithoutServers):
             connect (bool, optional): should the pool be connected. Defaults to
                 True.
             index (int, optional): Server index for dmg command. Defaults to 0.
+            set_masks_oncreate (bool, optional): should engine log_mask be elevated before create.
+                Defaults to True.
+            set_masks_ondestroy (bool, optional): should engine log_mask be elevated before destroy.
+                Defaults to True.
 
         Raises:
             TestFail: if self.pool is defined, but not as a list object.
@@ -1735,7 +1761,8 @@ class TestWithServers(TestWithoutServers):
         if not isinstance(self.pool, list):
             self.fail("add_pool_qty(): self.pool must be a list: {}".format(type(self.pool)))
         for _ in range(quantity):
-            self.pool.append(self.get_pool(namespace, create, connect, index))
+            self.pool.append(self.get_pool(namespace, create, connect, index,
+                                           set_masks_oncreate, set_masks_ondestroy))
 
     @fail_on(AttributeError)
     def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):

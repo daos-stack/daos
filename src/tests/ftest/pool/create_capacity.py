@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,10 +33,14 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool
         :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """
+        self.log.info('Elevating engines log_mask to DEBUG in the engines before pool creates')
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
+
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
-        self.add_pool_qty(quantity, create=False)
+        self.add_pool_qty(quantity, create=False, set_masks_oncreate=False,
+                          set_masks_ondestroy=False)
         self.check_pool_creation(30)
 
         # Verify DAOS can be restarted in less than 2 minutes
@@ -74,3 +78,5 @@ class PoolCreateTests(PoolTestBase):
         self.assertEqual(
             len(self.pool), len(detected_pools),
             "Additional pools detected after rebooting the servers")
+        self.log.info("Elevating engines log_mask to DEBUG in the engines before tearDown")
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)

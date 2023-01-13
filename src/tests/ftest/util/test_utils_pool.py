@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -23,7 +23,8 @@ POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
 
 
-def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0, **params):
+def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
+             set_masks_oncreate=True, set_masks_ondestroy=True, **params):
     """Add a new TestPool object to the test.
 
     Args:
@@ -33,6 +34,10 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
         create (bool, optional): should the pool be created. Defaults to True.
         connect (bool, optional): should the pool be connected. Defaults to True.
         index (int, optional): Server index for dmg command. Defaults to 0.
+        set_masks_oncreate (bool, optional): should engine log_mask be elevated before create.
+            Defaults to True.
+        set_masks_ondestroy (bool, optional): should engine log_mask be elevated before destroy.
+            Defaults to True.
 
     Returns:
         TestPool: the new pool object
@@ -45,24 +50,27 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
     if params:
         pool.update_params(**params)
     if create:
-        pool.create()
+        pool.create(set_masks=set_masks_oncreate)
     if create and connect:
         pool.connect()
 
     # Add a step to remove this pool when the test completes and ensure their is enough time for the
     # pool destroy to be attempted - accounting for a possible dmg command timeout
     test.increment_timeout(POOL_TIMEOUT_INCREMENT)
-    test.register_cleanup(remove_pool, test=test, pool=pool)
+    test.register_cleanup(remove_pool, test=test, pool=pool,
+                          set_masks_ondestroy=set_masks_ondestroy)
 
     return pool
 
 
-def remove_pool(test, pool):
+def remove_pool(test, pool, set_masks_ondestroy=True):
     """Remove the requested pool from the test.
 
     Args:
         test (Test): the test from which to destroy the pool
         pool (TestPool): the pool to destroy
+        set_masks_ondestroy (bool, optional): should engine log_mask be elevated before destroy.
+            Defaults to True.
 
     Returns:
         list: a list of any errors detected when removing the pool
@@ -79,7 +87,7 @@ def remove_pool(test, pool):
 
     # Attempt to destroy the pool
     try:
-        pool.destroy(force=1, disconnect=1, recursive=1)
+        pool.destroy(force=1, disconnect=1, recursive=1, set_masks=set_masks_ondestroy)
     except (DaosApiError, TestFail) as error:
         test.test_log.info("  {}".format(error))
         error_list.append("Error destroying pool {}: {}".format(pool.identifier, error))
@@ -304,8 +312,12 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     @fail_on(DmgJsonCommandFailure)
-    def create(self):
+    def create(self, set_masks=True):
         """Create a pool with dmg.
+
+        Args:
+            set_masks (bool, optional): should engine log_mask be elevated before create.
+                Defaults to True.
 
         To use dmg, the test needs to set dmg_command through the constructor.
         For example,
@@ -350,14 +362,18 @@ class TestPool(TestDaosApiBase):
                 kwargs[key] = value
 
         # Create a pool with the dmg command and store its CmdResult
-        # Elevate engine log_mask to DEBUG before, then restore after pool create
+        if set_masks:
+            self.log.info("Elevating engines log_mask to DEBUG before creating pool")
+            self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+
         self._log_method("dmg.pool_create", kwargs)
-        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         try:
             data = self.dmg.pool_create(**kwargs)
             create_res = self.dmg.result
         finally:
-            self.dmg.server_set_logmasks(raise_exception=False)
+            if set_masks:
+                self.log.info("Restoring engines log_mask after creating pool")
+                self.dmg.server_set_logmasks(raise_exception=False)
 
         # make sure dmg exit status is that of the pool create, not the set-logmasks
         if data is not None and create_res is not None:
@@ -429,7 +445,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
-    def destroy(self, force=1, disconnect=1, recursive=1):
+    def destroy(self, force=1, disconnect=1, recursive=1, set_masks=True):
         """Destroy the pool with either API or dmg.
 
         It uses control_method member previously set, so if you want to use the
@@ -439,6 +455,8 @@ class TestPool(TestDaosApiBase):
             force (int, optional): force flag. Defaults to 1.
             disconnect (int, optional): disconnect flag. Defaults to 1.
             recursive (int, optional): recursive flag. Defaults to 1.
+            set_masks (bool, optional): should engine log_mask be elevated before destroy.
+                Defaults to True.
 
         Returns:
             bool: True if the pool has been destroyed; False if the pool is not
@@ -451,13 +469,19 @@ class TestPool(TestDaosApiBase):
                 self.log.info("Disconnecting from pool %s", self.identifier)
                 self.disconnect()
             if self.pool.attached:
-                self.log.info("Destroying pool %s", self.identifier)
+                if set_masks:
+                    self.log.info("Elevating engines log_mask to DEBUG before destroying pool %s",
+                                  self.identifier)
+                    self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
 
                 # Destroy the pool with the dmg command.
-                # Elevate log_mask to DEBUG, then restore after pool destroy
-                self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+                self.log.info("Destroying pool %s", self.identifier)
                 self.dmg.pool_destroy(pool=self.identifier, force=force, recursive=recursive)
-                self.dmg.server_set_logmasks(raise_exception=False)
+
+                if set_masks:
+                    self.log.info("Restoring engines log_mask after destroying pool %s",
+                                  self.identifier)
+                    self.dmg.server_set_logmasks(raise_exception=False)
 
                 status = True
 
