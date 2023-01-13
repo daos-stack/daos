@@ -41,8 +41,6 @@ int crt_req_timeout_track(struct crt_rpc_priv *rpc_priv);
 void crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv);
 void crt_req_force_timeout(struct crt_rpc_priv *rpc_priv);
 
-void crt_trigger_hlc_error_cb(void);
-
 /** some simple helper functions */
 
 static inline bool
@@ -67,5 +65,12 @@ crt_register_proto_fi(crt_endpoint_t *ep);
 
 int
 crt_register_proto_ctl(crt_endpoint_t *ep);
+
+void
+crt_trigger_hlc_error_cb(void);
+
+void
+crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+		      enum crt_event_type type);
 
 #endif /* __CRT_INTERNAL_FNS_H__ */

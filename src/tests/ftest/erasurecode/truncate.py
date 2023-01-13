@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -35,7 +35,7 @@ class Ecodtruncate(FioBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_fio,ec_posix
-        :avocado: tags=ec_truncate
+        :avocado: tags=ec_truncate,test_ec_truncate
         """
         truncate_size = int(self.params.get("truncate_size", '/run/fio/*'))
         fname = self.params.get("names", '/run/fio/*')

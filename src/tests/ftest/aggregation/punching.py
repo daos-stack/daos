@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,11 +28,10 @@ class AggregationPunching(MdtestBase):
             Enable the aggregation run and verify the space is reclaimed.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=aggregation,mdtest,mdtest
-        :avocado: tags=aggregatepunching
+        :avocado: tags=AggregationPunching,aggregatepunching,test_aggregation_punching
         """
-
         if self.pool is None:
             self.add_pool(connect=False)
         self.pool.connect()

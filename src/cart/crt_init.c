@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,8 +72,7 @@ mem_pin_workaround(void)
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-		       errno, strerror(errno));
+		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
@@ -101,6 +100,9 @@ exit:
 	return;
 }
 
+/* Value based on default daos runs with 16 targets + 2 service contexts */
+#define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
+
 static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
@@ -117,6 +119,20 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
 	if (rc != 0)
 		return rc;
+
+	/* Set max number of contexts. Defaults to the number of cores */
+	ctx_num = 0;
+	d_getenv_int("CRT_CTX_NUM", &ctx_num);
+	max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+
+	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
+		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+
+	/* To be able to run on VMs */
+	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
+		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
+
+	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
@@ -203,8 +219,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n", start_rpcid,
+		crt_gdata.cg_num_cores);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -471,9 +489,9 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	int	rc = 0;
 
 	/* rxm and verbs providers only works with regular EP */
-	if ((prov == CRT_PROV_OFI_VERBS_RXM ||
-	     prov == CRT_PROV_OFI_TCP_RXM) &&
-	    crt_provider_is_sep(prov, primary)) {
+	if (prov != CRT_PROV_OFI_PSM2 &&
+	    prov != CRT_PROV_OFI_SOCKETS &&
+	    crt_provider_is_sep(primary, prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
 		crt_provider_set_sep(prov, primary, false);

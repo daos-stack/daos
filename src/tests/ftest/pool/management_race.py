@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -92,7 +92,7 @@ class PoolManagementRace(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=pool,boundary_test
-        :avocado: tags=pool_mgmt_race
+        :avocado: tags=pool_mgmt_race,test_pool_management_race
         Args:
         """
 

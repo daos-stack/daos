@@ -1,8 +1,8 @@
 #!/usr/bin/groovy
-/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral
-   groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName
-*/
-/* Copyright 2019-2022 Intel Corporation
+/* groovylint-disable-next-line LineLength */
+/* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
+/* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -17,6 +17,7 @@
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
 
+/* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
 void job_status_write() {
@@ -25,15 +26,16 @@ void job_status_write() {
     }
     String jobName = env.JOB_NAME.replace('/', '_')
     jobName += '_' + env.BUILD_NUMBER
-    String fileName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName
+    String dirName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName + '/'
 
     String job_status_text = writeYaml data: job_status_internal,
                                        returnText: true
 
     // Need to use shell script for creating files that are not
     // in the workspace.
-    sh label: "Write jenkins_job_status ${fileName}",
-       script: "echo \"${job_status_text}\" >> ${fileName}"
+    sh label: "Write jenkins_job_status ${dirName}jenkins_result",
+       script: """mkdir -p ${dirName}
+                  echo "${job_status_text}" >> ${dirName}jenkins_result"""
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired
@@ -65,9 +67,9 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('feature/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
-   currentBuild.result = 'SUCCESS'
-   return
-     }
+    currentBuild.result = 'SUCCESS'
+    return
+}
 
 // The docker agent setup and the provisionNodes step need to know the
 // UID that the build agent is running under.
@@ -79,6 +81,29 @@ Integer getuid() {
                         returnStdout: true).trim()
     }
     return cached_uid
+}
+
+void fixup_rpmlintrc() {
+    if (env.SCONS_FAULTS_ARGS != 'BUILD_TYPE=dev') {
+        return
+    }
+
+    List go_bins = ['/usr/bin/dmg',
+                    '/usr/bin/daos',
+                    '/usr/bin/daos_agent',
+                    '/usr/bin/hello_drpc',
+                    '/usr/bin/daos_firmware',
+                    '/usr/bin/daos_admin',
+                    '/usr/bin/daos_server']
+
+    String content = readFile(file: 'utils/rpms/daos.rpmlintrc') + '\n\n' +
+                     '# https://daosio.atlassian.net/browse/DAOS-11534\n'
+
+    go_bins.each { bin ->
+        content += 'addFilter("W: position-independent-executable-suggested ' + bin + '")\n'
+    }
+
+    writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
 pipeline {
@@ -129,10 +154,10 @@ pipeline {
                             'parameter.')
         string(name: 'TestProvider',
                defaultValue: '',
-               description: 'Test-provider to use for this run.  Specifies the default provider ' +
-                            'to use the daos_server config file when running functional tests' +
-                            '(the launch.py --provider argument;  i.e. "ucx+dc_x", "ofi+verbs", '+
-                            '"ofi+tcp")')
+               description: 'Test-provider to use for the non-Provider Functional Hardware test ' +
+                            'stages.  Specifies the default provider to use the daos_server ' +
+                            'config file when running functional tests (the launch.py ' +
+                            '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
                      description: 'Only build RPM and DEB packages, Skip unit tests.')
@@ -197,24 +222,36 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+        booleanParam(name: 'CI_medium-ucx-provider_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
-        string(name: 'CI_FUNCTIONAL_VM9_LABEL',
+        string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
                description: 'Label to use for 9 VM functional tests')
         string(name: 'CI_NLT_1_LABEL',
                defaultValue: 'ci_nlt_1',
                description: 'Label to use for NLT tests')
-        string(name: 'CI_NVME_5_LABEL',
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node NVMe tests')
-        string(name: 'CI_NVME_9_LABEL',
+               description: 'Label to use for the Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
+               defaultValue: 'ci_ofed5',
+               description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
+        string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node NVMe tests')
+               description: 'Label to use for 9 node Functional Hardware Large tests')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -376,8 +413,8 @@ pipeline {
                 } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {
@@ -432,7 +469,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -449,7 +487,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15') {
+                stage('Build RPM on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -468,7 +506,8 @@ pipeline {
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
                         }
                         unstable {
                             buildRpmPost condition: 'unstable'
@@ -603,7 +642,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.4 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -648,8 +687,8 @@ pipeline {
             parallel {
                 stage('Unit Test on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -669,8 +708,8 @@ pipeline {
                 }
                 stage('NLT on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label params.CI_NLT_1_LABEL
@@ -704,8 +743,8 @@ pipeline {
                 }
                 stage('Unit Test Bullseye on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -732,8 +771,8 @@ pipeline {
                 } // stage('Unit test Bullseye on EL 8')
                 stage('Unit Test with memcheck on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
@@ -788,7 +827,7 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -802,13 +841,13 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                stage('Functional on Leap 15') {
+                stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -821,14 +860,14 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15')
+                } // stage('Functional on Leap 15.4')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label params.CI_FUNCTIONAL_VM9_LABEL
+                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -878,7 +917,7 @@ pipeline {
                         }
                     }
                 } // stage('Scan EL 8 RPMs')
-                stage('Scan Leap 15 RPMs') {
+                stage('Scan Leap 15.4 RPMs') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -913,7 +952,7 @@ pipeline {
                                script: '! grep "<error " maldetect_leap15.xml'
                         }
                     }
-                } // stage('Scan Leap 15 RPMs')
+                } // stage('Scan Leap 15.4 RPMs')
                 stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
@@ -997,7 +1036,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.CI_NVME_5_LABEL
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1011,6 +1050,48 @@ pipeline {
                         }
                     }
                 } // stage('Functional_Hardware_Medium')
+                stage('Functional Hardware Medium Verbs Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium Verbs Provider')
+                stage('Functional Hardware Medium UCX Provider') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        // 4 node cluster with 2 IB/node + 1 test control node
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional_Hardware_Medium UCX Provider')
                 stage('Functional Hardware Large') {
                     when {
                         beforeAgent true
@@ -1018,7 +1099,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_9_LABEL
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
@@ -1038,8 +1119,8 @@ pipeline {
             parallel {
                 stage('Bullseye Report on EL 8') {
                     when {
-                      beforeAgent true
-                      expression { !skipStage() }
+                        beforeAgent true
+                        expression { !skipStage() }
                     }
                     agent {
                         dockerfile {

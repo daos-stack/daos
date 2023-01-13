@@ -25,6 +25,7 @@ from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
+from run_utils import run_remote
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -138,6 +139,30 @@ class DaosServerManager(SubprocessManager):
         # defined in the self.manager.job.yaml object.
         self._external_yaml_data = None
 
+        # Flag to determine if the server config file and certificates have already been copied to
+        # the server hosts.  These files must be in place before issue daos_server commands.
+        self._files_prepared = False
+
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: value["host"] for rank, value in self._expected_states.items()}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -182,6 +207,24 @@ class DaosServerManager(SubprocessManager):
             hosts = self._hosts
         self.dmg.hostlist = hosts
 
+    def _prepare_server_files(self, override=False):
+        """Distribute the server config file and certificates to all server hosts.
+
+        Args:
+            override (bool, optional): force the distribution of the files even if they have already
+                been distributed. Defaults to False.
+        """
+        if not self._files_prepared or override:
+            # Create the daos_server yaml file
+            self.manager.job.temporary_file_hosts = self._hosts.copy()
+            self.manager.job.create_yaml_file(self._external_yaml_data)
+
+            # Copy certificates
+            self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
+            self._prepare_dmg_certificates()
+
+            self._files_prepared = True
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
@@ -193,13 +236,8 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Preparing to start daos_server on %s with %s",
             self._hosts, self.manager.command)
 
-        # Create the daos_server yaml file
-        self.manager.job.temporary_file_hosts = self._hosts.copy()
-        self.manager.job.create_yaml_file(self._external_yaml_data)
-
-        # Copy certificates
-        self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
-        self._prepare_dmg_certificates()
+        # Ensure the server config file and certificates exist on the server hosts
+        self._prepare_server_files()
 
         # Prepare dmg for running storage format on all server hosts
         self._prepare_dmg_hostlist(self._hosts)
@@ -286,13 +324,11 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error preparing the storage
 
         """
+        self._prepare_server_files()
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.target_user.value = user
-        cmd.sub_command_class.sub_command_class.force.value = True
 
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
@@ -300,10 +336,27 @@ class DaosServerManager(SubprocessManager):
         if using_nvme is None:
             using_nvme = self.manager.job.using_nvme
 
-        if using_dcpm and not using_nvme:
-            cmd.sub_command_class.sub_command_class.scm_only.value = True
-        elif not using_dcpm and using_nvme:
-            cmd.sub_command_class.sub_command_class.nvme_only.value = True
+        if using_dcpm:
+            # Prepare SCM storage
+            cmd.set_sub_command("scm")
+            cmd.sub_command_class.set_sub_command("prepare")
+            cmd.sub_command_class.sub_command_class.target_user.value = user
+            result = run_remote(
+                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+            if not result.passed:
+                # Add some debug due to the failure
+                run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
+                run_remote(self.log, self._hosts, "ndctl list")
+                raise ServerFailed("Error preparing dcpm storage")
+        if using_nvme:
+            # Prepare NVMe storage
+            cmd.set_sub_command("nvme")
+            cmd.sub_command_class.set_sub_command("prepare")
+            cmd.sub_command_class.sub_command_class.target_user.value = user
+            result = run_remote(
+                self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+            if not result.passed:
+                raise ServerFailed("Error preparing nvme storage")
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         results = run_pcmd(
@@ -442,18 +495,17 @@ class DaosServerManager(SubprocessManager):
             ServerFailed: if there was an error resetting the storage
 
         """
+        self._prepare_server_files()
+
         cmd = DaosServerCommand(self.manager.job.command_path)
         cmd.sudo = False
         cmd.debug.value = False
-        cmd.set_sub_command("storage")
-        cmd.sub_command_class.set_sub_command("prepare")
-        cmd.sub_command_class.sub_command_class.nvme_only.value = True
-        cmd.sub_command_class.sub_command_class.reset.value = True
-        cmd.sub_command_class.sub_command_class.force.value = True
+        cmd.set_sub_command("nvme")
+        cmd.sub_command_class.set_sub_command("reset")
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
-        if len(result) > 1 or 0 not in result:
+        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
     def set_scm_mount_ownership(self, user=None, verbose=False):
@@ -845,7 +897,7 @@ class DaosServerManager(SubprocessManager):
             host = self._expected_states[rank]["host"]
         return host
 
-    def update_config_file_from_file(self, generated_yaml, storage_class=None):
+    def update_config_file_from_file(self, generated_yaml):
         """Update config file and object.
 
         Use the specified data to generate and distribute the server configuration to the hosts.
@@ -855,8 +907,6 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             generated_yaml (YAMLObject): New server config data.
-            storage_class (list, optional): if set only include storage classes identified in the
-                list. Defaults to None.
         """
         # Use the specified yaml data to create the server yaml file and copy it all the hosts
         self._external_yaml_data = generated_yaml
@@ -865,7 +915,7 @@ class DaosServerManager(SubprocessManager):
         # disks, etc. This clearing step is built into the server start steps. It'll look at the
         # engine_params of the server_manager and clear the SCM set there, so we need to overwrite
         # it before starting to the values from the generated config.
-        self.manager.job.yaml.override_params(generated_yaml, storage_class)
+        self.manager.job.yaml.override_params(generated_yaml)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.
