@@ -9,13 +9,42 @@ import traceback
 import uuid
 
 from avocado.core.exceptions import TestFail
+from avocado.utils import process
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
+from general_utils import run_command
+import time
 
+def dummy_run_ior_loop(manager, uuids, tmpdir_base):
+    """IOR run for each UUID provided.
+
+    Args:
+        manager (str): mpi job manager command
+        uuids (list): list of container UUIDs
+        tmpdir_base (str): base directory for the mpi orte_tmpdir_base mca parameter
+
+    Returns:
+        list: a list of CmdResults from each ior command run
+
+    """
+    results = []
+
+    for cont_uuid in enumerate(uuids):
+        manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
+
+        # Create a unique temporary directory for the the manager command
+        tmp_dir = mkdtemp(dir=tmpdir_base)
+        manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
+
+        results.append(process.CmdResult(exit_status=0))
+
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return results
 
 def run_ior_loop(manager, uuids, tmpdir_base):
     """IOR run for each UUID provided.
@@ -35,19 +64,35 @@ def run_ior_loop(manager, uuids, tmpdir_base):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
 
         # Create a unique temporary directory for the the manager command
+        t0 = time.time()
         tmp_dir = mkdtemp(dir=tmpdir_base)
+        t1 = time.time()
         manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
+        t2 = time.time()
+
+        mkdtemp_time = t1 - t0
+        param_upd_time = t2 - t1
 
         try:
             results.append(manager.run())
+            t3 = time.time()
         except CommandFailure as error:
+            t3 = time.time()
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
                     ior_mode, index, len(uuids), cont_uuid, error))
         finally:
+            ior_cmd_time = t3 - t2
             # Remove the unique temporary directory and its contents to avoid conflicts
+            t4 = time.time()
             shutil.rmtree(tmp_dir, ignore_errors=True)
+            t5 = time.time()
+            rmtree_time = t5 - t4
+            results.append("mkdtemp_time = {}".format(mkdtemp_time))
+            results.append("param_upd_time = {}".format(param_upd_time))
+            results.append("ior_cmd_time = {}".format(ior_cmd_time))
+            results.append("rmtree_time = {}".format(rmtree_time))
 
     if errors:
         raise CommandFailure(
@@ -374,6 +419,10 @@ class ObjectMetadata(TestWithServers):
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
+        run_command(command="ulimit -a")
+        #run_command(command="/usr/lib64/openmpi/bin/orterun --version")
+        run_command(command="python3 --version")
+
         list_of_uuid_lists = [
             [str(uuid.uuid4()) for _ in range(files_per_thread)]
             for _ in range(total_ior_threads)]
@@ -393,8 +442,12 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
+                #self.ior_managers.append(
+                #    get_job_manager(self, "Orterun", ior_cmd, mpi_type="openmpi"))
                 self.ior_managers.append(
-                    get_job_manager(self, "Orterun", ior_cmd, mpi_type="openmpi"))
+                    get_job_manager(self, "Mpirun", ior_cmd, mpi_type="openmpi"))
+                #self.ior_managers.append(
+                #    get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich"))
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
@@ -405,6 +458,8 @@ class ObjectMetadata(TestWithServers):
                 thread_manager.add(
                     manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index],
                     tmpdir_base=self.test_dir)
+                #thread_manager.add(
+                #    manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index])
                 self.log.info(
                     "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])
@@ -412,6 +467,7 @@ class ObjectMetadata(TestWithServers):
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
             failed_thread_count = thread_manager.check_run()
+            self.log.info("Done %d IOR %s threads", thread_manager.qty, operation)
             if failed_thread_count > 0:
                 msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
                 self.d_log.error(msg)
