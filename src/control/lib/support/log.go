@@ -27,6 +27,28 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
+const (
+	CopyServerConfigEnum int32 = iota
+	CollectSystemCmdEnum
+	CollectServerLogEnum
+	CollectCustomLogsEnum
+	CollectDaosServerCmdEnum
+	CollectDmgCmdEnum
+	CollectDmgDiskInfoEnum
+	CollectAgentCmdEnum
+	CollectClientLogEnum
+	CollectAgentLogEnum
+	CopyAgentConfigEnum
+	RsyncLogEnum
+)
+
+type CollectLogSubCmd struct {
+	Stop         bool   `short:"s" long:"stop" description:"Stop the collectlog command on very first error"`
+	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
+	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
+	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
+}
+
 // Folder names to copy logs and configs
 const (
 	dmgSystemLogFolder = "DmgSystemLog"     // Copy the dmg command output for DAOS system
@@ -96,7 +118,7 @@ type Params struct {
 	TargetFolder string
 	CustomLogs   string
 	JsonOutput   bool
-	LogFunction  string
+	LogFunction  int32
 	LogCmd       string
 }
 
@@ -324,26 +346,24 @@ func rsyncLog(log logging.Logger, opts ...Params) error {
 		return err
 	}
 
-	args := []string{
-		"-c",
-		"\"rsync",
-		"-avvv",
+	cmd := strings.Join([]string{
+		"rsync",
+		"-av",
 		"--blocking-io",
+		"--remove-source-files",
 		targetLocation,
-		opts[0].LogCmd + ":" + opts[0].TargetFolder,
-		"\"",
-	}
+		opts[0].LogCmd + ":" + opts[0].TargetFolder}, " ")
 
-	rsyncCmd := exec.Command("sh", args...)
+	rsyncCmd := exec.Command("sh", "-c", cmd)
 	var stdout, stderr bytes.Buffer
 	rsyncCmd.Stdout = &stdout
 	rsyncCmd.Stderr = &stderr
 	err = rsyncCmd.Run()
 	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
 	if err != nil {
-		log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
 		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
 	}
+	log.Infof("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
 
 	return nil
 }
@@ -667,29 +687,29 @@ func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
 // Common Entry/Exit point function.
 func CollectSupportLog(log logging.Logger, opts ...Params) error {
 	switch opts[0].LogFunction {
-	case "CopyServerConfig":
+	case CopyServerConfigEnum:
 		return CopyServerConfig(log, opts...)
-	case "CollectSystemCmd":
+	case CollectSystemCmdEnum:
 		return CollectCmdOutput(systemInfo, log, opts...)
-	case "CollectServerLog":
+	case CollectServerLogEnum:
 		return CollectServerLog(log, opts...)
-	case "CollectCustomLogs":
+	case CollectCustomLogsEnum:
 		return CollectCustomLogs(log, opts...)
-	case "CollectDaosServerCmd":
+	case CollectDaosServerCmdEnum:
 		return CollectDaosServerCmd(log, opts...)
-	case "CollectDmgCmd":
+	case CollectDmgCmdEnum:
 		return CollectDmgCmd(log, opts...)
-	case "CollectDmgDiskInfo":
+	case CollectDmgDiskInfoEnum:
 		return CollectDmgDiskInfo(log, opts...)
-	case "CollectAgentCmd":
+	case CollectAgentCmdEnum:
 		return CollectCmdOutput(daosAgentCmdInfo, log, opts...)
-	case "CollectClientLog":
+	case CollectClientLogEnum:
 		return CollectClientLog(log, opts...)
-	case "CollectAgentLog":
+	case CollectAgentLogEnum:
 		return CollectAgentLog(log, opts...)
-	case "CopyAgentConfig":
+	case CopyAgentConfigEnum:
 		return CopyAgentConfig(log, opts...)
-	case "rsyncLog":
+	case RsyncLogEnum:
 		return rsyncLog(log, opts...)
 	}
 

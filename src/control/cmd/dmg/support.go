@@ -31,19 +31,16 @@ type collectLogCmd struct {
 	ctlInvokerCmd
 	hostListCmd
 	jsonOutputCmd
-	Stop         bool   `short:"s" long:"stop" description:"Stop the collectlog command on very first error"`
-	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
-	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
+	support.CollectLogSubCmd
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Default log collection set
-	var LogCollection = map[string][]string{
-		"CopyServerConfig":     {""},
-		"CollectSystemCmd":     support.SystemCmd,
-		"CollectServerLog":     support.ServerLog,
-		"CollectDaosServerCmd": support.DaosServerCmd,
+	var LogCollection = map[int32][]string{
+		support.CopyServerConfigEnum:     {""},
+		support.CollectSystemCmdEnum:     support.SystemCmd,
+		support.CollectServerLogEnum:     support.ServerLog,
+		support.CollectDaosServerCmdEnum: support.DaosServerCmd,
 	}
 
 	// Default 7 set of support collection steps to show in progress bar
@@ -51,20 +48,20 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	// Add custom log location
 	if cmd.CustomLogs != "" {
-		LogCollection["CollectCustomLogs"] = []string{""}
-		progress.Total = progress.Total + 1
+		LogCollection[support.CollectCustomLogsEnum] = []string{""}
+		progress.Total++
 	}
 
 	// Increase progress counter for Archive if enabled
-	if cmd.Archive == true {
-		progress.Total = progress.Total + 1
+	if cmd.Archive {
+		progress.Total++
 	}
 	progress.Steps = 100 / progress.Total
 
 	// Check if DAOS Management Service is up and running
 	params := support.Params{}
 	params.Config = cmd.cfgCmd.config.Path
-	params.LogFunction = "CollectDmgCmd"
+	params.LogFunction = support.CollectDmgCmdEnum
 	params.LogCmd = "dmg system query"
 
 	err := support.CollectSupportLog(cmd.Logger, params)
@@ -84,7 +81,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Copy log/config file to TargetFolder on all servers
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
-			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
+			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logfunc, logcmd)
 			ctx := context.Background()
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
@@ -94,14 +91,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			}
 			req.SetHostList(cmd.hostlist)
 			resp, err := control.CollectLog(ctx, cmd.ctlInvoker, req)
-			if err != nil && cmd.Stop == true {
+			if err != nil && cmd.Stop {
 				return err
 			}
 			if len(resp.GetHostErrors()) > 0 {
 				var bld strings.Builder
-				_ = pretty.PrintResponseErrors(resp, &bld)
+				if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+					return err
+				}
 				cmd.Info(bld.String())
-				if cmd.Stop == true {
+				if cmd.Stop {
 					return resp.Errors()
 				}
 			}
@@ -113,28 +112,30 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	hostName, _ := support.GetHostName()
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		LogFunction:  "rsyncLog",
+		LogFunction:  support.RsyncLogEnum,
 		LogCmd:       hostName,
 	}
 	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
 	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
-	if err != nil && cmd.Stop == true {
+	if err != nil && cmd.Stop {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
 		var bld strings.Builder
-		_ = pretty.PrintResponseErrors(resp, &bld)
+		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+			return err
+		}
 		cmd.Info(bld.String())
-		if cmd.Stop == true {
+		if cmd.Stop {
 			return resp.Errors()
 		}
 	}
 	fmt.Printf(support.PrintProgress(&progress))
 
 	// Collect dmg command output on Admin node
-	var DmgInfoCollection = map[string][]string{
-		"CollectDmgCmd":      support.DmgCmd,
-		"CollectDmgDiskInfo": {""},
+	var DmgInfoCollection = map[int32][]string{
+		support.CollectDmgCmdEnum:      support.DmgCmd,
+		support.CollectDmgDiskInfoEnum: {""},
 	}
 
 	params = support.Params{}
@@ -151,7 +152,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop == true {
+				if cmd.Stop {
 					return err
 				}
 			}
@@ -160,7 +161,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Archive the logs
-	if cmd.Archive == true {
+	if cmd.Archive {
 		cmd.Infof("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {

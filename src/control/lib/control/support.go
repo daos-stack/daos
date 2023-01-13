@@ -21,7 +21,7 @@ type (
 		TargetFolder string
 		CustomLogs   string
 		JsonOutput   bool
-		LogFunction  string
+		LogFunction  int32
 		LogCmd       string
 	}
 

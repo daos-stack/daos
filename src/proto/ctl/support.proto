@@ -13,7 +13,7 @@ message CollectLogReq {
   string TargetFolder = 1;
   string CustomLogs = 2;
   bool JsonOutput = 3;
-  string LogFunction = 4;
+  int32 LogFunction = 4;
   string LogCmd = 5;
 }
 

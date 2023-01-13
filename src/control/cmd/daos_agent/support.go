@@ -22,33 +22,30 @@ type SupportCmd struct {
 type collectLogCmd struct {
 	configCmd
 	cmdutil.LogCmd
-	ConfigPath   string `short:"o" long:"config-path" required:"1" description:"Path to agent configuration file"`
-	Stop         bool   `short:"s" long:"Stop" description:"Stop the collectlog command on very first error"`
-	TargetFolder string `short:"t" long:"loglocation" description:"Folder location where log is going to be copied"`
-	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
+	ConfigPath string `short:"o" long:"config-path" required:"1" description:"Path to agent configuration file"`
+	support.CollectLogSubCmd
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	var LogCollection = map[string][]string{
-		"CopyAgentConfig":  {""},
-		"CollectAgentLog":  {""},
-		"CollectAgentCmd":  support.AgentCmd,
-		"CollectClientLog": {""},
-		"CollectSystemCmd": support.SystemCmd,
+	var LogCollection = map[int32][]string{
+		support.CopyAgentConfigEnum:  {""},
+		support.CollectAgentLogEnum:  {""},
+		support.CollectAgentCmdEnum:  support.AgentCmd,
+		support.CollectClientLogEnum: {""},
+		support.CollectSystemCmdEnum: support.SystemCmd,
 	}
 
 	// Default 3 steps of log/conf collection.
 	progress := support.ProgressBar{1, 5, 0, false}
 
-	if cmd.Archive == true {
-		progress.Total = progress.Total + 1
+	if cmd.Archive {
+		progress.Total++
 	}
 
 	// Copy the custom log location
 	if cmd.CustomLogs != "" {
-		LogCollection["CollectCustomLogs"] = []string{""}
-		progress.Total = progress.Total + 1
+		LogCollection[support.CollectCustomLogsEnum] = []string{""}
+		progress.Total++
 	}
 
 	if cmd.TargetFolder == "" {
@@ -63,14 +60,14 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.ConfigPath
 	for logfunc, logcmdset := range LogCollection {
 		for _, logcmd := range logcmdset {
-			cmd.Debugf("Log Function %s -- Log Collect Cmd %s ", logfunc, logcmd)
+			cmd.Debugf("Log Function Enum = %s -- Log Collect Cmd %s ", logfunc, logcmd)
 			params.LogFunction = logfunc
 			params.LogCmd = logcmd
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop == true {
+				if cmd.Stop {
 					return err
 				}
 			}
@@ -78,7 +75,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(support.PrintProgress(&progress))
 	}
 
-	if cmd.Archive == true {
+	if cmd.Archive {
 		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
