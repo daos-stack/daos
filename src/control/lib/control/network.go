@@ -214,13 +214,14 @@ type (
 	ClientNetworkHint struct {
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider        string `json:"provider"`
-		Interface       string `json:"interface"`
-		Domain          string `json:"domain"`
-		CrtCtxShareAddr uint32 `json:"crt_ctx_share_addr"`
-		CrtTimeout      uint32 `json:"crt_timeout"`
-		NetDevClass     uint32 `json:"net_dev_class"`
-		SrvSrxSet       int32  `json:"srv_srx_set"`
+		Provider        string   `json:"provider"`
+		Interface       string   `json:"interface"`
+		Domain          string   `json:"domain"`
+		CrtCtxShareAddr uint32   `json:"crt_ctx_share_addr"`
+		CrtTimeout      uint32   `json:"crt_timeout"`
+		NetDevClass     uint32   `json:"net_dev_class"`
+		SrvSrxSet       int32    `json:"srv_srx_set"`
+		EnvVars         []string `json:"env_vars"`
 	}
 
 	GetAttachInfoResp struct {

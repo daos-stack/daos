@@ -746,6 +746,8 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	init_info.na_init_info.auth_key = getenv("CRT_AUTH_KEY");
+
 	if (crt_provider_is_block_mode(provider))
 		init_info.na_init_info.progress_mode = 0;
 	else
