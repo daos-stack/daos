@@ -27,7 +27,7 @@ from ClusterShell.NodeSet import NodeSet
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing
+from process_core_files import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -35,7 +35,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, RunException                     # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
@@ -60,24 +60,6 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-YAML_KEYS = OrderedDict(
-    [
-        ("test_servers", "test_servers"),
-        ("test_clients", "test_clients"),
-        ("bdev_list", "nvme"),
-        ("timeout", "timeout_multiplier"),
-        ("timeouts", "timeout_multiplier"),
-        ("clush_timeout", "timeout_multiplier"),
-        ("ior_timeout", "timeout_multiplier"),
-        ("job_manager_timeout", "timeout_multiplier"),
-        ("pattern_timeout", "timeout_multiplier"),
-        ("pool_query_timeout", "timeout_multiplier"),
-        ("rebuild_timeout", "timeout_multiplier"),
-        ("srv_timeout", "timeout_multiplier"),
-        ("storage_prepare_timeout", "timeout_multiplier"),
-        ("storage_format_timeout", "timeout_multiplier"),
-    ]
-)
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -90,28 +72,6 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
-
-
-def find_command(source, pattern, depth, other=None):
-    """Get the find command.
-
-    Args:
-        source (str): where the files are currently located
-        pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
-        other (object, optional): other commands, as a list or str, to include at the end of the
-            base find command. Defaults to None.
-
-    Returns:
-        str: the find command
-
-    """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
-    if isinstance(other, list):
-        command.extend(other)
-    elif isinstance(other, str):
-        command.append(other)
-    return " ".join(command)
 
 
 class AvocadoInfo():
@@ -230,7 +190,7 @@ class AvocadoInfo():
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
             try:
-                result = run_local(logger, ["avocado", "-v"], check=True)
+                result = run_local(logger, "avocado -v", check=True)
             except RunException as error:
                 message = "Error obtaining avocado version after failed avocado.core.version import"
                 raise LaunchException(message) from error
@@ -280,7 +240,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            result = run_local(logger, ["avocado", "config"], check=True)
+            result = run_local(logger, "avocado config", check=True)
             try:
                 return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
             except IndexError:
@@ -1382,7 +1342,7 @@ class Launch():
 
         # Find all the test files that contain tests matching the tags
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, command, check=True)
+        output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
@@ -1398,7 +1358,7 @@ class Launch():
         """
         logger.debug("Checking for fault injection enablement via 'fault_status':")
         try:
-            run_local(logger, ["fault_status"], check=True)
+            run_local(logger, "fault_status", check=True)
             logger.debug("  Fault injection is enabled")
             return True
         except RunException:
@@ -1447,14 +1407,16 @@ class Launch():
         #
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
-        tier_type = "pmem"
+        tier_0_type = "pmem"
+        scm_size = 16
+        max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
             if args.nvme.startswith("auto"):
                 # Separate any optional filter from the key
                 nvme_args = args.nvme.split(":")
                 kwargs["device_filter"] = nvme_args[1] if len(nvme_args) > 1 else None
-            logger.info("-" * 80)
+            logger.debug("-" * 80)
             storage_info.scan(**kwargs)
 
             # Determine which storage device types to use when replacing keywords in the test yaml
@@ -1464,6 +1426,7 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+        self.details["storage"] = storage_info.devices
 
         updater = YamlUpdater(
             logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
@@ -1476,7 +1439,7 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_type)
+        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1493,18 +1456,20 @@ class Launch():
             if test.extra_yaml:
                 command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, command)
+            run_local(logger, " ".join(command))
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_type):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
             storage_info (StorageInfo): the collected storage information from the hosts
             yaml_dir (str): path n which to create the extra storage yaml files
-            tier_type (str): storage type to define; 'pmem' or 'md_on_ssd'
+            tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
+            scm_size (int): scm_size to use with ram storage tiers
+            max_nvme_tiers (int): maximum number of NVMe tiers to generate
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1520,8 +1485,9 @@ class Launch():
                 engines = info["engines_per_host"]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
-                    logger.info("-" * 80)
-                    storage_info.write_storage_yaml(yaml_file, engines, tier_type)
+                    logger.debug("-" * 80)
+                    storage_info.write_storage_yaml(
+                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
@@ -1746,7 +1712,7 @@ class Launch():
             logger.info("-" * 80)
             logger.info("Starting test repetition %s/%s", repeat, self.repeat)
 
-            for test in self.tests:
+            for index, test in enumerate(self.tests):
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
                 logger.info("-" * 80)
@@ -1768,7 +1734,7 @@ class Launch():
                 test_result.end()
 
                 # Run the test with avocado
-                return_code |= self.execute(test, repeat, sparse, fail_fast)
+                return_code |= self.execute(test, repeat, index + 1, sparse, fail_fast)
 
                 # Mark the continuation of the processing of this test
                 test_result.start()
@@ -1874,7 +1840,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, ["df", "-h", path], check=False)
+            run_local(logger, " ".join(["df", "-h", path]), check=False)
         except RunException:
             pass
 
@@ -2017,20 +1983,21 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, ["/usr/bin/rm", "-rf", certs_dir])
-            run_local(logger, [command, daos_test_log_dir])
+            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
+            run_local(logger, " ".join([command, daos_test_log_dir]))
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
             return 128
         return 0
 
-    def execute(self, test, repeat, sparse, fail_fast):
+    def execute(self, test, repeat, number, sparse, fail_fast):
         """Run the specified test.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
+            number (int): the test sequence number in this repetition
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
 
@@ -2041,19 +2008,21 @@ class Launch():
         logger.debug("=" * 80)
         command = self.avocado.get_run_command(test, self.tag_filters, sparse, fail_fast)
         logger.info(
-            "Running the %s test on repeat %s/%s: %s", test, repeat, self.repeat, " ".join(command))
+            "[Test %s/%s] Running the %s test on repetition %s/%s",
+            number, len(self.tests), test, repeat, self.repeat)
         start_time = int(time.time())
 
         try:
-            return_code = run_local(logger, command, capture_output=False, check=False).returncode
+            return_code = run_local(
+                logger, " ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
-            elif return_code == 2:
+            elif return_code & 2 == 2:
                 logger.debug("At least one avocado test variant failed")
-            elif return_code == 4:
+            elif return_code & 4 == 4:
                 message = "Failed avocado commands detected"
                 self._fail_test(self.result.tests[-1], "Process", message)
-            elif return_code == 8:
+            elif return_code & 8 == 8:
                 logger.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
@@ -2085,9 +2054,10 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, ["mkdir", "-p", latest_crash_dir], check=True)
+                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
                     for crash_file in crash_files:
-                        run_local(logger, ["mv", crash_file, latest_crash_dir], check=True)
+                        run_local(
+                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
@@ -2527,7 +2497,8 @@ class Launch():
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=900)
+        result = run_remote(
+            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2640,7 +2611,7 @@ class Launch():
         command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(logger, command, check=True, timeout=timeout)
+            run_local(logger, " ".join(command), check=True, timeout=timeout)
 
         except RunException:
             message = f"Error copying remote files to {destination}"
@@ -2664,21 +2635,27 @@ class Launch():
             test_job_results (str): the location of the core files
 
         Returns:
-            int: status code: 0 = success, 256 = failure
+            int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            error_count = core_file_processing.process_core_files(test_job_results, True)
-            if error_count:
-                message = f"Errors detected processing test core files: {error_count}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 256
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+
+        except CoreFileException:
+            message = "Errors detected processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
+
+        if corefiles_processed > 0:
+            message = "One or more core files detected after test execution"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 2048
 
         return 0
 
@@ -2800,6 +2777,7 @@ class Launch():
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
+            2048: "ERROR: Core stack trace files detected!",
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
