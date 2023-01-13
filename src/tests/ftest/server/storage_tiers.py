@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,7 @@ class StorageTiers(TestWithServers):
             Verify storage tiers are correctly obtained from the test yaml file.
 
         :avocado: tags=all,pr
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=server,storage,storage_tiers
         :avocado: tags=StorageTiers,test_tiers
         """
