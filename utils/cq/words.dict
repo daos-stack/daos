@@ -416,6 +416,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
