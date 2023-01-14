@@ -173,6 +173,7 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
+                                          --fair-sched=try \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --gen-suppressions=all \
                                           --error-exitcode=42 \

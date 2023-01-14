@@ -477,7 +477,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -590,7 +590,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -616,7 +616,7 @@ pmem0         0         1.0 TB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -646,7 +646,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -684,7 +684,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -706,7 +706,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -742,7 +742,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -778,7 +778,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -817,8 +817,8 @@ pmem1         1         2.0 TB
 
 NVMe PCI     Model FW Revision Socket ID Capacity 
 --------     ----- ----------- --------- -------- 
-0000:80:00.1                   1         2.0 TB   
-0000:80:00.4                   0         2.0 TB   
+0000:01:00.0                   1         2.0 TB   
+0000:04:00.0                   0         2.0 TB   
 
 ---------
 host[2,4]
@@ -831,8 +831,8 @@ pmem1         1         2.0 TB
 
 NVMe PCI     Model FW Revision Socket ID Capacity 
 --------     ----- ----------- --------- -------- 
-0000:80:00.1                   1         2.1 TB   
-0000:80:00.4                   0         2.1 TB   
+0000:01:00.0                   1         2.1 TB   
+0000:04:00.0                   0         2.1 TB   
 
 `,
 		},

@@ -149,7 +149,7 @@ func (tc *TierConfig) WithScmMountPoint(scmPath string) *TierConfig {
 	return tc
 }
 
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
+// WithScmRamdiskSize sets the size (in GiB) of the ramdisk used
 // to emulate SCM (no effect if ScmClass is not RAM).
 func (tc *TierConfig) WithScmRamdiskSize(size uint) *TierConfig {
 	tc.Scm.RamdiskSize = size
