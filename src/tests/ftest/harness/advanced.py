@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,7 @@ from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import get_avocado_config_value
-from run_utils import run_remote, RunException
+from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
 
@@ -28,7 +28,6 @@ class HarnessAdvancedTest(TestWithServers):
         # Always start the servers for each test variant
         self.start_agents_once = False
         self.start_servers_once = False
-
 
 
     def test_pool_timeout(self):
