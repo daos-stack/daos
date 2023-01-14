@@ -50,6 +50,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -3099,7 +3100,7 @@ class Launch():
 
         return return_code
 
-    def _process_core_files(self, test_job_results):
+    def _process_core_files(self, test_job_results, test):
         """Generate a stacktrace for each core file detected.
 
         Args:
@@ -3123,11 +3124,14 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        if corefiles_processed > 0:
+        if corefiles_processed > 0 and str(test) not in self.TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
-
+        elif corefiles_processed == 0 and str(test) in self.TEST_EXPECT_CORE_FILES:
+            message = "No core files detected when expected"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 256
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
