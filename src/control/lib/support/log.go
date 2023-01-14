@@ -31,7 +31,7 @@ const (
 	CopyServerConfigEnum int32 = iota
 	CollectSystemCmdEnum
 	CollectServerLogEnum
-	CollectCustomLogsEnum
+	CollectExtraLogsDirEnum
 	CollectDaosServerCmdEnum
 	CollectDmgCmdEnum
 	CollectDmgDiskInfoEnum
@@ -43,24 +43,24 @@ const (
 )
 
 type CollectLogSubCmd struct {
-	Stop         bool   `short:"s" long:"stop" description:"Stop the collectlog command on very first error"`
+	Stop         bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
 	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
-	CustomLogs   string `short:"c" long:"custom-logs" description:"Collect the Logs from given directory"`
+	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
 }
 
 // Folder names to copy logs and configs
 const (
-	dmgSystemLogFolder = "DmgSystemLog"     // Copy the dmg command output for DAOS system
-	daosNodeLogFolder  = "DaosNodeLog"      // Copy the dmg command output specific to the storage.
-	daosAgentCmdInfo   = "DaosAgentCmdInfo" // Copy the daos_agent command output specific to the node.
-	systemInfo         = "SysInfo"          // Copy the system related information
-	serverLogs         = "ServerLogs"       // Copy the server/control and helper logs
-	clientLogs         = "ClientLogs"       // Copy the server/control and helper logs
-	daosConfig         = "ServerConfig"     // Copy the server config
-	agentConfig        = "AgentConfig"      // Copy the Agent config
-	agentLog           = "AgentLog"         // Copy the Agent log
-	customLogs         = "CustomLogs"       // Copy the Custom logs
+	dmgSystemLogs    = "DmgSystemLogs"    // Copy the dmg command output for DAOS system
+	dmgNodeLogs      = "DmgNodeLogs"      // Copy the dmg command output specific to the storage.
+	daosAgentCmdInfo = "DaosAgentCmdInfo" // Copy the daos_agent command output specific to the node.
+	genSystemInfo    = "GenSystemInfo"    // Copy the system related information
+	serverLogs       = "ServerLogs"       // Copy the server/control and helper logs
+	clientLogs       = "ClientLogs"       // Copy the server/control and helper logs
+	DaosServerConfig = "DaosServerConfig" // Copy the server config
+	agentConfig      = "AgentConfig"      // Copy the Agent config
+	agentLogs        = "AgentLogs"        // Copy the Agent log
+	extraLogs        = "ExtraLogs"        // Copy the Custom logs
 )
 
 const DmgListDeviceCmd = "dmg storage query list-devices"
@@ -106,32 +106,32 @@ var DaosServerCmd = []string{
 }
 
 type ProgressBar struct {
-	Start      int  // start int number
-	Total      int  // end int number
-	Steps      int  // Int number be increased per steps
-	JsonOutput bool // Json option to skip progress bar if it's enabled
+	Start     int  // start int number
+	Total     int  // end int number
+	Steps     int  // Int number be increased per steps
+	NoDisplay bool // Option to skip progress bar if Json output is enabled
 }
 
-type Params struct {
+type CollectLogsParams struct {
 	Config       string
 	Hostlist     string
 	TargetFolder string
-	CustomLogs   string
+	ExtraLogsDir string
 	JsonOutput   bool
 	LogFunction  int32
 	LogCmd       string
 }
 
-type copy struct {
-	Cmd     string
-	Options string
+type logCopy struct {
+	cmd    string
+	option string
 }
 
 // Print the progress bar during log collect command
 func PrintProgress(progBar *ProgressBar) string {
-	if !(progBar.JsonOutput) {
-		printString := fmt.Sprintf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
+	if !(progBar.NoDisplay) {
 		progBar.Start = progBar.Start + 1
+		printString := fmt.Sprintf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
 		return printString
 	}
 
@@ -140,7 +140,7 @@ func PrintProgress(progBar *ProgressBar) string {
 
 // Print the progress End once the log collection completed.
 func PrintProgressEnd(progBar *ProgressBar) string {
-	if !(progBar.JsonOutput) {
+	if !(progBar.NoDisplay) {
 		return fmt.Sprintf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
 	}
 
@@ -178,7 +178,7 @@ func getRunningConf(log logging.Logger) (string, error) {
 }
 
 // Get the server config, either from the running daos engine or default
-func getServerConf(log logging.Logger, opts ...Params) (string, error) {
+func getServerConf(log logging.Logger, opts ...CollectLogsParams) (string, error) {
 	cfgPath, err := getRunningConf(log)
 
 	if err != nil {
@@ -232,17 +232,17 @@ func GetHostName() (string, error) {
 }
 
 // Copy Command output to the file
-func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, error) {
+func cpOutputToFile(target string, log logging.Logger, cp ...logCopy) (string, error) {
 	// Run command and copy output to the file
-	// executing as subshell enables pipes in cmd string
-	runCmd := strings.Join([]string{cp[0].Cmd, cp[0].Options}, " ")
+	// executing as sub shell enables pipes in cmd string
+	runCmd := strings.Join([]string{cp[0].cmd, cp[0].option}, " ")
 	out, err := exec.Command("sh", "-c", runCmd).CombinedOutput()
 	if err != nil {
 		return "", errors.New(string(out))
 	}
 
 	log.Debugf("Collecting DAOS command output = %s > %s ", runCmd, target)
-	cmd := strings.ReplaceAll(cp[0].Cmd, " -", "_")
+	cmd := strings.ReplaceAll(cp[0].cmd, " -", "_")
 	cmd = strings.ReplaceAll(cmd, " ", "_")
 	if err := ioutil.WriteFile(filepath.Join(target, cmd), out, 0644); err != nil {
 		return "", errors.Wrapf(err, "failed to write %s", filepath.Join(target, cmd))
@@ -252,7 +252,7 @@ func cpOutputToFile(target string, log logging.Logger, cp ...copy) (string, erro
 }
 
 // Create the Archive of logs.
-func ArchiveLogs(log logging.Logger, opts ...Params) error {
+func ArchiveLogs(log logging.Logger, opts ...CollectLogsParams) error {
 	var buf bytes.Buffer
 	err := common.FolderCompress(opts[0].TargetFolder, &buf)
 	if err != nil {
@@ -293,7 +293,7 @@ func createHostFolder(dst string, log logging.Logger) (string, error) {
 }
 
 // Create the individual log folder on each server
-func createHostLogFolder(dst string, log logging.Logger, opts ...Params) (string, error) {
+func createHostLogFolder(dst string, log logging.Logger, opts ...CollectLogsParams) (string, error) {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
 		return "", err
@@ -340,7 +340,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 }
 
 // Rsync the logs from individual servers to Admin node
-func rsyncLog(log logging.Logger, opts ...Params) error {
+func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
 		return err
@@ -369,21 +369,21 @@ func rsyncLog(log logging.Logger, opts ...Params) error {
 }
 
 // Collect the custom log folder
-func CollectCustomLogs(log logging.Logger, opts ...Params) error {
-	log.Infof("Log will be collected from custom location %s", opts[0].CustomLogs)
+func collectExtraLogsDir(log logging.Logger, opts ...CollectLogsParams) error {
+	log.Infof("Log will be collected from custom location %s", opts[0].ExtraLogsDir)
 
 	hn, err := GetHostName()
 	if err != nil {
 		return err
 	}
 
-	customLogFolder := filepath.Join(opts[0].TargetFolder, hn, customLogs)
+	customLogFolder := filepath.Join(opts[0].TargetFolder, hn, extraLogs)
 	err = createFolder(customLogFolder, log)
 	if err != nil {
 		return err
 	}
 
-	err = common.CpDir(opts[0].CustomLogs, customLogFolder)
+	err = common.CpDir(opts[0].ExtraLogsDir, customLogFolder)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func CollectCustomLogs(log logging.Logger, opts ...Params) error {
 }
 
 // Collect the disk info using dmg command from each server.
-func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
+func collectDmgDiskInfo(log logging.Logger, opts ...CollectLogsParams) error {
 	var hostNames []string
 	var output string
 
@@ -406,10 +406,10 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 
 	for _, hostName := range hostNames {
 		// Copy all the devices information for each server
-		dmg := copy{}
-		dmg.Cmd = DmgListDeviceCmd
-		dmg.Options = strings.Join([]string{"-o", opts[0].Config, "-l", hostName}, " ")
-		targetDmgLog := filepath.Join(opts[0].TargetFolder, hostName, daosNodeLogFolder)
+		dmg := logCopy{}
+		dmg.cmd = DmgListDeviceCmd
+		dmg.option = strings.Join([]string{"-o", opts[0].Config, "-l", hostName}, " ")
+		targetDmgLog := filepath.Join(opts[0].TargetFolder, hostName, dmgNodeLogs)
 
 		// Create the Folder.
 		err := createFolder(targetDmgLog, log)
@@ -426,9 +426,9 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 		for _, v1 := range strings.Split(output, "\n") {
 			if strings.Contains(v1, "UUID") {
 				device := strings.Fields(v1)[0][5:]
-				health := copy{}
-				health.Cmd = strings.Join([]string{DmgDeviceHealthCmd, "-u", device}, " ")
-				health.Options = strings.Join([]string{"-l", hostName, "-o", opts[0].Config}, " ")
+				health := logCopy{}
+				health.cmd = strings.Join([]string{DmgDeviceHealthCmd, "-u", device}, " ")
+				health.option = strings.Join([]string{"-l", hostName, "-o", opts[0].Config}, " ")
 				_, err = cpOutputToFile(targetDmgLog, log, health)
 				if err != nil {
 					return err
@@ -441,14 +441,14 @@ func CollectDmgDiskInfo(log logging.Logger, opts ...Params) error {
 }
 
 // Run command and copy the output to file.
-func CollectCmdOutput(folderName string, log logging.Logger, opts ...Params) error {
+func collectCmdOutput(folderName string, log logging.Logger, opts ...CollectLogsParams) error {
 	nodeLocation, err := createHostLogFolder(folderName, log, opts...)
 	if err != nil {
 		return err
 	}
 
-	agent := copy{}
-	agent.Cmd = opts[0].LogCmd
+	agent := logCopy{}
+	agent.cmd = opts[0].LogCmd
 	_, err = cpOutputToFile(nodeLocation, log, agent)
 	if err != nil {
 		return err
@@ -458,7 +458,7 @@ func CollectCmdOutput(folderName string, log logging.Logger, opts ...Params) err
 }
 
 // Collect client side log
-func CollectClientLog(log logging.Logger, opts ...Params) error {
+func collectClientLog(log logging.Logger, opts ...CollectLogsParams) error {
 	clientLogFile := os.Getenv("D_LOG_FILE")
 	if clientLogFile != "" {
 		clientLogLocation, err := createHostLogFolder(clientLogs, log, opts...)
@@ -479,9 +479,9 @@ func CollectClientLog(log logging.Logger, opts ...Params) error {
 }
 
 // Collect Agent log
-func CollectAgentLog(log logging.Logger, opts ...Params) error {
+func collectAgentLog(log logging.Logger, opts ...CollectLogsParams) error {
 	// Create the individual folder on each client
-	targetAgentLog, err := createHostLogFolder(agentLog, log, opts...)
+	targetAgentLog, err := createHostLogFolder(agentLogs, log, opts...)
 	if err != nil {
 		return err
 	}
@@ -506,7 +506,7 @@ func CollectAgentLog(log logging.Logger, opts ...Params) error {
 }
 
 // Copy Agent config file.
-func CopyAgentConfig(log logging.Logger, opts ...Params) error {
+func copyAgentConfig(log logging.Logger, opts ...CollectLogsParams) error {
 	// Create the individual folder on each client
 	targetConfig, err := createHostLogFolder(agentConfig, log, opts...)
 	if err != nil {
@@ -522,19 +522,19 @@ func CopyAgentConfig(log logging.Logger, opts ...Params) error {
 }
 
 // Collect the output of all dmg command and copy into individual file.
-func CollectDmgCmd(log logging.Logger, opts ...Params) error {
-	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogFolder)
+func collectDmgCmd(log logging.Logger, opts ...CollectLogsParams) error {
+	targetDmgLog := filepath.Join(opts[0].TargetFolder, dmgSystemLogs)
 	err := createFolder(targetDmgLog, log)
 	if err != nil {
 		return err
 	}
 
-	dmg := copy{}
-	dmg.Cmd = opts[0].LogCmd
-	dmg.Options = strings.Join([]string{"-o", opts[0].Config}, " ")
+	dmg := logCopy{}
+	dmg.cmd = opts[0].LogCmd
+	dmg.option = strings.Join([]string{"-o", opts[0].Config}, " ")
 
 	if opts[0].JsonOutput {
-		dmg.Options = strings.Join([]string{dmg.Options, "-j"}, " ")
+		dmg.option = strings.Join([]string{dmg.option, "-j"}, " ")
 	}
 
 	_, err = cpOutputToFile(targetDmgLog, log, dmg)
@@ -546,14 +546,14 @@ func CollectDmgCmd(log logging.Logger, opts ...Params) error {
 }
 
 // Copy server config file.
-func CopyServerConfig(log logging.Logger, opts ...Params) error {
+func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 	cfgPath, err := getServerConf(log, opts...)
 
 	serverConfig := config.DefaultServer()
 	serverConfig.SetPath(cfgPath)
 	serverConfig.Load()
 	// Create the individual folder on each server
-	targetConfig, err := createHostLogFolder(daosConfig, log, opts...)
+	targetConfig, err := createHostLogFolder(DaosServerConfig, log, opts...)
 	if err != nil {
 		return err
 	}
@@ -575,7 +575,7 @@ func CopyServerConfig(log logging.Logger, opts ...Params) error {
 }
 
 // Collect all server side logs
-func CollectServerLog(log logging.Logger, opts ...Params) error {
+func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	var cfgPath string
 
 	if opts[0].Config != "" {
@@ -619,14 +619,14 @@ func CollectServerLog(log logging.Logger, opts ...Params) error {
 }
 
 // Collect daos metrics.
-func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Params) error {
+func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...CollectLogsParams) error {
 	engineRunState, err := checkEngineState(log)
 	if err != nil {
 		return err
 	}
 
 	if engineRunState {
-		daos := copy{}
+		daos := logCopy{}
 		var cfgPath string
 		if opts[0].Config != "" {
 			cfgPath = opts[0].Config
@@ -639,7 +639,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Par
 
 		for i := range serverConfig.Engines {
 			engineId := fmt.Sprintf("%d", i)
-			daos.Cmd = strings.Join([]string{"daos_metrics", "-S", engineId}, " ")
+			daos.cmd = strings.Join([]string{"daos_metrics", "-S", engineId}, " ")
 
 			_, err := cpOutputToFile(daosNodeLocation, log, daos)
 			if err != nil {
@@ -654,8 +654,8 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Par
 }
 
 // Collect output of system side option of daos_server command.
-func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
-	daosNodeLocation, err := createHostLogFolder(daosNodeLogFolder, log, opts...)
+func collectDaosServerCmd(log logging.Logger, opts ...CollectLogsParams) error {
+	daosNodeLocation, err := createHostLogFolder(dmgNodeLogs, log, opts...)
 	if err != nil {
 		return err
 	}
@@ -685,30 +685,30 @@ func CollectDaosServerCmd(log logging.Logger, opts ...Params) error {
 }
 
 // Common Entry/Exit point function.
-func CollectSupportLog(log logging.Logger, opts ...Params) error {
+func CollectSupportLog(log logging.Logger, opts ...CollectLogsParams) error {
 	switch opts[0].LogFunction {
 	case CopyServerConfigEnum:
-		return CopyServerConfig(log, opts...)
+		return copyServerConfig(log, opts...)
 	case CollectSystemCmdEnum:
-		return CollectCmdOutput(systemInfo, log, opts...)
+		return collectCmdOutput(genSystemInfo, log, opts...)
 	case CollectServerLogEnum:
-		return CollectServerLog(log, opts...)
-	case CollectCustomLogsEnum:
-		return CollectCustomLogs(log, opts...)
+		return collectServerLog(log, opts...)
+	case CollectExtraLogsDirEnum:
+		return collectExtraLogsDir(log, opts...)
 	case CollectDaosServerCmdEnum:
-		return CollectDaosServerCmd(log, opts...)
+		return collectDaosServerCmd(log, opts...)
 	case CollectDmgCmdEnum:
-		return CollectDmgCmd(log, opts...)
+		return collectDmgCmd(log, opts...)
 	case CollectDmgDiskInfoEnum:
-		return CollectDmgDiskInfo(log, opts...)
+		return collectDmgDiskInfo(log, opts...)
 	case CollectAgentCmdEnum:
-		return CollectCmdOutput(daosAgentCmdInfo, log, opts...)
+		return collectCmdOutput(daosAgentCmdInfo, log, opts...)
 	case CollectClientLogEnum:
-		return CollectClientLog(log, opts...)
+		return collectClientLog(log, opts...)
 	case CollectAgentLogEnum:
-		return CollectAgentLog(log, opts...)
+		return collectAgentLog(log, opts...)
 	case CopyAgentConfigEnum:
-		return CopyAgentConfig(log, opts...)
+		return copyAgentConfig(log, opts...)
 	case RsyncLogEnum:
 		return rsyncLog(log, opts...)
 	}

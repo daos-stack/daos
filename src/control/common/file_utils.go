@@ -259,7 +259,7 @@ func FindBinary(binName string) (string, error) {
 	return adjPath, nil
 }
 
-// Copy file from src to dst.
+// CpFile copies a file from src to dst.
 func CpFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -324,8 +324,7 @@ func CpDir(source string, dest string) error {
 func IsHidden(filename string) bool {
 	if filename[0:1] == "." {
 		return true
-	} else {
-		return false
 	}
+
 	return false
 }

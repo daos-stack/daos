@@ -13,15 +13,15 @@ class DmgServerSetLogmasksTest(ControlTestBase):
     :avocado: recursive
     """
 
-    def test_dmg_support_collectlog(self):
+    def test_dmg_support_collect_log(self):
         """
         JIRA ID: DAOS-10625
-        Test Description: Test that support collectlog command completes successfully.
+        Test Description: Test that support collect-log command completes successfully.
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=basic,control,dmg
         :avocado: tags=test_dmg_support_collectlog
         """        
-        result = self.dmg.support_collectlog()
+        result = self.dmg.support_collect_log()
         status = result["status"]
         self.assertEqual(status, 0, "bad return status")

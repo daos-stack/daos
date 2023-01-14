@@ -514,12 +514,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("server", "set-logmasks"),
                                      raise_exception=raise_exception, **kwargs)
 
-    def support_collectlog(self, stop=None, target=None, archive=None,
+    def support_collect_log(self, stop=None, target=None, archive=None,
                            custom_logs=None, raise_exception=None):
         """Collect logs for debug purpose.
 
         Args:
-            stop (bool, optional): Stop the collectlog command on very first error.
+            stop (bool, optional): Stop the collect-log command on very first error.
             target (str, optional): Target Folder location to copy logs
             archive (bool, optional): Archive the log/config files
             custom_logs (str, optional): Collect the Logs from given custom directory
@@ -549,7 +549,7 @@ class DmgCommand(DmgCommandBase):
             "custom_logs": custom_logs,
         }
 
-        return self._get_json_result(("support", "collectlog"),
+        return self._get_json_result(("support", "collect-log"),
                                      raise_exception=raise_exception, **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,

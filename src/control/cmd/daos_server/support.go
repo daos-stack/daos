@@ -15,7 +15,7 @@ import (
 )
 
 type SupportCmd struct {
-	CollectLog collectLogCmd `command:"collectlog" description:"Collect logs from server"`
+	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from server"`
 }
 
 // collectLogCmd is the struct representing the command to collect the Logs/config for support purpose
@@ -34,15 +34,18 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Default 4 steps of log/conf collection.
-	progress := support.ProgressBar{1, 4, 0, false}
+	progress := support.ProgressBar{
+		Total:     len(LogCollection),
+		NoDisplay: false,
+	}
 
 	if cmd.Archive {
 		progress.Total++
 	}
 
 	// Copy the custom log location
-	if cmd.CustomLogs != "" {
-		LogCollection[support.CollectCustomLogsEnum] = []string{""}
+	if cmd.ExtraLogsDir != "" {
+		LogCollection[support.CollectExtraLogsDirEnum] = []string{""}
 		progress.Total++
 	}
 
@@ -52,15 +55,15 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 
 	progress.Steps = 100 / progress.Total
-	params := support.Params{}
+	params := support.CollectLogsParams{}
 	params.Config = cmd.configPath()
 	params.TargetFolder = cmd.TargetFolder
-	params.CustomLogs = cmd.CustomLogs
-	for logfunc, logcmdset := range LogCollection {
-		for _, logcmd := range logcmdset {
-			cmd.Debugf("Log Function Enum = %s -- Log Collect Cmd %s ", logfunc, logcmd)
-			params.LogFunction = logfunc
-			params.LogCmd = logcmd
+	params.ExtraLogsDir = cmd.ExtraLogsDir
+	for logFunc, logCmdSet := range LogCollection {
+		for _, logCmd := range logCmdSet {
+			cmd.Debugf("Log Function Enum = %s -- Log Collect Cmd %s ", logFunc, logCmd)
+			params.LogFunction = logFunc
+			params.LogCmd = logCmd
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {

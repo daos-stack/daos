@@ -21,7 +21,7 @@ import (
 
 // NetCmd is the struct representing the top-level network subcommand.
 type SupportCmd struct {
-	CollectLog collectLogCmd `command:"collectlog" description:"Collect logs from servers"`
+	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from servers"`
 }
 
 // collectLogCmd is the struct representing the command to collect the logs from the servers for support purpose
@@ -37,18 +37,27 @@ type collectLogCmd struct {
 func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Default log collection set
 	var LogCollection = map[int32][]string{
-		support.CopyServerConfigEnum:     {""},
 		support.CollectSystemCmdEnum:     support.SystemCmd,
 		support.CollectServerLogEnum:     support.ServerLog,
 		support.CollectDaosServerCmdEnum: support.DaosServerCmd,
+		support.CopyServerConfigEnum:     {""},
 	}
 
-	// Default 7 set of support collection steps to show in progress bar
-	progress := support.ProgressBar{1, 7, 0, cmd.jsonOutputEnabled()}
+	// dmg command info collection set
+	var DmgInfoCollection = map[int32][]string{
+		support.CollectDmgCmdEnum:      support.DmgCmd,
+		support.CollectDmgDiskInfoEnum: {""},
+	}
+
+	// set of support collection steps to show in progress bar
+	progress := support.ProgressBar{
+		Total:     len(LogCollection) + len(DmgInfoCollection) + 1, // Extra 1 is for rsync operation.
+		NoDisplay: cmd.jsonOutputEnabled(),
+	}
 
 	// Add custom log location
-	if cmd.CustomLogs != "" {
-		LogCollection[support.CollectCustomLogsEnum] = []string{""}
+	if cmd.ExtraLogsDir != "" {
+		LogCollection[support.CollectExtraLogsDirEnum] = []string{""}
 		progress.Total++
 	}
 
@@ -59,7 +68,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	progress.Steps = 100 / progress.Total
 
 	// Check if DAOS Management Service is up and running
-	params := support.Params{}
+	params := support.CollectLogsParams{}
 	params.Config = cmd.cfgCmd.config.Path
 	params.LogFunction = support.CollectDmgCmdEnum
 	params.LogCmd = "dmg system query"
@@ -79,17 +88,18 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Copy log/config file to TargetFolder on all servers
-	for logfunc, logcmdset := range LogCollection {
-		for _, logcmd := range logcmdset {
-			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logfunc, logcmd)
+	for logFunc, logCmdSet := range LogCollection {
+		for _, logCmd := range logCmdSet {
+			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
 			ctx := context.Background()
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
-				CustomLogs:   cmd.CustomLogs,
-				LogFunction:  logfunc,
-				LogCmd:       logcmd,
+				ExtraLogsDir: cmd.ExtraLogsDir,
+				LogFunction:  logFunc,
+				LogCmd:       logCmd,
 			}
 			req.SetHostList(cmd.hostlist)
+
 			resp, err := control.CollectLog(ctx, cmd.ctlInvoker, req)
 			if err != nil && cmd.Stop {
 				return err
@@ -109,7 +119,11 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Rsync the logs from servers
-	hostName, _ := support.GetHostName()
+	hostName, err := support.GetHostName()
+	if err != nil {
+		return err
+	}
+
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
 		LogFunction:  support.RsyncLogEnum,
@@ -132,22 +146,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 	fmt.Printf(support.PrintProgress(&progress))
 
-	// Collect dmg command output on Admin node
-	var DmgInfoCollection = map[int32][]string{
-		support.CollectDmgCmdEnum:      support.DmgCmd,
-		support.CollectDmgDiskInfoEnum: {""},
-	}
-
-	params = support.Params{}
+	params = support.CollectLogsParams{}
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
-	params.CustomLogs = cmd.CustomLogs
+	params.ExtraLogsDir = cmd.ExtraLogsDir
 	params.JsonOutput = cmd.jsonOutputEnabled()
 	params.Hostlist = strings.Join(cmd.hostlist, " ")
-	for logfunc, logcmdset := range DmgInfoCollection {
-		for _, logcmd := range logcmdset {
-			params.LogFunction = logfunc
-			params.LogCmd = logcmd
+	for logFunc, logCmdSet := range DmgInfoCollection {
+		for _, logCmd := range logCmdSet {
+			params.LogFunction = logFunc
+			params.LogCmd = logCmd
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
@@ -162,7 +170,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	// Archive the logs
 	if cmd.Archive {
-		cmd.Infof("Archiving the Log Folder %s", cmd.TargetFolder)
+		cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
 		err := support.ArchiveLogs(cmd.Logger, params)
 		if err != nil {
 			return err

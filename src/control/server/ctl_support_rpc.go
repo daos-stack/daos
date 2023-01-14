@@ -17,9 +17,9 @@ import (
 func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogReq) (*ctlpb.CollectLogResp, error) {
 	c.log.Infof("Support CollectLog: Calling Log Function Enum: %d, And Cmd/Log: %s", req.LogFunction, req.LogCmd)
 
-	params := support.Params{}
+	params := support.CollectLogsParams{}
 	params.TargetFolder = req.TargetFolder
-	params.CustomLogs = req.CustomLogs
+	params.ExtraLogsDir = req.ExtraLogsDir
 	params.JsonOutput = req.JsonOutput
 	params.LogFunction = req.LogFunction
 	params.LogCmd = req.LogCmd

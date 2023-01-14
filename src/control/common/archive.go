@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 )
 
+// Archive and create the *tar.gz of the given folder.
 func FolderCompress(src string, buf io.Writer) error {
 	gzipWriter := gzip.NewWriter(buf)
 	tarWriter := tar.NewWriter(gzipWriter)

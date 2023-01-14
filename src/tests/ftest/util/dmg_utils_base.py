@@ -498,17 +498,17 @@ class DmgCommandBase(YamlCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg support sub command object."""
-            if self.sub_command.value == "collectlog":
+            if self.sub_command.value == "collect-log":
                 self.sub_command_class = self.CollectlogSubCommand()
             else:
                 self.sub_command_class = None
 
         class CollectlogSubCommand(CommandWithParameters):
-            """Defines an object for the dmg support collectlog command."""
+            """Defines an object for the dmg support collect-log command."""
 
             def __init__(self):
-                """Create a dmg support collectlog command object."""
-                super().__init__("/run/dmg/server/support/*", "collectlog")
+                """Create a dmg support collect-log command object."""
+                super().__init__("/run/dmg/server/support/*", "collect-log")
                 self.stop = FormattedParameter("{}", None)
                 self.target = FormattedParameter("{}", None)
                 self.archive = FormattedParameter("{}", None)
