@@ -27,6 +27,7 @@ import (
 const (
 	hugePageDir         = "/dev/hugepages"
 	spdkHugepagePattern = `spdk_pid([0-9]+)map`
+	defaultAioFileMode  = 0600
 )
 
 type (
@@ -434,12 +435,18 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 		resp.DeviceResponses[path] = devResp
 		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
 			devResp.Error = FaultFormatError(path, err)
+			os.Remove(path)
 			continue
 		}
 		if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
 			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
 				"failed to set ownership of %q to %d.%d", path,
 				req.OwnerUID, req.OwnerGID))
+		}
+		if err := os.Chmod(path, defaultAioFileMode); err != nil {
+			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
+				"failed to set file mode of %q to %s", path,
+				os.FileMode(defaultAioFileMode)))
 		}
 	}
 
