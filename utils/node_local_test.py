@@ -35,7 +35,6 @@ import junit_xml
 import tabulate
 import yaml
 
-
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
@@ -473,10 +472,7 @@ class DaosCont():
 
     def __init__(self, cont_uuid, label):
         self.uuid = cont_uuid
-        if label == 'container_label_not_set':
-            self.label = None
-        else:
-            self.label = label
+        self.label = label
 
 
 class DaosServer():
@@ -1497,6 +1493,10 @@ def create_cont(conf,
             rc = _create_cont()
 
     assert rc.returncode == 0, rc
+    if label:
+        assert label == rc.json['response']['container_label']
+    else:
+        assert 'container_label' not in rc.json['response'].keys()
     return rc.json['response']['container_uuid']
 
 
