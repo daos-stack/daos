@@ -146,7 +146,7 @@ def sbatch(log, script, log_file=None):
     if log_file:
         command.extend(['-o', str(log_file)])
     command.append(script)
-    return run_local(log, command)
+    return run_local(log, ' '.join(command))
 
 
 def get_partition_hosts(log, control, partition):
@@ -311,7 +311,7 @@ def check_slurm_job(log, handle):
     state = "UNKNOWN"
     command = ["scontrol", "show", "job", handle]
     try:
-        result = run_local(log, command, verbose=False, check=True)
+        result = run_local(log, ' '.join(command), verbose=False, check=True)
         match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
         if match is not None:
             state = match.group(1)
