@@ -2438,7 +2438,9 @@ class Launch():
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
-            f"mkdir -p {user_dir}"
+            f"mkdir -p {user_dir}",
+            f"df -h",
+            F"ls -latr {test_dir}"
         ]
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
@@ -2831,7 +2833,18 @@ class Launch():
             summary, hosts, os.path.join(source, pattern), destination)
         logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
         logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
-
+        logger.debug("*" * 80)
+        logger.info("Partition and DAOS_TEST_LOG_DIR information")
+        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        logger.debug("DEBUG info for DAOS-12368")
+        commands = [
+            f"df -h",
+            f"ls -latr {test_dir}",
+        ]
+        for command in commands:
+            if not run_remote(logger, hosts, command).passed:
+                logger.debug("debug command failed")
+        logger.debug("*" * 80)
         # List any remote files and their sizes and determine which hosts contain these files
         return_code, file_hosts = self._list_files(hosts, source, pattern, depth)
         if not file_hosts:
@@ -2862,6 +2875,19 @@ class Launch():
         if "core files" in summary:
             # Process the core files
             return_code |= self._process_core_files(os.path.split(destination)[0])
+
+        logger.debug("*" * 80)
+        logger.info("Partition and DAOS_TEST_LOG_DIR information")
+        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+        logger.debug("DEBUG info for DAOS-12368")
+        commands = [
+            f"df -h",
+            f"ls -latr {test_dir}",
+        ]
+        for command in commands:
+            if not run_remote(logger, hosts, command).passed:
+                logger.debug("debug command failed")
+        logger.debug("*" * 80)
 
         return return_code
 
