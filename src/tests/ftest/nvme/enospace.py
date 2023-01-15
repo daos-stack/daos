@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -205,7 +205,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg,test_enospace_lazy_with_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -229,7 +229,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg,test_enospace_lazy_with_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -263,7 +263,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg,test_enospace_time_with_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -290,7 +290,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg,test_enospace_time_with_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -325,7 +325,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_performance
+        :avocado: tags=nvme,der_enospace,enospc_performance,test_performance_storage_full
         """
         # Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
@@ -333,7 +333,7 @@ class NvmeEnospace(ServerFillUp):
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
         # Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
+        max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         print("IOR Baseline Read MiB {}".format(max_mib_baseline))
 
@@ -343,7 +343,7 @@ class NvmeEnospace(ServerFillUp):
         # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1)
-        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
+        max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
@@ -369,7 +369,7 @@ class NvmeEnospace(ServerFillUp):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=nvme,der_enospace,enospc_no_aggregation
+        :avocado: tags=nvme,der_enospace,enospc_no_aggregation,test_enospace_no_aggregation
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

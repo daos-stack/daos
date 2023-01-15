@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -83,6 +83,7 @@ class ContainerAsync(TestWithServers):
         callback function, so if we try it as it is, the test hangs.
 
         :avocado: tags=all,full_regression,container,cont_destroy_async
+        :avocado: tags=test_destroy_async
         """
         self.add_pool()
 
@@ -111,6 +112,7 @@ class ContainerAsync(TestWithServers):
         callback function, so if we try it as it is, the test hangs.
 
         :avocado: tags=all,full_regression,container,cont_open_async
+        :avocado: tags=test_open_async
         """
         self.add_pool()
 
@@ -137,6 +139,7 @@ class ContainerAsync(TestWithServers):
         Test both positive and negative cases.
 
         :avocado: tags=all,full_regression,container,cont_close_async
+        :avocado: tags=test_close_async
         """
         self.add_pool()
 
@@ -180,6 +183,7 @@ class ContainerAsync(TestWithServers):
         Test both positive and negative cases.
 
         :avocado: tags=all,full_regression,container,cont_query_async
+        :avocado: tags=test_query_async
         """
         self.add_pool()
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -43,7 +43,7 @@ type poolBaseCmd struct {
 
 	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
 	Args    struct {
-		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used"`
+		Pool PoolID `positional-arg-name:"pool name or UUID" description:"required if --path is not used and not existing"`
 	} `positional-args:"yes"`
 }
 

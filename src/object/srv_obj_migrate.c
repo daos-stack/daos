@@ -2642,9 +2642,9 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
-			   DIOF_TO_LEADER) {
-			if (rc != -DER_INPROGRESS && rc != -DER_SHUTDOWN) {
+		} else if (rc && rc != -DER_SHUTDOWN &&
+			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
+			if (rc != -DER_INPROGRESS) {
 				enum_flags &= ~DIOF_TO_LEADER;
 				daos_anchor_set_flags(&dkey_anchor, enum_flags);
 				D_DEBUG(DB_REBUILD, "retry to non leader "
@@ -2671,7 +2671,7 @@ retry:
 			/* If the container is being destroyed, it may return
 			 * -DER_NONEXIST, see obj_ioc_init().
 			 */
-			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
 				D_WARN("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
