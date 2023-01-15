@@ -406,7 +406,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_write_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
             # Wait between write and read
             self.phase_barrier()
@@ -420,7 +420,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_read_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()
 
@@ -525,6 +525,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         # Wait for rebuild if we stopped a rank
         if stop_rank_s:
-            self.pool.wait_for_rebuild(False)
+            self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()
