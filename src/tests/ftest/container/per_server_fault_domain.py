@@ -75,7 +75,7 @@ class PerServerFaultDomainTest(IorTestBase):
         # 7. Restart the stopped servers for cleanup.
         dmg_command.system_start(ranks=ranks_to_stop)
 
-        # 8. Verify the container status.
+        # 8. Verify container status.
         self.assertEqual(
             status, expected_status,
             "Container status isn't {} with {}!".format(expected_status, properties))
