@@ -803,6 +803,9 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 
 	D_MUTEX_LOCK(&chained_rpc_priv->crp_mutex);
 
+	RPC_PUB_DECREF(chained_rpc_priv->crp_ul_req);
+	chained_rpc_priv->crp_ul_req = NULL;
+
 	if (cb_info->cci_rc != 0) {
 		RPC_ERROR(chained_rpc_priv,
 			  "URI_LOOKUP rpc completed with rc="DF_RC"\n",
@@ -905,8 +908,6 @@ retry:
 	}
 
 out:
-	RPC_PUB_DECREF(lookup_rpc);
-
 	/* Force complete and destroy chained rpc */
 	if (rc != 0) {
 		crt_context_req_untrack(chained_rpc_priv);
@@ -1031,6 +1032,7 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 		     struct crt_rpc_priv *chained_rpc_priv)
 {
 	crt_rpc_t			*rpc;
+	struct crt_rpc_priv		*rpc_priv;
 	crt_endpoint_t			target_ep;
 	struct crt_uri_lookup_in	*ul_in;
 	int				rc;
@@ -1054,15 +1056,23 @@ crt_issue_uri_lookup(crt_context_t ctx, crt_group_t *group,
 	RPC_PUB_ADDREF(rpc);
 	chained_rpc_priv->crp_ul_req = rpc;
 
+	/*
+	 * If we were to use crt_req_send instead of crt_req_send_internal
+	 * here, crt_req_send might invoke uri_lookup_cb upon errors, leading
+	 * to deadlocks on chained_rpc_priv->crp_mutex.
+	 */
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_complete_cb = uri_lookup_cb;
 	RPC_ADDREF(chained_rpc_priv);
-	rc = crt_req_send(rpc, uri_lookup_cb, chained_rpc_priv);
-
+	rpc_priv->crp_arg = chained_rpc_priv;
+	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
-		RPC_DECREF(chained_rpc_priv);
-
-		/* Addref done above */
-		RPC_PUB_DECREF(rpc);
+		RPC_ERROR(chained_rpc_priv, "URI_LOOKUP rpc send failed: "DF_RC"\n", DP_RC(rc));
+		RPC_DECREF((struct crt_rpc_priv *)rpc_priv->crp_arg);
+		rpc_priv->crp_arg = NULL;
+		RPC_PUB_DECREF(chained_rpc_priv->crp_ul_req);
 		chained_rpc_priv->crp_ul_req = NULL;
+		RPC_PUB_DECREF(rpc);
 	}
 
 exit:
