@@ -7,7 +7,6 @@ import time
 from ec_utils import ErasureCodeIor
 
 
-
 class EcodAggregationOffRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """

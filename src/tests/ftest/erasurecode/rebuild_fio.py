@@ -6,7 +6,6 @@
 from ec_utils import ErasureCodeFio
 
 
-
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
     # pylint: disable=protected-access
@@ -15,6 +14,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a EcodFioRebuild object."""
         super().__init__(*args, **kwargs)

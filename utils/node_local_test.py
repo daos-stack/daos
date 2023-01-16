@@ -35,6 +35,7 @@ import junit_xml
 import tabulate
 import yaml
 
+
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
