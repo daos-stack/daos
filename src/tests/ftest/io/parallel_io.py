@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -126,7 +125,7 @@ class ParallelIo(FioBase, IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio
+        :avocado: tags=parallelio,test_parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -217,7 +216,7 @@ class ParallelIo(FioBase, IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=multipoolparallelio,test_multipool_parallelio
         """
         # test params
         threads = []

@@ -53,6 +53,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    protobuf-c-devel \
     python3-devel \
     python3-pip \
     sg3_utils \

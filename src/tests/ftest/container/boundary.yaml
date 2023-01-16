@@ -7,6 +7,9 @@ server_config:
   engines:
     0:
       targets: 1
+      env_vars:
+        - DD_MASK=group_metadata_only
+        - DAOS_MD_CAP=1024
       storage:
         0:
           class: ram
