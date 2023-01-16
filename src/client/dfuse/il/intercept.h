@@ -8,6 +8,7 @@
 #define __INTERCEPT_H__
 #include <unistd.h>
 #include <stdlib.h>
+#include <wchar.h>
 #include <sys/uio.h>
 #include "dfuse_log.h"
 #include "ioil_io.h"
@@ -72,7 +73,7 @@
 	ACTION(int, fgetc, (FILE * stream))                                                        \
 	ACTION(int, getc, (FILE * stream))                                                         \
 	ACTION(char *, fgets, (char *str, int, FILE *stream))                                      \
-	ACTION(wchar_t *, fgetws, (const wchar_t *ws, FILE *stream))                               \
+	ACTION(wchar_t *, fgetws, (wchar_t *ws, int, FILE *stream))                          \
 	ACTION(int, ungetc, (int, FILE *))                                                         \
 	ACTION(int, fscanf, (FILE *, const char *, ...))                                           \
 	ACTION(int, vfscanf, (FILE *, const char *, va_list))                                      \
@@ -80,7 +81,11 @@
 	ACTION(int, vfprintf, (FILE *, const char *, va_list ap))                                  \
 	ACTION(int, __uflow, (FILE *))                                                             \
 	ACTION(int, __overflow, (FILE *, int))                                                     \
-	ACTION(int, getc_unlocked, (FILE * stream))
+	ACTION(int, getc_unlocked, (FILE * stream))                                                \
+	ACTION(wint_t, getwc, (FILE * stream))                                                     \
+	ACTION(wint_t, getwc_unlocked, (FILE * stream))                                            \
+	ACTION(wint_t, fgetwc, (FILE * stream))                                                    \
+	ACTION(wint_t, fgetwc_unlocked, (FILE * stream))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
