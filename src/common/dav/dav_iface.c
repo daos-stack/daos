@@ -311,10 +311,6 @@ dav_obj_close(dav_obj_t *hdl)
 	heap_cleanup(hdl->do_heap);
 	D_FREE(hdl->do_heap);
 
-	lw_tx_begin(hdl);
-	stats_persist(hdl, hdl->do_stats);
-	lw_tx_end(hdl, NULL);
-
 	stats_delete(hdl, hdl->do_stats);
 
 	munmap(hdl->do_base, hdl->do_size);

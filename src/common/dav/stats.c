@@ -57,7 +57,7 @@ stats_persist(dav_obj_t *pop, struct stats *s)
 	if (s->transient->heap_prev_pval !=
 	    s->persistent->heap_curr_allocated) {
 		mo_wal_persist(&pop->p_ops, s->persistent,
-		    sizeof(struct stats_persistent));
+			       sizeof(struct stats_persistent));
 		s->transient->heap_prev_pval =
 		    s->persistent->heap_curr_allocated;
 	}
