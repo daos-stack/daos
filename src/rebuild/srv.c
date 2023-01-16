@@ -1851,10 +1851,12 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
 						 eph, 0, &id_list, rebuild_op, 0);
 		} else {
+			D_ASSERT(rebuild_op == RB_OP_REINT);
+			/* For new target, let's turn to EXTEND command to match
+			 * the original action.
+			 */
 			if (tgt->ta_comp.co_fseq <= 1)
 				rebuild_op = RB_OP_EXTEND;
-			else
-				rebuild_op = RB_OP_REINT;
 
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
 						 eph, 0, &id_list, rebuild_op, 0);
@@ -1871,7 +1873,7 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 	return DER_SUCCESS;
 }
 
-int
+static int
 regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states,
 			daos_rebuild_opc_t rebuild_op)
 {

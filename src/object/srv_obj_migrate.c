@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2003,7 +2003,7 @@ punch_iod_pack(struct migrate_one *mrone, struct dc_object *obj, daos_iod_t *iod
 	}
 
 	if (obj_is_ec(obj))
-		boundary = obj_ec_tgt_nr(&obj->cob_oca) * iod->iod_size;
+		boundary = obj_ec_stripe_rec_nr(&obj->cob_oca);
 
 	rc = migrate_insert_recxs_sgl(mrone->mo_punch_iods, NULL, &mrone->mo_punch_iod_num,
 				      iod, iod->iod_recxs, NULL, iod->iod_nr, NULL, NULL, boundary);

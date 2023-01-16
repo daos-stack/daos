@@ -1749,6 +1749,9 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
 /**
  * Check if there are any EC parity shards still alive under the oh/dkey_hash.
  * 1: alive,  0: no alive  < 0: failure.
+ * NB: @shard suppose to return real shard from oclass, since it needs to compare
+ * with .id_shard to know whether it is right parity shard (see migrate_enum_unpack_cb()),
+ * so it has to use daos_oclass_grp_size to get the @shard.
  */
 int
 obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
@@ -1771,7 +1774,7 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 	oca = obj_get_oca(obj);
 	p_shard = obj_ec_parity_start(obj, dkey_hash);
 	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++, p_shard++) {
-		uint32_t shard_idx = p_shard % obj_get_grp_size(obj) +
+		uint32_t shard_idx = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
 				     grp_idx * obj_get_grp_size(obj);
 		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", shard_idx,
 			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
