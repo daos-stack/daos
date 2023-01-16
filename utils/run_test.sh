@@ -21,6 +21,41 @@ failed=0
 failures=()
 log_num=0
 
+if [ -z "$DAOS_BASE" ]; then
+    DAOS_BASE="."
+fi
+
+produce_output()
+{
+    echo "$2"
+
+    cname="run_test.${RUN_TEST_VALGRIND:-native}"
+    name="run_test"
+    fname="${DAOS_BASE}/test_results/test_run_test.sh.${RUN_TEST_VALGRIND:-native}.xml"
+
+    if [ "$1" -eq 0 ]; then
+       teststr="    <testcase classname=\"$cname\" name=\"$name\" />"
+    else
+       teststr="    <testcase classname=\"$cname\" name=\"$name\">
+      <failure type=\"format\">
+        <![CDATA[$2
+          ]]>
+      </failure>
+    </testcase>"
+    fi
+
+    cat > "${fname}" << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites>
+  <testsuite tests="1" failures="$1" errors="0" skipped="0" >
+EOF
+echo "${teststr}" >> "${fname}"
+cat >> "${fname}" << EOF
+  </testsuite>
+</testsuites>
+EOF
+}
+
 run_test()
 {
     local in="$*"
@@ -56,6 +91,7 @@ run_test()
     ((log_num += 1))
 
     FILES=("${DAOS_BASE}"/test_results/*.xml)
+    sudo chown -R "$USER" "${FILES[@]}"
 
     "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
                                                                   "${COMP}" \
@@ -67,14 +103,10 @@ run_test()
 if [ -d "/mnt/daos" ]; then
     # shellcheck disable=SC1091
     source ./.build_vars.sh
-    if ! ${OLD_CI:-true}; then
-        # fix up paths so they are relative to $PWD since we might not
-        # be in the same path as the software was built
-        SL_PREFIX=$PWD/${SL_PREFIX/*\/install/install}
-    fi
 
     echo "Running Cmocka tests"
     mkdir -p "${DAOS_BASE}"/test_results/xml
+    chmod 777 "${DAOS_BASE}"/test_results/xml
 
     VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
@@ -116,6 +148,11 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
+
+        run_test src/vos/tests/evt_stress.py
+        run_test src/vos/tests/evt_stress.py --algo dist_even
+        run_test src/vos/tests/evt_stress.py --algo soff
+
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
@@ -125,6 +162,7 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
+                                          --fair-sched=try \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --gen-suppressions=all \
                                           --error-exitcode=42 \
@@ -149,6 +187,16 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
+    COMP="UTEST_vos"
+    cmd="-c pool -w key@0-4 key@3-4 -R key@3-3 -w key@5-4 -R key@5-3 -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    cmd="-c pool -w key@0-3 key@3-4 -w key@5-1 -w key@5-4 -R key@5-3 -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    cmd="-c pool -x key@10-400 -i -d -o pool -a -i -d -D"
+    run_test "${SL_PREFIX}/bin/vos_tests" -r "\"${cmd}\""
+    export DAOS_DKEY_PUNCH_PROPAGATE=1
+    run_test "${SL_PREFIX}/bin/vos_tests" -C
+    unset DAOS_DKEY_PUNCH_PROPAGATE
 
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
@@ -229,13 +277,16 @@ if [ -d "/mnt/daos" ]; then
     # Reporting
     if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
-        echo "SUCCESS! NO TEST FAILURES"
+        produce_output 0 "SUCCESS! NO TEST FAILURES"
     else
-        echo "FAILURE: $failed tests failed (listed below)"
+        fail_msg="FAILURE: $failed tests failed (listed below)
+"
         for ((i = 0; i < ${#failures[@]}; i++)); do
-            echo "    ${failures[$i]}"
+            fail_msg=$"$fail_msg    ${failures[$i]}
+"
         done
-        if ! ${OLD_CI:-true}; then
+        produce_output 1 "$fail_msg"
+        if ! ${IS_CI:-false}; then
             exit 1
         fi
     fi

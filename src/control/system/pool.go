@@ -13,6 +13,8 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+
+	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 const (

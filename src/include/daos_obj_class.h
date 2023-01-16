@@ -39,7 +39,7 @@ enum daos_obj_redun {
 	OR_RP_128,
 
 	/**
-	 * N+K reed solomon erasude-coded object (OC_EC_NPK).
+	 * N+K reed solomon erasure-coded object (OC_EC_NPK).
 	 * - the first number is data cells number within a redundancy group
 	 * - the number after P is parity cells number within a redundancy group
 	 * C_S1

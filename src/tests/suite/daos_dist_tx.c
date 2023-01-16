@@ -2466,8 +2466,8 @@ dtx_35(void **state)
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
 	print_message("reopening object\n");
-	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
-	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[0], DAOS_OO_RW, &reqs[0].oh, NULL));
+	MUST(daos_obj_open(arg->coh, oids[1], DAOS_OO_RW, &reqs[1].oh, NULL));
 
 	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
@@ -2638,7 +2638,7 @@ dtx_36(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -2770,7 +2770,7 @@ dtx_37(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 
 	dtx_fini_req_akey(&req, akeys, 1, DTX_NC_CNT);
 }
@@ -2943,7 +2943,7 @@ dtx_38(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	reintegrate_single_pool_rank(arg, kill_ranks[0]);
+	reintegrate_single_pool_rank(arg, kill_ranks[0], false);
 
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
@@ -3020,7 +3020,7 @@ dtx_39(void **state)
 		ioreq_fini(&req);
 	}
 
-	reintegrate_single_pool_rank(arg, kill_rank);
+	reintegrate_single_pool_rank(arg, kill_rank, false);
 }
 
 static void

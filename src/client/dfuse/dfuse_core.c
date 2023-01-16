@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -43,7 +43,6 @@ dfuse_progress_thread(void *arg)
 			daos_event_fini(dev);
 			ev = container_of(dev, struct dfuse_event, de_ev);
 			ev->de_complete_cb(ev);
-			D_FREE(ev);
 		}
 	}
 	return NULL;
@@ -93,22 +92,20 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 
 /* Shrink a 64 bit value into 32 bits to avoid hash collisions */
 static uint32_t
-ih_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ih_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	const ino_t *_ino = key;
-	ino_t ino = *_ino;
-	uint32_t hash = ino ^ (ino >> 32);
+	ino_t        ino  = *_ino;
+	uint32_t     hash = ino ^ (ino >> 32);
 
 	return hash;
 }
 
 static bool
-ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
-	   const void *key, unsigned int ksize)
+ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
 {
-	const struct dfuse_inode_entry	*ie;
-	const ino_t			*ino = key;
+	const struct dfuse_inode_entry *ie;
+	const ino_t                    *ino = key;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -118,44 +115,37 @@ ih_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
 static uint32_t
 ih_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
-	const struct dfuse_inode_entry	*ie;
+	const struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	return ih_key_hash(NULL,
-			   &ie->ie_stat.st_ino,
-			   sizeof(ie->ie_stat.st_ino));
+	return ih_key_hash(NULL, &ie->ie_stat.st_ino, sizeof(ie->ie_stat.st_ino));
 }
 
 static void
 ih_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_add_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "addref to %u", oldref + 1);
+	atomic_fetch_add_relaxed(&ie->ie_ref, 1);
 }
 
 static bool
 ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref;
+	struct dfuse_inode_entry *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-	oldref = atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-	DFUSE_TRA_DEBUG(ie, "decref to %u", oldref - 1);
-	return oldref == 1;
+	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
 static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
-	struct dfuse_inode_entry	*ie;
-	uint				oldref = 0;
-	uint				newref = 0;
+	struct dfuse_inode_entry *ie;
+	uint32_t                  oldref = 0;
+	uint32_t                  newref = 0;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -170,12 +160,10 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
 
 	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u",
-				count, oldref);
+		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
 		return -DER_INVAL;
 	}
 
-	DFUSE_TRA_DEBUG(ie, "decref of %u to %u", count, newref);
 	if (newref == 0)
 		return 1;
 	return 0;
@@ -184,8 +172,8 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
-	struct dfuse_projection_info	*fs_handle = htable->ht_priv;
-	struct dfuse_inode_entry	*ie;
+	struct dfuse_projection_info *fs_handle = htable->ht_priv;
+	struct dfuse_inode_entry     *ie;
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
@@ -194,18 +182,17 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-	.hop_key_cmp		= ih_key_cmp,
-	.hop_key_hash		= ih_key_hash,
-	.hop_rec_hash		= ih_rec_hash,
-	.hop_rec_addref		= ih_addref,
-	.hop_rec_decref		= ih_decref,
-	.hop_rec_ndecref	= ih_ndecref,
-	.hop_rec_free		= ih_free,
+    .hop_key_cmp     = ih_key_cmp,
+    .hop_key_hash    = ih_key_hash,
+    .hop_rec_hash    = ih_rec_hash,
+    .hop_rec_addref  = ih_addref,
+    .hop_rec_decref  = ih_decref,
+    .hop_rec_ndecref = ih_ndecref,
+    .hop_rec_free    = ih_free,
 };
 
 static uint32_t
-ph_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ph_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -221,8 +208,7 @@ ph_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ph_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_pool *dfp;
 
@@ -233,10 +219,10 @@ ph_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ph_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	 *dfp;
-	uint			 oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_add_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "addref to %u", oldref + 1);
 }
@@ -244,10 +230,10 @@ ph_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ph_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_pool	*dfp;
-	uint			oldref;
+	struct dfuse_pool *dfp;
+	uint32_t           oldref;
 
-	dfp = container_of(link, struct dfuse_pool, dfp_entry);
+	dfp    = container_of(link, struct dfuse_pool, dfp_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfp->dfp_ref, 1);
 	DFUSE_TRA_DEBUG(dfp, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -273,15 +259,12 @@ _ph_free(struct dfuse_pool *dfp)
 				rc = -DER_SUCCESS;
 		}
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_disconnect() failed: "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: "DF_RC,
-				DP_RC(rc));
+		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
 	D_FREE(dfp);
 }
@@ -293,17 +276,16 @@ ph_free(struct d_hash_table *htable, d_list_t *link)
 }
 
 static d_hash_table_ops_t pool_hops = {
-	.hop_key_cmp		= ph_key_cmp,
-	.hop_key_hash		= ph_key_hash,
-	.hop_rec_hash		= ph_rec_hash,
-	.hop_rec_addref		= ph_addref,
-	.hop_rec_decref		= ph_decref,
-	.hop_rec_free		= ph_free,
+    .hop_key_cmp    = ph_key_cmp,
+    .hop_key_hash   = ph_key_hash,
+    .hop_rec_hash   = ph_rec_hash,
+    .hop_rec_addref = ph_addref,
+    .hop_rec_decref = ph_decref,
+    .hop_rec_free   = ph_free,
 };
 
 static uint32_t
-ch_key_hash(struct d_hash_table *htable, const void *key,
-	    unsigned int ksize)
+ch_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 {
 	return *((const uint32_t *)key);
 }
@@ -319,8 +301,7 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 }
 
 static bool
-ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
-	   const void *key, unsigned int ksize)
+ch_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigned int ksize)
 {
 	struct dfuse_cont *dfc;
 
@@ -331,10 +312,10 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *link,
 static void
 ch_addref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint			oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_add_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "addref to %u", oldref + 1);
 }
@@ -342,10 +323,10 @@ ch_addref(struct d_hash_table *htable, d_list_t *link)
 static bool
 ch_decref(struct d_hash_table *htable, d_list_t *link)
 {
-	struct dfuse_cont	*dfc;
-	uint			oldref;
+	struct dfuse_cont *dfc;
+	uint32_t           oldref;
 
-	dfc = container_of(link, struct dfuse_cont, dfs_entry);
+	dfc    = container_of(link, struct dfuse_cont, dfs_entry);
 	oldref = atomic_fetch_sub_relaxed(&dfc->dfs_ref, 1);
 	DFUSE_TRA_DEBUG(dfc, "decref to %u", oldref - 1);
 	return oldref == 1;
@@ -365,7 +346,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, "DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, " DF_RC, DP_RC(rc));
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
@@ -376,67 +357,74 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv,
-		 container_of(link, struct dfuse_cont, dfs_entry));
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
 }
 
 d_hash_table_ops_t cont_hops = {
-	.hop_key_cmp		= ch_key_cmp,
-	.hop_key_hash		= ch_key_hash,
-	.hop_rec_hash		= ch_rec_hash,
-	.hop_rec_addref		= ch_addref,
-	.hop_rec_decref		= ch_decref,
-	.hop_rec_free		= ch_free,
+    .hop_key_cmp    = ch_key_cmp,
+    .hop_key_hash   = ch_key_hash,
+    .hop_rec_hash   = ch_rec_hash,
+    .hop_rec_addref = ch_addref,
+    .hop_rec_decref = ch_decref,
+    .hop_rec_free   = ch_free,
 };
 
-/* Return a pool connection by label.
+/* Connect to a pool.
  *
- * Only used for command line parsing, so does not check for existing pools
+ * Daos accepts labels and uuids via the same function so simply call that, connect to a pool
+ * and setup a descriptor, then enter into the hash table and verify that it's unique.  If there
+ * is likely already a connection for this pool then use dfuse_pool_get_handle() instead
+ * which will do a hash-table lookup in advance.
  *
  * Return code is a system errno.
  */
 int
-dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char *label,
-			    struct dfuse_pool **_dfp)
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, const char *label,
+		   struct dfuse_pool **_dfp)
 {
-	struct dfuse_pool	*dfp;
-	daos_pool_info_t        p_info = {};
-	d_list_t		*rlink;
-	int			rc;
-	int			ret;
+	struct dfuse_pool *dfp;
+	d_list_t          *rlink;
+	int                rc;
+	int                ret;
 
 	D_ALLOC_PTR(dfp);
 	if (dfp == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	atomic_store_relaxed(&dfp->dfp_ref, 1);
+	atomic_init(&dfp->dfp_ref, 1);
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
-			       &p_info, NULL);
-	if (rc) {
-		if (rc == -DER_NO_PERM)
-			DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
-		else
-			DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, " DF_RC, DP_RC(rc));
-		D_GOTO(err_free, rc = daos_der2errno(rc));
+	/* Handle the case where no identifier is supplied, this is for when dfuse
+	 * is started without any pool on the command line.
+	 */
+	if (label[0]) {
+		daos_pool_info_t p_info = {};
+
+		rc = daos_pool_connect(label, fs_handle->dpi_info->di_group, DAOS_PC_RO,
+				       &dfp->dfp_poh, &p_info, NULL);
+		if (rc) {
+			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
+				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC,
+					       DP_RC(rc));
+			else
+				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC,
+						label, DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		}
+
+		uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
 	}
 
-	uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
-
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &cont_hops,
-					 &dfp->dfp_cont_table);
+	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, fs_handle,
+					 &cont_hops, &dfp->dfp_cont_table);
 	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
-				DP_RC(rc));
+		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: " DF_RC, DP_RC(rc));
 		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
 	}
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
-				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
-				       &dfp->dfp_entry);
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table, &dfp->dfp_pool,
+				       sizeof(dfp->dfp_pool), &dfp->dfp_entry);
 
 	if (rlink != &dfp->dfp_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
@@ -444,8 +432,7 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle, const char 
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
-			DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for " DF_UUID, DP_UUID(dfp->dfp_pool));
 
 	*_dfp = dfp;
 	return rc;
@@ -459,21 +446,12 @@ err:
 	return rc;
 }
 
-/* Return a pool connection by uuid.
- *
- * Re-use an existing connection if possible, otherwise open new connection.
- *
- * If successsfull with pass out a pool pointer, with one reference held.
- *
- * Return code is a system errno.
- */
 int
-dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
-		   struct dfuse_pool **_dfp)
+dfuse_pool_get_handle(struct dfuse_projection_info *fs_handle, uuid_t pool,
+		      struct dfuse_pool **_dfp)
 {
-	struct dfuse_pool	*dfp;
-	d_list_t		*rlink;
-	int			rc;
+	d_list_t *rlink;
+	char      uuid_str[37];
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_pool_table, pool, sizeof(*pool));
 	if (rlink) {
@@ -481,64 +459,9 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		return 0;
 	}
 
-	D_ALLOC_PTR(dfp);
-	if (dfp == NULL)
-		D_GOTO(err, rc = ENOMEM);
+	uuid_unparse(pool, uuid_str);
 
-	atomic_store_relaxed(&dfp->dfp_ref, 1);
-
-	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
-
-	DFUSE_TRA_DEBUG(dfp, "New pool "DF_UUIDF, DP_UUID(pool));
-
-	if (uuid_is_null(*pool) == 0) {
-		char uuid_str[37];
-
-		uuid_copy(dfp->dfp_pool, *pool);
-		uuid_unparse(dfp->dfp_pool, uuid_str);
-		rc = daos_pool_connect(uuid_str, fs_handle->dpi_info->di_group, DAOS_PC_RO,
-				       &dfp->dfp_poh, NULL, NULL);
-		if (rc) {
-			if (rc == -DER_NO_PERM)
-				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, "DF_RC, DP_RC(rc));
-			else
-				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() failed, "DF_RC,
-						DP_RC(rc));
-			D_GOTO(err_free, rc = daos_der2errno(rc));
-		}
-	}
-
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 3, fs_handle, &cont_hops,
-					 &dfp->dfp_cont_table);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
-				DP_RC(rc));
-		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
-	}
-
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
-				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
-				       &dfp->dfp_entry);
-
-	if (rlink != &dfp->dfp_entry) {
-		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
-		_ph_free(dfp);
-		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
-	}
-
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
-			DP_UUID(dfp->dfp_pool));
-
-	*_dfp = dfp;
-	return rc;
-err_disconnect:
-	if (daos_handle_is_valid(dfp->dfp_poh))
-		daos_pool_disconnect(dfp->dfp_poh, NULL);
-err_free:
-	D_FREE(dfp);
-err:
-	return rc;
+	return dfuse_pool_connect(fs_handle, uuid_str, _dfp);
 }
 
 #define ATTR_COUNT 6
@@ -857,7 +780,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 
 	/* No existing container found, so setup dfs and connect to one */
 
-	atomic_store_relaxed(&dfc->dfs_ref, 1);
+	atomic_init(&dfc->dfs_ref, 1);
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
@@ -973,13 +896,23 @@ dfuse_cache_set_time(struct dfuse_inode_entry *ie)
 	ie->ie_cache_last_update = now;
 }
 
+void
+dfuse_cache_evict(struct dfuse_inode_entry *ie)
+{
+	ie->ie_cache_last_update.tv_sec  = 0;
+	ie->ie_cache_last_update.tv_nsec = 0;
+}
+
 bool
-dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
+dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
 {
 	bool            use = false;
 	struct timespec now;
 	struct timespec left;
-	double          timeout;
+	double          time_left;
+
+	if (ie->ie_cache_last_update.tv_sec == 0)
+		return false;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
@@ -989,11 +922,14 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age)
 		left.tv_sec--;
 		left.tv_nsec += 1000000000;
 	}
-	timeout = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
-	if (timeout > 0) {
-		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", timeout);
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0) {
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %lf", time_left);
 		use = true;
 	}
+
+	if (use && timeout)
+		*timeout = time_left;
 
 	return use;
 }
@@ -1055,21 +991,28 @@ dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie)
 {
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie  = ie;
+	atomic_store_relaxed(&oh->doh_il_calls, 0);
+	atomic_store_relaxed(&oh->doh_write_count, 0);
 }
 
 void
-dfuse_ie_close(struct dfuse_projection_info *fs_handle,
-	       struct dfuse_inode_entry *ie)
+dfuse_ie_init(struct dfuse_inode_entry *ie)
 {
-	int	rc;
-	int	ref;
+	atomic_init(&ie->ie_ref, 1);
+}
+
+void
+dfuse_ie_close(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+{
+	int      rc;
+	uint32_t ref;
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
-	DFUSE_TRA_DEBUG(ie,
-			"closing, inode %#lx ref %u, name '%s', parent %#lx",
+	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name '%s', parent %#lx",
 			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
 
 	D_ASSERT(ref == 0);
+	D_ASSERT(atomic_load_relaxed(&ie->ie_readir_number) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
 
@@ -1078,17 +1021,15 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 		if (rc == ENOMEM)
 			rc = dfs_release(ie->ie_obj);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)", strerror(rc));
 		}
 	}
 
 	if (ie->ie_root) {
-		struct dfuse_cont	*dfc = ie->ie_dfs;
-		struct dfuse_pool	*dfp = dfc->dfs_dfp;
+		struct dfuse_cont *dfc = ie->ie_dfs;
+		struct dfuse_pool *dfp = dfc->dfs_dfp;
 
-		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d",
-			       daos_handle_is_valid(dfp->dfp_poh),
+		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
@@ -1097,14 +1038,90 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 	D_FREE(ie);
 }
 
+static void
+dfuse_event_init(void *arg, void *handle)
+{
+	struct dfuse_event *ev = arg;
+
+	ev->de_handle = handle;
+}
+
+static bool
+dfuse_read_event_reset(void *arg)
+{
+	struct dfuse_event *ev = arg;
+	int                 rc;
+
+	if (ev->de_iov.iov_buf == NULL) {
+		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		if (ev->de_iov.iov_buf == NULL)
+			return false;
+
+		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
+		ev->de_sgl.sg_iovs     = &ev->de_iov;
+		ev->de_sgl.sg_nr       = 1;
+	}
+
+	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
+	if (rc != -DER_SUCCESS) {
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+dfuse_write_event_reset(void *arg)
+{
+	struct dfuse_event *ev = arg;
+	int                 rc;
+
+	if (ev->de_iov.iov_buf == NULL) {
+		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		if (ev->de_iov.iov_buf == NULL)
+			return false;
+
+		ev->de_iov.iov_buf_len = DFUSE_MAX_READ;
+		ev->de_sgl.sg_iovs     = &ev->de_iov;
+		ev->de_sgl.sg_nr       = 1;
+	}
+
+	rc = daos_event_init(&ev->de_ev, ev->de_handle->dpi_eq, NULL);
+	if (rc != -DER_SUCCESS) {
+		return false;
+	}
+
+	return true;
+}
+
+static void
+dfuse_event_release(void *arg)
+{
+	struct dfuse_event *ev = arg;
+
+	D_FREE(ev->de_iov.iov_buf);
+}
+
 int
 dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
-	struct fuse_args		args = {0};
-	struct dfuse_inode_entry	*ie = NULL;
-	int				rc;
+	struct fuse_args          args     = {0};
+	struct dfuse_inode_entry *ie       = NULL;
+	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
+						.sr_reset   = dfuse_read_event_reset,
+						.sr_release = dfuse_event_release,
+						POOL_TYPE_INIT(dfuse_event, de_list)};
+	struct d_slab_reg         write_slab = {.sr_init    = dfuse_event_init,
+						.sr_reset   = dfuse_write_event_reset,
+						.sr_release = dfuse_event_release,
+						POOL_TYPE_INIT(dfuse_event, de_list)};
 
-	args.argc = 4;
+	int                       rc;
+
+	args.argc = 5;
+
+	if (fs_handle->dpi_info->di_multi_user)
+		args.argc++;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -1130,6 +1147,16 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
+	args.argv[4] = strdup("-onoatime");
+	if (!args.argv[4])
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	if (fs_handle->dpi_info->di_multi_user) {
+		args.argv[5] = strdup("-oallow_other");
+		if (!args.argv[5])
+			D_GOTO(err, rc = -DER_NOMEM);
+	}
+
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -1140,20 +1167,21 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 	ie->ie_dfs = dfs;
 	ie->ie_root = true;
 	ie->ie_parent = 1;
-	atomic_store_relaxed(&ie->ie_ref, 1);
-	ie->ie_stat.st_ino = 1;
-	ie->ie_stat.st_uid = geteuid();
-	ie->ie_stat.st_gid = getegid();
-	ie->ie_stat.st_mode = 0700 | S_IFDIR;
-	dfs->dfs_ino = ie->ie_stat.st_ino;
+	dfuse_ie_init(ie);
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
-		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
+	} else {
+		ie->ie_stat.st_uid  = geteuid();
+		ie->ie_stat.st_gid  = getegid();
+		ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	}
+	ie->ie_stat.st_ino = 1;
+	dfs->dfs_ino       = ie->ie_stat.st_ino;
 
 	rc = d_hash_rec_insert(&fs_handle->dpi_iet,
 			       &ie->ie_stat.st_ino,
@@ -1162,22 +1190,37 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       false);
 	D_ASSERT(rc == -DER_SUCCESS);
 
-	rc = pthread_create(&fs_handle->dpi_thread, NULL,
-			    dfuse_progress_thread, fs_handle);
+	rc = d_slab_init(&fs_handle->dpi_slab, fs_handle);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_ie_remove, rc);
+
+	rc = d_slab_register(&fs_handle->dpi_slab, &read_slab, &fs_handle->dpi_read_slab);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_slab, rc);
+
+	rc = d_slab_register(&fs_handle->dpi_slab, &write_slab, &fs_handle->dpi_write_slab);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err_slab, rc);
+
+	rc = pthread_create(&fs_handle->dpi_thread, NULL, dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
+		D_GOTO(err_slab, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	rc = dfuse_launch_fuse(fs_handle, &args);
-	fuse_opt_free_args(&args);
-	if (rc == -DER_SUCCESS)
+	if (rc == -DER_SUCCESS) {
+		fuse_opt_free_args(&args);
 		return rc;
+	}
 
+err_slab:
+	d_slab_destroy(&fs_handle->dpi_slab);
 err_ie_remove:
+	dfs_release(ie->ie_obj);
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
 	D_FREE(ie);
 	return rc;
@@ -1311,6 +1354,9 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 
 		ref = atomic_load_relaxed(&ie->ie_ref);
 
+		atomic_store_relaxed(&ie->ie_il_count, 0);
+		atomic_store_relaxed(&ie->ie_open_count, 0);
+
 		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
 
 		refs += ref;
@@ -1324,6 +1370,8 @@ dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
 
 	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
+
+	d_slab_destroy(&fs_handle->dpi_slab);
 
 	return 0;
 }

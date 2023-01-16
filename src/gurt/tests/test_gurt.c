@@ -401,6 +401,12 @@ test_gurt_list(void **state)
 		i--;
 	}
 
+	i = NUM_ENTRIES * 2 - 1;
+	d_list_for_each_entry_reverse_safe(entry, tentry, &head2, link) {
+		assert_int_equal(i, entry->num);
+		i--;
+	}
+
 	i = 0;
 	d_list_for_each_safe(pos, temp, &head2) {
 		entry = d_list_entry(pos, struct d_list_test_entry, link);
@@ -1835,62 +1841,6 @@ test_gurt_hash_parallel_refcounting(void **state)
 	_test_gurt_hash_parallel_refcounting(D_HASH_FT_LRU);
 }
 
-struct circular_item {
-	d_circleq_entry(circular_item)	 cci_link;
-	int				 cci_id;
-};
-
-static void
-test_gurt_circular_list(void **state)
-{
-	D_CIRCLEQ_HEAD(, circular_item)	 head;
-	struct circular_item		*item;
-	struct circular_item		 ci0, ci1, ci2;
-	int				 i;
-
-	D_CIRCLEQ_INIT(&head);
-	ci0.cci_id = 0;
-	ci1.cci_id = 1;
-	ci2.cci_id = 2;
-
-	D_CIRCLEQ_INSERT_HEAD(&head, &ci0, cci_link);
-	D_CIRCLEQ_INSERT_AFTER(&head, &ci0, &ci1, cci_link);
-	D_CIRCLEQ_INSERT_AFTER(&head, &ci1, &ci2, cci_link);
-	assert(!D_CIRCLEQ_EMPTY(&head));
-
-	assert(D_CIRCLEQ_FIRST(&head)->cci_id == 0);
-	assert(D_CIRCLEQ_LAST(&head)->cci_id == 2);
-
-	item = &ci0;
-	item = D_CIRCLEQ_LOOP_NEXT(&head, item, cci_link);
-	assert(item->cci_id == 1);
-	item = D_CIRCLEQ_LOOP_NEXT(&head, item, cci_link);
-	assert(item->cci_id == 2);
-	item = D_CIRCLEQ_LOOP_NEXT(&head, item, cci_link);
-	assert(item->cci_id == 0);
-	item = D_CIRCLEQ_LOOP_NEXT(&head, item, cci_link);
-	assert(item->cci_id == 1);
-
-	i = 0;
-	D_CIRCLEQ_FOREACH(item, &head, cci_link) {
-		assert(item->cci_id == i);
-		i++;
-	}
-	assert(i == 3);
-
-	i = 2;
-	D_CIRCLEQ_FOREACH_REVERSE(item, &head, cci_link) {
-		assert(item->cci_id == i);
-		i--;
-	}
-	assert(i == -1);
-
-	while (!D_CIRCLEQ_EMPTY(&head)) {
-		item = D_CIRCLEQ_FIRST(&head);
-		D_CIRCLEQ_REMOVE(&head, item, cci_link);
-	}
-	assert(D_CIRCLEQ_EMPTY(&head));
-}
 
 #define NUM_THREADS 16
 
@@ -2126,7 +2076,6 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_d_errdesc),
 		cmocka_unit_test(test_gurt_list),
 		cmocka_unit_test(test_gurt_hlist),
-		cmocka_unit_test(test_gurt_circular_list),
 		cmocka_unit_test(test_binheap),
 		cmocka_unit_test(test_log),
 		cmocka_unit_test(test_gurt_hash_empty),

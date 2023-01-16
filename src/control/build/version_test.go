@@ -97,6 +97,11 @@ func TestBuild_Version_GreaterThan(t *testing.T) {
 			b:           "1.2.3",
 			greaterThan: false,
 		},
+		"x.y.a < x.y.b": {
+			a:           "2.1.100",
+			b:           "2.6.0",
+			greaterThan: false,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			a := build.MustNewVersion(tc.a)
@@ -128,6 +133,11 @@ func TestBuild_Version_LessThan(t *testing.T) {
 		"a == b": {
 			a:        "1.2.3",
 			b:        "1.2.3",
+			lessThan: false,
+		},
+		"x.y.a > x.y.b": {
+			a:        "2.6.0",
+			b:        "2.1.100",
 			lessThan: false,
 		},
 	} {

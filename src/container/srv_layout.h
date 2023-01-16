@@ -108,7 +108,15 @@ extern d_iov_t ds_cont_prop_ec_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_rp_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32_t */
 extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
+extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
+extern d_iov_t ds_cont_prop_cont_obj_version;	/* uint32_t */
+extern d_iov_t ds_cont_prop_nhandles;		/* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
+
+struct co_md_times {
+	uint64_t	otime;	/* container open time */
+	uint64_t	mtime;	/* container metadata modify time */
+};
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
@@ -152,6 +160,7 @@ extern daos_prop_t cont_prop_default_v0;
 #define CONT_PROP_NUM_V0 20
 #define CONT_PROP_NUM	(DAOS_PROP_CO_MAX - DAOS_PROP_CO_MIN - 1)
 
+#define DEFAULT_CONT_LABEL "container_label_not_set"
 /**
  * Initialize the default container properties.
  *

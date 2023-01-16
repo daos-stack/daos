@@ -6,12 +6,13 @@
 """
 import ctypes
 import time
-import avocado
 import random
+import avocado
 
 from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
 from apricot import TestWithServers
 from general_utils import create_string_buffer
+
 
 class ObjectDataValidation(TestWithServers):
     """
@@ -54,12 +55,12 @@ class ObjectDataValidation(TestWithServers):
         Function to reconnect the pool/container and reopen the Object
         for read verification.
         '''
-        #Close the Obj/Container, Disconnect the Pool.
+        # Close the Obj/Container, Disconnect the Pool.
         self.obj.close()
         self.container.close()
         self.pool.disconnect()
         time.sleep(5)
-        #Connect Pool, Open Container and Object
+        # Connect Pool, Open Container and Object
         self.pool.connect(2)
         self.container.open()
         self.obj.open()
@@ -100,9 +101,9 @@ class ObjectDataValidation(TestWithServers):
         try:
             new_transaction = self.container.get_new_tx()
         except DaosApiError as excep:
-            #initial container get_new_tx failed, skip rest of the test
+            # initial container get_new_tx failed, skip rest of the test
             self.fail("##container get_new_tx failed: {}".format(excep))
-        invalid_transaction = new_transaction + random.randint(1000, 383838) #nosec
+        invalid_transaction = new_transaction + random.randint(1000, 383838)  # nosec
         self.log.info("==new_transaction=     %s", new_transaction)
         self.log.info("==invalid_transaction= %s", invalid_transaction)
         self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size,
@@ -151,7 +152,7 @@ class ObjectDataValidation(TestWithServers):
                     "##(4.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
 
-        #Try to abort the transaction which already closed.
+        # Try to abort the transaction which already closed.
         try:
             self.container.abort_tx(new_transaction)
             self.fail(
@@ -165,7 +166,7 @@ class ObjectDataValidation(TestWithServers):
                     "##(5.2)Expecting error RC: -1002, but got {}."
                     .format(str(excep)))
 
-        #open another transaction for abort test
+        # open another transaction for abort test
         try:
             new_transaction2 = self.container.get_new_tx()
         except DaosApiError as excep:
@@ -216,13 +217,10 @@ class ObjectDataValidation(TestWithServers):
         transaction_index = 0
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) *
-                          self.record_length[record_index])
+                indata = ("{0}".format(str(akey)[0]) * self.record_length[record_index])
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey,
-                                              c_akey,
-                                              len(indata)+1)
+                val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
                 if indata != str(val.value, 'utf-8'):
                     self.d_log.error("ERROR:Data mismatch for "
                                      "dkey = {0}, "
@@ -257,7 +255,7 @@ class ObjectDataValidation(TestWithServers):
                 value = ("{0}".format(str(akey)[0])
                          * self.record_length[record_index])
                 for item in range(self.array_size):
-                    c_values.append((create_string_buffer(value), len(value)+1))
+                    c_values.append((create_string_buffer(value), len(value) + 1))
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
 

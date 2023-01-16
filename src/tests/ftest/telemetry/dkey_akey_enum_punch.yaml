@@ -4,11 +4,16 @@ hosts:
 timeout: 320
 
 server_config:
-  servers:
+  engines_per_host: 1
+  engines:
     0:
       targets: 8
       nr_xs_helpers: 0
-      scm_size: 4
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 
 pool:
   scm_size: 1G

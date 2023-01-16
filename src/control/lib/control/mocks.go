@@ -25,8 +25,8 @@ import (
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // MockMessage implements the proto.Message
@@ -476,6 +476,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
 		ssr.HugePageInfo.PageSizeKb = (1 << 30) >> 10
+	case "badPciAddr":
+		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
@@ -580,11 +582,12 @@ type (
 
 	MockScmConfig struct {
 		MockStorageConfig
+		Rank ranklist.Rank
 	}
 
 	MockNvmeConfig struct {
 		MockStorageConfig
-		Rank system.Rank
+		Rank ranklist.Rank
 	}
 
 	MockHostStorageConfig struct {
@@ -627,6 +630,7 @@ func MockStorageScanResp(t *testing.T,
 				DeviceList: []string{fmt.Sprintf("pmem%d", index)},
 				TotalBytes: mockScmConfig.TotalBytes,
 				AvailBytes: mockScmConfig.AvailBytes,
+				Rank:       mockScmConfig.Rank,
 			}
 		}
 		scmNamespaces = append(scmNamespaces, scmNamespace)
@@ -655,6 +659,10 @@ func MockStorageScanResp(t *testing.T,
 }
 
 func mockRanks(rankSet string) (ranks []uint32) {
+	if rankSet == "" {
+		return
+	}
+
 	for _, item := range strings.Split(rankSet, ",") {
 		rank, err := strconv.ParseUint(item, 10, 32)
 		if err != nil {

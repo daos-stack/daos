@@ -17,6 +17,9 @@
 
 #define VOS_SUB_OP_MAX	((uint16_t)-2)
 
+#define VOS_POOL_DF_2_2 24
+#define VOS_POOL_DF_2_4 25
+
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
@@ -57,6 +60,10 @@ enum dtx_entry_flags {
 	DTE_CORRUPTED		= (1 << 3),
 	/* The DTX entry on leader does not exist, then not sure the status. */
 	DTE_ORPHAN		= (1 << 4),
+	/* Related DTX may be only committed on some participants, but not
+	 * on all yet, need to be re-committed.
+	 */
+	DTE_PARTIAL_COMMITTED	= (1 << 5),
 };
 
 struct dtx_entry {
@@ -269,7 +276,9 @@ enum {
 
 enum {
 	/** Aggregation optimization is enabled for this pool */
-	VOS_POOL_FEAT_AGG_OPT	= (1 << 0),
+	VOS_POOL_FEAT_AGG_OPT = (1ULL << 0),
+	/** Pool check is supported for this pool */
+	VOS_POOL_FEAT_CHK = (1ULL << 1),
 };
 
 /** Mask for any conditionals passed to to the fetch */

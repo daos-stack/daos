@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,11 +37,11 @@ class OSAOnlineDrain(OSAUtils):
 
     def run_online_drain_test(self, num_pool, oclass=None, app_name="ior"):
         """Run the Online drain without data.
-            Args:
-             num_pool(int) : total pools to create for testing purposes.
-             oclass(str) : Object class type (RP_2G1, etc)
-             app_name(str) : application to run on parallel (ior or mdtest)
-                             Defaults to ior.
+
+        Args:
+             num_pool (int) : total pools to create for testing purposes.
+             oclass (str) : Object class type (RP_2G1, etc)
+             app_name (str) : application to run on parallel (ior or mdtest). Defaults to ior.
         """
         # Create a pool
         self.pool = []
@@ -53,13 +52,13 @@ class OSAOnlineDrain(OSAUtils):
         drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
-        n = random.randint(0, 6) #nosec
-        target_list.append(n)
-        target_list.append(n+1)
+        exc = random.randint(0, 6)  # nosec
+        target_list.append(exc)
+        target_list.append(exc + 1)
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Drain one of the ranks (or server)
-        rank = random.randint(1, drain_servers) #nosec
+        rank = random.randint(1, drain_servers)  # nosec
 
         for val in range(0, num_pool):
             self.pool.append(self.get_pool())
@@ -90,17 +89,15 @@ class OSAOnlineDrain(OSAUtils):
             # Wait the threads to write some data before drain.
             time.sleep(5)
             self.pool[val].display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
+            pver_begin = self.pool[val].get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_drain(
-                self.pool[val].uuid, rank, t_string)
+            output = self.pool[val].drain(rank, t_string)
             self.print_and_assert_on_rebuild_failure(output)
 
-            pver_drain = self.get_pool_version()
+            pver_drain = self.pool[val].get_version(True)
             self.log.info("Pool Version after drain %s", pver_drain)
             # Check pool version incremented after pool exclude
-            self.assertTrue(pver_drain > pver_begin,
-                            "Pool Version Error:  After drain")
+            self.assertTrue(pver_drain > pver_begin, "Pool Version Error:  After drain")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
@@ -126,7 +123,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_with_csum
+        :avocado: tags=osa_drain,online_drain,online_drain_with_csum,test_osa_online_drain
         """
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
@@ -141,6 +138,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa
         :avocado: tags=osa_drain,online_drain,online_drain_without_csum
+        :avocado: tags=test_osa_online_drain_no_csum
         """
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -156,7 +154,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_oclass
+        :avocado: tags=osa_drain,online_drain,online_drain_oclass,test_osa_online_drain_oclass
         """
         self.log.info("Online Drain : Oclass")
         for oclass in self.test_oclass:
@@ -172,6 +170,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_aggregation
+        :avocado: tags=test_osa_online_drain_with_aggregation
         """
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -187,7 +186,7 @@ class OSAOnlineDrain(OSAUtils):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_mdtest
+        :avocado: tags=osa_drain,online_drain,online_drain_mdtest,test_osa_online_drain_mdtest
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")

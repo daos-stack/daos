@@ -451,14 +451,15 @@ ts_remove_rect(void)
 	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
-		if (rc != 0)
+		if (rc < 0) {
 			D_FATAL("Remove rect failed "DF_RC"\n", DP_RC(rc));
+			fail();
+		}
 	} else {
-		if (rc == 0) {
+		if (rc >= 0) {
 			D_FATAL("Remove rect should have failed\n");
 			fail();
 		}
-		rc = 0;
 	}
 }
 
@@ -2445,10 +2446,8 @@ ts_group(void **state)
 
 	int	opc = 0;
 
-	while ((opc = getopt_long(test_group_argc,
-				 test_group_args,
-				 "C:a:m:e:f:g:d:b:Docl::tsr:",
-				 ts_ops, NULL)) != -1){
+	while ((opc = getopt_long(test_group_argc, test_group_args,
+				  "C:a:m:e:f:g:d:b:Docl::ts:r:", ts_ops, NULL)) != -1) {
 		ts_cmd_run(opc, optarg);
 	}
 }

@@ -555,7 +555,7 @@ run_pool_test(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS Pool tests %s", cfg);
+	dts_create_config(test_name, "Pool tests %s", cfg);
 	return cmocka_run_group_tests_name(test_name, pool_tests,
 					   setup, teardown);
 }

@@ -18,7 +18,7 @@ if lspci | grep NVMe; then
   find /dev -name 'pmem*'
 
   # shellcheck disable=SC2086
-  daos_server storage prepare --scm-only --force $STORAGE_PREP_OPT
+  daos_server scm create --force $STORAGE_PREP_OPT
 
   find /dev -name 'pmem*'
 else

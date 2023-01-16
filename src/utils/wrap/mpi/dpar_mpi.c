@@ -1,3 +1,8 @@
+/**
+ * (C) Copyright 2021-2022 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #include <stdio.h>
 #include <mpi.h>
 #include <daos/dpar.h>
@@ -24,12 +29,6 @@ pcom2comm(uint32_t pcom, MPI_Comm *comm)
 
 	*comm = comm_table[pcom];
 	return 0;
-}
-
-uint32_t
-par_getversion(void)
-{
-	return DPAR_VERSION;
 }
 
 int
@@ -347,4 +346,29 @@ par_comm_free(uint32_t pcom)
 	free_pcom(pcom);
 
 	return 0;
+}
+
+bool
+par_version_compatible(uint32_t version, uint32_t *libmajor, uint32_t *libminor)
+{
+	uint32_t major = version >> DPAR_VERSION_SHIFT;
+	uint32_t minor = version & DPAR_VERSION_MASK;
+
+	if (libmajor != NULL)
+		*libmajor = DPAR_MAJOR;
+	if (libminor != NULL)
+		*libminor = DPAR_MINOR;
+
+	/** Major version difference means this library is incompatible with the caller */
+	if (major != DPAR_MAJOR)
+		return false;
+
+	/** For minor version, it is only incompatible if the caller minor version is greater
+	 *  than the minor version of the library.  This means that new APIs are expected
+	 *  but are not defined.
+	 */
+	if (minor > DPAR_MINOR)
+		return false;
+
+	return true;
 }

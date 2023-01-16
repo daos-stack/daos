@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,6 +66,9 @@ class MdtestBase(DfuseTestBase):
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
                         self.processes, out_queue=out_queue)
+
+        if self.subprocess:
+            return
 
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:

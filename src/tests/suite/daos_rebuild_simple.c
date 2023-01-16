@@ -29,66 +29,24 @@
 
 #define DATA_SIZE	(1048576 * 2 + 512)
 
-#if 0
-/* Disable inflight IO due to DAOS-8775 for 2.0, and re-enable it until inflight I/O
- * during reintegrated are supported.
- */
-static int
-reintegrate_inflight_io(void *data)
-{
-	test_arg_t	*arg = data;
-	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
-	struct ioreq	req;
-	int		i;
-
-	rebuild_pool_connect_internal(arg);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	for (i = 0; i < 5; i++) {
-		char	key[32];
-		daos_recx_t recx;
-		char	buf[DATA_SIZE];
-
-		sprintf(key, "d_inflight_%d", i);
-		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
-
-		sprintf(key, "d_inflight_1M_%d", i);
-		recx.rx_idx = 0;
-		recx.rx_nr = DATA_SIZE;
-		memset(buf, 'a', DATA_SIZE);
-		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
-			     buf, DATA_SIZE, &req);
-	}
-	ioreq_fini(&req);
-	rebuild_pool_disconnect_internal(arg);
-	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
-				      NULL);
-	return 0;
-}
-#endif
-
 static void
 reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 			     d_rank_t rank, int tgt)
 {
 	daos_obj_id_t inflight_oid;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid != NULL) {
 		inflight_oid = *oid;
 	} else {
-#endif
-	inflight_oid = daos_test_oid_gen(arg->coh,
+		inflight_oid = daos_test_oid_gen(arg->coh,
 					 DAOS_OC_R3S_SPEC_RANK, 0,
 					 0, arg->myrank);
-	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+		inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+	}
 
-#if 0
 	arg->rebuild_cb = reintegrate_inflight_io;
 	arg->rebuild_cb_arg = &inflight_oid;
-#endif
+
 	/* To make sure the IO will be done before reintegration is done */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -97,8 +55,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 	arg->rebuild_cb = NULL;
 	arg->rebuild_cb_arg = NULL;
 
-#if 0
-	/* Disable it due to DAOS-7420 */
 	if (oid == NULL) {
 		int rc;
 
@@ -106,7 +62,6 @@ reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
 		if (rc != 0)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
-#endif
 }
 
 static void
@@ -790,6 +745,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	d_rank_t	rank = 2;
 	int		rank_nr = 1;
 	int		i;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -805,15 +761,17 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+			      arg->group, rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
@@ -859,6 +817,7 @@ rebuild_large_object(void **state)
 	d_rank_t	rank = 2;
 	int		i;
 	int		j;
+	int		rc = 0;
 
 	if (!test_runable(arg, 4))
 		return;
@@ -875,15 +834,17 @@ rebuild_large_object(void **state)
 	}
 
 	/** exclude the target of this obj's replicas */
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config, rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      rank, -1);
+	assert_success(rc);
 
 	/* wait until rebuild done */
 	test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
-	daos_reint_server(arg->pool.pool_uuid, arg->group,
-			  arg->dmg_config, rank);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank, -1);
+	assert_success(rc);
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
@@ -1226,7 +1187,7 @@ rebuild_with_dfs_open_create_punch(void **state)
 
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
-	reintegrate_single_pool_rank_no_disconnect(arg, rank);
+	reintegrate_single_pool_rank(arg, rank, false);
 
 	for (i = 0; i < 20; i++) {
 		sprintf(filename, "degrade_file_%d", i);
@@ -1254,6 +1215,62 @@ rebuild_with_dfs_open_create_punch(void **state)
 	uuid_unparse(co_uuid, str);
 	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
+}
+
+static int
+rebuild_wait_reset_fail_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	print_message("wait 120 seconds for rebuild/reclaim/retry....");
+	sleep(120);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+
+	return 0;
+}
+
+static void
+rebuild_many_objects_with_failure(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	int		tgt = DEFAULT_FAIL_TGT;
+	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	for (i = 0; i < 15000; i++) {
+		char buffer[16];
+		daos_recx_t recx;
+		struct ioreq req;
+
+		oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0, arg->myrank);
+		oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+		oid = dts_oid_set_tgt(oid, DEFAULT_FAIL_TGT);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+		memset(buffer, 'a', 16);
+		recx.rx_idx = 0;
+		recx.rx_nr = 16;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer, 16, &req);
+
+		ioreq_fini(&req);
+	}
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 100,
+				      0, NULL);
+	}
+
+	arg->rebuild_cb = rebuild_wait_reset_fail_cb;
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 }
 
 /** create a new pool/container for each test */
@@ -1300,6 +1317,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD21: rebuild with dfs open create punch",
 	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD22: rebuild lot of objects with failure",
+	 rebuild_many_objects_with_failure, rebuild_sub_setup, test_teardown},
 };
 
 int

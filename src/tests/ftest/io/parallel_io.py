@@ -1,12 +1,11 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import threading
-import subprocess #nosec
+import subprocess  # nosec
 import time
 from getpass import getuser
 import general_utils
@@ -90,8 +89,8 @@ class ParallelIo(FioBase, IorTestBase):
             count (int): aggregation index
         """
         counter = 1
-        while (self.statvfs_after_cont_destroy[count] <
-               self.statvfs_before_cont_destroy[count] + reduced_space):
+        while (self.statvfs_after_cont_destroy[count] < self.statvfs_before_cont_destroy[count]
+                + reduced_space):
             # try to wait for 4 x 60 secs for aggregation to be completed
             # or else exit the test with a failure.
             if counter > 4:
@@ -126,7 +125,7 @@ class ParallelIo(FioBase, IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio
+        :avocado: tags=parallelio,test_parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -186,7 +185,7 @@ class ParallelIo(FioBase, IorTestBase):
             self.fail(
                 "Fio was able to access destroyed container: {}".format(
                     self.container[0].uuid))
-        except CommandFailure as error:
+        except CommandFailure:
             self.log.info("This run is expected to fail")
 
         # check dfuse is still running after attempting to access deleted
@@ -217,7 +216,7 @@ class ParallelIo(FioBase, IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=multipoolparallelio,test_multipool_parallelio
         """
         # test params
         threads = []
@@ -258,8 +257,7 @@ class ParallelIo(FioBase, IorTestBase):
             dfuse_pool_dir = str(self.dfuse.mount_dir.value + "/" + pool.uuid)
             for counter in range(self.cont_count):
                 cont_num = (pool_count * self.cont_count) + counter
-                dfuse_cont_dir = str(dfuse_pool_dir + "/" +
-                                     self.container[cont_num].uuid)
+                dfuse_cont_dir = str(dfuse_pool_dir + "/" + self.container[cont_num].uuid)
                 cmd = "###ls -a {}".format(dfuse_cont_dir)
                 self.execute_cmd(cmd)
 
@@ -304,8 +302,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         # Calculate the expected space to be returned after containers
         # are destroyed.
-        reduced_space = (self.cont_count *
-                         int(self.ior_cmd.block_size.value))/2
+        reduced_space = (self.cont_count * int(self.ior_cmd.block_size.value)) / 2
 
         # Verify if expected space is returned for each pool after containers
         # were destroyed. If not, wait for 60 secs and check again. Wait 4

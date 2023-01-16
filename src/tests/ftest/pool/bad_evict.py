@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -63,7 +62,10 @@ class BadEvictTest(TestWithServers):
             saveduuid = (ctypes.c_ubyte * 16)(0)
             for index, _ in enumerate(saveduuid):
                 saveduuid[index] = self.pool.pool.uuid[index]
-            self.pool.pool.uuid[4] = 244
+            if self.pool.pool.uuid[4] != 244:
+                self.pool.pool.uuid[4] = 244
+            else:
+                self.pool.pool.uuid[4] = 255
 
         self.pool.uuid = self.pool.pool.get_uuid_str()
 

@@ -6,7 +6,9 @@
 
 package config
 
-import "github.com/daos-stack/daos/src/control/server/engine"
+import (
+	"github.com/daos-stack/daos/src/control/server/engine"
+)
 
 // ServerLegacy describes old configuration options that should be supported for backward
 // compatibility and may be deprecated in future releases.
@@ -38,7 +40,6 @@ func updateVMDSetting(legacyCfg ServerLegacy, srvCfg *Server) error {
 	}
 }
 
-// parseLegacyConfig takes server config raw bytes and updates the provided server config struct.
 func updateFromLegacyParams(srvCfg *Server) error {
 	if err := updateVMDSetting(srvCfg.Legacy, srvCfg); err != nil {
 		return err

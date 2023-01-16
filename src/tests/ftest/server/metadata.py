@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -278,6 +278,10 @@ class ObjectMetadata(TestWithServers):
                 self.fail("Phase 3: fail (unexpected container create error)")
         self.log.info(
             "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
+
+        # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
+        self.container = None
+        self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
     def test_metadata_addremove(self):

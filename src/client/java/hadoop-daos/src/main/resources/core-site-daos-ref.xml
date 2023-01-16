@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!--
+ * (C) Copyright 2016-2022 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+-->
+
+<!-- Please merge these properties with your hadoop core-site.xml -->
+
+<configuration>
+  <property>
+    <name>fs.defaultFS</name>
+    <value>daos://Pool1/Cont1</value>
+	<description>Your DAOS URI. "Pool1" is DAOS pool label. "Cont1" is DAOS POSIX container label. Required.</description>
+  </property>
+  <property>
+    <name>hadoop.tmp.dir</name>
+    <value>file:///tmp/hadoop</value>
+    <description>A base for other temporary directories. Configure it to local file system if you don't want hadoop temporary file
+	to be written to DAOS. Suggested.</description>
+  </property>
+  <property>
+    <name>fs.checkpoint.period</name>
+    <value>1800</value>
+    <description>The number of seconds between two periodic checkpoints. Optional.</description>
+  </property>
+  <property>
+    <name>fs.checkpoint.size</name>
+    <value>10485760</value>
+	<description>Hadoop filesystem checkpoint size. Optional.</description>
+  </property>
+  <property>
+    <name>fs.AbstractFileSystem.daos.impl</name>
+    <value>io.daos.fs.hadoop.DaosAbsFsImpl</value>
+	<description>DAOS impl. of abstract file system. Required.</description>
+  </property>
+  <property>
+    <name>fs.automatic.close</name>
+    <value>false</value>
+	<description>Set it to false to prevent closing underlying shared DAOS Container session. Required.</description>
+  </property>
+</configuration>
+

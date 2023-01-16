@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package logging
 
 import (
@@ -14,6 +15,7 @@ import (
 type (
 	// Logger defines a standard logging interface
 	Logger interface {
+		EnabledFor(level LogLevel) bool
 		DebugLogger
 		Debug(msg string)
 		InfoLogger
@@ -83,6 +85,12 @@ func (ll *LeveledLogger) SetLevel(newLevel LogLevel) {
 // Level returns the logger's current LogLevel.
 func (ll *LeveledLogger) Level() LogLevel {
 	return ll.level.Get()
+}
+
+// EnabledFor returns true if the logger is enabled for the
+// specified LogLevel.
+func (ll *LeveledLogger) EnabledFor(level LogLevel) bool {
+	return ll.level.Get() >= level
 }
 
 // ClearLevel clears all loggers for the specified level.

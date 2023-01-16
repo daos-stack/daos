@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ior_test_base import IorTestBase
+
 
 class EcodCellSize(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -29,7 +29,7 @@ class EcodCellSize(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_ior,ior
-        :avocado: tags=ec_cell_size
+        :avocado: tags=ec_cell_size,test_ec_cell_size
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

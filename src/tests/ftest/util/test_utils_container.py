@@ -1,19 +1,19 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
 from logging import getLogger
 from time import time
 
-from test_utils_base import TestDaosApiBase
-
 from avocado import fail_on
-from command_utils_base import BasicParameter
-from exception_utils import CommandFailure
 from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
                         c_uuid_to_str, str_to_c_uuid)
+
+from test_utils_base import TestDaosApiBase
+from command_utils_base import BasicParameter
+from exception_utils import CommandFailure
 from general_utils import get_random_bytes, DaosTestError
 
 
@@ -265,9 +265,12 @@ class TestContainer(TestDaosApiBase):
         self.path = BasicParameter(None)
         self.type = BasicParameter(None)
         self.oclass = BasicParameter(None)
+        self.dir_oclass = BasicParameter(None)
+        self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
+        self.label = BasicParameter(None)
 
         self.container = None
         self.uuid = None
@@ -329,14 +332,19 @@ class TestContainer(TestDaosApiBase):
                 kwargs["con_uuid"] = uuid
 
             # Refer daos_api for setting input params for DaosContainer.
+            cop = self.input_params.get_con_create_params()
             if con_in is not None:
-                cop = self.input_params.get_con_create_params()
                 cop.type = con_in[0]
                 cop.enable_chksum = con_in[1]
                 cop.srv_verify = con_in[2]
                 cop.chksum_type = con_in[3]
                 cop.chunk_size = con_in[4]
-                kwargs["con_prop"] = cop
+                cop.rd_lvl = con_in[5]
+            else:
+                # Default to RANK fault domain (rd_lvl:1) when not specified
+                cop.rd_lvl = ctypes.c_uint64(1)
+
+            kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
 
@@ -352,18 +360,19 @@ class TestContainer(TestDaosApiBase):
                 "path": self.path.value,
                 "cont_type": self.type.value,
                 "oclass": self.oclass.value,
+                "dir_oclass": self.dir_oclass.value,
+                "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
                 "acl_file": acl_file,
+                "label": self.label.value
             }
 
             self._log_method("daos.container_create", kwargs)
             try:
-                uuid = self.daos.container_create(
-                    **kwargs)["response"]["container_uuid"]
+                uuid = self.daos.container_create(**kwargs)["response"]["container_uuid"]
             except KeyError as error:
-                raise CommandFailure(
-                    "Error: Unexpected daos container create output") from error
+                raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
@@ -910,6 +919,30 @@ class TestContainer(TestDaosApiBase):
                 "Error: Undefined control_method: %s", self.control_method.value)
 
         return None
+
+    @fail_on(CommandFailure)
+    @fail_on(DaosTestError)
+    def update_acl(self, entry=None, acl_file=None):
+        """Update container acl by calling daos container update-acl.
+
+        Args:
+            entry (bool, optional): Add or modify a single ACL entry
+            acl_file (str, optional): Input file containing ACL
+
+        Returns:
+            str: JSON output of daos container update-acl.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+            DaosTestError: if params are undefined
+
+        """
+        if self.control_method.value != self.USE_DAOS:
+            raise DaosTestError("Undefined control_method: {}".format(self.control_method.value))
+        if not self.daos:
+            raise DaosTestError("Undefined daos command")
+        return self.daos.container_update_acl(
+            pool=self.pool.identifier, cont=self.uuid, entry=entry, acl_file=acl_file)
 
     def verify_health(self, expected_health):
         """Check container property's Health field by calling daos container get-prop.

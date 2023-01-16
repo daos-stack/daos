@@ -122,7 +122,7 @@ daos_shard_fail_value(uint16_t *shards, int nr)
 
 	for (i = 0; i < nr; i++) {
 		D_ASSERT(shards[i] != 0xffff);
-		fail_val |= ((shards[i] + 1) << (16 * i));
+		fail_val |= ((uint64_t)(shards[i] + 1) << (16 * i));
 	}
 
 	return fail_val;

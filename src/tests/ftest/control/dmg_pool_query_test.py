@@ -35,9 +35,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         pool query command.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_basic,test_pool_query_basic
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         self.pool.set_query_data()
@@ -77,8 +77,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "pool_layout_ver": 1,
-            "upgrade_layout_ver": 1,
+            "pool_layout_ver": 2,
+            "upgrade_layout_ver": 2,
             "rebuild": {
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),
@@ -104,9 +104,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         argument of the dmg pool subcommand.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_inputs,test_pool_query_inputs
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_inputs
         """
         # Get test UUIDs
         errors_list = []
@@ -151,9 +151,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         accurately show the size changes once there is content in the pool.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_write,test_pool_query_ior
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_ior
         """
         # Store original pool info
         self.pool.set_query_data()

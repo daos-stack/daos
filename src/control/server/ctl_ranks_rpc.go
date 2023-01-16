@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -165,7 +166,6 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("CtlSvc.StopRanks dispatch, req:%+v\n", req)
 
 	signal := syscall.SIGINT
 	if req.Force {
@@ -204,8 +204,6 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
-
-	svc.log.Debugf("CtlSvc.StopRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -252,8 +250,6 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, errors.New("no ranks specified in request")
 	}
 
-	svc.log.Debugf("CtlSvc.PingRanks dispatch, req:%+v\n", req)
-
 	results, err := svc.queryLocalRanks(ctx, req)
 	if err != nil {
 		return nil, err
@@ -263,8 +259,6 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
-
-	svc.log.Debugf("CtlSvc.PingRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -285,14 +279,13 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
 
-	savedRanks := make(map[uint32]system.Rank) // instance idx to system rank
+	savedRanks := make(map[uint32]ranklist.Rank) // instance idx to system rank
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
 		if err != nil {
@@ -331,8 +324,6 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		return nil, err
 	}
 
-	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, resp:%+v\n", resp)
-
 	return resp, nil
 }
 
@@ -349,7 +340,6 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("CtlSvc.StartRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
@@ -379,8 +369,6 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 
-	svc.log.Debugf("CtlSvc.StartRanks dispatch, resp:%+v\n", resp)
-
 	return resp, nil
 }
 
@@ -389,8 +377,6 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-
-	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, req:%+v\n", req)
 
 	var errs []string
 
@@ -432,8 +418,6 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 	}
 
 	resp := new(ctlpb.SetLogMasksResp)
-
-	svc.log.Debugf("CtlSvc.SetEngineLogMasks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }

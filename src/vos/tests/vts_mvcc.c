@@ -168,7 +168,7 @@ set_oid(int i, char *path, daos_unit_oid_t *oid)
 	oid->id_pub.lo = (i << 8) + path[L_O];
 	daos_obj_set_oid(&oid->id_pub, DAOS_OT_MULTI_UINT64, OR_RP_1, 1, 0);
 	oid->id_shard = 0;
-	oid->id_pad_32 = 0;
+	oid->id_layout_ver = 0;
 }
 
 static void
@@ -1116,12 +1116,17 @@ we_minus_re(daos_epoch_t we, daos_epoch_t re)
 		return -1;
 }
 
+static bool pp_enabled;
+
 static bool
 conflicting_rw_is_excluded(bool empty, struct op *r, char *rp, daos_epoch_t re,
 			   struct op *w, char *wp, daos_epoch_t we,
 			   bool same_tx)
 {
 	int i;
+
+	if (pp_enabled)
+		return false;
 
 	for (i = 0; i < ARRAY_SIZE(conflicting_rw_excluded_cases); i++) {
 		struct conflicting_rw_excluded_case *c;
@@ -1736,7 +1741,9 @@ run_mvcc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	dts_create_config(test_name, "VOS MVCC Tests %s", cfg);
+	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &pp_enabled);
+
+	dts_create_config(test_name, "MVCC Tests %s%s", cfg, pp_enabled ? " pp enabled" : "");
 
 	return cmocka_run_group_tests_name(test_name, mvcc_tests,
 					   setup_mvcc, teardown_mvcc);

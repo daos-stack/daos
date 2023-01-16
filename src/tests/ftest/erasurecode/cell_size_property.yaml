@@ -3,60 +3,65 @@ hosts:
   test_clients: 3
 timeout: 900
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos0
+        1:
+          class: nvme
+          bdev_list: ["aaaa:aa:aa.a"]
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["bbbb:bb:bb.b"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
       log_mask: ERR
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem1"]
+          scm_mount: /mnt/daos1
+        1:
+          class: nvme
+          bdev_list: ["bbbb:bb:bb.b"]
 pool:
-    name: daos_server
-    control_method: dmg
-    scm_size: 25%
-    nvme_size: 93%
-    cell_size: !mux
-      cell_size_4K:
-        properties: ec_cell_sz:4096
-      cell_size_64K:
-        properties: ec_cell_sz:65536
-      cell_size_111K:
-        properties: ec_cell_sz:131072
+  control_method: dmg
+  scm_size: 25%
+  nvme_size: 93%
+  cell_size: !mux
+    cell_size_4K:
+      properties: ec_cell_sz:4096
+    cell_size_64K:
+      properties: ec_cell_sz:65536
+    cell_size_111K:
+      properties: ec_cell_sz:131072
 container:
-    type: POSIX
-    control_method: daos
-    cont_cell_size:
-      - 4096
-      - 65536
-      - 131072
-      - 1048576
+  type: POSIX
+  control_method: daos
+  cont_cell_size:
+    - 4096
+    - 65536
+    - 131072
+    - 1048576
 ior:
   api: "DFS"
   client_processes:
     np: 48
   dfs_destroy: False
   iorflags:
-      flags: "-w -W -r -R -G 1 -vv"
+    flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
   repetitions: 1
   ior_transfer_size:
