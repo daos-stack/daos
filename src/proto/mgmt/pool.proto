@@ -124,6 +124,7 @@ message PoolReintegrateReq {
 	uint32 rank = 3; // target to move to the up state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.

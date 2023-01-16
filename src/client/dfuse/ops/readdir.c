@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,6 +115,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = entry->attr;
 
@@ -147,7 +148,6 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_name[NAME_MAX] = '\0';
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", entry->ino, ie->ie_stat.st_mode);
 
@@ -211,16 +211,26 @@ int
 dfuse_do_readdir(struct dfuse_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
 {
-	off_t                         buff_offset = 0;
-	int                           added       = 0;
-	int                           rc          = 0;
-	bool                          large_fetch = true;
-	size_t                        size        = *out_size;
-	struct dfuse_readdir_hdl     *hdl;
+	off_t                     buff_offset = 0;
+	int                       added       = 0;
+	int                       rc          = 0;
+	bool                      large_fetch = true;
+	size_t                    size        = *out_size;
+	struct dfuse_readdir_hdl *hdl;
+
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
+		  "Multiple readdir per handle");
+
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1) == 0,
+		  "Multiple readdir per inode");
 
 	if (offset == READDIR_EOD) {
 		oh->doh_kreaddir_finished = true;
 		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
+
+		atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+
 		*out_size = 0;
 		return 0;
 	}
@@ -427,7 +437,7 @@ reply:
 out_reset:
 	dfuse_readdir_reset(hdl);
 out:
-	D_ASSERT(rc != -0);
+	D_ASSERT(rc != 0);
 	return rc;
 }
 
@@ -453,5 +463,8 @@ out:
 	else
 		DFUSE_REPLY_BUF(oh, req, reply_buff, out_size);
 
+	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(reply_buff);
 }
