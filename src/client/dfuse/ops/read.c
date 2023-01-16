@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,8 +90,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-		d_slab_release(eqt->de_read_slab, ev);
+		D_GOTO(err, rc);
 		return;
 	}
 
