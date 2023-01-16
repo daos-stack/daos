@@ -228,9 +228,6 @@ dfuse_do_readdir(struct dfuse_info *fs_handle, fuse_req_t req, struct dfuse_obj_
 		oh->doh_kreaddir_finished = true;
 		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
 
-		atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
-		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
-
 		*out_size = 0;
 		return 0;
 	}
