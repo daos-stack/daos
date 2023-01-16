@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +10,8 @@ from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):
+    # pylint: disable=too-many-public-methods
+
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
@@ -60,6 +62,7 @@ class DaosCommand(DaosCommandBase):
     def container_create(self, pool, sys_name=None, cont=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
                          properties=None, acl_file=None, label=None):
+        # pylint: disable=too-many-arguments
         """Create a container.
 
         Args:
@@ -392,6 +395,7 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos container get-prop command fails.
 
         """
+        # pylint: disable=wrong-spelling-in-comment
         # Sample output
         # {
         #   "response": [

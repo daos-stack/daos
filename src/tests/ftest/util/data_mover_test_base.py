@@ -1015,7 +1015,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.set_tool(tool)
 
         if create_dataset:
-            # create initial datasets with ior
+            # create initial data-sets with ior
             self.run_ior_with_params("DAOS", self.ior_cmd.test_file.value, pool, cont)
 
         # create cont2
