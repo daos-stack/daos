@@ -24,7 +24,6 @@ from command_utils_base import BasicParameter
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Base DataMover test class.
 
     Optional yaml config values:
@@ -584,6 +583,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                              src_type=None, src_path=None, src_pool=None, src_cont=None,
                              dst_type=None, dst_path=None, dst_pool=None, dst_cont=None):
         """Set the params for self.tool.
+
         Called by run_datamover if params are passed.
 
         DEPRECATED. Use set_dm_params() instead.
@@ -898,6 +898,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                       expected_rc=0, expected_output=None, expected_err=None,
                       processes=None):
         """Run the corresponding command specified by self.tool.
+
         Calls set_datamover_params if and only if any are passed in.
 
         Args:
@@ -1001,8 +1002,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return result
 
     def run_dm_activities_with_ior(self, tool, pool, cont, create_dataset=False):
-        """Generic method to perform various datamover activities
-           using ior
+        """Generic method to perform various datamover activities using ior
+
         Args:
             tool (str): specify the tool name to be used
             pool (TestPool): source pool object

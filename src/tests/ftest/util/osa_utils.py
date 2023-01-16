@@ -18,13 +18,11 @@ from general_utils import create_string_buffer, run_command
 
 
 class OSAUtils(MdtestBase, IorTestBase):
-    # pylint: disable=too-many-ancestors
-    """
-    Test Class Description: This test runs
-    daos_server offline drain test cases.
+    """Test Class Description: This test runs daos_server offline drain test cases.
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()

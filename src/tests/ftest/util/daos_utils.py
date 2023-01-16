@@ -10,7 +10,6 @@ from daos_utils_base import DaosCommandBase
 
 
 class DaosCommand(DaosCommandBase):
-    # pylint: disable=too-many-ancestors,too-many-public-methods
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
@@ -61,7 +60,6 @@ class DaosCommand(DaosCommandBase):
     def container_create(self, pool, sys_name=None, cont=None, path=None, cont_type=None,
                          oclass=None, dir_oclass=None, file_oclass=None, chunk_size=None,
                          properties=None, acl_file=None, label=None):
-        # pylint: disable=too-many-arguments
         """Create a container.
 
         Args:

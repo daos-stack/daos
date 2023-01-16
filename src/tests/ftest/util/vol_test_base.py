@@ -11,7 +11,6 @@ from command_utils import ExecutableCommand
 
 
 class VolTestBase(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Runs HDF5 vol test suites.
 
     :avocado: recursive

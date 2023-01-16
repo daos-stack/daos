@@ -15,7 +15,6 @@ from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive
@@ -77,7 +76,6 @@ class IorTestBase(DfuseTestBase):
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None, out_queue=None, env=None):
-        # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -291,8 +289,7 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
                                   flags, mount_dir):
-        """Run multiple ior commands with various different combination
-           of ior input params.
+        """Run multiple ior commands with various different combination of ior input params.
 
         Args:
             obj_class(list): List of different object classes

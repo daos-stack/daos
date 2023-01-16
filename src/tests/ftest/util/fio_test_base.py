@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -10,7 +9,6 @@ from daos_utils import DaosCommand
 
 
 class FioBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base fio class.
 
     :avocado: recursive
