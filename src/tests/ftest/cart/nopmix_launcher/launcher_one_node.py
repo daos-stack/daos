@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -19,6 +18,7 @@ class CartNoPmixLauncherOneNodeTest(CartTest):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,no_pmix_launcher,one_node,memcheck
+        :avocado: tags=test_cart_no_pmix_launcher
         """
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')

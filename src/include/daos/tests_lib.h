@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -360,6 +360,25 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  *					expected state
  */
 int verify_blobstore_state(int state, const char *state_str);
+
+/**
+ * Stop a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
+/**
+ * Start a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to start.
+ */
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
 
