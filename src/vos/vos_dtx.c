@@ -1072,6 +1072,27 @@ vos_dtx_append(struct dtx_handle *dth, umem_off_t record, uint32_t type)
 	return 0;
 }
 
+static inline uint32_t
+vos_dtx_status(struct vos_dtx_act_ent *dae)
+{
+	if (DAE_FLAGS(dae) & DTE_CORRUPTED)
+		return DTX_ST_CORRUPTED;
+
+	if (dae->dae_committed)
+		return DTX_ST_COMMITTED;
+
+	if (dae->dae_committable)
+		return DTX_ST_COMMITTABLE;
+
+	if (dae->dae_committable)
+		return DTX_ST_COMMITTABLE;
+
+	if (dae->dae_prepared)
+		return DTX_ST_PREPARED;
+
+	return DTX_ST_INITED;
+}
+
 /*
  * Since no entries should be hidden from 'purge' (aggregation, discard,
  * remove) operations, ALB_UNAVAILABLE should never be returned for the
@@ -1126,20 +1147,28 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
-
-	/* The DTX owner can always see the DTX. */
-	if (found && dtx_is_valid_handle(dth) && dae == dth->dth_ent)
-		return ALB_AVAILABLE_CLEAN;
-
-	if (intent == DAOS_INTENT_PURGE)
-		return ALB_AVAILABLE_DIRTY;
-
 	if (!found) {
 		D_DEBUG(DB_TRACE,
-			"Entry %d "DF_U64" not in lru array, it must be"
-			" committed\n", entry, epoch);
+			"Entry %d "DF_U64" not in lru array, it must be committed\n",
+			entry, epoch);
+
 		return ALB_AVAILABLE_CLEAN;
 	}
+
+	if (intent == DAOS_INTENT_PURGE) {
+		/*
+		 * The DTX entry still references related data record,
+		 * then we cannot (vos) aggregate related data record.
+		 */
+		D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) aggregated\n",
+		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
+
+		return ALB_AVAILABLE_DIRTY;
+	}
+
+	/* The DTX owner can always see the DTX. */
+	if (dtx_is_valid_handle(dth) && dae == dth->dth_ent)
+		return ALB_AVAILABLE_CLEAN;
 
 	if (dae->dae_committable || dae->dae_committed || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED)
 		return ALB_AVAILABLE_CLEAN;
