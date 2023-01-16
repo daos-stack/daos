@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,6 +27,7 @@ class PoolSecurityTestBase(TestWithServers):
 
     :avocado: recursive
     """
+
     def modify_acl_file_entry(self, file_name, entry, new_entry):
         """Modify the acl_file acl list entry.
 
