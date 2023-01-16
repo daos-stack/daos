@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,6 +30,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
     """
 
     class PerfParams():
+        # pylint: disable=too-few-public-methods
         """Data class for performance params"""
 
         def __init__(self):

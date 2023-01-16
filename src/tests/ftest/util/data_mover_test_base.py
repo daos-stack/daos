@@ -24,6 +24,7 @@ from command_utils_base import BasicParameter
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
+    # pylint: disable=too-many-instance-attributes
     """Base DataMover test class.
 
     Optional yaml config values:
