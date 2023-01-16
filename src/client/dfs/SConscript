@@ -40,14 +40,14 @@ def scons():
 
     dfs_src = ['dfs.c', 'dfs_sys.c', 'dfs_internal.c']
     dfs = denv.d_library('dfs', dfs_src, LIBS=libraries)
-    denv.Install('$PREFIX/lib64/', dfs)
+    denv.Install('$_LIB_PREFIX/', dfs)
 
     libraries = libraries + ['dfs']
 
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     duns = denv.d_library('duns', 'duns.c', LIBS=libraries)
-    denv.Install('$PREFIX/lib64/', duns)
+    denv.Install('$_LIB_PREFIX/', duns)
 
 
 if __name__ == "SCons.Script":

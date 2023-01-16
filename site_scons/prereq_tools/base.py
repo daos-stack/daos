@@ -690,6 +690,8 @@ class PreReqComponent():
                                    'Allocate ABT ULTs stacks with mmap()', 0))
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
+                      PathVariable('LIB_PREFIX', 'Installation path for shared libraries',
+                                   None, PathVariable.PathIsDirCreate),
                       PathVariable('GOPATH',
                                    'Location of your GOPATH for the build',
                                    f'{self.__build_dir}/go',
@@ -699,6 +701,15 @@ class PreReqComponent():
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
         self._setup_parallel_build()
+
+        # Handle LIB_PREFIX specially, have it default to None but if it's set then make it
+        # relative to root rather than the build tree.  Use _LIB_PREFIX for substitution so that
+        # the default value does not get saved to daos.conf
+        lib_prefix = self.__env.get('LIB_PREFIX')
+        if lib_prefix is None:
+            self.__env['_LIB_PREFIX'] = '$PREFIX/lib64'
+        else:
+            self.__env['_LIB_PREFIX'] = os.path.join(self.__top_dir, lib_prefix)
 
         if config_file is not None:
             self._configs = configparser.ConfigParser()
