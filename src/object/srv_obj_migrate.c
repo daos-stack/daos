@@ -2220,8 +2220,10 @@ migrate_one_create(struct enum_unpack_arg *arg, struct dc_obj_enum_unpack_io *io
 
 		rc = migrate_one_insert_recx(mrone, obj, &io->ui_iods[i], io->ui_recx_ephs[i],
 					     rec_punch_ephs[i], inline_copy ? &sgls[i] : NULL);
-		if (rc)
+		if (rc) {
+			obj_decref(obj);
 			D_GOTO(free, rc);
+		}
 	}
 	obj_decref(obj);
 
