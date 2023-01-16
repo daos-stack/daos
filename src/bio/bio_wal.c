@@ -1762,20 +1762,6 @@ out:
 	return rc;
 }
 
-int
-bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_readv(mc->mc_meta, bsgl, sgl);
-}
-
-int
-bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_writev(mc->mc_meta, bsgl, sgl);
-}
-
 void
 bio_meta_get_attr(struct bio_meta_context *mc, uint64_t *capacity, uint32_t *blk_sz,
 		  uint32_t *hdr_blks)

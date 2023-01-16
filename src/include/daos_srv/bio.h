@@ -955,8 +955,8 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
  */
 int bio_mc_close(struct bio_meta_context *mc);
 
-/* Function to return current data io context */
-struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
+/* Function to return io context for data/meta/wal blob */
+struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type);
 
 /*
  * Reserve WAL log space for current transaction
@@ -1035,28 +1035,6 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  * \return			Zero on success, negative value on error
  */
 int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
-
-/*
- * Read meta blob
- *
- * \param[in]	mc		BIO meta context
- * \param[in]	bsgl		BIO SGL describing the IOVs to be read
- * \param[out]	sgl		SGL for the read buffer
- *
- * \return			Zero on success, negative value on error
- */
-int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
-
-/*
- * Read meta blob
- *
- * \param[in]	mc		BIO meta context
- * \param[in]	bsgl		BIO SGL describing the IOVs to be written
- * \param[in]	sgl		SGL for the data to be written
- *
- * \return			Zero on success, negative value on error
- */
-int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 /*
  * Query meta capacity & meta block size & meta blob header blocks.

@@ -1539,8 +1539,8 @@ vos_data_ioctxt(struct vos_pool *vp)
 
 	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
 	mc = (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
-	if (mc != NULL && bio_mc2data(mc) != NULL)
-		return bio_mc2data(mc);
+	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
+		return bio_mc2ioc(mc, SMD_DEV_TYPE_DATA);
 
 	/* Use dummy I/O context when data blob doesn't exist */
 	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
