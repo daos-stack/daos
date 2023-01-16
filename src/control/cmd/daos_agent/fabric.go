@@ -35,7 +35,12 @@ type FabricInterface struct {
 }
 
 func (f *FabricInterface) Providers() []string {
-	return f.hw.Providers.ToSlice()
+	provs := f.hw.Providers.ToSlice()
+	provStrs := make([]string, len(provs))
+	for i, p := range provs {
+		provStrs[i] = p.Name
+	}
+	return provStrs
 }
 
 func (f *FabricInterface) String() string {

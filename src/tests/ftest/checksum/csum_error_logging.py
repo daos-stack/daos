@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -89,6 +89,7 @@ class CsumErrorLog(DaosCoreBase):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=checksum,faults
         :avocado: tags=csum_error_log
+        :avocado: tags=test_csum_error_logging
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)
