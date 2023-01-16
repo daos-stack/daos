@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -189,6 +189,12 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
+	}
+	if ap.dm_args != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.dm_args))
+	}
+	if ap.fs_copy_stats != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.fs_copy_stats))
 	}
 
 	C.free(unsafe.Pointer(ap))
