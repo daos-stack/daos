@@ -1275,10 +1275,6 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 	for (i = 0, idx = start_tgt, shard_idx = idx + grp_start; i < obj_get_grp_size(obj);
 	     i++, idx = ((idx + obj_get_grp_size(obj) - 1) % obj_get_grp_size(obj)),
 	     shard_idx = idx + grp_start) {
-		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
-		    isclr(reasb_req->tgt_bitmap, idx))
-			continue;
-
 		rc = obj_shard_open(obj, shard_idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
 			rc = 0;
@@ -1304,6 +1300,12 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		if (rc != 0)
 			goto out;
+
+		if (reasb_req != NULL && reasb_req->tgt_bitmap != NIL_BITMAP &&
+		    isclr(reasb_req->tgt_bitmap, shard->do_shard % daos_oclass_grp_size(oca))) {
+			obj_shard_close(shard);
+			continue;
+		}
 
 		if (shard->do_reintegrating)
 			tx->tx_reintegrating = 1;
@@ -1368,6 +1370,9 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		dcri->dcri_req_idx = req_idx;
 		dcri->dcri_padding = 0;
 
+		D_DEBUG(DB_TRACE, "shard idx %u shard id %u tgt id %u cnt r/w %u/%u\n",
+			shard_idx, shard->do_shard, shard->do_target_id, dtrg->dtrg_read_cnt,
+			dtrg->dtrg_write_cnt);
 		if (read)
 			dtrg->dtrg_read_cnt++;
 		else

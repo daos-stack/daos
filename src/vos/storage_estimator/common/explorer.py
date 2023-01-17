@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +8,8 @@ import os
 import copy
 import sys
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, VosValue, Overhead, ValType, KeyType
+from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, \
+    VosValue, Overhead, ValType, KeyType
 from storage_estimator.util import CommonBase, ObjectClass
 
 
