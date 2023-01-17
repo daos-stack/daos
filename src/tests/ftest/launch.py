@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -712,17 +712,20 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    def __init__(self, name, repeat, mode, verbose):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
             repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
+            verbose (int): enable more debug info
+
         """
         self.name = name
         self.repeat = repeat
         self.mode = mode
+        self.verbose = verbose
 
         self.avocado = AvocadoInfo()
         self.class_name = f"FTEST_launch.launch-{self.name.lower()}"
@@ -1882,8 +1885,7 @@ class Launch():
             if not run_remote(logger, hosts, command.format(config)).passed:
                 raise LaunchException(f"Failed to setup {config}")
 
-    @staticmethod
-    def _replace_yaml_file(yaml_file, args, yaml_dir):
+    def _replace_yaml_file(self, yaml_file, args, yaml_dir):
         # pylint: disable=too-many-nested-blocks,too-many-branches
         """Create a temporary test yaml file with any requested values replaced.
 
@@ -2103,7 +2105,7 @@ class Launch():
                 yaml_buffer.write(yaml_data)
 
             # Optionally display a diff of the yaml file
-            if args.verbose > 0:
+            if self.verbose > 0:
                 command = ["diff", "-y", orig_yaml_file, yaml_file]
                 run_local(logger, " ".join(command), check=False)
 
@@ -2438,16 +2440,28 @@ class Launch():
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
-            f"mkdir -p {user_dir}",
-            f"df -h",
-            F"ls -latr {test_dir}"
+            f"mkdir -p {user_dir}"
         ]
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
+        self._list_test_directory(test)
         return 0
+
+    def _list_test_directory(self, test):
+        """List the test directory.
+
+        Args:
+            test (TestInfo): the test information
+        """
+        if self.verbose > 1:
+            test_dir = os.environ["DAOS_TEST_LOG_DIR"]
+            logger.debug("-" * 80)
+            commands = ["df -h", f"ls -latr {test_dir}", f"ls -latr {test_dir}/.."]
+            for command in commands:
+                run_remote(logger, test.host_info.all_hosts, command)
 
     def _generate_certs(self):
         """Generate the certificates for the test.
@@ -2646,9 +2660,11 @@ class Launch():
             for summary, data in remote_files.items():
                 if not data["hosts"]:
                     continue
+                self._list_test_directory(test)
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
                     data["destination"], data["depth"], threshold, data["timeout"])
+        self._list_test_directory(test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2833,18 +2849,7 @@ class Launch():
             summary, hosts, os.path.join(source, pattern), destination)
         logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
         logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
-        logger.debug("*" * 80)
-        logger.info("Partition and DAOS_TEST_LOG_DIR information")
-        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        logger.debug("DEBUG info for DAOS-12368")
-        commands = [
-            f"df -h",
-            f"ls -latr {test_dir}",
-        ]
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                logger.debug("debug command failed")
-        logger.debug("*" * 80)
+
         # List any remote files and their sizes and determine which hosts contain these files
         return_code, file_hosts = self._list_files(hosts, source, pattern, depth)
         if not file_hosts:
@@ -2875,19 +2880,6 @@ class Launch():
         if "core files" in summary:
             # Process the core files
             return_code |= self._process_core_files(os.path.split(destination)[0])
-
-        logger.debug("*" * 80)
-        logger.info("Partition and DAOS_TEST_LOG_DIR information")
-        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        logger.debug("DEBUG info for DAOS-12368")
-        commands = [
-            f"df -h",
-            f"ls -latr {test_dir}",
-        ]
-        for command in commands:
-            if not run_remote(logger, hosts, command).passed:
-                logger.debug("debug command failed")
-        logger.debug("*" * 80)
 
         return return_code
 
@@ -3495,7 +3487,7 @@ def main():
     parser.add_argument(
         "-v", "--verbose",
         action="count",
-        default=0,
+        default=4,
         help="verbosity output level. Specify multiple times (e.g. -vv) for "
              "additional output")
     parser.add_argument(
@@ -3508,7 +3500,7 @@ def main():
     args = parser.parse_args()
 
     # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
+    launch = Launch(args.name, args.repeat, args.mode, args.verbose)
 
     # Override arguments via the mode
     if args.mode == "ci":
