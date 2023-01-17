@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1330,7 +1330,7 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 }
 
 static int
-_d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
+_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_stats_t	*dtm_stats = NULL;
@@ -1363,7 +1363,7 @@ _d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
 			struct d_tm_node_t	*bucket;
 
 			bucket = dtm_histogram->dth_buckets[i].dtb_bucket;
-			_d_tm_reset_node(ctx, bucket);
+			_reset_node(ctx, bucket);
 		}
 	}
 
@@ -1372,7 +1372,7 @@ _d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
 }
 
 static void
-d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
+reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		char *path, int format, int opt_fields, FILE *stream)
 {
 	char	*name = NULL;
@@ -1387,7 +1387,7 @@ d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	switch (node->dtn_type) {
 	case D_TM_LINK:
 		node = d_tm_follow_link(ctx, node);
-		d_tm_reset_node(ctx, node, level, path, format, opt_fields, stream);
+		reset_node(ctx, node, level, path, format, opt_fields, stream);
 		break;
 	case D_TM_DIRECTORY:
 	case D_TM_COUNTER:
@@ -1402,7 +1402,7 @@ d_tm_reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	case (D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME):
 	case D_TM_GAUGE:
 	case D_TM_STATS_GAUGE:
-		_d_tm_reset_node(ctx, node);
+		_reset_node(ctx, node);
 		break;
 	default:
 		fprintf(stream, "Item: %s has unknown type: 0x%x\n", name,
@@ -1458,8 +1458,8 @@ d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node,
 			d_tm_print_node(ctx, node, level, path, format,
 					opt_fields, stream);
 		if (ops & D_TM_ITER_RESET)
-			d_tm_reset_node(ctx, node, level, path, format,
-					opt_fields, stream);
+			reset_node(ctx, node, level, path, format,
+				   opt_fields, stream);
 	}
 
 	parent_name = conv_ptr(shmem, node->dtn_name);
