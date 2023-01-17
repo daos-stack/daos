@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -267,7 +267,7 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		resp.Status = int32(daos.Already)
 		if ps.State != system.PoolServiceStateReady {
 			resp.Status = int32(daos.TryAgain)
-			return resp, svc.checkPools(ctx, ps)
+			return resp, svc.checkPools(ctx, false, ps)
 		}
 		return resp, nil
 	}
@@ -458,7 +458,7 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 // checkPools iterates over the list of pools in the system to check
 // for any that are in an unexpected state. Pools not in the Ready
 // state will be cleaned up and removed from the system.
-func (svc *mgmtSvc) checkPools(parent context.Context, psList ...*system.PoolService) error {
+func (svc *mgmtSvc) checkPools(parent context.Context, ignCreating bool, psList ...*system.PoolService) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
@@ -476,11 +476,15 @@ func (svc *mgmtSvc) checkPools(parent context.Context, psList ...*system.PoolSer
 		if ps.State == system.PoolServiceStateReady {
 			continue
 		}
+		if ignCreating && ps.State == system.PoolServiceStateCreating {
+			svc.log.Noticef("pool %s in %s state but cleanup skipped due to ignore", ps.PoolUUID, ps.State)
+			continue
+		}
 
 		lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
 		if err != nil {
 			if fault.IsFaultCode(err, code.SystemPoolLocked) {
-				svc.log.Noticef("skipping cleanup on pool %s: %s", ps.PoolUUID, err)
+				svc.log.Noticef("pool %s not cleaned up due to err: %s", ps.PoolUUID, err)
 				continue
 			}
 			return err
@@ -497,7 +501,7 @@ func (svc *mgmtSvc) checkPools(parent context.Context, psList ...*system.PoolSer
 		if ps.State != system.PoolServiceStateDestroying {
 			ps.State = system.PoolServiceStateDestroying
 			if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
-				return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+				return errors.Wrapf(err, "pool %s not updated", ps.PoolUUID)
 			}
 		}
 
@@ -512,7 +516,7 @@ func (svc *mgmtSvc) checkPools(parent context.Context, psList ...*system.PoolSer
 		if _, err := svc.PoolDestroy(ctx, dr); err != nil {
 			// Best effort cleanup. If the pool destroy fails here,
 			// another leadership step-up should get it eventually.
-			svc.log.Errorf("error while destroying pool %s: %s", ps.PoolUUID, err)
+			svc.log.Errorf("pool %s not destroyed: %s", ps.PoolUUID, err)
 		}
 	}
 

@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -39,15 +39,16 @@ class ConfigGenerateRun(TestWithServers):
         :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
         num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")
-        min_ssds = self.params.get("min_ssds", "/run/config_generate_params/*/")
+        scm_only = self.params.get("scm_only", "/run/config_generate_params/*/")
         net_class = self.params.get("net_class", "/run/config_generate_params/*/")
         net_provider = self.params.get("net_provider", "/run/config_generate_params/*/")
+        use_tmpfs_scm = self.params.get("use_tmpfs_scm", "/run/config_generate_params/*/")
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
-            access_points=server_host, num_engines=num_engines,
-            min_ssds=min_ssds, net_class=net_class, net_provider=net_provider)
+            access_points=server_host, num_engines=num_engines, scm_only=scm_only,
+            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)

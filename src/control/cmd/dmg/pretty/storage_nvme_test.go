@@ -34,8 +34,8 @@ func TestPretty_PrintNVMeController(t *testing.T) {
 			expPrintStr: `
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
-0000:80:00.2 model-2 fwRev-2     0         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+0000:02:00.0 model-2 fwRev-2     0         2.0 TB   
 `,
 		},
 		"vmd backing devices": {
