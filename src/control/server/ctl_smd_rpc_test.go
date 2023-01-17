@@ -739,7 +739,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 
 			cfg := config.DefaultServer()
 			for i := 0; i < engineCount; i++ {
-				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1).WithRank(uint32(i)))
+				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1))
 			}
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()
@@ -1383,7 +1383,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 
 			cfg := config.DefaultServer()
 			for i := 0; i < engineCount; i++ {
-				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1).WithRank(uint32(i)))
+				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1))
 			}
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()

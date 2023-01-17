@@ -154,12 +154,6 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		superblock.HostFaultDomain = ei.hostFaultDomain.String()
 	}
 
-	if cfg.Rank != nil {
-		superblock.Rank = new(ranklist.Rank)
-		if cfg.Rank != nil {
-			*superblock.Rank = *cfg.Rank
-		}
-	}
 	ei.setSuperblock(superblock)
 	ei.log.Debugf("index %d: creating %s: (rank: %s, uuid: %s)",
 		ei.Index(), ei.superblockPath(), superblock.Rank, superblock.UUID)

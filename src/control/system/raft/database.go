@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -349,6 +349,15 @@ func (db *Database) CheckReplica() error {
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
+// errNotSysLeader returns an error indicating that the node is not
+// the current system leader.
+func errNotSysLeader(svc raftService, db *Database) error {
+	return &system.ErrNotLeader{
+		LeaderHint: string(svc.Leader()),
+		Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+	}
+}
+
 // CheckLeader returns an error if the node is not a replica
 // or is not the current system leader. The error can be inspected
 // for hints about where to find the current leader.
@@ -359,10 +368,7 @@ func (db *Database) CheckLeader() error {
 
 	if err := db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return nil
 	}); err != nil {
@@ -478,6 +484,8 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 
 	for {
+		db.log.Debug("(re-)starting leadership monitoring loop")
+
 		select {
 		case <-parent.Done():
 			if cancelGainedCtx != nil {
@@ -499,7 +507,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
 				if err = db.ResignLeadership(err); err != nil {
@@ -507,7 +514,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				}
 				continue // restart the monitoring loop
 			}
-			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
@@ -583,6 +589,17 @@ func copyMember(in *system.Member) *system.Member {
 	out := new(system.Member)
 	*out = *in
 	return out
+}
+
+// DataVersion returns the current version of the system database.
+func (db *Database) DataVersion() (uint64, error) {
+	if err := db.CheckReplica(); err != nil {
+		return 0, err
+	}
+
+	db.data.RLock()
+	defer db.data.RUnlock()
+	return db.data.Version, nil
 }
 
 // AllMembers returns a copy of the system membership.

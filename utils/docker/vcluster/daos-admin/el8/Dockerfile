@@ -1,4 +1,4 @@
-# Copyright 2021-2022 Intel Corporation
+# Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for building a RHEL variant docker image of a DAOS administrator node
@@ -16,7 +16,7 @@ FROM	$DAOS_BASE_IMAGE:$DAOS_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
 # Install DAOS client package
-RUN	dnf install daos-client &&                                                                 \
+RUN	dnf install daos-admin &&                                                                  \
 	dnf clean all
 
 # Install certificates

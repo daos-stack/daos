@@ -50,7 +50,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
-	hpi, err := common.GetHugePageInfo()
+	mi, err := common.GetMemInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
@@ -64,7 +64,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+	if err := cfg.Validate(log, mi.HugePageSizeKb); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -381,7 +381,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}

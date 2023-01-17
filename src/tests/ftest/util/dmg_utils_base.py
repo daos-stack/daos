@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -222,8 +222,10 @@ class DmgCommandBase(YamlCommand):
                 self.access_points = FormattedParameter(
                     "--access-points={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
-                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
+                self.net_provider = FormattedParameter("--net-provider={}", None)
+                self.use_tmpfs_scm = FormattedParameter("--use-tmpfs-scm", False)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
@@ -481,6 +483,9 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg server set-logmasks command object."""
                 super().__init__("/run/dmg/server/set-logmasks/*", "set-logmasks")
+                # Set log masks for a set of facilities to a given level.
+                # Syntax is identical to the 'D_LOG_MASK' environment variable.
+                self.masks = FormattedParameter("{}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""

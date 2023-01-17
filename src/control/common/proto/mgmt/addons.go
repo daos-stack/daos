@@ -8,14 +8,8 @@ package mgmt
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/proto"
-
-	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 func (p *PoolProperty) UnmarshalJSON(b []byte) error {
@@ -218,68 +212,4 @@ func (r *ListContReq) SetSvcRanks(rl []uint32) {
 // SetUUID sets the request's ID to a UUID.
 func (r *ListContReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
-}
-
-func Debug(msg proto.Message) string {
-	var bld strings.Builder
-	switch m := msg.(type) {
-	case *SystemQueryResp:
-		stateRanks := make(map[string]*ranklist.RankSet)
-		for _, m := range m.Members {
-			if _, found := stateRanks[m.State]; !found {
-				stateRanks[m.State] = &ranklist.RankSet{}
-			}
-			stateRanks[m.State].Add(ranklist.Rank(m.Rank))
-		}
-		fmt.Fprintf(&bld, "%T ", m)
-		for state, set := range stateRanks {
-			fmt.Fprintf(&bld, "%s:%s ", state, set.String())
-		}
-	case *PoolCreateReq:
-		fmt.Fprintf(&bld, "%T uuid:%s u:%s g:%s ", m, m.Uuid, m.User, m.Usergroup)
-		if len(m.Properties) > 0 {
-			fmt.Fprintf(&bld, "p:%+v ", m.Properties)
-		}
-		ranks := &ranklist.RankSet{}
-		for _, r := range m.Ranks {
-			ranks.Add(ranklist.Rank(r))
-		}
-		fmt.Fprintf(&bld, "ranks:%s ", ranks.String())
-		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.Tierbytes {
-			fmt.Fprintf(&bld, "%d: %d ", i, b)
-			if len(m.Tierratio) > i+1 {
-				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
-			}
-		}
-	case *PoolCreateResp:
-		fmt.Fprintf(&bld, "%T ", m)
-		ranks := &ranklist.RankSet{}
-		for _, r := range m.SvcReps {
-			ranks.Add(ranklist.Rank(r))
-		}
-		fmt.Fprintf(&bld, "svc_ranks:%s ", ranks.String())
-		ranks = &ranklist.RankSet{}
-		for _, r := range m.TgtRanks {
-			ranks.Add(ranklist.Rank(r))
-		}
-		fmt.Fprintf(&bld, "tgt_ranks:%s ", ranks.String())
-		fmt.Fprint(&bld, "tiers:")
-		for i, b := range m.TierBytes {
-			fmt.Fprintf(&bld, "%d:%d ", i, b)
-		}
-	case *JoinResp:
-		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t)", m, m.Rank, m.State, m.LocalJoin)
-	default:
-		fmt.Fprintf(&bld, "%T", m)
-		if sr, ok := m.(interface{ GetStatus() int32 }); ok {
-			fmt.Fprintf(&bld, " status:%s", daos.Status(sr.GetStatus()))
-		}
-		dbg := fmt.Sprintf("%+v", m)
-		if len(dbg) > 0 {
-			fmt.Fprintf(&bld, " (%s)", dbg)
-		}
-	}
-
-	return bld.String()
 }
