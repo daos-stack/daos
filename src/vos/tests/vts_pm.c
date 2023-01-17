@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2677,7 +2677,7 @@ local_transaction(void **state)
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
 	for (i = 0; i < 2; i++) {
-		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, epoch, &dth);
+		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
 		assert_rc_equal(rc, 0);
 
 		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey[0], 1, &iod,

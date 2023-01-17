@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,7 +94,9 @@ struct dtx_handle {
 	    /* Ignore other uncommitted DTXs. */
 	    dth_ignore_uncommitted : 1,
 	    /** Local transaction */
-	    dth_local              : 1;
+	    dth_local              : 1,
+	    /** Flag to commit the local transaction */
+	    dth_local_complete     : 1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;

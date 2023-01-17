@@ -271,7 +271,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 }
 
 int
-vos_local_tx_begin(daos_handle_t poh, daos_epoch_t epoch, struct dtx_handle **dthp)
+vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dthp)
 {
 	struct dtx_handle    *dth;
 	struct vos_pool      *pool;
@@ -287,16 +287,8 @@ vos_local_tx_begin(daos_handle_t poh, daos_epoch_t epoch, struct dtx_handle **dt
 
 	/** Use field to store pool handle */
 	dth->dth_coh = poh;
-	/** Set the epoch information */
-	dth->dth_xid.dti_hlc = dth->dth_epoch = dth->dth_epoch_bound = epoch;
 	/** Mark it as special local handle, skip dtx internals */
 	dth->dth_local = 1;
-
-	/** Set this to high value to avoid internal commit...since this causes a large allocation
-	 *  in vos_dtx_rsrvd_init, perhaps we can pick a smaller maximum value.
-	 */
-	dth->dth_modification_cnt    = (uint16_t)-1;
-	dth->dth_op_seq              = 1;
 
 	rc = vos_dtx_rsrvd_init(dth);
 	if (rc != 0) {
@@ -344,11 +336,18 @@ vos_tx_end_internal(struct vos_pool *pool, struct dtx_handle *dth,
 	if (!dth->dth_local_tx_started)
 		goto cancel;
 
-	/* Not the last modification. */
-	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
+	if (err == 0) {
+		/** Just return 0 if it's not the last modification */
+		if (dth->dth_local) {
+			if (dth->dth_local_complete)
+				goto commit;
+		} else if (dth->dth_modification_cnt <= dth->dth_op_seq) {
+			goto commit;
+		}
 		vos_dth_set(NULL);
 		return 0;
 	}
+commit:
 
 	dth->dth_local_tx_started = 0;
 
@@ -418,7 +417,7 @@ vos_local_tx_end(struct dtx_handle *dth, int err)
 	int rc;
 
 	/** Indicate to local tx that we want to actually commit */
-	dth->dth_modification_cnt = dth->dth_op_seq;
+	dth->dth_local_complete = 1;
 
 	rc = vos_tx_end_internal(vos_hdl2pool(dth->dth_coh), dth, NULL, NULL, NULL, err);
 
