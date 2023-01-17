@@ -513,6 +513,7 @@ class DmgCommandBase(YamlCommand):
 
         class ReplaceSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage replace sub command"""
+
             def __init__(self):
                 """Create a dmg storage replace sub command object."""
                 super().__init__("/run/dmg/storage/replace/*", "replace")
@@ -527,6 +528,7 @@ class DmgCommandBase(YamlCommand):
 
             class NVMESubCommand(CommandWithParameters):
                 """Get dmg storage replace sub command object"""
+
                 def __init__(self):
                     """Create a dmg storage replace sub command object."""
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
@@ -536,6 +538,7 @@ class DmgCommandBase(YamlCommand):
 
         class IdentifySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage identify command"""
+
             def __init__(self):
                 """Create a dmg storage identify sub command object."""
                 super().__init__("/run/dmg/storage/identify/*", "identify")
@@ -550,6 +553,7 @@ class DmgCommandBase(YamlCommand):
 
             class VmdSubCommand(CommandWithParameters):
                 """Get dmg storage identify vmd sub command object"""
+
                 def __init__(self):
                     """Create a dmg storage identify vmd command object."""
                     super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")

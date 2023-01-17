@@ -11,7 +11,6 @@ from daos_utils_base import DaosCommandBase
 
 class DaosCommand(DaosCommandBase):
     # pylint: disable=too-many-public-methods
-
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
