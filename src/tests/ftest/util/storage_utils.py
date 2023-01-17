@@ -316,7 +316,7 @@ class StorageInfo():
                 if key == 'PMEM':
                     info_key = 'blockdev'
                     info = {
-                        'size': re.findall(r'"size":(\d),', all_output),
+                        'size': re.findall(r'"size":(\d+),', all_output),
                         'blockdev': re.findall(r'"blockdev":"(.*)",', all_output),
                         'map': re.findall(r'"map":"(.*)",', all_output),
                         'numa': re.findall(r'"numa_node":(\d),', all_output),
