@@ -1373,7 +1373,7 @@ _reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node)
 
 static void
 reset_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
-		char *path, int format, int opt_fields, FILE *stream)
+	   char *path, int format, int opt_fields, FILE *stream)
 {
 	char	*name = NULL;
 
