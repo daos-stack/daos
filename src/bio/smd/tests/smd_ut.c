@@ -12,11 +12,13 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <getopt.h>
 
 #include <daos/common.h>
 #include <daos_srv/smd.h>
 #include "../smd_internal.h"
 #include <daos/tests_lib.h>
+#include <daos/sys_db.h>
 
 #define SMD_STORAGE_PATH	"/mnt/daos"
 #define DB_LIST_NR		(SMD_DEV_TYPE_MAX * 2 + 1)
@@ -197,6 +199,7 @@ db_fini(void)
 uuid_t	dev_id1;
 uuid_t	dev_id2;
 
+static bool is_lmdb;
 static int
 smd_ut_setup(void **state)
 {
@@ -207,9 +210,14 @@ smd_ut_setup(void **state)
 		print_error("Error initializing the debug instance\n");
 		return rc;
 	}
-	db_init();
+	if (is_lmdb) {
+		lmm_db_init_ex(SMD_STORAGE_PATH, "sys_db", true, false);
+		rc = smd_init(lmm_db_get());
+	} else {
+		db_init();
+		rc = smd_init(&ut_db.ud_db);
+	}
 
-	rc = smd_init(&ut_db.ud_db);
 	if (rc) {
 		print_error("Error initializing SMD store: %d\n", rc);
 		daos_debug_fini();
@@ -222,8 +230,13 @@ smd_ut_setup(void **state)
 static int
 smd_ut_teardown(void **state)
 {
-	smd_fini();
-	db_fini();
+	if (is_lmdb) {
+		lmm_db_fini();
+		smd_fini();
+	} else {
+		smd_fini();
+		db_fini();
+	}
 	daos_debug_fini();
 	return 0;
 }
@@ -533,9 +546,26 @@ static const struct CMUnitTest smd_uts[] = {
 	{ "smd_ut_dev_replace", ut_dev_replace, NULL, NULL},
 };
 
+static void
+print_usage(char *name)
+{
+	print_message(
+		"\n\nCOMMON TESTS\n==========================\n");
+	print_message("%s -h|--help\n", name);
+	print_message("%s -l|--lmdb\n", name);
+}
+
+const char *s_opts = "hl";
+static int idx;
+static struct option l_opts[] = {
+	{"help", no_argument,	NULL, 'h'},
+	{"lmdb", no_argument,	NULL, 'l'},
+};
+
 int main(int argc, char **argv)
 {
 	int	rc;
+	int	opt;
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {
@@ -543,9 +573,24 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
+	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) != -1) {
+		switch (opt) {
+		case 'h':
+			print_usage(argv[0]);
+			rc = 0;
+			goto out;
+		case 'l':
+			is_lmdb = true;
+			break;
+		default:
+			rc = 1;
+			goto out;
+		}
+	}
 	rc = cmocka_run_group_tests_name("SMD unit tests", smd_uts,
 					 smd_ut_setup, smd_ut_teardown);
 
+out:
 	ABT_finalize();
 	return rc;
 }

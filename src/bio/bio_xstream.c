@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,9 +94,10 @@ static struct bio_nvme_data nvme_glb;
 static int
 bio_spdk_env_init(void)
 {
-	struct spdk_env_opts	 opts;
-	bool			 enable_rpc_srv;
-	int			 rc;
+	struct spdk_env_opts	opts;
+	bool			enable_rpc_srv;
+	int			rc;
+	int			roles = 0;
 
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
@@ -113,12 +114,13 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
+		nvme_glb.bd_nvme_roles = roles;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
@@ -251,7 +253,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
 	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	D_INFO("MD on SSD is %s\n", md_on_ssd_enabled ? "enabled" : "disabled");
 
 	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
@@ -312,6 +313,10 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		nvme_glb.bd_nvme_conf = NULL;
 		goto free_cond;
 	}
+
+	D_INFO("MD on SSD is %s\n",
+	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+
 	bio_spdk_inited = true;
 	set_faulty_criteria();
 
@@ -765,7 +770,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	}
 }
 
-static int
+int
 bdev_name2roles(const char *name)
 {
 	const char	*dst = strrchr(name, '_');
@@ -831,8 +836,6 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		goto error;
 	}
 
-	/* Update roles in global NVMe config */
-	nvme_glb.bd_nvme_roles |= rc;
 	d_bdev->bb_roles = rc;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
@@ -1181,24 +1184,6 @@ alloc_xs_blobstore(void)
 	return bxb;
 }
 
-static inline struct bio_bdev *
-find_sys_bdev(unsigned int role)
-{
-	struct bio_bdev	*d_bdev;
-
-	D_ASSERT(!d_list_empty(&nvme_glb.bd_bdevs));
-	/*
-	 * Temporarily use the first meta/WAL device, needs be improved when we support
-	 * meta/WAL device hotplug.
-	 */
-	d_list_for_each_entry(d_bdev, &nvme_glb.bd_bdevs, bb_link) {
-		if (is_role_match(d_bdev->bb_roles, role))
-			return d_bdev;
-	}
-
-	return NULL;
-}
-
 static int
 assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 {
@@ -1218,6 +1203,28 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 			goto error;
 		}
 		assigned = true;
+		/*
+		 * Now a device will be assigned to SYS_TGT_ID for RDB
+		 * (the mapping will be recorded in target table), but we should not
+		 * treat the SYS_TGT mapping equally with other VOS targets mappings.
+		 *
+		 * Let's take an example, if there is a config having 4 meta SSDs and 3 targets,
+		 * how should we assign SSDs?
+		 *
+		 * 1. Assign 3 SSDs to 3 VOS targets and sys target (sys target share SSD with
+		 * one of VOS target), leave one SSD unused, or;
+		 * 2. Assign 1 SSD to sys target, assign the other 3 SSDs to VOS targets
+		 *
+		 * We use the 1st policy to assign SSDs and @bb_tgt_cnt won't be increased for
+		 * sys tgt id.
+		 *
+		 */
+		if (tgt_id != BIO_SYS_TGT_ID)
+			d_bdev->bb_tgt_cnt++;
+
+		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d/%u to tgt %d role %u\n",
+			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles,
+			tgt_id, dev_type2role(st));
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
@@ -1242,16 +1249,6 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	int			 rc;
 
 	*dev_state = SMD_DEV_NORMAL;
-	if (tgt_id == BIO_SYS_TGT_ID || tgt_id == BIO_STANDALONE_TGT_ID) {
-		d_bdev = find_sys_bdev(dev_type2role(st));
-		if (d_bdev == NULL) {
-			D_ERROR("Failed to find sys bdev\n");
-			return NULL;
-		}
-		/* Assume the sys device in NORMAL state for this moment */
-		return d_bdev;
-	}
-
 	rc = smd_dev_get_by_tgt(tgt_id, st, &dev_info);
 	if (rc == -DER_NONEXIST) {
 		d_bdev = choose_device(tgt_id, st);
@@ -1265,10 +1262,6 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 			D_ERROR("Failed to assign roles. "DF_RC"\n", DP_RC(rc));
 			return NULL;
 		}
-
-		d_bdev->bb_tgt_cnt++;
-		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d to tgt %d\n",
-			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, tgt_id);
 
 		return d_bdev;
 	} else if (rc) {

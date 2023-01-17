@@ -94,7 +94,7 @@ class ServerFillUp(IorTestBase):
         self.dmg_command = self.get_dmg_command()
 
     def create_container(self):
-        """Create the container """
+        """Create the container."""
         self.nvme_local_cont = self.get_container(self.pool, create=False)
 
         # update container oclass
@@ -219,9 +219,9 @@ class ServerFillUp(IorTestBase):
             self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
 
         # Wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
     def set_device_faulty_loop(self):
         """Set devices to Faulty one by one and wait for rebuild to complete."""
@@ -272,18 +272,17 @@ class ServerFillUp(IorTestBase):
 
         # If NVMe is True get the max NVMe size from servers
         if nvme:
-            self.pool.nvme_size.update('{}'.format(sizes[1]))
+            self.pool.nvme_size.update(str(sizes[1]))
 
         # If SCM is True get the max SCM size from servers
         if scm:
-            self.pool.scm_size.update('{}'.format(sizes[0]))
+            self.pool.scm_size.update(str(sizes[0]))
 
         # Create the Pool
         self.pool.create()
 
     def kill_rank_thread(self, rank):
-        """
-        Server rank kill thread function
+        """Server rank kill thread function.
 
         Args:
             rank: Rank number to kill the daos server
@@ -291,17 +290,15 @@ class ServerFillUp(IorTestBase):
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
     def exclude_target_thread(self, rank, target):
-        """
-        Target kill thread function
+        """Target kill thread function.
 
         Args:
             rank(int): Rank number to kill the target from
             target(str): target number or range of targets to kill
         """
-        self.dmg_command.pool_exclude(self.pool.uuid, rank, str(target))
+        self.pool.exclude(rank, str(target))
 
-    def start_ior_load(self, storage='NVMe', operation="WriteRead",
-                       percent=1, create_cont=True):
+    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -344,8 +341,7 @@ class ServerFillUp(IorTestBase):
             # Kill the target from rank in BG thread
             for _id, (key, value) in enumerate(self.pool_exclude.items()):
                 kill_target_job.append(threading.Thread(target=self.exclude_target_thread,
-                                                        kwargs={"rank": key,
-                                                                "target": value}))
+                                                        kwargs={"rank": key, "target": value}))
                 kill_target_job[_id].start()
 
             # Wait for server kill thread to finish

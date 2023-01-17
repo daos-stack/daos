@@ -1,11 +1,12 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 from ec_utils import ErasureCodeSingle
+
 
 class EcodDisabledRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
@@ -26,8 +27,7 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
         :avocado: tags=ec,ec_single,ec_disabled_rebuild,rebuild
-        :avocado: tags=ec_disabled_rebuild_single
-
+        :avocado: tags=ec_disabled_rebuild_single,test_ec_degrade_single_value
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")

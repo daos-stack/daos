@@ -13,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -138,7 +137,6 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *ranklist.Rank `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -312,12 +310,6 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
-	return c
-}
-
-// WithRank sets the instance rank.
-func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = ranklist.NewRankPtr(r)
 	return c
 }
 

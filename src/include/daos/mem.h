@@ -101,7 +101,9 @@ struct umem_store_ops {
 	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
 				 void *data_iod);
 	int	(*so_wal_replay)(struct umem_store *store,
-				 int (*replay_cb)(uint64_t tx_id, struct umem_action *act));
+				 int (*replay_cb)(uint64_t tx_id, struct umem_action *act,
+						  void *data),
+				 void *arg);
 	/* See bio_wal_id_cmp() */
 	int	(*so_wal_id_cmp)(struct umem_store *store, uint64_t id1, uint64_t id2);
 };

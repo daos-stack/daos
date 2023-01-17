@@ -1,5 +1,5 @@
 """
-   (C) Copyright 2020-2022 Intel Corporation.
+   (C) Copyright 2020-2023 Intel Corporation.
 
    SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,6 +48,7 @@ class IoAggregation(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,ioaggregation,tx
+        :avocado: tags=test_ioaggregation
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")

@@ -52,7 +52,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		srvCfg: cfg,
 	}
 
-	for _, ec := range cfg.Engines {
+	for idx, ec := range cfg.Engines {
 		trc := new(engine.TestRunnerConfig)
 		trc.Running.SetTrue()
 		runner := engine.NewTestRunner(trc, ec)
@@ -62,7 +62,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			bdev.NewMockProvider(log, bmbc), nil)
 		ei := NewEngineInstance(log, sp, nil, runner)
 		ei.setSuperblock(&Superblock{
-			Rank: ranklist.NewRankPtr(ec.Rank.Uint32()),
+			Rank: ranklist.NewRankPtr(uint32(idx)),
 		})
 		ei.ready.SetTrue()
 		if err := cs.harness.AddInstance(ei); err != nil {

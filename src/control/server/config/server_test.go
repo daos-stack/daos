@@ -244,7 +244,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
-			WithRank(0).
 			WithTargetCount(16).
 			WithHelperStreamCount(4).
 			WithServiceThreadCore(0).
@@ -276,7 +275,6 @@ func TestServerConfig_Constructed(t *testing.T) {
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
-			WithRank(1).
 			WithTargetCount(16).
 			WithHelperStreamCount(4).
 			WithServiceThreadCore(22).
@@ -1580,85 +1578,88 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 		expFabNumas []int
 		expErr      error
 	}{
+		"no affinity sources": {
+			affSrcSet: []EngineAffinityFn{},
+			expErr:    errors.New("requires at least one"),
+		},
 		"no affinity detected (default NUMA nodes)": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("", 0),
+			},
 			expNumaSet: []int{0, 0},
 		},
 		"engines have first_core set; NUMA nodes should not be set": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs").
-						WithServiceThreadCore(1),
-					engine.MockConfig().
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs").
-						WithServiceThreadCore(2),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs").
+					WithServiceThreadCore(1),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs").
+					WithServiceThreadCore(2),
+			),
 			expNumaSet: []int{-1, -1},
 		},
 		"single engine with pinned_numa_node set": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs").
-						WithPinnedNumaNode(1),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs").
+					WithPinnedNumaNode(1),
+			),
 			expNumaSet: []int{1},
 		},
 		"single engine without pinned_numa_node set and no detected affinity": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
+			affSrcSet: []EngineAffinityFn{
+				genAffFn("", 0),
+			},
 			expNumaSet: []int{-1},
 		},
 		"single engine without pinned_numa_node set and affinity detected as != 0": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
 			affSrcSet: []EngineAffinityFn{
 				genAffFn("ib0", 1),
 			},
 			expNumaSet: []int{1},
 		},
 		"single engine without pinned_numa_node set and affinity detected as 0": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+			),
 			affSrcSet: []EngineAffinityFn{
 				genAffFn("ib0", 0),
 			},
 			expNumaSet: []int{-1},
 		},
 		"multi engine without pinned_numa_node set and affinity for both detected as 0": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
 			affSrcSet: []EngineAffinityFn{
 				genAffFn("ib0", 0),
 				genAffFn("ib1", 0),
@@ -1666,73 +1667,53 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 			expNumaSet: []int{0, 0},
 		},
 		"multi engine without pinned_numa_node set": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
-			affSrcSet: []EngineAffinityFn{
-				genAffFn("ib0", 1),
-				genAffFn("ib1", 2),
-			},
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
 			expNumaSet: []int{1, 2},
 		},
 		"multi engine with pinned_numa_node set matching detected affinities": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithPinnedNumaNode(1).
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithPinnedNumaNode(2).
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
-			affSrcSet: []EngineAffinityFn{
-				genAffFn("ib0", 1),
-				genAffFn("ib1", 2),
-			},
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithPinnedNumaNode(2).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
 			expNumaSet: []int{1, 2},
 		},
 		"multi engine with pinned_numa_node set overriding detected affinities": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithPinnedNumaNode(2).
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithPinnedNumaNode(1).
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
-			affSrcSet: []EngineAffinityFn{
-				genAffFn("ib0", 1),
-				genAffFn("ib1", 2),
-			},
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithPinnedNumaNode(2).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
 			expNumaSet: []int{2, 1},
 		},
 		"multi engine with first_core set; detected affinities take precedence": {
-			cfg: baseSrvCfg().
-				WithEngines(
-					engine.MockConfig().
-						WithServiceThreadCore(1).
-						WithFabricInterface("ib0").
-						WithFabricProvider("ofi+verbs"),
-					engine.MockConfig().
-						WithServiceThreadCore(25).
-						WithFabricInterface("ib1").
-						WithFabricProvider("ofi+verbs"),
-				),
-			affSrcSet: []EngineAffinityFn{
-				genAffFn("ib0", 1),
-				genAffFn("ib1", 2),
-			},
+			cfg: baseSrvCfg().WithEngines(
+				engine.MockConfig().
+					WithServiceThreadCore(1).
+					WithFabricInterface("ib0").
+					WithFabricProvider("ofi+verbs"),
+				engine.MockConfig().
+					WithServiceThreadCore(25).
+					WithFabricInterface("ib1").
+					WithFabricProvider("ofi+verbs"),
+			),
 			expNumaSet:  []int{-1, -1}, // PinnedNumaNode should not be set
 			expFabNumas: []int{1, 2},
 		},
@@ -1743,6 +1724,13 @@ func TestConfig_SetEngineAffinities(t *testing.T) {
 
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
+
+			if tc.affSrcSet == nil {
+				tc.affSrcSet = []EngineAffinityFn{
+					genAffFn("ib0", 1),
+					genAffFn("ib1", 2),
+				}
+			}
 
 			gotErr := tc.cfg.SetEngineAffinities(log, tc.affSrcSet...)
 			CmpErr(t, tc.expErr, gotErr)
