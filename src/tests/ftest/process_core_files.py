@@ -143,8 +143,8 @@ class CoreFileProcessing():
         try:
             command = [
                 "gdb", f"-cd={core_dir}",
-                "-ex", "set pagination off",
-                "-ex", "thread apply all bt full",
+                "-ex", "'set pagination off'",
+                "-ex", "'thread apply all bt full'",
                 "-ex", "detach",
                 "-ex", "quit",
                 self._get_exe_name(core_full), core_name
@@ -178,7 +178,7 @@ class CoreFileProcessing():
 
         """
         self.log.debug("Extracting the executable name from %s", core_file)
-        command = ["gdb", "-c", core_file, "-ex", "info proc exe", "-ex", "quit"]
+        command = ["gdb", "-c", core_file, "-ex", "'info proc exe'", "-ex", "quit"]
         result = run_local(self.log, " ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
