@@ -9,7 +9,8 @@ import random
 import string
 import subprocess  # nosec
 
-BUILD_FILES = ['site_scons',
+BUILD_FILES = ['site_scons/prereq_tools',
+               'site_scons/components',
                'utils/build.config',
                'SConstruct',
                '.github/workflows/landing-builds.yml',
@@ -21,8 +22,7 @@ COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 
 
 def set_output(key, value):
-    """ Set a key-value pair in GitHub actions metadata"""
-
+    """Set a key-value pair in GitHub actions metadata"""
     env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         print(f'::set-output name={key}::{value}')
@@ -35,7 +35,6 @@ def set_output(key, value):
 
 def main():
     """Parse git history to load caches for GHA"""
-
     # Try and use the right hash key.  For chained PRs on release branches this won't be correct
     # however most of the time it should be right, and the build should still work on cache miss
     # although it will take longer.

@@ -315,11 +315,11 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
-	hpi, err := c.getHugePageInfo()
+	mi, err := c.getMemInfo()
 	if err != nil {
 		return nil, err
 	}
-	if err := convert.Types(hpi, &resp.HugePageInfo); err != nil {
+	if err := convert.Types(mi, &resp.MemInfo); err != nil {
 		return nil, err
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,8 +24,11 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -255,7 +258,7 @@ func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanRes
 	if err := convert.Types(pbResp.GetScm().GetNamespaces(), &hss.HostStorage.ScmNamespaces); err != nil {
 		t.Fatal(err)
 	}
-	if err := convert.Types(pbResp.GetHugePageInfo(), &hss.HostStorage.HugePageInfo); err != nil {
+	if err := convert.Types(pbResp.GetMemInfo(), &hss.HostStorage.MemInfo); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,21 +288,19 @@ func MockHostStorageMap(t *testing.T, scans ...*MockStorageScan) HostStorageMap 
 	return hsm
 }
 
-// MockHugePageInfo returns a mock HugePageInfo result.
-func MockHugePageInfo(t *testing.T, pgSize ...uint32) *ctlpb.HugePageInfo {
-	if len(pgSize) == 0 {
-		pgSize = []uint32{2048}
-	}
-	return &ctlpb.HugePageInfo{
-		PageSizeKb: pgSize[0],
+// MockMemInfo returns a mock MemInfo result.
+func MockMemInfo(t *testing.T) *ctlpb.MemInfo {
+	return &ctlpb.MemInfo{
+		HugepageSizeKb: 2048,
+		MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 	}
 }
 
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
-		Nvme:         &ctlpb.ScanNvmeResp{},
-		Scm:          &ctlpb.ScanScmResp{},
-		HugePageInfo: MockHugePageInfo(t),
+		Nvme:    &ctlpb.ScanNvmeResp{},
+		Scm:     &ctlpb.ScanScmResp{},
+		MemInfo: MockMemInfo(t),
 	}
 	nvmeControllers := storage.NvmeControllers{
 		storage.MockNvmeController(),
@@ -475,9 +476,13 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		}
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
-		ssr.HugePageInfo.PageSizeKb = (1 << 30) >> 10
+		ssr.MemInfo.HugepageSizeKb = humanize.GiByte / humanize.KiByte // specified in kib
 	case "badPciAddr":
 		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
+	case "noHugepageSz":
+		ssr.MemInfo.HugepageSizeKb = 0
+	case "noMemTotal":
+		ssr.MemInfo.MemTotal = 0
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)
@@ -694,4 +699,59 @@ func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCr
 	}
 
 	return poolCreateRespMsg
+}
+
+func MockEngineCfg(t *testing.T, numaID int, pciAddrIDs ...int) *engine.Config {
+	t.Helper()
+
+	tcs := storage.TierConfigs{
+		storage.NewTierConfig().
+			WithNumaNodeIndex(uint(numaID)).
+			WithStorageClass(storage.ClassDcpm.String()).
+			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numaID)).
+			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID)),
+	}
+	if len(pciAddrIDs) > 0 {
+		tcs = append(tcs, storage.NewTierConfig().
+			WithNumaNodeIndex(uint(numaID)).
+			WithStorageClass(storage.ClassNvme.String()).
+			WithBdevDeviceList(test.MockPCIAddrs(pciAddrIDs...)...))
+	}
+
+	return DefaultEngineCfg(numaID).
+		WithPinnedNumaNode(uint(numaID)).
+		WithFabricInterface(fmt.Sprintf("ib%d", numaID)).
+		WithFabricInterfacePort(defaultFiPort + numaID*defaultFiPortInterval).
+		WithFabricProvider("ofi+psm2").
+		WithFabricNumaNodeIndex(uint(numaID)).
+		WithStorage(tcs...).
+		WithStorageNumaNodeIndex(uint(numaID))
+}
+
+func MockEngineCfgTmpfs(t *testing.T, numaID, ramdiskSize int, pciAddrIDs ...int) *engine.Config {
+	t.Helper()
+
+	ec := MockEngineCfg(t, numaID, pciAddrIDs...)
+	ec.Storage.Tiers[0] = storage.NewTierConfig().
+		WithNumaNodeIndex(uint(numaID)).
+		WithScmRamdiskSize(uint(ramdiskSize)).
+		WithStorageClass("ram").
+		WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID))
+
+	return ec
+}
+
+func MockServerCfg(t *testing.T, provider string, ecs []*engine.Config) *config.Server {
+	t.Helper()
+
+	for idx, ec := range ecs {
+		ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
+			WithStorageVosEnv("NVME")
+	}
+
+	return config.DefaultServer().
+		WithControlLogFile(defaultControlLogFile).
+		WithFabricProvider(provider).
+		WithDisableVMD(false).
+		WithEngines(ecs...)
 }
