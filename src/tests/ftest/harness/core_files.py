@@ -13,7 +13,7 @@ from ClusterShell.NodeSet import NodeSet
 from run_utils import run_remote, run_local, RunException
 
 
-class CoreFilesTest(TestWithServers):
+class HarnessCoreFilesTest(TestWithServers):
     """Processed corefile harness test cases.
 
     :avocado: recursive
