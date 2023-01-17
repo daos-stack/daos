@@ -48,6 +48,8 @@ const (
 	PropEntryEncryption = C.DAOS_PROP_ENTRY_ENCRYPT
 	// PropEntryGlobalVersion is the global version property.
 	PropEntryGlobalVersion = C.DAOS_PROP_ENTRY_GLOBAL_VERSION
+	// PropEntryObjectVersion is the object layout version property.
+	PropEntryObjectVersion = C.DAOS_PROP_ENTRY_OBJ_VERSION
 	// PropEntryGroup is the group property.
 	PropEntryGroup = C.DAOS_PROP_ENTRY_GROUP
 	// PropEntryLabel is the label property.

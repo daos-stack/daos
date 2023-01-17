@@ -2031,7 +2031,7 @@ const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_query_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__led_manage_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor ctl__led_manage_req__field_descriptors[4] =
 {
   {
     "ids",
@@ -2069,17 +2069,30 @@ static const ProtobufCFieldDescriptor ctl__led_manage_req__field_descriptors[3] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "led_duration_mins",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__LedManageReq, led_duration_mins),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__led_manage_req__field_indices_by_name[] = {
   0,   /* field[0] = ids */
   1,   /* field[1] = led_action */
+  3,   /* field[3] = led_duration_mins */
   2,   /* field[2] = led_state */
 };
 static const ProtobufCIntRange ctl__led_manage_req__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 3, 1 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor =
 {
@@ -2089,7 +2102,7 @@ const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor =
   "Ctl__LedManageReq",
   "ctl",
   sizeof(Ctl__LedManageReq),
-  3,
+  4,
   ctl__led_manage_req__field_descriptors,
   ctl__led_manage_req__field_indices_by_name,
   2,  ctl__led_manage_req__number_ranges,
@@ -2453,20 +2466,22 @@ const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_manage_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[3] =
+static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[4] =
 {
   { "NORMAL", "CTL__NVME_DEV_STATE__NORMAL", 0 },
   { "NEW", "CTL__NVME_DEV_STATE__NEW", 1 },
   { "EVICTED", "CTL__NVME_DEV_STATE__EVICTED", 2 },
+  { "UNPLUGGED", "CTL__NVME_DEV_STATE__UNPLUGGED", 3 },
 };
 static const ProtobufCIntRange ctl__nvme_dev_state__value_ranges[] = {
-{0, 0},{0, 3}
+{0, 0},{0, 4}
 };
-static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[3] =
+static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[4] =
 {
   { "EVICTED", 2 },
   { "NEW", 1 },
   { "NORMAL", 0 },
+  { "UNPLUGGED", 3 },
 };
 const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
 {
@@ -2475,9 +2490,9 @@ const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
   "NvmeDevState",
   "Ctl__NvmeDevState",
   "ctl",
-  3,
+  4,
   ctl__nvme_dev_state__enum_values_by_number,
-  3,
+  4,
   ctl__nvme_dev_state__enum_values_by_name,
   1,
   ctl__nvme_dev_state__value_ranges,

@@ -76,6 +76,7 @@ enum NvmeDevState {
 	NORMAL = 0;	// Device is in a normal operational state
 	NEW = 1;	// Device is new and is not yet in-use
 	EVICTED = 2;	// Device is faulty and has been evicted
+	UNPLUGGED = 3;	// Device has been physically removed
 }
 
 enum LedState {
@@ -156,7 +157,8 @@ enum LedAction {
 message LedManageReq {
 	string ids = 1;			// List of Device-UUIDs and/or PCI-addresses
 	LedAction led_action = 3;	// LED action to perform
-	LedState led_state = 4;		// LED control case
+	LedState led_state = 4;		// LED state to set (used if action is SET)
+	uint32 led_duration_mins = 5;	// LED action duration (how long to blink LED in minutes)
 }
 
 message DevReplaceReq {

@@ -1,12 +1,12 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 
 from cart_utils import CartTest
+
 
 class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
     # pylint: disable=too-few-public-methods
@@ -20,6 +20,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
 
         :avocado: tags=all,pr
         :avocado: tags=cart,rpc,one_node,swim_rank_eviction,memcheck
+        :avocado: tags=test_cart_rpc
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

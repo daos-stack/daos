@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -209,7 +211,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		}
 	case *fault.Fault:
 		switch e.Code {
-		case code.ServerDataPlaneNotStarted:
+		case code.ServerDataPlaneNotStarted, code.SystemPoolLocked:
 			return true
 		default:
 			return false
@@ -262,7 +264,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Create DAOS pool request: %+v\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Create DAOS pool request: %+v\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -299,13 +301,23 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Destroy DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool destroy failed")
+	if err := ur.getMSError(); err != nil {
+		// If the error is due to a retried destroy failing to find
+		// the pool, then we can assume that the pool was destroyed
+		// via a server-side cleanup and we can intercept it. Everything
+		// else is still an error.
+		if !(ur.retryCount > 0 && system.IsPoolNotFound(err)) {
+			return errors.Wrap(err, "pool destroy failed")
+		}
+	}
+
+	return nil
 }
 
 // PoolUpgradeReq contains the parameters for a pool upgrade request.
@@ -324,7 +336,7 @@ func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Upgrade DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Upgrade DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -351,7 +363,7 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Evict DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Evict DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -580,7 +592,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Query DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -603,7 +615,7 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool targets request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Query DAOS pool targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -749,7 +761,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS pool set-prop request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS pool set-prop request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -798,7 +810,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("pool get-prop request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("pool get-prop request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -898,7 +910,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Drain DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Drain DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -937,7 +949,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Extend DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Extend DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -971,7 +983,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -1131,7 +1143,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system list-pools request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system list-pools request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1179,6 +1191,14 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
 	}
+
+	sort.Slice(resp.Pools, func(i int, j int) bool {
+		l, r := resp.Pools[i], resp.Pools[j]
+		if l == nil || r == nil {
+			return false
+		}
+		return l.Label < r.Label
+	})
 
 	for _, p := range resp.Pools {
 		rpcClient.Debugf("DAOS system pool in list-pools response: %+v", p)

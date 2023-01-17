@@ -28,16 +28,26 @@ from ClusterShell.NodeSet import NodeSet
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing
-from util.logger_utils import get_console_handler, get_file_handler
-from util.results_utils import create_html, create_xml, Job, Results, TestResult
-from util.run_utils import get_local_host, run_local, run_remote, RunException
-from util.user_utils import get_chown_command
+from process_core_files import CoreFileProcessing, CoreFileException
 
+# Update the path to support utils files that import other utils files
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+# pylint: disable=import-outside-toplevel
+from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
+    get_user_groups  # noqa: E402
+
+BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
+DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
-DEFAULT_LOGS_THRESHOLD = "2G"
+DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 PROVIDER_KEYS = OrderedDict(
@@ -113,7 +123,7 @@ def get_yaml_data(yaml_file):
     if os.path.isfile(yaml_file):
         with open(yaml_file, "r", encoding="utf-8") as open_file:
             try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)
+                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
             except yaml.YAMLError as error:
                 logger.error("Error reading %s: %s", yaml_file, str(error))
                 sys.exit(1)
@@ -211,28 +221,6 @@ def find_pci_address(value):
     digit = "0-9a-fA-F"
     pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
     return re.findall(pattern, str(value))
-
-
-def find_command(source, pattern, depth, other=None):
-    """Get the find command.
-
-    Args:
-        source (str): where the files are currently located
-        pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
-        other (object, optional): other commands, as a list or str, to include at the end of the
-            base find command. Defaults to None.
-
-    Returns:
-        str: the find command
-
-    """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
-    if isinstance(other, list):
-        command.extend(other)
-    elif isinstance(other, str):
-        command.append(other)
-    return " ".join(command)
 
 
 class AvocadoInfo():
@@ -351,7 +339,7 @@ class AvocadoInfo():
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
             try:
-                result = run_local(logger, ["avocado", "-v"], check=True)
+                result = run_local(logger, "avocado -v", check=True)
             except RunException as error:
                 message = "Error obtaining avocado version after failed avocado.core.version import"
                 raise LaunchException(message) from error
@@ -401,7 +389,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            result = run_local(logger, ["avocado", "config"], check=True)
+            result = run_local(logger, "avocado config", check=True)
             try:
                 return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
             except IndexError:
@@ -610,25 +598,15 @@ class TestName():
 class TestInfo():
     """Defines the python test file and its associated test yaml file."""
 
-    class HostInfo():
-        # pylint: disable=too-few-public-methods
-        """Defines the hosts being utilized by the test."""
-
-        def __init__(self):
-            """Initialize a HostInfo object."""
-            self.all = NodeSet()
-            self.servers = NodeSet()
-            self.clients = NodeSet()
-
-        @property
-        def clients_with_localhost(self):
-            """Get the test clients including the localhost.
-
-            Returns:
-                NodeSet: test clients including the localhost
-
-            """
-            return self.clients | NodeSet(get_local_host())
+    YAML_INFO_KEYS = [
+        "test_servers",
+        "server_partition",
+        "server_reservation",
+        "test_clients",
+        "client_partition",
+        "client_reservation",
+        "client_users"
+    ]
 
     def __init__(self, test_file, order):
         """Initialize a TestInfo object.
@@ -640,9 +618,12 @@ class TestInfo():
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
-        self.directory, self.python_file = self.test_file.split(os.path.sep)[1:]
+        parts = self.test_file.split(os.path.sep)[1:]
+        self.python_file = parts.pop()
+        self.directory = os.path.join(*parts)
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
-        self.hosts = self.HostInfo()
+        self.host_info = HostInfo()
+        self.yaml_info = {}
 
     def __str__(self):
         """Get the test file as a string.
@@ -653,73 +634,59 @@ class TestInfo():
         """
         return self.test_file
 
-    def set_host_info(self, include_localhost=False):
+    def set_yaml_info(self, include_local_host=False):
+        """Set the test yaml data from the test yaml file.
+
+        Args:
+            include_local_host (bool, optional): whether or not the local host be included in the
+                set of client hosts. Defaults to False.
+        """
+        self.yaml_info = {"include_local_host": include_local_host}
+        yaml_data = get_yaml_data(self.yaml_file)
+        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+
+        logger.debug("Test yaml information for %s:", self.test_file)
+        for key in self.YAML_INFO_KEYS:
+            if key in (self.YAML_INFO_KEYS[0], self.YAML_INFO_KEYS[3]):
+                self.yaml_info[key] = get_node_set(info[key] if key in info else None)
+            else:
+                self.yaml_info[key] = info[key] if key in info else None
+            logger.debug("  %-18s = %s", key, self.yaml_info[key])
+
+    def set_host_info(self, control_node):
         """Set the test host information using the test yaml file.
 
         Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
+            control_node (NodeSet): the slurm control node
+
+        Raises:
+            LaunchException: if there is an error getting the host from the test yaml or a problem
+            setting up a slum partition
+
         """
-        self.hosts.all.clear()
-        self.hosts.all.update(self._get_hosts_from_yaml(include_localhost))
+        logger.debug("Using %s to define host information", self.yaml_file)
+        if self.yaml_info["include_local_host"]:
+            logger.debug("  Adding the localhost to the clients: %s", get_local_host())
+        try:
+            self.host_info.set_hosts(
+                logger, control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
+                self.yaml_info[self.YAML_INFO_KEYS[1]], self.yaml_info[self.YAML_INFO_KEYS[2]],
+                self.yaml_info[self.YAML_INFO_KEYS[3]], self.yaml_info[self.YAML_INFO_KEYS[4]],
+                self.yaml_info[self.YAML_INFO_KEYS[5]], self.yaml_info["include_local_host"])
+        except HostException as error:
+            raise LaunchException("Error getting hosts from {self.yaml_file}") from error
 
-        self.hosts.servers.clear()
-        self.hosts.servers.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_servers"]))
-
-        self.hosts.clients.clear()
-        self.hosts.clients.update(
-            self._get_hosts_from_yaml(include_localhost, YAML_KEYS["test_clients"]))
-
-    def _get_hosts_from_yaml(self, include_localhost=False, key_match=None):
-        """Extract the list of hosts from the test yaml file.
-
-        This host will be included in the list if no clients are explicitly called
-        out in the test's yaml file.
-
-        Args:
-            include_localhost (bool, optional): should the local host be included in the list of
-                client matches. Defaults to False.
-            key_match (str, optional): test yaml key used to filter which hosts to
-                find.  Defaults to None which will match all keys.
+    def get_yaml_client_users(self):
+        """Find all the users in the specified yaml file.
 
         Returns:
-            NodeSet: hosts specified in the test's yaml file
+            list: list of (user, group) to create
 
         """
-        logger.debug("Extracting hosts from %s that match key '%s'", self.yaml_file, key_match)
-        local_host = NodeSet(get_local_host())
-        yaml_hosts = NodeSet()
-        if include_localhost and key_match != YAML_KEYS["test_servers"]:
-            yaml_hosts.add(local_host)
-        found_client_key = False
-        for key, value in list(self._find_yaml_hosts().items()):
-            logger.debug("  Found %s: %s", key, value)
-            if key_match is None or key == key_match:
-                logger.debug("    Adding %s", value)
-                if isinstance(value, list):
-                    yaml_hosts.add(NodeSet.fromlist(value))
-                else:
-                    yaml_hosts.add(NodeSet(value))
-            if key in YAML_KEYS["test_clients"]:
-                found_client_key = True
-
-        # Include this host as a client if no clients are specified
-        if not found_client_key and key_match != YAML_KEYS["test_servers"]:
-            logger.debug("    Adding the localhost: %s", local_host)
-            yaml_hosts.add(local_host)
-
-        return yaml_hosts
-
-    def _find_yaml_hosts(self):
-        """Find the all the host values in the specified yaml file.
-
-        Returns:
-            dict: a dictionary of each host key and its host values
-
-        """
-        return find_values(
-            get_yaml_data(self.yaml_file), [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
+        yaml_data = get_yaml_data(self.yaml_file)
+        client_users = find_values(yaml_data, ["client_users"], val_type=list)
+        client_users = client_users['client_users'] if client_users else []
+        return client_users
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -763,15 +730,23 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
-        self.local_host = NodeSet(get_local_host())
+        self.local_host = get_local_host()
 
         # Results tracking settings
         self.job_results_dir = None
         self.job = None
         self.result = None
 
+        # Options for bullseye code coverage
+        self.bullseye_hosts = NodeSet()
+
         # Details about the run
         self.details = OrderedDict()
+
+        # Options for creating slurm partitions
+        self.slurm_control_node = NodeSet()
+        self.slurm_partition_hosts = NodeSet()
+        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -1009,7 +984,7 @@ class Launch():
         # Modify the test yaml files to run on this cluster
         try:
             self.setup_test_files(args, yaml_dir)
-        except RunException:
+        except (RunException, LaunchException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
@@ -1022,17 +997,42 @@ class Launch():
             logger.warning(error)
 
         # Get the core file pattern information
-        core_files = self._get_core_file_pattern(
-            args.test_servers, args.test_clients, args.process_cores)
+        try:
+            core_files = self._get_core_file_pattern(
+                args.test_servers, args.test_clients, args.process_cores)
+        except LaunchException:
+            message = "Error obtaining the core file pattern information"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Split the timer for the test result to account for any non-test execution steps as not to
         # double report the test time accounted for in each individual test result
         setup_result.end()
 
+        # Determine if bullseye code coverage collection is enabled
+        logger.debug("Checking for bullseye code coverage configuration")
+        # pylint: disable=unsupported-binary-operation
+        self.bullseye_hosts = args.test_servers | get_local_host()
+        result = run_remote(logger, self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
+        if not result.passed:
+            logger.info(
+                "Bullseye code coverage collection not configured on %s", self.bullseye_hosts)
+            self.bullseye_hosts = NodeSet()
+        else:
+            logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+
+        # Define options for creating any slurm partitions required by the tests
+        try:
+            self.slurm_control_node = NodeSet(args.slurm_control_node)
+        except TypeError:
+            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
+        self.slurm_add_partition = args.slurm_setup
+
         # Execute the tests
         status = self.run_tests(
             args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold)
+            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1082,7 +1082,7 @@ class Launch():
 
         # Add details about the run
         self.details["avocado version"] = str(self.avocado)
-        self.details["launch host"] = get_local_host()
+        self.details["launch host"] = str(get_local_host())
 
     def _create_log_dir(self):
         """Create the log directory and rename it if it already exists.
@@ -1133,6 +1133,7 @@ class Launch():
         # /usr/sbin directory.
         usr_sbin = os.path.sep + os.path.join("usr", "sbin")
         path = os.environ.get("PATH")
+        os.environ["COVFILE"] = BULLSEYE_FILE
 
         if not list_tests:
             # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
@@ -1147,6 +1148,8 @@ class Launch():
                 os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
+            if "DAOS_TEST_USER_DIR" not in os.environ:
+                os.environ["DAOS_TEST_USER_DIR"] = DEFAULT_DAOS_TEST_USER_DIR
             if "DAOS_TEST_SHARED_DIR" not in os.environ:
                 if base_dir != os.path.join(os.sep, "usr"):
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
@@ -1301,17 +1304,21 @@ class Launch():
         # Find the speed of each common active interface in order to be able to choose the fastest
         interface_speeds = {}
         for interface in common_interfaces:
+            # Check for a virtual interface
+            module_path = os.path.join(net_path, interface, "device", "driver", "module")
+            command = [f"readlink {module_path}", "grep 'virtio_net'"]
+            result = run_remote(logger, all_hosts, " | ".join(command))
+            if result.passed and result.homogeneous:
+                interface_speeds[interface] = 1000
+                continue
+
+            # Verify each host has the same speed for non-virtual interfaces
             command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
             result = run_remote(logger, all_hosts, command)
-            # Verify each host has the same interface speed
             if result.passed and result.homogeneous:
                 for line in result.output[0].stdout:
                     try:
                         interface_speeds[interface] = int(line.strip())
-                    except IOError as io_error:
-                        # KVM/Qemu/libvirt returns an EINVAL
-                        if io_error.errno == errno.EINVAL:
-                            interface_speeds[interface] = 1000
                     except ValueError:
                         # Any line not containing a speed (integer)
                         pass
@@ -1683,7 +1690,7 @@ class Launch():
 
         # Find all the test files that contain tests matching the tags
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, command, check=True)
+        output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
@@ -1699,7 +1706,7 @@ class Launch():
         """
         logger.debug("Checking for fault injection enablement via 'fault_status':")
         try:
-            run_local(logger, ["fault_status"], check=True)
+            run_local(logger, "fault_status", check=True)
             logger.debug("  Fault injection is enabled")
             return True
         except RunException:
@@ -1715,7 +1722,8 @@ class Launch():
             yaml_dir (str): directory in which to write the modified yaml files
 
         Raises:
-            RunException: if there is a problem updating the test ymal files
+            RunException: if there is a problem updating the test yaml files
+            LaunchException: if there is an error getting host information from the test yaml files
 
         """
         # Replace any placeholders in the extra yaml file, if provided
@@ -1731,21 +1739,124 @@ class Launch():
             if args.extra_yaml:
                 command.extend(args.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, command, check=False)
+            run_local(logger, " ".join(command), check=False)
 
             # Collect the host information from the updated test yaml
-            test.set_host_info(args.include_localhost)
+            test.set_yaml_info(args.include_localhost)
 
-        # Log the test information
-        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
-        logger.debug("-" * 80)
-        logger.debug("Test information:")
-        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
-        for test in self.tests:
-            logger.debug(
-                msg_format, test.name.order, test.test_file, test.yaml_file, test.hosts.servers,
-                test.hosts.clients)
+    @staticmethod
+    def _query_create_group(hosts, group, create=False):
+        """Query and optionally create a group on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            group (str): group to query and create
+            create (bool, optional): whether to create the group if non-existent
+
+        Raises:
+            LaunchException: if there is an error querying or creating the group
+
+        Returns:
+            str: the group's gid
+
+        """
+        # Get the group id on each node
+        logger.info('Querying group %s', group)
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
+        if not create:
+            raise LaunchException(f'Group not setup correctly: {group}')
+
+        # Create the group
+        logger.info('Creating group %s', group)
+        if not groupadd(logger, hosts, group, True, True).passed:
+            raise LaunchException(f'Error creating group {group}')
+
+        # Get the group id on each node
+        logger.info('Querying group %s', group)
+        gids = get_group_id(logger, hosts, group).keys()
+        logger.debug('  found gids %s', gids)
+        gids = list(gids)
+        if len(gids) == 1 and gids[0] is not None:
+            return gids[0]
+        raise LaunchException(f'Group not setup correctly: {group}')
+
+    @staticmethod
+    def _query_create_user(hosts, user, gid=None, create=False):
+        """Query and optionally create a user on remote hosts.
+
+        Args:
+            hosts (NodeSet): hosts on which to query and create the group
+            user (str): user to query and create
+            gid (str, optional): user's primary gid. Default is None
+            create (bool, optional): whether to create the group if non-existent. Default is False
+
+        Raises:
+            LaunchException: if there is an error querying or creating the user
+
+        """
+        logger.info('Querying user %s', user)
+        groups = get_user_groups(logger, hosts, user)
+        logger.debug('  found groups %s', groups)
+        groups = list(groups)
+        if len(groups) == 1 and groups[0] == gid:
+            # Exists and in correct group
+            return
+        if not create:
+            raise LaunchException(f'User {user} groups not as expected')
+
+        # Delete and ignore errors, in case user account is inconsistent across nodes
+        logger.info('Deleting user %s', user)
+        _ = userdel(logger, hosts, user, True)
+
+        logger.info('Creating user %s in group %s', user, gid)
+        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
+        if not useradd(logger, hosts, user, gid, parent_dir, True).passed:
+            raise LaunchException(f'Error creating user {user}')
+
+    def _user_setup(self, test, create=False):
+        """Setup test users on client nodes.
+
+        Args:
+            test (TestInfo): the test information
+            create (bool, optional): whether to create extra test users defined by the test
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        users = test.get_yaml_client_users()
+        clients = test.host_info.clients.hosts
+        if users:
+            logger.info('Setting up test users on %s', clients)
+
+        # Keep track of queried groups to avoid redundant work
+        group_gid = {}
+
+        # Query and optionally create all groups and users
+        for _user in users:
+            user, *group = _user.split(':')
+            group = group[0] if group else None
+
+            # Save the group's gid
+            if group and group not in group_gid:
+                try:
+                    group_gid[group] = self._query_create_group(clients, group, create)
+                except LaunchException as error:
+                    self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                    return 128
+
+            gid = group_gid.get(group, None)
+            try:
+                self._query_create_user(clients, user, gid, create)
+            except LaunchException as error:
+                self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                return 128
+
+        return 0
 
     @staticmethod
     def setup_fuse_config(hosts):
@@ -1994,7 +2105,7 @@ class Launch():
             # Optionally display a diff of the yaml file
             if args.verbose > 0:
                 command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(logger, command, check=False)
+                run_local(logger, " ".join(command), check=False)
 
         # Return the untouched or modified yaml file
         return yaml_file
@@ -2006,6 +2117,9 @@ class Launch():
             servers (NodeSet): hosts designated for the server role in testing
             clients (NodeSet): hosts designated for the client role in testing
             process_cores (bool): whether or not to collect core files after the tests complete
+
+        Raises:
+            LaunchException: if there was an error obtaining the core file pattern information
 
         Returns:
             dict: a dictionary containing the path and pattern for the core files per NodeSet
@@ -2024,20 +2138,18 @@ class Launch():
 
         # Verify all the hosts have the same core file pattern
         if not result.passed:
-            message = "Error obtaining the core file pattern"
-            return self.get_exit_status(1, message, "Setup")
+            raise LaunchException("Error obtaining the core file pattern")
 
         # Get the path and pattern information from the core pattern
         for data in result.output:
             hosts = str(data.hosts)
             try:
                 info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError):
-                message = "Error obtaining the core file pattern and directory"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+            except (TypeError, IndexError) as error:
+                raise LaunchException(
+                    "Error obtaining the core file pattern and directory") from error
             if not info[0]:
-                message = "Error obtaining the core file pattern directory"
-                return self.get_exit_status(1, message, "Setup")
+                raise LaunchException("Error obtaining the core file pattern directory")
             core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
             logger.info(
                 "Collecting any '%s' core files written to %s on %s",
@@ -2046,7 +2158,8 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold):
+                  core_files, threshold, user_create):
+        # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
@@ -2059,6 +2172,7 @@ class Launch():
             jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code to use when exiting launch.py
@@ -2068,6 +2182,9 @@ class Launch():
 
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
+
+        # Configure hosts to collect code coverage
+        self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -2086,11 +2203,10 @@ class Launch():
                 test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
 
                 # Prepare the hosts to run the tests
-                step_status = self.prepare(test, repeat)
+                step_status = self._prepare(test, repeat, user_create)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted
                     return_code |= step_status
-                    self.result.tests[-1].status = TestResult.INTERRUPT
                     continue
 
                 # Avoid counting the test execution time as part of the processing time of this test
@@ -2119,8 +2235,78 @@ class Launch():
                 # Stop logging to the test log file
                 logger.removeHandler(test_file_handler)
 
+        # Collect code coverage files after all test have completed
+        self.finalize_bullseye()
+
         # Summarize the run
         return self._summarize_run(return_code)
+
+    def setup_bullseye(self):
+        """Set up the hosts for bullseye code coverage collection.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        if self.bullseye_hosts:
+            logger.debug("-" * 80)
+            logger.info("Setting up bullseye code coverage on %s:", self.bullseye_hosts)
+
+            logger.debug("Removing any existing %s file", BULLSEYE_FILE)
+            command = ["rm", "-fr", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error removing bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
+            command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error copying bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+
+            logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
+            command = ["chmod", "777", BULLSEYE_FILE]
+            if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
+                message = "Error updating bullseye code coverage file on at least one host"
+                self._fail_test(self.result.tests[0], "Run", message, None)
+                return 128
+        return 0
+
+    def finalize_bullseye(self):
+        """Retrieve the bullseye code coverage collection information from the hosts.
+
+        Returns:
+            int: status code: 0 = success, 16 = failure
+
+        """
+        if not self.bullseye_hosts:
+            return 0
+
+        bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
+        bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
+        status = self._archive_files(
+            "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
+        # Rename bullseye_coverage_logs.host/test.cov.* to
+        # bullseye_coverage_logs/test.host.cov.*
+        for item in os.listdir(self.job_results_dir):
+            item_full = os.path.join(self.job_results_dir, item)
+            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    os.makedirs(bullseye_dir, exist_ok=True)
+                    for name in os.listdir(item_full):
+                        old_file = os.path.join(item_full, name)
+                        if os.path.isfile(old_file):
+                            new_name = name.split(".")
+                            new_name.insert(1, host_ext[-1][1:])
+                            new_file_name = ".".join(new_name)
+                            new_file = os.path.join(bullseye_dir, new_file_name)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            os.rename(old_file, new_file)
+        return status
 
     @staticmethod
     def display_disk_space(path):
@@ -2133,16 +2319,17 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, ["df", "-h", path], check=False)
+            run_local(logger, " ".join(["df", "-h", path]), check=False)
         except RunException:
             pass
 
-    def prepare(self, test, repeat):
+    def _prepare(self, test, repeat, user_create):
         """Prepare the test for execution.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
+            user_create (bool): whether to create extra test users defined by the test
 
         Returns:
             int: status code: 0 = success, 128 = failure
@@ -2151,13 +2338,86 @@ class Launch():
         logger.debug("=" * 80)
         logger.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.repeat)
 
+        # Setup the test host information, including creating any required slurm partitions
+        status = self._setup_host_information(test)
+        if status:
+            return status
+
         # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
         status = self._setup_test_directory(test)
         if status:
             return status
 
+        # Setup additional test users
+        status = self._user_setup(test, user_create)
+        if status:
+            return status
+
         # Generate certificate files for the test
         return self._generate_certs()
+
+    def _setup_host_information(self, test):
+        """Set up the test host information and any required partitions.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+
+        """
+        logger.debug("-" * 80)
+        logger.debug("Setting up host information for %s", test)
+
+        # Verify any required partitions exist
+        if test.yaml_info["client_partition"]:
+            partition = test.yaml_info["client_partition"]
+            logger.debug("Determining if the %s client partition exists", partition)
+            exists = show_partition(logger, self.slurm_control_node, partition).passed
+            if not exists and not self.slurm_add_partition:
+                message = f"Error missing {partition} partition"
+                self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                return 128
+            if self.slurm_add_partition and exists:
+                logger.info(
+                    "Removing existing %s partition to ensure correct configuration", partition)
+                if not delete_partition(logger, self.slurm_control_node, partition).passed:
+                    message = f"Error removing existing {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+            if self.slurm_add_partition:
+                hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
+                logger.debug(
+                    "Partition hosts from '%s', excluding test servers '%s': %s",
+                    self.slurm_partition_hosts, test.yaml_info["test_servers"], hosts)
+                if not hosts:
+                    message = "Error no partition hosts exist after removing the test servers"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+                logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
+                if not create_partition(logger, self.slurm_control_node, partition, hosts).passed:
+                    message = f"Error adding the {partition} partition"
+                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    return 128
+
+        # Define the hosts for this test
+        try:
+            test.set_host_info(self.slurm_control_node)
+        except LaunchException:
+            message = "Error setting up host information"
+            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            return 128
+
+        # Log the test information
+        msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
+        logger.debug("-" * 80)
+        logger.debug("Test information:")
+        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
+        logger.debug(
+            msg_format, test.name.order, test.test_file, test.yaml_file,
+            test.host_info.servers.hosts, test.host_info.clients.hosts)
+        return 0
 
     def _setup_test_directory(self, test):
         """Set up the common test directory on all hosts.
@@ -2171,15 +2431,17 @@ class Launch():
         """
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.hosts.all)
+        user_dir = os.environ["DAOS_TEST_USER_DIR"]
+        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
+            f"mkdir -p {user_dir}"
         ]
         for command in commands:
-            if not run_remote(logger, test.hosts.all, command).passed:
+            if not run_remote(logger, test.host_info.all_hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2200,8 +2462,8 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, ["/usr/bin/rm", "-rf", certs_dir])
-            run_local(logger, [command, daos_test_log_dir])
+            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
+            run_local(logger, " ".join([command, daos_test_log_dir]))
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2230,7 +2492,8 @@ class Launch():
         start_time = int(time.time())
 
         try:
-            return_code = run_local(logger, command, capture_output=False, check=False).returncode
+            return_code = run_local(
+                logger, " ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
             elif return_code == 2:
@@ -2270,9 +2533,10 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, ["mkdir", "-p", latest_crash_dir], check=True)
+                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
                     for crash_file in crash_files:
-                        run_local(logger, ["mv", crash_file, latest_crash_dir], check=True)
+                        run_local(
+                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
@@ -2332,7 +2596,7 @@ class Launch():
                 "source": os.path.join(os.sep, "etc", "daos"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
                 "pattern": "daos_*.yml",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 300,
             }
@@ -2340,7 +2604,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2348,7 +2612,7 @@ class Launch():
                 "source": daos_test_log_dir,
                 "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
                 "pattern": "*log*",
-                "hosts": test.hosts.all,
+                "hosts": test.host_info.all_hosts,
                 "depth": 2,
                 "timeout": 900,
             }
@@ -2356,7 +2620,7 @@ class Launch():
                 "source": os.path.join(os.sep, "tmp"),
                 "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
                 "pattern": "daos_dump*.txt*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2364,7 +2628,7 @@ class Launch():
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
                 "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
                 "pattern": "valgrind*",
-                "hosts": test.hosts.servers,
+                "hosts": test.host_info.servers.hosts,
                 "depth": 1,
                 "timeout": 900,
             }
@@ -2401,7 +2665,8 @@ class Launch():
 
         """
         service = "daos_agent.service"
-        hosts = test.hosts.clients_with_localhost
+        # pylint: disable=unsupported-binary-operation
+        hosts = test.host_info.clients.hosts | get_local_host()
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2417,7 +2682,7 @@ class Launch():
 
         """
         service = "daos_server.service"
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Verifying %s after running '%s'", service, test)
         return self._stop_service(hosts, service)
@@ -2525,13 +2790,13 @@ class Launch():
             int: status code: 0 = success, 512 = failure
 
         """
-        hosts = test.hosts.servers
+        hosts = test.host_info.servers.hosts
         logger.debug("-" * 80)
         logger.debug("Resetting server storage after running %s", test)
         if hosts:
             commands = [
                 "if lspci | grep -i nvme",
-                "then daos_server storage prepare -n --reset && "
+                f"then export COVFILE={BULLSEYE_FILE} && daos_server storage prepare -n --reset && "
                 "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
                 "fi"]
             logger.info("Resetting server storage on %s after running '%s'", hosts, test)
@@ -2703,7 +2968,8 @@ class Launch():
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
-        result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=900)
+        result = run_remote(
+            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2816,7 +3082,7 @@ class Launch():
         command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(logger, command, check=True, timeout=timeout)
+            run_local(logger, " ".join(command), check=True, timeout=timeout)
 
         except RunException:
             message = f"Error copying remote files to {destination}"
@@ -2840,21 +3106,27 @@ class Launch():
             test_job_results (str): the location of the core files
 
         Returns:
-            int: status code: 0 = success, 256 = failure
+            int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            error_count = core_file_processing.process_core_files(test_job_results, True)
-            if error_count:
-                message = f"Errors detected processing test core files: {error_count}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 256
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+
+        except CoreFileException:
+            message = "Errors detected processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
+
+        if corefiles_processed > 0:
+            message = "One or more core files detected after test execution"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 2048
 
         return 0
 
@@ -2934,7 +3206,7 @@ class Launch():
             xml_file = xml_file[0:-11] + "xunit1_results.xml"
             logger.debug("Updating the xml data for the Launchable %s file", xml_file)
             xml_data = org_xml_data
-            org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+            org_name = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
             new_name = rf'\1\2\3 file="{test.test_file}"'
             xml_data = re.sub(org_name, new_name, xml_data)
             try:
@@ -2969,13 +3241,14 @@ class Launch():
             2: "ERROR: Failed avocado jobs detected!",
             4: "ERROR: Failed avocado commands detected!",
             8: "Interrupted avocado jobs detected!",
-            16: "ERROR: Failed archiving files after one or more tests!",
+            16: "ERROR: Failed to archive files after one or more tests!",
             32: "ERROR: Failed log size threshold check after one or more tests!",
             64: "ERROR: Failed to create a junit xml test error file!",
-            128: "ERROR: Failed to preparing the hosts before running the test!",
+            128: "ERROR: Failed to prepare the hosts before running the one or more tests!",
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
+            2048: "ERROR: Core stack trace files detected!",
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
@@ -3150,6 +3423,21 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
+        "-ss", "--slurm_setup",
+        action="store_true",
+        help="setup any slurm partitions required by the tests")
+    parser.add_argument(
+        "-sc", "--slurm_control_node",
+        action="store",
+        default=str(get_local_host()),
+        type=str,
+        help="slurm control node where scontrol commands will be issued to check for the existence "
+             "of any slurm partitions required by the tests")
+    parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "tags",
         nargs="*",
         type=str,
@@ -3207,6 +3495,8 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.slurm_setup = True
+        args.user_create = True
 
     # Perform the steps defined by the arguments specified
     try:

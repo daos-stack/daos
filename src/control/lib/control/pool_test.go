@@ -88,6 +88,28 @@ func TestControl_PoolDestroy(t *testing.T) {
 				},
 			},
 		},
+		"ErrPoolNotFound on first try is not retried": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
+				},
+			},
+			expErr: system.ErrPoolUUIDNotFound(test.MockPoolUUID()),
+		},
+		"ErrPoolNotFound on retry is treated as success": {
+			req: &PoolDestroyReq{
+				ID: test.MockUUID(),
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", daos.TimedOut, nil),
+					MockMSResponse("host1", system.ErrPoolUUIDNotFound(test.MockPoolUUID()), nil),
+				},
+			},
+		},
 		"DataPlaneNotStarted error is retried": {
 			req: &PoolDestroyReq{
 				ID: test.MockUUID(),
