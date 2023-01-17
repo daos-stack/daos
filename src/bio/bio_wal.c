@@ -1312,10 +1312,9 @@ entry_move_next(struct wal_trans_blk *entry_blk, struct wal_blks_desc *bd)
 {
 	unsigned int	entry_sz = sizeof(struct wal_trans_entry);
 
+	entry_blk->tb_off += entry_sz;
 	if ((entry_blk->tb_off + entry_sz) > entry_blk->tb_blk_sz)
 		next_wal_blk(entry_blk);
-	else
-		entry_blk->tb_off += entry_sz;
 
 	if (entry_blk->tb_idx < bd->bd_payload_idx)
 		D_ASSERT((entry_blk->tb_off + entry_sz) <= entry_blk->tb_blk_sz);
