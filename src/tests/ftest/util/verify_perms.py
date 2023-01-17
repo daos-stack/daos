@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
