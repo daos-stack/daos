@@ -67,6 +67,7 @@ class ListVerboseTest(IorTestBase):
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
+            "svc_ldr": 0,
             "usage": [
                 {
                     "tier_name": "SCM",

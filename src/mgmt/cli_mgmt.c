@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -429,6 +429,34 @@ cleanup:
 	return rc;
 }
 
+int dc_mgmt_net_cfg_check(const char *name)
+{
+	int rc;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
+	Mgmt__GetAttachInfoResp *resp;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	if (rc != 0)
+		return rc;
+
+	/* Client may not set it if the server hasn't. */
+	if (info.srv_srx_set == -1) {
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+
+out:
+	put_attach_info(&info, resp);
+	return rc;
+}
+
 static int send_monitor_request(struct dc_pool *pool, int request_type)
 {
 	struct drpc		 *ctx;
@@ -807,7 +835,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	crt_endpoint_t			srv_ep;
 	crt_rpc_t		       *rpc = NULL;
 	struct mgmt_pool_find_in       *rpc_in;
-	struct mgmt_pool_find_out      *rpc_out;
+	struct mgmt_pool_find_out      *rpc_out = NULL;
 	crt_opcode_t			opc;
 	int				i;
 	int				idx;
@@ -876,9 +904,34 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 				DF_RC "\n", DP_RC(rc));
 			crt_req_decref(rpc);
 			idx = (idx + 1) % ms_ranks->rl_nr;
+			success = false;
 			continue;
 		}
-		success = true;
+
+		success = true; /* The RPC invocation succeeded. */
+
+		/* Special case: Unpack the response and check for a
+		 * -DER_NONEXIST from the upcall handler; in which
+		 * case we should retry with another replica.
+		 */
+		rpc_out = crt_reply_get(rpc);
+		D_ASSERT(rpc_out != NULL);
+		if (rpc_out->pfo_rc == -DER_NONEXIST) {
+			/* This MS replica may have a stale copy of the DB. */
+			if (label) {
+				D_DEBUG(DB_MGMT, "%s: pool not found on rank %u\n",
+					label, srv_ep.ep_rank);
+			} else {
+				D_DEBUG(DB_MGMT, DF_UUID": pool not found on rank %u\n",
+					DP_UUID(puuid), srv_ep.ep_rank);
+			}
+			if (i + 1 < ms_ranks->rl_nr) {
+				crt_req_decref(rpc);
+				idx = (idx + 1) % ms_ranks->rl_nr;
+			}
+			continue;
+		}
+
 		break;
 	}
 
@@ -894,7 +947,6 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 		return rc;
 	}
 
-	rpc_out = crt_reply_get(rpc);
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {
