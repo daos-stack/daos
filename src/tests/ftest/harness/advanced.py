@@ -29,7 +29,6 @@ class HarnessAdvancedTest(TestWithServers):
         self.start_agents_once = False
         self.start_servers_once = False
 
-
     def test_pool_timeout(self):
         """Test to verify tearDown() timeout setting for timed out tests.
 

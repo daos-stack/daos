@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -2647,7 +2647,7 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], threshold, data["timeout"], test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2809,7 +2809,7 @@ class Launch():
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
-                       timeout):
+                       timeout, test=None):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2821,6 +2821,7 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
             timeout (int): number of seconds to wait for the command to complete.
+            test (TestInfo): the test information
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2860,7 +2861,7 @@ class Launch():
         # Move the test files to the test-results directory on this host
         return_code |= self._move_files(file_hosts, source, pattern, destination, depth, timeout)
 
-        if "core files" in summary:
+        if test and "core files" in summary:
             # Process the core files
             return_code |= self._process_core_files(os.path.split(destination)[0])
 
@@ -3124,11 +3125,11 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        if corefiles_processed > 0 and str(test) not in self.TEST_EXPECT_CORE_FILES:
+        if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
-        elif corefiles_processed == 0 and str(test) in self.TEST_EXPECT_CORE_FILES:
+        if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256

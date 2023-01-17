@@ -14,7 +14,7 @@ from run_utils import run_remote, run_local, RunException
 
 
 class HarnessCoreFilesTest(TestWithServers):
-    """Processed corefile harness test cases.
+    """Processed core file harness test cases.
 
     :avocado: recursive
     """
