@@ -5,7 +5,7 @@
 """
 from socket import gethostname
 import subprocess   # nosec
-import shlex
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -225,7 +225,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     Args:
         log (logger): logger for the messages produced by this method
-        command (str): command from which to obtain the output
+        command (list): command from which to obtain the output
         capture_output(bool, optional): whether or not to include the command output in the
             subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
@@ -250,42 +250,43 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     """
     local_host = gethostname().split(".")[0]
+    command_str = " ".join(command)
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
     if timeout and verbose:
-        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
     elif verbose:
-        log.debug("Running on %s: %s", local_host, command)
+        log.debug("Running on %s: %s", local_host, command_str)
 
     try:
         # pylint: disable=subprocess-run-check
-        result = subprocess.run(shlex.split(command), **kwargs)     # nosec
+        result = subprocess.run(command, **kwargs)     # nosec
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise RunException(f"Command '{command}' exceed {timeout}s timeout") from error
+        raise RunException(f"Command '{command_str}' exceed {timeout}s timeout") from error
 
     except subprocess.CalledProcessError as error:
         # Raised if command yields a non-zero return status with check=True
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise RunException(f"Command '{command}' returned non-zero status") from error
+        raise RunException(f"Command '{command_str}' returned non-zero status") from error
 
     except KeyboardInterrupt as error:
         # User Ctrl-C
-        message = f"Command '{command}' interrupted by user"
+        message = f"Command '{command_str}' interrupted by user"
         log.debug(message)
         raise RunException(message) from error
 
     except Exception as error:
         # Catch all
-        message = f"Command '{command}' encountered unknown error"
+        message = f"Command '{command_str}' encountered unknown error"
         log.debug(message)
         log.debug(str(error))
         raise RunException(message) from error
@@ -346,25 +347,3 @@ def command_as_user(command, user):
         return command
     switch_command = " ".join(get_switch_user(user))
     return f"{switch_command} {command}"
-
-
-def find_command(source, pattern, depth, other=None):
-    """Get the find command.
-
-    Args:
-        source (str): where the files are currently located
-        pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
-        other (object, optional): other commands, as a list or str, to include at the end of the
-            base find command. Defaults to None.
-
-    Returns:
-        str: the find command
-
-    """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
-    if isinstance(other, list):
-        command.extend(other)
-    elif isinstance(other, str):
-        command.append(other)
-    return " ".join(command)
