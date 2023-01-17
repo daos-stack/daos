@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,8 +54,7 @@ mem_pin_workaround(void)
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-		       errno, strerror(errno));
+		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
@@ -82,6 +81,9 @@ mem_pin_workaround(void)
 exit:
 	return;
 }
+
+/* Value based on default daos runs with 16 targets + 2 service contexts */
+#define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
 
 static void
 prov_data_init(struct crt_prov_gdata *prov_data, int provider,
@@ -139,8 +141,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n", start_rpcid,
+		crt_gdata.cg_num_cores);
 
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
@@ -443,11 +447,24 @@ do_init:
 			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 			d_getenv_int("CRT_CTX_NUM", &ctx_num);
 
+			max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+
+			/* To be able to run on VMs */
+			if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
+				max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
+
 			if (share_addr) {
 				set_sep = true;
 				max_num_ctx = ctx_num;
 			}
+
 		}
+
+		if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
+			max_num_ctx = CRT_SRV_CONTEXT_NUM;
+
+		D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
+
 
 		uint32_t max_expect_size = 0;
 		uint32_t max_unexpect_size = 0;

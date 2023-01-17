@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -113,6 +113,8 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
+	/** Number of cores on a system */
+	long			 cg_num_cores;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -127,13 +129,12 @@ struct crt_event_cb_priv {
 	void			*cecp_args;
 };
 
-/* TODO may use a RPC to query server-side context number */
 #ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(256)
+#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
 #endif
 
 #ifndef CRT_PROGRESS_NUM
-# define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
+#define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
 /* structure of global fault tolerance data */
