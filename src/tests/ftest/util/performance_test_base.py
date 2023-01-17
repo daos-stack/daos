@@ -298,9 +298,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             ior_metrics = self.ior_cmd.get_ior_metrics(ior_output)
             for metrics in ior_metrics:
                 if metrics[0] == "write":
-                    self.log_performance("Max Write: {}".format(metrics[IorMetrics.Max_MiB]))
+                    self.log_performance("Max Write: {}".format(metrics[IorMetrics.MAX_MIB]))
                 elif metrics[0] == "read":
-                    self.log_performance("Max Read: {}".format(metrics[IorMetrics.Max_MiB]))
+                    self.log_performance("Max Read: {}".format(metrics[IorMetrics.MAX_MIB]))
         except (CommandFailure, TestFail):
             try:
                 self._log_daos_metrics()
@@ -406,7 +406,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_write_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
             # Wait between write and read
             self.phase_barrier()
@@ -420,7 +420,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_read_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()
 
@@ -525,6 +525,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         # Wait for rebuild if we stopped a rank
         if stop_rank_s:
-            self.pool.wait_for_rebuild(False)
+            self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()

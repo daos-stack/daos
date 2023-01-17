@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -242,7 +242,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_basic
+        :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
         """
         self.maxDiff = None
         self.pool = []
@@ -379,7 +379,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_imbalance
+        :avocado: tags=list_verbose,list_verbose_imbalance,test_used_imbalance
         """
         errors = []
         self.log.debug("---------- NVME test ----------")

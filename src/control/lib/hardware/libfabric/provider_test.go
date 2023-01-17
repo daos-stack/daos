@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -60,6 +59,7 @@ func (m *mockInfo) fabricProvider() string {
 }
 
 func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
+	testPriority := 5
 	for name, tc := range map[string]struct {
 		in        info
 		expResult *hardware.FabricInterface
@@ -86,9 +86,14 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 				fabricProviderReturn: "provider_x",
 			},
 			expResult: &hardware.FabricInterface{
-				Name:      "fi0_domain",
-				OSName:    "fi0_domain",
-				Providers: common.NewStringSet("provider_x"),
+				Name:   "fi0_domain",
+				OSName: "fi0_domain",
+				Providers: hardware.NewFabricProviderSet(
+					&hardware.FabricProvider{
+						Name:     "provider_x",
+						Priority: testPriority,
+					},
+				),
 			},
 		},
 	} {
@@ -98,10 +103,10 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 
 			p := NewProvider(log)
 
-			result, err := p.infoToFabricInterface(tc.in)
+			result, err := p.infoToFabricInterface(tc.in, testPriority)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(hardware.FabricProviderSet{})); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
 		})
