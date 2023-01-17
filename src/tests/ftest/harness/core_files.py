@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,7 +14,7 @@ from run_utils import run_remote, run_local, RunException
 
 
 class CoreFilesTest(TestWithServers):
-    """Advanced harness test cases.
+    """Processed corefile harness test cases.
 
     :avocado: recursive
     """
@@ -37,7 +37,7 @@ class CoreFilesTest(TestWithServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,core_files
-        :avocado: tags=HarnessAdvancedTest,test_core_files
+        :avocado: tags=HarnessCoreFilesTest,test_core_files
         """
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
@@ -102,6 +102,6 @@ class CoreFilesTest(TestWithServers):
         :avocado: tags=all
         :avocado: tags=hw,medium,large
         :avocado: tags=harness,core_files
-        :avocado: tags=HarnessAdvancedTest,test_core_files_hw
+        :avocado: tags=HarnessCoreFilesTest,test_core_files_hw
         """
         self.test_core_files()
