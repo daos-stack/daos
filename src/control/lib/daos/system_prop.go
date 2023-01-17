@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -441,8 +441,10 @@ func (ppv poolPropValue) String() string {
 }
 
 func (ppv poolPropValue) copy() SystemPropertyValue {
+	pphCpy := new(PoolPropHandler)
+	*pphCpy = *ppv.pph
 	return poolPropValue{
-		pph: ppv.pph,
+		pph: pphCpy,
 	}
 }
 

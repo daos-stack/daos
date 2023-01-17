@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1153,16 +1153,19 @@ func (svc *mgmtSvc) SystemSetProp(ctx context.Context, req *mgmtpb.SystemSetProp
 
 // updatePoolPropsWithSysProps This function will take systemProperties and
 // update each associated pool property (if one exists) on each pool
-func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context,
-	systemProperties map[string]string, sys string) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context, systemProperties map[string]string, sys string) (resp *mgmtpb.DaosResp, err error) {
+	resp = new(mgmtpb.DaosResp)
 	// Get the properties from the request, convert to pool prop, then put into poolSysProps
 	var poolSysProps []*daos.PoolProperty
-	for k := range systemProperties {
+	for k, v := range systemProperties {
 		p, ok := svc.systemProps.Get(k)
 		if !ok {
 			return nil, errors.Errorf("unknown property %q", k)
 		}
 		if pp, ok := sp2pp(p); ok {
+			if err := pp.SetValue(v); err != nil {
+				return nil, errors.Wrapf(err, "invalid value %q for property %q", v, k)
+			}
 			poolSysProps = append(poolSysProps, pp)
 		}
 	}
@@ -1199,7 +1202,6 @@ func (svc *mgmtSvc) updatePoolPropsWithSysProps(ctx context.Context,
 			return nil, err
 		}
 
-		resp = new(mgmtpb.DaosResp)
 		if err = proto.Unmarshal(dResp.Body, resp); err != nil {
 			return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 		}
