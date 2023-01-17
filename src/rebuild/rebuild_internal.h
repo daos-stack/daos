@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -217,6 +217,10 @@ struct rebuild_task {
 	daos_epoch_t			dst_reclaim_eph;
 	uint64_t			dst_schedule_time;
 	uint32_t			dst_map_ver;
+	/* Once the task fail, it will use reclaim version to
+	 * reclaim those half-rebuild/reintegrated job.
+	 */
+	uint32_t			dst_reclaim_ver;
 };
 
 /* Per pool structure in TLS to check pool rebuild status
