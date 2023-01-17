@@ -14,7 +14,8 @@ path to your source tree.
 {
     "pylint.importStrategy": "fromEnvironment",
     "python.linting.pylintArgs": [
-        "--import=<checkout_root>/venv/lib/python3.9/site-packages"
+        "--import=<checkout_root>/venv/lib/python3.9/site-packages",
+        "--promote-to-error"
     ],
     "pylint.path": [
         "<checkout_root>/utils/cq/daos_pylint.py"

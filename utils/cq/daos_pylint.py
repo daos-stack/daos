@@ -166,7 +166,7 @@ class WrapScript():
 
     @staticmethod
     def write_header(outfile):
-        """write the header"""
+        """Write the header"""
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
@@ -454,9 +454,31 @@ sys.path.append('site_scons')"""
 
             if args.output_format == 'json':
                 report = {'type': vals['category'],
-                          'module': vals['path']}
-                for copy in ('message-id', 'symbol', 'line', 'column', 'message'):
-                    report[copy] = vals[copy]
+                          'path': msg.path,
+                          'module': msg.module,
+                          'line': vals['line'],
+                          'column': vals['column'],
+                          'symbol': vals['symbol'],
+                          'message': vals['message'],
+                          'message-id': vals['message-id']}
+
+                if msg.obj:
+                    report['obj'] = msg.obj
+
+                if msg.end_line:
+                    if wrapper:
+                        report['endLine'] = wrapper.convert_line(msg.end_line)
+                    else:
+                        report['endLine'] = msg.end_line
+
+                if msg.end_column:
+                    report['endColumn'] = msg.end_column
+
+                # VS Code should allow customization of error levels but it appears to not be
+                # working.
+                # https://code.visualstudio.com/docs/python/linting
+                if args.promote_to_error:
+                    report['type'] = 'error'
                 self._reports.append(report)
             else:
                 print(args.msg_template.format(**vals))
@@ -567,6 +589,7 @@ def main():
     parser.add_argument('--rcfile', default=rcfile)
     parser.add_argument('--diff', action='store_true')
     parser.add_argument('--version', action='store_true')
+    parser.add_argument('--promote-to-error', action='store_true')
 
     # Args that VS Code uses.
     parser.add_argument('--import')
