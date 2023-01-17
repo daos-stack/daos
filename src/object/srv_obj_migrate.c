@@ -2212,6 +2212,11 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	int			rc = 0;
 	int			i;
 
+	if (!daos_oclass_is_valid(daos_obj_id2class(io->ui_oid.id_pub))) {
+		D_WARN("Skip invalid "DF_UOID".\n", DP_UOID(io->ui_oid));
+		return 0;
+	}
+
 	if (!daos_oclass_is_ec(&arg->oc_attr))
 		return migrate_one_create(arg, io);
 
@@ -2601,6 +2606,8 @@ retry:
 			break;
 		}
 
+		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64" > "DF_U64"\n",
+			  sgl.sg_iovs[0].iov_len, buf_len);
 		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
