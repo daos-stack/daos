@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -40,8 +40,7 @@ class FioBase(DfuseTestBase):
 
         Args:
             directory (str): path for fio run dir
-            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this
-                               method.
+            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this method.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -64,8 +63,7 @@ class FioBase(DfuseTestBase):
                                             attr='dfuse-direct-io-disable',
                                             val='on')
 
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                self.start_dfuse(self.hostlist_clients, self.pool, self.container)
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")
