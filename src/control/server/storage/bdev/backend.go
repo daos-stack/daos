@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,7 +27,6 @@ import (
 const (
 	hugePageDir         = "/dev/hugepages"
 	spdkHugepagePattern = `spdk_pid([0-9]+)map`
-	defaultAioFileMode  = 0600
 )
 
 type (
@@ -431,23 +430,7 @@ func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.B
 	}
 
 	for _, path := range req.Properties.DeviceList.Devices() {
-		devResp := new(storage.BdevDeviceFormatResponse)
-		resp.DeviceResponses[path] = devResp
-		if err := createEmptyFile(sb.log, path, req.Properties.DeviceFileSize); err != nil {
-			devResp.Error = FaultFormatError(path, err)
-			os.Remove(path)
-			continue
-		}
-		if err := os.Chown(path, req.OwnerUID, req.OwnerGID); err != nil {
-			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
-				"failed to set ownership of %q to %d.%d", path,
-				req.OwnerUID, req.OwnerGID))
-		}
-		if err := os.Chmod(path, defaultAioFileMode); err != nil {
-			devResp.Error = FaultFormatError(path, errors.Wrapf(err,
-				"failed to set file mode of %q to %s", path,
-				os.FileMode(defaultAioFileMode)))
-		}
+		resp.DeviceResponses[path] = createAioFile(sb.log, path, req)
 	}
 
 	return resp, nil
