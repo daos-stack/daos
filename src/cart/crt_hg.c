@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -746,7 +746,7 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	init_info.na_init_info.auth_key = getenv("CRT_AUTH_KEY");
+	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
 	if (crt_provider_is_block_mode(provider))
 		init_info.na_init_info.progress_mode = 0;

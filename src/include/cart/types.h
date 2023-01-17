@@ -86,6 +86,8 @@ typedef struct crt_init_options {
 	/** If set, used as a port setting instead of OFI_PORT env */
 	char		*cio_port;
 
+	/** If set, used as the authentication key instead of CRT_AUTH_KEY env */
+	char		*cio_auth_key;
 } crt_init_options_t;
 
 /**
