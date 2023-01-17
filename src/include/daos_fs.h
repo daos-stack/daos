@@ -1136,7 +1136,7 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
 
 enum {
-	/** just print the OIDS */
+	/** print the OIDS */
 	DFS_CHECK_PRINT		= (1 << 0),
 	/** remove / punch the leaked objects */
 	DFS_CHECK_REMOVE	= (1 << 1),
@@ -1150,14 +1150,18 @@ enum {
  * or just print the oids to stdout.
  *
  * \param[in]	poh	Open pool handle.
- * \param[in]	cont	Name of POSIX container.
+ * \param[in]	cont	POSIX container label.
  * \param[in]	flags	Flags to indicate what to do with leaked objects:
- *			punch, link to l+f, or just print to stdout.
+ *			punch, link to l+f, or print to stdout.
+ * \param[in]	name	Optional directory name to be created under lost+found where all oids are
+ *			stored. If NULL is specified, a directory will be created with a name
+ *			corresponding to the current timestamp with the format "%Y-%m-%d-%H:%M:%S".
+ *			If the DFS_CHECK_LINK_LF is not set, this is ignored.
  *
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags);
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }

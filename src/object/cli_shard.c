@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2022 Intel Corporation.
+ *  (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2188,10 +2188,6 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	if (check && flags & DAOS_GET_RECX) {
 		bool get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
-
-		/** if first cb, set recx */
-		if (!first && !changed)
-			D_ASSERT(is_ec_obj);
 
 		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
 					  okqo, get_max, changed);
