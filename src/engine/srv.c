@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,7 @@
 #include <abt.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
 #include <daos_srv/bio.h>
@@ -492,16 +493,6 @@ dss_srv_handler(void *arg)
 	}
 
 	dmi->dmi_xstream = dx;
-
-	if (dx->dx_xs_id == 0) {
-		rc = vos_db_init(dss_storage_path);
-		if (rc) {
-			D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
-			D_GOTO(nvme_fini, rc);
-		}
-		smd_init(vos_db_get());
-	}
-
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
 	D_ASSERT(!xstream_data.xd_ult_signal);
@@ -551,11 +542,6 @@ dss_srv_handler(void *arg)
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
-	}
-
-	if (dx->dx_xs_id == 0) {
-		smd_fini();
-		vos_db_fini();
 	}
 
 nvme_fini:
@@ -1197,9 +1183,22 @@ enum {
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_NVME,
+	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
 };
+
+static void
+dss_sys_db_fini(void)
+{
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		vos_db_fini();
+		return;
+	}
+
+	lmm_db_fini();
+}
 
 /**
  * Entry point to start up and shutdown the service
@@ -1215,6 +1214,9 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
+		/* fall through */
+	case XD_INIT_SYS_DB:
+		dss_sys_db_fini();
 		/* fall through */
 	case XD_INIT_NVME:
 		bio_nvme_fini();
@@ -1240,6 +1242,39 @@ dss_srv_fini(bool force)
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
+}
+
+static int
+dss_sys_db_init()
+{
+	int	 rc;
+	/* walkaround*/
+	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = vos_db_init(dss_storage_path);
+		if (rc)
+			return rc;
+		rc = smd_init(vos_db_get());
+		if (rc)
+			vos_db_fini();
+		return rc;
+	}
+
+	if (lmm_db_path == NULL) {
+		D_ERROR("DAOS_LMM_DB_PATH need be configured\n");
+		return -DER_INVAL;
+	}
+
+	rc = lmm_db_init(lmm_db_path);
+	if (rc)
+		return rc;
+
+	rc = smd_init(lmm_db_get());
+	if (rc)
+		lmm_db_fini();
+
+	return rc;
 }
 
 int
@@ -1291,13 +1326,17 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-
 	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr,
-			   dss_nvme_bypass_health_check);
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
+
+	rc = dss_sys_db_init();
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_SYS_DB;
+
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */

@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-1%{?dist}
+%global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.101
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -74,6 +74,7 @@ BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
+BuildRequires: lmdb-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
@@ -529,6 +530,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Dec 06 2022 Joseph G. Moore <joseph.moore@intel.com> 2.3.101-5
+- Update Mercury to 2.2.0-6
+
 * Thu Dec 01 2022 Tom Nabarro <tom.nabarro@intel.com> 2.3.101-4
 - Update SPDK dependency requirement to greater than or equal to 22.01.2.
 

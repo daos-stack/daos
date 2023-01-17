@@ -43,6 +43,7 @@ dnf --nodocs install \
     libtool-ltdl-devel \
     libunwind-devel \
     libuuid-devel \
+    lmdb-devel \
     libyaml-devel \
     lz4-devel \
     make \
@@ -53,6 +54,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    protobuf-c-devel \
     python3-devel \
     python3-pip \
     sg3_utils \

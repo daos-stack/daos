@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,7 @@
 #include <daos/rpc.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
+#include <daos/sys_db.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/ras.h>
 #include <daos_srv/daos_engine.h>
@@ -663,38 +664,9 @@ struct dss_module vos_srv_module =  {
 	.sm_metrics	= &vos_metrics,
 };
 
-static const char	*vos_db_path;
-static bool		 vos_use_sys_db;
-
-static int vos_smd_init(void)
-{
-	int rc;
-
-	D_ASSERT(vos_db_path != NULL);
-	if (vos_use_sys_db)
-		rc = vos_db_init(vos_db_path);
-	else
-		rc = vos_db_init_ex(vos_db_path, "self_db", true, true);
-	if (rc) {
-		D_ERROR("Init sysdb failed. "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-
-	smd_init(vos_db_get());
-	return 0;
-}
-
-static void vos_smd_fini(void)
-{
-	smd_fini();
-	vos_db_fini();
-}
-
 static void
 vos_self_nvme_fini(void)
 {
-	vos_smd_fini();
-
 	if (self_mode.self_xs_ctxt != NULL) {
 		bio_xsctxt_free(self_mode.self_xs_ctxt);
 		self_mode.self_xs_ctxt = NULL;
@@ -757,7 +729,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
-	rc = vos_smd_init();
 out:
 	D_FREE(nvme_conf);
 	return rc;
@@ -766,7 +737,12 @@ out:
 static void
 vos_self_fini_locked(void)
 {
+
 	vos_self_nvme_fini();
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		vos_db_fini();
+	else
+		lmm_db_fini();
 
 	if (self_mode.self_tls) {
 		vos_tls_fini(self_mode.self_tls);
@@ -793,11 +769,15 @@ vos_self_fini(void)
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 }
 
+#define LMMDB_PATH	"/var/daos/"
+
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
-	char	*evt_mode;
-	int	 rc = 0;
+	char		*evt_mode;
+	int		 rc = 0;
+	char		*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
@@ -806,10 +786,8 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	}
 
 	rc = ABT_init(0, NULL);
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	vos_start_epoch = 0;
 
@@ -817,16 +795,34 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
+		D_GOTO(out, rc);
 	}
 #endif
 	rc = vos_mod_init();
 	if (rc)
 		D_GOTO(failed, rc);
 
-	vos_db_path = db_path;
-	vos_use_sys_db = use_sys_db;
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		if (use_sys_db)
+			rc = vos_db_init(db_path);
+		else
+			rc = vos_db_init_ex(db_path, "self_db", true, true);
+		db = vos_db_get();
+	} else {
+		if (lmm_db_path == NULL)
+			lmm_db_path = LMMDB_PATH;
+		if (use_sys_db)
+			rc = lmm_db_init(lmm_db_path);
+		else
+			rc = lmm_db_init_ex(lmm_db_path, "self_db", true, true);
+		db = lmm_db_get();
+	}
+	if (rc)
+		D_GOTO(failed, rc);
+
+	rc = smd_init(db);
+	if (rc)
+		D_GOTO(failed, rc);
 
 	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)

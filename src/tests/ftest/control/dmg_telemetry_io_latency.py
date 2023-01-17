@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -165,8 +165,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry
-        :avocado: tags=test_io_latency_telemetry
-
+        :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")
@@ -338,8 +337,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry,control
-        :avocado: tags=test_ior_dtx_telemetry
-
+        :avocado: tags=test_ior_dtx_telemetry,test_ior_dtx_telemetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")

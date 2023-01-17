@@ -36,11 +36,13 @@ apt-get install \
     liblz4-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libprotobuf-c-dev \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \
     libunwind-dev \
     libyaml-dev \
+    liblmdb-dev \
     locales \
     maven \
     numactl \

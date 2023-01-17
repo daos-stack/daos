@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,7 @@ dpdk_cli_override_opts;
 
 /** NVMe config keys */
 #define NVME_CONF_ATTACH_CONTROLLER	"bdev_nvme_attach_controller"
+#define NVME_CONF_AIO_CREATE		"bdev_aio_create"
 #define NVME_CONF_ENABLE_VMD		"enable_vmd"
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"

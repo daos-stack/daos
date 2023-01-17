@@ -39,10 +39,12 @@ dnf --nodocs install \
     liblz4-devel \
     libnuma-devel \
     libopenssl-devel \
+    libprotobuf-c-devel \
     libtool \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
+    lmdb-devel \
     lua-lmod \
     make \
     maven \

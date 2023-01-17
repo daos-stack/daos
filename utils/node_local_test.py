@@ -79,6 +79,7 @@ def umount(path, background=False):
 
 class NLTConf():
     """Helper class for configuration"""
+
     def __init__(self, json_file, args):
 
         with open(json_file, 'r') as ofh:
@@ -425,6 +426,7 @@ def get_base_env(clean=False):
 
 class DaosPool():
     """Class to store data about daos pools"""
+
     def __init__(self, server, pool_uuid, label):
         self._server = server
         self.uuid = pool_uuid
@@ -1454,7 +1456,7 @@ def create_cont(conf,
         cmd.append(pool)
 
     if label:
-        cmd.extend(['--properties', f'label:{label}'])
+        cmd.append(label)
 
     if path:
         cmd.extend(['--path', path])
@@ -2254,6 +2256,41 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+
+    @needs_dfuse
+    def test_uns_link(self):
+        """Simple test to create a container then create a path for it in dfuse"""
+        container1 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link1')
+        cmd = ['cont', 'query', self.pool.id(), container1]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+
+        container2 = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='mycont_uns_link2')
+        cmd = ['cont', 'query', self.pool.id(), container2]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+
+        path = join(self.dfuse.dir, 'uns_link1')
+        cmd = ['cont', 'link', self.pool.id(), 'mycont_uns_link1', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
+        print(os.listdir(path))
+        cmd = ['cont', 'destroy', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+
+        path = join(self.dfuse.dir, 'uns_link2')
+        cmd = ['cont', 'link', self.pool.id(), container2, '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        stbuf = os.stat(path)
+        print(stbuf)
+        assert stbuf.st_ino < 100
+        print(os.listdir(path))
+        cmd = ['cont', 'destroy', '--path', path]
+        rc = run_daos_cmd(self.conf, cmd)
 
     @needs_dfuse
     def test_rename_clobber(self):
@@ -4368,8 +4405,33 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.check_post_stdout = False
     test_cmd.check_stderr = True
 
-    rc = test_cmd.launch()
-    return rc
+    return test_cmd.launch()
+
+
+def test_alloc_cont_create(server, conf, wf):
+    """Run container creation under fault injection.
+
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
+    """
+
+    pool = server.get_test_pool_id()
+
+    def get_cmd(cont_id):
+        return [join(conf['PREFIX'], 'bin', 'daos'),
+                'container',
+                'create',
+                pool,
+                '--properties',
+                f'srv_cksum:on,label:{cont_id}']
+
+    test_cmd = AllocFailTest(conf, 'cont-create', get_cmd)
+    test_cmd.wf = wf
+    test_cmd.check_post_stdout = False
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = False
+
+    return test_cmd.launch()
 
 
 def test_alloc_fail_cont_create(server, conf):
@@ -4726,6 +4788,9 @@ def run(wf, args):
 
                 # filesystem copy test.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
+                # container create with properties test.
+                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 wf_client.close()
 

@@ -18,6 +18,7 @@ def build_daos_common(denv, client, prereqs):
     stack_mmap_files = []
     ad_mem_files = []
     dav_src = []
+    sys_lmdb_files = []
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
@@ -30,12 +31,13 @@ def build_daos_common(denv, client, prereqs):
                    'dav/ravl_interval.c', 'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c',
                    'dav/util.c', 'dav/wal_tx.c']
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
-        common_libs.extend(['pmemobj'])
+        sys_lmdb_files = ['sys_lmdb.c']
+        common_libs.extend(['pmemobj', 'lmdb', 'abt'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         benv.Append(OBJPREFIX="v_")
         libname = 'daos_common_pmem'
-        prereqs.require(benv, 'pmdk')
+        prereqs.require(benv, 'pmdk', 'argobots')
 
     if benv["STACK_MMAP"] == 1:
         common_libs.extend(['abt'])
@@ -44,7 +46,7 @@ def build_daos_common(denv, client, prereqs):
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files +
-                            stack_mmap_files, LIBS=common_libs)
+                            stack_mmap_files + sys_lmdb_files, LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 

@@ -15,6 +15,7 @@ missing = set()
 
 class DaosLiteral(Literal):
     """A wrapper for a Literal."""
+
     # pylint: disable=too-few-public-methods
 
     def __hash__(self):
@@ -64,7 +65,6 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
 
 def _add_build_rpath(env, pathin="."):
     """Add a build directory to rpath"""
-
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
@@ -191,7 +191,6 @@ def _test_program(env, *args, **kwargs):
 
 def _find_mpicc(env):
     """find mpicc"""
-
     mpicc = WhereIs('mpicc')
     if not mpicc:
         return False
@@ -222,7 +221,6 @@ def _configure_mpi_pkg(env):
 
 def _configure_mpi(self):
     """Check if mpi exists and configure environment"""
-
     if GetOption('help'):
         return None
 
@@ -245,7 +243,7 @@ def _configure_mpi(self):
     return None
 
 
-def setup(env):
+def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
@@ -255,3 +253,8 @@ def setup(env):
     env.AddMethod(_test_program, 'd_test_program')
     env.AddMethod(_library, 'd_library')
     env.AddMethod(_static_library, 'd_static_library')
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True

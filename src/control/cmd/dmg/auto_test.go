@@ -7,16 +7,21 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -30,7 +35,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			errors.New("no access points"),
+			errors.New("no host responses"),
 		},
 		{
 			"Generate with defaults",
@@ -81,12 +86,12 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("no host responses"),
 		},
 		{
-			"Generate with best-available network device class",
+			"Generate with deprecated network device class",
 			"config generate -a foo --net-class best-available",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
-			errors.New("no host responses"),
+			errors.New("Invalid value"),
 		},
 		{
 			"Generate with unsupported network device class",
@@ -103,6 +108,226 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("Unknown command"),
 		},
 	})
+}
+
+// The Control API calls made in configGenCmd.confGen() are already well tested so just do some
+// sanity checking here to prevent regressions.
+func TestAuto_confGen(t *testing.T) {
+	ib0 := &ctlpb.FabricInterface{
+		Provider: "ofi+psm2", Device: "ib0", Numanode: 0, Netdevclass: 32, Priority: 0,
+	}
+	ib1 := &ctlpb.FabricInterface{
+		Provider: "ofi+psm2", Device: "ib1", Numanode: 1, Netdevclass: 32, Priority: 1,
+	}
+	netHostResp := &control.HostResponse{
+		Addr: "host1",
+		Message: &ctlpb.NetworkScanResp{
+			Numacount:    2,
+			Corespernuma: 24,
+			Interfaces:   []*ctlpb.FabricInterface{ib0, ib1},
+		},
+	}
+	storHostResp := &control.HostResponse{
+		Addr:    "host1",
+		Message: control.MockServerScanResp(t, "withSpaceUsage"),
+	}
+	exmplEngineCfg := control.DefaultEngineCfg(0).
+		WithPinnedNumaNode(0).
+		WithFabricInterface("ib0").
+		WithFabricInterfacePort(31416).
+		WithFabricProvider("ofi+psm2").
+		WithStorage(
+			storage.NewTierConfig().
+				WithNumaNodeIndex(0).
+				WithStorageClass(storage.ClassDcpm.String()).
+				WithScmDeviceList("/dev/pmem0").
+				WithScmMountPoint("/mnt/daos0"),
+			storage.NewTierConfig().
+				WithNumaNodeIndex(0).
+				WithStorageClass(storage.ClassNvme.String()).
+				WithBdevDeviceList(
+					storage.MockNvmeController(2).PciAddr,
+					storage.MockNvmeController(4).PciAddr,
+					storage.MockNvmeController(6).PciAddr,
+					storage.MockNvmeController(8).PciAddr).
+				WithBdevDeviceRoles(storage.BdevRoleData),
+		).
+		WithTargetCount(16).
+		WithHelperStreamCount(4)
+	exmplEngineCfgs := []*engine.Config{
+		exmplEngineCfg,
+		control.DefaultEngineCfg(1).
+			WithPinnedNumaNode(1).
+			WithStorageIndex(1).
+			WithFabricInterface("ib1").
+			WithFabricInterfacePort(32416).
+			WithFabricProvider("ofi+psm2").
+			WithFabricNumaNodeIndex(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithNumaNodeIndex(1).
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmDeviceList("/dev/pmem1").
+					WithScmMountPoint("/mnt/daos1"),
+				storage.NewTierConfig().
+					WithNumaNodeIndex(1).
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(
+						storage.MockNvmeController(1).PciAddr,
+						storage.MockNvmeController(3).PciAddr,
+						storage.MockNvmeController(5).PciAddr,
+						storage.MockNvmeController(7).PciAddr).
+					WithBdevDeviceRoles(storage.BdevRoleData),
+			).
+			WithStorageNumaNodeIndex(1).
+			WithTargetCount(16).
+			WithHelperStreamCount(4),
+	}
+	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
+		for idx, ec := range ecs {
+			ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
+				WithStorageVosEnv("NVME")
+		}
+		return config.DefaultServer().
+			WithControlLogFile("").
+			WithFabricProvider(prov).
+			WithDisableVMD(false).
+			WithEngines(ecs...)
+	}
+
+	for name, tc := range map[string]struct {
+		hostlist         []string
+		accessPoints     string
+		nrEngines        int
+		minNrSSDs        int
+		netClass         string
+		uErr             error
+		hostResponsesSet [][]*control.HostResponse
+		expCfg           *config.Server
+		expErr           error
+	}{
+		"no host responses": {
+			expErr: errors.New("no host responses"),
+		},
+		"fetching host unary error": {
+			uErr:   errors.New("bad fetch"),
+			expErr: errors.New("bad fetch"),
+		},
+		"fetching host fabric error": {
+			hostResponsesSet: [][]*control.HostResponse{
+				{&control.HostResponse{Addr: "host1", Error: errors.New("server fail")}},
+			},
+			expErr: errors.New("1 host"),
+		},
+		"fetching host storage error": {
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{&control.HostResponse{Addr: "host1", Error: errors.New("server fail")}},
+			},
+			expErr: errors.New("1 host"),
+		},
+		"successful fetch of host storage and fabric": {
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+				WithNrHugePages(16384).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
+		"successful fetch of host storage and fabric; access points set": {
+			accessPoints: "moon-111,mars-115,jupiter-119",
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+				WithNrHugePages(16384).
+				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
+		"successful fetch of host storage and fabric; unmet min nr ssds": {
+			minNrSSDs: 8,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expErr: errors.New("insufficient number of ssds"),
+		},
+		"successful fetch of host storage and fabric; unmet nr engines": {
+			nrEngines: 8,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expErr: errors.New("insufficient number of pmem"),
+		},
+		"successful fetch of host storage and fabric; bad net class": {
+			netClass: "foo",
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expErr: errors.New("unrecognized net-class"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			// Mimic go-flags default values.
+			if tc.minNrSSDs == 0 {
+				tc.minNrSSDs = 1
+			}
+			if tc.netClass == "" {
+				tc.netClass = "infiniband"
+			}
+			if tc.accessPoints == "" {
+				tc.accessPoints = "localhost"
+			}
+
+			cmd := &configGenCmd{
+				AccessPoints: tc.accessPoints,
+				NrEngines:    tc.nrEngines,
+				MinNrSSDs:    tc.minNrSSDs,
+				NetClass:     tc.netClass,
+			}
+			cmd.Logger = log
+			cmd.hostlist = tc.hostlist
+
+			if tc.hostResponsesSet == nil {
+				tc.hostResponsesSet = [][]*control.HostResponse{{}}
+			}
+			mic := control.MockInvokerConfig{}
+			for _, r := range tc.hostResponsesSet {
+				mic.UnaryResponseSet = append(mic.UnaryResponseSet,
+					&control.UnaryResponse{Responses: r})
+			}
+			mic.UnaryError = tc.uErr
+			cmd.ctlInvoker = control.NewMockInvoker(log, &mic)
+
+			gotCfg, gotErr := cmd.confGen(context.TODO())
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+					if x == nil && y == nil {
+						return true
+					}
+					return x.Equals(y)
+				}),
+				cmpopts.IgnoreUnexported(security.CertificateConfig{}),
+			}
+
+			if diff := cmp.Diff(tc.expCfg, gotCfg, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected config generated (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
 }
 
 // TestAuto_ConfigWrite verifies that output from config generate command matches documented
@@ -168,9 +393,6 @@ nr_hugepages: 6144
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
-helper_log_file: ""
-firmware_helper_log_file: ""
-fault_path: ""
 core_dump_filter: 19
 name: daos_server
 socket_dir: /var/run/daos_server

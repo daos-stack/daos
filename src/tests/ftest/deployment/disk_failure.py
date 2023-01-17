@@ -17,11 +17,12 @@ class DiskFailureTest(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
+        """Set up for test case."""
         super().setUp()
         self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
-        self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/*')
         self.daos_command = self.get_daos_command()
 
     def get_nvme_device_info(self):
@@ -134,9 +135,7 @@ class DiskFailureTest(OSAUtils):
                     # Convert target list to string
                     targets = ",".join(map(str, value["tgts"]))
                     # Now reintegrate the target to appropriate rank.
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               value["rank"],
-                                                               targets)
+                    output = self.pool.reintegrate(value["rank"], targets)
                     time.sleep(15)
                 count = count + 1
             done = "Faulty NVMEs replaced"
@@ -157,13 +156,14 @@ class DiskFailureTest(OSAUtils):
             self.log.info(output)
 
     def test_disk_failure_w_rf(self):
-        """Jira ID: DAOS-11284
+        """Jira ID: DAOS-11284.
+
         Test disk failures during the IO operation.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=deployment
-        :avocado: tags=disk_failure,test_disk_failure_w_rf
+        :avocado: tags=deployment,disk_failure
+        :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
         self.verify_disk_failure(1)
 
@@ -173,14 +173,13 @@ class DiskFailureTest(OSAUtils):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=deployment
-        :avocado: tags=disk_failure,test_disk_fault_to_normal
+        :avocado: tags=deployment,disk_failure
+        :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """
         device_info = {}
         # Get the list of device ids.
         device_info = self.get_nvme_device_info()
         for key, val in device_info.items():
             self.log.info("Key: %s, Value: %s", key, val)
-            resp = self.dmg_command.storage_replace_nvme(old_uuid=val["uuid"],
-                                                         new_uuid=val["uuid"])
+            resp = self.dmg_command.storage_replace_nvme(old_uuid=val["uuid"], new_uuid=val["uuid"])
             self.log.info(resp)

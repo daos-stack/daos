@@ -50,6 +50,13 @@ extern int	gc;
 extern bool	g_force_checksum;
 extern bool	g_force_no_zero_copy;
 
+/**
+ * The last key stored in vos/tests/vts_io.c
+ * It can be used for punching or overwrite
+ */
+extern char	last_dkey[];
+extern char	last_akey[];
+
 enum vts_ops_type {
 	CREAT,
 	CREAT_OPEN,
