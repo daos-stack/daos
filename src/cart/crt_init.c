@@ -31,12 +31,12 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER", "CRT_AUTH_KEY"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		if (strcmp(envars[i], "CRT_AUTH_KEY") == 0 && val)
+		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
 			D_INFO("%s = %s\n", envars[i], "********");
 		else
 			D_INFO("%s = %s\n", envars[i], val);
@@ -616,13 +616,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		if (opt && opt->cio_auth_key)
 			auth_key_env = opt->cio_auth_key;
-		else {
-			auth_key_env = getenv("CRT_AUTH_KEY");
-
-			tmp = getenv("D_AUTH_KEY");
-			if (tmp)
-				auth_key_env = tmp;
-		}
+		else
+			auth_key_env = getenv("D_PROVIDER_AUTH_KEY");
 
 		if (opt && opt->cio_provider)
 			provider_env = opt->cio_provider;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,7 +29,7 @@ type FabricConfig struct {
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
-	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"CRT_AUTH_KEY"`
+	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -79,7 +79,7 @@ func (fc *FabricConfig) Validate() error {
 
 // GetAuthKeyEnv returns the environment variable string for the auth key.
 func (fc *FabricConfig) GetAuthKeyEnv() string {
-	return fmt.Sprintf("CRT_AUTH_KEY=%s", fc.AuthKey)
+	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
