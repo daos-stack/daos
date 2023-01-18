@@ -2440,7 +2440,7 @@ class Launch():
             f"mkdir -p {test_dir}",
             f"chmod a+wr {test_dir}",
             f"ls -al {test_dir}",
-            f"mkdir -p {user_dir}"
+            f"mkdir -p {user_dir}",
         ]
         for command in commands:
             if not run_remote(logger, test.host_info.all_hosts, command).passed:
@@ -2459,7 +2459,10 @@ class Launch():
         if self.verbose > 1:
             test_dir = os.environ["DAOS_TEST_LOG_DIR"]
             logger.debug("-" * 80)
-            commands = ["df -h", f"ls -latr {test_dir}", f"ls -latr {test_dir}/.."]
+            commands = [
+                "df -h",
+                f"find {test_dir}/../ -type f -printf '%s\t%p\n' |sort -n",
+            ]
             for command in commands:
                 run_remote(logger, test.host_info.all_hosts, command)
 
@@ -3487,7 +3490,7 @@ def main():
     parser.add_argument(
         "-v", "--verbose",
         action="count",
-        default=4,
+        default=2,
         help="verbosity output level. Specify multiple times (e.g. -vv) for "
              "additional output")
     parser.add_argument(
