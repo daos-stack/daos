@@ -68,6 +68,30 @@ enum sh_op {
 	SH_VOS
 };
 
+struct fs_copy_stats {
+	uint64_t		num_dirs;
+	uint64_t		num_files;
+	uint64_t		num_links;
+};
+
+struct dm_args {
+	char		*src;
+	char		*dst;
+	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	src_poh;
+	daos_handle_t	src_coh;
+	daos_handle_t	dst_poh;
+	daos_handle_t	dst_coh;
+	uint32_t	cont_prop_oid;
+	uint32_t	cont_prop_layout;
+	uint64_t	cont_layout;
+	uint64_t	cont_oid;
+
+};
+
 /* cmd_args_s: consolidated result of parsing command-line arguments
  * for pool, cont, obj commands, much of which is common.
  */
@@ -110,6 +134,11 @@ struct cmd_args_s {
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
 	daos_prop_t		*props;		/* --properties cont create */
+
+	/* Container datamover related */
+	struct dm_args		*dm_args;	/* datamover arguments */
+	struct fs_copy_stats	*fs_copy_stats;	/* fs copy stats */
+	bool			 fs_copy_posix; /* fs copy to POSIX */
 
 	FILE			*outstream;	/* normal output stream */
 	FILE			*errstream;	/* errors stream */

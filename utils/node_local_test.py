@@ -35,7 +35,6 @@ import junit_xml
 import tabulate
 import yaml
 
-
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
@@ -473,10 +472,7 @@ class DaosCont():
 
     def __init__(self, cont_uuid, label):
         self.uuid = cont_uuid
-        if label == 'container_label_not_set':
-            self.label = None
-        else:
-            self.label = label
+        self.label = label
 
 
 class DaosServer():
@@ -1469,10 +1465,10 @@ def create_cont(conf,
         cmd.extend(['--oclass', oclass])
 
     if dir_oclass:
-        cmd.extend(['--dir_oclass', dir_oclass])
+        cmd.extend(['--dir-oclass', dir_oclass])
 
     if file_oclass:
-        cmd.extend(['--file_oclass', file_oclass])
+        cmd.extend(['--file-oclass', file_oclass])
 
     if hints:
         cmd.extend(['--hints', hints])
@@ -1497,6 +1493,10 @@ def create_cont(conf,
             rc = _create_cont()
 
     assert rc.returncode == 0, rc
+    if label:
+        assert label == rc.json['response']['container_label']
+    else:
+        assert 'container_label' not in rc.json['response'].keys()
     return rc.json['response']['container_uuid']
 
 
@@ -2998,14 +2998,16 @@ class PosixTests():
                src_dir.name,
                '--dst',
                f'daos://{self.pool.uuid}/{self.container}']
-        rc = run_daos_cmd(self.conf, cmd)
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
-        lineresult = rc.stdout.decode('utf-8').splitlines()
-        assert len(lineresult) == 4
-        assert lineresult[1] == '    Directories: 1'
-        assert lineresult[2] == '    Files:       1'
-        assert lineresult[3] == '    Links:       1'
-        assert rc.returncode == 0
+
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response'] is not None, rc
+        assert data['response']['copy_stats']['num_dirs'] == 1
+        assert data['response']['copy_stats']['num_files'] == 1
+        assert data['response']['copy_stats']['num_links'] == 1
 
     def test_cont_clone(self):
         """Verify that cloning a container works
@@ -3028,9 +3030,13 @@ class PosixTests():
                src_dir.name,
                '--dst',
                f'daos://{self.pool.uuid}/{self.container}']
-        rc = run_daos_cmd(self.conf, cmd)
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
-        assert rc.returncode == 0
+
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response'] is not None, rc
 
         # Now create a container uuid and do an object based copy.
         # The daos command will create the target container on demand.
@@ -3040,12 +3046,15 @@ class PosixTests():
                f'daos://{self.pool.uuid}/{self.container}',
                '--dst',
                f'daos://{self.pool.uuid}/']
-        rc = run_daos_cmd(self.conf, cmd)
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
-        assert rc.returncode == 0
-        lineresult = rc.stdout.decode('utf-8').splitlines()
-        assert len(lineresult) == 2
-        destroy_container(self.conf, self.pool.id(), lineresult[1][-36:])
+
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response'] is not None, rc
+
+        destroy_container(self.conf, self.pool.id(), data['response']['dst_cont'])
 
 
 class NltStdoutWrapper():
