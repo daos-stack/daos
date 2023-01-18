@@ -138,7 +138,6 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.fault_path = BasicParameter(None)
 
-
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 

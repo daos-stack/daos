@@ -250,7 +250,6 @@ class DaosServerManager(SubprocessManager):
             verbose (bool, optional): display clean commands. Defaults to True.
         """
         clean_commands = []
-
         for index, engine_params in enumerate(self.manager.job.yaml.engine_params):
             scm_mount = engine_params.get_value("scm_mount")
             self.log.info("Cleaning up the %s directory.", str(scm_mount))
