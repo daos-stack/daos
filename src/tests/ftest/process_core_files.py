@@ -245,7 +245,7 @@ class CoreFileProcessing():
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
             output = run_local(
-                self.log, " ".join(["rpm", "-q", "--qf", "%{evr}", "daos"]), check=False)
+                self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]), check=False)
             rpm_version = output.stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
@@ -338,7 +338,8 @@ class CoreFileProcessing():
             # Eventually use python libraries for this rather than exec()ing out to rpm
             output = run_local(
                 self.log,
-                " ".join(["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg]),
+                " ".join(
+                    ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg]),
                 check=False)
             name, version, release, epoch = output.stdout.split()
 
