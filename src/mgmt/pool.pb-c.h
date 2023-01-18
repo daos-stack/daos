@@ -203,6 +203,10 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
+   * Current service leader
+   */
+  uint32_t leader;
+  /*
    * pool service replica ranks
    */
   size_t n_svc_reps;
@@ -220,7 +224,7 @@ struct  _Mgmt__PoolCreateResp
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0,NULL }
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*

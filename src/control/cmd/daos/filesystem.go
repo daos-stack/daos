@@ -62,10 +62,45 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to copy %s -> %s",
-			cmd.Source, cmd.Dest)
+		return errors.Wrapf(err, "failed to copy %s -> %s", cmd.Source, cmd.Dest)
 	}
+
+	if cmd.shouldEmitJSON {
+		type CopyStats struct {
+			NumDirs  uint64 `json:"num_dirs"`
+			NumFiles uint64 `json:"num_files"`
+			NumLinks uint64 `json:"num_links"`
+		}
+
+		return cmd.outputJSON(struct {
+			SourcePool string    `json:"src_pool"`
+			SourceCont string    `json:"src_cont"`
+			DestPool   string    `json:"dst_pool"`
+			DestCont   string    `json:"dst_cont"`
+			CopyStats  CopyStats `json:"copy_stats"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+			CopyStats{
+				uint64(ap.fs_copy_stats.num_dirs),
+				uint64(ap.fs_copy_stats.num_files),
+				uint64(ap.fs_copy_stats.num_links),
+			},
+		}, nil)
+	}
+
+	fsType := "DAOS"
+	if ap.fs_copy_posix {
+		fsType = "POSIX"
+	}
+	// Compat with old-style output
+	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.Infof("Successfully copied to %s: %s", fsType, cmd.Dest)
+	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
+	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
+	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
 
 	return nil
 }

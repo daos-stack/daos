@@ -52,8 +52,8 @@ var (
 		}),
 	}
 
-	defHugePageInfo = &common.HugePageInfo{
-		PageSizeKb: 2048,
+	defMemInfo = &common.MemInfo{
+		HugePageSizeKb: 2048,
 	}
 )
 
@@ -147,7 +147,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 			configA.Path = tt.inPath
 			err := configA.Load()
 			if err == nil {
-				err = configA.Validate(log, defHugePageInfo.PageSizeKb)
+				err = configA.Validate(log, defMemInfo.HugePageSizeKb)
 			}
 
 			CmpErr(t, tt.expErr, err)
@@ -178,7 +178,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 
 			err = configB.Load()
 			if err == nil {
-				err = configB.Validate(log, defHugePageInfo.PageSizeKb)
+				err = configB.Validate(log, defMemInfo.HugePageSizeKb)
 			}
 
 			if err != nil {
@@ -711,7 +711,7 @@ func TestServerConfig_Validation(t *testing.T) {
 			// Apply extra config test case
 			dupe := tt.extraConfig(baseCfg())
 
-			CmpErr(t, tt.expErr, dupe.Validate(log, defHugePageInfo.PageSizeKb))
+			CmpErr(t, tt.expErr, dupe.Validate(log, defMemInfo.HugePageSizeKb))
 			if tt.expErr != nil || tt.expConfig == nil {
 				return
 			}
@@ -1034,7 +1034,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			}
 
 			config = tt.extraConfig(config)
-			CmpErr(t, tt.expValidateErr, config.Validate(log, defHugePageInfo.PageSizeKb))
+			CmpErr(t, tt.expValidateErr, config.Validate(log, defMemInfo.HugePageSizeKb))
 
 			if tt.expCheck != nil {
 				if err := tt.expCheck(config); err != nil {
@@ -1237,7 +1237,7 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 				WithFabricProvider("test").
 				WithEngines(tc.configA, tc.configB)
 
-			gotErr := conf.Validate(log, defHugePageInfo.PageSizeKb)
+			gotErr := conf.Validate(log, defMemInfo.HugePageSizeKb)
 			CmpErr(t, tc.expErr, gotErr)
 		})
 	}
