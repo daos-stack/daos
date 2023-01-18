@@ -276,39 +276,16 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
 #define FADP fuse_add_direntry_plus
 #define FAD  fuse_add_direntry
 
-void
-dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
+int
+dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
+		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	char                         *reply_buff;
-	off_t                         buff_offset = 0;
-	int                           added       = 0;
-	int                           rc          = 0;
-	bool                          large_fetch = true;
-	struct dfuse_readdir_hdl     *hdl;
-
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
-		  "Multiple readdir per handle");
-
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1) == 0,
-		  "Multiple readdir per inode");
-
-	if (offset == READDIR_EOD) {
-		oh->doh_kreaddir_finished = true;
-		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
-
-		atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
-		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
-
-		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
-		return;
-	}
-
-	size = 1024;
-
-	D_ALLOC(reply_buff, size);
-	if (reply_buff == NULL)
-		D_GOTO(out, rc = ENOMEM);
+	off_t                     buff_offset = 0;
+	int                       added       = 0;
+	int                       rc          = 0;
+	bool                      large_fetch = true;
+	struct dfuse_readdir_hdl *hdl;
+	size_t                    size = *out_size;
 
 	/* Lock oh->doh_ie->ie_rd_hdl against releasedir calls */
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
@@ -322,7 +299,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			if (oh->doh_rd == NULL) {
 				D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
-
 				D_GOTO(out, rc = ENOMEM);
 			}
 
@@ -603,19 +579,61 @@ reply:
 		D_GOTO(out_reset, rc);
 
 	oh->doh_rd_offset = hdl->drh_dre[hdl->drh_dre_index].dre_offset;
-	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
-
-	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
-	D_FREE(reply_buff);
-
-	return;
+	*out_size         = buff_offset;
+	return 0;
 
 out_reset:
 	dfuse_readdir_reset(hdl);
 out:
+	D_ASSERT(rc != 0);
+	return rc;
+}
+
+void
+dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
+{
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	size_t                        out_size;
+	char                         *reply_buff;
+	int                           rc = EIO;
+
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
+		  "Multiple readdir per handle");
+
+	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readir_number, 1) == 0,
+		  "Multiple readdir per inode");
+
+	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
+	 * so reply early in this case.
+	 */
+	if (offset == READDIR_EOD) {
+		oh->doh_kreaddir_finished = true;
+		DFUSE_TRA_DEBUG(oh, "End of directory %#lx", offset);
+
+		atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
+		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
+
+		DFUSE_REPLY_BUF(oh, req, NULL, (size_t)0);
+		return;
+	}
+
+	D_ALLOC(reply_buff, size);
+	if (reply_buff == NULL)
+		D_GOTO(out, rc = ENOMEM);
+
+	out_size = size;
+
+	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &out_size, offset, plus);
+
+out:
+
 	atomic_fetch_sub_relaxed(&oh->doh_readir_number, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readir_number, 1);
-	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+
+	if (rc)
+		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	else
+		DFUSE_REPLY_BUF(oh, req, reply_buff, out_size);
+
 	D_FREE(reply_buff);
 }
