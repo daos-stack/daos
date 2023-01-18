@@ -1,10 +1,8 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
@@ -34,8 +32,10 @@ class DaosServerConfigTest(TestWithServers):
         Test Description: Test daos_server start/stops properly.
         on the system.
 
-        :avocado: tags=all,control,daily_regression,server_start,basic
-        :avocado: tags=hw,small
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=server,control,server_start,basic
+        :avocado: tags=DaosServerConfigTest,test_daos_server_config_basic
         """
         # Setup the servers
         self.add_server_manager()

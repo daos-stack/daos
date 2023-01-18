@@ -94,7 +94,12 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			 * The case of the check engine sending IV message to the check leader
 			 * on the same rank has already been handled via chk_iv_update().
 			 */
-			D_ASSERT(!chk_is_on_leader(src_iv->ci_gen, -1, false));
+			D_ASSERTF(!chk_is_on_leader(src_iv->ci_gen, -1, false),
+				  "Invalid IV forward path for gen "DF_X64"/"DF_X64", rank %u, "
+				  "phase %u, status %d/%d, from_psl %s\n",
+				  src_iv->ci_gen, src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+				  src_iv->ci_ins_status, src_iv->ci_pool_status,
+				  src_iv->ci_from_psl ? "yes" : "no");
 
 			/* Trigger RPC to the leader (IV parent) via returning -DER_IVCB_FORWARD. */
 			rc = -DER_IVCB_FORWARD;
@@ -105,7 +110,11 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			 * Return zero that will trigger IV_SYNC to other check engines.
 			 */
 			if (!src_iv->ci_from_psl)
-				D_ASSERT(chk_is_on_leader(src_iv->ci_gen, -1, false));
+				D_ASSERTF(chk_is_on_leader(src_iv->ci_gen, -1, false),
+					  "Invalid IV forward path for gen "DF_X64"/"DF_X64
+					  ", rank %u, phase %u, status %d/%d\n", src_iv->ci_gen,
+					  src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+					  src_iv->ci_ins_status, src_iv->ci_pool_status);
 
 			rc = 0;
 		}
@@ -117,9 +126,11 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		 * We got an IV SYNC (refresh) RPC from some engine. But because the engine
 		 * always set CRT_IV_SHORTCUT_TO_ROOT for sync, then this should not happen.
 		 */
-		D_ERROR("Got invalid IV SYNC with gen "DF_X64", rank %u, phase %u, status %d/%d\n",
-			src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_ins_status,
-			src_iv->ci_pool_status);
+		D_ERROR("Got invalid IV SYNC with gen "DF_X64"/"DF_X64", rank %u, phase %u, "
+			"status %d/%d, to_leader %s, from_psl %s\n",
+			src_iv->ci_gen, src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+			src_iv->ci_ins_status, src_iv->ci_pool_status,
+			src_iv->ci_to_leader ? "yes" : "no", src_iv->ci_from_psl ? "yes" : "no");
 		rc = -DER_IO;
 	}
 
@@ -173,6 +184,7 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	int			rc;
 
 	iv->ci_rank = dss_self_rank();
+	iv->ci_seq = d_hlc_get();
 
 	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
 		/*
@@ -193,8 +205,9 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 		rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	}
 
-	if (rc != 0)
-		D_ERROR("CHK iv update failed: "DF_RC"\n", DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "CHK iv "DF_X64"/"DF_X64" on rank %u: "DF_RC"\n",
+		 iv->ci_gen, iv->ci_seq, iv->ci_rank, DP_RC(rc));
 
 	return rc;
 }

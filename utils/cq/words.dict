@@ -148,6 +148,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -191,9 +192,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -287,6 +290,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -342,6 +346,7 @@ puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -364,6 +369,7 @@ rpc
 rpms
 rsvc
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -376,6 +382,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
@@ -403,6 +410,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
@@ -450,6 +458,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
@@ -464,6 +474,7 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs

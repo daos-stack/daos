@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dustin/go-humanize/english"
+
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -36,7 +38,20 @@ func PrintCheckerPolicies(out io.Writer, flags control.SystemCheckFlags, policie
 	tf.Format(table)
 }
 
-func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
+func countResultPools(resp *control.SystemCheckQueryResp) int {
+	if resp == nil {
+		return 0
+	}
+
+	poolMap := make(map[string]struct{})
+	for _, report := range resp.Reports {
+		poolMap[report.PoolUuid] = struct{}{}
+	}
+
+	return len(poolMap)
+}
+
+func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verbose bool) {
 	fmt.Fprintln(out, "DAOS System Checker Info")
 
 	statusMsg := fmt.Sprintf("Current status: %s", resp.Status)
@@ -46,16 +61,27 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 	fmt.Fprintf(out, "  %s\n", statusMsg)
 	fmt.Fprintf(out, "  Current phase: %s (%s)\n", resp.ScanPhase, resp.ScanPhase.Description())
 
-	if resp.ScanPhase >= control.SystemCheckScanPhasePoolMembership && resp.ScanPhase < control.SystemCheckScanPhaseDone {
-		fmt.Fprintf(out, "  Checking %d pools\n", len(resp.Pools))
-		if len(resp.Pools) > 0 {
+	// Toggle this output based on the status. If the checker is still running, we
+	// should show the number of pools being checked. If the checker has completed,
+	// we should show the number of unique pools found in the reports.
+	action := "Checking"
+	poolCount := len(resp.Pools)
+	if resp.Status == control.SystemCheckStatusCompleted {
+		action = "Checked"
+		poolCount = countResultPools(resp)
+	}
+	if poolCount > 0 {
+		fmt.Fprintf(out, "  %s %s\n", action, english.Plural(poolCount, "pool", ""))
+	}
+
+	if len(resp.Pools) > 0 {
+		if verbose {
 			fmt.Fprintln(out, "\nPer-Pool Checker Info:")
 			for _, pool := range resp.Pools {
-				// FIXME: Gross debug output for now.
 				fmt.Fprintf(out, "  %+v\n", pool)
 			}
-			fmt.Fprintln(out)
 		}
+		fmt.Fprintln(out)
 	}
 
 	if len(resp.Reports) == 0 {
@@ -67,7 +93,29 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp) {
 	fmt.Fprintln(out, "Inconsistency Reports:")
 	for _, report := range resp.Reports {
 		cls := control.SystemCheckFindingClass(report.Class)
-		fmt.Fprintf(iw, "0x%x %s: %s\n", report.Seq, cls, report.Msg)
+		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
+		fmt.Fprintf(iw, "Class:      %s\n", cls)
+		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)
+		poolID := report.PoolUuid
+		var poolIDV string
+		if report.PoolLabel != "" {
+			poolID = report.PoolLabel
+			if verbose {
+				poolIDV = fmt.Sprintf(" (%s)", report.PoolUuid)
+			}
+		}
+		fmt.Fprintf(iw, "Pool:       %s%s\n", poolID, poolIDV)
+		if report.ContUuid != "" {
+			contID := report.ContUuid
+			var contIDV string
+			if report.ContLabel != "" {
+				contID = report.ContLabel
+				if verbose {
+					contIDV = fmt.Sprintf(" (%s)", report.ContUuid)
+				}
+			}
+			fmt.Fprintf(iw, "Container:  %s%s\n", contID, contIDV)
+		}
 		if report.IsInteractive() {
 			fmt.Fprintf(iw, "Potential resolution actions:\n")
 			iw2 := txtfmt.NewIndentWriter(iw)

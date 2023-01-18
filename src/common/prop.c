@@ -84,7 +84,9 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	}
 
 	if (daos_prop_has_str(entry)) {
-		D_FREE(entry->dpe_str);
+		if (entry->dpe_str) {
+			D_FREE(entry->dpe_str);
+		}
 		return;
 	}
 
@@ -256,13 +258,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	}
 	if (prop->dpp_nr == 0) {
 		if (prop->dpp_entries != NULL)
-			D_ERROR("invalid properties, NON-NULL dpp_entries with "
-				"zero dpp_nr.\n");
+			D_ERROR("invalid properties, NON-NULL dpp_entries with zero dpp_nr.\n");
 		return prop->dpp_entries == NULL;
 	}
 	if (prop->dpp_entries == NULL) {
-		D_ERROR("invalid properties, NULL dpp_entries with non-zero "
-			"dpp_nr.\n");
+		D_ERROR("invalid properties, NULL dpp_entries with non-zero dpp_nr.\n");
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
@@ -290,10 +290,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_label_is_valid(
-						prop->dpp_entries[i].dpe_str)) {
-				D_ERROR("invalid label \"%s\"\n",
-					prop->dpp_entries[i].dpe_str);
+			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
 				return false;
 			}
 			break;
@@ -327,6 +325,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_EC_PDA:
 		case DAOS_PROP_PO_RP_PDA:
 		case DAOS_PROP_PO_GLOBAL_VERSION:
+		case DAOS_PROP_PO_OBJ_VERSION:
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
@@ -401,8 +400,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= (1ULL << 32)) {
-				D_ERROR("invalid chunk size "
-					DF_U64". Should be < 2GiB\n", val);
+				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB\n", val);
 				return false;
 			}
 			break;
@@ -413,8 +411,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
 			    val != DAOS_PROP_CO_CSUM_SV_ON) {
-				D_ERROR("invalid csum server verify property "
-					DF_U64".\n", val);
+				D_ERROR("invalid csum server verify property " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -423,8 +420,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (val != DAOS_PROP_CO_DEDUP_OFF &&
 			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
 			    val != DAOS_PROP_CO_DEDUP_HASH) {
-				D_ERROR("invalid deduplication parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid deduplication parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -471,8 +467,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
-				D_ERROR("invalid compression parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid compression parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -486,8 +481,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256) {
-				D_ERROR("invalid encryption parameter "
-					DF_U64".\n", val);
+				D_ERROR("invalid encryption parameter " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -507,6 +501,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_EC_PDA:
 		case DAOS_PROP_CO_RP_PDA:
 		case DAOS_PROP_CO_GLOBAL_VERSION:
+		case DAOS_PROP_CO_OBJ_VERSION:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -536,10 +531,12 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
 	case DAOS_PROP_CO_LABEL:
-		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (entry_dup->dpe_str == NULL) {
-			return -DER_NOMEM;
+		if (entry->dpe_str) {
+			D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (entry_dup->dpe_str == NULL) {
+				return -DER_NOMEM;
+			}
 		}
 		break;
 	case DAOS_PROP_PO_ACL:
@@ -565,7 +562,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 		rc = d_rank_list_dup(&dst_list, svc_list);
 		if (rc) {
-			D_ERROR("failed dup rank list "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed dup rank list: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
@@ -573,7 +570,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_CO_ROOTS:
 		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
 		if (rc) {
-			D_ERROR("failed to dup roots "DF_RC"\n", DP_RC(rc));
+			D_ERROR("failed to dup roots: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 		break;
@@ -673,8 +670,7 @@ daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_siz
 		D_ERROR("Entry type does not expect a string value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_str != NULL)
-		D_FREE(entry->dpe_str);
+	D_FREE(entry->dpe_str);
 	if (str == NULL || len == 0)
 		return 0;
 
@@ -706,8 +702,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 		D_ERROR("Entry type does not expect a ptr value\n");
 		return -DER_INVAL;
 	}
-	if (entry->dpe_val_ptr != NULL)
-		D_FREE(entry->dpe_val_ptr);
+	D_FREE(entry->dpe_val_ptr);
 	if (ptr == NULL || size == 0)
 		return 0;
 
@@ -1066,7 +1061,8 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
-		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0) {
+		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_OBJ_VERSION) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {

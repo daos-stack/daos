@@ -1,13 +1,13 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from socket import gethostname
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosPool
 from apricot import TestWithServers
-from socket import gethostname
+
 
 class DmgSystemCleanupTest(TestWithServers):
     """Test Class Description:
@@ -59,27 +59,27 @@ class DmgSystemCleanupTest(TestWithServers):
 
         # Check to make sure we can access the pool
         try:
-            for i in range(2):
-                self.container[i].write_objects()
+            for idx in range(2):
+                self.container[idx].write_objects()
         except TestFail as error:
-            self.fail("Unable to write container #{}: {}\n".format(i, error))
+            self.fail("Unable to write container #{}: {}\n".format(idx, error))
 
         # Call dmg system cleanup on the host and create cleaned pool list.
         dmg_cmd = self.get_dmg_command()
         result = dmg_cmd.system_cleanup(self.agent_managers[0].hosts, verbose=True)
 
         # Build list of pools and how many handles were cleaned (should be 6 each)
-        actual_counts = dict()
+        actual_counts = {}
         for res in result["response"]["results"]:
             if res["status"] == 0:
                 actual_counts[res["pool_id"].lower()] = res["count"]
         # Attempt to access the pool again (should fail)
-        for i in range(2):
+        for idx in range(2):
             try:
-                self.container[i].write_objects()
-                self.fail("Wrote to container #{} when it should have failed:\n".format(i))
+                self.container[idx].write_objects()
+                self.fail("Wrote to container #{} when it should have failed:\n".format(idx))
             except TestFail as error:
-                self.log.info("Unable to write container #%d: as expected %s\n", i, error)
+                self.log.info("Unable to write container #%d: as expected %s\n", idx, error)
 
         # Build a list of pool IDs and counts (6) to compare against
         # our cleanup results.

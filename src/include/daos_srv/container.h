@@ -32,14 +32,12 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_list_t *ranks, daos_prop_t *prop);
-
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
-
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
@@ -183,6 +181,7 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
+int ds_cont_chk_post(struct ds_pool_child *pool_child);
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
@@ -263,6 +262,7 @@ int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
 
 int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
 
-int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in, bool for_svc);
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		      daos_prop_t *prop_old, bool for_svc);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

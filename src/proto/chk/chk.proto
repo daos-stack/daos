@@ -186,9 +186,9 @@ enum CheckScanPhase {
 	CSP_DTX_RESYNC = 6; // DTX resync and cleanup.
 	CSP_OBJ_SCRUB = 7; // RP/EC shards consistency verification with checksum scrub if have.
 	CSP_REBUILD = 8; // Object rebuild.
-	OSP_AGGREGATION = 9; // EC aggregation & VOS aggregation.
+	CSP_AGGREGATION = 9; // EC aggregation & VOS aggregation.
 
-	DSP_DONE = 10; // All done.
+	CSP_DONE = 10; // All done.
 }
 
 // DAOS check engine reports the found inconsistency and repair result to control plane.
@@ -210,13 +210,15 @@ message CheckReport {
         uint32 rank = 5; // Inconsistency happened on which rank if applicable.
         uint32 target = 6; // Inconsistency happened on which target in the rank if applicable.
         string pool_uuid = 7; // The consistency is in which pool if applicable.
-        string cont_uuid = 8; // The consistency is in which container if applicable.
-        string objid = 9; // The consistency is in which object if applicable.
-        string dkey = 10; // The consistency is in which dkey if applicable.
-        string akey = 11; // The consistency is in which akey if applicable.
-        string timestamp = 12; // The time of report (and repair) the inconsistency.
-        string msg = 13; // Information to describe the inconsistency in detail.
-        repeated CheckInconsistAction act_choices = 14; // Potential actions to be made in interaction mode.
-        repeated string act_details = 15; // Details for each potential action (length should match actions).
-	repeated string act_msgs = 16; // Formatted messages containing details for each action choice.
+        string pool_label = 8; // The pool label, if available.
+        string cont_uuid = 9; // The consistency is in which container if applicable.
+        string cont_label = 10; // The container label, if available.
+        string objid = 11; // The consistency is in which object if applicable.
+        string dkey = 12; // The consistency is in which dkey if applicable.
+        string akey = 13; // The consistency is in which akey if applicable.
+        string timestamp = 14; // The time of report (and repair) the inconsistency.
+        string msg = 15; // Information to describe the inconsistency in detail.
+        repeated CheckInconsistAction act_choices = 16; // Interactive mode options (first is suggested).
+        repeated string act_details = 17; // Details for each potential action (length should match actions).
+        repeated string act_msgs = 18; // Formatted messages containing details for each action choice.
 }

@@ -101,7 +101,7 @@ message CheckQueryTarget {
 	uint32 target = 2; // Target index in the rank.
 	chk.CheckInstStatus status = 3; // Check instance status on this target - see CheckInstStatus.
 	// Inconsistency statistics during the phases range
-	// [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	// [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
 	CheckQueryInconsist inconsistency = 4;
 	// Time information for the pool shard on the target if applicable.
 	CheckQueryTime time = 5;

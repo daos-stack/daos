@@ -470,6 +470,11 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				      priv_entry ? priv_entry->priv : NULL);
 	} else {
 		D_ASSERT(iv_value != NULL);
+		if (ns->iv_master_rank != key.rank) {
+			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
+				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
+			D_GOTO(output, rc = -DER_GRPVER);
+		}
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
@@ -821,12 +826,16 @@ free:
 
 /* Update iv namespace */
 void
-ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term)
 {
-	D_INFO("update iv_ns %u master rank %u new master rank %u "
-	       "myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-	       master_rank, dss_self_rank(), ns);
+	if (term <= ns->iv_master_term)
+		return;
+
+	D_INFO("update iv_ns %u master rank %u->%u term "DF_U64"->"DF_U64
+	       " myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+	       master_rank,  ns->iv_master_term, term, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
+	ns->iv_master_term = term;
 }
 
 void
@@ -1047,6 +1056,16 @@ retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+		if (rc == -DER_GRPVER && engine_in_check()) {
+			/*
+			 * Under check mode, the pool shard on peer rank/target does
+			 * not exist, then it will reply "-DER_GRPVER" that is normal
+			 * for check. Return the errno to the caller instead of retry.
+			 */
+			D_WARN("IV for DAOS check hit unmatched GRP version %d\n", rc);
+			return rc;
+		}
+
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {

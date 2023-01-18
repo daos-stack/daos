@@ -22,13 +22,12 @@ PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
 
-def base_setup(env):
+def _base_setup(env):
     """Setup the scons environment for the compiler
 
     Include all our preferred compile options for the chosen
     compiler and build type.
     """
-
     if GetOption('help') or GetOption('clean'):
         return
 
@@ -84,3 +83,13 @@ def base_setup(env):
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
     env['BSETUP'] = compiler
+
+
+def generate(env):
+    """Add daos specific method to environment"""
+    env.AddMethod(_base_setup, 'compiler_setup')
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True

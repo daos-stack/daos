@@ -1327,7 +1327,7 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 		iod.iod_size = 1;
 	}
 
-	epoch = crt_hlc_get();
+	epoch = d_hlc_get();
 	rc = vos_obj_update(coh, vtp->vtp_oid, epoch, pool_ver, flags,
 			    &vtp->vtp_dkey, 1, &iod, NULL, &sgl);
 	if (rc == -DER_NO_PERM)

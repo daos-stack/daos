@@ -1,6 +1,6 @@
-#!/bin/bash
+# shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -65,20 +65,6 @@ tmpfs /mnt/daos tmpfs rw,relatime,size=${tmpfs_size}k 0 0 # added by ftest.sh
 wq
 EOF
     sudo mount /mnt/daos
-fi
-
-rm -f /tmp/test.cov
-if [ -f /usr/lib/daos/TESTING/ftest/test.cov ]; then
-    cp /usr/lib/daos/TESTING/ftest/test.cov /tmp
-    chmod 777 /tmp/test.cov
-fi
-
-echo Setting up fuse.conf
-ls -l /etc/fuse.conf || true
-if [ -e /etc/fuse.conf ]
-then
-        echo user_allow_other | sudo tee -a /etc/fuse.conf
-        cat /etc/fuse.conf
 fi
 
 # make sure to set up for daos_agent. The test harness will take care of

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,17 @@
 
 /* Pool service (opaque) */
 struct ds_pool_svc;
+
+/*
+ * Aggregation of pool/container/object/keys disk format change.
+ */
+#define DS_POOL_GLOBAL_VERSION		1
+
+/**
+ * Each individual object layout format, like oid layout, dkey to group,
+ * dkey to EC group start.
+ */
+#define DS_POOL_OBJ_VERSION		1
 
 /*
  * Pool object
@@ -109,6 +120,7 @@ struct ds_pool_hdl {
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
 	uint32_t		sph_global_ver; /* pool global version */
+	uint32_t		sph_obj_ver;	/* pool obj layout version */
 	struct ds_pool	       *sph_pool;
 	int			sph_ref;
 	d_iov_t			sph_cred;
@@ -148,7 +160,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1;
+	uint64_t	spc_discard_done:1,
+			spc_no_storage:1; /* The pool shard has no storage. */
+
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -176,6 +190,7 @@ int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
+int ds_pool_chk_post(uuid_t uuid);
 int ds_pool_start_with_svc(uuid_t uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
@@ -234,7 +249,7 @@ struct rsvc_hint;
 int ds_pool_cont_svc_lookup_leader(uuid_t pool_uuid, struct cont_svc **svc,
 				   struct rsvc_hint *hint);
 
-void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank);
+void ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank, uint64_t term);
 
 int ds_pool_iv_map_update(struct ds_pool *pool, struct pool_buf *buf,
 		       uint32_t map_ver);
@@ -246,6 +261,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
+int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -275,6 +291,7 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
+int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
 int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
 void ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
@@ -293,6 +310,9 @@ int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       daos_handle_t *ph);
 int dsc_pool_close(daos_handle_t ph);
 int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
+
+int
+ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking

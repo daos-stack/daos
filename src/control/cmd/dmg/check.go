@@ -210,6 +210,8 @@ func (cmd *checkStopCmd) Execute(_ []string) error {
 
 type checkQueryCmd struct {
 	checkPoolCmdBase
+
+	Verbose bool `short:"v" long:"verbose" description:"Show more detailed information."`
 }
 
 func (cmd *checkQueryCmd) Execute(_ []string) error {
@@ -227,7 +229,7 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 	}
 
 	var buf bytes.Buffer
-	pretty.PrintCheckQueryResp(&buf, resp)
+	pretty.PrintCheckQueryResp(&buf, resp, cmd.Verbose)
 	cmd.Info(buf.String())
 
 	return nil

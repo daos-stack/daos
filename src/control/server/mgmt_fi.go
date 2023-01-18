@@ -22,15 +22,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
-func (svc *mgmtSvc) FaultInjectReport(ctx context.Context, rpt *chkpb.CheckReport) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) FaultInjectReport(ctx context.Context, rpt *chkpb.CheckReport) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(rpt); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to FaultInjectReport RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received FaultInjectReport RPC: %+v", rpt)
 
 	cf := checker.NewFinding(rpt)
 	if err := svc.sysdb.AddCheckerFinding(cf); err != nil {
@@ -40,15 +35,10 @@ func (svc *mgmtSvc) FaultInjectReport(ctx context.Context, rpt *chkpb.CheckRepor
 	return new(mgmtpb.DaosResp), nil
 }
 
-func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) FaultInjectMgmtPoolFault(parent context.Context, fault *chkpb.Fault) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(fault); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to FaultInjectMgmtPoolFault RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received FaultInjectMgmtPoolFault RPC: %+v", fault)
 
 	var poolID string
 	var newLabel string
@@ -69,6 +59,13 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 	if newLabel == "" {
 		newLabel = ps.PoolLabel + "-fault"
 	}
+
+	lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
 
 	var newRanks []ranklist.Rank
 	switch len(fault.Uints) {
@@ -88,7 +85,7 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 	case chkpb.CheckInconsistClass_CIC_POOL_BAD_SVCL:
 		ps.Replicas = newRanks
 	case chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS:
-		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
+		if err := svc.sysdb.RemovePoolService(ctx, ps.PoolUUID); err != nil {
 			return nil, err
 		}
 		ps = nil
@@ -97,22 +94,17 @@ func (svc *mgmtSvc) FaultInjectMgmtPoolFault(ctx context.Context, fault *chkpb.F
 	}
 
 	if ps != nil {
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+		if err := svc.sysdb.UpdatePoolService(ctx, ps); err != nil {
 			return nil, err
 		}
 	}
 	return new(mgmtpb.DaosResp), nil
 }
 
-func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault) (resp *mgmtpb.DaosResp, err error) {
+func (svc *mgmtSvc) FaultInjectPoolFault(parent context.Context, fault *chkpb.Fault) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(fault); err != nil {
 		return nil, err
 	}
-
-	defer func() {
-		svc.log.Debugf("Responding to FaultInjectPoolFault RPC: %s (%+v)", mgmtpb.Debug(resp), err)
-	}()
-	svc.log.Debugf("Received FaultInjectPoolFault RPC: %+v", fault)
 
 	var poolID string
 	var newLabel string
@@ -134,7 +126,14 @@ func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault
 		newLabel = ps.PoolLabel + "-fault"
 	}
 
-	resp = new(mgmtpb.DaosResp)
+	lock, err := svc.sysdb.TakePoolLock(parent, ps.PoolUUID)
+	if err != nil {
+		return nil, err
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	resp := new(mgmtpb.DaosResp)
 	switch fault.Class {
 	case chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL:
 		prop := &mgmtpb.PoolProperty{
@@ -181,5 +180,5 @@ func (svc *mgmtSvc) FaultInjectPoolFault(ctx context.Context, fault *chkpb.Fault
 		return nil, errors.Errorf("unhandled fault class %q", fault.Class)
 	}
 
-	return
+	return resp, nil
 }

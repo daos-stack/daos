@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2022 Intel Corporation.
 
@@ -74,9 +73,9 @@ class AgentFailure(IorTestBase):
         verifies that DAOS can recover from the fault with minimal human intervention.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_basic
+        :avocado: tags=AgentFailure,test_agent_failure
         """
         # 1. Create a pool and a container.
         self.add_pool()
@@ -95,8 +94,8 @@ class AgentFailure(IorTestBase):
 
         # We need to stop daos_agent while IOR is running, so need to wait for a few
         # seconds for IOR to start.
-        self.log.info("Waiting 5 sec for IOR to start writing data...")
-        time.sleep(5)
+        self.log.info("Waiting 10 sec for IOR to start writing data...")
+        time.sleep(10)
 
         errors = []
 
@@ -166,18 +165,20 @@ class AgentFailure(IorTestBase):
         9. Run IOR again from the keep client. It should succeed without any error.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,fault_management,agent_failure
-        :avocado: tags=agent_failure_isolation
+        :avocado: tags=AgentFailure,test_agent_failure_isolation
         """
         # 1. Create a pool and a container.
         self.add_pool()
         self.add_container(self.pool)
 
+        # Use the last two agent hosts, since the first is likely the test runner node
         agent_hosts = self.agent_managers[0].hosts
         self.log.info("agent_hosts = %s", agent_hosts)
-        agent_host_keep = agent_hosts[0]
-        agent_host_kill = agent_hosts[1]
+        if len(agent_hosts) < 2:
+            self.fail("Need at least two agent hosts!")
+        agent_host_keep, agent_host_kill = agent_hosts[-2:]
 
         # 2. Run IOR from the two client nodes.
         ior_results = {}
@@ -197,8 +198,8 @@ class AgentFailure(IorTestBase):
 
         # We need to stop daos_agent while IOR is running, so need to wait for a few
         # seconds for IOR to start.
-        self.log.info("Waiting 5 sec for IOR to start writing data...")
-        time.sleep(5)
+        self.log.info("Waiting 10 sec for IOR to start writing data...")
+        time.sleep(10)
 
         errors = []
 

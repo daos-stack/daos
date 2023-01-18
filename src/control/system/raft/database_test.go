@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/raft"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -32,7 +33,9 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/checker"
 )
 
 func waitForLeadership(ctx context.Context, t *testing.T, db *Database, gained bool) {
@@ -226,6 +229,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	maxRanks := 2048
 	maxPools := 1024
 	maxAttrs := 4096
+	maxFindings := 512
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
@@ -281,6 +285,18 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		(*fsm)(db0).Apply(rl)
 	}
 
+	for i := 0; i < maxFindings; i++ {
+		f := checker.MockFinding(i)
+		data, err := createRaftUpdate(raftOpAddCheckerFinding, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rl := &raft.Log{
+			Data: data,
+		}
+		(*fsm)(db0).Apply(rl)
+	}
+
 	attrs := make(map[string]string)
 	for i := 0; i < maxAttrs; i++ {
 		attrs[fmt.Sprintf("prop%04d", i)] = fmt.Sprintf("value%04d", i)
@@ -314,6 +330,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 		cmpopts.IgnoreUnexported(dbData{}, Member{}, PoolServiceStorage{}),
 		cmpopts.IgnoreFields(dbData{}, "RWMutex"),
 		cmpopts.IgnoreFields(PoolServiceStorage{}, "Mutex"),
+		protocmp.Transform(),
 	}
 	if diff := cmp.Diff(db0.data, db1.data, cmpOpts...); diff != "" {
 		t.Fatalf("db differs after restore (-want, +got):\n%s\n", diff)
@@ -758,15 +775,21 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			db := MockDatabase(t, log)
-			for _, ps := range tc.poolSvcs {
-				if err := db.AddPoolService(ps); err != nil {
-					t.Fatal(err)
-				}
-			}
-
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			defer cancel()
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+					t.Fatal(err)
+				}
+				lock.Release()
+			}
 
 			ps := events.NewPubSub(ctx, log)
 			defer ps.Close()
@@ -838,11 +861,18 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
+			ctx := context.Background()
 			db := MockDatabase(t, log)
 			for _, ps := range tc.poolSvcs {
-				if err := db.AddPoolService(ps); err != nil {
+				lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+				if err != nil {
 					t.Fatal(err)
 				}
+
+				if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+					t.Fatal(err)
+				}
+				lock.Release()
 			}
 
 			poolSvcs, err := db.PoolServiceList(tc.all)
@@ -985,6 +1015,10 @@ func Test_Database_ResignLeadership(t *testing.T) {
 			cause:     raft.ErrLeadershipTransferInProgress,
 			expLeader: true,
 		},
+		"cause: system.ErrNotLeader": {
+			cause:     &system.ErrNotLeader{},
+			expLeader: true,
+		},
 		// Also check to see what happens if we get a raft error during
 		// leadership transfer.
 		"leadership transfer fails": {
@@ -1009,6 +1043,79 @@ func Test_Database_ResignLeadership(t *testing.T) {
 			}
 
 			test.AssertEqual(t, tc.expLeader, db.IsLeader(), "unexpected leader state")
+		})
+	}
+}
+
+func TestDatabase_TakePoolLock(t *testing.T) {
+	mockUUID := uuid.MustParse(test.MockUUID(1))
+	parentLock := makeLock(1, 1, 1)
+	wrongIdLock := makeLock(1, 2, 1)
+	wrongPoolLock := makeLock(1, 1, 2)
+
+	for name, tc := range map[string]struct {
+		ctx          context.Context
+		poolUUID     uuid.UUID
+		existingLock *PoolLock
+		expErr       error
+		expNewLock   bool
+	}{
+		"nil context": {
+			poolUUID: mockUUID,
+			expErr:   errors.New("nil context"),
+		},
+		"empty pool UUID": {
+			ctx:    context.Background(),
+			expErr: errors.New("nil pool UUID"),
+		},
+		"already-released parent lock": {
+			ctx:      parentLock.InContext(context.Background()),
+			poolUUID: mockUUID,
+			expErr:   errors.New("lock not found"),
+		},
+		"parent lock wrong id": {
+			ctx:          parentLock.InContext(context.Background()),
+			existingLock: wrongIdLock,
+			poolUUID:     mockUUID,
+			expErr:       errors.New("is locked"),
+		},
+		"parent lock for wrong pool": {
+			ctx:          wrongPoolLock.InContext(context.Background()),
+			existingLock: wrongPoolLock,
+			poolUUID:     mockUUID,
+			expErr:       errors.New("different pool"),
+		},
+		"successful new lock": {
+			ctx:        context.Background(),
+			poolUUID:   mockUUID,
+			expNewLock: true,
+		},
+		"successful parent lock": {
+			ctx:          parentLock.InContext(context.Background()),
+			existingLock: parentLock,
+			poolUUID:     mockUUID,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			if tc.existingLock != nil {
+				db.poolLocks.locks = make(map[uuid.UUID]*PoolLock)
+				db.poolLocks.locks[tc.existingLock.poolUUID] = tc.existingLock
+			}
+			gotLock, gotErr := db.TakePoolLock(tc.ctx, tc.poolUUID)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if tc.expNewLock && (gotLock == nil || gotLock == parentLock) {
+				t.Fatal("expected new lock")
+			} else if !tc.expNewLock && gotLock != parentLock {
+				t.Fatal("expected parent lock")
+			}
 		})
 	}
 }

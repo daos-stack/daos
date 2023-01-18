@@ -17,8 +17,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	pbutil "github.com/daos-stack/daos/src/control/common/proto"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 type SystemCheckEnableReq struct {
@@ -39,7 +41,7 @@ func SystemCheckEnable(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckEnable(ctx, &req.CheckEnableReq)
 	})
 
-	rpcClient.Debugf("DAOS system checker enable request: %s", mgmtpb.Debug(&req.CheckEnableReq))
+	rpcClient.Debugf("DAOS system checker enable request: %s", pbutil.Debug(&req.CheckEnableReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -66,7 +68,7 @@ func SystemCheckDisable(ctx context.Context, rpcClient UnaryInvoker, req *System
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckDisable(ctx, &req.CheckDisableReq)
 	})
 
-	rpcClient.Debugf("DAOS system checker disable request: %s", mgmtpb.Debug(&req.CheckDisableReq))
+	rpcClient.Debugf("DAOS system checker disable request: %s", pbutil.Debug(&req.CheckDisableReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -269,7 +271,7 @@ func SystemCheckStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStart(ctx, &req.CheckStartReq)
 	})
 
-	rpcClient.Debugf("DAOS system check start request: %s", mgmtpb.Debug(&req.CheckStartReq))
+	rpcClient.Debugf("DAOS system check start request: %s", pbutil.Debug(&req.CheckStartReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -296,7 +298,7 @@ func SystemCheckStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemChe
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckStop(ctx, &req.CheckStopReq)
 	})
 
-	rpcClient.Debugf("DAOS system check stop request: %s", mgmtpb.Debug(&req.CheckStopReq))
+	rpcClient.Debugf("DAOS system check stop request: %s", pbutil.Debug(&req.CheckStopReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -381,8 +383,8 @@ const (
 	SystemCheckScanPhaseDtxResync        = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DTX_RESYNC)
 	SystemCheckScanPhaseObjectScrub      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_OBJ_SCRUB)
 	SystemCheckScanPhaseObjectRebuild    = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_REBUILD)
-	SystemCheckScanPhaseAggregation      = SystemCheckScanPhase(chkpb.CheckScanPhase_OSP_AGGREGATION)
-	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_DSP_DONE)
+	SystemCheckScanPhaseAggregation      = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_AGGREGATION)
+	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DONE)
 )
 
 type SystemCheckRepairChoice struct {
@@ -397,9 +399,16 @@ type SystemCheckReport struct {
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	choices := make([]*SystemCheckRepairChoice, len(r.ActChoices))
 	for i, c := range r.ActChoices {
+		info := r.ActMsgs[i]
+		// FIXME DAOS-12189: Use the details instead because the messages
+		// are too generic. Longer-term, only the messages should be
+		// user-visible.
+		if len(strings.Fields(r.ActDetails[i])) > 1 {
+			info = r.ActDetails[i]
+		}
 		choices[i] = &SystemCheckRepairChoice{
 			Action: SystemCheckRepairAction(c),
-			Info:   r.ActMsgs[i],
+			Info:   info,
 		}
 	}
 
@@ -421,14 +430,77 @@ func (r *SystemCheckReport) Resolution() string {
 	return msg
 }
 
+type rawRankMap map[ranklist.Rank]*mgmtpb.CheckQueryPool
+
+type SystemCheckPoolInfo struct {
+	RawRankInfo rawRankMap    `json:"-"`
+	UUID        string        `json:"uuid"`
+	Label       string        `json:"label"`
+	Status      string        `json:"status"`
+	Phase       string        `json:"phase"`
+	StartTime   time.Time     `json:"start_time"`
+	Remaining   time.Duration `json:"remaining"`
+	Elapsed     time.Duration `json:"elapsed"`
+}
+
+func (p *SystemCheckPoolInfo) String() string {
+	var remOrElapsed string
+	if p.Elapsed > 0 {
+		remOrElapsed = fmt.Sprintf(" elapsed: %s", p.Elapsed)
+	} else if p.Remaining > 0 {
+		remOrElapsed = fmt.Sprintf(" remaining: %s", p.Remaining)
+	}
+	return fmt.Sprintf("Pool %s: %d ranks, status: %s, phase: %s, started: %s%s",
+		p.UUID, len(p.RawRankInfo), p.Status, p.Phase, p.StartTime, remOrElapsed)
+}
+
+func getQueryPoolRank(pool *mgmtpb.CheckQueryPool) ranklist.Rank {
+	if len(pool.Targets) == 0 {
+		return ranklist.NilRank
+	}
+	return ranklist.Rank(pool.Targets[0].Rank)
+}
+
+func roe(f string, status chkpb.CheckPoolStatus, val uint64) time.Duration {
+	if f == "r" && status != chkpb.CheckPoolStatus_CPS_CHECKING {
+		return 0
+	}
+	if f == "e" && status == chkpb.CheckPoolStatus_CPS_CHECKING {
+		return 0
+	}
+	return time.Duration(val) * time.Second
+}
+
+func getPoolCheckInfo(pbPools []*mgmtpb.CheckQueryPool) map[string]*SystemCheckPoolInfo {
+	pools := make(map[string]*SystemCheckPoolInfo)
+
+	for _, pbPool := range pbPools {
+		if _, found := pools[pbPool.Uuid]; !found {
+			pools[pbPool.Uuid] = &SystemCheckPoolInfo{
+				RawRankInfo: make(rawRankMap),
+				UUID:        pbPool.Uuid,
+				// For the moment, ignore potential differences in these details
+				// across multiple ranks.
+				Status:    pbPool.Status.String(),
+				Phase:     pbPool.Phase.String(),
+				StartTime: time.Unix(int64(pbPool.Time.StartTime), 0),
+				Remaining: roe("r", pbPool.Status, pbPool.Time.MiscTime),
+				Elapsed:   roe("e", pbPool.Status, pbPool.Time.MiscTime),
+			}
+		}
+		pools[pbPool.Uuid].RawRankInfo[getQueryPoolRank(pbPool)] = pbPool
+	}
+
+	return pools
+}
+
 type SystemCheckQueryResp struct {
 	Status    SystemCheckStatus    `json:"status"`
 	ScanPhase SystemCheckScanPhase `json:"scan_phase"`
 	StartTime time.Time            `json:"start_time"`
 
-	// FIXME: Don't use protobuf types in public API.
-	Pools   []*mgmtpb.CheckQueryPool `json:"pools"`
-	Reports []*SystemCheckReport     `json:"reports"`
+	Pools   map[string]*SystemCheckPoolInfo `json:"pools"`
+	Reports []*SystemCheckReport            `json:"reports"`
 }
 
 // SystemCheckQuery queries the system checker status.
@@ -442,7 +514,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckQuery(ctx, &req.CheckQueryReq)
 	})
 
-	rpcClient.Debugf("DAOS system check query request: %s", mgmtpb.Debug(&req.CheckQueryReq))
+	rpcClient.Debugf("DAOS system check query request: %s", pbutil.Debug(&req.CheckQueryReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -456,7 +528,7 @@ func SystemCheckQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemCh
 		Status:    SystemCheckStatus(pbResp.GetInsStatus()),
 		ScanPhase: SystemCheckScanPhase(pbResp.GetInsPhase()),
 		StartTime: time.Unix(int64(pbResp.GetTime().GetStartTime()), 0),
-		Pools:     pbResp.GetPools(),
+		Pools:     getPoolCheckInfo(pbResp.GetPools()),
 	}
 	for _, pbReport := range pbResp.GetReports() {
 		rpt := new(SystemCheckReport)
@@ -495,7 +567,7 @@ func SystemCheckGetPolicy(ctx context.Context, rpcClient UnaryInvoker, req *Syst
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckGetPolicy(ctx, &req.CheckGetPolicyReq)
 	})
 
-	rpcClient.Debugf("DAOS system check get-policy request: %s", mgmtpb.Debug(&req.CheckGetPolicyReq))
+	rpcClient.Debugf("DAOS system check get-policy request: %s", pbutil.Debug(&req.CheckGetPolicyReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -559,7 +631,7 @@ func SystemCheckSetPolicy(ctx context.Context, rpcClient UnaryInvoker, req *Syst
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckSetPolicy(ctx, &req.CheckSetPolicyReq)
 	})
 
-	rpcClient.Debugf("DAOS system check set-policy request: %s", mgmtpb.Debug(&req.CheckSetPolicyReq))
+	rpcClient.Debugf("DAOS system check set-policy request: %s", pbutil.Debug(&req.CheckSetPolicyReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -590,12 +662,12 @@ func SystemCheckRepair(ctx context.Context, rpcClient UnaryInvoker, req *SystemC
 		return errors.Errorf("nil %T", req)
 	}
 
+	req.CheckActReq.Sys = req.getSystem(rpcClient)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		req.CheckActReq.Sys = req.getSystem(rpcClient)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCheckRepair(ctx, &req.CheckActReq)
 	})
 
-	rpcClient.Debugf("DAOS system check repair request: %s", mgmtpb.Debug(&req.CheckActReq))
+	rpcClient.Debugf("DAOS system check repair request: %s", pbutil.Debug(&req.CheckActReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err

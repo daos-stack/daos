@@ -434,7 +434,6 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
-		D_ERROR("Alloc purge item failed.\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&pi->pi_link);
@@ -475,7 +474,6 @@ prealloc_requests(struct sched_info *info, int cnt)
 	for (i = 0; i < cnt; i++) {
 		D_ALLOC_PTR(req);
 		if (req == NULL) {
-			D_ERROR("Alloc req failed.\n");
 			return -DER_NOMEM;
 		}
 		D_INIT_LIST_HEAD(&req->sr_link);
@@ -588,7 +586,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 	D_ALLOC_PTR(spi);
 	if (spi == NULL) {
-		D_ERROR("Failed to allocate spi\n");
 		return NULL;
 	}
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
@@ -1286,9 +1283,8 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 static void
 req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
-	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
-	if (req->sr_wakeup_time == 0)
+	if (req == NULL || req->sr_wakeup_time == 0)
 		return;
 
 	D_ASSERT(!d_list_empty(&req->sr_link));

@@ -132,13 +132,20 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	struct chk_cont_list_in		*ccli = crt_req_get(rpc);
 	struct chk_cont_list_out	*cclo = crt_reply_get(rpc);
 	uuid_t				*conts = NULL;
+	d_rank_t			 myrank = dss_self_rank();
 	uint32_t			 count = 0;
 	int				 rc = 0;
+	bool				 remote;
+
+	if (ccli->ccli_rank != myrank)
+		remote = true;
+	else
+		remote = false;
 
 	rc = chk_engine_cont_list(ccli->ccli_gen, ccli->ccli_pool, &conts, &count);
 
 	cclo->cclo_status = rc;
-	cclo->cclo_rank = dss_self_rank();
+	cclo->cclo_rank = myrank;
 	cclo->cclo_conts.ca_arrays = conts;
 	cclo->cclo_conts.ca_count = count;
 
@@ -153,7 +160,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	 * the PS leader completed aggregating the result for the local shard. And then
 	 * the PS leader will release the buffer.
 	 */
-	if (cclo->cclo_status < 0 || !chk_is_on_leader(ccli->ccli_gen, -1, false))
+	if (cclo->cclo_status < 0 || remote)
 		D_FREE(conts);
 }
 
@@ -181,8 +188,9 @@ ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
 	int			 rc;
 
 	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_phase,
-				 cpmi->cpmi_label, cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
-				 cpmi->cpmi_targets.ca_arrays, &cpmo->cpmo_hint);
+				 cpmi->cpmi_label, cpmi->cpmi_label_seq, cpmi->cpmi_flags,
+				 cpmi->cpmi_targets.ca_count, cpmi->cpmi_targets.ca_arrays,
+				 &cpmo->cpmo_hint);
 
 	cpmo->cpmo_status = rc;
 	rc = crt_reply_send(rpc);
@@ -206,7 +214,9 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_option_nr = cri->cri_options.ca_count;
 	cru.cru_detail_nr = cri->cri_details.ca_count;
 	cru.cru_pool = &cri->cri_pool;
+	cru.cru_pool_label = cri->cri_pool_label;
 	cru.cru_cont = &cri->cri_cont;
+	cru.cru_cont_label = cri->cri_cont_label;
 	cru.cru_obj = &cri->cri_obj;
 	cru.cru_dkey = &cri->cri_dkey;
 	cru.cru_akey = &cri->cri_akey;
@@ -214,6 +224,7 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_options = cri->cri_options.ca_arrays;
 	cru.cru_details = cri->cri_details.ca_arrays;
 	cru.cru_result = cri->cri_ics_result;
+	cro->cro_seq = cri->cri_seq;
 
 	rc = chk_leader_report(&cru, &cro->cro_seq, NULL);
 
@@ -303,7 +314,8 @@ ds_chk_setup(void)
 	 * the check explicitly.
 	 */
 
-	chk_engine_rejoin();
+	rc = dss_ult_create(chk_engine_rejoin, NULL, DSS_XS_SYS, 0, 0, NULL);
+	D_ASSERT(rc == 0);
 
 	goto out_done;
 

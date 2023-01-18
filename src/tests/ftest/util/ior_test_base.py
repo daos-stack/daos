@@ -72,23 +72,6 @@ class IorTestBase(DfuseTestBase):
 
         return self.container
 
-    def display_pool_space(self, pool=None):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
-
-        Args:
-            pool (TestPool, optional): The pool for which to display space.
-                    Default is self.pool.
-        """
-        if not pool:
-            pool = self.pool
-
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
-
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
                           test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
@@ -192,7 +175,7 @@ class IorTestBase(DfuseTestBase):
             JobManager: the mpi job manager object
 
         """
-        return get_job_manager(self, "Mpirun", self.ior_cmd, self.subprocess, "mpich")
+        return get_job_manager(self, job=self.ior_cmd, subprocess=self.subprocess)
 
     def check_subprocess_status(self, operation="write"):
         """Check subprocess status."""
@@ -255,7 +238,7 @@ class IorTestBase(DfuseTestBase):
 
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             out = manager.run()
 
             if self.subprocess:
@@ -278,10 +261,10 @@ class IorTestBase(DfuseTestBase):
             # ior thread (eg: thread1 --> thread2 --> ior)
             if out_queue is not None:
                 out_queue.put("IOR Failed")
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("IOR Failed")
         finally:
             if not self.subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         return None
 
@@ -300,9 +283,9 @@ class IorTestBase(DfuseTestBase):
             return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("Failed to stop in-progress IOR command")
         finally:
-            self.display_pool_space()
+            self.pool.display_space()
 
         return None
 
@@ -403,8 +386,8 @@ class IorTestBase(DfuseTestBase):
 
         except CommandFailure as error:
             # Report an error if any command fails
-            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.log.error("Failed to execute command: %s", str(error))
+            self.fail("Failed to execute command")
 
         return result
 

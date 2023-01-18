@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -257,15 +258,47 @@ type (
 		MakeMountPathErr   error
 	}
 
+	mountMap struct {
+		sync.RWMutex
+		mounts map[string]string
+	}
+
 	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
 	MockMountProvider struct {
-		cfg *MockMountProviderConfig
+		cfg    *MockMountProviderConfig
+		mounts mountMap
 	}
 )
+
+func (mm *mountMap) Add(target, opts string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	if mm.mounts == nil {
+		mm.mounts = make(map[string]string)
+	}
+	mm.mounts[target] = opts
+}
+
+func (mm *mountMap) Remove(target string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	delete(mm.mounts, target)
+}
+
+func (mm *mountMap) Get(target string) (string, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	opts, ok := mm.mounts[target]
+	return opts, ok
+}
 
 // Mount is a mock implementation.
 func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.MountErr == nil {
+		m.mounts.Add(req.Target, req.Options)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: true,
@@ -277,6 +310,7 @@ func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 // Unmount is a mock implementation.
 func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		m.mounts.Remove(req.Target)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: false,
@@ -285,10 +319,17 @@ func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	return nil, m.cfg.UnmountErr
 }
 
+// GetMountOpts returns the mount options for the given target.
+func (m *MockMountProvider) GetMountOpts(target string) (string, bool) {
+	opts, exists := m.mounts.Get(target)
+	return opts, exists
+}
+
 // IsMounted is a mock implementation.
-func (m *MockMountProvider) IsMounted(_ string) (bool, error) {
+func (m *MockMountProvider) IsMounted(target string) (bool, error) {
 	if m.cfg == nil {
-		return true, nil
+		opts, exists := m.mounts.Get(target)
+		return exists && opts != "", nil
 	}
 	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
 }

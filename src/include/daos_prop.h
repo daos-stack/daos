@@ -121,6 +121,8 @@ enum daos_pool_props {
 	 * Pool service redundancy factor.
 	 */
 	DAOS_PROP_PO_SVC_REDUN_FAC,
+	/** object global version */
+	DAOS_PROP_PO_OBJ_VERSION,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -315,6 +317,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_GLOBAL_VERSION,
 	/** Override the pool scrubbing property. */
 	DAOS_PROP_CO_SCRUBBER_DISABLED,
+	/** immutable container object global version */
+	DAOS_PROP_CO_OBJ_VERSION,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -552,8 +556,11 @@ daos_label_is_valid(const char *label)
 /* For the case of no label is set for the pool. */
 #define DAOS_PROP_NO_PO_LABEL		"pool_label_not_set"
 
+/* Default container label */
+#define DEFAULT_CONT_LABEL		"container_label_not_set"
+
 /* For the case of no label is set for the container. */
-#define DAOS_PROP_NO_CO_LABEL		"container_label_not_set"
+#define DAOS_PROP_NO_CO_LABEL		DEFAULT_CONT_LABEL
 
 /** daos properties, for pool or container */
 typedef struct {

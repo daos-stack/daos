@@ -182,7 +182,7 @@ chk_pool_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	struct chk_pool_start_out	*out_source = crt_reply_get(source);
 	struct chk_pool_start_out	*out_result = crt_reply_get(result);
 
-	if (out_source->cpso_status != 0) {
+	if (out_source->cpso_status != 0 && out_source->cpso_status != -DER_NONEXIST) {
 		D_ERROR("Failed to pool start with gen "DF_X64" on rank %u: "DF_RC"\n",
 			in_source->cpsi_gen, out_source->cpso_rank, DP_RC(out_source->cpso_status));
 
@@ -325,7 +325,7 @@ out:
 	}
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u start DAOS check with gen "DF_X64", flags %x, phase %u: "DF_RC"\n",
+		 "Rank %u start DAOS check with gen "DF_X64", flags %x, phase %d: "DF_RC"\n",
 		 leader, gen, flags, phase, DP_RC(rc));
 
 	return rc;
@@ -496,6 +496,7 @@ chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cl
 
 	cai = crt_req_get(req);
 	cai->cai_gen = gen;
+	cai->cai_seq = seq;
 	cai->cai_cla = cla;
 	cai->cai_act = act;
 	cai->cai_flags = for_all ? CAF_FOR_ALL : 0;
@@ -539,6 +540,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 
 	ccli = crt_req_get(req);
 	ccli->ccli_gen = gen;
+	ccli->ccli_rank = dss_self_rank();
 	uuid_copy(ccli->ccli_pool, pool->sp_uuid);
 
 	rc = dss_rpc_send(req);
@@ -552,7 +554,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 		/*
 		 * Some failure happened on remote check engine or during aggregation.
 		 * Then release the conts' buffer for the case of the check engine and
-		 * the check leader are on the same rank. See ds_chk_cont_list_hdlr for detail.
+		 * PS leader are on the same rank. See ds_chk_cont_list_hdlr for detail.
 		 */
 		if (cclo->cclo_status >= 0)
 			chk_fini_conts(cclo->cclo_conts.ca_arrays, cclo->cclo_rank);
@@ -561,7 +563,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 
 		/*
 		 * The aggregator only aggregates the results from the pool shards,
-		 * does not include the PS leader on the same rank as the PS leader
+		 * does not include the pool shard on the same rank as the PS leader
 		 * resides. Let's aggregate it here.
 		 */
 		if (rc >= 0)
@@ -617,7 +619,7 @@ out:
 
 int
 chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, char *label,
-		    uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
+		    uint64_t seq, uint32_t flags, uint32_t mbs_nr, struct chk_pool_mbs *mbs_array,
 		    struct rsvc_hint *hint)
 {
 	crt_rpc_t		*req;
@@ -635,6 +637,7 @@ chk_pool_mbs_remote(d_rank_t rank, uint32_t phase, uint64_t gen, uuid_t uuid, ch
 	cpmi->cpmi_flags = flags;
 	cpmi->cpmi_phase = phase;
 	cpmi->cpmi_label = label;
+	cpmi->cpmi_label_seq = seq;
 	cpmi->cpmi_targets.ca_count = mbs_nr;
 	cpmi->cpmi_targets.ca_arrays = mbs_array;
 
@@ -651,18 +654,18 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Sent pool ("DF_UUIDF") members and label %s to rank %u with phase %u gen "
-		 DF_X64": "DF_RC"\n",
-		 DP_UUID(uuid), label != NULL ? label : "(null)", rank, phase, gen, DP_RC(rc));
+		 "Sent pool ("DF_UUIDF") members and label %s ("
+		 DF_X64") to rank %u with phase %d gen "DF_X64": "DF_RC"\n",
+		 DP_UUID(uuid), label != NULL ? label : "(null)", seq, rank, phase, gen, DP_RC(rc));
 
 	return rc;
 }
 
 int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act, int result,
-		      d_rank_t rank, uint32_t target, uuid_t *pool, uuid_t *cont,
-		      daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey, char *msg,
-		      uint32_t option_nr, uint32_t *options, uint32_t detail_nr, d_sg_list_t *details,
-		      uint64_t *seq)
+		      d_rank_t rank, uint32_t target, uuid_t *pool, char *pool_label, uuid_t *cont,
+		      char *cont_label, daos_unit_oid_t *obj, daos_key_t *dkey, daos_key_t *akey,
+		      char *msg, uint32_t option_nr, uint32_t *options, uint32_t detail_nr,
+		      d_sg_list_t *details, uint64_t *seq)
 {
 	crt_rpc_t		*req;
 	struct chk_report_in	*cri;
@@ -680,16 +683,21 @@ int chk_report_remote(d_rank_t leader, uint64_t gen, uint32_t cla, uint32_t act,
 	cri->cri_ics_result = result;
 	cri->cri_rank = rank;
 	cri->cri_target = target;
+	cri->cri_seq = *seq;
 
 	if (pool != NULL)
 		uuid_copy(cri->cri_pool, *pool);
 	else
 		memset(cri->cri_pool, 0, sizeof(uuid_t));
 
+	cri->cri_pool_label = pool_label;
+
 	if (cont != NULL)
 		uuid_copy(cri->cri_cont, *cont);
 	else
 		memset(cri->cri_cont, 0, sizeof(uuid_t));
+
+	cri->cri_cont_label = cont_label;
 
 	if (obj != NULL)
 		cri->cri_obj = *obj;
@@ -726,9 +734,8 @@ out:
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Rank %u report DAOS check to leader %u, gen "DF_X64", class %u, action %u, "
-		 "result %d, "DF_UUIDF"/"DF_UUIDF", msg %s, got seq "DF_X64": "DF_RC"\n",
-		 rank, leader, gen, cla, act, result, DP_UUID(pool), DP_UUID(cont),
-		 msg, *seq, DP_RC(rc));
+		 "result %d, "DF_UUIDF"/"DF_UUIDF", seq "DF_X64": "DF_RC"\n", rank, leader,
+		 gen, cla, act, result, DP_UUID(pool), DP_UUID(cont), *seq, DP_RC(rc));
 
 	return rc;
 }

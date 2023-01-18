@@ -476,6 +476,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	case "1gbHugepages":
 		ssr = MockServerScanResp(t, "withSpaceUsage")
 		ssr.HugePageInfo.PageSizeKb = (1 << 30) >> 10
+	case "badPciAddr":
+		ssr.Nvme.Ctrlrs[0].PciAddr = "foo.bar"
 	case "standard":
 	default:
 		t.Fatalf("MockServerScanResp(): variant %s unrecognized", variant)

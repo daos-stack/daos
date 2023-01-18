@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,7 +71,7 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd.flags.update(flags)
 
             # Define the job manager for the IOR command
-            job_manager = get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich")
+            job_manager = get_job_manager(self, job=ior_cmd)
             cont_label = self.cont_label_generator.get_label()
             job_manager.job.dfs_cont.update(cont_label)
             env = ior_cmd.get_default_env(str(job_manager))
