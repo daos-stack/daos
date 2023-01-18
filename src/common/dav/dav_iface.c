@@ -277,8 +277,7 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	}
 	size = (size_t)statbuf.st_size;
 
-	if (store->stor_priv != NULL &&
-	    (strcmp(basename(path), "sys_db") != 0)) {
+	if (store->stor_priv != NULL) {
 		if (ftruncate(fd, 0) == -1) {
 			close(fd);
 			return NULL;
@@ -312,9 +311,7 @@ dav_obj_close(dav_obj_t *hdl)
 	heap_cleanup(hdl->do_heap);
 	D_FREE(hdl->do_heap);
 
-	lw_tx_begin(hdl);
 	stats_delete(hdl, hdl->do_stats);
-	lw_tx_end(hdl, NULL);
 
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);

@@ -663,7 +663,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 static inline uint64_t
 off2lba(struct wal_super_info *si, unsigned int blk_off)
 {
-	return (blk_off + WAL_HDR_BLKS) * si->si_header.wh_blk_bytes;
+	return (uint64_t)(blk_off + WAL_HDR_BLKS) * si->si_header.wh_blk_bytes;
 }
 
 struct wal_tx_desc {
@@ -1759,20 +1759,6 @@ bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id)
 out:
 	D_FREE(buf);
 	return rc;
-}
-
-int
-bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_readv(mc->mc_meta, bsgl, sgl);
-}
-
-int
-bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_writev(mc->mc_meta, bsgl, sgl);
 }
 
 void
