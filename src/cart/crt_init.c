@@ -508,11 +508,6 @@ crt_gdata_init(void)
 		D_GOTO(exit, rc);
 	}
 
-	rc = D_MUTEX_INIT(&crt_gdata.alex_lock, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to init alex_lock\n");
-		D_GOTO(exit, rc);
-	}
 
 	/*
 	 * avoid size mis-matching between client/server side
