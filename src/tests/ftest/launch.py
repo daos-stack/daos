@@ -3100,7 +3100,7 @@ class Launch():
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
+        command = ["clush", "-w", str(hosts), "-pv", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
             run_local(logger, " ".join(command), check=True, timeout=timeout)

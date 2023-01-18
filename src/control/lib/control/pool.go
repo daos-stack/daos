@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -242,6 +242,7 @@ type (
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
 		UUID      string   `json:"uuid"`
+		Leader    uint32   `json:"svc_ldr"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
 		TierBytes []uint64 `json:"tier_bytes"`
@@ -1013,6 +1014,8 @@ type (
 		UUID string `json:"uuid"`
 		// Label is an optional human-friendly identifier for a pool.
 		Label string `json:"label,omitempty"`
+		// ServiceLeader is the current pool service leader.
+		ServiceLeader uint32 `json:"svc_ldr"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
