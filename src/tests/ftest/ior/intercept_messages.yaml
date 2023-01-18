@@ -36,7 +36,7 @@ ior:
   test_file: testFile
   repetitions: 1
   iorflags:
-    flags: "-v -w -r"
+    flags: "-v -w -r -R"
   transfer_size: '1M'
   block_size: '100M'
   write_x: 2

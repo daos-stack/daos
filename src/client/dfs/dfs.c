@@ -1995,7 +1995,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		D_GOTO(err_super, rc = errno);
 	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
 	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
-	entry.chunk_size = dattr.da_chunk_size;
 	entry.uid = geteuid();
 	entry.gid = getegid();
 

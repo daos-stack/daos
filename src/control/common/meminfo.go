@@ -13,10 +13,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
 
-type GetHugePageInfoFn func() (*HugePageInfo, error)
+type GetMemInfoFn func() (*MemInfo, error)
 
 const (
 	// MinTargetHugePageSize is the minimum amount of hugepage space that
@@ -27,21 +28,24 @@ const (
 	ExtraHugePages = 2
 )
 
-// HugePageInfo contains information about system hugepages.
-type HugePageInfo struct {
-	Total      int `json:"total"`
-	Free       int `json:"free"`
-	Reserved   int `json:"reserved"`
-	Surplus    int `json:"surplus"`
-	PageSizeKb int `json:"page_size_kb"`
+// MemInfo contains information about system hugepages.
+type MemInfo struct {
+	HugePagesTotal int `json:"hugepages_total"`
+	HugePagesFree  int `json:"hugepages_free"`
+	HugePagesRsvd  int `json:"hugepages_rsvd"`
+	HugePagesSurp  int `json:"hugepages_surp"`
+	HugePageSizeKb int `json:"hugepage_size_kb"`
+	MemTotal       int `json:"mem_total"`
+	MemFree        int `json:"mem_free"`
+	MemAvailable   int `json:"mem_available"`
 }
 
-func (hpi *HugePageInfo) TotalMB() int {
-	return (hpi.Total * hpi.PageSizeKb) / 1024
+func (mi *MemInfo) HugePagesTotalMB() int {
+	return (mi.HugePagesTotal * mi.HugePageSizeKb) / 1024
 }
 
-func (hpi *HugePageInfo) FreeMB() int {
-	return (hpi.Free * hpi.PageSizeKb) / 1024
+func (mi *MemInfo) HugePagesFreeMB() int {
+	return (mi.HugePagesFree * mi.HugePageSizeKb) / 1024
 }
 
 func parseInt(a string, i *int) {
@@ -52,26 +56,27 @@ func parseInt(a string, i *int) {
 	*i = v
 }
 
-func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
-	hpi := new(HugePageInfo)
+func parseMemInfo(input io.Reader) (*MemInfo, error) {
+	mi := new(MemInfo)
 
 	scn := bufio.NewScanner(input)
 	for scn.Scan() {
-		keyVal := strings.Split(scn.Text(), ":")
+		txt := scn.Text()
+		keyVal := strings.Split(txt, ":")
 		if len(keyVal) < 2 {
 			continue
 		}
 
 		switch keyVal[0] {
 		case "HugePages_Total":
-			parseInt(keyVal[1], &hpi.Total)
+			parseInt(keyVal[1], &mi.HugePagesTotal)
 		case "HugePages_Free":
-			parseInt(keyVal[1], &hpi.Free)
+			parseInt(keyVal[1], &mi.HugePagesFree)
 		case "HugePages_Rsvd":
-			parseInt(keyVal[1], &hpi.Reserved)
+			parseInt(keyVal[1], &mi.HugePagesRsvd)
 		case "HugePages_Surp":
-			parseInt(keyVal[1], &hpi.Surplus)
-		case "Hugepagesize":
+			parseInt(keyVal[1], &mi.HugePagesSurp)
+		case "Hugepagesize", "MemTotal", "MemFree", "MemAvailable":
 			sf := strings.Fields(keyVal[1])
 			if len(sf) != 2 {
 				return nil, errors.Errorf("unable to parse %q", keyVal[1])
@@ -79,27 +84,37 @@ func parseHugePageInfo(input io.Reader) (*HugePageInfo, error) {
 			// units are hard-coded to kB in the kernel, but doesn't hurt
 			// to double-check...
 			if sf[1] != "kB" {
-				return nil, errors.Errorf("unhandled page size unit %q", sf[1])
+				return nil, errors.Errorf("unhandled size unit %q", sf[1])
 			}
-			parseInt(sf[0], &hpi.PageSizeKb)
+
+			switch keyVal[0] {
+			case "Hugepagesize":
+				parseInt(sf[0], &mi.HugePageSizeKb)
+			case "MemTotal":
+				parseInt(sf[0], &mi.MemTotal)
+			case "MemFree":
+				parseInt(sf[0], &mi.MemFree)
+			case "MemAvailable":
+				parseInt(sf[0], &mi.MemAvailable)
+			}
 		default:
 			continue
 		}
 	}
 
-	return hpi, scn.Err()
+	return mi, scn.Err()
 }
 
-// GetHugePageInfo reads /proc/meminfo and returns information about
-// system hugepages.
-func GetHugePageInfo() (*HugePageInfo, error) {
+// GetMemInfo reads /proc/meminfo and returns information about
+// system hugepages and available memory (RAM).
+func GetMemInfo() (*MemInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	return parseHugePageInfo(f)
+	return parseMemInfo(f)
 }
 
 // CalcMinHugePages returns the minimum number of hugepages that should be
@@ -109,7 +124,7 @@ func CalcMinHugePages(hugePageSizeKb int, numTargets int) (int, error) {
 		return 0, errors.New("numTargets must be > 0")
 	}
 
-	hugepageSizeBytes := hugePageSizeKb << 10 // KiB to B
+	hugepageSizeBytes := hugePageSizeKb * humanize.KiByte // KiB to B
 	if hugepageSizeBytes == 0 {
 		return 0, errors.New("invalid system hugepage size")
 	}
