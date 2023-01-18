@@ -81,7 +81,7 @@ func nvmeBdevsFromCfg(cfg *config.Server) *storage.BdevDeviceList {
 
 func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("nil input server config so skip updating request from config")
+		log.Debugf("skip updating request from config")
 		return nil
 	}
 
