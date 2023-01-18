@@ -50,7 +50,7 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 
     ddblib = denv.d_library('ddb', src, LIBS=libs)
-    denv.Install('$PREFIX/lib64/', ddblib)
+    denv.Install('$PREFIX/lib64/daos_srv/', ddblib)
 
     # tests
     SConscript('tests/SConscript', exports=['denv'])
