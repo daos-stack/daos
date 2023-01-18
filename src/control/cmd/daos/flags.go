@@ -252,19 +252,17 @@ func (f *FsCheckFlag) UnmarshalFlag(fv string) error {
 		return errors.New("empty filesystem check flags")
 	}
 
-	f.Flags = 0
-
-	cflags := strings.Split(fv, ",")
-	for _, cflag := range cflags {
-		if strings.EqualFold(cflag, "print") {
+	for _, cflag := range strings.Split(fv, ",") {
+		switch strings.TrimSpace(strings.ToLower(cflag)) {
+		case "print":
 			f.Flags |= C.DFS_CHECK_PRINT
-		} else if strings.EqualFold(cflag, "remove") {
+		case "remove":
 			f.Flags |= C.DFS_CHECK_REMOVE
-		} else if strings.EqualFold(cflag, "relink") {
+		case "relink":
 			f.Flags |= C.DFS_CHECK_RELINK
-		} else if strings.EqualFold(cflag, "verify") {
+		case "verify":
 			f.Flags |= C.DFS_CHECK_VERIFY
-		} else {
+		default:
 			return errors.Errorf("unknown filesystem check flags: %q", fv)
 		}
 	}

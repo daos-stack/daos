@@ -520,6 +520,13 @@ func TestFlags_FsCheckFlag(t *testing.T) {
 				Flags: 13,
 			},
 		},
+		"untrimmed, upper case": {
+			arg: "print, VeRiFy,relink",
+			expFlag: &FsCheckFlag{
+				Set:   true,
+				Flags: 13,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := FsCheckFlag{}

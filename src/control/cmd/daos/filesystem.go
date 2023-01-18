@@ -288,15 +288,16 @@ func (cmd *fsCheckCmd) Execute(_ []string) error {
 		return err
 	}
 
-	var cleanupPool func()
-	cleanupPool, err = cmd.connectPool(C.DAOS_PC_RW, ap)
+	cleanupPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanupPool()
 
-	rc := C.dfs_cont_check(cmd.cPoolHandle, &ap.cont_str[0], cmd.FsckFlags.Flags,
-		C.CString(cmd.DirName))
+	dirName := C.CString(cmd.DirName)
+	defer freeString(dirName)
+
+	rc := C.dfs_cont_check(cmd.cPoolHandle, &ap.cont_str[0], cmd.FsckFlags.Flags, dirName)
 	if err := dfsError(rc); err != nil {
 		return errors.Wrapf(err, "failed filesystem check")
 	}
@@ -345,7 +346,7 @@ type fsFixSB struct {
 	ObjectClass     ObjClassFlag  `long:"oclass" short:"o" description:"default object class"`
 	DirObjectClass  ObjClassFlag  `long:"dir-oclass" short:"D" description:"default directory object class"`
 	FileObjectClass ObjClassFlag  `long:"file-oclass" short:"F" description:"default file object class"`
-	CHints          string        `long:"hints" short:"h" description:"container hints"`
+	CHints          string        `long:"hints" short:"H" description:"container hints"`
 }
 
 func (cmd *fsFixSB) Execute(_ []string) error {
