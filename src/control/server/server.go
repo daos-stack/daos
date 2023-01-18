@@ -364,7 +364,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig, srv.sysdb.IsLeader)
 	if err != nil {
 		return err
 	}
