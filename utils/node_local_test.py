@@ -708,19 +708,6 @@ class DaosServer():
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
-        import stat
-
-        def walk_dir(dir):
-            for root, dirs, files in os.walk(dir):
-                for name in files:
-                    st = os.stat(join(root, name))
-                    print(f'{root}/{name}: {stat.filemode(st.st_mode)}')
-                for name in dirs:
-                    walk_dir(join(root, name))
-
-        print(f'control_metadata: {scyaml["control_metadata"]}')
-        walk_dir(scyaml['control_metadata']['path'])
-
         cmd = [daos_server, f'--config={self._yaml_file.name}', 'start', '--insecure']
 
         if self.conf.args.no_root:
