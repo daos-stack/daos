@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'dc_sectest_tgts')
+    Import('env', 'dc_sectest_tgts')
 
     libs = ['$LIBS', 'daos', 'daos_common', 'gurt']
     sec_sources = ['security_test.c', dc_sectest_tgts]
@@ -13,10 +13,10 @@ def scons():
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
-    prereqs.require(denv, 'argobots')
+    denv.require('argobots')
 
     senv = denv.Clone()
-    prereqs.require(senv, 'protobufc')
+    senv.require('protobufc')
 
     security_test = senv.d_program('security_test', sec_sources, LIBS=libs)
     senv.Install('$PREFIX/bin/', security_test)

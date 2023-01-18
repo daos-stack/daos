@@ -310,7 +310,7 @@ class GitRepoRetriever():
         self.commit_sha = None
 
     def checkout_commit(self, subdir):
-        """checkout a certain commit SHA or branch"""
+        """Checkout a certain commit SHA or branch"""
         if self.commit_sha is not None:
             commands = [['git', 'checkout', self.commit_sha]]
             if not RUNNER.run_commands(commands, subdir=subdir):
@@ -329,7 +329,7 @@ class GitRepoRetriever():
                     raise DownloadFailure(self.url, subdir)
 
     def _update_submodules(self, subdir):
-        """update the git submodules"""
+        """Update the git submodules"""
         if self.has_submodules:
             commands = [['git', 'submodule', 'init'], ['git', 'submodule', 'update']]
             if not RUNNER.run_commands(commands, subdir=subdir):
@@ -501,7 +501,7 @@ class BuildInfo():
         self.info = {}
 
     def update(self, var, value):
-        """save a variable in the build info"""
+        """Save a variable in the build info"""
         self.info[var] = value
 
     def save(self, filename):
@@ -731,14 +731,14 @@ class PreReqComponent():
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
 
-        # Go ahead and prebuild some components
+        env.AddMethod(self.require, 'require')
 
+        # Go ahead and prebuild some components
         for comp in reqs:
-            env = self.__env.Clone()
-            self.require(env, comp)
+            env.Clone().require(comp)
 
     def _setup_build_type(self):
-        """set build type"""
+        """Set build type"""
         self.add_opts(EnumVariable('BUILD_TYPE', "Set the build type",
                                    'release', ['dev', 'debug', 'release'],
                                    ignorecase=1))
@@ -989,15 +989,15 @@ class PreReqComponent():
         self.__defined[name] = comp
 
     def server_requested(self):
-        """return True if server build is requested"""
+        """Return True if server build is requested"""
         return "server" in self._build_targets
 
     def client_requested(self):
-        """return True if client build is requested"""
+        """Return True if client build is requested"""
         return "client" in self._build_targets
 
     def test_requested(self):
-        """return True if test build is requested"""
+        """Return True if test build is requested"""
         return "test" in self._build_targets
 
     def _modify_prefix(self, comp_def):
@@ -1267,7 +1267,7 @@ class _Component():
         self.patch_path = self.prereqs.get_build_dir()
 
     def resolve_patches(self):
-        """parse the patches variable"""
+        """Parse the patches variable"""
         patchnum = 1
         patchstr = self.prereqs.get_config("patch_versions", self.name)
         if patchstr is None:
@@ -1546,7 +1546,7 @@ class _Component():
             raise MissingTargets(self.name, self.package)
 
     def _check_user_options(self, env, needed_libs):
-        """check help and clean options"""
+        """Check help and clean options"""
         if GetOption('help'):
             if self.requires:
                 self.prereqs.require(env, *self.requires)
@@ -1558,7 +1558,7 @@ class _Component():
         return False
 
     def _rm_old_dir(self, path):
-        """remove the old dir"""
+        """Remove the old dir"""
         if self.__dry_run:
             print(f'Would empty {path}')
         else:

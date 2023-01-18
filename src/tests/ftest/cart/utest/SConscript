@@ -6,8 +6,7 @@
 
 import os
 
-TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c',
-            'utest_portnumber.c']
+TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c', 'utest_portnumber.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
 
 
@@ -16,10 +15,10 @@ def scons():
     if GetOption('help'):
         return
 
-    Import('env', 'prereqs', 'cart_targets', 'swim_targets', 'gurt_targets')
+    Import('env', 'cart_targets', 'swim_targets', 'gurt_targets')
 
     test_env = env.Clone()
-    prereqs.require(test_env, 'mercury', 'uuid', 'cmocka')
+    test_env.require('mercury', 'uuid', 'cmocka')
     test_env.AppendUnique(LIBS=['pthread', 'm'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)

@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -95,7 +95,7 @@ _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
 
 
 def define_mercury(reqs):
-    """mercury definitions"""
+    """Mercury definitions"""
     libs = ['rt']
 
     if reqs.get_env('PLATFORM') == 'darwin':
@@ -216,7 +216,7 @@ def define_mercury(reqs):
 
 
 def define_common(reqs):
-    """common system component definitions"""
+    """Common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
 
     reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'], package='libunwind-devel')

@@ -8,7 +8,7 @@
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs', 'conf_dir')
+    Import('env', 'conf_dir')
 
     env.d_add_build_rpath()
 
@@ -16,7 +16,7 @@ def scons():
 
     cenv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
-    prereqs.require(cenv, 'protobufc', 'mercury')
+    cenv.require('protobufc', 'mercury')
 
     # Generate cart utility shared objects
     cart_utils_objs = cenv.SharedObject(['crt_utils.c'], SHOBJPREFIX='s_')
