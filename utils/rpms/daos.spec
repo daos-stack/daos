@@ -558,7 +558,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Jan 18 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.101-7
+* Wed Jan 18 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.3.101-7
 - Update libfabric v1.17.0
 
 * Fri Jan 6 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.101-6
