@@ -331,6 +331,13 @@ dtx_is_valid_handle(const struct dtx_handle *dth)
 	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid);
 }
 
+/** Return true if it's a real dtx (valid and not a local tx) */
+static inline bool
+dtx_is_real_handle(const struct dtx_handle *dth)
+{
+	return dth != NULL && !daos_is_zero_dti(&dth->dth_xid) && !dth->dth_local;
+}
+
 struct dtx_scan_args {
 	uuid_t		pool_uuid;
 	uint32_t	version;

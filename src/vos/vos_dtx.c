@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1429,7 +1429,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth) || dth->dth_local) {
+	if (!dtx_is_real_handle(dth)) {
 		*tx_id = DTX_LID_COMMITTED;
 		return 0;
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -579,6 +579,7 @@ pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 	return rc ? umem_tx_errno(rc) : 0;
 }
 
+static __thread int tcount;
 static int
 pmem_tx_abort(struct umem_instance *umm, int err)
 {
@@ -586,8 +587,11 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 	 * obj_tx_abort() may have already been called in the error
 	 * handling code of pmemobj APIs.
 	 */
-	if (pmemobj_tx_stage() != TX_STAGE_ONABORT)
+	if (pmemobj_tx_stage() != TX_STAGE_ONABORT) {
+		printf("real abort %d\n", --tcount);
 		pmemobj_tx_abort(err);
+	}
+	tcount = 0;
 
 	err = pmemobj_tx_end();
 	return err ? umem_tx_errno(err) : 0;
@@ -694,6 +698,7 @@ pmem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 	int rc;
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
+	printf("Real begin %d\n", tcount++);
 	if (txd != NULL) {
 		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
 		rc = pmemobj_tx_begin(pop, NULL, TX_PARAM_CB, pmem_stage_callback,
@@ -718,6 +723,7 @@ pmem_tx_commit(struct umem_instance *umm, void *data)
 {
 	int rc;
 
+	printf("real commit %d\n", --tcount);
 	pmemobj_tx_commit();
 	rc = pmemobj_tx_end();
 

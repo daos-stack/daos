@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -668,6 +668,7 @@ umem_tx_commit(struct umem_instance *umm)
 static inline int
 umem_tx_abort(struct umem_instance *umm, int err)
 {
+	printf("abort %p\n", umm->umm_ops->mo_tx_abort);
 	if (umm->umm_ops->mo_tx_abort)
 		return umm->umm_ops->mo_tx_abort(umm, err);
 	else

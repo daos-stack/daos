@@ -2680,17 +2680,20 @@ local_transaction(void **state)
 		rc = vos_local_tx_begin(arg->ctx.tc_po_hdl, &dth);
 		assert_rc_equal(rc, 0);
 
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey[0], 1, &iod,
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[0], 1, &iod,
 				       NULL, &sgl, dth);
 		assert_rc_equal(rc, 0);
 
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch, 0, 0, &dkey[1], 1, &iod,
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 1, &iod,
 				       NULL, &sgl, dth);
 		assert_rc_equal(rc, 0);
 
-		memset(buf2, 'x', sizeof(buf2));
+		rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 0, NULL, dth);
+		assert_rc_equal(rc, 0);
+
 		if (i == 0) {
 			/** Abort first time */
+			memset(buf2, 'x', sizeof(buf2));
 			passed_rc = -DER_EXIST;
 		} else {
 			/** Commit second time */
@@ -2704,17 +2707,26 @@ local_transaction(void **state)
 		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
 		iod.iod_size = strlen(first);
 		memset(buf, 'x', sizeof(buf));
+		printf("dkey[0] buf = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[0] buf2 = %.*s\n", (int)strlen(first), buf2);
 		rc =
 		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[0], 1, &iod, &fetch_sgl);
 		assert_rc_equal(rc, 0);
+		printf("size=" DF_U64 "\n", iod.iod_size);
+		printf("dkey[0] buf = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[0] buf2 = %.*s\n", (int)strlen(first), buf2);
+		fflush(stdout);
 		assert_memory_equal(buf, buf2, sizeof(buf));
 
 		d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
 		iod.iod_size = strlen(first);
+		memset(buf2, 'x', sizeof(buf2));
 		memset(buf, 'x', sizeof(buf));
 		rc =
 		    vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[1], 1, &iod, &fetch_sgl);
 		assert_rc_equal(rc, 0);
+		printf("dkey[1] buf = %.*s\n", (int)strlen(first), buf);
+		printf("dkey[1] buf2 = %.*s\n", (int)strlen(first), buf2);
 		assert_memory_equal(buf, buf2, sizeof(buf));
 		printf("pass #%d finished\n", i);
 		fflush(stdout);

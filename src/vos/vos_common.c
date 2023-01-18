@@ -289,7 +289,9 @@ vos_local_tx_begin(daos_handle_t poh, struct dtx_handle **dthp)
 	dth->dth_coh = poh;
 	/** Mark it as special local handle, skip dtx internals */
 	dth->dth_local = 1;
+	dth->dth_xid.dti_hlc = 1;
 
+	dth->dth_modification_cnt = 256;
 	rc = vos_dtx_rsrvd_init(dth);
 	if (rc != 0) {
 		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
@@ -344,11 +346,11 @@ vos_tx_end_internal(struct vos_pool *pool, struct dtx_handle *dth,
 		} else if (dth->dth_modification_cnt <= dth->dth_op_seq) {
 			goto commit;
 		}
+		printf("don't commit\n");
 		vos_dth_set(NULL);
 		return 0;
 	}
 commit:
-
 	dth->dth_local_tx_started = 0;
 
 	if (dtx_is_valid_handle(dth) && err == 0 && !dth->dth_local)

@@ -617,8 +617,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_io_size = 0;
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
-	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
+	ioc->ic_epr.epr_hi = dtx_is_real_handle(dth) ? dth->dth_epoch : epoch;
+	bound              = dtx_is_real_handle(dth) ? dth->dth_epoch_bound : epoch;
 	ioc->ic_bound = MAX(bound, ioc->ic_epr.epr_hi);
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
@@ -2322,8 +2322,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 		goto abort;
 
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
-			  dth->dth_op_seq : VOS_SUB_OP_MAX);
+	err = dkey_update(ioc, pm_ver, dkey,
+			  dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
@@ -2441,9 +2441,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+	D_DEBUG(DB_TRACE,
+		"Prepare IOC for " DF_UOID ", iod_nr %d, epc " DF_X64 ", flags=" DF_X64 "\n",
+		DP_UOID(oid), iod_nr, dtx_is_real_handle(dth) ? dth->dth_epoch : epoch, flags);
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {
