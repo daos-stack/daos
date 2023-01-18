@@ -1426,7 +1426,7 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
-        self.details["storage"] = storage_info.devices
+        self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
             logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
@@ -2175,7 +2175,7 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], threshold, data["timeout"], test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2337,7 +2337,7 @@ class Launch():
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
-                       timeout):
+                       timeout, test=None):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2349,6 +2349,7 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
             timeout (int): number of seconds to wait for the command to complete.
+            test (TestInfo, optional): the test information. Defaults to None.
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2356,8 +2357,9 @@ class Launch():
         """
         logger.debug("=" * 80)
         logger.info(
-            "Archiving %s from %s:%s to %s",
-            summary, hosts, os.path.join(source, pattern), destination)
+            "Archiving %s from %s:%s to %s%s,",
+            summary, hosts, os.path.join(source, pattern), destination,
+            f" after running '{str(test)}'" if test else "")
         logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
         logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
 

@@ -250,6 +250,20 @@ class StorageInfo():
         """
         return list(filter(StorageDevice.is_controller.fget, self.devices))
 
+    def device_dict(self):
+        """Get the scanned devices as a dictionary.
+
+        Returns:
+            dict: device type keys with device information string values
+
+        """
+        data = {}
+        for key, name in {'PMEM': 'pmem', 'NVMe': 'disk', 'VMD': 'controller'}.items():
+            devices = getattr(self, f'{name}_devices')
+            if devices:
+                data[key] = [str(item) for item in devices]
+        return data
+
     def _raise_error(self, message, error=None):
         """Raise and log the error message.
 
