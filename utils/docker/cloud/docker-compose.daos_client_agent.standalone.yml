@@ -41,6 +41,8 @@ services:
     tty: true
     network_mode: host
     pid: host
+    cap_add:
+      - SYS_ADMIN
     user: "${DAOS_CLIENT_UID}:${DAOS_CLIENT_GID}"
     volumes:
       - type: volume
@@ -48,6 +50,8 @@ services:
         target: /var/run/daos_agent
         volume:
           nocopy: true
+    devices:
+      - "/dev/fuse:/dev/fuse"
     depends_on:
       - daos_agent
 
