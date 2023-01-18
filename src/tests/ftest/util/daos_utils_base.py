@@ -252,22 +252,22 @@ class DaosCommandBase(CommandWithSubCommand):
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
                 self.oclass = FormattedParameter("--oclass={}")
-                #   --dir_oclass=<object_class>
+                #   --dir-oclass=<object_class>
                 #           default directory object class:
                 #               S1, S2, S4, SX, RP_2G1, RP_2G2, RP_2GX, RP_3G1,
                 #               RP_3G2, RP_3GX, RP_4G1, RP_4G2, RP_4GX, RP_XSF,
                 #               S1_ECHO, RP_2G1_ECHO, RP_3G1_ECHO, RP_4G1_ECHO,
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
-                self.dir_oclass = FormattedParameter("--dir_oclass={}")
-                #   --file_oclass=<object_class>
+                self.dir_oclass = FormattedParameter("--dir-oclass={}")
+                #   --file-oclass=<object_class>
                 #           default file object class:
                 #               S1, S2, S4, SX, RP_2G1, RP_2G2, RP_2GX, RP_3G1,
                 #               RP_3G2, RP_3GX, RP_4G1, RP_4G2, RP_4GX, RP_XSF,
                 #               S1_ECHO, RP_2G1_ECHO, RP_3G1_ECHO, RP_4G1_ECHO,
                 #               RP_3G1_SR, RP_2G1_SR, S1_SR, EC_2P1G1, EC_2P2G1,
                 #               EC_8P2G1
-                self.file_oclass = FormattedParameter("--file_oclass={}")
+                self.file_oclass = FormattedParameter("--file-oclass={}")
                 #   --chunk-size=BYTES
                 #           chunk size of files created. Supports suffixes:
                 #               K (KB), M (MB), G (GB), T (TB), P (PB), E (EB)
