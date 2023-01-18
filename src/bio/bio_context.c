@@ -1302,7 +1302,19 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	return rc;
 }
 
-struct bio_io_context *bio_mc2data(struct bio_meta_context *mc)
+struct bio_io_context *
+bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type)
 {
-	return mc->mc_data;
+	D_ASSERT(mc != NULL);
+	switch (type) {
+	case SMD_DEV_TYPE_DATA:
+		return mc->mc_data;
+	case SMD_DEV_TYPE_META:
+		return mc->mc_meta;
+	case SMD_DEV_TYPE_WAL:
+		return mc->mc_wal;
+	default:
+		D_ASSERTF(0, "Invalid device type:%u\n", type);
+		return NULL;
+	}
 }
