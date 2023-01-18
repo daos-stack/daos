@@ -1018,20 +1018,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 
-	ps, err := db.FindPoolServiceByUUID(poolUUID)
-	if err != nil {
-		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
-		return
-	}
-
-	// If the pool service is not in the Ready state, ignore the update.
-	if ps.State != PoolServiceStateReady {
-		return
-	}
-
-	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
-		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
-
+	// Attempt to take the lock first, to cut down on log spam.
 	ctx := context.Background()
 	lock, err := db.TakePoolLock(ctx, poolUUID)
 	if err != nil {
@@ -1039,6 +1026,26 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 	defer lock.Release()
+
+	ps, err := db.FindPoolServiceByUUID(poolUUID)
+	if err != nil {
+		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	// If the pool service is in the Creating state, set it to Ready, as
+	// we know that it's ready if it's sending us a RAS event. The pool
+	// create may have completed on a previous MS leader.
+	if ps.State == PoolServiceStateCreating {
+		db.log.Debugf("automatically moving pool %s from Creating to Ready due to svc update", dbgUuidStr(ps.PoolUUID))
+		ps.State = PoolServiceStateReady
+	} else if ps.State == PoolServiceStateDestroying {
+		// Don't update the pool service if it's being destroyed.
+		return
+	}
+
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
 
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		dbgUuidStr(ps.PoolUUID), ps.State, ps.Replicas, ei.SvcReplicas)
