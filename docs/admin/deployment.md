@@ -110,6 +110,11 @@ given set of hosts either through the `dmg` or `daos_server` tools.
 To generate a configuration file for a single storage server, run the `daos_server config generate`
 command locally. In this case, the `daos_server` service should not be running on the local host.
 
+`daos_server nvme prepare` should be run prior to `daos_server config generate` if the intent is to
+use NVMe and likewise `daos_server scm prepare` should be run prior to `daos_server config generate`
+if the intent is to use PMem for SCM. This will allow the relevant storage to be available for
+detection when attempting to generate the configuration files.
+
 ```bash
 $ daos_server config generate --help
 Usage:

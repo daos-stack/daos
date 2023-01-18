@@ -156,7 +156,6 @@ class WrapScript():
     @staticmethod
     def write_header(outfile):
         """write the header"""
-
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
@@ -178,6 +177,7 @@ class FileTypeList():
     Consumes a list of file/module names and sorts them into categories so that later on each
     category can be run in parallel.
     """
+
     def __init__(self):
         self.ftest_files = []
         self.scons_files = []
@@ -199,7 +199,6 @@ class FileTypeList():
 
         def is_scons_file(filename):
             """Returns true if file is used by Scons and needs annotations"""
-
             if filename == 'SConstruct' or filename.endswith('SConscript'):
                 return True
 
@@ -232,6 +231,7 @@ class FileTypeList():
         self.files.append(file)
 
     def __str__(self):
+        """Convert object to a nicely formatted string"""
         desc = "FileTypeList\n"
         if self.files:
             desc += f'files: {",".join(self.files)}\n'
@@ -265,13 +265,12 @@ class FileTypeList():
     def parse_file(self, args, target_file, ftest=False, scons=False, fake_scons=False):
         """Parse a list of targets.
 
-        Returns True if warnings issued to GitHub."""
-
+        Returns True if warnings issued to GitHub.
+        """
         # pylint: disable=too-many-branches,too-many-locals
 
         def word_is_allowed(word, code):
             """Return True if misspelling is permitted"""
-
             # pylint: disable=too-many-return-statements
 
             # Skip short words for now to cut down on noise whilst we resolve existing issues.
@@ -411,15 +410,15 @@ sys.path.append('site_scons')"""
 
             vals = parse_msg(msg)
 
-            if promote_to_error:
-                vals['category'] = 'error'
-
-            # The build/scons code is mostly clean, so only allow f-string warnings.
-            if scons and msg.symbol != 'consider-using-f-string':
-                vals['category'] = 'error'
-
             # Flag some serious warnings as errors
             if msg.symbol in ('condition-evals-to-constant'):
+                promote_to_error = True
+
+            # All non-scons code should be clean now.
+            if scons:
+                promote_to_error = True
+
+            if promote_to_error:
                 vals['category'] = 'error'
 
             types[vals['category']] += 1
@@ -481,7 +480,6 @@ sys.path.append('site_scons')"""
 
 def get_git_files(directory=None):
     """Run pylint on contents of 'git ls-files'"""
-
     all_files = FileTypeList()
 
     cmd = ['git', 'ls-files']
@@ -527,7 +525,6 @@ class OutPutRegion:
 
 def main():
     """Main program"""
-
     # pylint: disable=too-many-branches
 
     pylinter.MANAGER.clear_cache()
@@ -600,7 +597,10 @@ def main():
                 regions = OutPutRegion()
                 all_files.add_regions(file, regions)
                 if not args.git:
-                    all_files.add(file)
+                    if os.path.exists(file):
+                        all_files.add(file)
+                    else:
+                        print(f'Skipping {file} as it does not exist')
                 continue
             if line.startswith('@@ '):
                 parts = line.split(' ')
