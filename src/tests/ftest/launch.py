@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,6 @@ import re
 import site
 import sys
 import time
-import yaml
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -38,8 +37,11 @@ from logger_utils import get_console_handler, get_file_handler                # 
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
 from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
+from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
+    YamlException    # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -58,24 +60,6 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
-YAML_KEYS = OrderedDict(
-    [
-        ("test_servers", "test_servers"),
-        ("test_clients", "test_clients"),
-        ("bdev_list", "nvme"),
-        ("timeout", "timeout_multiplier"),
-        ("timeouts", "timeout_multiplier"),
-        ("clush_timeout", "timeout_multiplier"),
-        ("ior_timeout", "timeout_multiplier"),
-        ("job_manager_timeout", "timeout_multiplier"),
-        ("pattern_timeout", "timeout_multiplier"),
-        ("pool_query_timeout", "timeout_multiplier"),
-        ("rebuild_timeout", "timeout_multiplier"),
-        ("srv_timeout", "timeout_multiplier"),
-        ("storage_prepare_timeout", "timeout_multiplier"),
-        ("storage_format_timeout", "timeout_multiplier"),
-    ]
-)
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -88,139 +72,6 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
-
-
-def get_yaml_data(yaml_file):
-    """Get the contents of a yaml file as a dictionary.
-
-    Removes any mux tags and ignores any other tags present.
-
-    Args:
-        yaml_file (str): yaml file to read
-
-    Raises:
-        Exception: if an error is encountered reading the yaml file
-
-    Returns:
-        dict: the contents of the yaml file
-
-    """
-    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
-        """Helper class for parsing avocado yaml files."""
-
-        def forward_mux(self, node):
-            """Pass on mux tags unedited."""
-            return self.construct_mapping(node)
-
-        def ignore_unknown(self, node):  # pylint: disable=no-self-use,unused-argument
-            """Drop any other tag."""
-            return None
-
-    DaosLoader.add_constructor('!mux', DaosLoader.forward_mux)
-    DaosLoader.add_constructor(None, DaosLoader.ignore_unknown)
-
-    yaml_data = {}
-    if os.path.isfile(yaml_file):
-        with open(yaml_file, "r", encoding="utf-8") as open_file:
-            try:
-                yaml_data = yaml.load(open_file.read(), Loader=DaosLoader)  # nosec
-            except yaml.YAMLError as error:
-                logger.error("Error reading %s: %s", yaml_file, str(error))
-                sys.exit(1)
-    return yaml_data
-
-
-def find_values(obj, keys, key=None, val_type=str):
-    """Find dictionary values of a certain type specified with certain keys.
-
-    Args:
-        obj (obj): a python object; initially the dictionary to search
-        keys (list): list of keys to find their matching list values
-        key (str, optional): key to check for a match. Defaults to None.
-
-    Returns:
-        dict: a dictionary of each matching key and its value
-
-    """
-    def add_matches(found):
-        """Add found matches to the match dictionary entry of the same key.
-
-        If a match does not already exist for this key add all the found values.
-        When a match already exists for a key, append the existing match with
-        any new found values.
-
-        For example:
-            Match       Found           Updated Match
-            ---------   ------------    -------------
-            None        [A, B]          [A, B]
-            [A, B]      [C]             [A, B, C]
-            [A, B, C]   [A, B, C, D]    [A, B, C, D]
-
-        Args:
-            found (dict): dictionary of matches found for each key
-        """
-        for found_key in found:
-            if found_key not in matches:
-                # Simply add the new value found for this key
-                matches[found_key] = found[found_key]
-
-            else:
-                is_list = isinstance(matches[found_key], list)
-                if not is_list:
-                    matches[found_key] = [matches[found_key]]
-                if isinstance(found[found_key], list):
-                    for found_item in found[found_key]:
-                        if found_item not in matches[found_key]:
-                            matches[found_key].append(found_item)
-                elif found[found_key] not in matches[found_key]:
-                    matches[found_key].append(found[found_key])
-
-                if not is_list and len(matches[found_key]) == 1:
-                    matches[found_key] = matches[found_key][0]
-
-    matches = {}
-    if isinstance(obj, val_type) and isinstance(key, str) and key in keys:
-        # Match found
-        matches[key] = obj
-    elif isinstance(obj, dict):
-        # Recursively look for matches in each dictionary entry
-        for obj_key, obj_val in list(obj.items()):
-            add_matches(find_values(obj_val, keys, obj_key, val_type))
-    elif isinstance(obj, list):
-        # Recursively look for matches in each list entry
-        for item in obj:
-            add_matches(find_values(item, keys, None, val_type))
-
-    return matches
-
-
-def get_test_category(test_file):
-    """Get a category for the specified test using its path and name.
-
-    Args:
-        test_file (str): the test python file
-
-    Returns:
-        str: concatenation of the test path and base filename joined by dashes
-
-    """
-    file_parts = os.path.split(test_file)
-    return "-".join([os.path.splitext(os.path.basename(part))[0] for part in file_parts])
-
-
-def find_pci_address(value):
-    """Find PCI addresses in the specified string.
-
-    Args:
-        value (str): string to search for PCI addresses
-
-    Returns:
-        list: a list of all the PCI addresses found in the string
-
-    """
-    digit = "0-9a-fA-F"
-    pattern = rf"[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]"
-    return re.findall(pattern, str(value))
 
 
 class AvocadoInfo():
@@ -450,15 +301,14 @@ class AvocadoInfo():
             return r"avocado-instrumented\s+(.*):"
         return r"INSTRUMENTED\s+(.*):"
 
-    def get_run_command(self, test, tag_filters, sparse, failfast, extra_yaml):
+    def get_run_command(self, test, tag_filters, sparse, failfast):
         """Get the avocado run command for this version of avocado.
 
         Args:
             test (TestInfo): the test information
             tag_filters (list): optional '--filter-by-tags' arguments
             sparse (bool): whether or not to provide sparse output of the test execution
-            failfast (bool): _description_
-            extra_yaml (list): additional yaml files to include on the command line
+            failfast (bool): whether or not to fail fast
 
         Returns:
             list: avocado run command
@@ -484,8 +334,8 @@ class AvocadoInfo():
         if failfast:
             command.extend(["--failfast", "on"])
         command.extend(["--mux-yaml", test.yaml_file])
-        if extra_yaml:
-            command.extend(extra_yaml)
+        if test.extra_yaml:
+            command.extend(test.extra_yaml)
         command.extend(["--", str(test)])
         return command
 
@@ -605,7 +455,7 @@ class TestInfo():
         "test_clients",
         "client_partition",
         "client_reservation",
-        "client_users"
+        "client_users",
     ]
 
     def __init__(self, test_file, order):
@@ -624,6 +474,7 @@ class TestInfo():
         self.class_name = f"FTEST_launch.{self.directory}-{os.path.splitext(self.python_file)[0]}"
         self.host_info = HostInfo()
         self.yaml_info = {}
+        self.extra_yaml = []
 
     def __str__(self):
         """Get the test file as a string.
@@ -944,16 +795,6 @@ class Launch():
         except LaunchException as error:
             return self.get_exit_status(1, str(error), "Setup", sys.exc_info())
 
-        # Auto-detect nvme test yaml replacement values if requested
-        if args.nvme and args.nvme.startswith("auto") and not args.list:
-            try:
-                args.nvme = self._get_device_replacement(args.test_servers, args.nvme)
-            except LaunchException:
-                message = "Error auto-detecting NVMe test yaml file replacement values"
-                return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        elif args.nvme and args.nvme.startswith("vmd:"):
-            args.nvme = args.nvme.replace("vmd:", "")
-
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
             self.list_tests(args.tags)
@@ -983,9 +824,12 @@ class Launch():
 
         # Modify the test yaml files to run on this cluster
         try:
-            self.setup_test_files(args, yaml_dir)
-        except (RunException, LaunchException):
+            self.setup_test_files(yaml_dir, args)
+        except (RunException, YamlException):
             message = "Error modifying the test yaml files"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        except StorageException:
+            message = "Error detecting storage information for test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         if args.modify:
             return self.get_exit_status(0, "Modifying test yaml files complete")
@@ -1031,8 +875,8 @@ class Launch():
 
         # Execute the tests
         status = self.run_tests(
-            args.sparse, args.failfast, args.extra_yaml, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create)
+            args.sparse, args.failfast, not args.disable_stop_daos, args.archive, args.rename,
+            args.jenkinslog, core_files, args.logs_threshold, args.user_create)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -1453,198 +1297,6 @@ class Launch():
             os.environ["PYTHONPATH"] = python_path
         logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
-    def _get_device_replacement(self, servers, nvme):
-        """Determine the value to use for the '--nvme' command line argument.
-
-        Determine if the specified hosts have homogeneous NVMe drives (either standalone or VMD
-        controlled) and use these values to replace placeholder devices in avocado test yaml files.
-
-        Supported auto '--nvme' arguments:
-            auto[:filter]       = select any PCI domain number of a NVMe device or VMD controller
-                                (connected to a VMD enabled NVMe device) in the homogeneous
-                                'lspci -D' output from each server.  Optionally grep the list of
-                                NVMe or VMD enabled NVMe devices for 'filter'.
-            auto_nvme[:filter]  = select any PCI domain number of a non-VMD controlled NVMe device
-                                in the homogeneous 'lspci -D' output from each server.  Optionally
-                                grep this output for 'filter'.
-            auto_vmd[:filter]   = select any PCI domain number of a VMD controller connected to a
-                                VMD enabled NVMe device in the homogeneous 'lspci -D' output from
-                                each server.  Optionally grep the list of VMD enabled NVMe devices
-                                for 'filter'.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            nvme (str): the --nvme argument value
-
-        Raises:
-            LaunchException: if there is a problem finding a device replacement
-
-        Returns:
-            str: a comma-separated list of nvme device pci addresses available on all of the
-                specified test servers
-
-        """
-        logger.debug("-" * 80)
-        logger.debug("Detecting devices that match: %s", nvme)
-        devices = []
-        device_types = []
-
-        # Separate any optional filter from the key
-        dev_filter = None
-        nvme_args = nvme.split(":")
-        if len(nvme_args) > 1:
-            dev_filter = nvme_args[1]
-
-        # First check for any VMD disks, if requested
-        if nvme_args[0] in ["auto", "auto_vmd"]:
-            vmd_devices = self._auto_detect_devices(servers, "NVMe", "5", dev_filter)
-            if vmd_devices:
-                # Find the VMD controller for the matching VMD disks
-                vmd_controllers = self._auto_detect_devices(servers, "VMD", "4", None)
-                devices.extend(
-                    self._get_vmd_address_backed_nvme(servers, vmd_devices, vmd_controllers))
-            elif not dev_filter:
-                # Use any VMD controller if no VMD disks found w/o a filter
-                devices = self._auto_detect_devices(servers, "VMD", "4", None)
-            if devices:
-                device_types.append("VMD")
-
-        # Second check for any non-VMD NVMe disks, if requested
-        if nvme_args[0] in ["auto", "auto_nvme"]:
-            dev_list = self._auto_detect_devices(servers, "NVMe", "4", dev_filter)
-            if dev_list:
-                devices.extend(dev_list)
-                device_types.append("NVMe")
-
-        # If no VMD or NVMe devices were found exit
-        if not devices:
-            raise LaunchException(
-                f"Error: Unable to auto-detect devices for the '--nvme {nvme}' argument")
-
-        logger.debug(
-            "Auto-detected %s devices on %s: %s", " & ".join(device_types), servers, devices)
-        logger.info("Testing with %s devices: %s", " & ".join(device_types), devices)
-        self.details[f"{' & '.join(device_types)} devices"] = devices
-        return ",".join(devices)
-
-    @staticmethod
-    def _auto_detect_devices(hosts, device_type, length, device_filter=None):
-        """Get a list of NVMe/VMD devices found on each specified host.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            hosts (NodeSet): hosts on which to find the NVMe/VMD devices
-            device_type (str): device type to find, e.g. 'NVMe' or 'VMD'
-            length (str): number of digits to match in the first PCI domain number
-            device_filter (str, optional): optional filter to apply to device searching. Defaults to
-                None.
-
-        Raises:
-            LaunchException: if there is a problem finding a devices
-
-        Returns:
-            list: A list of detected devices - empty if none found
-
-        """
-        found_devices = {}
-
-        # Find the devices on each host
-        if device_type == "VMD":
-            # Exclude the controller revision as this causes heterogeneous clush output
-            command_list = [
-                "/sbin/lspci -D",
-                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-                "grep -E 'Volume Management Device NVMe RAID Controller'",
-                r"sed -E 's/\(rev\s+([a-f0-9])+\)//I'"]
-        elif device_type == "NVMe":
-            command_list = [
-                "/sbin/lspci -D",
-                f"grep -E '^[0-9a-f]{{{length}}}:[0-9a-f]{{2}}:[0-9a-f]{{2}}.[0-9a-f] '",
-                "grep -E 'Non-Volatile memory controller:'"]
-            if device_filter and device_filter.startswith("-"):
-                command_list.append(f"grep -v '{device_filter[1:]}'")
-            elif device_filter:
-                command_list.append(f"grep '{device_filter}'")
-        else:
-            raise LaunchException(
-                f"ERROR: Invalid 'device_type' for NVMe/VMD auto-detection: {device_type}")
-        command = " | ".join(command_list) + " || :"
-
-        # Find all the VMD PCI addresses common to all hosts
-        result = run_remote(logger, hosts, command)
-        if result.passed:
-            for data in result.output:
-                for line in data.stdout:
-                    if line not in found_devices:
-                        found_devices[line] = NodeSet()
-                    found_devices[line].update(data.hosts)
-
-            # Remove any non-homogeneous devices
-            for key in list(found_devices):
-                if found_devices[key] != hosts:
-                    logger.debug(
-                        "  device '%s' not found on all hosts: %s", key, found_devices[key])
-                    found_devices.pop(key)
-
-        if not found_devices:
-            raise LaunchException("Error: Non-homogeneous {device_type} PCI addresses.")
-
-        # Get the devices from the successful, homogeneous command output
-        return find_pci_address("\n".join(found_devices))
-
-    @staticmethod
-    def _get_vmd_address_backed_nvme(hosts, vmd_disks, vmd_controllers):
-        """Find valid VMD address which has backing NVMe.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            hosts (NodeSet): hosts on which to find the VMD addresses
-            vmd_disks (list): list of PCI domain numbers for each VMD controlled disk
-            vmd_controllers (list): list of PCI domain numbers for each VMD controller
-
-        Raises:
-            LaunchException: if there is a problem finding a devices
-
-        Returns:
-            list: a list of the VMD controller PCI domain numbers which are connected to the VMD
-                disks
-
-        """
-        disk_controllers = {}
-        command_list = ["ls -l /sys/block/", "grep nvme"]
-        if vmd_disks:
-            command_list.append(f"grep -E '({'|'.join(vmd_disks)})'")
-        command_list.extend(["cut -d'>' -f2", "cut -d'/' -f4"])
-        command = " | ".join(command_list) + " || :"
-        result = run_remote(logger, hosts, command)
-
-        # Verify the command was successful on each server host
-        if not result.passed:
-            raise LaunchException(f"Error issuing command '{command}'")
-
-        # Collect a list of NVMe devices behind the same VMD addresses on each host.
-        logger.debug("Checking for %s in command output", vmd_controllers)
-        if result.passed:
-            for data in result.output:
-                for device in vmd_controllers:
-                    if device in data.stdout:
-                        if device not in disk_controllers:
-                            disk_controllers[device] = NodeSet()
-                        disk_controllers[device].update(data.hosts)
-
-            # Remove any non-homogeneous devices
-            for key in list(disk_controllers):
-                if disk_controllers[key] != hosts:
-                    logger.debug(
-                        "  device '%s' not found on all hosts: %s", key, disk_controllers[key])
-                    disk_controllers.pop(key)
-
-        # Verify each server host has the same NVMe devices behind the same VMD addresses.
-        if not disk_controllers:
-            raise LaunchException("Error: Non-homogeneous NVMe device behind VMD addresses.")
-
-        return disk_controllers
-
     def list_tests(self, tags):
         """List the test files matching the tags.
 
@@ -1714,35 +1366,133 @@ class Launch():
             logger.debug("  Fault injection is disabled")
         return False
 
-    def setup_test_files(self, args, yaml_dir):
+    def setup_test_files(self, yaml_dir, args):
         """Set up the test yaml files with any placeholder replacements.
 
         Args:
-            args (argparse.Namespace): command line arguments for this program
             yaml_dir (str): directory in which to write the modified yaml files
+            args (argparse.Namespace): command line arguments for this program
 
         Raises:
             RunException: if there is a problem updating the test yaml files
-            LaunchException: if there is an error getting host information from the test yaml files
+            YamlException: if there is an error getting host information from the test yaml files
+            StorageException: if there is an error getting storage information
 
         """
+        # Detect available disk options for test yaml replacement
+        # Supported --nvme options:
+        #
+        #   auto[:filter]           = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: dcpm' first storage tier.
+        #
+        #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
+        #                             found to exist on all server hosts. If a 'filter' is specified
+        #                             use it to find devices with the 'filter' in the device
+        #                             description. If generating automatic storage extra files, use
+        #                             a 'class: dcpm' first storage tier.
+        #
+        #   auto_vmd[:filter]       = replace any test bdev_list placeholders with any VMD
+        #                             controller address found to exist on all server hosts. If a
+        #                             'filter' is specified use it to find devices with the 'filter'
+        #                             in the device description. If generating automatic storage
+        #                             extra files, use a 'class: dcpm' first storage tier.
+        #
+        #   <address>[,<address>]   = replace any test bdev_list placeholders with the addresses
+        #                             specified as long as the address exists on each server host.
+        #                             If generating automatic storage extra files, use a
+        #                             'class: dcpm' first storage tier.
+        #
+        storage = None
+        storage_info = StorageInfo(logger, args.test_servers)
+        tier_0_type = "pmem"
+        scm_size = 16
+        max_nvme_tiers = 1
+        if args.nvme:
+            kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
+            if args.nvme.startswith("auto"):
+                # Separate any optional filter from the key
+                nvme_args = args.nvme.split(":")
+                kwargs["device_filter"] = nvme_args[1] if len(nvme_args) > 1 else None
+            logger.debug("-" * 80)
+            storage_info.scan(**kwargs)
+
+            # Determine which storage device types to use when replacing keywords in the test yaml
+            if args.nvme.startswith("auto_nvme"):
+                storage = ",".join([dev.address for dev in storage_info.disk_devices])
+            elif args.nvme.startswith("auto_vmd") or storage_info.controller_devices:
+                storage = ",".join([dev.address for dev in storage_info.controller_devices])
+            else:
+                storage = ",".join([dev.address for dev in storage_info.disk_devices])
+        self.details["storage"] = storage_info.device_dict()
+
+        updater = YamlUpdater(
+            logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
+            args.override, args.verbose)
+
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
-            args.extra_yaml = [
-                self._replace_yaml_file(extra, args, yaml_dir) for extra in args.extra_yaml]
+            common_extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
+            for test in self.tests:
+                test.extra_yaml.extend(common_extra_yaml)
 
+        # Generate storage configuration extra yaml files if requested
+        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
+
+        # Replace any placeholders in the test yaml file
         for test in self.tests:
-            test.yaml_file = self._replace_yaml_file(test.yaml_file, args, yaml_dir)
+            new_yaml_file = updater.update(test.yaml_file, yaml_dir)
+            if new_yaml_file:
+                if args.verbose > 0:
+                    # Optionally display a diff of the yaml file
+                    command = ["diff", "-y", test.yaml_file, new_yaml_file]
+                    run_local(logger, command, check=False)
+                test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
             command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
-            if args.extra_yaml:
-                command.extend(args.extra_yaml)
+            if test.extra_yaml:
+                command.extend(test.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, " ".join(command), check=False)
+            run_local(logger, " ".join(command))
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
+
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
+        """Add extra storage yaml definitions for tests requesting automatic storage configurations.
+
+        Args:
+            storage_info (StorageInfo): the collected storage information from the hosts
+            yaml_dir (str): path n which to create the extra storage yaml files
+            tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
+            scm_size (int): scm_size to use with ram storage tiers
+            max_nvme_tiers (int): maximum number of NVMe tiers to generate
+
+        Raises:
+            YamlException: if there is an error getting host information from the test yaml files
+            StorageException: if there is an error creating the extra storage yaml files
+
+        """
+        engine_storage_yaml = {}
+        for test in self.tests:
+            yaml_data = get_yaml_data(test.yaml_file)
+            info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
+            logger.debug("Checking for auto-storage request in %s: %s", test.yaml_file, info)
+            if "storage" in info and info["storage"] == "auto":
+                engines = info["engines_per_host"]
+                yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
+                if engines not in engine_storage_yaml:
+                    logger.debug("-" * 80)
+                    storage_info.write_storage_yaml(
+                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
+                    engine_storage_yaml[engines] = yaml_file
+                logger.debug(
+                    "  - Adding auto-storage extra yaml %s for %s",
+                    engine_storage_yaml[engines], str(test))
+                test.extra_yaml.append(engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -1818,7 +1568,7 @@ class Launch():
             raise LaunchException(f'Error creating user {user}')
 
     def _user_setup(self, test, create=False):
-        """Setup test users on client nodes.
+        """Set up test users on client nodes.
 
         Args:
             test (TestInfo): the test information
@@ -1882,234 +1632,6 @@ class Launch():
             if not run_remote(logger, hosts, command.format(config)).passed:
                 raise LaunchException(f"Failed to setup {config}")
 
-    @staticmethod
-    def _replace_yaml_file(yaml_file, args, yaml_dir):
-        # pylint: disable=too-many-nested-blocks,too-many-branches
-        """Create a temporary test yaml file with any requested values replaced.
-
-        Optionally replace the following test yaml file values if specified by the
-        user via the command line arguments:
-
-            test_servers:   Use the list specified by the --test_servers (-ts)
-                            argument to replace any host name placeholders listed
-                            under "test_servers:"
-
-            test_clients    Use the list specified by the --test_clients (-tc)
-                            argument (or any remaining names in the --test_servers
-                            list argument, if --test_clients is not specified) to
-                            replace any host name placeholders listed under
-                            "test_clients:".
-
-            bdev_list       Use the list specified by the --nvme (-n) argument to
-                            replace the string specified by the "bdev_list:" yaml
-                            parameter.  If multiple "bdev_list:" entries exist in
-                            the yaml file, evenly divide the list when making the
-                            replacements.
-
-        Any replacements are made in a copy of the original test yaml file.  If no
-        replacements are specified return the original test yaml file.
-
-        Args:
-            yaml_file (str): test yaml file
-            args (argparse.Namespace): command line arguments for this program
-            yaml_dir (str): directory in which to write the modified yaml files
-
-        Raises:
-            RunException: if a yaml file placeholder is missing a value
-
-        Returns:
-            str: the test yaml file; None if the yaml file contains placeholders
-                w/o replacements
-
-        """
-        logger.debug("-" * 80)
-        replacements = {}
-
-        if args.test_servers or args.nvme or args.timeout_multiplier:
-            # Find the test yaml keys and values that match the replaceable fields
-            yaml_data = get_yaml_data(yaml_file)
-            logger.debug("Detected yaml data: %s", yaml_data)
-            yaml_keys = list(YAML_KEYS.keys())
-            yaml_find = find_values(yaml_data, yaml_keys, val_type=(list, int, dict, str))
-
-            # Generate a list of values that can be used as replacements
-            user_values = OrderedDict()
-            for key, value in list(YAML_KEYS.items()):
-                args_value = getattr(args, value)
-                if isinstance(args_value, NodeSet):
-                    user_values[key] = list(args_value)
-                elif isinstance(args_value, str):
-                    user_values[key] = args_value.split(",")
-                elif args_value:
-                    user_values[key] = [args_value]
-                else:
-                    user_values[key] = None
-
-            # Assign replacement values for the test yaml entries to be replaced
-            logger.debug("Detecting replacements for %s in %s", yaml_keys, yaml_file)
-            logger.debug("  Found values: %s", yaml_find)
-            logger.debug("  User values:  %s", dict(user_values))
-
-            node_mapping = {}
-            for key, user_value in user_values.items():
-                # If the user did not provide a specific list of replacement
-                # test_clients values, use the remaining test_servers values to
-                # replace test_clients placeholder values
-                if key == "test_clients" and not user_value:
-                    user_value = user_values["test_servers"]
-
-                # Replace test yaml keys that were:
-                #   - found in the test yaml
-                #   - have a user-specified replacement
-                if key in yaml_find and user_value:
-                    if key.startswith("test_"):
-                        # The entire server/client test yaml list entry is replaced
-                        # by a new test yaml list entry, e.g.
-                        #   '  test_servers: server-[1-2]' --> '  test_servers: wolf-[10-11]'
-                        #   '  test_servers: 4'            --> '  test_servers: wolf-[10-13]'
-                        if not isinstance(yaml_find[key], list):
-                            yaml_find[key] = [yaml_find[key]]
-
-                        for yaml_find_item in yaml_find[key]:
-                            replacement = NodeSet()
-                            try:
-                                # Replace integer placeholders with the number of nodes from the
-                                # user provided list equal to the quantity requested by the test
-                                # yaml
-                                quantity = int(yaml_find_item)
-                                if args.override and args.test_clients:
-                                    # When individual lists of server and client nodes are provided
-                                    # with the override flag set use the full list of nodes
-                                    # specified by the test_server/test_client arguments
-                                    quantity = len(user_value)
-                                elif args.override:
-                                    logger.warning(
-                                        "Warning: In order to override the node quantity a "
-                                        "'--test_clients' argument must be specified: %s: %s",
-                                        key, yaml_find_item)
-                                for _ in range(quantity):
-                                    try:
-                                        replacement.add(user_value.pop(0))
-                                    except IndexError:
-                                        # Not enough nodes provided for the replacement
-                                        if not args.override:
-                                            replacement = None
-                                        break
-
-                            except ValueError:
-                                try:
-                                    # Replace clush-style placeholders with nodes from the user
-                                    # provided list using a mapping so that values used more than
-                                    # once yield the same replacement
-                                    for node in NodeSet(yaml_find_item):
-                                        if node not in node_mapping:
-                                            try:
-                                                node_mapping[node] = user_value.pop(0)
-                                            except IndexError:
-                                                # Not enough nodes provided for the replacement
-                                                if not args.override:
-                                                    replacement = None
-                                                break
-                                            logger.debug(
-                                                "  - %s replacement node mapping: %s -> %s",
-                                                key, node, node_mapping[node])
-                                        replacement.add(node_mapping[node])
-
-                                except TypeError:
-                                    # Unsupported format
-                                    replacement = None
-
-                            hosts_key = r":\s+".join([key, str(yaml_find_item)])
-                            hosts_key = hosts_key.replace("[", r"\[")
-                            hosts_key = hosts_key.replace("]", r"\]")
-                            if replacement:
-                                replacements[hosts_key] = ": ".join([key, str(replacement)])
-                            else:
-                                replacements[hosts_key] = None
-
-                    elif key == "bdev_list":
-                        # Individual bdev_list NVMe PCI addresses in the test yaml
-                        # file are replaced with the new NVMe PCI addresses in the
-                        # order they are found, e.g.
-                        #   0000:81:00.0 --> 0000:12:00.0
-                        for yaml_find_item in yaml_find[key]:
-                            bdev_key = f"\"{yaml_find_item}\""
-                            if bdev_key in replacements:
-                                continue
-                            try:
-                                replacements[bdev_key] = f"\"{user_value.pop(0)}\""
-                            except IndexError:
-                                replacements[bdev_key] = None
-
-                    else:
-                        # Timeouts - replace the entire timeout entry (key + value)
-                        # with the same key with its original value multiplied by the
-                        # user-specified value, e.g.
-                        #   timeout: 60 -> timeout: 600
-                        if isinstance(yaml_find[key], int):
-                            timeout_key = r":\s+".join([key, str(yaml_find[key])])
-                            timeout_new = max(1, round(yaml_find[key] * user_value[0]))
-                            replacements[timeout_key] = ": ".join([key, str(timeout_new)])
-                            logger.debug(
-                                "  - Timeout adjustment (x %s): %s -> %s",
-                                user_value, timeout_key, replacements[timeout_key])
-                        elif isinstance(yaml_find[key], dict):
-                            for timeout_test, timeout_val in list(yaml_find[key].items()):
-                                timeout_key = r":\s+".join([timeout_test, str(timeout_val)])
-                                timeout_new = max(1, round(timeout_val * user_value[0]))
-                                replacements[timeout_key] = ": ".join(
-                                    [timeout_test, str(timeout_new)])
-                                logger.debug(
-                                    "  - Timeout adjustment (x %s): %s -> %s",
-                                    user_value, timeout_key, replacements[timeout_key])
-
-            # Display the replacement values
-            for value, replacement in list(replacements.items()):
-                logger.debug("  - Replacement: %s -> %s", value, replacement)
-
-        if replacements:
-            # Read in the contents of the yaml file to retain the !mux entries
-            logger.debug("Reading %s", yaml_file)
-            with open(yaml_file, encoding="utf-8") as yaml_buffer:
-                yaml_data = yaml_buffer.read()
-
-            # Apply the placeholder replacements
-            missing_replacements = []
-            logger.debug("Modifying contents: %s", yaml_file)
-            for key in sorted(replacements):
-                value = replacements[key]
-                if value:
-                    # Replace the host entries with their mapped values
-                    logger.debug("  - Replacing: %s --> %s", key, value)
-                    yaml_data = re.sub(key, value, yaml_data)
-                else:
-                    # Keep track of any placeholders without a replacement value
-                    logger.debug("  - Missing:   %s", key)
-                    missing_replacements.append(key)
-            if missing_replacements:
-                # Report an error for all of the placeholders w/o a replacement
-                logger.error(
-                    "Error: Placeholders missing replacements in %s:\n  %s",
-                    yaml_file, ", ".join(missing_replacements))
-                raise LaunchException(f"Error: Placeholders missing replacements in {yaml_file}")
-
-            # Write the modified yaml file into a temporary file.  Use the path to
-            # ensure unique yaml files for tests with the same filename.
-            orig_yaml_file = yaml_file
-            yaml_name = get_test_category(yaml_file)
-            yaml_file = os.path.join(yaml_dir, f"{yaml_name}.yaml")
-            logger.debug("Creating copy: %s", yaml_file)
-            with open(yaml_file, "w", encoding="utf-8") as yaml_buffer:
-                yaml_buffer.write(yaml_data)
-
-            # Optionally display a diff of the yaml file
-            if args.verbose > 0:
-                command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(logger, " ".join(command), check=False)
-
-        # Return the untouched or modified yaml file
-        return yaml_file
-
     def _get_core_file_pattern(self, servers, clients, process_cores):
         """Get the core file pattern information from the hosts if collecting core files.
 
@@ -2157,15 +1679,14 @@ class Launch():
 
         return core_files
 
-    def run_tests(self, sparse, fail_fast, extra_yaml, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold, user_create):
+    def run_tests(self, sparse, fail_fast, stop_daos, archive, rename, jenkinslog, core_files,
+                  threshold, user_create):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
         Args:
             sparse (bool): whether or not to display the shortened avocado test output
             fail_fast (bool): whether or not to fail the avocado run command upon the first failure
-            extra_yaml (list): optional test yaml file to use when running the test
             stop_daos (bool): whether or not to stop daos servers/clients after the test
             archive (bool): whether or not to collect remote files generated by the test
             rename (bool): whether or not to rename the default avocado job-results directory names
@@ -2191,7 +1712,7 @@ class Launch():
             logger.info("-" * 80)
             logger.info("Starting test repetition %s/%s", repeat, self.repeat)
 
-            for test in self.tests:
+            for index, test in enumerate(self.tests):
                 # Define a log for the execution of this test for this repetition
                 test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
                 logger.info("-" * 80)
@@ -2213,7 +1734,7 @@ class Launch():
                 test_result.end()
 
                 # Run the test with avocado
-                return_code |= self.execute(test, repeat, sparse, fail_fast, extra_yaml)
+                return_code |= self.execute(test, repeat, index + 1, sparse, fail_fast)
 
                 # Mark the continuation of the processing of this test
                 test_result.start()
@@ -2470,25 +1991,25 @@ class Launch():
             return 128
         return 0
 
-    def execute(self, test, repeat, sparse, fail_fast, extra_yaml):
+    def execute(self, test, repeat, number, sparse, fail_fast):
         """Run the specified test.
 
         Args:
             test (TestInfo): the test information
             repeat (int): the test repetition number
+            number (int): the test sequence number in this repetition
             sparse (bool): whether to use avocado sparse output
             fail_fast(bool): whether to use the avocado fail fast option
-            extra_yaml (list): whether to use an exta yaml file with the avocado run command
 
         Returns:
             int: status code: 0 = success, >0 = failure
 
         """
         logger.debug("=" * 80)
-        command = self.avocado.get_run_command(
-            test, self.tag_filters, sparse, fail_fast, extra_yaml)
+        command = self.avocado.get_run_command(test, self.tag_filters, sparse, fail_fast)
         logger.info(
-            "Running the %s test on repeat %s/%s: %s", test, repeat, self.repeat, " ".join(command))
+            "[Test %s/%s] Running the %s test on repetition %s/%s",
+            number, len(self.tests), test, repeat, self.repeat)
         start_time = int(time.time())
 
         try:
@@ -2496,12 +2017,12 @@ class Launch():
                 logger, " ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
-            elif return_code == 2:
+            elif return_code & 2 == 2:
                 logger.debug("At least one avocado test variant failed")
-            elif return_code == 4:
+            elif return_code & 4 == 4:
                 message = "Failed avocado commands detected"
                 self._fail_test(self.result.tests[-1], "Process", message)
-            elif return_code == 8:
+            elif return_code & 8 == 8:
                 logger.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
@@ -2578,6 +2099,14 @@ class Launch():
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
 
+        # Mark the test execution as failed if a results.xml file is not found
+        test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
+        results_xml = os.path.join(test_logs_dir, "results.xml")
+        if not os.path.exists(results_xml):
+            message = f"Missing a '{results_xml}' file for {str(test)}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+            return_code = 16
+
         # Optionally store all of the server and client config files and remote logs along with
         # this test's results. Also report an error if the test generated any log files with a
         # size exceeding the threshold.
@@ -2646,7 +2175,7 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], threshold, data["timeout"], test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2808,7 +2337,7 @@ class Launch():
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
-                       timeout):
+                       timeout, test=None):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2820,6 +2349,7 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
             timeout (int): number of seconds to wait for the command to complete.
+            test (TestInfo, optional): the test information. Defaults to None.
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2827,8 +2357,9 @@ class Launch():
         """
         logger.debug("=" * 80)
         logger.info(
-            "Archiving %s from %s:%s to %s",
-            summary, hosts, os.path.join(source, pattern), destination)
+            "Archiving %s from %s:%s to %s%s,",
+            summary, hosts, os.path.join(source, pattern), destination,
+            f" after running '{str(test)}'" if test else "")
         logger.debug("  Remote hosts: %s", hosts.difference(self.local_host))
         logger.debug("  Local host:   %s", hosts.intersection(self.local_host))
 
@@ -3269,22 +2800,9 @@ def main():
         "DAOS functional test launcher",
         "",
         "Launches tests by specifying a test tag.  For example:",
-        "\tbadconnect  --run pool connect tests that pass NULL ptrs, etc.",
-        "\tbadevict    --run pool client evict tests that pass NULL ptrs, "
-        "etc.",
-        "\tbadexclude  --run pool target exclude tests that pass NULL ptrs, "
-        "etc.",
-        "\tbadparam    --run tests that pass NULL ptrs, etc.",
-        "\tbadquery    --run pool query tests that pass NULL ptrs, etc.",
-        "\tmulticreate --run tests that create multiple pools at once",
-        "\tmultitarget --run tests that create pools over multiple servers",
         "\tpool        --run all pool related tests",
-        "\tpoolconnect --run all pool connection related tests",
-        "\tpooldestroy --run all pool destroy related tests",
-        "\tpoolevict   --run all client pool eviction related tests",
-        "\tpoolinfo    --run all pool info retrieval related tests",
-        "\tquick       --run tests that complete quickly, with minimal "
-        "resources",
+        "\tcontainer   --run all container related tests",
+        "\tcontol      --run all control plane related tests",
         "",
         "Multiple tags can be specified:",
         "\ttag_a,tag_b -- run all tests with both tag_a and tag_b",
@@ -3292,24 +2810,44 @@ def main():
         "",
         "Specifying no tags will run all of the available tests.",
         "",
-        "Tests can also be launched by specifying a path to the python script "
-        "instead of its tag.",
+        "Tests can also be launched by specifying a path to the python script instead of its tag.",
         "",
-        "The placeholder server and client names in the yaml file can also be "
-        "replaced with the following options:",
-        "\tlaunch.py -ts node1,node2 -tc node3 <tag>",
+        "The placeholder server and client names in the yaml file can also be replaced with the "
+        "following options:",
+        "\tlaunch.py -ts node[1-2] -tc node3 <tag>",
         "\t  - Use node[1-2] to run the daos server in each test",
         "\t  - Use node3 to run the daos client in each test",
-        "\tlaunch.py -ts node1,node2 <tag>",
+        "\tlaunch.py -ts node[1-2] <tag>",
         "\t  - Use node[1-2] to run the daos server or client in each test",
-        "\tlaunch.py -ts node1,node2 -d <tag>",
-        "\t  - Use node[1-2] to run the daos server or client in each test",
-        "\t  - Discard of any additional server or client placeholders for "
-        "each test",
+        "\tlaunch.py -ts node1 -tc node2 -o <tag>",
+        "\t  - Use node1 to run the daos server in each test",
+        "\t  - Use node2 to run the daos client in each test",
+        "\t  - Override the number of servers and clients specified by the test",
         "",
-        "You can also specify the sparse flag -s to limit output to "
-        "pass/fail.",
-        "\tExample command: launch.py -s pool"
+        "You can also specify the sparse flag -s to limit output to pass/fail.",
+        "\tExample command: launch.py -s pool",
+        "",
+        "The placeholder server storage configuration in the test yaml can also be replaced with "
+        "the following --nvme argument options:",
+        "\tauto[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_nvme[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
+        "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
+        "\t\tin the device description. If generating automatic storage extra files, use a ",
+        "\t\t'class: dcpm' first storage tier.",
+        "\tauto_vmd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any VMD controller address found to ",
+        "\t\texist on all server hosts. If a 'filter' is specified use it to find devices with the",
+        "\t\t'filter' in the device description. If generating automatic storage extra files, use",
+        "\t\ta 'class: dcpm' first storage tier.",
+        "\t<address>[,<address>]",
+        "\t\treplace any test bdev_list placeholders with the addresses specified as long as the",
+        "\t\taddress exists on each server host. If generating automatic storage extra files, use ",
+        "\t\ta 'class: dcpm' first storage tier."
     ]
     parser = ArgumentParser(
         prog="launcher.py",
@@ -3377,17 +2915,9 @@ def main():
     parser.add_argument(
         "-n", "--nvme",
         action="store",
-        help="comma-separated list of NVMe device PCI addresses to use as "
-             "replacement values for the bdev_list in each test's yaml file.  "
-             "Using the 'auto[:<filter>]' keyword will auto-detect any VMD "
-             "controller or NVMe PCI address list on each of the '--test_servers' "
-             "hosts - the optional '<filter>' can be used to limit auto-detected "
-             "NVMe addresses, e.g. 'auto:Optane' for Intel Optane NVMe devices.  "
-             "To limit the device detection to either VMD controller or NVMe "
-             "devices the 'auto_vmd[:filter]' or 'auto_nvme[:<filter>]' keywords "
-             "can be used, respectively.  When using 'filter' with VMD controllers, "
-             "the filter is applied to devices managed by the controller, therefore "
-             "only selecting controllers that manage the matching devices.")
+        help="Detect available disk options for replacing the devices specified in the server "
+             "storage yaml configuration file. Supported options include:  auto[:filter], "
+             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",
