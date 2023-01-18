@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,7 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -53,22 +52,21 @@ type PoolCreateCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	GroupName     ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName      ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolLabelFlag string              `short:"p" long:"label" description:"Unique label for pool (deprecated, use positional argument)"`
-	Properties    PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
-	ACLFile       string              `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size          string              `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
-	TierRatio     string              `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
-	NumRanks      uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
-	NumSvcReps    uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize       string              `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
-	NVMeSize      string              `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	RankList      ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	GroupName  ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
+	ACLFile    string              `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	Size       string              `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
+	TierRatio  string              `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
+	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
+	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
+	ScmSize    string              `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize   string              `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
 		PoolLabel string `positional-arg-name:"<pool label>"`
-	} `positional-args:"yes"`
+	} `positional-args:"yes" required:"1"`
 }
 
 // Regexp allowing to define the size of a new pool as the percentage of the overall available storage
@@ -81,10 +79,6 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 	if cmd.Size == "" && cmd.ScmSize == "" {
 		return errors.New("either --size or --scm-size must be supplied")
-	}
-
-	if cmd.PoolLabelFlag != "" {
-		cmd.Args.PoolLabel = cmd.PoolLabelFlag
 	}
 
 	if cmd.Args.PoolLabel != "" {
@@ -327,8 +321,8 @@ type poolCmd struct {
 	jsonOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>"`
-	} `positional-args:"yes"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>"`
+	} `positional-args:"yes" required:"1"`
 }
 
 func (cmd *poolCmd) PoolID() *PoolID {
@@ -595,36 +589,14 @@ func (cmd *PoolUpgradeCmd) Execute(args []string) error {
 // PoolSetPropCmd represents the command to set a property on a pool.
 type PoolSetPropCmd struct {
 	poolCmd
-	Property string `short:"n" long:"name" description:"Name of property to be set (deprecated; use positional argument)"`
-	Value    string `short:"v" long:"value" description:"Value of property to be set (deprecated; use positional argument)"`
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"pool properties to set (key:val[,key:val...])"`
-	} `positional-args:"yes"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>"`
+	} `positional-args:"yes" required:"1"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
-	// TODO (DAOS-7964): Remove support for --name/--value flags.
-	if cmd.Property != "" || cmd.Value != "" {
-		if len(cmd.Args.Props.ToSet) > 0 {
-			return errors.New("cannot mix flags and positional arguments")
-		}
-		if cmd.Property == "" || cmd.Value == "" {
-			return errors.New("both --name and --value must be supplied if either are supplied")
-		}
-
-		propName := strings.ToLower(cmd.Property)
-		p, err := daos.PoolProperties().GetProperty(propName)
-		if err != nil {
-			return err
-		}
-		if err := p.SetValue(cmd.Value); err != nil {
-			return err
-		}
-		cmd.Args.Props.ToSet = []*daos.PoolProperty{p}
-	}
-
 	for _, prop := range cmd.Args.Props.ToSet {
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
@@ -659,7 +631,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 type PoolGetPropCmd struct {
 	poolCmd
 	Args struct {
-		Props PoolGetPropsFlag `positional-arg-name:"pool properties to get (key[,key...])"`
+		Props PoolGetPropsFlag `positional-arg-name:"[key[,key...]]"`
 	} `positional-args:"yes"`
 }
 
