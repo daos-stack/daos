@@ -2863,7 +2863,7 @@ class Launch():
 
         if test and "core files" in summary:
             # Process the core files
-            return_code |= self._process_core_files(os.path.split(destination)[0])
+            return_code |= self._process_core_files(os.path.split(destination)[0], test)
 
         return return_code
 
@@ -3106,6 +3106,7 @@ class Launch():
 
         Args:
             test_job_results (str): the location of the core files
+            test (TestInfo): the test information
 
         Returns:
             int: status code: 2048 = Core file exist; 256 = failure; 0 = success
