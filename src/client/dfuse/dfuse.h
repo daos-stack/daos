@@ -86,7 +86,7 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint64_t           doh_write_count;
 
-	/* Last offset returned by readdir */
+	/* Next offset we expect from readdir */
 	off_t                     doh_rd_offset;
 
 	struct dfuse_readdir_c   *doh_rd_nextc;
@@ -152,8 +152,11 @@ struct dfuse_readdir_hdl {
 	uint32_t                   drh_dre_last_index;
 	/** Next value from anchor */
 	uint32_t                   drh_anchor_index;
+
+	/** List of directory entries read so far, list of dfuse_readdir_c */
 	d_list_t                   drh_cache_list;
 
+	/* Count of how many directory handles are using this handle */
 	ATOMIC uint32_t            drh_ref;
 
 	bool                       dre_caching;

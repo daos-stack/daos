@@ -35,6 +35,7 @@ import junit_xml
 import tabulate
 import yaml
 
+
 class NLTestFail(Exception):
     """Used to indicate test failure"""
 
@@ -1876,13 +1877,31 @@ class PosixTests():
             self.fatal_errors = True
 
     @needs_dfuse
+    def test_readdir_basic(self):
+        """Basic readdir test.
+
+        Call readdir on a empty directory, then populate it and call it again
+        """
+        dir_name = tempfile.mkdtemp(dir=self.dfuse.dir)
+        files = os.listdir(dir_name)
+        assert len(files) == 0
+
+        count = 40
+
+        for idx in range(count):
+            with open(join(dir_name, f'file_{idx}'), 'w'):
+                pass
+
+        files = os.listdir(dir_name)
+        assert len(files) == count
+
+    @needs_dfuse
     def test_readdir_30(self):
-        """Test reading a directory with 25 entries"""
+        """Test reading a directory with 30 entries"""
         self.readdir_test(30)
 
     def readdir_test(self, count, test_all=False):
         """Run a rudimentary readdir test"""
-
         wide_dir = tempfile.mkdtemp(dir=self.dfuse.dir)
         start = time.time()
         for idx in range(count):
@@ -1961,8 +1980,10 @@ class PosixTests():
                 files2.append(next(second).name)
                 for entry in entries:
                     files.append(entry.name)
+                    assert len(files) < 500
                 for entry in second:
                     files2.append(entry.name)
+                    assert len(files2) < 500
 
         print('Reads are from list 2, 1, 1, 2.')
         print(files)
