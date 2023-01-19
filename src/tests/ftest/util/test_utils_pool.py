@@ -960,26 +960,6 @@ class TestPool(TestDaosApiBase):
             free_space = daos_space["s_free"][1]
         return free_space
 
-    def get_pool_used_space(self, device="scm"):
-        """Get SCM or NVME used space.
-
-        Args:
-            device (str, optional): device type, e.g. "scm" or "nvme". Defaults
-                to "scm".
-
-        Returns:
-            str: used SCM or NVME space
-
-        """
-        used_space = "0"
-        dev = device.lower()
-        daos_space = self.get_pool_daos_space()
-        if dev == "scm":
-            used_space = daos_space["s_total"][0] - daos_space["s_free"][0]
-        elif dev == "nvme":
-            used_space = daos_space["s_total"][1] - daos_space["s_free"][1]
-        return used_space
-
     def display_space(self):
         """Display the current pool space.
 
@@ -1026,10 +1006,10 @@ class TestPool(TestDaosApiBase):
         """
         daos_space = self.get_pool_daos_space()
         pool_percent = {
-            'scm': round(float(daos_space["s_total"][0] - daos_space["s_free"][0]) /
-                         float(daos_space["s_total"][0]) * 100, 4),
-            'nvme': round(float(daos_space["s_total"][1] - daos_space["s_free"][1]) /
-                          float(daos_space["s_total"][1]) * 100, 4)
+            'scm': round(float(daos_space["s_total"][0] - daos_space["s_free"][0])
+                         / float(daos_space["s_total"][0]) * 100, 4),
+            'nvme': round(float(daos_space["s_total"][1] - daos_space["s_free"][1])
+                          / float(daos_space["s_total"][1]) * 100, 4)
         }
         return pool_percent
 
