@@ -29,6 +29,7 @@ from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
 from oclass_utils import extract_redundancy_factor
+from duns_utils import format_path
 
 H_LOCK = threading.Lock()
 
@@ -728,7 +729,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
-    bind_cores = self.params.get("cores", dfuse.namespace, None)
+    dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
@@ -741,14 +742,11 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
     dfuse_env = "export D_LOG_MASK=ERR;export D_LOG_FILE={}".format(dfuse_log)
     module_load = "module load {}".format(self.mpi_module)
-    if bind_cores:
-        task_set = "taskset -c {} ".format(bind_cores)
-    else:
-        task_set = ""
+
     dfuse_start_cmds = [
         "clush -S -w $SLURM_JOB_NODELIST \"mkdir -p {}\"".format(dfuse.mount_dir.value),
-        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}{}\"".format(
-            dfuse.mount_dir.value, dfuse_env, module_load, task_set, str(dfuse)),
+        "clush -S -w $SLURM_JOB_NODELIST \"cd {};{};{};{}\"".format(
+            dfuse.mount_dir.value, dfuse_env, module_load, str(dfuse)),
         "sleep 10",
         "clush -S -w $SLURM_JOB_NODELIST \"df -h {}\"".format(dfuse.mount_dir.value),
     ]
@@ -956,7 +954,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.timings_file_name.update(macsio_timing_log)
             env = macsio.env.copy()
             env["D_LOG_FILE"] = get_log_file(daos_log or "{}_daos.log".format(macsio.command))
-            env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(macsio.daos_pool, macsio.daos_cont)
+            env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
             sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
