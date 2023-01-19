@@ -30,6 +30,7 @@ struct crt_na_config {
 	int32_t		 noc_port;
 	char		*noc_interface;
 	char		*noc_domain;
+	char		*noc_auth_key;
 	/* IP addr str for the noc_interface */
 	char		 noc_ip_str[INET_ADDRSTRLEN];
 };
