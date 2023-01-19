@@ -55,7 +55,7 @@ struct crt_prov_gdata {
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
 
-	/** free-list of indecies */
+	/** free-list of indices */
 	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
