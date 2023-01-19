@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -551,7 +551,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
 	blk_hdr.th_id = tx->utx_id;
-	blk_hdr.th_tot_ents = umem_tx_act_nr(tx);
+	blk_hdr.th_tot_ents = umem_tx_act_nr(tx) + dc_arr->dca_nr;
 	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(tx);
 
 	/* Initialize first entry block */
@@ -637,6 +637,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			entry.te_off = act->ac_csum.addr;
 			entry.te_len = act->ac_csum.size;
 			entry.te_data = act->ac_csum.csum;
+			place_entry(&entry_blk, &entry);
 			break;
 		default:
 			D_ASSERTF(0, "Invalid opc %u\n", act->ac_opc);
