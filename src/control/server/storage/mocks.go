@@ -111,7 +111,7 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 // MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := test.GetIndex(varIdx...)
-	pciAddr := concat("0000:80:00", idx, ".")
+	pciAddr := test.MockPCIAddr(idx)
 
 	return &NvmeController{
 		Model:       concat("model", idx),

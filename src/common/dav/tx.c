@@ -474,6 +474,9 @@ lw_tx_end(dav_obj_t *pop, void *data)
 	struct umem_wal_tx	*utx;
 	int			 rc;
 
+	/* Persist the frequently updated persistent globals */
+	stats_persist(pop, pop->do_stats);
+
 	utx = pop->do_utx;
 	D_ASSERT(utx != NULL);
 	pop->do_utx = NULL;

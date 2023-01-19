@@ -25,7 +25,7 @@ type StorageControlService struct {
 	log             logging.Logger
 	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
-	getHugePageInfo common.GetHugePageInfoFn
+	getMemInfo      common.GetMemInfoFn
 }
 
 // ScmPrepare preps locally attached modules.
@@ -54,7 +54,7 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, hpiFn common.GetHugePageInfoFn) *StorageControlService {
+func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, miFn common.GetMemInfoFn) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
@@ -64,7 +64,7 @@ func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storag
 		log:             l,
 		storage:         sp,
 		instanceStorage: instanceStorage,
-		getHugePageInfo: hpiFn,
+		getMemInfo:      miFn,
 	}
 }
 
@@ -77,8 +77,10 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 		topCfg.ControlMetadata = engineCfgs[0].Storage.ControlMetadata
 	}
 	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, topCfg),
-		common.GetHugePageInfo,
+		storage.DefaultProvider(log, 0, &storage.Config{
+			Tiers: nil,
+		}),
+		common.GetMemInfo,
 	)
 }
 
@@ -89,7 +91,7 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}, sys, scm, bdev, nil),
-		func() (*common.HugePageInfo, error) {
+		func() (*common.MemInfo, error) {
 			return nil, nil
 		},
 	)
