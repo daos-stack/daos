@@ -220,8 +220,8 @@ type containerCreateCmd struct {
 	Path            string               `long:"path" short:"p" description:"container namespace path"`
 	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
-	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
+	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
 	CHints          string               `long:"hints" short:"h" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
@@ -884,10 +884,26 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 	rc := C.cont_clone_hdlr(ap)
 
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to clone container %s",
-			cmd.Source)
+		return errors.Wrapf(err, "failed to clone container %s", cmd.Source)
 	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(struct {
+			SourcePool string `json:"src_pool"`
+			SourceCont string `json:"src_cont"`
+			DestPool   string `json:"dst_pool"`
+			DestCont   string `json:"dst_cont"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+		}, nil)
+	}
+
+	// Compat with old-style output
+	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.Infof("Successfully copied to destination container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 
 	return nil
 }
