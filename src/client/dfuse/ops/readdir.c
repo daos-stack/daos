@@ -317,19 +317,16 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 	hdl = oh->doh_rd;
 
-	/* if starting from the beginning, reset the anchor attached to the open handle. */
+	/* Keep track of if this call is part of a series of calls, one start-to-end directory reads
+	 * will populate the kernel cache.  This lets us estimate when the kernel cache was
+	 * populated so that opendir can pass "keep_cache" based on timeout values.
+	 */
 	if (offset == 0) {
-		/* Keep track of if this call is part of a series of calls, one start-to-end
-		 * directory reads will populate the kernel cache
-		 */
 		if (oh->doh_kreaddir_started) {
 			oh->doh_kreaddir_invalid = true;
 		}
 		oh->doh_kreaddir_started = true;
 	}
-
-	if (oh->doh_rd_offset != offset)
-		DFUSE_TRA_ERROR(hdl, "Seekdir detected");
 
 	DFUSE_TRA_INFO(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
 		       hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
@@ -380,26 +377,44 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
 		}
 		large_fetch = false;
-	}
-
-	/* If there is no seekdir but there is valid cache data and the cache data matches up
-	 * then use the cache.
-	 */
-	if ((oh->doh_rd_offset == offset) && (!d_list_empty(&hdl->drh_cache_list)) &&
-	    ((oh->doh_rd_nextc == NULL && offset == 0) ||
-	     (oh->doh_rd_nextc && oh->doh_rd_nextc->drc_offset == offset))) {
+	} else if (!d_list_empty(&hdl->drh_cache_list)) {
+		/* If there is no seekdir but there is valid cache data then use the cache.
+		 *
+		 * Directory handles may not have up-to-date values for doh_rd_nextc in some cases
+		 * so perform a seek here if necessairy.
+		 */
 		struct dfuse_readdir_c *drc;
-		size_t                  written = 0;
+		size_t                  written     = 0;
 		off_t                   next_offset = 0;
 
 		DFUSE_TRA_DEBUG(hdl, "hdl_next %p list start %p list end %p list addr %p",
 				oh->doh_rd_nextc, hdl->drh_cache_list.next,
 				hdl->drh_cache_list.prev, &hdl->drh_cache_list);
 
-		if (oh->doh_rd_nextc)
+		if (oh->doh_rd_nextc) {
 			drc = oh->doh_rd_nextc;
-		else
+
+			DFUSE_TRA_DEBUG(oh, "Resuming at existing location on list %#lx %#lx",
+					drc->drc_offset, offset);
+
+		} else {
 			drc = (struct dfuse_readdir_c *)hdl->drh_cache_list.next;
+
+			DFUSE_TRA_DEBUG(oh, "Starting on list %#lx %#lx", drc->drc_offset, offset);
+
+			if (offset != 0) {
+				/* Whilst there is more list then move forward in the list until the
+				 * offsets match.
+				 */
+				while ((drc != (void *)&hdl->drh_cache_list) &&
+				       (drc->drc_offset != offset)) {
+					DFUSE_TRA_DEBUG(oh, "Moving along list %#lx %#lx",
+							drc->drc_offset, offset);
+
+					drc = (struct dfuse_readdir_c *)drc->drc_list.next;
+				}
+			}
+		}
 
 		while (drc != (void *)&hdl->drh_cache_list) {
 			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
@@ -413,7 +428,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			if (written > size - buff_offset) {
 				DFUSE_TRA_DEBUG(oh, "Buffer is full");
-				oh->doh_rd_nextc = drc;
+				oh->doh_rd_nextc  = drc;
 				oh->doh_rd_offset = next_offset;
 				D_GOTO(reply, rc = 0);
 			}
@@ -427,10 +442,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		DFUSE_TRA_DEBUG(oh, "Ran out of cache entries, added %d", added);
 
 		if (added) {
+			oh->doh_rd_nextc = drc;
 			D_GOTO(reply, oh->doh_rd_offset = next_offset);
 		}
-
-		D_GOTO(out, rc = EIO);
 	}
 
 	if (offset == 0)
@@ -490,6 +504,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				}
 				stbuf = &drc->drc_stbuf;
 				strncpy(drc->drc_name, dre->dre_name, NAME_MAX);
+				drc->drc_offset      = offset;
 				drc->drc_next_offset = dre->dre_next_offset;
 			}
 
@@ -606,7 +621,6 @@ reply:
 out_reset:
 	/* TODO: Work through this and make unique */
 	dfuse_readdir_reset(hdl);
-out:
 	D_ASSERT(rc != 0);
 	return rc;
 }
