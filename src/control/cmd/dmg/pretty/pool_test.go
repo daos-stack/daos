@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -906,6 +906,7 @@ func TestPretty_PrintPoolCreateResp(t *testing.T) {
 Pool created with 5.66%%,94.34%% storage tier ratio
 -------------------------------------------------
   UUID                 : %s
+  Service Leader       : 0                                   
   Service Ranks        : [0-2]                               
   Storage Ranks        : [0-3]                               
   Total Size           : 42 GB                               
@@ -927,6 +928,7 @@ Pool created with 5.66%%,94.34%% storage tier ratio
 Pool created with 100.00%% storage tier ratio
 --------------------------------------------
   UUID                 : %s
+  Service Leader       : 0                                   
   Service Ranks        : [0-2]                               
   Storage Ranks        : [0-3]                               
   Total Size           : 2.4 GB                              

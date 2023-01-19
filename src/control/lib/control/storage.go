@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -31,11 +32,25 @@ var storageHashOpts = hashstructure.HashOptions{
 	SlicesAsSets: true,
 }
 
-// HugePageInfo is a cut-down version of the hugepage information
-// retrieved from the storage scan. For the purposes of the storage
-// scan, we only care about the system hugepage size.
-type HugePageInfo struct {
-	PageSizeKb int `json:"page_size_kb"`
+// MemInfo is a cut-down version of the memory information retrieved from the storage scan.
+// For the purposes of the storage scan, we only care about the system hugepage size and memory
+// available.
+type MemInfo struct {
+	HugePageSizeKb int `json:"hugepage_size_kb"`
+	MemTotal       int `json:"mem_total" hash:"ignore"`
+	MemFree        int `json:"mem_free" hash:"ignore"`
+	MemAvailable   int `json:"mem_available" hash:"ignore"`
+}
+
+func (mi *MemInfo) Summary() string {
+	if mi == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("hugepage size: %s, mem total/free/available: %s/%s/%s",
+		humanize.IBytes(uint64(mi.HugePageSizeKb*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemTotal*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemFree*humanize.KiByte)),
+		humanize.IBytes(uint64(mi.MemAvailable*humanize.KiByte)))
 }
 
 // HostStorage describes a host storage configuration which
@@ -65,9 +80,8 @@ type HostStorage struct {
 	// to achieve some goal (SCM prep, etc.)
 	RebootRequired bool `json:"reboot_required"`
 
-	// HugePageInfo contains information about the host's
-	// hugepages.
-	HugePageInfo HugePageInfo `json:"huge_page_info"`
+	// MemInfo contains information about the host's hugepages.
+	MemInfo MemInfo `json:"mem_info"`
 }
 
 // HashKey returns a uint64 value suitable for use as a key into
@@ -215,7 +229,7 @@ func (ssp *StorageScanResp) addHostResponse(hr *HostResponse) error {
 		}
 	}
 
-	if err := convert.Types(pbResp.GetHugePageInfo(), &hs.HugePageInfo); err != nil {
+	if err := convert.Types(pbResp.GetMemInfo(), &hs.MemInfo); err != nil {
 		return err
 	}
 
