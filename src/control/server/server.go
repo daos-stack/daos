@@ -399,6 +399,7 @@ func (srv *server) setupGrpc() error {
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
+		EnvVars:         srv.cfg.ClientEnvVars,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
