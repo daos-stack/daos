@@ -872,8 +872,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
-		       daos_size_t csize);
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize);
 
 /**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
@@ -1136,12 +1135,14 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
 
 enum {
-	/** print the OIDS */
+	/** print the leaked OIDS */
 	DFS_CHECK_PRINT		= (1 << 0),
 	/** remove / punch the leaked objects */
 	DFS_CHECK_REMOVE	= (1 << 1),
-	/** add leaked oids to a "lost+found" directory */
-	DFS_CHECK_LINK_LF	= (1 << 2),
+	/** relink the leaked oids under "/lost+found" */
+	DFS_CHECK_RELINK	= (1 << 2),
+	/** verify data consistency of each oid in the container (note that this will be slow) */
+	DFS_CHECK_VERIFY	= (1 << 3),
 };
 
 /**
