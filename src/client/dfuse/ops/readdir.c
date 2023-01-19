@@ -394,9 +394,12 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		if (oh->doh_rd_nextc) {
 			drc = oh->doh_rd_nextc;
 
-			DFUSE_TRA_DEBUG(oh, "Resuming at existing location on list %#lx %#lx",
-					drc->drc_offset, offset);
-
+			if (drc == (void *)&hdl->drh_cache_list)
+				DFUSE_TRA_DEBUG(oh, "Existing location is end-of-stream");
+			else
+				DFUSE_TRA_DEBUG(oh,
+						"Resuming at existing location on list %#lx %#lx",
+						drc->drc_offset, offset);
 		} else {
 			drc = (struct dfuse_readdir_c *)hdl->drh_cache_list.next;
 
@@ -446,6 +449,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			D_GOTO(reply, oh->doh_rd_offset = next_offset);
 		}
 	}
+
+	/* TODO: Check for EOD when using the cache, we do not want to call dfs_iterate for each
+	 * handle.
+	 */
 
 	if (offset == 0)
 		offset = OFFSET_BASE;
