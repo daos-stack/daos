@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,7 +41,7 @@ my_crtu_progress_fn(void *data)
 	int		rc;
 	int		i;
 
-	/* Create/destroy context multiple times to test DAOS-12012 */
+	/* Create and destroy context multiple times to test DAOS-12012 */
 	for (i = 0; i < NUM_CREATE_DESTROY; i++) {
 		rc = crt_context_create(p_ctx);
 		D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
