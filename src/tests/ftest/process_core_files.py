@@ -144,8 +144,8 @@ class CoreFileProcessing():
         try:
             command = [
                 "gdb", f"-cd={core_dir}",
-                "-ex", "set pagination off",
-                "-ex", "thread apply all bt full",
+                "-ex", "'set pagination off'",
+                "-ex", "'thread apply all bt full'",
                 "-ex", "detach",
                 "-ex", "quit",
                 self._get_exe_name(core_full), core_name
@@ -179,7 +179,7 @@ class CoreFileProcessing():
 
         """
         self.log.debug("Extracting the executable name from %s", core_file)
-        command = ["gdb", "-c", core_file, "-ex", "info proc exe", "-ex", "quit"]
+        command = ["gdb", "-c", core_file, "-ex", "'info proc exe'", "-ex", "quit"]
         result = run_local(self.log, " ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
@@ -244,7 +244,7 @@ class CoreFileProcessing():
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
             output = run_local(
-                self.log, " ".join(["rpm", "-q", "--qf", "%{evr}", "daos"]), check=False)
+                self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]), check=False)
             rpm_version = output.stdout
             cmds.append(
                 ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
@@ -337,7 +337,8 @@ class CoreFileProcessing():
             # Eventually use python libraries for this rather than exec()ing out
             output = run_local(
                 self.log,
-                " ".join(["rpm", "-q", "--qf", "%{name} %{version} %{release} %{epoch}", pkg]),
+                " ".join(
+                    ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg]),
                 check=False)
             name, version, release, epoch = output.stdout.split()
 
