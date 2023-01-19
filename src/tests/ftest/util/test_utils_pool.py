@@ -147,8 +147,7 @@ class TestPool(TestDaosApiBase):
         self.quantity = BasicParameter(None, 1)
         self.min_targets = BasicParameter(None, 1)
 
-        # Parameter to control setting and unsetting of log mask
-        # for pool create/destroy
+        # Parameter to control log mask enable/disable for pool create/destroy
         self.set_logmasks = BasicParameter(None, True)
 
         self.pool = None
