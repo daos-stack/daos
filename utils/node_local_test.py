@@ -746,7 +746,6 @@ class DaosServer():
 
         cmd = ['storage', 'format', '--json']
         start_timeout = 0.5
-        forced = False
         while True:
             try:
                 rc = self._sp.wait(timeout=start_timeout)
