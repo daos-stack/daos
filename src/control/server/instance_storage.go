@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -90,12 +90,14 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 		ei.log.Errorf("failed to check control metadata storage formatting: %s", err)
 		needsMetaFormat = true
 	}
+	ei.log.Debugf("needsMetaFormat: %t", needsMetaFormat)
 
 	needsScmFormat, err := ei.storage.ScmNeedsFormat()
 	if err != nil {
 		ei.log.Errorf("instance %d: failed to check storage formatting: %s", idx, err)
 		needsScmFormat = true
 	}
+	ei.log.Debugf("needsScmFormat: %t", needsScmFormat)
 
 	if !needsMetaFormat && !needsScmFormat {
 		if skipMissingSuperblock {
@@ -110,14 +112,17 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSupe
 			ei.log.Debugf("instance %d: superblock not needed", idx)
 			return nil
 		}
+		ei.log.Debugf("instance %d: superblock needed", idx)
 	}
 
-	cfg, err := ei.storage.GetScmConfig()
-	if err != nil {
-		return err
-	}
-	if skipMissingSuperblock {
-		return FaultScmUnmanaged(cfg.Scm.MountPoint)
+	if needsScmFormat {
+		cfg, err := ei.storage.GetScmConfig()
+		if err != nil {
+			return err
+		}
+		if skipMissingSuperblock {
+			return FaultScmUnmanaged(cfg.Scm.MountPoint)
+		}
 	}
 
 	// by this point we need superblock and possibly scm format

@@ -1218,12 +1218,12 @@ class Launch():
 
         except ValueError as error:
             if not list_tests:
-                raise LaunchException("Error setting test environment") from error
+                raise LaunchException("Error setting test environment:", str(error)) from error
 
         except IOError as error:
             if error.errno == errno.ENOENT:
                 if not list_tests:
-                    raise LaunchException("Error setting test environment") from error
+                    raise LaunchException("Error setting test environment:", str(error)) from error
 
         return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 

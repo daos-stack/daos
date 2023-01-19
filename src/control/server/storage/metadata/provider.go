@@ -46,6 +46,8 @@ func (p *Provider) Format(req storage.MetadataFormatRequest) error {
 		return errors.New("nil metadata provider")
 	}
 
+	p.log.Debugf("Format(%+v)", req)
+
 	if req.RootPath == "" {
 		return errors.New("no control metadata root path specified")
 	}
@@ -183,13 +185,18 @@ func (p *Provider) setupDataDir(req storage.MetadataFormatRequest) error {
 }
 
 // NeedsFormat checks whether the metadata storage needs to be formatted.
-func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (bool, error) {
+func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (out bool, _ error) {
 	if p == nil {
 		return false, errors.New("nil metadata provider")
 	}
 
-	p.log.Debugf("checking if control metadata root exists")
+	defer func() {
+		p.log.Debugf("NeedsFormat(%+v): %t", req, out)
+	}()
+
+	p.log.Debugf("checking if control metadata root (%s) exists", req.RootPath)
 	if _, err := p.sys.Stat(req.RootPath); os.IsNotExist(err) {
+		p.log.Debugf("control metadata root (%s) does not exist", req.RootPath)
 		return true, nil
 	} else if err != nil {
 		return false, errors.Wrap(err, "checking control metadata root path existence")
@@ -212,7 +219,9 @@ func (p *Provider) NeedsFormat(req storage.MetadataFormatRequest) (bool, error) 
 		}
 	}
 
+	p.log.Debugf("checking if control metadata path (%s) exists", req.DataPath)
 	if _, err := p.sys.Stat(req.DataPath); os.IsNotExist(err) {
+		p.log.Debugf("control metadata path (%s) does not exist", req.DataPath)
 		return true, nil
 	} else if err != nil {
 		return false, errors.Wrap(err, "checking control metadata path existence")

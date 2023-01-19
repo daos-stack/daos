@@ -504,6 +504,10 @@ class DaosServer():
                                                        suffix='.log',
                                                        dir=conf.tmp_dir,
                                                        delete=False)
+        self.helper_log = tempfile.NamedTemporaryFile(prefix='dnt_helper_',
+                                                      suffix='.log',
+                                                      dir=conf.tmp_dir,
+                                                      delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
                                                      dir=conf.tmp_dir,
@@ -672,9 +676,9 @@ class DaosServer():
         with open(join(self_dir, 'nlt_server.yaml'), 'r') as scfd:
             scyaml = yaml.safe_load(scfd)
         if self.conf.args.server_debug:
-            scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
+        scyaml['helper_log_file'] = self.helper_log.name
 
         scyaml['socket_dir'] = self.agent_dir
 
@@ -742,6 +746,7 @@ class DaosServer():
 
         cmd = ['storage', 'format', '--json']
         start_timeout = 0.5
+        forced = False
         while True:
             try:
                 rc = self._sp.wait(timeout=start_timeout)
