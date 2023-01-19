@@ -2462,6 +2462,7 @@ class Launch():
             commands = [
                 "df -h",
                 f"find {test_dir}/../ -type f -printf '%s\t%p\n' |sort -n",
+                f"find {test_dir}/../ -type d -printf '%s\t%p\n' |sort -n",
             ]
             for command in commands:
                 run_remote(logger, test.host_info.all_hosts, command)
