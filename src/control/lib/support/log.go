@@ -127,21 +127,18 @@ type logCopy struct {
 	option string
 }
 
-// Print the progress bar during log collect command
-func PrintProgress(progBar *ProgressBar) string {
-	if !(progBar.NoDisplay) {
-		progBar.Start = progBar.Start + 1
-		printString := fmt.Sprintf("\r[%-100s] %8d/%d", strings.Repeat("=", progBar.Steps*progBar.Start), progBar.Start, progBar.Total)
+// Print the progress while log collect command in progress
+func (p *ProgressBar) Display() string {
+	if !(p.NoDisplay) {
+		// Return the progress End string.
+		if p.Start == p.Total {
+			printString := fmt.Sprintf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), p.Start, p.Total)
+			return printString
+		}
+		// Return the current progress string.
+		p.Start = p.Start + 1
+		printString := fmt.Sprintf("\r[%-100s] %8d/%d", strings.Repeat("=", p.Steps*p.Start), p.Start, p.Total)
 		return printString
-	}
-
-	return ""
-}
-
-// Print the progress End once the log collection completed.
-func PrintProgressEnd(progBar *ProgressBar) string {
-	if !(progBar.NoDisplay) {
-		return fmt.Sprintf("\r[%-100s] %8d/%d\n", strings.Repeat("=", 100), progBar.Total, progBar.Total)
 	}
 
 	return ""

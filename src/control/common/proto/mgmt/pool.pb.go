@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1921,7 +1921,6 @@ type PoolProperty struct {
 
 	Number uint32 `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"` // pool property number
 	// Types that are assignable to Value:
-	//
 	//	*PoolProperty_Strval
 	//	*PoolProperty_Numval
 	Value isPoolProperty_Value `protobuf_oneof:"value"`

@@ -15,57 +15,43 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-func TestPrintProgress(t *testing.T) {
-	progress := support.ProgressBar{1, 7, 0, false}
+func TestDisplay(t *testing.T) {
+	progress := support.ProgressBar{
+		Start:     1,
+		Total:     7,
+		NoDisplay: false,
+	}
 
 	for name, tc := range map[string]struct {
-		Start      int
-		Steps      int
-		jsonOutput bool
-		expResult  string
+		Start     int
+		Steps     int
+		NoDisplay bool
+		expResult string
 	}{
 		"Valid Step count progress": {
-			Start:      2,
-			Steps:      7,
-			jsonOutput: false,
-			expResult:  "\r[==============                                                                                      ]        2/7",
+			Start:     2,
+			Steps:     7,
+			NoDisplay: false,
+			expResult: "\r[=====================                                                                               ]        3/7",
+		},
+		"Valid progress end": {
+			Start:     7,
+			Steps:     7,
+			NoDisplay: false,
+			expResult: "\r[====================================================================================================]        7/7\n",
 		},
 		"No Progress Bar if JsonOutput is Enabled": {
-			Start:      2,
-			Steps:      7,
-			jsonOutput: true,
-			expResult:  "",
+			Start:     2,
+			Steps:     7,
+			NoDisplay: true,
+			expResult: "",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			progress.Start = tc.Start
 			progress.Steps = tc.Steps
-			progress.JsonOutput = tc.jsonOutput
-			gotOutput := support.PrintProgress(&progress)
-			test.AssertEqual(t, tc.expResult, gotOutput, "")
-		})
-	}
-}
-
-func TestPrintProgressEnd(t *testing.T) {
-	progress := support.ProgressBar{1, 7, 0, false}
-
-	for name, tc := range map[string]struct {
-		jsonOutput bool
-		expResult  string
-	}{
-		"Valid Progress Bar for Non JsonOutput": {
-			jsonOutput: false,
-			expResult:  "\r[====================================================================================================]        7/7\n",
-		},
-		"No Progress Bar if JsonOutput is Enabled": {
-			jsonOutput: true,
-			expResult:  "",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			progress.JsonOutput = tc.jsonOutput
-			gotOutput := support.PrintProgressEnd(&progress)
+			progress.NoDisplay = tc.NoDisplay
+			gotOutput := progress.Display()
 			test.AssertEqual(t, tc.expResult, gotOutput, "")
 		})
 	}

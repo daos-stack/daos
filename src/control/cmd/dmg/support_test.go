@@ -16,8 +16,8 @@ import (
 func TestSupportCollectlogCommands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
-			"support collectlog without any args",
-			"support collectlog",
+			"support collect-log without any args",
+			"support collect-log",
 			printRequest(t, &control.CollectLogReq{
 				TargetFolder: "",
 			}),

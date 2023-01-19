@@ -73,7 +73,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(support.PrintProgress(&progress))
+		fmt.Printf(progress.Display())
 	}
 
 	if cmd.Archive {
@@ -88,7 +88,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	fmt.Printf(support.PrintProgressEnd(&progress))
+	fmt.Printf(progress.Display())
 
 	return nil
 }

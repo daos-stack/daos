@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,7 @@ import (
 )
 
 type (
-	// CollectLogReq contains the parameters for a collectlog request.
+	// CollectLogReq contains the parameters for a collect-log request.
 	CollectLogReq struct {
 		unaryRequest
 		TargetFolder string
@@ -25,7 +25,7 @@ type (
 		LogCmd       string
 	}
 
-	// CollectLogResp contains the results of a collectlog
+	// CollectLogResp contains the results of a collect-log
 	CollectLogResp struct {
 		HostErrorsResp
 	}

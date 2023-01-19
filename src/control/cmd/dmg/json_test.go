@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop", "support collectlog":
+				"manpage", "system set-prop", "support collect-log":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",

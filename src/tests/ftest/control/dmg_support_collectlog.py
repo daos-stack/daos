@@ -6,10 +6,10 @@
 from control_test_base import ControlTestBase
 
 
-class DmgServerSetLogmasksTest(ControlTestBase):
+class DmgSupportCollectLogTest(ControlTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:
-    Verify the support collectlog function of the dmg tool.
+    Verify the support collect-log function of the dmg tool.
     :avocado: recursive
     """
 
@@ -20,7 +20,7 @@ class DmgServerSetLogmasksTest(ControlTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=basic,control,dmg
-        :avocado: tags=test_dmg_support_collectlog
+        :avocado: tags=test_dmg_support_collect_log
         """        
         result = self.dmg.support_collect_log()
         status = result["status"]

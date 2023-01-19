@@ -115,7 +115,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(support.PrintProgress(&progress))
+		fmt.Printf(progress.Display())
 	}
 
 	// Rsync the logs from servers
@@ -144,7 +144,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			return resp.Errors()
 		}
 	}
-	fmt.Printf(support.PrintProgress(&progress))
+	fmt.Printf(progress.Display())
 
 	params = support.CollectLogsParams{}
 	params.Config = cmd.cfgCmd.config.Path
@@ -165,7 +165,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				}
 			}
 		}
-		fmt.Printf(support.PrintProgress(&progress))
+		fmt.Printf(progress.Display())
 	}
 
 	// Archive the logs
@@ -181,7 +181,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		}
 	}
 
-	fmt.Printf(support.PrintProgressEnd(&progress))
+	fmt.Printf(progress.Display())
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(nil, err)
