@@ -187,7 +187,9 @@ class StorageInfo():
     TIER_NVME_PRIORITY = (1, 2, 3, 3, 2)
     TYPE_SEARCH = OrderedDict(
         [
-            ('PMEM', ['ndctl list -c -v']),
+            ('PMEM', [
+                'ndctl list -c -v',
+                "grep -v 'uuid'"]),
             ('NVMe', [
                 'lspci -vmm -D',
                 "grep -E '^(Slot|Class|Device|NUMANode):'",
@@ -515,7 +517,7 @@ class StorageInfo():
             self._raise_error(f'Error: Invalid storage type \'{tier_0_type}\'')
 
         pmem_list = {}
-        if tier_0_type == self.TIER_0_TYPES[1] and self.pmem_devices:
+        if tier_0_type == self.TIER_0_TYPES[0] and self.pmem_devices:
             # Sort the detected devices and place then in lists by NUMA node
             numa_devices = self._get_numa_devices(self.pmem_devices)
             self._log.debug('  PMEM numa_devices:   %s', numa_devices)
@@ -584,7 +586,7 @@ class StorageInfo():
             self._log.debug('    %s', line)
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
-                config_handle.writelines([f'{line}\n' for line in lines])
+                config_handle.writelines(f'{line}\n' for line in lines)
         except IOError as error:
             self._raise_error(f"Error writing avocado config file {yaml_file}", error)
 
