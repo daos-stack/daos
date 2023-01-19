@@ -227,7 +227,7 @@ fs_set_cs_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out_umount, rc);
 	}
 
-	rc = dfs_update_chunk_size(dfs, obj, ap->chunk_size);
+	rc = dfs_file_update_chunk_size(dfs, obj, ap->chunk_size);
 	if (rc) {
 		fprintf(ap->errstream, "failed to update chunk size: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_release, rc);
