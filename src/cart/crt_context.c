@@ -214,6 +214,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	int			rc = 0;
 	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
 	int			cur_ctx_num;
+	int			ctx_idx;
 	int			max_ctx_num;
 	d_list_t		*ctx_list;
 
@@ -225,8 +226,9 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	cur_ctx_num = crt_provider_get_cur_ctx_num(primary, provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(primary, provider);
+	ctx_idx = crt_provider_get_ctx_idx(primary, provider);
 
-	if (cur_ctx_num >= max_ctx_num) {
+	if (ctx_idx < 0 || ctx_idx >= max_ctx_num || cur_ctx_num >= max_ctx_num) {
 		D_WARN("Provider: %d; Number of active contexts (%d) reached limit (%d).\n",
 		       provider, cur_ctx_num, max_ctx_num);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -249,7 +251,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 
 	ctx->cc_primary = primary;
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num, primary);
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary);
 
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -269,7 +271,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		}
 	}
 
-	ctx->cc_idx = cur_ctx_num;
+	ctx->cc_idx = ctx_idx;
 
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
 
@@ -658,13 +660,15 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
+	crt_provider_put_ctx_idx(ctx->cc_primary, provider, ctx->cc_idx);
 	crt_provider_dec_cur_ctx_num(ctx->cc_primary, provider);
 	d_list_del(&ctx->cc_link);
+
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
-	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n",
-		ctx->cc_idx, force);
+	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n", ctx->cc_idx, force);
 	D_FREE(ctx);
 
 out:
