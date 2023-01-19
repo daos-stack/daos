@@ -77,9 +77,7 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 		topCfg.ControlMetadata = engineCfgs[0].Storage.ControlMetadata
 	}
 	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
+		storage.DefaultProvider(log, 0, topCfg),
 		common.GetMemInfo,
 	)
 }

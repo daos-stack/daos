@@ -351,10 +351,13 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 			engineIdxs[i] = uint(eng.Index())
 		}
 
+		c.log.Debug("formatting control metadata storage")
 		if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
 			return nil, errors.Wrap(err, "formatting control metadata storage")
 		}
 		mdFormatted = true
+	} else {
+		c.log.Debug("no control metadata format needed")
 	}
 
 	instanceErrored := make(map[uint32]string)
