@@ -63,7 +63,8 @@ func getLocalFabric(ctx context.Context, log logging.Logger) (*control.HostFabri
 type getStorageFn func(context.Context, logging.Logger) (*control.HostStorage, error)
 
 func getLocalStorage(ctx context.Context, log logging.Logger) (*control.HostStorage, error) {
-	svc := server.NewStorageControlService(log, config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(log, config.DefaultServer().Engines).
+		WithVMDEnabled() // use vmd if present
 
 	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -399,6 +399,7 @@ func (srv *server) setupGrpc() error {
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
+		EnvVars:         srv.cfg.ClientEnvVars,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
@@ -444,7 +445,7 @@ func (srv *server) registerEvents() {
 			return nil
 		},
 		func(ctx context.Context) error {
-			return srv.mgmtSvc.checkPools(ctx)
+			return srv.mgmtSvc.checkPools(ctx, true)
 		},
 	)
 	srv.sysdb.OnLeadershipLost(func() error {

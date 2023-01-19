@@ -31,12 +31,15 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_INFO("%s = %s\n", envars[i], val);
+		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
+			D_INFO("%s = %s\n", envars[i], "********");
+		else
+			D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -54,7 +57,8 @@ dump_opt(crt_init_options_t *opt)
 
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
-		   char *interface, char *domain, char *port);
+		   char *interface, char *domain, char *port,
+		   char *auth_key);
 
 /* Workaround for CART-890 */
 static void
@@ -524,6 +528,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char		*provider_env;
 	char		*interface_env;
 	char		*domain_env;
+	char		*auth_key_env;
 	char		*tmp;
 	struct timeval	now;
 	unsigned int	seed;
@@ -537,6 +542,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_provider_t	tmp_prov;
 	char		*port_str, *port0, *port1;
 	char		*iface0, *iface1, *domain0, *domain1;
+	char		*auth_key0, *auth_key1;
 	int		num_secondaries = 0;
 	int		i;
 
@@ -548,6 +554,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	iface1 = NULL;
 	domain0 = NULL;
 	domain1 = NULL;
+	auth_key0 = NULL;
+	auth_key1 = NULL;
 
 	/* d_log_init is reference counted */
 	rc = d_log_init();
@@ -605,6 +613,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
+
+		if (opt && opt->cio_auth_key)
+			auth_key_env = opt->cio_auth_key;
+		else
+			auth_key_env = getenv("D_PROVIDER_AUTH_KEY");
 
 		if (opt && opt->cio_provider)
 			provider_env = opt->cio_provider;
@@ -673,6 +686,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
+		rc = __split_arg(auth_key_env, &auth_key0, &auth_key1);
+		if (rc != 0)
+			D_GOTO(unlock, rc);
 
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
@@ -687,7 +703,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		prov_settings_apply(true, primary_provider, opt);
 		crt_gdata.cg_primary_prov = primary_provider;
 
-		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0);
+		rc = crt_na_config_init(true, primary_provider, iface0, domain0,
+					port0, auth_key0);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(unlock, rc);
@@ -722,7 +739,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			prov_settings_apply(false, tmp_prov, opt);
 
-			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1);
+			rc = crt_na_config_init(false, tmp_prov, iface1, domain1,
+						port1, auth_key1);
 			if (rc != 0) {
 				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 				D_GOTO(cleanup, rc);
@@ -806,6 +824,7 @@ out:
 	D_FREE(iface0);
 	D_FREE(domain0);
 	D_FREE(provider_str0);
+	D_FREE(auth_key0);
 
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
@@ -1065,7 +1084,8 @@ out:
 
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
-		   char *interface, char *domain, char *port_str)
+		   char *interface, char *domain, char *port_str,
+		   char *auth_key)
 {
 	struct crt_na_config		*na_cfg;
 	int				rc = 0;
@@ -1082,6 +1102,12 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	if (domain) {
 		D_STRNDUP(na_cfg->noc_domain, domain, 64);
 		if (!na_cfg->noc_domain)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (auth_key) {
+		D_STRNDUP(na_cfg->noc_auth_key, auth_key, 255);
+		if (!na_cfg->noc_auth_key)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -1114,6 +1140,7 @@ out:
 	if (rc != -DER_SUCCESS) {
 		D_FREE(na_cfg->noc_interface);
 		D_FREE(na_cfg->noc_domain);
+		D_FREE(na_cfg->noc_auth_key);
 	}
 	return rc;
 }
@@ -1125,5 +1152,6 @@ void crt_na_config_fini(bool primary, crt_provider_t provider)
 	na_cfg = crt_provider_get_na_config(primary, provider);
 	D_FREE(na_cfg->noc_interface);
 	D_FREE(na_cfg->noc_domain);
+	D_FREE(na_cfg->noc_auth_key);
 	na_cfg->noc_port = 0;
 }

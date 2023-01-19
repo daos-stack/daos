@@ -429,15 +429,15 @@ sys.path.append('site_scons')"""
 
             vals = parse_msg(msg)
 
-            if promote_to_error:
-                vals['category'] = 'error'
-
-            # The build/scons code is mostly clean, so only allow f-string warnings.
-            if scons and msg.symbol != 'consider-using-f-string':
-                vals['category'] = 'error'
-
             # Flag some serious warnings as errors
             if msg.symbol in ('condition-evals-to-constant'):
+                promote_to_error = True
+
+            # All non-scons code should be clean now.
+            if scons:
+                promote_to_error = True
+
+            if promote_to_error:
                 vals['category'] = 'error'
 
             types[vals['category']] += 1
