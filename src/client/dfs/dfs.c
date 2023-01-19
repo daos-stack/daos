@@ -3353,7 +3353,7 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 }
 
 int
-dfs_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
+dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 {
 	if (obj == NULL)
 		return EINVAL;

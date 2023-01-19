@@ -107,11 +107,11 @@ dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);
  * in lost+found.
  */
 int
-dfs_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
+dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize);
 
 /*
- * Internal routine to recreate a POSIX container if it was every corrupted as part of a
- * catastrophic recovery event.
+ * Internal routine to recreate a POSIX container if it was ever corrupted as part of a catastrophic
+ * recovery event.
  */
 int
 dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
