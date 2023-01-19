@@ -279,7 +279,7 @@ func PoolProperties() PoolPropertyMap {
 				Number:      PoolPropertyScrubThresh,
 				Description: "Checksum scrubbing threshold",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid Scrubbing Threshold value %s", s)
+					rbErr := errors.Errorf("invalid Scrubbing Threshold value %q", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
 					if err != nil {
 						return nil, rbErr
