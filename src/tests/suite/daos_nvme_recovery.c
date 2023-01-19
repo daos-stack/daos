@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -689,9 +689,10 @@ nvme_test_simulate_IO_error(void **state)
 
 	/*
 	 * Insert the 4K record again which will induce WRITE Error and
-	 * expected to fail with DER_NVME_IO Error.
+	 * expected to fail with DER_IO Error.
 	 */
 	rx_nr = size / OW_IOD_SIZE;
+	arg->expect_result = -DER_IO;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 
