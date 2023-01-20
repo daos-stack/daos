@@ -91,7 +91,7 @@ class StorageDevice():
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only the this StorageDevice is more performant, False if the other
+            bool: True if only this StorageDevice is more performant, False if the other
                 StorageDevice is more performant, or True if this StorageDevice address is less
                 than the other StorageDevice.
 
