@@ -1,16 +1,16 @@
-# Copyright 2021-2022 Intel Corporation
+# Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for building a base RHEL variant docker image of a DAOS node
 #
 # This Dockerfile accept the following input build arguments:
 # - RHEL_BASE_IMAGE     Base docker image to use (default "rockylinux/rockylinux")
-# - RHEL_BASE_VERSION   Version of the base docker image to use (default "8.4")
-# - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the cache,
+# - RHEL_BASE_VERSION   Version of the base docker image to use (default "8.6")
+# - BUST_CACHE          Manage docker building cache (default "").  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
 # - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
-#                       "https://packages.daos.io/v2.0/CentOS8/packages/x86_64/")
+#                       "https://packages.daos.io/v2.2/EL8/packages/x86_64/")
 # - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
 #                       "https://packages.daos.io/RPM-GPG-KEY")
 # - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication
@@ -18,7 +18,7 @@
 
 # Pull base image
 ARG	RHEL_BASE_IMAGE=rockylinux/rockylinux
-ARG	RHEL_BASE_VERSION=8.4
+ARG	RHEL_BASE_VERSION=8.6
 FROM	$RHEL_BASE_IMAGE:$RHEL_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -58,8 +58,8 @@ RUN	dnf clean all &&                                                            
 # XXX NOTE XXX Variable allowing to build the image without using global --no-cache option and thus
 # XXX NOTE XXX to not update all rpms.  To work properly a random value such as the date of the day
 # XXX NOTE XXX should be given.
-ARG	BUST_CACHE
-ARG	DAOS_REPOS="https://packages.daos.io/v2.0/CentOS8/packages/x86_64/"
+ARG	BUST_CACHE=""
+ARG	DAOS_REPOS="https://packages.daos.io/v2.2/EL8/packages/x86_64/"
 ARG	DAOS_GPG_KEYS="https://packages.daos.io/RPM-GPG-KEY"
 ARG	DAOS_REPOS_NOAUTH=""
 RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
