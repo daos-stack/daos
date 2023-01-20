@@ -21,7 +21,7 @@ class DmgSupportCollectLogTest(ControlTestBase):
         :avocado: tags=hw,medium
         :avocado: tags=basic,control,dmg
         :avocado: tags=test_dmg_support_collect_log
-        """        
+        """
         result = self.dmg.support_collect_log()
         status = result["status"]
         self.assertEqual(status, 0, "bad return status")
