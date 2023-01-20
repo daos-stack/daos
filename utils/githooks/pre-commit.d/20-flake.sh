@@ -2,7 +2,7 @@
 
 # Runs flake8 for the DAOS project.
 #
-# Will first check uncomiited code, then either the entire tree or against an entire
+# Will first check uncommitted code, then either the entire tree or against an entire
 # pull request if possible.
 #
 # To get the most out of this hook the 'gh' command should be installed and working.

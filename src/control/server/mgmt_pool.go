@@ -248,6 +248,10 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, err
 	}
 
+	if err := svc.poolCreateAddSystemProps(req); err != nil {
+		return nil, err
+	}
+
 	poolUUID, err := uuid.Parse(req.GetUuid())
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to parse pool UUID %q", req.GetUuid())
@@ -453,6 +457,55 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	}
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) poolCreateAddSystemProps(req *mgmtpb.PoolCreateReq) error {
+	poolSysProps := make(map[uint32]*daos.PoolProperty)
+	for sp := range svc.systemProps.Iter() {
+		pp, found := sp2pp(sp)
+		if !found {
+			continue
+		}
+
+		poolSysProps[pp.Number] = pp
+
+		curVal, err := system.GetUserProperty(svc.sysdb, svc.systemProps, sp.Key.String())
+		if err != nil {
+			return err
+		}
+
+		if err := pp.SetValue(curVal); err != nil {
+			return err
+		}
+
+		svc.log.Debugf("System Property '%+v' converted to Pool Property '%+v'", sp, pp)
+	}
+
+	if len(poolSysProps) == 0 {
+		return nil
+	}
+
+	poolSetProps := make(map[uint32]*mgmtpb.PoolProperty)
+	for _, p := range req.GetProperties() {
+		poolSetProps[p.GetNumber()] = p
+	}
+
+	for k, p := range poolSysProps {
+		if _, found := poolSetProps[k]; found {
+			continue
+		}
+		pbProp := &mgmtpb.PoolProperty{
+			Number: p.Number,
+		}
+		if nv, err := p.Value.GetNumber(); err == nil {
+			pbProp.SetValueNumber(nv)
+		} else {
+			pbProp.SetValueString(p.Value.String())
+		}
+		req.Properties = append(req.Properties, pbProp)
+	}
+
+	return nil
 }
 
 // checkPools iterates over the list of pools in the system to check
