@@ -34,13 +34,8 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False)
 
-        # Run ddb with single mode with -R. i.e., non-interactive mode.
-        self.run_cmd = FormattedParameter("-R", default=True)
-
         # Command to run on the VOS file that contains container, object info, etc.
-        # Specify double quotes in str_format because the command needs to be wrapped
-        # with them.
-        self.single_command = FormattedParameter("\"{}\"")
+        self.single_command = BasicParameter(None, position=2)
 
         # VOS file path.
         self.vos_path = BasicParameter(None, position=1)

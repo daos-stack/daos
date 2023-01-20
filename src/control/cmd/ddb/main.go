@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -41,8 +39,9 @@ type cliOptions struct {
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
 	Args      struct {
-		VosPath vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd  ddbCmdStr  `positional-arg-name:"ddb_command"`
+		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
+		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -120,10 +119,10 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p.ShortDescription = "daos debug tool"
 	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
 a file in the VOS format. It offers both a command line and interactive
-shell mode. If neither a single command or '-f' option is provided, then the tool will
-run in interactive mode. In order to modify the VOS file, the '-w' option
-must be included. If supplied, the VOS file supplied in the first positional
-parameter will be opened before commands are executed.`
+shell mode. If neither a single command or '-f' option is provided, then
+the tool will run in interactive mode. In order to modify the VOS file,
+the '-w' option must be included. If supplied, the VOS file supplied in
+the first positional parameter will be opened before commands are executed.`
 
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
@@ -164,7 +163,7 @@ parameter will be opened before commands are executed.`
 		}
 
 		if opts.Args.RunCmd != "" {
-			return runCmdStr(app, string(opts.Args.RunCmd))
+			return runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
 		}
 
 		return runFileCmds(log, app, opts.CmdFile)
@@ -223,12 +222,6 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 }
 
 // Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
-func runCmdStr(app *grumble.App, run string) error {
-	args, err := shlex.Split(run, true)
-
-	if err != nil {
-		fmt.Printf("Error parsing run command '%s'\n", run)
-		return err
-	}
-	return app.RunCommand(args)
+func runCmdStr(app *grumble.App, cmd string, args ...string) error {
+	return app.RunCommand(append([]string{cmd}, args...))
 }
