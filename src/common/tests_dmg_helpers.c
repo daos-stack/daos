@@ -404,6 +404,12 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 	}
 
+	if (!json_object_object_get_ex(json_pool, "svc_ldr", &tmp)) {
+		D_ERROR("unable to extract pool leader from JSON\n");
+		return -DER_INVAL;
+	}
+	pool_info->mgpi_ldr = json_object_get_int(tmp);
+
 	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
 		return -DER_INVAL;
