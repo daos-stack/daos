@@ -12,10 +12,15 @@ import (
 	"strings"
 )
 
-func listDir() []string {
-	var result []string
+const (
+	defMntPrefix = "/mnt"
+)
 
-	filepath.Walk("/mnt", func(path string, info fs.FileInfo, err error) error {
+func listDir(match string) (result []string) {
+	if strings.HasSuffix(match, "vos-") {
+		match = filepath.Dir(match)
+	}
+	filepath.Walk(match, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			/* ignore error */
 			return nil
@@ -25,12 +30,12 @@ func listDir() []string {
 		}
 		return nil
 	})
-	return result
+	return
 }
 
 func openCompleter(prefix string, args []string) []string {
 	suggestions := []string{"-h", "-w", "--write_mode"}
-	suggestions = append(suggestions, listDir()...)
+	suggestions = append(suggestions, listDir(defMntPrefix)...)
 
 	if len(prefix) > 0 {
 		var newSuggestions []string

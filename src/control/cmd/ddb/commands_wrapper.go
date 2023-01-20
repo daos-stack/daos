@@ -7,55 +7,64 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"runtime"
 	"unsafe"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
+ #cgo CFLAGS: -I${SRCDIR}/../../../ddb/
+ #cgo LDFLAGS: -lddb -lgurt
+
  #include <ddb.h>
  #include <daos_errno.h>
 */
 import "C"
+
+func daosError(rc C.int) error {
+	if rc != 0 {
+		return daos.Status(rc)
+	}
+	return nil
+}
+
+func freeString(s *C.char) {
+	C.free(unsafe.Pointer(s))
+}
+
+// InitDdb initializes the ddb context and returns a closure to finalize it.
+func InitDdb() (*DdbContext, func(), error) {
+	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
+	runtime.LockOSThread()
+
+	if err := daosError(C.ddb_init()); err != nil {
+		runtime.UnlockOSThread()
+		return nil, nil, err
+	}
+
+	ctx := &DdbContext{}
+	C.ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
+
+	return ctx, func() {
+		C.ddb_fini()
+		runtime.UnlockOSThread()
+	}, nil
+}
 
 // DdbContext structure for wrapping the C code context structure
 type DdbContext struct {
 	ctx C.struct_ddb_ctx
 }
 
-// Init initialize DAOS and the context for doing ddb operations
-func (ctx *DdbContext) Init() error {
-	// Must lock to OS thread because vos init/fini uses ABT init and finalize which must be called on the same thread
-	runtime.LockOSThread()
-
-	result := C.ddb_init()
-
-	if result != 0 {
-		return daos.Status(result)
-	}
-	C.ddb_ctx_init(&ctx.ctx) // Initialize with ctx default values
-
-	return nil
-}
-
-// Fini clean up from Init
-func (ctx *DdbContext) Fini() {
-	C.ddb_fini()
-	runtime.UnlockOSThread()
-}
-
 func ddbLs(ctx *DdbContext, path string, recursive bool) error {
 	/* Set up the options */
 	options := C.struct_ls_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.recursive = C.bool(recursive)
 	/* Run the c code command */
-	result := C.ddb_run_ls(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
 }
 
 func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
