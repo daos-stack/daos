@@ -1,5 +1,5 @@
 """
-(C) Copyright 2022 Intel Corporation.
+(C) Copyright 2022-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -129,6 +129,28 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             abs(scm_unused_bytes - self.scm_avail_bytes), delta_bytes,
             msg.format(scm_unused_bytes, self.scm_avail_bytes, delta_bytes))
 
+    def get_recycle_pools_delta_bytes(self, pool_count):
+        """ Return the allowed size growth of metadata """
+
+        scm_hugepages_disabled = self.params.get(
+            "scm_hugepages_disabled",
+            "/run/server_config/engines/0/storage/0/*",
+            False)
+
+        # These value are empirical ones: management of RAM page fs by the Linux kernel is not
+        # easily predictable.   More details could be found in the comments of the JIRA ticket
+        # DAOS-11987.
+        delta_rank_bytes = 0
+        if scm_hugepages_disabled:
+            delta_bytes_max = 8 << 20   # 8 MiB
+            page_size = 4 << 10         # 4 KiB
+            delta_rank_bytes = min(pool_count * 2 * page_size, delta_bytes_max)
+        else:
+            page_size = 2 << 20         # 2 MiB
+            delta_rank_bytes = 4 * page_size
+
+        return self.ranks_count * delta_rank_bytes
+
     def test_recycle_pools(self):
         """Test the pool creation and destruction
 
@@ -144,30 +166,36 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """
         self.log.info("Test pool creation and destruction")
 
-        for index in range(10):
-            self.log.info("Creating pool %d", index)
+        pool_count = self.params.get("pool_count", "/run/test_recycle_pools/*", 20)
+        delta_bytes = self.get_recycle_pools_delta_bytes(pool_count)
+        scm_avail_bytes = self.get_available_bytes()
+        self.log.debug(
+            "{pool_count} pools to create/destrory with SCM storage"
+            " of {scm_avail_bytes} Bytes (max metadata size of {delta_bytes} Bytes)")
+        for pool_id in range(pool_count):
+            self.log.info("Creating pool %d", pool_id)
             create_time = self.create_one_pool()
             self.log.debug(
                 "Created one pool with 100%% of the available storage in %f seconds", create_time)
 
-            self.log.info("Checking size of pool %d", index)
+            self.log.info("Checking size of pool %d", pool_id)
             self.pool[0].get_info()
             tier_bytes = self.pool[0].info.pi_space.ps_space.s_total
             msg = r"Invalid SCM size: want={}, got={}, delta={}"
             self.assertLessEqual(
-                abs(self.scm_avail_bytes - tier_bytes[0]), self.delta_bytes,
-                msg.format(self.scm_avail_bytes, tier_bytes[0], self.delta_bytes))
+                abs(scm_avail_bytes - tier_bytes[0]), delta_bytes,
+                msg.format(scm_avail_bytes, tier_bytes[0], delta_bytes))
             self.assertEqual(
                 0, tier_bytes[1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1]))
 
-            self.destroy_one_pool(index)
+            self.destroy_one_pool(pool_id)
 
-            self.log.info("Checking size of available storage at iteration %d", index)
+            self.log.info("Checking size of available storage at iteration %d", pool_id)
             scm_bytes = self.get_available_bytes()
             msg = r"Invalid SCM size: want={}, got={}, delta={}"
             self.assertLessEqual(
-                abs(self.scm_avail_bytes - scm_bytes), self.delta_bytes,
-                msg.format(self.scm_avail_bytes, scm_bytes, self.delta_bytes))
+                abs(scm_avail_bytes - scm_bytes), delta_bytes,
+                msg.format(scm_avail_bytes, scm_bytes, delta_bytes))
 
     def check_pool_distribution(self):
         """Check if the size used on each hosts is more or less uniform
@@ -263,7 +291,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             0, tier_bytes[1][1], "Invalid SMD size: want=0, got={}".format(tier_bytes[1][1]))
 
         self.log.info("Checking size of the second pool with the size of the first pool")
-        scm_delta_bytes = self.ranks_size * self.max_scm_metadata_bytes + self.delta_bytes
+        scm_delta_bytes = self.ranks_count * self.max_scm_metadata_bytes + self.delta_bytes
         msg = r"Invalid SCM size: want={}, got={}, delta={}"
         self.assertLessEqual(
             abs(tier_bytes[0][0] - tier_bytes[1][0]), scm_delta_bytes,
