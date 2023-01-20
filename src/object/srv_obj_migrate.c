@@ -577,7 +577,8 @@ mrone_recx_daos_vos_internal(struct migrate_one *mrone, bool daos2vos, int shard
 			daos_recx_t *recx;
 
 			recx = &iod->iod_recxs[k];
-			D_ASSERT(recx->rx_nr <= cell_nr);
+			D_ASSERTF(recx->rx_nr <= cell_nr, DF_U64"/"DF_U64"cell nr %d "DF_UOID"\n",
+				  recx->rx_idx, recx->rx_nr, cell_nr, DP_UOID(mrone->mo_oid));
 			if (daos2vos)
 				recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
 								   stripe_nr,
