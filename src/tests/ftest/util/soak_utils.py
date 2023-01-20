@@ -366,7 +366,7 @@ def display_job_failures(self):
     self.log.debug("="*80)
     self.log.debug("These are the job logs for failed jobs")
     for id in self.all_failed_jobs:
-        cmd = f"ls -latr {self.outputsoakdir}/pass*/*_{id}_*"
+        cmd = f"ls -latr {self.outputsoak_dir}/pass*/*_{id}_*"
         run_command(cmd, timeout=120)
     self.log.debug("="*80)
     self.log.debug("="*80)
