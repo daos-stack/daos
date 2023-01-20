@@ -120,6 +120,7 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=rebuild,pool,rebuild_tests
         :avocado: tags=RbldBasic,test_simple_rebuild
         """

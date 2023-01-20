@@ -43,6 +43,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_overwrite_acl_inputs,test_acl_overwrite_invalid_inputs
         """
@@ -81,6 +82,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_overwrite_acl_file,test_overwrite_invalid_acl_file
         """
@@ -117,6 +119,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command performs as
             expected with valid ACL file provided.
 
+        :avocado: tags=daos_cmd
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_overwrite_acl_file,test_overwrite_valid_acl_file
         """
@@ -144,6 +147,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command fails with
             no permission -1001 when user doesn't have the right permissions.
 
+        :avocado: tags=daos_cmd
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_overwrite_acl_noperms,test_no_user_permissions
         """

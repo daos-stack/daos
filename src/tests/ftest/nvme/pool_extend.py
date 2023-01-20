@@ -139,6 +139,7 @@ class NvmePoolExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
+        :avocado: tags=daos_cmd
         :avocado: tags=nvme,checksum,nvme_osa,rebuild
         :avocado: tags=NvmePoolExtend,test_nvme_pool_extend
         """

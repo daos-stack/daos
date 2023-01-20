@@ -220,6 +220,7 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             DAOS-6233: add tests for daos filesystem copy
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy,test_dm_posix_types_fs_copy
         """

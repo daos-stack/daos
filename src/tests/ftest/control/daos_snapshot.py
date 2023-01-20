@@ -98,6 +98,7 @@ class DaosSnapshotTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=control,snap,snapshot
         :avocado: tags=daos_snapshot,test_create_list_delete
         """
@@ -131,6 +132,7 @@ class DaosSnapshotTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=container,snap,snapshot
         :avocado: tags=daos_snapshot_range,test_epcrange
         """

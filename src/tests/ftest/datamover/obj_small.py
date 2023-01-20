@@ -127,6 +127,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
             DAOS-6858: Verify cloning a small container.
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=datamover,daos_cont_clone
         :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
         """

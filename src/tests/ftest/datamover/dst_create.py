@@ -301,6 +301,7 @@ class DmvrDstCreate(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=datamover,daos_fs_copy,dfs,ior
         :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         :avocado: tags=test_dm_dst_create_fs_copy_posix_dfs

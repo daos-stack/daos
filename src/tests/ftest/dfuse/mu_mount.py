@@ -31,6 +31,7 @@ class DfuseMUMount(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_mu
+        :avocado: tags=daos_cmd
         :avocado: tags=DfuseMUMount,test_dfuse_mu_mount
         """
         # Create a pool and container for dfuse

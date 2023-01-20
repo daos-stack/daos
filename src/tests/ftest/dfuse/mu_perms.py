@@ -36,6 +36,7 @@ class DfuseMUPerms(DfuseTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfuse_mu,verify_perms
+        :avocado: tags=daos_cmd
         :avocado: tags=DfuseMUPerms,test_dfuse_mu_perms
         """
         # Use a single client for file/dir operations

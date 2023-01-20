@@ -40,6 +40,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_update_acl_inputs,test_acl_update_invalid_inputs
         """
@@ -88,6 +89,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_update_invalid_acl,test_update_invalid_acl
         """
@@ -127,6 +129,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_update_acl,test_update_acl_file
         """
@@ -180,6 +183,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_update_acl_noperms,test_no_user_permissions
         """

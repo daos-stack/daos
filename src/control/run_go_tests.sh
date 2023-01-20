@@ -163,6 +163,7 @@ DAOS_BASE=${DAOS_BASE:-${SL_SRC_DIR}}
 export PATH=$SL_PREFIX/bin:$PATH
 GO_TEST_XML="$DAOS_BASE/test_results/run_go_tests.xml"
 GO_TEST_RUNNER=$(get_test_runner)
+GO_TEST_EXTRA_ARGS=${*:-""}
 
 controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
@@ -182,7 +183,7 @@ set +e
 LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
 CGO_LDFLAGS="$CGO_LDFLAGS" \
 CGO_CFLAGS="$CGO_CFLAGS" \
-	$GO_TEST_RUNNER
+	$GO_TEST_RUNNER "$GO_TEST_EXTRA_ARGS"
 testrc=$?
 popd >/dev/null
 

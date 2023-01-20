@@ -163,6 +163,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
+        :avocado: tags=daos_cmd
         :avocado: tags=telemetry
         :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """
@@ -335,6 +336,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
+        :avocado: tags=daos_cmd
         :avocado: tags=telemetry,control
         :avocado: tags=test_ior_dtx_telemetry,test_ior_dtx_telemetry_metrics
         """
