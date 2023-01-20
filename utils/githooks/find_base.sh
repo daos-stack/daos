@@ -5,11 +5,9 @@ if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
     exit 1
 fi
 
-ORIGIN="origin"
-if [ -n "$DAOS_ORIGIN" ]; then
-    ORIGIN="$DAOS_ORIGIN"
-else
-    echo "Using origin as remote repo.  If this is incorrect, set DAOS_ORIGIN in environment"
+ORIGIN="${DAOS_ORIGIN:=origin}"
+if [ "$ORIGIN" == "origin" ]; then
+    echo "  Using origin as remote repo.  If this is incorrect, set DAOS_ORIGIN in environment"
 fi
 
 # Try and use the gh command to work out the target branch, or if not installed
@@ -21,9 +19,9 @@ if command -v gh > /dev/null 2>&1; then
     fi
 else
     # With no 'gh' command installed then check against origin/master.
-    echo "  Install gh command to auto-detect target branch, assuming origin/master."
     # shellcheck disable=SC2034
     TARGET="$ORIGIN"/master
+    echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi
 
 # get the actual commit in $TARGET that is our base, if we are working on a commit in the history

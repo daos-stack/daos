@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -50,6 +50,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -2646,7 +2647,7 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], threshold, data["timeout"], test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2808,7 +2809,7 @@ class Launch():
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
-                       timeout):
+                       timeout, test=None):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2820,6 +2821,7 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
             timeout (int): number of seconds to wait for the command to complete.
+            test (TestInfo): the test information
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2859,9 +2861,9 @@ class Launch():
         # Move the test files to the test-results directory on this host
         return_code |= self._move_files(file_hosts, source, pattern, destination, depth, timeout)
 
-        if "core files" in summary:
+        if test and "core files" in summary:
             # Process the core files
-            return_code |= self._process_core_files(os.path.split(destination)[0])
+            return_code |= self._process_core_files(os.path.split(destination)[0], test)
 
         return return_code
 
@@ -3099,11 +3101,12 @@ class Launch():
 
         return return_code
 
-    def _process_core_files(self, test_job_results):
+    def _process_core_files(self, test_job_results, test):
         """Generate a stacktrace for each core file detected.
 
         Args:
             test_job_results (str): the location of the core files
+            test (TestInfo): the test information
 
         Returns:
             int: status code: 2048 = Core file exist; 256 = failure; 0 = success
@@ -3123,11 +3126,14 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        if corefiles_processed > 0:
+        if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
-
+        if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
+            message = "No core files detected when expected"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 256
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
