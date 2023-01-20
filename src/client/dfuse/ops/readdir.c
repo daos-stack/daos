@@ -134,7 +134,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
-		DFUSE_TRA_DEBUG(oh, "Ref was %d", oldref);
+		DFUSE_TRA_DEBUG(hdl, "Ref was %d", oldref);
 		D_GOTO(unlock, 0);
 	}
 
@@ -295,7 +295,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
 
 	if (oh->doh_rd == NULL) {
-		if (oh->doh_ie->ie_rd_hdl) {
+		if (oh->doh_ie->ie_rd_hdl &&
+		    dfuse_cache_get_valid(oh->doh_ie, oh->doh_ie->ie_dfs->dfc_dentry_timeout,
+					  NULL)) {
 			oh->doh_rd = oh->doh_ie->ie_rd_hdl;
 			atomic_fetch_add_relaxed(&oh->doh_rd->drh_ref, 1);
 			DFUSE_TRA_DEBUG(oh, "Sharing readdir handle with existing reader");
@@ -308,8 +310,10 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 
-			if (oh->doh_rd->dre_caching)
+			if (oh->doh_rd->dre_caching) {
+				dfuse_cache_set_time(oh->doh_ie);
 				oh->doh_ie->ie_rd_hdl = oh->doh_rd;
+			}
 		}
 	}
 
@@ -493,7 +497,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 		/* Populate dir */
 		for (i = hdl->drh_dre_index; i < hdl->drh_dre_last_index; i++) {
-			struct dfuse_readdir_entry *dre   = &hdl->drh_dre[i];
+			struct dfuse_readdir_entry *dre    = &hdl->drh_dre[i];
 			struct stat                 _stbuf = {0};
 			struct stat                *stbuf  = &_stbuf;
 			daos_obj_id_t               oid;
@@ -635,9 +639,9 @@ out_reset:
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_projection_info *fs_handle  = fuse_req_userdata(req);
 	char                         *reply_buff = NULL;
-	int                           rc = EIO;
+	int                           rc         = EIO;
 
 	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readir_number, 1) == 0,
 		  "Multiple readdir per handle");
@@ -655,8 +659,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		size = 0;
 		D_GOTO(out, rc = 0);
 	}
-
-	size = 1024;
 
 	D_ALLOC(reply_buff, size);
 	if (reply_buff == NULL)
