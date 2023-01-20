@@ -109,8 +109,8 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	if (store != NULL)
 		umm_pool->up_store = *store;
 
-	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ...\n",
-		path, poolsize, store->stor_size);
+	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ...\n", path, poolsize,
+		store != NULL ? store->stor_size : 0);
 	switch (daos_md_backend) {
 	case DAOS_MD_PMEM:
 		pop = pmemobj_create(path, layout_name, poolsize, mode);

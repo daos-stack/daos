@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,7 +94,6 @@ bool		dss_helper_pool;
 bool		dss_nvme_bypass_health_check;
 
 static daos_epoch_t	dss_start_epoch;
-static bool		md_on_ssd_enabled;
 
 unsigned int
 dss_ctx_nr_get(void)
@@ -1183,8 +1182,8 @@ enum {
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
-	XD_INIT_SYS_DB,
 	XD_INIT_NVME,
+	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
 };
@@ -1193,7 +1192,7 @@ static void
 dss_sys_db_fini(void)
 {
 
-	if (!md_on_ssd_enabled) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		vos_db_fini();
 		return;
 	}
@@ -1216,11 +1215,11 @@ dss_srv_fini(bool force)
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
-	case XD_INIT_NVME:
-		bio_nvme_fini();
-		/* fall through */
 	case XD_INIT_SYS_DB:
 		dss_sys_db_fini();
+		/* fall through */
+	case XD_INIT_NVME:
+		bio_nvme_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
@@ -1246,17 +1245,19 @@ dss_srv_fini(bool force)
 }
 
 static int
-dss_sys_db_init(struct sys_db **db)
+dss_sys_db_init()
 {
 	int	 rc;
 	/* walkaround*/
 	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
 
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
-	if (!md_on_ssd_enabled) {
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = vos_db_init(dss_storage_path);
-		if (rc == 0)
-			*db = vos_db_get();
+		if (rc)
+			return rc;
+		rc = smd_init(vos_db_get());
+		if (rc)
+			vos_db_fini();
 		return rc;
 	}
 
@@ -1266,8 +1267,12 @@ dss_sys_db_init(struct sys_db **db)
 	}
 
 	rc = lmm_db_init(lmm_db_path);
-	if (rc == 0)
-		*db = lmm_db_get();
+	if (rc)
+		return rc;
+
+	rc = smd_init(lmm_db_get());
+	if (rc)
+		lmm_db_fini();
 
 	return rc;
 }
@@ -1277,7 +1282,6 @@ dss_srv_init(void)
 {
 	int		 rc;
 	bool		 started = true;
-	struct sys_db	*db;
 
 	xstream_data.xd_init_step  = XD_INIT_NONE;
 	xstream_data.xd_ult_signal = false;
@@ -1322,17 +1326,17 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = dss_sys_db_init(&db);
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+	xstream_data.xd_init_step = XD_INIT_NVME;
+
+	rc = dss_sys_db_init();
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, db,
-			   dss_nvme_bypass_health_check);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */

@@ -605,12 +605,17 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 uint64_t
 default_wal_sz(uint64_t meta_sz)
 {
+	return meta_sz * 2;
+
+	/* REVISIT: enable the below #if code when checkpointing is enabled */
+#if 0
 	if (meta_sz <= (2 * default_cluster_sz()))
 		return meta_sz;
 	else if (meta_sz <= (100ULL << 30))
 		return meta_sz / 2;
 
 	return (50ULL << 30);
+#endif
 }
 
 int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_sz,
@@ -1297,7 +1302,19 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	return rc;
 }
 
-struct bio_io_context *bio_mc2data(struct bio_meta_context *mc)
+struct bio_io_context *
+bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type)
 {
-	return mc->mc_data;
+	D_ASSERT(mc != NULL);
+	switch (type) {
+	case SMD_DEV_TYPE_DATA:
+		return mc->mc_data;
+	case SMD_DEV_TYPE_META:
+		return mc->mc_meta;
+	case SMD_DEV_TYPE_WAL:
+		return mc->mc_wal;
+	default:
+		D_ASSERTF(0, "Invalid device type:%u\n", type);
+		return NULL;
+	}
 }

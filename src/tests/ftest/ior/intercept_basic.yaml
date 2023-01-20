@@ -23,7 +23,8 @@ ior:
     np: 32
   test_file: testFile
   repetitions: 3
-  flags: "-v -D 60 -w -r -R"
+  sw_deadline: 60
+  flags: "-v -w -r -R"
   dfs_oclass: 'SX'
   transfer_size: '1M'
   block_size: '100G'

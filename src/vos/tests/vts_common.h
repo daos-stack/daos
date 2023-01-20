@@ -38,9 +38,10 @@
 #define VPOOL_256M	(256ULL << 20)
 #define VPOOL_1G	(1ULL << 30)
 #define VPOOL_2G	(2ULL << 30)
+#define VPOOL_3G	(3ULL << 30)
 #define VPOOL_10G	(10ULL << 30)
 
-#define VPOOL_SIZE	VPOOL_2G
+#define VPOOL_SIZE	VPOOL_3G
 
 #define	VP_OPS 10
 
@@ -49,6 +50,13 @@ extern char	vos_path[STORAGE_PATH_LEN+1];
 extern int	gc;
 extern bool	g_force_checksum;
 extern bool	g_force_no_zero_copy;
+
+/**
+ * The last key stored in vos/tests/vts_io.c
+ * It can be used for punching or overwrite
+ */
+extern char	last_dkey[];
+extern char	last_akey[];
 
 enum vts_ops_type {
 	CREAT,

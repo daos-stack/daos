@@ -32,43 +32,49 @@
 #include <daos_pool.h>
 #include <daos_srv/policy.h>
 
+static void
+vos_iod2bsgl(struct umem_store *store, struct umem_store_iod *iod, struct bio_sglist *bsgl)
+{
+	struct bio_iov	*biov;
+	bio_addr_t	 addr = { 0 };
+	uint32_t	 off_bytes;
+	int		 i;
+
+	off_bytes = store->stor_hdr_blks * store->stor_blk_size;
+	for (i = 0; i < iod->io_nr; i++) {
+		biov = &bsgl->bs_iovs[i];
+
+		bio_addr_set(&addr, DAOS_MEDIA_NVME, iod->io_regions[i].sr_addr + off_bytes);
+		bio_iov_set(biov, addr, iod->io_regions[i].sr_size);
+	}
+	bsgl->bs_nr_out = bsgl->bs_nr;
+}
+
 static int
 vos_meta_rwv(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_t *sgl, bool update)
 {
 	struct bio_sglist	bsgl;
-	struct bio_iov		local_biov, *biov;
-	bio_addr_t		addr = { 0 };
-	uint32_t		off_bytes;
-	int			i, rc;
+	struct bio_iov		local_biov;
+	int			rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	D_ASSERT(iod->io_nr > 0);
 	D_ASSERT(sgl->sg_nr > 0);
-	off_bytes = store->stor_hdr_blks * store->stor_blk_size;
 
 	if (iod->io_nr == 1) {
-		bio_addr_set(&addr, DAOS_MEDIA_NVME, iod->io_region.sr_addr + off_bytes);
-		bio_iov_set(&local_biov, addr, iod->io_region.sr_size);
 		bsgl.bs_iovs = &local_biov;
-		bsgl.bs_nr = bsgl.bs_nr_out = 1;
+		bsgl.bs_nr = 1;
 	} else {
 		rc = bio_sgl_init(&bsgl, iod->io_nr);
 		if (rc)
 			return rc;
-
-		for (i = 0; i < iod->io_nr; i++) {
-			biov = &bsgl.bs_iovs[i];
-
-			bio_addr_set(&addr, DAOS_MEDIA_NVME,
-				     iod->io_regions[i].sr_addr + off_bytes);
-			bio_iov_set(biov, addr, iod->io_regions[i].sr_size);
-		}
 	}
+	vos_iod2bsgl(store, iod, &bsgl);
 
 	if (update)
-		rc = bio_meta_writev(store->stor_priv, &bsgl, sgl);
+		rc = bio_writev(bio_mc2ioc(store->stor_priv, SMD_DEV_TYPE_META), &bsgl, sgl);
 	else
-		rc = bio_meta_readv(store->stor_priv, &bsgl, sgl);
+		rc = bio_readv(bio_mc2ioc(store->stor_priv, SMD_DEV_TYPE_META), &bsgl, sgl);
 
 	if (iod->io_nr > 1)
 		bio_sgl_fini(&bsgl);
@@ -88,6 +94,57 @@ vos_meta_writev(struct umem_store *store, struct umem_store_iod *iod, d_sg_list_
 	return vos_meta_rwv(store, iod, sgl, true);
 }
 
+static int
+vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_handle_t *fh)
+{
+	struct bio_desc		*biod;
+	struct bio_sglist	*bsgl;
+	int			 rc;
+
+	D_ASSERT(store && store->stor_priv != NULL);
+	D_ASSERT(iod->io_nr > 0);
+	D_ASSERT(fh != NULL);
+
+	biod = bio_iod_alloc(bio_mc2ioc(store->stor_priv, SMD_DEV_TYPE_META),
+			     NULL, 1, BIO_IOD_TYPE_UPDATE);
+	if (biod == NULL)
+		return -DER_NOMEM;
+
+	bsgl = bio_iod_sgl(biod, 0);
+	rc = bio_sgl_init(bsgl, iod->io_nr);
+	if (rc)
+		goto free;
+
+	vos_iod2bsgl(store, iod, bsgl);
+
+	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
+	if (rc)
+		goto free;
+
+	fh->cookie = (uint64_t)biod;
+	return 0;
+free:
+	bio_iod_free(biod);
+	return rc;
+}
+
+static int
+vos_meta_flush_copy(daos_handle_t fh, d_sg_list_t *sgl)
+{
+	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
+
+	D_ASSERT(sgl->sg_nr > 0);
+	return bio_iod_copy(biod, sgl, 1);
+}
+
+static int
+vos_meta_flush_post(daos_handle_t fh, int err)
+{
+	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
+
+	return bio_iod_post(biod, err);
+}
+
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
@@ -103,10 +160,12 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 }
 
 static inline int
-vos_wal_replay(struct umem_store *store, int (*replay_cb)(uint64_t tx_id, struct umem_action *act))
+vos_wal_replay(struct umem_store *store,
+	       int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *arg),
+	       void *arg)
 {
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_replay(store->stor_priv, replay_cb);
+	return bio_wal_replay(store->stor_priv, replay_cb, arg);
 }
 
 static inline int
@@ -119,6 +178,9 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 struct umem_store_ops vos_store_ops = {
 	.so_read	= vos_meta_readv,
 	.so_write	= vos_meta_writev,
+	.so_flush_prep	= vos_meta_flush_prep,
+	.so_flush_copy	= vos_meta_flush_copy,
+	.so_flush_post	= vos_meta_flush_post,
 	.so_wal_reserv	= vos_wal_reserve,
 	.so_wal_submit	= vos_wal_commit,
 	.so_wal_replay	= vos_wal_replay,

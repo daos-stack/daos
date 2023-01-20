@@ -118,16 +118,17 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
-	rc = lw_tx_begin(hdl);
-	if (rc) {
-		err = ENOMEM;
-		goto out2;
-	}
-
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
 		heap_base = (char *)hdl->do_base + hdl->do_phdr->dp_heap_offset;
 		heap_size = hdl->do_phdr->dp_heap_size;
+
+		rc = lw_tx_begin(hdl);
+		if (rc) {
+			err = ENOMEM;
+			goto out2;
+		}
+
 		rc = heap_init(heap_base, heap_size, &hdl->do_phdr->dp_heap_size,
 			       &hdl->p_ops);
 		if (rc) {
@@ -137,8 +138,24 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		persist_hdr = 1;
 	} else {
 		hdl->do_phdr = hdl->do_base;
+
+		/* REVISIT: checkpoint case */
+		D_ASSERT(store != NULL);
+		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb,
+							    hdl->do_base);
+		if (rc) {
+			err = rc;
+			goto out2;
+		}
+
 		heap_base = (char *)hdl->do_base + hdl->do_phdr->dp_heap_offset;
 		heap_size = hdl->do_phdr->dp_heap_size;
+
+		rc = lw_tx_begin(hdl);
+		if (rc) {
+			err = ENOMEM;
+			goto out2;
+		}
 	}
 
 	hdl->do_stats = stats_new(hdl);
@@ -243,6 +260,7 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 dav_obj_t *
 dav_obj_open(const char *path, int flags, struct umem_store *store)
 {
+	size_t size;
 	int fd;
 	dav_obj_t *hdl;
 	struct stat statbuf;
@@ -257,13 +275,27 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 		close(fd);
 		return NULL;
 	}
+	size = (size_t)statbuf.st_size;
 
-	hdl = dav_obj_open_internal(fd, 0, (size_t)statbuf.st_size, path, store);
+	if (store->stor_priv != NULL) {
+		if (ftruncate(fd, 0) == -1) {
+			close(fd);
+			return NULL;
+		}
+
+		if (ftruncate(fd, (off_t)size) == -1) {
+			close(fd);
+			errno = ENOSPC;
+			return NULL;
+		}
+	}
+
+	hdl = dav_obj_open_internal(fd, 0, size, path, store);
 	if (hdl == NULL) {
 		close(fd);
 		return NULL;
 	}
-	DAV_DBG("pool %s is open, size="DF_U64"", hdl->do_path, (size_t)statbuf.st_size);
+	DAV_DBG("pool %s is open, size="DF_U64"", hdl->do_path, size);
 	return hdl;
 }
 
@@ -279,9 +311,7 @@ dav_obj_close(dav_obj_t *hdl)
 	heap_cleanup(hdl->do_heap);
 	D_FREE(hdl->do_heap);
 
-	lw_tx_begin(hdl);
 	stats_delete(hdl, hdl->do_stats);
-	lw_tx_end(hdl, NULL);
 
 	munmap(hdl->do_base, hdl->do_size);
 	close(hdl->do_fd);

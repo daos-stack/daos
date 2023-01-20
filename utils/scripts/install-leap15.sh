@@ -39,6 +39,7 @@ dnf --nodocs install \
     liblz4-devel \
     libnuma-devel \
     libopenssl-devel \
+    libprotobuf-c-devel \
     libtool \
     libunwind-devel \
     libuuid-devel \

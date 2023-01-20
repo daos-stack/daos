@@ -213,6 +213,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -393,6 +394,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -472,6 +474,7 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs

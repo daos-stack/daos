@@ -14,7 +14,6 @@ include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 def _scan_go_file(node, env, _path):
     """Scanner for go code"""
-
     src_dir = os.path.dirname(str(node))
     includes = []
     path_name = str(node)[12:]
@@ -50,7 +49,7 @@ def _scan_go_file(node, env, _path):
     return includes
 
 
-def _setup_go(env):
+def generate(env):
     """Setup the go compiler"""
 
     def _check_go_version(context):
@@ -96,11 +95,6 @@ def _setup_go(env):
         env['ENV']['GOCACHE'] = os.environ['GOCACHE']
 
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
-
-
-def generate(env):
-    """Add daos specific methods to environment"""
-    env.AddMethod(_setup_go, 'd_setup_go')
 
 
 def exists(_env):

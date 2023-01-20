@@ -75,6 +75,9 @@ def find_values(obj, keys, key=None, val_type=str):
         obj (obj): a python object; initially the dictionary to search
         keys (list): list of keys to find their matching list values
         key (str, optional): key to check for a match. Defaults to None.
+        val_type (object, optional): object type to allow when finding values. A list of object
+            types can be used to filter on multiple object types. If a value found is not of type
+            val_type it will not be included in the returned dictionary.
 
     Returns:
         dict: a dictionary of each matching key and its value
@@ -204,14 +207,13 @@ class YamlUpdater():
         """Determine the replacement values for the placeholders in the test yaml.
 
         Args:
-            logger (logger): logger for the messages produced by this method
-            yaml_file (_type_): _description_
+            yaml_file (str): the test yaml file
 
         Raises:
             YamlException: if there was a problem replacing any of the placeholders
 
         Returns:
-            dict: _description_
+            dict: a dictionary of existing test yaml entry keys and their replacement values
 
         """
         replacements = {}
@@ -273,16 +275,14 @@ class YamlUpdater():
                     replacements, placeholder_data, key, replacement, node_mapping)
 
             elif key == "bdev_list":
-                # Individual bdev_list NVMe PCI addresses in the test yaml
-                # file are replaced with the new NVMe PCI addresses in the
-                # order they are found, e.g.
+                # Individual bdev_list NVMe PCI addresses in the test yaml file are replaced with
+                # the new NVMe PCI addresses in the order they are found, e.g.
                 #   0000:81:00.0 --> 0000:12:00.0
                 self._get_storage_replacement(replacements, placeholder_data, key, replacement)
 
             else:
-                # Timeouts - replace the entire timeout entry (key + value)
-                # with the same key with its original value multiplied by the
-                # user-specified value, e.g.
+                # Timeouts - replace the entire timeout entry (key + value) with the same key with
+                # its original value multiplied by the user-specified value, e.g.
                 #   timeout: 60 -> timeout: 600
                 self._get_timeout_replacement(replacements, placeholder_data, key, replacement)
 
@@ -371,13 +371,13 @@ class YamlUpdater():
 
     @staticmethod
     def _get_storage_replacement(replacements, placeholder_data, key, replacement):
-        """_summary_.
+        """Add replacements for the storage entries in the test yaml file.
 
         Args:
-            replacements (dict): _description_
-            placeholder_data (dict): _description_
-            key (str): _description_
-            replacement (list): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
+            placeholder_data (dict): test yaml values requesting replacements
+            key (str): test yaml entry key
+            replacement (list): available values to use as replacements for the test yaml entries
         """
         for placeholder in placeholder_data[key]:
             bdev_key = f"\"{placeholder}\""
@@ -389,13 +389,13 @@ class YamlUpdater():
                 replacements[bdev_key] = None
 
     def _get_timeout_replacement(self, replacements, placeholder_data, key, replacement):
-        """_summary_.
+        """Add replacements for the timeout entries in the test yaml file.
 
         Args:
-            replacements (dict): _description_
-            placeholder_data (dict): _description_
-            key (str): _description_
-            replacement (list): _description_
+            replacements (dict): dictionary in which to add replacements for test yaml entries
+            placeholder_data (dict): test yaml values requesting replacements
+            key (str): test yaml entry key
+            replacement (list): available values to use as replacements for the test yaml entries
         """
         if isinstance(placeholder_data[key], int):
             timeout_key = r":\s+".join([key, str(placeholder_data[key])])

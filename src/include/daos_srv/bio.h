@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -418,14 +418,12 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] mem_size		SPDK memory alloc size when using primary mode
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
- * \param[IN] db		persistent database to store SMD data
  * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
-		  unsigned int hugepage_size, unsigned int tgt_nr,
-		  struct sys_db *db, bool bypass);
+		  unsigned int hugepage_size, unsigned int tgt_nr, bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -957,8 +955,8 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
  */
 int bio_mc_close(struct bio_meta_context *mc);
 
-/* Function to return current data io context */
-struct bio_io_context *bio_mc2data(struct bio_meta_context *mc);
+/* Function to return io context for data/meta/wal blob */
+struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type);
 
 /*
  * Reserve WAL log space for current transaction
@@ -999,11 +997,13 @@ int bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2);
  *
  * \param[in]	mc		BIO meta context
  * \param[in]	replay_cb	Replay callback for individual action
+ * \param[in]	arg		The callback function's private data
  *
  * \return			Zero on success, negative value on error
  */
 int bio_wal_replay(struct bio_meta_context *mc,
-		   int (*replay_cb)(uint64_t tx_id, struct umem_action *act));
+		   int (*replay_cb)(uint64_t tx_id, struct umem_action *act, void *data),
+		   void *arg);
 
 /*
  * Flush back WAL header
@@ -1035,28 +1035,6 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  * \return			Zero on success, negative value on error
  */
 int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
-
-/*
- * Read meta blob
- *
- * \param[in]	mc		BIO meta context
- * \param[in]	bsgl		BIO SGL describing the IOVs to be read
- * \param[out]	sgl		SGL for the read buffer
- *
- * \return			Zero on success, negative value on error
- */
-int bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
-
-/*
- * Read meta blob
- *
- * \param[in]	mc		BIO meta context
- * \param[in]	bsgl		BIO SGL describing the IOVs to be written
- * \param[in]	sgl		SGL for the data to be written
- *
- * \return			Zero on success, negative value on error
- */
-int bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl);
 
 /*
  * Query meta capacity & meta block size & meta blob header blocks.

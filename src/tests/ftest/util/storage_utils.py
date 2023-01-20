@@ -91,7 +91,7 @@ class StorageDevice():
             other (StorageDevice): the other object to compare
 
         Returns:
-            bool: True if only the this StorageDevice is more performant, False if the other
+            bool: True if only this StorageDevice is more performant, False if the other
                 StorageDevice is more performant, or True if this StorageDevice address is less
                 than the other StorageDevice.
 
@@ -187,7 +187,9 @@ class StorageInfo():
     TIER_NVME_PRIORITY = (1, 2, 3, 3, 2)
     TYPE_SEARCH = OrderedDict(
         [
-            ('PMEM', ['ndctl list -c -v']),
+            ('PMEM', [
+                'ndctl list -c -v',
+                "grep -v 'uuid'"]),
             ('NVMe', [
                 'lspci -vmm -D',
                 "grep -E '^(Slot|Class|Device|NUMANode):'",
@@ -249,6 +251,20 @@ class StorageInfo():
 
         """
         return list(filter(StorageDevice.is_controller.fget, self.devices))
+
+    def device_dict(self):
+        """Get the scanned devices as a dictionary.
+
+        Returns:
+            dict: device type keys with device information string values
+
+        """
+        data = {}
+        for key, name in {'PMEM': 'pmem', 'NVMe': 'disk', 'VMD': 'controller'}.items():
+            devices = getattr(self, f'{name}_devices')
+            if devices:
+                data[key] = [str(item) for item in devices]
+        return data
 
     def _raise_error(self, message, error=None):
         """Raise and log the error message.
@@ -316,7 +332,7 @@ class StorageInfo():
                 if key == 'PMEM':
                     info_key = 'blockdev'
                     info = {
-                        'size': re.findall(r'"size":(\d),', all_output),
+                        'size': re.findall(r'"size":(\d+),', all_output),
                         'blockdev': re.findall(r'"blockdev":"(.*)",', all_output),
                         'map': re.findall(r'"map":"(.*)",', all_output),
                         'numa': re.findall(r'"numa_node":(\d),', all_output),
@@ -501,7 +517,7 @@ class StorageInfo():
             self._raise_error(f'Error: Invalid storage type \'{tier_0_type}\'')
 
         pmem_list = {}
-        if tier_0_type == self.TIER_0_TYPES[1] and self.pmem_devices:
+        if tier_0_type == self.TIER_0_TYPES[0] and self.pmem_devices:
             # Sort the detected devices and place then in lists by NUMA node
             numa_devices = self._get_numa_devices(self.pmem_devices)
             self._log.debug('  PMEM numa_devices:   %s', numa_devices)
@@ -570,7 +586,7 @@ class StorageInfo():
             self._log.debug('    %s', line)
         try:
             with open(yaml_file, "w", encoding="utf-8") as config_handle:
-                config_handle.writelines([f'{line}\n' for line in lines])
+                config_handle.writelines(f'{line}\n' for line in lines)
         except IOError as error:
             self._raise_error(f"Error writing avocado config file {yaml_file}", error)
 

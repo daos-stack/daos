@@ -147,7 +147,7 @@ if [ -d "/mnt/daos" ]; then
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
         rm -f "${AIO_DEV}"
-        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=10
+        dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
         sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
 	LMM_DB_PATH=$(mktemp -d /tmp/lmm_db_XXXXX)
@@ -173,6 +173,7 @@ if [ -d "/mnt/daos" ]; then
                                           --show-reachable=yes \
                                           --num-callers=20 \
                                           --error-limit=no \
+                                          --fair-sched=try \
                                           --suppressions=${VALGRIND_SUPP} \
                                           --gen-suppressions=all \
                                           --error-exitcode=42 \
@@ -212,6 +213,13 @@ if [ -d "/mnt/daos" ]; then
     COMP="UTEST_vea"
     run_test "${SL_PREFIX}/bin/vea_ut"
     run_test "${SL_PREFIX}/bin/vea_stress -d 60"
+    # regression test for DAOS-12256
+    COMP="UTEST_vea_debug"
+    export D_LOG_MASK=DEBUG
+    export DD_SUBSYS=all
+    export DD_MASK=all
+    run_test "${SL_PREFIX}/bin/vea_ut"
+    unset D_LOG_MASK DD_SUBSYS DD_MASK
 
     COMP="UTEST_bio"
     run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
