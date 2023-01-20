@@ -586,27 +586,16 @@ crt_provider_get_na_config(bool primary, int provider)
 }
 
 void
-crt_provider_inc_cur_ctx_num(bool primary, int provider)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
-
-	prov_data->cpg_ctx_num++;
-}
-
-void
-crt_provider_dec_cur_ctx_num(bool primary, int provider)
-{
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
-
-	prov_data->cpg_ctx_num--;
-}
-
-void
 crt_provider_put_ctx_idx(bool primary, int provider, int idx)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	prov_data->cpg_used_idx[idx] = false;
+	if (prov_data->cpg_used_idx[idx] == false) {
+		D_WARN("Put context on free idx=%d:%d\n", provider, idx);
+	} else {
+		prov_data->cpg_used_idx[idx] = false;
+		prov_data->cpg_ctx_num--;
+	}
 }
 
 int
@@ -618,6 +607,7 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		if (prov_data->cpg_used_idx[i] == false) {
 			prov_data->cpg_used_idx[i] = true;
+			prov_data->cpg_ctx_num++;
 			return i;
 		}
 	}

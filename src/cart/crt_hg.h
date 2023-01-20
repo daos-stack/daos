@@ -129,8 +129,6 @@ char *crt_provider_name_get(int provider);
 bool crt_provider_is_sep(bool primary, int provider);
 void crt_provider_set_sep(bool primary, int provider, bool enable);
 int crt_provider_get_cur_ctx_num(bool primary, int provider);
-void crt_provider_inc_cur_ctx_num(bool primary, int provider);
-void crt_provider_dec_cur_ctx_num(bool primary, int provider);
 int crt_provider_get_ctx_idx(bool primary, int provider);
 void crt_provider_put_ctx_idx(bool primary, int provider, int idx);
 int crt_provider_get_max_ctx_num(bool primary, int provider);
