@@ -393,6 +393,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
