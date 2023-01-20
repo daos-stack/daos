@@ -2460,9 +2460,9 @@ class Launch():
             test_dir = os.environ["DAOS_TEST_LOG_DIR"]
             logger.debug("-" * 80)
             commands = [
-                "df -h",
-                f"find {test_dir}/../ -type f -printf '%s\t%p\n' |sort -n",
-                f"find {test_dir}/../ -type d -printf '%s\t%p\n' |sort -n",
+                f"df -h /var/tmp",
+                f"sudo find {test_dir}/../ -type f -printf '%s\t%p\n' |sort -n",
+                f"sudo find {test_dir}/../ -type d -printf '%s\t%p\n' |sort -n",
             ]
             for command in commands:
                 run_remote(logger, test.host_info.all_hosts, command)
