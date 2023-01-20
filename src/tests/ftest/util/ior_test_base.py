@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,6 @@ from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive
@@ -291,8 +290,7 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
                                   flags, mount_dir):
-        """Run multiple ior commands with various different combination
-           of ior input params.
+        """Run multiple ior commands with various different combination of ior input params.
 
         Args:
             obj_class(list): List of different object classes

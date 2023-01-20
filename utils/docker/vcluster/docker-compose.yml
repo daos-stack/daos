@@ -1,16 +1,29 @@
-# Copyright 2021-2022 Intel Corporation
+# Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
 # Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
 
-version: "3"
+version: "3.8"
 
 services:
+
+  daos_base:
+    image: "daos-base:${DAOS_SERVER_VERSION}"
+    build:
+      context: "daos-base/el8"
+      args:
+        - "RHEL_BASE_IMAGE=${RHEL_BASE_IMAGE}"
+        - "RHEL_BASE_VERSION=${RHEL_BASE_VERSION}"
+        - "BUST_CACHE=${BUST_CACHE}"
+        - "DAOS_AUTH=${DAOS_AUTH}"
+        - "DAOS_REPOS=${DAOS_REPOS}"
+        - "DAOS_GPG_KEYS=${DAOS_GPG_KEYS}"
+        - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
 
   daos_server:
     image: "daos-server:${DAOS_SERVER_VERSION}"
     build:
-      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-server/el8"
+      context: "daos-server/el8"
       args:
         - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
         - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
@@ -21,7 +34,6 @@ services:
         - "DAOS_BDEV_SIZE=${DAOS_BDEV_SIZE}"
     container_name: daos-server
     hostname: daos-server
-    tty: true
     # FIXME Refine needed capabilities
     privileged: true
     # FIXME virtual network such as bridge are not yet supported
@@ -40,13 +52,21 @@ services:
         read_only: false
         source: /dev/hugepages
         target: /dev/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/kernel/mm/hugepages
+        target: /sys/kernel/mm/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/devices/system/node
+        target: /sys/devices/system/node
       - type: tmpfs
         target: /run
 
   daos_admin:
     image: "daos-admin:${DAOS_ADMIN_VERSION}"
     build:
-      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-admin/el8"
+      context: "daos-admin/el8"
       args:
         - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
         - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
@@ -55,7 +75,6 @@ services:
         - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
     container_name: daos-admin
     hostname: daos-admin
-    tty: true
     # FIXME Refine needed capabilities
     privileged: true
     # FIXME virtual network such as bridge are not yet supported
@@ -78,16 +97,19 @@ services:
   daos_client:
     image: "daos-client:${DAOS_CLIENT_VERSION}"
     build:
-      context: "https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-client/el8"
+      context: "daos-client/el8"
       args:
         - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
         - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
         - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
+        - "DAOS_AGENT_IFACE_CFG=${DAOS_AGENT_IFACE_CFG}"
+        - "DAOS_AGENT_IFACE_NUMA_NODE=${DAOS_AGENT_IFACE_NUMA_NODE}"
+        - "DAOS_AGENT_IFACE_NAME=${DAOS_AGENT_IFACE_NAME}"
+        - "DAOS_AGENT_IFACE_DOMAIN_NAME=${DAOS_AGENT_IFACE_DOMAIN_NAME}"
     container_name: daos-client
     hostname: daos-client
-    tty: true
     # FIXME Refine needed capabilities
     privileged: true
     # FIXME virtual network such as bridge are not yet supported
