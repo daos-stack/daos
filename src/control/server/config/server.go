@@ -56,6 +56,7 @@ type Server struct {
 	FaultPath           string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars       []string                  `yaml:"client_env_vars,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -123,6 +124,22 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Provider = cfg.Fabric.Provider
 	}
+	return cfg
+}
+
+// WithFabricAuthKey sets the top-level fabric authorization key.
+func (cfg *Server) WithFabricAuthKey(key string) *Server {
+	cfg.Fabric.AuthKey = key
+	cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	for _, engine := range cfg.Engines {
+		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
+	}
+	return cfg
+}
+
+// WithClientEnvVars sets the environment variables to be sent to the client.
+func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
+	cfg.ClientEnvVars = envVars
 	return cfg
 }
 
@@ -335,6 +352,10 @@ func (cfg *Server) Load() error {
 	// propagate top-level settings to engine configs
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
+	}
+
+	if cfg.Fabric.AuthKey != "" {
+		cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	return nil

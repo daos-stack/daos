@@ -40,6 +40,7 @@ const (
 
 var (
 	defConfigCmpOpts = []cmp.Option{
+		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
 			security.CertificateConfig{},
 		),
@@ -237,6 +238,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
+		WithClientEnvVars([]string{"foo=bar"}).
+		WithFabricAuthKey("foo:bar").
 		WithHyperthreads(true) // hyper-threads disabled by default
 
 	// add engines explicitly to test functionality applied in WithEngines()
@@ -262,6 +265,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
@@ -291,6 +295,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
