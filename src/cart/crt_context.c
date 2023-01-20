@@ -251,6 +251,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	}
 
 	ctx->cc_primary = primary;
+	ctx->cc_idx = ctx_idx;
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary);
 
@@ -272,10 +273,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		}
 	}
 
-	ctx->cc_idx = ctx_idx;
-
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
-
 	d_list_add_tail(&ctx->cc_link, ctx_list);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
