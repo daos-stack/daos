@@ -50,10 +50,8 @@ class PerServerFaultDomainTest(IorTestBase):
         # 1. Create a pool if create_pool is True. Then create a container with given
         # container property.
         if create_pool:
-            self.add_pool()
-        self.container = self.get_container(pool=self.pool, create=False)
-        self.container.properties.update(properties)
-        self.container.create()
+            self.pool = self.get_pool()
+        self.container = self.get_container(pool=self.pool, properties=properties)
 
         # Run IOR to write some data to the container.
         self.ior_cmd.set_daos_params(
@@ -201,7 +199,7 @@ class PerServerFaultDomainTest(IorTestBase):
         # ranks from service ranks. If we stop more than two service ranks, many of the
         # dmg commands will hang.
         # Create a pool to determine the service ranks.
-        self.add_pool()
+        self.pool = self.get_pool()
         self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
 
         # Create the list of non-service ranks. Assume there are 5 service ranks and rank
@@ -278,13 +276,17 @@ class PerServerFaultDomainTest(IorTestBase):
         # two ranks from service ranks. If we stop more than two service ranks, many of
         # the dmg commands will hang.
         # Create a pool to determine the service ranks.
-        self.add_pool()
+        self.pool = self.get_pool()
         self.log.info("Pool service ranks = %s", self.pool.svc_ranks)
 
         # Create the list of non-service ranks. Assume there are 5 service ranks and rank
         # numbering is consecutive.
         non_svc_ranks = []
-        for rank in range(8):
+        host_count = len(self.hostlist_servers)
+        engines_per_host = self.params.get("engines_per_host", "/run/server_config/*")
+        rank_count = host_count * engines_per_host
+        self.log.info("Rank count = %s", rank_count)
+        for rank in range(rank_count):
             if rank not in self.pool.svc_ranks:
                 non_svc_ranks.append(rank)
         self.log.info("non_svc_ranks = %s", non_svc_ranks)
