@@ -90,11 +90,15 @@ struct migrate_pool_tls {
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
+	ABT_cond		mpt_init_cond;
+	ABT_mutex		mpt_init_mutex;
+
 	/* The new layout version for upgrade job */
 	uint32_t		mpt_new_layout_ver;
 
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+				mpt_init_tls:1,
 				mpt_fini:1;
 };
 
