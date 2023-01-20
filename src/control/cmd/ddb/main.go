@@ -6,132 +6,200 @@
 
 package main
 
-/*
- #cgo CFLAGS: -I${SRCDIR}/../../../ddb/
- #cgo LDFLAGS: -lddb -lgurt
- #include <ddb.h>
-*/
-import "C"
 import (
 	"bufio"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime/debug"
+	"sort"
+	"strings"
+
 	"github.com/desertbit/go-shlex"
 	"github.com/desertbit/grumble"
 	"github.com/jessevdk/go-flags"
-	"os"
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func exitWithError(log logging.Logger, err error) {
+	cmdName := path.Base(os.Args[0])
+	log.Errorf("%s: %v", cmdName, err)
+	if fault.HasResolution(err) {
+		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
+	}
+	os.Exit(1)
+}
+
 type cliOptions struct {
-	Run       string `long:"run_cmd" short:"R" description:"Execute the single command <cmd>, then exit"`
-	File      string `long:"file_cmd" short:"f" description:"Path to a file container a list of ddb commands, one command per line, then exit."`
+	Debug     bool   `long:"debug" description:"enable debug output"`
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Args      struct {
+		VosPath vosPathStr `positional-arg-name:"vos_file_path"`
+		RunCmd  ddbCmdStr  `positional-arg-name:"ddb_command"`
+	} `positional-args:"yes"`
+}
+
+type vosPathStr string
+
+func (pathStr vosPathStr) Complete(match string) (comps []flags.Completion) {
+	if match == "" || match == "/" {
+		match = defMntPrefix
+	}
+	for _, comp := range listDir(match) {
+		comps = append(comps, flags.Completion{Item: comp})
+	}
+	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
+
+	return
+}
+
+type ddbCmdStr string
+
+func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
+	// hack to get at command names
+	ctx, cleanup, err := InitDdb()
+	if err != nil {
+		return
+	}
+	defer cleanup()
+
+	app := createGrumbleApp(ctx)
+	for _, cmd := range app.Commands().All() {
+		if match == "" || strings.HasPrefix(cmd.Name, match) {
+			comps = append(comps, flags.Completion{Item: cmd.Name})
+		}
+	}
+	sort.Slice(comps, func(i, j int) bool { return comps[i].Item < comps[j].Item })
+
+	return
+}
+
+func (cmdStr *ddbCmdStr) UnmarshalFlag(fv string) error {
+	*cmdStr = ddbCmdStr(fv)
+	return nil
+}
+
+func runFileCmds(log logging.Logger, app *grumble.App, fileName string) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return errors.Wrapf(err, "Error opening file: %s", fileName)
+
+	}
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			log.Errorf("Error closing %s: %s\n", fileName, err)
+		}
+	}()
+
+	log.Debugf("Running commands in: %s\n", fileName)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fileCmd := scanner.Text()
+		log.Debugf("Running Command: %s\n", fileCmd)
+		err := runCmdStr(app, fileCmd)
+		if err != nil {
+			return errors.Wrapf(err, "Failed running command %q", fileCmd)
+		}
+	}
+
+	return nil
+}
+
+func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+	p := flags.NewParser(opts, flags.HelpFlag|flags.IgnoreUnknown)
+	p.Name = "ddb"
+	p.Usage = "[OPTIONS]"
+	p.ShortDescription = "daos debug tool"
+	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
+a file in the VOS format. It offers both a command line and interactive
+shell mode. If neither a single command or '-f' option is provided, then the tool will
+run in interactive mode. In order to modify the VOS file, the '-w' option
+must be included. If supplied, the VOS file supplied in the first positional
+parameter will be opened before commands are executed.`
+
+	// Set the traceback level such that a crash results in
+	// a coredump (when ulimit -c is set appropriately).
+	debug.SetTraceback("crash")
+
+	if _, err := p.ParseArgs(args); err != nil {
+		return err
+	}
+
+	if opts.Version {
+		log.Infof("ddb version %s", build.DaosVersion)
+		return nil
+	}
+
+	if opts.Debug {
+		log.WithLogLevel(logging.LogLevelDebug)
+		log.Debug("debug output enabled")
+	}
+
+	ctx, cleanup, err := InitDdb()
+	if err != nil {
+		return errors.Wrap(err, "Error initializing the DDB Context")
+	}
+	defer cleanup()
+	app := createGrumbleApp(ctx)
+
+	if opts.Args.VosPath != "" {
+		log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
+		if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
+			return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+		}
+	}
+
+	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
+		// Non-interactive mode
+		if opts.Args.RunCmd != "" && opts.CmdFile != "" {
+			return errors.New("Cannot use both command file and a command string")
+		}
+
+		if opts.Args.RunCmd != "" {
+			return runCmdStr(app, string(opts.Args.RunCmd))
+		}
+
+		return runFileCmds(log, app, opts.CmdFile)
+	}
+
+	// Interactive mode
+	// Print the version upon entry
+	log.Infof("ddb version %s", build.DaosVersion)
+	// app.Run() uses the os.Args so need to clear them before running
+	os.Args = args
+	return app.Run()
 }
 
 func main() {
-	ctx := DdbContext{}
-	err := ctx.Init()
-	if err != nil {
-		fmt.Printf("Error initializing the DDB Context: %s\n", err)
-		return
-	}
-	defer ctx.Fini()
-
-	// There are two 'stages' to the cli interactivity. The first is the parsing of the command line arguments
-	// and flags. The flags module is used to handle this stage.
-	// The second 'stage' is the actual execution of the commands that ddb provides as well as the
-	// interactive mode. A grumble App from the grumble package is used to help handle this stage.
 	var opts cliOptions
-	parser := createFlagsParser(&opts)
-	app := createGrumbleApp(&ctx)
+	log := logging.NewCommandLineLogger()
 
-	rest, err := parser.ParseArgs(os.Args[1:])
-	if err != nil {
-		return
-	}
-
-	if len(rest) > 1 {
-		fmt.Printf("Unknown argument: %s\n", rest[1])
-		return
-	}
-
-	if len(opts.Run) > 0 && len(opts.File) > 0 {
-		print("Cannot use both '-R' and '-f'.\n")
-		return
-	}
-
-	if len(rest) == 1 {
-		// Path to vos file was supplied. Open before moving on
-		fmt.Printf("Connect to path: %s\n", rest[0])
-		err := ddbOpen(&ctx, rest[0], opts.WriteMode)
-		if err != nil {
-			fmt.Printf("Error opening file '%s': %s\n", rest[0], err)
-			return
+	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
+			log.Info(fe.Error())
+			os.Exit(0)
 		}
-	}
-
-	if len(opts.Run) > 0 {
-		// '-R'
-		err := runCmdStr(app, opts.Run)
-		if err != nil {
-			fmt.Printf("%s\n", err)
-		}
-		return
-	} else if len(opts.File) > 0 {
-		// '-f'
-		file, err := os.Open(opts.File)
-		if err != nil {
-			fmt.Printf("Error opening file. Error: %s\n", err)
-			return
-
-		}
-		fmt.Printf("Running commands in: %s\n", opts.File)
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			cmd := scanner.Text()
-			fmt.Printf("Running Command: %s\n", cmd)
-			err := runCmdStr(app, cmd)
-			if err != nil {
-				fmt.Printf("Failed running command '%s'. Error: %s\n", cmd, err)
-				return // don't continue if a command fails
-			}
-		}
-
-		err = file.Close()
-		if err != nil {
-			fmt.Printf("Error closing file. Error: %s\n", err)
-		}
-		return
-	}
-
-	/* Run in interactive mode */
-	// Print the version upon entry
-	err = ddbVersion(&ctx)
-	if err != nil {
-		fmt.Printf("Version error: %s", err)
-	}
-	/* app.Run() uses the os.Args so need to clear them before running */
-	os.Args = append(os.Args[:1])
-	err = app.Run()
-
-	if err != nil {
-		fmt.Printf("error: %s\n", err)
+		exitWithError(log, err)
 	}
 }
 
 func createGrumbleApp(ctx *DdbContext) *grumble.App {
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		homedir = "/tmp"
+	}
 	var app = grumble.New(&grumble.Config{
-		Name: "ddb",
-		Description: `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
-a file in the VOS format. In order to modify the file, the '-w' option must
-be included when opening the vos file.
-
-Many of the commands take a vos tree path. The format for this path
-is 'cont_uuid/obj_id/dkey/akey/recx'. The keys currently only support string
-keys. The recx for array values is the format {lo-hi}. To make it easier to
-navigate the tree, indexes can be used instead of the path part. The index
-is in the format '[i]', for example '[0]/[0]/[0]'`,
+		Name:        "ddb",
 		Flags:       nil,
-		HistoryFile: "/tmp/ddb.hist",
+		HistoryFile: filepath.Join(homedir, ".ddb_history"),
 		NoColor:     false,
 		Prompt:      "ddb:  ",
 	})
@@ -152,20 +220,6 @@ is in the format '[i]', for example '[0]/[0]/[0]'`,
 		Completer: nil,
 	})
 	return app
-}
-
-func createFlagsParser(opts *cliOptions) *flags.Parser {
-	p := flags.NewParser(opts, flags.Default)
-	p.Name = "ddb"
-	p.Usage = "[OPTIONS] [<vos_file_path>]"
-	p.ShortDescription = "daos debug tool"
-	p.LongDescription = `The DAOS Debug Tool (ddb) allows a user to navigate through and modify
-a file in the VOS format. It offers both a command line and interactive
-shell mode. If the '-R' or '-f' options are not provided, then it will
-run in interactive mode. In order to modify the file, the '-w' option
-must be included. The optional <vos_file_path> will be opened before running
-commands supplied by '-R' or '-f' or entering interactive mode.`
-	return p
 }
 
 // Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
