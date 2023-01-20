@@ -1239,17 +1239,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
 
-	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
-	rc = crt_req_timeout_track(rpc_priv);
-	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
-	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_req_timeout_track failed, rc: %d.\n", rc);
-		/* roll back the addref above */
-		RPC_DECREF(rpc_priv);
-		D_MUTEX_UNLOCK(&epi->epi_mutex);
-		D_GOTO(out, rc);
-	}
-
 	if (crt_gdata.cg_credit_ep_ctx != 0 &&
 	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
 		if (rpc_priv->crp_opc_info->coi_queue_front) {
@@ -1264,10 +1253,20 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
-		d_list_add_tail(&rpc_priv->crp_epi_link,
-				&epi->epi_req_q);
-		epi->epi_req_num++;
-		rc = CRT_REQ_TRACK_IN_INFLIGHQ;
+		D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+		rc = crt_req_timeout_track(rpc_priv);
+		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+		if (rc == 0) {
+			d_list_add_tail(&rpc_priv->crp_epi_link,
+					&epi->epi_req_q);
+			epi->epi_req_num++;
+			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
+		} else {
+			RPC_ERROR(rpc_priv,
+				"crt_req_timeout_track failed, rc: %d.\n", rc);
+			/* roll back the addref above */
+			RPC_DECREF(rpc_priv);
+		}
 	}
 
 	rpc_priv->crp_ctx_tracked = 1;
@@ -1379,6 +1378,14 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		D_MUTEX_LOCK(&epi->epi_mutex);
 		if (tmp_rpc->crp_state == RPC_STATE_QUEUED && credits_available(epi) > 0) {
 			tmp_rpc->crp_state = RPC_STATE_INITED;
+			crt_set_timeout(tmp_rpc);
+
+			D_MUTEX_LOCK(&crt_ctx->cc_mutex);
+			rc = crt_req_timeout_track(tmp_rpc);
+			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+			if (rc != 0)
+				RPC_ERROR(tmp_rpc,
+					"crt_req_timeout_track failed, rc: %d.\n", rc);
 
 			/* remove from waitq and add to in-flight queue */
 			d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
