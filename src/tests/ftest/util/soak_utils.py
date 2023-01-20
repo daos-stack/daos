@@ -356,6 +356,22 @@ def run_metrics_check(self, logging=True, prefix=None):
                     write_logfile(result["stdout"], log_name, destination)
 
 
+def display_job_failures(self):
+    """Display job failures.
+
+    Args:
+        self (obj): soak obj
+    """
+    self.log.debug("="*80)
+    self.log.debug("="*80)
+    self.log.debug("These are the job logs for failed jobs")
+    for id in self.all_failed_jobs:
+        cmd = f"ls -latr {self.outputsoakdir}/pass*/*_{id}_*"
+        run_command(cmd, timeout=120)
+    self.log.debug("="*80)
+    self.log.debug("="*80)
+
+
 def get_harassers(harasser):
     """Create a valid harasser list from the yaml job harassers.
 
