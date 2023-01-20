@@ -584,7 +584,7 @@ func TestPoolCommands(t *testing.T) {
 			"Set pool property missing value",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:",
 			"",
-			errors.New("must not be empty"),
+			errors.New("invalid property"),
 		},
 		{
 			"Set pool property bad value",
