@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,6 +21,7 @@ class NvmePoolExclude(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
@@ -37,18 +37,19 @@ class NvmePoolExclude(OSAUtils):
         self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_exclude(self, num_pool, oclass=None):
-        """This is the main method which performs the actual
-        testing. It does the following jobs:
+        """Perform the actual testing.
+
+        It does the following jobs:
         - Create number of TestPools
         - Start the IOR threads for running on each pools.
         - On each pool do the following:
             - Perform an IOR write (using a container)
             - Exclude a daos_server
             - Perform an IOR read/verify (same container used for write)
+
         Args:
-            num_pool (int) : total pools to create for testing purposes.
-            oclass (str) : object class (eg: RP_2G8, S1,etc).
-                           Defaults to None
+            num_pool (int): total pools to create for testing purposes.
+            oclass (str, optional): object class (eg: RP_2G8, S1,etc). Defaults to None
         """
         # Create a pool
         pool = {}
@@ -69,7 +70,7 @@ class NvmePoolExclude(OSAUtils):
             self.add_container(self.pool)
             self.cont_list.append(self.container)
             rf = ''.join(self.container.properties.value.split(":"))
-            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
+            rf_num = int(re.search(r"rd_fac([0-9]+)", rf).group(1))
             for test in range(0, rf_num):
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
@@ -83,7 +84,7 @@ class NvmePoolExclude(OSAUtils):
                     time.sleep(1)
 
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
-                pver_begin = self.get_pool_version()
+                pver_begin = self.pool.get_version(True)
 
                 index = random.randint(1, len(rank_list))  # nosec
                 rank = rank_list.pop(index - 1)
@@ -91,15 +92,13 @@ class NvmePoolExclude(OSAUtils):
                 self.log.info("Removing rank %d, target %d", rank, tgt_exclude)
 
                 self.log.info("Pool Version at the beginning %s", pver_begin)
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank, tgt_exclude)
+                output = self.pool.exclude(rank, tgt_exclude)
                 self.print_and_assert_on_rebuild_failure(output)
 
-                pver_exclude = self.get_pool_version()
+                pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
-                self.assertTrue(pver_exclude > pver_begin,
-                                "Pool Version Error:  After exclude")
+                self.assertTrue(pver_exclude > pver_begin, "Pool Version Error:  After exclude")
                 # Wait to finish the threads
                 for thrd in threads:
                     thrd.join()
@@ -115,14 +114,14 @@ class NvmePoolExclude(OSAUtils):
                 self.log.info(output)
 
     def test_nvme_pool_excluded(self):
-        """Test ID: DAOS-2086
-        Test Description: This method is called from
-        the avocado test infrastructure. This method invokes
-        NVME pool exclude testing on multiple pools.
+        """Test ID: DAOS-2086.
+
+        Test Description: This method is called from the avocado test infrastructure. This method
+            invokes NVME pool exclude testing on multiple pools.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=nvme,checksum,nvme_osa
-        :avocado: tags=nvme_pool_exclude
+        :avocado: tags=NvmePoolExclude,test_nvme_pool_excluded
         """
         self.run_nvme_pool_exclude(1)

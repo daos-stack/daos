@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,6 +67,7 @@ class ListVerboseTest(IorTestBase):
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
+            "svc_ldr": 0,
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -134,7 +135,7 @@ class ListVerboseTest(IorTestBase):
             created (int): SCM size used to create the pool.
             rank_count (int): Number of ranks that the pool is created on.
         """
-        targets = self.params.get("targets", "/run/server_config/*/")
+        targets = self.server_managers[0].get_config_value("targets")
         self.log.info("rank_count = %d; targets = %d", rank_count, targets)
 
         total_targets = rank_count * targets
@@ -242,7 +243,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_basic
+        :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
         """
         self.maxDiff = None
         self.pool = []
@@ -379,7 +380,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_imbalance
+        :avocado: tags=list_verbose,list_verbose_imbalance,test_used_imbalance
         """
         errors = []
         self.log.debug("---------- NVME test ----------")

@@ -8,6 +8,7 @@ package raft
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"go.etcd.io/bbolt"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -98,7 +100,7 @@ func IsRaftLeadershipError(err error) bool {
 // leadership state. No-op if there is only one replica configured
 // or the cause is a raft leadership error.
 func (db *Database) ResignLeadership(cause error) error {
-	if IsRaftLeadershipError(cause) {
+	if system.IsNotLeader(cause) || IsRaftLeadershipError(cause) {
 		// no-op
 		return nil
 	}
@@ -108,6 +110,13 @@ func (db *Database) ResignLeadership(cause error) error {
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
 	return db.raft.withReadLock(func(svc raftService) error {
+		// One more belt-and-suspenders check to make sure we're
+		// actually the leader before we try to transfer leadership.
+		// This is important because trying to transfer leadership
+		// if we're not the leader will result in a blocked channel, i.e. hang.
+		if svc.State() != raft.Leader {
+			return nil
+		}
 		return svc.LeadershipTransfer().Error()
 	})
 }
@@ -116,7 +125,21 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Barrier(0).Error()
+		barrierStart := time.Now()
+		err := svc.Barrier(0).Error()
+		barrierElapsed := time.Since(barrierStart)
+		if barrierElapsed > 100*time.Millisecond {
+			var errMsg string
+			if err != nil {
+				errMsg = fmt.Sprintf("; err: %s", err)
+			}
+			db.log.Debugf("raft Barrier() complete after %s%s", barrierElapsed, errMsg)
+		}
+		if IsRaftLeadershipError(err) {
+			db.log.Errorf("lost leadership during Barrier(): %s", err)
+			return errNotSysLeader(svc, db)
+		}
+		return err
 	})
 }
 
@@ -411,7 +434,7 @@ func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, m.Member.LastUpdate)
+	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, common.FormatTime(m.Member.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -423,7 +446,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *system.PoolService) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
+	db.log.Debugf("pool %s (%s) updated @ %s", dbgUuidStr(ps.PoolUUID), ps.State, common.FormatTime(ps.LastUpdate))
 	return db.submitRaftUpdate(data)
 }
 
@@ -447,10 +470,7 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 		// signal some callers to retry the operation on the
 		// new leader.
 		if IsRaftLeadershipError(err) {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 
 		return err

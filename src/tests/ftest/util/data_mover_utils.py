@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -36,7 +35,7 @@ class MfuCommandBase(ExecutableCommand):
             namespace (str): yaml namespace (path to parameters)
             command: command (str): string of the command to be executed.
             hosts (list): list of hosts to specify in the hostfile.
-            tmp (str): path for hostfiles.
+            tmp (str): path for host-files.
 
         """
         super().__init__(namespace, command)
@@ -57,8 +56,7 @@ class MfuCommandBase(ExecutableCommand):
 
     @staticmethod
     def __param_sort(k):
-        """Key sort for get_param_names. Moves src and dst
-           to the end of the list.
+        """Key sort for get_param_names. Moves src and dst to the end of the list.
 
         Args:
             k (str): the key
@@ -73,8 +71,7 @@ class MfuCommandBase(ExecutableCommand):
         }.get(k, 0)
 
     def get_param_names(self):
-        """Override the original get_param_names to sort
-           the src and dst paths.
+        """Override the original get_param_names to sort the src and dst paths.
 
         Returns:
             list: the sorted param names.
@@ -190,7 +187,7 @@ class DsyncCommand(MfuCommandBase):
         self.no_dereference = FormattedParameter("--no-dereference", False)
         # open files with O_DIRECT
         self.direct = FormattedParameter("--direct", False)
-        # hardlink to files in DIR when unchanged
+        # hard-link to files in DIR when unchanged
         self.link_dest = FormattedParameter("--link-dest {}")
         # create sparse files when possible
         self.sparse = FormattedParameter("--sparse", False)
@@ -206,6 +203,7 @@ class DsyncCommand(MfuCommandBase):
         self.src = BasicParameter(None)
         # destination path
         self.dst = BasicParameter(None)
+
 
 class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
@@ -251,9 +249,8 @@ class DdeserializeCommand(MfuCommandBase):
 
 class FsCopy():
     """Class defining an object of type FsCopy.
-       Allows interfacing with daos fs copy in a similar
-       manner to DcpCommand.
 
+    Allows interfacing with daos fs copy in a similar manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):
@@ -305,10 +302,12 @@ class FsCopy():
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
                                              preserve_props=self.preserve_props)
 
+
 class ContClone():
     """Class defining an object of type ContClone.
-       Allows interfacing with daos container copy in a similar
-       manner to DcpCommand.
+
+    Allows interfacing with daos container copy in a similar
+    manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):

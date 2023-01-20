@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,7 +50,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
-	hpi, err := common.GetHugePageInfo()
+	mi, err := common.GetMemInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
@@ -64,7 +64,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+	if err := cfg.Validate(log, mi.HugePageSizeKb); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -169,7 +169,7 @@ func (srv *server) logDuration(msg string, start time.Time) {
 
 // CreateDatabaseConfig creates a new database configuration.
 func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
-	dbReplicas, err := cfgGetReplicas(cfg, net.ResolveTCPAddr)
+	dbReplicas, err := cfgGetReplicas(cfg, net.LookupIP)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to retrieve replicas from config")
 	}
@@ -278,7 +278,7 @@ func (srv *server) initNetwork() error {
 	ctlAddr, err := getControlAddr(ctlAddrParams{
 		port:           srv.cfg.ControlPort,
 		replicaAddrSrc: srv.sysdb,
-		resolveAddr:    net.ResolveTCPAddr,
+		lookupHost:     net.LookupIP,
 	})
 	if err != nil {
 		return err
@@ -381,7 +381,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
 	if err != nil {
 		return err
 	}
@@ -399,6 +399,7 @@ func (srv *server) setupGrpc() error {
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
+		EnvVars:         srv.cfg.ClientEnvVars,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 
@@ -444,7 +445,7 @@ func (srv *server) registerEvents() {
 			return nil
 		},
 		func(ctx context.Context) error {
-			return srv.mgmtSvc.checkPools(ctx)
+			return srv.mgmtSvc.checkPools(ctx, true)
 		},
 	)
 	srv.sysdb.OnLeadershipLost(func() error {

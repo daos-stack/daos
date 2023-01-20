@@ -132,6 +132,7 @@ enum {
 #define VOS_NOSPC_ERROR_INTVL	60	/* seconds */
 
 extern unsigned int vos_agg_nvme_thresh;
+extern bool vos_dkey_punch_propagate;
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -191,8 +192,8 @@ struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
 	struct d_ulink		vp_hlink;
 	/** number of openers */
-	int			vp_opened:30;
-	int			vp_dying:1;
+	uint32_t                 vp_opened : 30;
+	uint32_t                 vp_dying  : 1;
 	/** exclusive handle (see VOS_POF_EXCL) */
 	int			vp_excl:1;
 	/** caller specifies pool is small (for sys space reservation) */

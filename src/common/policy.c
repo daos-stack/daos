@@ -87,7 +87,7 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 	int		param_idx = POLICY_BAD_PARAM;
 	int		tok_len = 0;
 	bool		ret_val = false;
-	int              i;
+	int		i;
 	size_t		len;
 	char		*str, *orig_str;
 	unsigned int	policy_idx = DAOS_MEDIA_POLICY_MAX;

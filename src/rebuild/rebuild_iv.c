@@ -67,7 +67,7 @@ rebuild_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 }
 
 static int
-rebuild_iv_ent_put(struct ds_iv_entry *entry, void **priv)
+rebuild_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	return 0;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## Wrap spdk setup script. This script will be called by daos_admin process which will be
+## Wrap spdk setup script. This script will be called by daos_server_helper process which will be
 ## running with elevated privileges. Activities include changing directory permissions (which
 ## enables spdk to be run by an unprivileged user).
 
@@ -97,11 +97,9 @@ else
 		'/sys/class/uio/uio*/device/config'	\
 		'/sys/class/uio/uio*/device/resource*'; do
 
-		# shellcheck disable=SC2086
-		if list=$(ls -d $glob); then
-			echo -n "RUN: ls -d $glob | xargs -r chown -R "
-			echo "$_TARGET_USER"
-			echo "$list" | xargs -r chown -R "$_TARGET_USER"
+		if compgen -G "${glob}" > /dev/null; then
+			echo "RUN: chown -R ${_TARGET_USER} ${glob}"
+			chown -R "${_TARGET_USER}" "${glob}"
 		fi
 	done
 

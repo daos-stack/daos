@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -59,19 +58,19 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
 
 
         """
-        rf = None
+        rd_fac = None
         # Create a container and add it to the overall list of containers
         self.container.append(
             TestContainer(pool, daos_command=self.get_daos_command()))
         self.container[-1].namespace = path
         self.container[-1].get_params(self)
-        # include rf based on the class
+        # include rd_fac based on the class
         if oclass:
             self.container[-1].oclass.update(oclass)
             redundancy_factor = extract_redundancy_factor(oclass)
-            rf = 'rf:{}'.format(str(redundancy_factor))
+            rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
         properties = self.container[-1].properties.value
-        cont_properties = (",").join(filter(None, [properties, rf]))
+        cont_properties = (",").join(filter(None, [properties, rd_fac]))
         if cont_properties is not None:
             self.container[-1].properties.update(cont_properties)
         self.container[-1].create()
@@ -165,8 +164,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry
-        :avocado: tags=test_io_latency_telemetry
-
+        :avocado: tags=test_io_latency_telemetry,test_io_latency_telmetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")
@@ -338,8 +336,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=telemetry,control
-        :avocado: tags=test_ior_dtx_telemetry
-
+        :avocado: tags=test_ior_dtx_telemetry,test_ior_dtx_telemetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         self.iterations = self.params.get("repetitions", "/run/*")

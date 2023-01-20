@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script for running NLT in a docker container.  This is called from Jenkinsfile
-# where needed, and is a cheat way of running setup_daos_admin under sudo
+# where needed, and is a cheat way of running setup_daos_server_helper under sudo
 # and NLT itself from a single script.
 
 set -e
@@ -10,7 +10,7 @@ set -x
 
 . utils/sl/setup_local.sh
 
-sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_admin.sh
+sudo --preserve-env=SL_PREFIX,SL_SPDK_PREFIX ./utils/setup_daos_server_helper.sh
 
 TMP_DIR=$(mktemp -d)
 

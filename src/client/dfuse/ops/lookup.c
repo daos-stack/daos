@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,20 +124,10 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 	}
 
-	if (fi_out) {
-		/* Now set the value of keep_cache, this is for creat where we need to do the hash
-		 * table lookup before setting this value.
-		 */
-		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
-			fi_out->keep_cache = 1;
-		} else if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_data_timeout, NULL)) {
-			fi_out->keep_cache = 1;
-		}
-
+	if (fi_out)
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
-	} else {
+	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
-	}
 
 	if (wipe_parent == 0)
 		return;
@@ -246,6 +236,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(ie);
+
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
@@ -262,7 +254,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 

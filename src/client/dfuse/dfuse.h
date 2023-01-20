@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,7 @@
 #include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/slab.h>
 
 #include "daos.h"
 #include "daos_fs.h"
@@ -24,14 +25,15 @@
 #include "dfuse_common.h"
 
 struct dfuse_info {
-	struct fuse_session		*di_session;
-	char				*di_group;
-	char				*di_mountpoint;
-	uint32_t			di_thread_count;
-	bool				di_threaded;
-	bool				di_foreground;
-	bool				di_caching;
-	bool				di_wb_cache;
+	struct fuse_session *di_session;
+	char                *di_group;
+	char                *di_mountpoint;
+	uint32_t             di_thread_count;
+	bool                 di_threaded;
+	bool                 di_foreground;
+	bool                 di_caching;
+	bool                 di_multi_user;
+	bool                 di_wb_cache;
 };
 
 struct dfuse_projection_info {
@@ -48,7 +50,14 @@ struct dfuse_projection_info {
 	sem_t				dpi_sem;
 	pthread_t			dpi_thread;
 	bool				dpi_shutdown;
+
+	struct d_slab                    dpi_slab;
+	struct d_slab_type              *dpi_read_slab;
+	struct d_slab_type              *dpi_write_slab;
 };
+
+/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
+#define DFUSE_MAX_READ (1024 * 1024)
 
 /* Launch fuse, and do not return until complete */
 int
@@ -58,63 +67,69 @@ struct dfuse_inode_entry;
 
 struct dfuse_readdir_entry {
 	/* Name of this directory entry */
-	char	dre_name[NAME_MAX + 1];
+	char  dre_name[NAME_MAX + 1];
 
 	/* Offset of this directory entry */
-	off_t	dre_offset;
+	off_t dre_offset;
 
 	/* Offset of the next directory entry
 	 * A value of DFUSE_READDIR_EOD means end
 	 * of directory.
 	 */
-	off_t	dre_next_offset;
+	off_t dre_next_offset;
 };
 
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t                           *doh_dfs;
-	/** the DFS object handle */
-	dfs_obj_t                       *doh_obj;
+	dfs_t                    *doh_dfs;
+	/** the DFS object handle.  Not created for directories. */
+	dfs_obj_t                *doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry        *doh_ie;
+	struct dfuse_inode_entry *doh_ie;
 
-	/** an anchor to track listing in readdir */
-	daos_anchor_t                    doh_anchor;
+	/** readdir handle. */
+	struct dfuse_readdir_hdl *doh_rd;
 
-	/** Array of entries returned by dfs but not reported to kernel */
-	struct dfuse_readdir_entry      *doh_dre;
-	/** Current index into doh_dre array */
-	uint32_t                         doh_dre_index;
-	/** Last index containing valid data */
-	uint32_t                         doh_dre_last_index;
-	/** Next value from anchor */
-	uint32_t                         doh_anchor_index;
+	ATOMIC uint32_t           doh_il_calls;
 
-	ATOMIC uint32_t                  doh_il_calls;
-	ATOMIC uint64_t                  doh_write_count;
+	/** Number of active readdir operations */
+	ATOMIC uint32_t           doh_readir_number;
+
+	ATOMIC uint64_t           doh_write_count;
 
 	/** True if caching is enabled for this file. */
-	bool                             doh_caching;
-
-	/* True of the kernel may have been told to keep the cache for this open.  This is used
-	 * for knowing if we need to reset the cache timer on close so it's OK to be conservative
-	 * here and this flag may be set on create even if the kernel flag isn't provided.
-	 */
-	bool                             doh_keep_cache;
+	bool                      doh_caching;
 
 	/* True if the file handle is writeable - used for cache invalidation */
-	bool                             doh_writeable;
+	bool                      doh_writeable;
 
 	/* Track possible kernel cache of readdir on this directory */
 	/* Set to true if there is any reason the kernel will not use this directory handle as the
 	 * basis for a readdir cache.  Includes if seekdir or rewind are used.
 	 */
-	bool                             doh_kreaddir_invalid;
+	bool                      doh_kreaddir_invalid;
 	/* Set to true if readdir calls are made on this handle */
-	bool                             doh_kreaddir_started;
-	/* Set to true if readdir calls are made on this handle */
-	bool                             doh_kreaddir_finished;
+	bool                      doh_kreaddir_started;
+	/* Set to true if readdir calls reach EOF made on this handle */
+	bool                      doh_kreaddir_finished;
+};
+
+/* Maximum number of dentries to read at one time. */
+#define READDIR_MAX_COUNT 1024
+
+struct dfuse_readdir_hdl {
+	/** an anchor to track listing in readdir */
+	daos_anchor_t              drh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
+	struct dfuse_readdir_entry drh_dre[READDIR_MAX_COUNT];
+	/** Current index into doh_dre array */
+	uint32_t                   drh_dre_index;
+	/** Last index containing valid data */
+	uint32_t                   drh_dre_last_index;
+	/** Next value from anchor */
+	uint32_t                   drh_anchor_index;
 };
 
 /*
@@ -159,13 +174,13 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t            de_req; /**< The fuse request handle */
-	daos_event_t          de_ev;
-	size_t                de_len;          /**< The size returned by daos */
-	off_t                 de_req_position; /**< The file position requested by fuse */
-	d_iov_t               de_iov;
-	d_sg_list_t           de_sgl;
-	struct dfuse_obj_hdl *de_oh;
+	fuse_req_t                    de_req; /**< The fuse request handle */
+	daos_event_t                  de_ev;
+	size_t                        de_len; /**< The size returned by daos */
+	d_iov_t                       de_iov;
+	d_sg_list_t                   de_sgl;
+	d_list_t                      de_list;
+	struct dfuse_projection_info *de_handle;
 	void (*de_complete_cb)(struct dfuse_event *ev);
 };
 
@@ -189,7 +204,7 @@ struct dfuse_pool {
 	/** Hash table entry in dpi_pool_table */
 	d_list_t		dfp_entry;
 	/** Hash table reference count */
-	ATOMIC uint		dfp_ref;
+	ATOMIC uint32_t         dfp_ref;
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table	dfp_cont_table;
@@ -207,35 +222,35 @@ struct dfuse_pool {
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops *dfs_ops;
+	struct dfuse_inode_ops	*dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
-	struct dfuse_pool      *dfs_dfp;
+	struct dfuse_pool	*dfs_dfp;
 
 	/** dfs mount handle */
-	dfs_t                  *dfs_ns;
+	dfs_t			*dfs_ns;
 
 	/** UUID of the container */
-	uuid_t                  dfs_cont;
+	uuid_t			dfs_cont;
 
 	/** Container handle */
-	daos_handle_t           dfs_coh;
+	daos_handle_t		dfs_coh;
 
 	/** Hash table entry entry in dfp_cont_table */
-	d_list_t                dfs_entry;
+	d_list_t		dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint             dfs_ref;
+	ATOMIC uint32_t          dfs_ref;
 
 	/** Inode number of the root of this container */
-	ino_t                   dfs_ino;
+	ino_t			dfs_ino;
 
 	/** Caching information */
-	double                  dfc_attr_timeout;
-	double                  dfc_dentry_timeout;
-	double                  dfc_dentry_dir_timeout;
-	double                  dfc_ndentry_timeout;
-	double                  dfc_data_timeout;
-	bool                    dfc_direct_io_disable;
+	double			dfc_attr_timeout;
+	double			dfc_dentry_timeout;
+	double			dfc_dentry_dir_timeout;
+	double			dfc_ndentry_timeout;
+	bool			dfc_data_caching;
+	bool			dfc_direct_io_disable;
 };
 
 void
@@ -569,9 +584,6 @@ struct dfuse_inode_entry {
 	d_list_t                 ie_htl;
 
 	/* Time of last kernel cache update.
-	 * For directories this is the time of the most recent closedir for a handle which may
-	 * have populated the cache.
-	 * For files this is when the file was last closed after been written to.
 	 */
 	struct timespec          ie_cache_last_update;
 
@@ -579,10 +591,8 @@ struct dfuse_inode_entry {
 	size_t                   ie_start_off;
 	size_t                   ie_end_off;
 
-	/** Reference counting for the inode.
-	 * Used by the hash table callbacks
-	 */
-	ATOMIC uint              ie_ref;
+	/** Reference counting for the inode Used by the hash table callbacks */
+	ATOMIC uint32_t          ie_ref;
 
 	/* Number of open file descriptors for this inode */
 	ATOMIC uint32_t          ie_open_count;
@@ -591,6 +601,9 @@ struct dfuse_inode_entry {
 
 	/* Number of file open file descriptors using IL */
 	ATOMIC uint32_t          ie_il_count;
+
+	/** Number of active readdir operations */
+	ATOMIC uint32_t          ie_readir_number;
 
 	/** file was truncated from 0 to a certain size */
 	bool                     ie_truncated;
@@ -624,6 +637,12 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
+/* Mark the cache for a directory invalid.  Called when directory contents change on create,
+ * unlink or rename
+ */
+void
+dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie);
+
 /* Mark the cache as up-to-date from now */
 void
 dfuse_cache_set_time(struct dfuse_inode_entry *ie);
@@ -639,6 +658,9 @@ dfuse_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *time
 int
 check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
+
+void
+dfuse_ie_init(struct dfuse_inode_entry *ie);
 
 void
 dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);

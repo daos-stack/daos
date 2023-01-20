@@ -3,13 +3,16 @@ hosts:
 timeout: 1800
 server_config:
   name: daos_server
-  servers:
-    log_mask: INFO
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
+  engines_per_host: 1
+  engines:
+    0:
+      log_mask: INFO
+      storage:
+        0:
+          class: dcpm
+          scm_list: ["/dev/pmem0"]
+          scm_mount: /mnt/daos
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 30000000000
   control_method: dmg
   pool_count: 5

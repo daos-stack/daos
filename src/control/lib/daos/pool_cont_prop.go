@@ -48,6 +48,8 @@ const (
 	PropEntryEncryption = C.DAOS_PROP_ENTRY_ENCRYPT
 	// PropEntryGlobalVersion is the global version property.
 	PropEntryGlobalVersion = C.DAOS_PROP_ENTRY_GLOBAL_VERSION
+	// PropEntryObjectVersion is the object layout version property.
+	PropEntryObjectVersion = C.DAOS_PROP_ENTRY_OBJ_VERSION
 	// PropEntryGroup is the group property.
 	PropEntryGroup = C.DAOS_PROP_ENTRY_GROUP
 	// PropEntryLabel is the label property.
@@ -73,6 +75,8 @@ const (
 )
 
 const (
+	// PoolPropertyMin before any pool property
+	PoolPropertyMin = C.DAOS_PROP_PO_MIN
 	// PoolPropertyLabel is a string that a user can associate with a pool.
 	PoolPropertyLabel = C.DAOS_PROP_PO_LABEL
 	// PoolPropertyACL is the Access Control List for a pool.
@@ -110,6 +114,8 @@ const (
 	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 	// PoolPropertySvcRedunFac defines redundancy factor of the pool service.
 	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
+	// PoolPropertySvcList is the list of pool service replicas.
+	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
 )
 
 const (

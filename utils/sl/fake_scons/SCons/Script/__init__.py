@@ -1,5 +1,5 @@
 """Fake scons environment shutting up pylint on SCons files"""
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -21,7 +21,6 @@
 
 import os
 import sys
-import copy
 
 # pylint: disable=no-self-use
 # pylint: disable=too-many-public-methods
@@ -85,6 +84,10 @@ class DefaultEnvironment():
     def Zip(self, *_args, **_kw):
         """Fake Zip"""
         return []
+
+    def Tool(self, name, **_kw):
+        """Fake Tool"""
+        return
 
     def CXXFile(self, *_args, **_kw):
         """Fake CXXFile"""
@@ -192,7 +195,29 @@ class DefaultEnvironment():
 
     def __getitem__(self, x):
         """Fake __getitem__"""
-        return []
+
+        class myItem():
+            """Fake class for Env variables"""
+
+            def __index__(self):
+                return 0
+
+            def __getitem__(self, x):
+                """Fake __getitem__"""
+
+            def __setitem__(self, x, value):
+                """Fake __setitem__"""
+                return
+
+        return myItem()
+
+    def __setitem__(self, x, value):
+        """Fake __setitem__"""
+        return
+
+    def __index__(self):
+        """Allow indexing"""
+        return 0
 
     def Install(self, *_args, **_kw):
         """Fake Install"""
@@ -209,12 +234,16 @@ class DefaultEnvironment():
         """Fake Object"""
         return []
 
+    def SConscript(self, s_dir):
+        """Fake SConscript"""
+        return
+
     def Replace(self, *_args, **_kw):
         """Fake Replace"""
 
     def Clone(self, *_args, **_kw):
         """Fake Replace"""
-        return copy.copy(self)
+        return DefaultEnvironment()
 
     def Append(self, *_args, **_kw):
         """Fake Append"""
@@ -237,12 +266,68 @@ class DefaultEnvironment():
         """Fake GetOption"""
         return []
 
-    def AppendENVPath(self, key, value):
+    def SetOption(self, key, value):
+        """Fake SetOption"""
+        return
+
+    def ParseConfig(self, command):
+        """Fake ParseConfig"""
+        return
+
+    def AppendENVPath(self, key, value, sep=None):
         """Fake AppendENVPath"""
         return
 
     def PrependENVPath(self, key, value):
         """Fake PrependENVPath"""
+        return
+
+    def d_add_build_rpath(self, pathin='.'):
+        """Fake d_add_build_rpath"""
+        return
+
+    def d_add_rpaths(self, offset, set_go, is_bin):
+        """Fake d_add_rpaths"""
+        return
+
+    def d_configure_mpi(self):
+        """Fake d_configure_mpi"""
+        return DefaultEnvironment()
+
+    def d_setup_go(self):
+        """Fake d_setup_go"""
+        return
+
+    def d_go_bin(self):
+        """Fake d_go_bin"""
+        return 'go'
+
+    def d_program(self, *_args, **_kw):
+        """Fake d_program"""
+        return self.Program(*_args, **_kw)
+
+    def d_test_program(self, *_args, **_kw):
+        """Fake d_test_program"""
+        return self.d_program(*_args, **_kw)
+
+    def d_static_library(self, *_args, **_kw):
+        """Fake d_static_library"""
+        return self.StaticLibrary(*_args, **_kw)
+
+    def d_library(self, *_args, **_kw):
+        """Fake d_library"""
+        return self.Library(*_args, **_kw)
+
+    def analyze_setup(self, prefix, args):
+        """Fake analyze_setup"""
+        return
+
+    def compiler_setup(self):
+        """Fake compiler_setup"""
+        return
+
+    def Preprocess(self, files):
+        """Fake Preprocess"""
         return
 
 
@@ -270,6 +355,7 @@ class Variables():
 
 class Configure():
     """Fake Configure"""
+
     def __init__(self, *_args, **_kw):
         self.env = DefaultEnvironment()
         """constructor"""
@@ -310,6 +396,10 @@ class Configure():
         """Fake CheckFlag"""
         return True
 
+    def CheckGoVersion(self, *_args, **_kw):
+        """Fake CheckGoVersion"""
+        return True
+
     def Finish(self):
         """Fake finish"""
 
@@ -323,6 +413,7 @@ class Literal():
 
 class Dir():
     """Fake Dir"""
+
     def __init__(self, *_args, **_kw):
         self.abspath = os.getcwd()
         self.path = os.getcwd()
@@ -330,6 +421,10 @@ class Dir():
     def srcnode(self):
         """Fake srcnode"""
         return self
+
+
+class Scanner():
+    """Fake Scanner"""
 
 
 class File():
@@ -357,6 +452,7 @@ def SetOption(*_args, **_kw):
 
 class Help():
     """Fake Help"""
+
     def __init__(self, *_args, **_kw):
         """constructor"""
 
