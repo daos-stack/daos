@@ -1,8 +1,8 @@
-'''
+"""
   (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 from logging import getLogger
 import os
 import random
