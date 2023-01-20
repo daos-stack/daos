@@ -654,7 +654,9 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out, rc);
+
+		if (!force)
+			D_GOTO(out, rc);
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
