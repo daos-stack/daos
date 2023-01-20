@@ -312,6 +312,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -417,6 +418,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
