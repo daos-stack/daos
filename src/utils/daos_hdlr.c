@@ -2818,8 +2818,10 @@ out_disconnect:
 out:
 	D_FREE(src_str);
 	D_FREE(dst_str);
-	D_FREE(ca->src);
-	D_FREE(ca->dst);
+	if (ca) {
+		D_FREE(ca->src);
+		D_FREE(ca->dst);
+	}
 	return rc;
 }
 
