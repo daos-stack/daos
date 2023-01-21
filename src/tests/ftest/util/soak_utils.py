@@ -357,19 +357,27 @@ def run_metrics_check(self, logging=True, prefix=None):
 
 
 def display_job_failures(self):
-    """Display job failures.
+    """Display job failure logs.
 
     Args:
         self (obj): soak obj
     """
-    self.log.debug("="*80)
-    self.log.debug("="*80)
+    job_logs = []
+    self.log.debug("=" * 80)
+    self.log.debug("=" * 80)
     self.log.debug("These are the job logs for failed jobs")
-    for id in self.all_failed_jobs:
-        cmd = f"ls -latr {self.outputsoak_dir}/pass*/*_{id}_*"
-        run_command(cmd, timeout=120)
-    self.log.debug("="*80)
-    self.log.debug("="*80)
+    for job_id in self.all_failed_jobs:
+        cmd = f"ls -latr {self.outputsoak_dir}/pass*/*_{job_id}_*"
+        try:
+            output = run_command(cmd, timeout=120, verbose=False)
+            job_logs.extend(output.stdout_text.splitlines())
+        except DaosTestError:
+            self.log.error(
+                f" <<FAILED: No logs with job ID {job_id}>>")
+    for log in job_logs:
+        self.log.debug("  >>>%s", log)
+    self.log.debug("=" * 80)
+    self.log.debug("=" * 80)
 
 
 def get_harassers(harasser):
