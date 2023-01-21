@@ -124,6 +124,9 @@ struct umem_store {
 	uint32_t		 stor_hdr_blks;
 	/** private data passing between layers */
 	void			*stor_priv;
+	void                    *chkpt_ctx;
+	/** Cache for this store */
+	struct umem_cache       *cache;
 	/**
 	 * Callbacks provided by upper level stack, umem allocator uses them to operate
 	 * the storage device.
@@ -968,46 +971,45 @@ umem_page2store(struct umem_page *page)
 /** Allocate global cache for umem store.  All 16MB pages are initially unmapped
  *
  * \param[in]	store		The umem store
- * \param[out]	cache		Allocated cache
  * \param[in]	max_mapped	0 or Maximum number of mapped 16MB pages (must be 0 for now)
  *
  * \return 0 on success
  */
 int
-umem_cache_alloc(struct umem_store *store, struct umem_cache **cache, uint64_t max_mapped);
+umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
 
 /** Free global cache for umem store.  Pages must be unmapped first
  *
- * \param[in]	cache	Cache to free.
+ * \param[in]	store	Store for which to free cache
  *
  * \return 0 on success
  */
 int
-umem_cache_free(struct umem_cache *cache);
+umem_cache_free(struct umem_store *store);
 
 /** Query if the page cache has enough space to map a range
  *
- * \param[in]	cache		The umem cache
+ * \param[in]	store		The store
  * \param[in]	num_pages	Number of pages to bring into cache
  *
  * \return number of pages that need eviction to support mapping the range
  */
 int
-umem_cache_check(struct umem_cache *cache, uint64_t num_pages);
+umem_cache_check(struct umem_store *store, uint64_t num_pages);
 
 /** Evict the pages.   This invokes the unmap callback. (XXX: not yet implemented)
  *
- * \param[in]	cache		The umem cache
+ * \param[in]	store		The store
  * \param[in]	num_pages	Number of pages to evict
  *
  * \return 0 on success, -DER_BUSY means a checkpoint is needed to evict the pages
  */
 int
-umem_cache_evict(struct umem_cache *cache, uint64_t num_pages);
+umem_cache_evict(struct umem_store *store, uint64_t num_pages);
 
 /** Adds a mapped range of pages to the page cache.
  *
- * \param[in]	cache		The umem cache
+ * \param[in]	store		The store
  * \param[in]	offset		The offset in the umem cache
  * \param[in]	start_addr	Start address of mapping
  * \param[in]	num_pages	Number of consecutive 16MB pages to being cached
@@ -1015,31 +1017,31 @@ umem_cache_evict(struct umem_cache *cache, uint64_t num_pages);
  * \return 0 on success
  */
 int
-umem_cache_map_range(struct umem_cache *cache, umem_off_t offset, void *start_addr,
+umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
 		     uint64_t num_pages);
 
 /** Take a reference on the pages in the range.   Only needed for cases where we need the page to
  *  stay loaded across a yield, such as the VOS object cache.  Pages in the range must be mapped.
  *
- *  \param[in]	cache	The umem cache
+ *  \param[in]	store	The umem store
  *  \param[in]	addr	The address of the hold
  *  \param[in]	size	The size of the hold
  *
  *  \return 0 on success
  */
 int
-umem_cache_pin(struct umem_cache *cache, umem_off_t addr, daos_size_t size);
+umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size);
 
 /** Release a reference on pages in the range.  Pages in the range must be mapped and held.
  *
- *  \param[in]	cache	The umem cache
+ *  \param[in]	store	The umem store
  *  \param[in]	addr	The address of the hold
  *  \param[in]	size	The size of the hold
  *
  *  \return 0 on success
  */
 int
-umem_cache_unpin(struct umem_cache *cache, umem_off_t addr, daos_size_t size);
+umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size);
 
 /**
  * Touched the region identified by @addr and @size, it will mark pages in this region as
@@ -1048,7 +1050,7 @@ umem_cache_unpin(struct umem_cache *cache, umem_off_t addr, daos_size_t size);
  * This function is called by allocator(probably VOS as well) each time it creates memory
  * snapshot (calls tx_snap) or just to mark a region to be flushed.
  *
- * \param[in]	cache	The umem cache
+ * \param[in]	store	The umem store
  * \param[in]	wr_tx	The writing transaction
  * \param[in]	addr	The start address
  * \param[in]	size	size of dirty region
@@ -1057,29 +1059,32 @@ umem_cache_unpin(struct umem_cache *cache, umem_off_t addr, daos_size_t size);
  *         transaction must either abort or find another location to modify.
  */
 int
-umem_cache_touch(struct umem_cache *cache, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
+umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
 
 /** Callback for checkpoint to wait for the commit of chkpt_tx.
  *
- * \param[in]	cache		The umem cache
+ * \param[in]	store		The umem store
  * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
  * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
  */
 typedef void
-umem_cache_wait_cb_t(struct umem_cache *cache, uint64_t chkpt_tx, uint64_t *committed_tx);
+umem_cache_wait_cb_t(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx,
+		     void *arg);
 
 /**
  * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
  *
  * This function can yield internally, it is called by checkpoint service of upper level stack.
  *
- * \param[in]	cache	The umem cache
+ * \param[in]	store	The umem store
+ * \param[in]	wait_cb	the cutoff for checkpointing, should be the latest inflight tx ID
  * \param[in]	wal_tx	the cutoff for checkpointing, should be the latest inflight tx ID
  *
  * \return 0 on success
  */
 int
-umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx, umem_cache_wait_cb_t wait_cb);
+umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
+		      uint64_t *checkpointed_id);
 
 #endif /** DAOS_PMEM_BUILD */
 

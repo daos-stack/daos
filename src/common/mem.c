@@ -1575,14 +1575,14 @@ umem_tx_publish(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act)
 }
 
 int
-umem_cache_alloc(struct umem_store *store, struct umem_cache **cachep, uint64_t max_mapped)
+umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 {
 	struct umem_cache *cache;
 	int                num_pages;
 	int                rc = 0;
 	int                idx;
 
-	D_ASSERT(store != NULL && cachep != NULL);
+	D_ASSERT(store != NULL);
 
 	num_pages = (store->stor_size + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 
@@ -1595,7 +1595,7 @@ umem_cache_alloc(struct umem_store *store, struct umem_cache **cachep, uint64_t 
 	if (cache == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
-	cache->ca_store = store;
+	store->cache->ca_store = store;
 	cache->ca_num_pages  = num_pages;
 	cache->ca_max_mapped = num_pages;
 
@@ -1607,7 +1607,7 @@ umem_cache_alloc(struct umem_store *store, struct umem_cache **cachep, uint64_t 
 	for (idx = 0; idx < num_pages; idx++)
 		cache->ca_pages[idx].pg_id = idx;
 
-	*cachep = cache;
+	store->cache = cache;
 
 	return 0;
 
@@ -1617,16 +1617,18 @@ error:
 }
 
 int
-umem_cache_free(struct umem_cache *cache)
+umem_cache_free(struct umem_store *store)
 {
 	/** XXX: check reference counts? */
-	D_FREE(cache);
+	D_FREE(store->cache);
 	return 0;
 }
 
 int
-umem_cache_check(struct umem_cache *cache, uint64_t num_pages)
+umem_cache_check(struct umem_store *store, uint64_t num_pages)
 {
+	struct umem_cache *cache = store->cache;
+
 	D_ASSERT(num_pages + cache->ca_mapped <= cache->ca_num_pages);
 
 	if (num_pages > cache->ca_max_mapped - cache->ca_mapped)
@@ -1636,16 +1638,17 @@ umem_cache_check(struct umem_cache *cache, uint64_t num_pages)
 }
 
 int
-umem_cache_evict(struct umem_cache *cache, uint64_t num_pages)
+umem_cache_evict(struct umem_store *store, uint64_t num_pages)
 {
 	/** XXX: Not yet implemented */
 	return 0;
 }
 
 int
-umem_cache_map_range(struct umem_cache *cache, umem_off_t offset, void *start_addr,
+umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
 		     uint64_t num_pages)
 {
+	struct umem_cache *cache = store->cache;
 	struct umem_page *page;
 	struct umem_page *end_page;
 	uint64_t          current_addr = (uint64_t)start_addr;
@@ -1672,8 +1675,9 @@ umem_cache_map_range(struct umem_cache *cache, umem_off_t offset, void *start_ad
 }
 
 int
-umem_cache_pin(struct umem_cache *cache, umem_off_t addr, daos_size_t size)
+umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size)
 {
+	struct umem_cache *cache     = store->cache;
 	struct umem_page *page      = umem_cache_off2page(cache, addr);
 	struct umem_page *end_page  = umem_cache_off2page(cache, addr + size - 1) + 1;
 
@@ -1686,8 +1690,9 @@ umem_cache_pin(struct umem_cache *cache, umem_off_t addr, daos_size_t size)
 }
 
 int
-umem_cache_unpin(struct umem_cache *cache, umem_off_t addr, daos_size_t size)
+umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size)
 {
+	struct umem_cache *cache    = store->cache;
 	struct umem_page *page     = umem_cache_off2page(cache, addr);
 	struct umem_page *end_page = umem_cache_off2page(cache, addr + size - 1) + 1;
 
@@ -1701,10 +1706,10 @@ umem_cache_unpin(struct umem_cache *cache, umem_off_t addr, daos_size_t size)
 }
 
 static inline void
-touch_page(struct umem_cache *cache, struct umem_page *page, uint64_t wr_tx, umem_off_t first_byte,
+touch_page(struct umem_store *store, struct umem_page *page, uint64_t wr_tx, umem_off_t first_byte,
 	   umem_off_t last_byte)
 {
-	struct umem_store *store = cache->ca_store;
+	struct umem_cache *cache = store->cache;
 	int start_bit = (first_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 	int end_bit   = (last_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 
@@ -1726,8 +1731,9 @@ touch_page(struct umem_cache *cache, struct umem_page *page, uint64_t wr_tx, ume
 }
 
 int
-umem_cache_touch(struct umem_cache *cache, uint64_t wr_tx, umem_off_t addr, daos_size_t size)
+umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size)
 {
+	struct umem_cache *cache     = store->cache;
 	struct umem_page *page      = umem_cache_off2page(cache, addr);
 	umem_off_t        end_addr  = addr + size - 1;
 	struct umem_page *end_page  = umem_cache_off2page(cache, end_addr);
@@ -1746,11 +1752,11 @@ umem_cache_touch(struct umem_cache *cache, uint64_t wr_tx, umem_off_t addr, daos
 		D_ASSERT((page + 1) == end_page);
 		start_addr = end_addr & ~UMEM_CACHE_PAGE_SZ_MASK;
 
-		touch_page(cache, end_page, wr_tx, start_addr, end_addr);
+		touch_page(store, end_page, wr_tx, start_addr, end_addr);
 		end_addr = start_addr - 1;
 	}
 
-	touch_page(cache, page, wr_tx, addr, end_addr);
+	touch_page(store, page, wr_tx, addr, end_addr);
 
 	return 0;
 }
@@ -1835,7 +1841,7 @@ page_insert_sorted(struct umem_store *store, struct umem_page *page, d_list_t *l
 	struct umem_page *other;
 
 	d_list_for_each_entry(other, list, pg_link) {
-		if (store->stor_ops->so_wal_id_cmp(page->pg_last_checkpoint,
+		if (store->stor_ops->so_wal_id_cmp(store, page->pg_last_checkpoint,
 						   other->pg_last_checkpoint) < 0) {
 			d_list_add(&page->pg_link, &other->pg_link);
 			return;
@@ -1846,13 +1852,15 @@ page_insert_sorted(struct umem_store *store, struct umem_page *page, d_list_t *l
 }
 
 int
-umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx, umem_cache_wait_cb_t wait_cb)
+umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
+		      uint64_t *out_id)
 {
-	struct umem_store           *store    = cache->ca_store;
+	struct umem_cache           *cache    = store->cache;
 	struct umem_page            *page     = NULL;
 	struct umem_checkpoint_data *chkpt_data_all;
 	struct umem_checkpoint_data *chkpt_data;
 	uint64_t                     committed_tx = 0;
+	uint64_t                     chkpt_id     = 0;
 	d_list_t                     free_list;
 	int                          i;
 	int                          rc;
@@ -1886,6 +1894,8 @@ umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx, umem_cache_wait
 		 *  them from being moved to another list by an I/O operation.
 		 */
 		page->pg_waiting = 1;
+		if (store->stor_ops->so_wal_id_cmp(store, page->pg_last_inflight, chkpt_id) > 0)
+			page->pg_last_inflight = chkpt_id;
 	}
 
 	do {
@@ -1929,7 +1939,7 @@ umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx, umem_cache_wait
 
 		page = d_list_pop_entry(&cache->ca_pgs_waiting, struct umem_page, pg_link);
 
-		wait_cb(cache, page->pg_last_checkpoint, &committed_tx);
+		wait_cb(store, page->pg_last_checkpoint, &committed_tx, arg);
 
 		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
 							page->pg_last_checkpoint) >= 0);
@@ -1952,6 +1962,8 @@ umem_cache_checkpoint(struct umem_cache *cache, uint64_t wal_tx, umem_cache_wait
 	} while (inflight != 0 || !d_list_empty(&cache->ca_pgs_copying));
 
 	D_FREE(chkpt_data_all);
+
+	*out_id = chkpt_id;
 
 	return 0;
 }

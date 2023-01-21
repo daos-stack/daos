@@ -212,7 +212,7 @@ dav_wal_tx_snap(void *hdl, void *addr, daos_size_t size, void *src, uint32_t fla
 	if (addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
 
-	rc = umem_cache_touch(dav_hdl->do_cache, dav_hdl->do_utx->utx_id,
+	rc = umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id,
 			      mdblob_addr2offset(tx->wt_dav_hdl, addr), size);
 	if (rc != 0)
 		return rc;
@@ -249,7 +249,7 @@ dav_wal_tx_assign(void *hdl, void *addr, uint64_t val)
 	if (addr == NULL)
 		return -DER_INVAL;
 
-	rc = umem_cache_touch(dav_hdl->do_cache, dav_hdl->do_utx->utx_id,
+	rc = umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id,
 			      mdblob_addr2offset(tx->wt_dav_hdl, addr), sizeof(uint64_t));
 	if (rc != 0)
 		return rc;
@@ -278,7 +278,7 @@ dav_wal_tx_set_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits)
 	if (addr == NULL)
 		return -DER_INVAL;
 
-	rc = umem_cache_touch(dav_hdl->do_cache, dav_hdl->do_utx->utx_id,
+	rc = umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id,
 			      mdblob_addr2offset(tx->wt_dav_hdl, addr), sizeof(uint64_t));
 	if (rc != 0)
 		return rc;
@@ -307,7 +307,7 @@ dav_wal_tx_clr_bits(void *hdl, void *addr, uint32_t pos, uint16_t num_bits)
 	if (addr == NULL)
 		return -DER_INVAL;
 
-	rc = umem_cache_touch(dav_hdl->do_cache, dav_hdl->do_utx->utx_id,
+	rc = umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id,
 			      mdblob_addr2offset(tx->wt_dav_hdl, addr), sizeof(uint64_t));
 	if (rc != 0)
 		return rc;
@@ -339,7 +339,7 @@ dav_wal_tx_set(void *hdl, void *addr, char c, daos_size_t size)
 	if (addr == NULL || size == 0 || size > UMEM_ACT_PAYLOAD_MAX_LEN)
 		return -DER_INVAL;
 
-	rc = umem_cache_touch(dav_hdl->do_cache, dav_hdl->do_utx->utx_id,
+	rc = umem_cache_touch(dav_hdl->do_store, dav_hdl->do_utx->utx_id,
 			      mdblob_addr2offset(tx->wt_dav_hdl, addr), size);
 	if (rc != 0)
 		return rc;

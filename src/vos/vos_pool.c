@@ -190,6 +190,69 @@ struct umem_store_ops vos_store_ops = {
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	/** TOOD: Revisit. */
+	return bio_nvme_configured(SMD_DEV_TYPE_META);
+}
+
+static void
+chkpt_notify(uint64_t commit_id, void *arg)
+{
+	struct chkpt_ctx *ctx = arg;
+
+	ctx->cc_wake_fn(ctx);
+	ctx->cc_commit_id = commit_id;
+}
+
+static void
+chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
+{
+	struct chkpt_ctx *ctx = arg;
+	int               rc;
+
+	rc = bio_wal_set_ckp_id(store->stor_priv, chkpt_tx, chkpt_notify, ctx);
+	if (rc == -DER_ALREADY)
+		goto done;
+
+	ctx->cc_wait_fn(ctx);
+done:
+	*committed_tx = ctx->cc_commit_id;
+}
+
+int
+vos_pool_checkpoint(struct chkpt_ctx *ctx)
+{
+	struct vos_pool      *pool;
+	uint64_t              tx_id;
+	struct umem_instance *umm;
+	struct umem_store    *store;
+	int                   rc;
+
+	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	umm   = vos_pool2umm(pool);
+	store = &umm->umm_pool->up_store;
+
+	/* Not going to call bio_wal_chp_start to start because it returns commit_id.  As such, we
+	 * will calculate the latest uncommitted id which is what we want.  When this is changed,
+	 * we can update this API and assume tx_id will be the same value.
+	 */
+	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
+
+	if (rc == 0)
+		rc = bio_wal_ckp_end(store->stor_priv, tx_id);
+
+	return rc;
+}
+
 int
 vos_pool_settings_init(void)
 {

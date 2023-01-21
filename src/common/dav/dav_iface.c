@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,7 +103,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		goto out0;
 	}
 
-	rc = umem_cache_alloc(store, &hdl->do_cache, 0);
+	rc = umem_cache_alloc(store, 0);
 	if (rc != 0) {
 		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 		err = rc;
@@ -125,7 +125,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	}
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
-	rc = umem_cache_map_range(hdl->do_cache, 0, base, sz >> UMEM_CACHE_PAGE_SZ_SHIFT);
+	rc = umem_cache_map_range(hdl->do_store, 0, base, sz >> UMEM_CACHE_PAGE_SZ_SHIFT);
 	if (rc != 0) {
 		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 		err = rc;
@@ -221,7 +221,7 @@ out2:
 		D_FREE(hdl->do_utx);
 	}
 	D_FREE(hdl->do_path);
-	umem_cache_free(hdl->do_cache);
+	umem_cache_free(hdl->do_store);
 out1:
 	D_FREE(hdl);
 out0:
@@ -335,7 +335,7 @@ dav_obj_close(dav_obj_t *hdl)
 		dav_umem_wtx_cleanup(hdl->do_utx);
 		D_FREE(hdl->do_utx);
 	}
-	umem_cache_free(hdl->do_cache);
+	umem_cache_free(hdl->do_store);
 	DAV_DBG("pool %s is closed", hdl->do_path);
 	D_FREE(hdl->do_path);
 	D_FREE(hdl);

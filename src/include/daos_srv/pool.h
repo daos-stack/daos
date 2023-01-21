@@ -140,6 +140,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
 	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
+	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
@@ -327,5 +328,10 @@ ds_pool_get_version(struct ds_pool *pool)
 
 	return ver;
 }
+
+int
+ds_start_chkpt_ult(struct ds_pool_child *child);
+int
+ds_stop_chkpt_ult(struct ds_pool_child *child);
 
 #endif /* __DAOS_SRV_POOL_H__ */

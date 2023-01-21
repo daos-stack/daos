@@ -88,6 +88,9 @@ struct wal_super_info {
 	uint32_t		si_ckp_blks;	/* Blocks used by last check-pointed ID */
 	uint32_t		si_commit_blks;	/* Blocks used by last committed ID */
 	uint64_t		si_unused_id;	/* Next unused ID */
+	uint64_t                si_ckp_wait_id; /* ID checkpoint is waiting for */
+	void                   *si_ckp_wait_arg; /* Arg to pass to callback */
+	ckp_notify_cb           si_notify_cb;    /* Callback to notify ckp_wait_id is committed */
 	d_list_t		si_pending_list;/* Pending transactions */
 	ABT_cond		si_rsrv_wq;	/* FIFO waitqueue for WAL ID reserving */
 	ABT_mutex		si_mutex;	/* For si_rsrv_wq */

@@ -158,6 +158,24 @@ bio_wal_id_cmp(struct bio_meta_context *mc, uint64_t id1, uint64_t id2)
 	return wal_id_cmp(si, id1, id2);
 }
 
+int
+bio_wal_set_ckp_id(struct bio_meta_context *mc, uint64_t chkpt_id, ckp_notify_cb notify_cb,
+		   void *arg)
+{
+	struct wal_super_info *si = &mc->mc_wal_info;
+
+	if (wal_id_cmp(si, chkpt_id, si->si_commit_id) <= 0) {
+		notify_cb(si->si_commit_id, arg);
+		return -DER_ALREADY;
+	}
+
+	si->si_ckp_wait_id  = chkpt_id;
+	si->si_ckp_wait_arg = arg;
+	si->si_notify_cb    = notify_cb;
+
+	return 0;
+}
+
 /* Get next ID by current ID & blocks used by current ID */
 static inline uint64_t
 wal_next_id(struct wal_super_info *si, uint64_t id, uint32_t blks)
@@ -753,6 +771,10 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 		D_ASSERT(si->si_tx_failed == 0);
 
 		si->si_commit_id = wal_tx->td_id;
+		if (si->si_notify_cb && wal_id_cmp(si, si->si_commit_id, si->si_ckp_wait_id) >= 0) {
+			si->si_notify_cb(si->si_commit_id, si->si_ckp_wait_arg);
+			si->si_notify_cb = NULL;
+		}
 		si->si_commit_blks = wal_tx->td_blks;
 	}
 
@@ -1663,10 +1685,8 @@ bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id)
 		return -DER_ALREADY;
 
 	/*
-	 * Caller doesn't have to checkpoint to this highest committed ID, instead,
-	 * it could pick reasonable amount of pages for checkpointing in the committed
-	 * ID order, so that the WAL space will be gradually reclaimed in a more
-	 * prompt way.
+	 * Caller will checkpoint to the latest id because there are inflight updates to
+	 * that point.
 	 */
 	*tx_id = si->si_commit_id;
 	return 0;

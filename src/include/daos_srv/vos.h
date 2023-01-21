@@ -1230,6 +1230,48 @@ int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
 
+struct chkpt_ctx;
+typedef bool (*cc_is_idle_fn_t)();
+typedef int (*cc_yield_fn_t)(struct chkpt_ctx *);
+typedef void (*cc_wait_fn_t)(struct chkpt_ctx *);
+typedef void (*cc_wake_fn_t)(struct chkpt_ctx *);
+
+/* Scrub the pool */
+struct chkpt_ctx {
+	struct dss_module_info *cc_dmi;
+
+	/**
+	 * Pool
+	 **/
+	uuid_t                  cc_pool_uuid;
+	daos_handle_t           cc_vos_pool_hdl;
+	struct ds_pool         *cc_pool; /* Used to get properties */
+
+	/* Schedule controlling function pointers and arg */
+	cc_is_idle_fn_t         cc_is_idle_fn;
+	cc_yield_fn_t           cc_yield_fn;
+	cc_wait_fn_t            cc_wait_fn;
+	cc_wake_fn_t            cc_wake_fn;
+	uint64_t                cc_commit_id;
+	void                   *cc_sched_arg;
+	void                   *cc_eventual;
+};
+
+/**
+ * Returns true if checkpointing is needed for the pool
+ *
+ * \param[in]	poh	Pool open handle
+ */
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh);
+
+/** Checkpoint the VOS pool
+ *
+ * \param[in] ctx	Checkpoint context
+ */
+int
+vos_pool_checkpoint(struct chkpt_ctx *ctx);
+
 /**
  * The following declarations are for checksum scrubbing functions. The function
  * types provide an interface for injecting dependencies into the
