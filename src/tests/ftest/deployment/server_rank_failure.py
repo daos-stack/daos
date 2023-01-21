@@ -35,8 +35,7 @@ class ServerRankFailure(IorTestBase):
             pool (TestPool): Pool to run IOR.
             container (TestContainer): Container to run IOR.
             namespace (str): IOR namespace.
-            timeout (int): Mpirun timeout value in sec. Defaults to None, in which case
-                infinite.
+            timeout (int): Mpirun timeout value in sec. Defaults to None, in which case infinite.
         """
         # Update the object class depending on the test case.
         ior_cmd = IorCommand(namespace=namespace)
@@ -44,17 +43,13 @@ class ServerRankFailure(IorTestBase):
 
         # Standard IOR prep sequence.
         ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.update_params(test_file=os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
-        manager.assign_hosts(
-            self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
+        manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", namespace)
-        manager.ppn.update(ppn, 'mpirun.ppn')
-        manager.processes.update(None, 'mpirun.np')
+        manager.update_params(ppn=ppn, processes=None)
 
         # Run the command.
         try:
@@ -69,23 +64,6 @@ class ServerRankFailure(IorTestBase):
         except CommandFailure as error:
             self.log.info("--- IOR command %d failed ---", job_num)
             results[job_num] = [False, "IOR failed: {}".format(error)]
-
-    @staticmethod
-    def check_container_health(container, expected_health):
-        """Check container property's Health field by calling daos container get-prop.
-
-        Args:
-            container (TestContainer): Container to call get-prop.
-            expected_health (str): Expected value in the Health field.
-
-        Returns:
-            bool: True if expected_health matches the one obtained from get-prop.
-
-        """
-        output = container.get_prop(properties=["status"])
-        actual_health = output["response"][0]["value"]
-
-        return actual_health == expected_health
 
     def restart_all_servers(self):
         """Restart daos_server on all nodes.
@@ -221,8 +199,7 @@ class ServerRankFailure(IorTestBase):
             self.pool.wait_for_rebuild(to_start=False, interval=10)
 
         # 11. Verify that the container Health is HEALTHY.
-        if not self.check_container_health(
-                container=self.container, expected_health="HEALTHY"):
+        if not self.container.verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after server restart!")
 
         # 12. Run IOR and verify that it works.
@@ -246,8 +223,8 @@ class ServerRankFailure(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_with_rp
+        :avocado: tags=deployment,server_rank_failure,rebuild
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_with_rp
         """
         self.verify_rank_failure(ior_namespace="/run/ior_with_rp/*")
 
@@ -259,8 +236,8 @@ class ServerRankFailure(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_with_ec
+        :avocado: tags=deployment,server_rank_failure,rebuild
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_with_ec
         """
         self.verify_rank_failure(ior_namespace="/run/ior_with_ec/*")
 
@@ -274,13 +251,13 @@ class ServerRankFailure(IorTestBase):
         3. Create a container without redundancy factor.
         4. Run IOR with oclass SX.
         5. While IOR is running, kill daos_engine process from two of the ranks where the
-        pool isn’t created. This will simulate the case where there’s a node failure, but
-        does not affect the user because their pool isn’t created on the failed node
+        pool isn't created. This will simulate the case where there's a node failure, but
+        does not affect the user because their pool isn't created on the failed node
         (assuming that everything else such as network, client node, etc. are still
         working).
         6. Verify that IOR finishes successfully.
         7. Verify that the container Health is HEALTHY.
-        8. To further verify that the pool isn’t affected, create a new container on the
+        8. To further verify that the pool isn't affected, create a new container on the
         pool and run IOR.
         9. To make avocado happy, restart daos_servers on the host where the engines were
         killed.
@@ -288,7 +265,7 @@ class ServerRankFailure(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,server_rank_failure
-        :avocado: tags=test_server_rank_failure_isolation
+        :avocado: tags=ServerRankFailure,test_server_rank_failure_isolation
         """
         # 1. Determine the two ranks to create the pool and a node to kill the engines.
         # We'll create a pool on rank 0 and the other rank that's on the same node. Find
@@ -320,9 +297,7 @@ class ServerRankFailure(IorTestBase):
         self.log.info("engine_kill_host = %s", engine_kill_host)
 
         # 2. Create a pool across two ranks on the same node; 0 and rank_r.
-        self.add_pool(namespace="/run/pool_size_value/*", create=False)
-        self.pool.target_list.update([0, rank_r])
-        self.pool.create()
+        self.add_pool(namespace="/run/pool_size_value/*", target_list=[0, rank_r])
 
         # 3. Create a container without redundancy factor.
         self.container = []
@@ -356,10 +331,8 @@ class ServerRankFailure(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.check_container_health(
-                container=self.container[0], expected_health="HEALTHY"):
-            errors.append(
-                "Container health isn't HEALTHY after killing engine on rank 1!")
+        if not self.container.verify_health(expected_health="HEALTHY"):
+            errors.append("Container health isn't HEALTHY after killing engine on rank 1!")
 
         # 8. Create a new container on the pool and run IOR.
         self.container.append(
