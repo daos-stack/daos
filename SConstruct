@@ -2,14 +2,11 @@
 import os
 import sys
 import platform
-import subprocess
+import subprocess  # nosec
 import time
 import errno
 import SCons.Warnings
-import daos_build
-import compiler_setup
 from prereq_tools import PreReqComponent
-import stack_analyzer
 # pylint: disable=reimported
 
 if sys.version_info.major < 3:
@@ -21,11 +18,6 @@ wrap scons-3.""")
     Exit(1)
 
 SCons.Warnings.warningAsException()
-
-try:
-    input = raw_input  # pylint: disable=redefined-builtin
-except NameError:
-    pass
 
 
 def get_version(env):
@@ -43,13 +35,15 @@ def get_version(env):
 
 
 API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "5"
+API_VERSION_MINOR = "7"
 API_VERSION_FIX = "0"
 API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
 
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM spec file """
+
+    # pylint: disable=consider-using-f-string
     spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
     current_version = 0
     release = 0
@@ -151,6 +145,7 @@ def build_misc(build_prefix):
 def scons():  # pylint: disable=too-many-locals,too-many-branches
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
+        # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
             import pygit2
@@ -324,18 +319,17 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
-    env = Environment(TOOLS=['extra', 'default', 'textfile'])
+    deps_env = Environment()
 
     # Scons strips out the environment, however to be able to build daos using the interception
     # library we need to add a few things back in.
     if 'LD_PRELOAD' in os.environ:
-        # pylint: disable=invalid-sequence-index
-        env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+        deps_env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
         for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
             value = os.environ.get(key, None)
             if value is not None:
-                env['ENV'][key] = value
+                deps_env['ENV'][key] = value
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
@@ -347,27 +341,26 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     platform_arm = is_platform_arm()
 
     if 'VIRTUAL_ENV' in os.environ:
-        env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
-        # pylint: disable=invalid-sequence-index
-        env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
+        deps_env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
+        deps_env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
 
-    prereqs = PreReqComponent(env, opts, commits_file)
-    config = Configure(env)
+    config = Configure(deps_env)
     if not config.CheckHeader('stdatomic.h'):
         Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
     config.Finish()
-    build_prefix = prereqs.get_src_build_dir()
-    prereqs.init_build_targets(build_prefix)
-    prereqs.load_defaults()
+
+    prereqs = PreReqComponent(deps_env, opts, commits_file)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+        deps_env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
-    opts.Save(opts_file, env)
+    opts.Save(opts_file, deps_env)
 
     if GetOption('build_deps') == 'only':
         print('Exiting because --build-deps=only was set')
         Exit(0)
+
+    env = deps_env.Clone(tools=['extra', 'textfile', 'daos_builder', 'compiler_setup'])
 
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
@@ -378,21 +371,20 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     base_env = env.Clone()
 
-    base_env_mpi = env.Clone()
-
-    compiler_setup.base_setup(env)
-
     if not GetOption('help') and not GetOption('clean'):
-        mpi = daos_build.configure_mpi(base_env_mpi)
-        if not mpi:
+        base_env_mpi = env.d_configure_mpi()
+        if not base_env_mpi:
             print("\nSkipping compilation for tests that need MPI")
             print("Install and load mpich or openmpi\n")
-            base_env_mpi = None
+    else:
+        base_env_mpi = None
+
+    env.compiler_setup()
+    build_prefix = prereqs.get_src_build_dir()
 
     args = GetOption('analyze_stack')
     if args is not None:
-        analyzer = stack_analyzer.Analyzer(env, build_prefix, args)
-        analyzer.analyze_on_exit()
+        env.Tool('stack_analyzer', prefix=build_prefix, args=args)
 
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
@@ -402,17 +394,12 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     path = os.path.join(build_prefix, 'src')
     SConscript(os.path.join('src', 'SConscript'), variant_dir=path, duplicate=0)
 
-    buildinfo = prereqs.get_build_info()
-    buildinfo.gen_script('.build_vars.sh')
-    buildinfo.save('.build_vars.json')
+    prereqs.save_build_info()
     # also install to $PREFIX/lib to work with existing avocado test code
     if prereqs.test_requested():
-        daos_build.install(env, "lib/daos/",
-                           ['.build_vars.sh', '.build_vars.json'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                    ['site_scons/env_modules.py'])
-        env.Install('$PREFIX/lib/daos/TESTING/ftest/',
-                    ['ftest.sh'])
+        env.Install('$PREFIX/lib/daos', ['.build_vars.sh', '.build_vars.json'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/util', ['site_scons/env_modules.py'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/', ['ftest.sh'])
 
     env.Install("$PREFIX/lib64/daos", "VERSION")
 

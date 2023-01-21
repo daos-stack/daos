@@ -469,7 +469,7 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			} else {
 				if len(mbb.ResetCalls) != 1 {
 					t.Fatalf("unexpected number of reset calls, want 1 got %d",
-						len(mbb.PrepareCalls))
+						len(mbb.ResetCalls))
 				}
 				// If empty TargetUser in cmd, expect current user in call.
 				if tc.resetCmd.TargetUser == "" {
@@ -482,4 +482,270 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			mbb.RUnlock()
 		})
 	}
+}
+
+func TestDaosServer_getVMDState(t *testing.T) {
+	fa := false
+	tr := true
+
+	for name, tc := range map[string]struct {
+		cfg           *config.Server
+		ignoreCfg     bool
+		cmdDisableVMD bool
+		expOut        bool
+	}{
+		"nil cmd cfg": {
+			expOut: true,
+		},
+		"vmd state not specified in cfg": {
+			cfg:    &config.Server{},
+			expOut: true,
+		},
+		"vmd not disabled in cfg": {
+			cfg: &config.Server{
+				DisableVMD: &fa,
+			},
+			expOut: true,
+		},
+		"vmd disabled in cfg": {
+			cfg: &config.Server{
+				DisableVMD: &tr,
+			},
+		},
+		"vmd disabled in cfg; cfg ignored": {
+			cfg: &config.Server{
+				DisableVMD: &tr,
+			},
+			ignoreCfg: true,
+			expOut:    true,
+		},
+		"vmd disabled on commandline": {
+			cfg:           &config.Server{},
+			cmdDisableVMD: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			scanCmd := &scanNVMeCmd{}
+			scanCmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+			scanCmd.config = tc.cfg
+			scanCmd.IgnoreConfig = tc.ignoreCfg
+			scanCmd.DisableVMD = tc.cmdDisableVMD
+
+			test.AssertEqual(t, tc.expOut, scanCmd.getVMDState(), "unexpected VMD state")
+		})
+	}
+}
+
+func TestDaosServer_scanNVMe(t *testing.T) {
+	cmpopt := cmp.Comparer(func(x, y *storage.BdevDeviceList) bool {
+		if x == nil && y == nil {
+			return true
+		}
+		return x.Equals(y)
+	})
+
+	for name, tc := range map[string]struct {
+		scanCmd     *scanNVMeCmd
+		cfg         *config.Server
+		ignoreCfg   bool
+		bmbc        *bdev.MockBackendConfig
+		expErr      error
+		expScanCall *storage.BdevScanRequest
+	}{
+		"normal scan": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+					},
+				},
+			},
+			expScanCall: &storage.BdevScanRequest{},
+		},
+		"failed scan": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanErr: errors.New("fail"),
+			},
+			expErr: errors.New("fail"),
+		},
+		"devices filtered by config": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+						storage.MockNvmeController(2),
+						storage.MockNvmeController(3),
+					},
+				},
+			},
+			cfg: (&config.Server{}).WithEngines(
+				(&engine.Config{}).WithStorage(storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(test.MockPCIAddr(1))),
+				(&engine.Config{}).WithStorage(storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(test.MockPCIAddr(3))),
+			),
+			expScanCall: &storage.BdevScanRequest{
+				DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1),
+					test.MockPCIAddr(3)),
+			},
+		},
+		"no devices specified in config": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+						storage.MockNvmeController(2),
+						storage.MockNvmeController(3),
+					},
+				},
+			},
+			cfg: (&config.Server{}).WithEngines(
+				(&engine.Config{}).WithStorage(),
+			),
+			expScanCall: &storage.BdevScanRequest{},
+		},
+		"cfg ignore flag set; device filtering skipped": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						storage.MockNvmeController(1),
+						storage.MockNvmeController(2),
+						storage.MockNvmeController(3),
+					},
+				},
+			},
+			ignoreCfg: true,
+			cfg: (&config.Server{}).WithEngines(
+				(&engine.Config{}).WithStorage(storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(test.MockPCIAddr(1))),
+				(&engine.Config{}).WithStorage(storage.NewTierConfig().
+					WithStorageClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(test.MockPCIAddr(3))),
+			),
+			expScanCall: &storage.BdevScanRequest{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			mbb := bdev.NewMockBackend(tc.bmbc)
+			mbp := bdev.NewProvider(log, mbb)
+			msp := scm.NewMockProvider(log, nil, nil)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+
+			if tc.scanCmd == nil {
+				tc.scanCmd = &scanNVMeCmd{}
+			}
+			tc.scanCmd.LogCmd = cmdutil.LogCmd{
+				Logger: log,
+			}
+			tc.scanCmd.config = tc.cfg
+			tc.scanCmd.IgnoreConfig = tc.ignoreCfg
+
+			gotErr := tc.scanCmd.scanNVMe(scs.NvmeScan)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			mbb.RLock()
+			if len(mbb.ScanCalls) != 1 {
+				t.Fatalf("unexpected number of scan calls, want 1 got %d", len(mbb.ScanCalls))
+			}
+			if diff := cmp.Diff(tc.expScanCall, &mbb.ScanCalls[0], cmpopt); diff != "" {
+				t.Fatalf("unexpected scan calls (-want, +got):\n%s\n", diff)
+			}
+			mbb.RUnlock()
+		})
+	}
+}
+
+func TestDaosServer_NVMe_Commands(t *testing.T) {
+	multPCIAddrsSpaceSep := "0000:80:00.0 0000:81:00.0"
+	multPCIAddrsCommaSep := "0000:80:00.0,0000:81:00.0"
+
+	runCmdTests(t, []cmdTest{
+		{
+			"Prepare drives with all opts; space separated PCI addresses",
+			fmt.Sprintf("nvme prepare --pci-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
+				"-l /tmp/foo "+multPCIAddrsSpaceSep, multPCIAddrsSpaceSep),
+			"",
+			errors.New("unexpected commandline arguments"),
+		},
+		{
+			"Prepare drives with all opts; comma separated PCI addresses",
+			fmt.Sprintf("nvme prepare --pci-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
+				"-l /tmp/foo "+multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			printCommand(t, (&prepareNVMeCmd{
+				PCIBlockList: multPCIAddrsCommaSep,
+				NrHugepages:  8192,
+				TargetUser:   "bob",
+				DisableVFIO:  true,
+			}).WithPCIAllowList(multPCIAddrsCommaSep)),
+			nil,
+		},
+		{
+			"Prepare drives; bad opt",
+			fmt.Sprintf("nvme prepare --pcx-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
+				"-l /tmp/foo "+multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Reset drives with all opts",
+			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disable-vfio -l /tmp/foo "+
+				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			printCommand(t, (&resetNVMeCmd{
+				PCIBlockList: multPCIAddrsCommaSep,
+				TargetUser:   "bob",
+				DisableVFIO:  true,
+			}).WithPCIAllowList(multPCIAddrsCommaSep)),
+			nil,
+		},
+		{
+			"Reset drives; bad opt",
+			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disble-vfio -l /tmp/foo "+
+				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Prepare namespaces with all opts",
+			"scm prepare -S 2 -f --socket 0",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+			}),
+			nil,
+		},
+		{
+			"Prepare namespaces; bad opt",
+			"scm prepare -X",
+			"",
+			errors.New("unknown"),
+		},
+		{
+			"Reset namespaces with all opts",
+			"scm reset -f --socket 1",
+			printCommand(t, &resetSCMCmd{
+				Force: true,
+			}),
+			nil,
+		},
+		{
+			"Reset namespaces; bad opt",
+			"scm reset -S",
+			"",
+			errors.New("unknown"),
+		},
+	})
 }

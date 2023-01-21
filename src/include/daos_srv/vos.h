@@ -100,6 +100,18 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 	      bool for_refresh);
 
 /**
+ * Load participants information for the given DTX.
+ *
+ * \param coh		[IN]	Container open handle.
+ * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ *
+ * \return		Zero on success, negative value if error.
+ */
+int
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+
+/**
  * Commit the specified DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -129,13 +141,14 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch);
  * Set flags on the active DTXs.
  *
  * \param coh	[IN]	Container open handle.
- * \param dti	[IN]	The DTX identifiers to be handled.
+ * \param dtis	[IN]	The array for DTX identifiers to be set.
+ * \param count [IN]	The count of DTXs to be set.
  * \param flags [IN]	The flags for the DTXs.
  *
  * \return		Zero on success, negative value if error.
  */
 int
-vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dti, uint32_t flags);
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.

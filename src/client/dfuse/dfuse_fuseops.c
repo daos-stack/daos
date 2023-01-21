@@ -67,6 +67,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
 
+	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
+	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
+	 * does not know how large to pre-allocate any buffers.
+	 */
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
@@ -398,13 +402,13 @@ err:
  * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
-df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
-	      struct fuse_file_info *fi)
+df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}
@@ -416,10 +420,11 @@ static void
 df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}

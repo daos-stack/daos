@@ -1,10 +1,10 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from ec_utils import ErasureCodeIor, check_aggregation_status
+from ec_utils import ErasureCodeIor
+
 
 class EcodAggregationOff(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -24,9 +24,9 @@ class EcodAggregationOff(ErasureCodeIor):
                   triggered. Verify the IOR read data at the end.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_disabled
+        :avocado: tags=EcodAggregationOff,test_ec_aggregation_disabled
         """
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
@@ -38,7 +38,7 @@ class EcodAggregationOff(ErasureCodeIor):
         self.ior_write_dataset()
 
         # Verify if Aggregation is getting started
-        if any(check_aggregation_status(self.pool).values()) is True:
+        if any(self.check_aggregation_status().values()) is True:
             self.fail("Aggregation should not happens...")
 
         # Read IOR data and verify content
@@ -55,9 +55,9 @@ class EcodAggregationOff(ErasureCodeIor):
                   Verify the IOR read data at the end.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_default
+        :avocado: tags=EcodAggregationOff,test_ec_aggregation_default
         """
         self.pool.connect()
         self.log.info("pool_percentage Before = %s ",
@@ -69,7 +69,7 @@ class EcodAggregationOff(ErasureCodeIor):
                 self.ior_write_single_dataset(oclass, sizes)
 
                 # Verify if Aggregation is getting started
-                if not any(check_aggregation_status(self.pool).values()):
+                if not any(self.check_aggregation_status().values()):
                     self.fail("Aggregation failed to start..")
 
                 # Read single IOR
@@ -89,9 +89,9 @@ class EcodAggregationOff(ErasureCodeIor):
                   is getting reclaimed. Verify the IOR read data at the end.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,aggregation,ec_array,ec_aggregation
-        :avocado: tags=ec_aggregation_time
+        :avocado: tags=EcodAggregationOff,test_ec_aggregation_time
         """
         # Set time mode aggregation
         self.pool.set_property("reclaim", "time")
@@ -103,7 +103,7 @@ class EcodAggregationOff(ErasureCodeIor):
         self.ior_write_dataset()
 
         # Verify if Aggregation is getting started
-        if not any(check_aggregation_status(self.pool).values()):
+        if not any(self.check_aggregation_status().values()):
             self.fail("Aggregation failed to start..")
 
         # Read IOR data and verify content

@@ -1,16 +1,15 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 
-from command_utils_base import \
-     EnvironmentVariables, FormattedParameter
+from command_utils_base import EnvironmentVariables, FormattedParameter
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import get_job_manager
+
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.

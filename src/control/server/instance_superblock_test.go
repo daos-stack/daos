@@ -14,6 +14,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -28,12 +29,11 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	defer cleanup()
 
 	h := NewEngineHarness(log)
-	for idx, mnt := range []string{"one", "two"} {
+	for _, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
 		cfg := engine.MockConfig().
-			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithStorage(
 				storage.NewTierConfig().
@@ -42,11 +42,11 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 					WithScmMountPoint(mnt),
 			)
 		r := engine.NewRunner(log, cfg)
-		msc := &scm.MockSysConfig{
+		msc := &sysprov.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
+		mp := storage.NewProvider(log, 0, &cfg.Storage, sysprov.NewMockSysProvider(log, msc), scm.NewMockProvider(log, mbc, msc), nil)
 		ei := NewEngineInstance(log, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
@@ -72,9 +72,6 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 
 	for idx, e := range h.Instances() {
 		i := e.(*EngineInstance)
-		if i._superblock.Rank.Uint32() != uint32(idx) {
-			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
-		}
 
 		test.AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
 

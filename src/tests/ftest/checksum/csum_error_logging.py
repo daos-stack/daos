@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +8,7 @@ import json
 from daos_core_base import DaosCoreBase
 from avocado.utils import process
 from general_utils import get_log_file
+
 
 class CsumErrorLog(DaosCoreBase):
     """
@@ -89,6 +89,7 @@ class CsumErrorLog(DaosCoreBase):
         :avocado: tags=hw,medium,ib2
         :avocado: tags=checksum,faults
         :avocado: tags=csum_error_log
+        :avocado: tags=test_csum_error_logging
         """
         dev_id = self.get_nvme_device_id()
         self.log.info("%s", dev_id)

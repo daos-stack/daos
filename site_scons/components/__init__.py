@@ -20,13 +20,11 @@
 # -*- coding: utf-8 -*-
 """Defines common components used by HPDD projects"""
 
-import sys
 import platform
 import distro
 from prereq_tools import GitRepoRetriever
 # from prereq_tools import WebRetriever
 
-SCONS_EXE = sys.argv[0]
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
 ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
@@ -37,6 +35,7 @@ if PROCESSOR.lower() in [x.lower() for x in ARM_LIST]:
 
 class InstalledComps():
     """Checks for installed components and keeps track of prior checks"""
+
     installed = []
     not_installed = []
 
@@ -80,8 +79,7 @@ def inst(reqs, name):
 
 
 def check(reqs, name, built_str, installed_str=""):
-    """Return a different string based on whether a component is
-       installed or not"""
+    """Return a different string based on whether a component is installed or not"""
     installed = InstalledComps(reqs)
     if installed.check(name):
         return installed_str
@@ -361,11 +359,11 @@ def define_components(reqs):
                            '--without-crypto',
                            '--without-pmdk',
                            '--without-rbd',
-                           '--with-rdma',
                            '--without-iscsi-initiator',
                            '--without-isal',
                            '--without-vtune',
-                           '--with-shared'],
+                           '--with-shared',
+                           f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],
                           ['cp', '-r', '-P', 'dpdk/build/lib/', '$SPDK_PREFIX'],
@@ -386,7 +384,8 @@ def define_components(reqs):
                           ['make'],
                           ['make', 'install']],
                 libs=['protobuf-c'],
-                headers=['protobuf-c/protobuf-c.h'])
+                headers=['protobuf-c/protobuf-c.h'],
+                package='protobuf-c-devel')
 
 
 __all__ = ['define_components']
