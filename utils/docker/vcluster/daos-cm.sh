@@ -2,7 +2,7 @@
 
 set -o pipefail
 
-VERSION=0.1
+VERSION=0.2
 CWD="$(realpath $(dirname $0))"
 
 DAOS_POOL_SIZE=10G
@@ -80,7 +80,7 @@ function check_cmds
 	done
 }
 
-check_cmds docker docker-compose
+check_cmds docker
 
 function usage
 {
@@ -117,7 +117,7 @@ function run
 function state
 {
 	info "State of the DAOS virtual cluster containers"
-	if ! run docker-compose ps ; then
+	if ! run docker compose ps ; then
 		fatal "Docker platform not healthy"
 	fi
 }
@@ -125,7 +125,7 @@ function state
 function stop
 {
 	info "Stopping DAOS virtual cluster containers"
-	if ! run docker-compose down ; then
+	if ! run docker compose down ; then
 		fatal "DAOS virtual cluster could not be properly stopped"
 	fi
 }
@@ -136,7 +136,7 @@ function start
 	DAOS_POOL_SIZE="$2"
 
 	info "Starting DAOS virtual cluster containers"
-	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker-compose up --detach ; then
+	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_server daos_admin daos_client ; then
 		fatal "DAOS virtual cluster containers could no be started"
 	fi
 
@@ -172,7 +172,7 @@ function start
 	fi
 
 	info "Creating POSIX container posix-fs in tank pool"
-	if ! run docker exec daos-client daos container create --type=posix --label=posix-fs tank ; then
+	if ! run docker exec daos-client daos container create --type=posix tank posix-fs ; then
 		fatal "DAOS POSIX container posix-fs could not be created in tank pool"
 	fi
 
@@ -187,7 +187,7 @@ function start
 	fi
 
 	info "Mounting DAOS posix-fs container on /mnt/daos-posix-fs"
-	if ! run docker exec daos-client dfuse --mountpoint="/mnt/daos-posix-fs" --pool=tank --container=posix-fs ; then
+	if ! run docker exec daos-client dfuse /mnt/daos-posix-fs tank posix-fs ; then
 		fatal "DAOS POSIX container posix-fs could not be created in tank pool"
 	fi
 

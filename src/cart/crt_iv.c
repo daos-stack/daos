@@ -923,8 +923,12 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	crt_rpc_t			*rpc;
 	int				rc = 0;
 
-	/* Something is really bad if info is NULL */
 	D_ASSERT(info != NULL);
+
+	/* Keep freeing things even if something fails */
+	rc = crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
+	if (rc != 0)
+		D_ERROR("crt_bulk_free(): "DF_RC"\n", DP_RC(rc));
 
 	cb_info = info->bci_arg;
 	rpc = info->bci_bulk_desc->bd_rpc;
@@ -942,14 +946,9 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	if (rc != 0)
 		D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
 
-	/* Keep freeing things even if something fails */
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("crt_reply_send(): "DF_RC"\n", DP_RC(rc));
-
-	rc = crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
-	if (rc != 0)
-		D_ERROR("crt_bulk_free(): "DF_RC"\n", DP_RC(rc));
 
 	RPC_PUB_DECREF(rpc);
 
@@ -2420,9 +2419,10 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 			   cb_info->uci_user_priv);
 
 	crt_reply_send(cb_info->uci_child_rpc);
+
 	/* ADDREF done in crt_hdlr_iv_update */
-	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 
 	/* addref in transfer_back_to_child() */
 	IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2812,6 +2812,11 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
 	D_ASSERT(output != NULL);
+
+	if (info->bci_rc != 0) {
+		D_ERROR("bulk update transfer failed; "DF_RC"\n", DP_RC(info->bci_rc));
+		D_GOTO(send_error, rc = info->bci_rc);
+	}
 
 	update_rc = iv_ops->ivo_on_update(ivns_internal,
 					  &input->ivu_key, 0, false,

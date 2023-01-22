@@ -1,10 +1,10 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from ec_utils import ErasureCodeFio, check_aggregation_status
+from ec_utils import ErasureCodeFio
+
 
 class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
@@ -22,11 +22,10 @@ class EcodFioRebuild(ErasureCodeFio):
         self.read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
 
     def execution(self, rebuild_mode):
-        """
-        Test execution
+        """Execute test.
 
         Args:
-            rebuild_mode: On-line or off-line rebuild mode
+            rebuild_mode (str): On-line or off-line rebuild mode
         """
         # Kill last server rank first
         self.rank_to_kill = self.server_count - 1
@@ -39,7 +38,7 @@ class EcodFioRebuild(ErasureCodeFio):
         self.start_online_fio()
 
         # Verify Aggregation should start for Partial stripes IO
-        if not any(check_aggregation_status(self.pool, attempt=60).values()):
+        if not any(self.check_aggregation_status(attempt=60).values()):
             self.fail("Aggregation failed to start..")
 
         if 'off-line' in rebuild_mode:
@@ -59,8 +58,7 @@ class EcodFioRebuild(ErasureCodeFio):
             self.fio_cmd._jobs['test'].unlink.value = 1
             self.log.info("RF is 2,So kill another server and verify data")
             # Kill one more server rank
-            self.server_managers[0].stop_ranks([self.server_count - 2],
-                                               self.d_log, force=True)
+            self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
             # Read and verify the original data.
             self.fio_cmd.run()
 
@@ -80,9 +78,9 @@ class EcodFioRebuild(ErasureCodeFio):
             Kill one more rank and verify the data after rebuild finish.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,fio,ec_online_rebuild
-        :avocado: tags=ec_online_rebuild_fio
+        :avocado: tags=EcodFioRebuild,test_ec_online_rebuild_fio
         """
         self.execution('on-line')
 
@@ -100,8 +98,8 @@ class EcodFioRebuild(ErasureCodeFio):
             Kill one more rank and verify the data after rebuild finish.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,fio,ec_offline_rebuild
-        :avocado: tags=ec_offline_rebuild_fio
+        :avocado: tags=EcodFioRebuild,test_ec_offline_rebuild_fio
         """
         self.execution('off-line')

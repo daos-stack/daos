@@ -107,7 +107,7 @@ def scons():
         install_dir('share/spdk/scripts')
         install_dir('include/spdk')
 
-    denv.d_setup_go()
+    denv.Tool('go_builder')
 
     prereqs.require(denv, 'ofi', 'hwloc')
     prereqs.require(denv, 'ucx')

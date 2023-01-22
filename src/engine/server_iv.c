@@ -470,6 +470,11 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				      priv_entry ? priv_entry->priv : NULL);
 	} else {
 		D_ASSERT(iv_value != NULL);
+		if (ns->iv_master_rank != key.rank) {
+			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
+				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
+			D_GOTO(output, rc = -DER_GRPVER);
+		}
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}

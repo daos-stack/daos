@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -290,7 +290,12 @@ rebuild_objects_send_ult(void *data)
 	arg.rpt = rpt;
 	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
 		if (rpt->rt_stable_epoch == 0) {
-			ABT_thread_yield();
+			dss_sleep(0);
+			continue;
+		}
+
+		if (dbtree_is_empty(tls->rebuild_tree_hdl)) {
+			dss_sleep(0);
 			continue;
 		}
 
@@ -701,7 +706,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_DRAIN:
 	case RB_OP_REINT:
 	case RB_OP_EXTEND:
-		rc = find_rebuild_shards(map, arg->co_props.dcp_global_version, &md,
+		rc = find_rebuild_shards(map, arg->co_props.dcp_obj_version, &md,
 					 rpt->rt_tgts_num, rpt->rt_rebuild_op,
 					 rpt->rt_rebuild_ver, myrank,
 					 &tgts, &shards, LOCAL_ARRAY_SIZE);
@@ -878,6 +883,11 @@ rebuild_scanner(void *data)
 	}
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
+		/* Skip reclaim OP for HANG failure injection */
+		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+		    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
+			break;
+
 		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
 		dss_sleep(2 * 1000);
 	}

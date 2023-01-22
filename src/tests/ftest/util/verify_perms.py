@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -211,7 +211,7 @@ def _verify_one(path, entry_type, user_perm, verify_mode):
     for perm in 'rwx':
         if perm_to_fun[perm](path) != have[perm]:
             raise VerifyPermsError(
-                f'Expected {perm} to {"pass" if have["perm"] else "fail"} on "{path}"')
+                f'Expected {perm} to {"pass" if have[perm] else "fail"} on "{path}"')
 
 
 def _real_r(entry_type, path):
@@ -283,13 +283,14 @@ def _real_x(entry_type, path):
     '''
     if entry_type == 'file':
         try:
-            return run_local(logger, [path], check=True, verbose=False).returncode == 0
+            return run_local(logger, path, check=True, verbose=False).returncode == 0
         except RunException:
             return False
     if entry_type == 'dir':
         try:
-            return run_local(logger, ['cd', path], check=True, verbose=False).returncode == 0
-        except RunException:
+            os.chdir(path)
+            return True
+        except PermissionError:
             return False
     return False
 

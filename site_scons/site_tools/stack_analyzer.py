@@ -121,6 +121,17 @@ class Analyzer():
             size_map[value].append(key)
 
         for key in sorted(size_map.keys(), reverse=True):
-            print("%d bytes:" % key)
+            print(f'{key:d} bytes:')
             for value in size_map[key]:
-                print("    %s" % value)
+                print(f'    {value}')
+
+
+def generate(env, prefix, args):
+    """Add daos specific methods to environment"""
+    analyzer = Analyzer(env, prefix, args)
+    analyzer.analyze_on_exit()
+
+
+def exists(_env):
+    """Tell SCons we exist"""
+    return True
