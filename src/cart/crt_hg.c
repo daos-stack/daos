@@ -553,7 +553,7 @@ crt_provider_put_ctx_idx(int provider, int idx)
 }
 
 int
-crt_provider_get_ctx_idx(bool primary, int provider)
+crt_provider_get_ctx_idx(int provider)
 {
 	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(provider);
 	int			i;
