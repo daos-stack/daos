@@ -229,7 +229,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	if (ctx_idx < 0 || ctx_idx >= max_ctx_num) {
 		D_WARN("Provider: %d; Context limit (%d) reached\n",
 		       provider, max_ctx_num);
-		crt_provider_put_ctx_idx(primary, provider, ctx_idx);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
