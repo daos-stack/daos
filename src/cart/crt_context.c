@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,7 +178,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
 	size_t			uri_len = CRT_ADDR_STR_MAX_LEN;
-	int			cur_ctx_num;
+	int			ctx_idx;
 	int			max_ctx_num;
 	d_list_t		*ctx_list;
 
@@ -188,18 +188,29 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+<<<<<<< HEAD
 	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
 	max_ctx_num = crt_provider_get_max_ctx_num(provider);
 
 	if (cur_ctx_num >= max_ctx_num) {
 		D_WARN("Number of active contexts (%d) reached limit (%d).\n",
 			cur_ctx_num, max_ctx_num);
+=======
+	max_ctx_num = crt_provider_get_max_ctx_num(primary, provider);
+	ctx_idx = crt_provider_get_ctx_idx(primary, provider);
+
+	if (ctx_idx < 0 || ctx_idx >= max_ctx_num) {
+		D_WARN("Provider: %d; Context limit (%d) reached\n",
+		       provider, max_ctx_num);
+		crt_provider_put_ctx_idx(primary, provider, ctx_idx);
+>>>>>>> 8c843f58a... DAOS-12012 cart: Segfault in OFI-RXM when using SPDK DAOS bdev module (#11259)
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_AGAIN);
 	}
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL) {
+		crt_provider_put_ctx_idx(primary, provider, ctx_idx);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -208,12 +219,20 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	if (rc != 0) {
 		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE(ctx);
+		crt_provider_put_ctx_idx(primary, provider, ctx_idx);
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(out, rc);
 	}
 
+<<<<<<< HEAD
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
+=======
+	ctx->cc_primary = primary;
+	ctx->cc_idx = ctx_idx;
+
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary);
+>>>>>>> 8c843f58a... DAOS-12012 cart: Segfault in OFI-RXM when using SPDK DAOS bdev module (#11259)
 
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
@@ -233,12 +252,17 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		}
 	}
 
+<<<<<<< HEAD
 	ctx->cc_idx = cur_ctx_num;
 
 	ctx_list = crt_provider_get_ctx_list(provider);
 
 	d_list_add_tail(&ctx->cc_link, ctx_list);
 	crt_provider_inc_cur_ctx_num(provider);
+=======
+	ctx_list = crt_provider_get_ctx_list(primary, provider);
+	d_list_add_tail(&ctx->cc_link, ctx_list);
+>>>>>>> 8c843f58a... DAOS-12012 cart: Segfault in OFI-RXM when using SPDK DAOS bdev module (#11259)
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -586,18 +610,30 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	int provider = ctx->cc_hg_ctx.chc_provider;
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
+<<<<<<< HEAD
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	crt_provider_dec_cur_ctx_num(provider);
+=======
+		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));
+
+		if (!force)
+			D_GOTO(out, rc);
+	}
+
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
+	crt_provider_put_ctx_idx(ctx->cc_primary, provider, ctx->cc_idx);
+>>>>>>> 8c843f58a... DAOS-12012 cart: Segfault in OFI-RXM when using SPDK DAOS bdev module (#11259)
 	d_list_del(&ctx->cc_link);
+
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
-	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n",
-		ctx->cc_idx, force);
+	D_DEBUG(DB_TRACE, "destroyed context (idx %d, force %d)\n", ctx->cc_idx, force);
 	D_FREE(ctx);
 
 out:
