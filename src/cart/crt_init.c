@@ -118,6 +118,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
 	uint32_t	max_num_ctx = CRT_SRV_CONTEXT_NUM;
+	int		i;
 	int		rc;
 
 	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
@@ -173,6 +174,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_max_exp_size = max_expect_size;
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		prov_data->cpg_used_idx[i] = false;
 
 	/* By default set number of secondary remote tags to 1 */
 	prov_data->cpg_num_remote_tags = 1;
