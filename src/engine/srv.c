@@ -1248,8 +1248,8 @@ static int
 dss_sys_db_init()
 {
 	int	 rc;
-	/* walkaround*/
-	char	*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+	/* NVMe config should always reside in an engine specific writable location */
+	char	*lmm_db_path = dirname(dss_nvme_conf);
 
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = vos_db_init(dss_storage_path);
@@ -1262,7 +1262,7 @@ dss_sys_db_init()
 	}
 
 	if (lmm_db_path == NULL) {
-		D_ERROR("DAOS_LMM_DB_PATH need be configured\n");
+		D_ERROR("nvme conf path needs be configured\n");
 		return -DER_INVAL;
 	}
 

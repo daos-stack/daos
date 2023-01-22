@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -191,9 +191,9 @@ struct umem_store_ops vos_store_ops = {
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
-vos_pool_settings_init(void)
+vos_pool_settings_init(bool md_on_ssd)
 {
-	return umempobj_settings_init();
+	return umempobj_settings_init(md_on_ssd);
 }
 
 static inline enum bio_mc_flags

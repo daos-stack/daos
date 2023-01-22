@@ -450,14 +450,14 @@ struct dss_module_key vos_module_key = {
 daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
 
 static int
-vos_mod_init(void)
+vos_mod_init(bool md_on_ssd)
 {
 	int	 rc = 0;
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
-	rc = vos_pool_settings_init();
+	rc = vos_pool_settings_init(md_on_ssd);
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
 		return rc;
@@ -776,7 +776,8 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char		*evt_mode;
 	int		 rc = 0;
-	char		*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
+	bool		 md_on_ssd;
+	char		*lmm_db_path = dirname(dss_nvme_conf);
 	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
@@ -798,17 +799,13 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		D_GOTO(out, rc);
 	}
 #endif
-	rc = vos_mod_init();
+	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
+
+	rc = vos_mod_init(md_on_ssd);
 	if (rc)
 		D_GOTO(failed, rc);
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		if (use_sys_db)
-			rc = vos_db_init(db_path);
-		else
-			rc = vos_db_init_ex(db_path, "self_db", true, true);
-		db = vos_db_get();
-	} else {
+	if (md_on_ssd) {
 		if (lmm_db_path == NULL)
 			lmm_db_path = LMMDB_PATH;
 		if (use_sys_db)
@@ -816,6 +813,12 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		else
 			rc = lmm_db_init_ex(lmm_db_path, "self_db", true, true);
 		db = lmm_db_get();
+	} else {
+		if (use_sys_db)
+			rc = vos_db_init(db_path);
+		else
+			rc = vos_db_init_ex(db_path, "self_db", true, true);
+		db = vos_db_get();
 	}
 	if (rc)
 		D_GOTO(failed, rc);
