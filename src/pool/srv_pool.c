@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -964,6 +964,12 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 	    event->psv_type != CRT_EVT_DEAD || pool_disable_exclude) {
 		D_DEBUG(DB_MD, "ignore event: "DF_PS_EVENT" exclude=%d\n", DP_PS_EVENT(event),
 			pool_disable_exclude);
+		goto out;
+	}
+
+	if (event->psv_rank == dss_self_rank() && event->psv_src == CRT_EVS_GRPMOD &&
+	    event->psv_type == CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore exclusion of self\n");
 		goto out;
 	}
 
