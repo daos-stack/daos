@@ -8,6 +8,7 @@ import time
 from osa_utils import OSAUtils
 from avocado.utils import process
 
+
 class VmdLedStatus(OSAUtils):
     """
     Test Class Description: This class methods to get
