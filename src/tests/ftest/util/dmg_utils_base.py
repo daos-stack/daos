@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -222,9 +222,10 @@ class DmgCommandBase(YamlCommand):
                 self.access_points = FormattedParameter(
                     "--access-points={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
-                self.min_ssds = FormattedParameter("--min-ssds={}", None)
+                self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
                 self.net_provider = FormattedParameter("--net-provider={}", None)
+                self.use_tmpfs_scm = FormattedParameter("--use-tmpfs-scm", False)
 
     class ContSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg cont sub command."""
@@ -513,6 +514,7 @@ class DmgCommandBase(YamlCommand):
 
         class ReplaceSubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage replace sub command"""
+
             def __init__(self):
                 """Create a dmg storage replace sub command object."""
                 super().__init__("/run/dmg/storage/replace/*", "replace")
@@ -527,6 +529,7 @@ class DmgCommandBase(YamlCommand):
 
             class NVMESubCommand(CommandWithParameters):
                 """Get dmg storage replace sub command object"""
+
                 def __init__(self):
                     """Create a dmg storage replace sub command object."""
                     super().__init__("/run/dmg/storage/replace/nvme/*", "nvme")
@@ -536,6 +539,7 @@ class DmgCommandBase(YamlCommand):
 
         class IdentifySubCommand(CommandWithSubCommand):
             """Defines an object for the dmg storage identify command"""
+
             def __init__(self):
                 """Create a dmg storage identify sub command object."""
                 super().__init__("/run/dmg/storage/identify/*", "identify")
@@ -550,6 +554,7 @@ class DmgCommandBase(YamlCommand):
 
             class VmdSubCommand(CommandWithParameters):
                 """Get dmg storage identify vmd sub command object"""
+
                 def __init__(self):
                     """Create a dmg storage identify vmd command object."""
                     super().__init__("/run/dmg/storage/identify/vmd/*", "vmd")

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,12 +31,15 @@ dump_envariables(void)
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
-		D_INFO("%s = %s\n", envars[i], val);
+		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
+			D_INFO("%s = %s\n", envars[i], "********");
+		else
+			D_INFO("%s = %s\n", envars[i], val);
 	}
 }
 
@@ -54,7 +57,8 @@ dump_opt(crt_init_options_t *opt)
 
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
-		   char *interface, char *domain, char *port);
+		   char *interface, char *domain, char *port,
+		   char *auth_key);
 
 /* Workaround for CART-890 */
 static void
@@ -72,8 +76,7 @@ mem_pin_workaround(void)
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-		       errno, strerror(errno));
+		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
@@ -101,6 +104,9 @@ exit:
 	return;
 }
 
+/* Value based on default daos runs with 16 targets + 2 service contexts */
+#define CRT_SRV_CONTEXT_NUM_MIN (16 + 2)
+
 static int
 prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
@@ -112,11 +118,26 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
 	uint32_t	max_num_ctx = CRT_SRV_CONTEXT_NUM;
+	int		i;
 	int		rc;
 
 	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
 	if (rc != 0)
 		return rc;
+
+	/* Set max number of contexts. Defaults to the number of cores */
+	ctx_num = 0;
+	d_getenv_int("CRT_CTX_NUM", &ctx_num);
+	max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+
+	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
+		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+
+	/* To be able to run on VMs */
+	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
+		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
+
+	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
@@ -153,6 +174,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_max_exp_size = max_expect_size;
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		prov_data->cpg_used_idx[i] = false;
 
 	/* By default set number of secondary remote tags to 1 */
 	prov_data->cpg_num_remote_tags = 1;
@@ -203,8 +227,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx\n", start_rpcid);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n", start_rpcid,
+		crt_gdata.cg_num_cores);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -506,6 +532,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char		*provider_env;
 	char		*interface_env;
 	char		*domain_env;
+	char		*auth_key_env;
 	char		*tmp;
 	struct timeval	now;
 	unsigned int	seed;
@@ -519,6 +546,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_provider_t	tmp_prov;
 	char		*port_str, *port0, *port1;
 	char		*iface0, *iface1, *domain0, *domain1;
+	char		*auth_key0, *auth_key1;
 	int		num_secondaries = 0;
 	int		i;
 
@@ -530,6 +558,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	iface1 = NULL;
 	domain0 = NULL;
 	domain1 = NULL;
+	auth_key0 = NULL;
+	auth_key1 = NULL;
 
 	/* d_log_init is reference counted */
 	rc = d_log_init();
@@ -587,6 +617,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
+
+		if (opt && opt->cio_auth_key)
+			auth_key_env = opt->cio_auth_key;
+		else
+			auth_key_env = getenv("D_PROVIDER_AUTH_KEY");
 
 		if (opt && opt->cio_provider)
 			provider_env = opt->cio_provider;
@@ -655,6 +690,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
+		rc = __split_arg(auth_key_env, &auth_key0, &auth_key1);
+		if (rc != 0)
+			D_GOTO(unlock, rc);
 
 		if (iface0 == NULL) {
 			D_ERROR("Empty interface specified\n");
@@ -669,7 +707,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		prov_settings_apply(true, primary_provider, opt);
 		crt_gdata.cg_primary_prov = primary_provider;
 
-		rc = crt_na_config_init(true, primary_provider, iface0, domain0, port0);
+		rc = crt_na_config_init(true, primary_provider, iface0, domain0,
+					port0, auth_key0);
 		if (rc != 0) {
 			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 			D_GOTO(unlock, rc);
@@ -704,7 +743,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			prov_settings_apply(false, tmp_prov, opt);
 
-			rc = crt_na_config_init(false, tmp_prov, iface1, domain1, port1);
+			rc = crt_na_config_init(false, tmp_prov, iface1, domain1,
+						port1, auth_key1);
 			if (rc != 0) {
 				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
 				D_GOTO(cleanup, rc);
@@ -788,6 +828,7 @@ out:
 	D_FREE(iface0);
 	D_FREE(domain0);
 	D_FREE(provider_str0);
+	D_FREE(auth_key0);
 
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
@@ -1047,7 +1088,8 @@ out:
 
 static int
 crt_na_config_init(bool primary, crt_provider_t provider,
-		   char *interface, char *domain, char *port_str)
+		   char *interface, char *domain, char *port_str,
+		   char *auth_key)
 {
 	struct crt_na_config		*na_cfg;
 	int				rc = 0;
@@ -1064,6 +1106,12 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	if (domain) {
 		D_STRNDUP(na_cfg->noc_domain, domain, 64);
 		if (!na_cfg->noc_domain)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (auth_key) {
+		D_STRNDUP(na_cfg->noc_auth_key, auth_key, 255);
+		if (!na_cfg->noc_auth_key)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -1096,6 +1144,7 @@ out:
 	if (rc != -DER_SUCCESS) {
 		D_FREE(na_cfg->noc_interface);
 		D_FREE(na_cfg->noc_domain);
+		D_FREE(na_cfg->noc_auth_key);
 	}
 	return rc;
 }
@@ -1107,5 +1156,6 @@ void crt_na_config_fini(bool primary, crt_provider_t provider)
 	na_cfg = crt_provider_get_na_config(primary, provider);
 	D_FREE(na_cfg->noc_interface);
 	D_FREE(na_cfg->noc_domain);
+	D_FREE(na_cfg->noc_auth_key);
 	na_cfg->noc_port = 0;
 }
