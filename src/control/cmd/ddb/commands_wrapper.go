@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,218 +71,150 @@ func ddbOpen(ctx *DdbContext, path string, write_mode bool) error {
 	/* Set up the options */
 	options := C.struct_open_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.write_mode = C.bool(write_mode)
 	/* Run the c code command */
-	result := C.ddb_run_open(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_open(&ctx.ctx, &options))
 }
 
 func ddbVersion(ctx *DdbContext) error {
 	/* Run the c code command */
-	result := C.ddb_run_version(&ctx.ctx)
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_version(&ctx.ctx))
 }
 
 func ddbClose(ctx *DdbContext) error {
 	/* Run the c code command */
-	result := C.ddb_run_close(&ctx.ctx)
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_close(&ctx.ctx))
 }
 
 func ddbSuperblockDump(ctx *DdbContext) error {
 	/* Run the c code command */
-	result := C.ddb_run_superblock_dump(&ctx.ctx)
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_superblock_dump(&ctx.ctx))
 }
 
 func ddbValueDump(ctx *DdbContext, path string, dst string) error {
 	/* Set up the options */
 	options := C.struct_value_dump_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.dst = C.CString(dst)
+	defer freeString(options.dst)
 	/* Run the c code command */
-	result := C.ddb_run_value_dump(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	C.free(unsafe.Pointer(options.dst))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_value_dump(&ctx.ctx, &options))
 }
 
 func ddbRm(ctx *DdbContext, path string) error {
 	/* Set up the options */
 	options := C.struct_rm_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	/* Run the c code command */
-	result := C.ddb_run_rm(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_rm(&ctx.ctx, &options))
 }
 
 func ddbValueLoad(ctx *DdbContext, src string, dst string) error {
 	/* Set up the options */
 	options := C.struct_value_load_options{}
 	options.src = C.CString(src)
+	defer freeString(options.src)
 	options.dst = C.CString(dst)
+	defer freeString(options.dst)
 	/* Run the c code command */
-	result := C.ddb_run_value_load(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.src))
-	C.free(unsafe.Pointer(options.dst))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_value_load(&ctx.ctx, &options))
 }
 
 func ddbIlogDump(ctx *DdbContext, path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_dump_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	/* Run the c code command */
-	result := C.ddb_run_ilog_dump(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_ilog_dump(&ctx.ctx, &options))
 }
 
 func ddbIlogCommit(ctx *DdbContext, path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_commit_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	/* Run the c code command */
-	result := C.ddb_run_ilog_commit(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_ilog_commit(&ctx.ctx, &options))
 }
 
 func ddbIlogClear(ctx *DdbContext, path string) error {
 	/* Set up the options */
 	options := C.struct_ilog_clear_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	/* Run the c code command */
-	result := C.ddb_run_ilog_clear(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_ilog_clear(&ctx.ctx, &options))
 }
 
 func ddbDtxDump(ctx *DdbContext, path string, active bool, committed bool) error {
 	/* Set up the options */
 	options := C.struct_dtx_dump_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.active = C.bool(active)
 	options.committed = C.bool(committed)
 	/* Run the c code command */
-	result := C.ddb_run_dtx_dump(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_dtx_dump(&ctx.ctx, &options))
 }
 
 func ddbDtxCmtClear(ctx *DdbContext, path string) error {
 	/* Set up the options */
 	options := C.struct_dtx_cmt_clear_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	/* Run the c code command */
-	result := C.ddb_run_dtx_cmt_clear(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_dtx_cmt_clear(&ctx.ctx, &options))
 }
 
 func ddbSmdSync(ctx *DdbContext, nvme_conf string, db_path string) error {
 	/* Set up the options */
 	options := C.struct_smd_sync_options{}
 	options.nvme_conf = C.CString(nvme_conf)
+	defer freeString(options.nvme_conf)
 	options.db_path = C.CString(db_path)
+	defer freeString(options.db_path)
 	/* Run the c code command */
-	result := C.ddb_run_smd_sync(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.nvme_conf))
-	C.free(unsafe.Pointer(options.db_path))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_smd_sync(&ctx.ctx, &options))
 }
 
 func ddbVeaDump(ctx *DdbContext) error {
 	/* Run the c code command */
-	result := C.ddb_run_vea_dump(&ctx.ctx)
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_vea_dump(&ctx.ctx))
 }
 
 func ddbVeaUpdate(ctx *DdbContext, offset string, blk_cnt string) error {
 	/* Set up the options */
 	options := C.struct_vea_update_options{}
 	options.offset = C.CString(offset)
+	defer freeString(options.offset)
 	options.blk_cnt = C.CString(blk_cnt)
+	defer freeString(options.blk_cnt)
 	/* Run the c code command */
-	result := C.ddb_run_vea_update(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.offset))
-	C.free(unsafe.Pointer(options.blk_cnt))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_vea_update(&ctx.ctx, &options))
 }
 
 func ddbDtxActCommit(ctx *DdbContext, path string, dtx_id string) error {
 	/* Set up the options */
 	options := C.struct_dtx_act_commit_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.dtx_id = C.CString(dtx_id)
+	defer freeString(options.dtx_id)
 	/* Run the c code command */
-	result := C.ddb_run_dtx_act_commit(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	C.free(unsafe.Pointer(options.dtx_id))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_dtx_act_commit(&ctx.ctx, &options))
 }
 
 func ddbDtxActAbort(ctx *DdbContext, path string, dtx_id string) error {
 	/* Set up the options */
 	options := C.struct_dtx_act_abort_options{}
 	options.path = C.CString(path)
+	defer freeString(options.path)
 	options.dtx_id = C.CString(dtx_id)
+	defer freeString(options.dtx_id)
 	/* Run the c code command */
-	result := C.ddb_run_dtx_act_abort(&ctx.ctx, &options)
-	C.free(unsafe.Pointer(options.path))
-	C.free(unsafe.Pointer(options.dtx_id))
-	if result != 0 {
-		return daos.Status(result)
-	}
-	return nil
+	return daosError(C.ddb_run_dtx_act_abort(&ctx.ctx, &options))
 }

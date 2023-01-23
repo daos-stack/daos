@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -273,7 +273,7 @@ the path must include the extent, otherwise, it must not.`,
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
 			a.String("path", "VOS tree path to a container.")
-			a.String("dtx_id", "The dtx id of the entry to commit. ")
+			a.String("dtx_id", "DTX id of the entry to commit. ")
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxActCommit(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
@@ -289,7 +289,7 @@ the path must include the extent, otherwise, it must not.`,
 		HelpGroup: "vos",
 		Args: func(a *grumble.Args) {
 			a.String("path", "VOS tree path to a container.")
-			a.String("dtx_id", "The dtx id of the entry to abort. ")
+			a.String("dtx_id", "DTX id of the entry to abort. ")
 		},
 		Run: func(c *grumble.Context) error {
 			return ddbDtxActAbort(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
