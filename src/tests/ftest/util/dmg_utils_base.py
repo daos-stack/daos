@@ -669,8 +669,12 @@ class DmgCommandBase(YamlCommand):
             """Get the dmg system sub command object."""
             if self.sub_command.value == "cleanup":
                 self.sub_command_class = self.CleanupSubCommand()
+            elif self.sub_command.value == "clear-exclude":
+                self.sub_command_class = self.ClearExcludeSubCommand()
             elif self.sub_command.value == "erase":
                 self.sub_command_class = self.EraseSubCommand()
+            elif self.sub_command.value == "exclude":
+                self.sub_command_class = self.ExcludeSubCommand()
             elif self.sub_command.value == "leader-query":
                 self.sub_command_class = self.LeaderQuerySubCommand()
             elif self.sub_command.value == "list-pools":
@@ -693,6 +697,15 @@ class DmgCommandBase(YamlCommand):
                 self.machinename = FormattedParameter("{}", None)
                 self.verbose = FormattedParameter("--verbose", False)
 
+        class ClearExcludeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system clear-exclude command."""
+
+            def __init__(self):
+                """Create a dmg system clear-exclude command object."""
+                super().__init__("/run/dmg/system/clear-exclude/*", "clear-exclude")
+                self.ranks = FormattedParameter("--ranks={}")
+                self.rank_hosts = FormattedParameter("--rank-hosts={}")
+
         class EraseSubCommand(CommandWithParameters):
             """Defines an object for the dmg system erase command."""
 
@@ -700,6 +713,15 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg system erase command object."""
                 super().__init__(
                     "/run/dmg/system/erase/*", "erase")
+
+        class ExcludeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg system exclude command."""
+
+            def __init__(self):
+                """Create a dmg system exclude command object."""
+                super().__init__("/run/dmg/system/exclude/*", "exclude")
+                self.ranks = FormattedParameter("--ranks={}")
+                self.rank_hosts = FormattedParameter("--rank-hosts={}")
 
         class LeaderQuerySubCommand(CommandWithParameters):
             """Defines an object for the dmg system leader-query command."""
