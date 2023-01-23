@@ -49,8 +49,6 @@ crt_lib_init(void)
 
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-	return;
 }
 
 /* Library deinit */
