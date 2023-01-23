@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -345,7 +345,7 @@ vtp_path_printing_tests(void **state)
 	vtp.vtp_is_recx = true;
 
 	vtp_print(&ctx, &vtp, false);
-	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0/"
+	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0.0/"
 			 "dkey-1/akey-1/{1-10}");
 
 	/* Try different types of keys */
@@ -359,7 +359,7 @@ vtp_path_printing_tests(void **state)
 
 	dvt_fake_print_reset();
 	vtp_print(&ctx, &vtp, false);
-	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0/"
+	assert_str_exact("/12345678-1234-1234-1234-123456789001/281479271743488.4294967296.0.0/"
 			 "{bin(32):0xababababababababab...}/0/{1-10}");
 }
 
