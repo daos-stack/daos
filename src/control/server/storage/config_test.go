@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -374,12 +374,12 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
+					WithBdevDeviceRoles(BdevRoleWAL),
 				NewTierConfig().
 					WithTier(2).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
+					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData),
 			},
 		},
 		"unspecified roles; implicit role assignment; three bdev tiers": {
