@@ -63,14 +63,14 @@ class Pass0Test(TestWithServers):
         try:
             dmg_command.check_start()
         except CommandFailure as error:
-            self.log.info("dmg check start is expected to fail.")
+            self.log.info("dmg check start is expected to fail. Error: %s", error)
 
         # 5. Call dmg check query. It should show error because the stopped rank is not at
         # CheckerStarted state.
         try:
             dmg_command.check_query()
         except CommandFailure as error:
-            self.log.info("dmg check query is expected to fail. Error: {}".format(error))
+            self.log.info("dmg check query is expected to fail. Error: %s", error)
 
         # 6. Call dmg check disable. It should work.
         dmg_command.check_disable()
@@ -91,7 +91,7 @@ class Pass0Test(TestWithServers):
         4. Verify that the checker can be run with AdminExcluded state by calling enable,
         start, query, and disable. Verify that none of the commands returns error.
         5. Disable AdminExcluded by calling dmg system clear-exclude --ranks=1
-        6. Verify that the rank 1 state is Exluded.
+        6. Verify that the rank 1 state is Excluded.
         7. Start rank 1 for clean up. (At this point, its state is "Excluded".)
 
         Jira ID: DAOS-11704
@@ -136,7 +136,7 @@ class Pass0Test(TestWithServers):
         # 5. Disable AdminExcluded of rank 1.
         dmg_command.system_clear_exclude(ranks="1")
 
-        # 6. Verify that the rank 1 state is Exluded.
+        # 6. Verify that the rank 1 state is Excluded.
         query_out = dmg_command.system_query()
         excluded_found = False
         rank_1_state = None
