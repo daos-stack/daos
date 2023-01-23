@@ -17,8 +17,48 @@
 struct crt_gdata crt_gdata;
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
-static pthread_once_t data_init_once = PTHREAD_ONCE_INIT;
 
+static void
+crt_lib_init(void) __attribute__((__constructor__));
+
+static void
+crt_lib_fini(void) __attribute__((__destructor__));
+
+/* Library initialization/constructor */
+static void
+crt_lib_init(void)
+{
+	int		rc;
+	uint64_t	start_rpcid;
+
+	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
+	D_ASSERT(rc == 0);
+
+	/*
+	 * avoid size mis-matching between client/server side
+	 * /see crt_proc_uuid_t().
+	 */
+	D_CASSERT(sizeof(uuid_t) == 16);
+
+	crt_gdata.cg_refcount = 0;
+	crt_gdata.cg_inited = 0;
+	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
+
+	d_srand(d_timeus_secdiff(0) + getpid());
+	start_rpcid = ((uint64_t)d_rand()) << 32;
+
+	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+	return;
+}
+
+/* Library deinit */
+static void
+crt_lib_fini(void)
+{
+	D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);
+}
 
 static void
 dump_envariables(void)
@@ -496,38 +536,6 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	return rc;
 }
 
-static void
-crt_gdata_init(void)
-{
-	int		rc;
-	uint64_t	start_rpcid;
-
-	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to init cg_rwlock\n");
-		D_GOTO(exit, rc);
-	}
-
-
-	/*
-	 * avoid size mis-matching between client/server side
-	 * /see crt_proc_uuid_t().
-	 */
-	D_CASSERT(sizeof(uuid_t) == 16);
-
-	crt_gdata.cg_refcount = 0;
-	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
-
-	d_srand(d_timeus_secdiff(0) + getpid());
-	start_rpcid = ((uint64_t)d_rand()) << 32;
-
-	crt_gdata.cg_rpcid = start_rpcid;
-	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-exit:
-	return;
-}
-
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
@@ -584,9 +592,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	rc = check_grpid(grpid);
 	if (rc != DER_SUCCESS)
 		D_GOTO(out, rc);
-
-	/* For things that are critical to be init-ed only once */
-	pthread_once(&data_init_once, crt_gdata_init);
 
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
@@ -889,11 +894,6 @@ crt_finalize(void)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		rc = D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);
-		if (rc != 0) {
-			D_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
-			D_GOTO(out, rc);
-		}
 
 		/* allow the same program to re-initialize */
 		crt_gdata.cg_refcount = 0;
