@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -137,7 +137,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 	par_barrier(PAR_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("All ranks remove the same dir\n");
+		print_message("All ranks remove the same directory\n");
 	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_remove(dfs, NULL, dirname, true, NULL);
 	rc = check_one_success(op_rc, ENOENT);
@@ -684,6 +684,7 @@ dfs_test_cont_atomic(void **state)
 	if (arg->myrank == 0)
 		print_message("All ranks create the same POSIX container\n");
 
+	par_barrier(PAR_COMM_WORLD);
 	op_rc = dfs_cont_create_with_label(arg->pool.poh, "dfs_par_test_cont",
 					   NULL, NULL, NULL, NULL);
 	rc = check_one_success(op_rc, EEXIST);

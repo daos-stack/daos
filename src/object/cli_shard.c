@@ -950,7 +950,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * rec2big errors which can be expected.
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
-		    rc == -DER_EXIST || rc == -DER_RF)
+		    rc == -DER_EXIST || rc == -DER_RF || rc == -DER_TX_RESTART)
 			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
