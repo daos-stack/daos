@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -266,6 +266,14 @@ int swim_progress(struct swim_context *ctx, int64_t timeout);
  */
 int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 			   uint64_t delay);
+
+/**
+ * Delete a SWIM member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of member to delete
+ */
+void swim_member_del(struct swim_context *ctx, swim_id_t id);
 
 /** @} */
 
