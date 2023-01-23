@@ -24,7 +24,7 @@ const (
 	MaxUserOnlyKeyPerm os.FileMode = 0400
 	MaxGroupKeyPerm    os.FileMode = 0440
 	MaxCertPerm        os.FileMode = 0664
-	MaxDirPerm         os.FileMode = 0700
+	MaxDirPerm         os.FileMode = 0750
 )
 
 type badPermsError struct {
