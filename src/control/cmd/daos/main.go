@@ -155,6 +155,9 @@ or query/manage an object inside a container.`
 			if os.Getenv("D_LOG_MASK") == "" {
 				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
 			}
+			if os.Getenv("DD_MASK") == "" {
+				os.Setenv("DD_MASK", "mgmt")
+			}
 			log.Debug("debug output enabled")
 		}
 

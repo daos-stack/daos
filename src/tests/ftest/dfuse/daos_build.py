@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ from dfuse_test_base import DfuseTestBase
 
 
 class DaosBuild(DfuseTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Build DAOS over dfuse.
 
     :avocado: recursive
@@ -115,8 +114,7 @@ class DaosBuild(DfuseTestBase):
         self.run_build_test("nocache")
 
     def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
-        """"Run an actual test from above."""
-
+        """Run an actual test from above."""
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)

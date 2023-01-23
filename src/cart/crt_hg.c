@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -586,19 +586,33 @@ crt_provider_get_na_config(bool primary, int provider)
 }
 
 void
-crt_provider_inc_cur_ctx_num(bool primary, int provider)
+crt_provider_put_ctx_idx(bool primary, int provider, int idx)
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
 
-	prov_data->cpg_ctx_num++;
+	if (prov_data->cpg_used_idx[idx] == false) {
+		D_WARN("Put context on free idx=%d:%d\n", provider, idx);
+	} else {
+		prov_data->cpg_used_idx[idx] = false;
+		prov_data->cpg_ctx_num--;
+	}
 }
 
-void
-crt_provider_dec_cur_ctx_num(bool primary, int provider)
+int
+crt_provider_get_ctx_idx(bool primary, int provider)
 {
-	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
+	int			i;
 
-	prov_data->cpg_ctx_num--;
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (prov_data->cpg_used_idx[i] == false) {
+			prov_data->cpg_used_idx[i] = true;
+			prov_data->cpg_ctx_num++;
+			return i;
+		}
+	}
+
+	return -1;
 }
 
 d_list_t
@@ -745,6 +759,8 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	rc = crt_get_info_string(primary, provider, &info_string, idx);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
 	if (crt_provider_is_block_mode(provider))
 		init_info.na_init_info.progress_mode = 0;
