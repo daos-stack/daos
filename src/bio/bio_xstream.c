@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/log.h>
@@ -1113,16 +1114,30 @@ bio_nvme_configured(enum smd_dev_type type)
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
 
-	/*
-	 * As wal and meta roles are not supported on the same device, single NVMe tier is not a
-	 * supported configuration for MD on SSD.
-	 */
-	if (type == SMD_DEV_TYPE_META && dss_storage_tiers < 3) {
-		D_DEBUG(DB_MGMT, "MD on SSD is not supported with only one NVMe storage tier\n");
-		return false;
+	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+}
+
+int
+bio_get_lmm_db_path(char *lmm_db_path)
+{
+	char	*nvme_conf_path = NULL;
+
+	if (lmm_db_path != NULL)
+		return -DER_INVAL;
+	if (nvme_glb.bd_nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
 	}
 
-	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+	D_STRNDUP(nvme_conf_path, nvme_glb.bd_nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	if (lmm_db_path == NULL)
+		return -DER_NOMEM;
+
+	D_FREE(nvme_conf_path);
+	return 0;
 }
 
 static struct bio_bdev *

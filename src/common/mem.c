@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,17 +44,17 @@ static int daos_md_backend = DAOS_MD_PMEM;
 
 /** Sets up global settings for the pmem objects.
  *
+ *  \param	md_on_ssd[IN]	Indicate if MD-on-SSD mode is set.
+ *
  *  \return	0 on success, non-zero on failure.
  */
 int
-umempobj_settings_init(void)
+umempobj_settings_init(int md_mode)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
-	unsigned int				val = DAOS_MD_PMEM;
 
-	d_getenv_int("DAOS_MD_ON_SSD", &val);
-	switch (val) {
+	switch (md_mode) {
 	case DAOS_MD_PMEM:
 		daos_md_backend = DAOS_MD_PMEM;
 		atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
@@ -73,7 +73,7 @@ umempobj_settings_init(void)
 		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
 		return 0;
 	default:
-		D_ERROR("invalid DAOS_MD_ON_SSD value %d\n", val);
+		D_ERROR("invalid MD mode value %d\n", md_mode);
 		return -DER_INVAL;
 	};
 	return 0;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,7 +25,7 @@
  * umoff	Unified Memory offset
  */
 
-int umempobj_settings_init(void);
+int umempobj_settings_init(int md_mode);
 
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1

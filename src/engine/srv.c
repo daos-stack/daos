@@ -1248,8 +1248,7 @@ static int
 dss_sys_db_init()
 {
 	int	 rc;
-	/* NVMe config should always reside in an engine specific writable location */
-	char	*lmm_db_path = dirname(dss_nvme_conf);
+	char	*lmm_db_path = NULL;
 
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = vos_db_init(dss_storage_path);
@@ -1261,18 +1260,20 @@ dss_sys_db_init()
 		return rc;
 	}
 
-	if (lmm_db_path == NULL) {
-		D_ERROR("nvme conf path needs be configured\n");
-		return -DER_INVAL;
+	rc = bio_get_lmm_db_path(lmm_db_path);
+	if (rc) {
+		return rc;
 	}
 
 	rc = lmm_db_init(lmm_db_path);
 	if (rc)
-		return rc;
+		goto out;
 
 	rc = smd_init(lmm_db_get());
 	if (rc)
 		lmm_db_fini();
+out:
+	D_FREE(lmm_db_path);
 
 	return rc;
 }

@@ -450,14 +450,18 @@ struct dss_module_key vos_module_key = {
 daos_epoch_t	vos_start_epoch = DAOS_EPOCH_MAX;
 
 static int
-vos_mod_init(bool md_on_ssd)
+vos_mod_init(void)
 {
 	int	 rc = 0;
 
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
-	rc = vos_pool_settings_init(md_on_ssd);
+	/**
+	 * Pass MD mode as int to enable custom umem allocator to be requested e.g. PMEM (0),
+	 * BMEM (1) and ADMEM (2). For MD on SSD specify (1) for now.
+	 */
+	rc = vos_pool_settings_init((int)bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
 		return rc;
@@ -776,19 +780,18 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char		*evt_mode;
 	int		 rc = 0;
-	bool		 md_on_ssd;
-	char		*lmm_db_path = dirname(dss_nvme_conf);
+	char		*lmm_db_path = NULL;
 	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	vos_start_epoch = 0;
 
@@ -796,23 +799,34 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_GOTO(out, rc);
+		goto out;
 	}
 #endif
-	md_on_ssd = bio_nvme_configured(SMD_DEV_TYPE_META);
-
-	rc = vos_mod_init(md_on_ssd);
+	rc = vos_mod_init();
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
-	if (md_on_ssd) {
-		if (lmm_db_path == NULL)
-			lmm_db_path = LMMDB_PATH;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		bool	needs_free = false;
+
+		rc = bio_get_lmm_db_path(lmm_db_path);
+		if (rc) {
+			if (rc == -DER_INVAL)
+				lmm_db_path = LMMDB_PATH;
+			else
+				goto failed;
+		} else {
+			needs_free = true;
+		}
+
 		if (use_sys_db)
 			rc = lmm_db_init(lmm_db_path);
 		else
 			rc = lmm_db_init_ex(lmm_db_path, "self_db", true, true);
 		db = lmm_db_get();
+
+		if (needs_free)
+			D_FREE(lmm_db_path);
 	} else {
 		if (use_sys_db)
 			rc = vos_db_init(db_path);
@@ -821,15 +835,15 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		db = vos_db_get();
 	}
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
 	rc = smd_init(db);
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
 	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
