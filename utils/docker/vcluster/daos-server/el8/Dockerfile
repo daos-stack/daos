@@ -1,11 +1,11 @@
-# Copyright 2021-2022 Intel Corporation
+# Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for building a RHEL variant docker image of a DAOS server node
 #
 # This Dockerfile accept the following input build arguments:
 # - DAOS_BASE_IMAGE      Base docker image to use (default "daos-base")
-# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.4")
+# - DAOS_BASE_VERSION    Version of the base docker image to use (default "rocky8.6")
 # - DAOS_AUTH            Enable DAOS authentication when set to "yes" (default "yes")
 # - DAOS_HUGEPAGES_NBR   Number of huge pages to allocate for SPDK (default 4096)
 # - DAOS_IFACE_NAME      Fabric network interface used by the DAOS engine (default "eth0")
@@ -14,7 +14,7 @@
 
 # Pull base image
 ARG	DAOS_BASE_IMAGE=daos-base
-ARG	DAOS_BASE_VERSION=rocky8.4
+ARG	DAOS_BASE_VERSION=rocky8.6
 FROM	$DAOS_BASE_IMAGE:$DAOS_BASE_VERSION
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -32,7 +32,15 @@ ARG	DAOS_BDEV_SIZE=16
 # XXX NOTE XXX With a production platform, this configuration file should be provided with a volume
 # XXX NOTE XXX (or ConfigMaps for K8S).
 COPY	daos_server.yml.in /tmp/daos_server.yml.in
-RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
+# XXX NOTE XXX HugePages and vfio seem to not be well managed with docker and latest version of the
+# XXX NOTE XXX kernel.  More details could be found at:
+# XXX NOTE XXX - https://stackoverflow.com/questions/64707324/dpdk-sample-application-aborts-after-eal-couldnt-get-fd-on-hugepage-file
+# XXX NOTE XXX - https://doc.dpdk.org/guides/linux_gsg/enable_func.html
+RUN	sed --regexp-extended --in-place                                                           \
+	    --expression "s/^User=daos_server$/User=root/"                                         \
+	    --expression "s/^Group=daos_server$/Group=root/"                                       \
+	    /usr/lib/systemd/system/daos_server.service &&                                         \
+	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		sed --regexp-extended                                                              \
 		    --expression "s/@DAOS_HUGEPAGES_NBR@/${DAOS_HUGEPAGES_NBR}/"                   \
 		    --expression "s/@DAOS_IFACE_NAME@/${DAOS_IFACE_NAME}/"                         \
