@@ -23,7 +23,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.distro }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 500
@@ -32,7 +32,7 @@ jobs:
       run: ./ci/gha_helper.py
       id: commit-hash
     - name: Fetch docker images from cache.
-      uses: satackey/action-docker-layer-caching@v0.0.11
+      uses: jpribyl/action-docker-layer-caching@v0.1.1
       continue-on-error: true
       with:
         key: ${{ steps.commit-hash.outputs.key }}
@@ -86,7 +86,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: true
         fetch-depth: 500
@@ -95,7 +95,7 @@ jobs:
       run: ./ci/gha_helper.py
       id: commit-hash
     - name: Fetch docker images from cache.
-      uses: satackey/action-docker-layer-caching@v0.0.11
+      uses: jpribyl/action-docker-layer-caching@v0.1.1
       continue-on-error: true
       with:
         key: ${{ steps.commit-hash.outputs.key }}
