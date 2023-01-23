@@ -15,8 +15,8 @@
 
 Name:          daos
 Version:       2.2.0
-Release:       6%{?relval}%{?dist}
-Summary:       DAOS Storage Engine
+Release:       7%{?relval}%{?dist}
+Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https://github.com/daos-stack/daos
