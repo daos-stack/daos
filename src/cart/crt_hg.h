@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -155,12 +155,13 @@ bool crt_provider_is_port_based(int provider);
 bool crt_provider_is_sep(int provider);
 void crt_provider_set_sep(int provider, bool enable);
 int crt_provider_get_cur_ctx_num(int provider);
-void crt_provider_inc_cur_ctx_num(int provider);
-void crt_provider_dec_cur_ctx_num(int provider);
 char *crt_provider_name_get(int provider);
 
 int crt_provider_get_max_ctx_num(int provider);
 d_list_t *crt_provider_get_ctx_list(int provider);
+
+int crt_provider_get_ctx_idx(int provider);
+void crt_provider_put_ctx_idx(int provider, int idx);
 
 static inline int
 crt_hgret_2_der(int hg_ret)
