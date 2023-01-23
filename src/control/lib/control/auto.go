@@ -951,35 +951,58 @@ func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails)
 	return scmTier, nil
 }
 
-func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAddressSet) (tiers storage.TierConfigs, err error) {
+func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAddressSet) (storage.TierConfigs, error) {
 	nrSSDs := ssds.Len()
 	if nrSSDs == 0 {
 		log.Debugf("skip assigning ssd tiers as no ssds are available")
-		return
+		return nil, nil
 	}
 
-	// TODO DAOS-11859: On MD-on-SSD branch assign SSDs to multiple tiers with explicit role
-	//                  assignments when scm class is ram (use tmpfs).
-	switch scmCls {
-	case storage.ClassDcpm:
-		tiers = storage.TierConfigs{
+	if scmCls == storage.ClassDcpm {
+		return storage.TierConfigs{
 			storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(ssds.Strings()...).
-				WithBdevDeviceRoles(storage.BdevRoleData),
-		}
-	case storage.ClassRam:
-		tiers = storage.TierConfigs{
-			storage.NewTierConfig().
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(ssds.Strings()...).
-				WithBdevDeviceRoles(storage.BdevRoleAll),
-		}
+				WithBdevDeviceList(ssds.Strings()...),
+		}, nil
+	}
+	if scmCls != storage.ClassRam {
+		return nil, errors.New("only scm classes dcpm (pmem) and ram supported")
+	}
+
+	// Assign SSDs to multiple tiers for MD-on-SSD, NVMe SSDs on same NUMA as
+	// engine to be split into bdev tiers as follows:
+	// 1 SSD: tiers 1
+	// 2-5 SSDs: tiers 1:N-1
+	// 6+ SSDs: tiers 2:N-2
+	//
+	// Bdev tier device roles are implied from the tier order when the config file is
+	// processed on daos_server start-up. Therefore roles are not explicitly specified.
+	//
+	// TODO: Decide whether engine config target count should be calculated based on
+	//       the number of cores and number of SSDs in the second (meta+data) tier.
+
+	var ts []int
+	switch nrSSDs {
+	case 1:
+		ts = []int{1}
+	case 2, 3, 4, 5:
+		ts = []int{1, nrSSDs - 1}
 	default:
-		err = errors.New("only scm classes dcpm (pmem) and ram supported")
+		ts = []int{2, nrSSDs - 2}
 	}
 
-	return
+	log.Debugf("md-on-ssd: nr ssds per bdev tier %v", ts)
+
+	var tiers storage.TierConfigs
+	last := 0
+	for _, count := range ts {
+		tiers = append(tiers, storage.NewTierConfig().
+			WithStorageClass(storage.ClassNvme.String()).
+			WithBdevDeviceList(ssds.Strings()[last:last+count]...))
+		last += count
+	}
+
+	return tiers, nil
 }
 
 type newEngineCfgFn func(int) *engine.Config
