@@ -163,9 +163,9 @@ class ServerRankFailure(IorTestBase):
 
         # 6. Wait for rebuild to finish.
         self.log.info("Wait for rebuild to start.")
-        self.pool.wait_for_rebuild(to_start=True, interval=10)
+        self.pool.wait_for_rebuild_to_start(interval=10)
         self.log.info("Wait for rebuild to finish.")
-        self.pool.wait_for_rebuild(to_start=False, interval=10)
+        self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 7. Restart daos_servers. It's not easy to restart only on the host where the
         # engines were killed, so just restart all.
@@ -194,9 +194,9 @@ class ServerRankFailure(IorTestBase):
 
             # Wait for rebuild to finish
             self.log.info("Wait for rebuild to start.")
-            self.pool.wait_for_rebuild(to_start=True, interval=10)
+            self.pool.wait_for_rebuild_to_start(interval=10)
             self.log.info("Wait for rebuild to finish.")
-            self.pool.wait_for_rebuild(to_start=False, interval=10)
+            self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 11. Verify that the container Health is HEALTHY.
         if not self.container.verify_health(expected_health="HEALTHY"):
@@ -331,7 +331,7 @@ class ServerRankFailure(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container.verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_health(expected_health="HEALTHY"):
             errors.append("Container health isn't HEALTHY after killing engine on rank 1!")
 
         # 8. Create a new container on the pool and run IOR.
