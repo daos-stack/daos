@@ -14,6 +14,7 @@ class EcodFioRebuild(ErasureCodeFio):
 
     :avocado: recursive
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize a EcodFioRebuild object."""
         super().__init__(*args, **kwargs)

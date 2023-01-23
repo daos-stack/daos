@@ -78,6 +78,7 @@ message ClientNetHint {
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
 	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+	repeated string env_vars = 8;	// Client-side environment variables to set
 }
 
 message GetAttachInfoResp {
