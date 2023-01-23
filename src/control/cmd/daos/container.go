@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -786,10 +786,26 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 	rc := C.cont_clone_hdlr(ap)
 
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to clone container %s",
-			cmd.Source)
+		return errors.Wrapf(err, "failed to clone container %s", cmd.Source)
 	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(struct {
+			SourcePool string `json:"src_pool"`
+			SourceCont string `json:"src_cont"`
+			DestPool   string `json:"dst_pool"`
+			DestCont   string `json:"dst_cont"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+		}, nil)
+	}
+
+	// Compat with old-style output
+	cmd.log.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.log.Infof("Successfully copied to destination container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 
 	return nil
 }
