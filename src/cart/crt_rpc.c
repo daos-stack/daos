@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1388,16 +1388,13 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+	D_ASSERT(req->cr_ctx != NULL);
+
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	/* Take a reference to ensure rpc_priv is valid for duration of this
 	 * function.  Referenced dropped at end of this function.
 	 */
 	RPC_ADDREF(rpc_priv);
-
-	if (req->cr_ctx == NULL) {
-		D_ERROR("invalid parameter (NULL req->cr_ctx).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
@@ -1440,7 +1437,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 out:
 	/* internally destroy the req when failed */
-	if (rc != 0 && req->cr_ctx != NULL) {
+	if (rc != 0) {
 		if (!rpc_priv->crp_coll) {
 			crt_rpc_complete(rpc_priv, rc);
 			/* failure already reported through complete cb */
