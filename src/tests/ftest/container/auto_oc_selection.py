@@ -30,7 +30,7 @@ class AutoOCSelectionTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container
+        :avocado: tags=container,dfs
         :avocado: tags=oc_selection,test_oc_selection
         """
         self.add_pool()
@@ -73,7 +73,7 @@ class AutoOCSelectionTest(TestWithServers):
             oclass = prop_oclass[1]
             failure_expected = prop_oclass[2]
 
-            for item in ['oclass', 'dir-oclass', 'file-oclass']:
+            for item in ['oclass', 'dir_oclass', 'file_oclass']:
                 try:
                     self.log.info(
                         "Creating container with rd_fac = %s, %s = %s", properties, item, oclass)

@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -240,7 +239,6 @@ class DaosAgentManager(SubprocessManager):
 
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent."""
-
         server_name = self.get_config_value("name")
 
         self.dump_attachinfo()
