@@ -942,7 +942,9 @@ umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
 {
 	uint64_t idx = offset >> UMEM_CACHE_PAGE_SZ_SHIFT;
 
-	D_ASSERT(idx < cache->ca_num_pages);
+	D_ASSERTF(idx < cache->ca_num_pages,
+		  "offset=" DF_U64 ", num_pages=" DF_U64 ", idx=" DF_U64 "\n", offset,
+		  cache->ca_num_pages, idx);
 
 	return &cache->ca_pages[idx];
 }

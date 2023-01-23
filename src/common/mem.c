@@ -1578,7 +1578,7 @@ int
 umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 {
 	struct umem_cache *cache;
-	int                num_pages;
+	uint64_t           num_pages;
 	int                rc = 0;
 	int                idx;
 
@@ -1595,7 +1595,11 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 	if (cache == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
-	store->cache->ca_store = store;
+	D_DEBUG(DB_IO,
+		"Allocated page cache for stor->stor_size=" DF_U64 ", " DF_U64 " pages at %p\n",
+		store->stor_size, num_pages, cache);
+
+	cache->ca_store      = store;
 	cache->ca_num_pages  = num_pages;
 	cache->ca_max_mapped = num_pages;
 
