@@ -14,15 +14,7 @@
 #include <daos_types.h>
 #include <daos_security.h>
 #include <daos_srv/pool.h>
-
-/**
- * Structure representing a resource's ownership by user and group,
- * respectively.
- */
-struct ownership {
-	char *user;	/** name of the user owner */
-	char *group;	/** name of the group owner */
-};
+#include <daos/security.h>
 
 /**
  * Allocate the default ACL for DAOS pools.

@@ -10,7 +10,16 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <daos_types.h>
+#include <daos_prop.h>
 
+/**
+ * Structure representing a resource's ownership by user and group,
+ * respectively.
+ */
+struct ownership {
+	char *user;	/** name of the user owner */
+	char *group;	/** name of the group owner */
+};
 
 /**
  * Request the security credentials for the current user from the DAOS agent.
@@ -32,5 +41,26 @@
  *		-DER_MISC	Invalid response from agent
  */
 int dc_sec_request_creds(d_iov_t *creds);
+
+/**
+ * Request a user's permissions for a specific container.
+ *
+ * \param[in]	pool_prop	Pool property containing pool ACL and owner/group
+ * \param[in]	cont_prop	Container property containing pool ACL and owner/group
+ * \param[in]	uid		Uid of the local user whose permissions to look up
+ * \param[in]	gid		Gid of the user's primary group
+ * \param[in]	gids		Gids of the user's supplementary groups, if any
+ * \param[in]	nr_gids		Length of the gids list
+ * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
+ *				in enum daos_acl_perm.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID or GID not found on the system
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+dc_sec_get_user_permissions(daos_prop_t *pool_prop, daos_prop_t *cont_prop, uid_t uid, gid_t gid,
+			    gid_t *gids, size_t nr_gids, uint64_t *perms);
 
 #endif /* __DAOS_SECURITY_INT_H__ */

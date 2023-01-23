@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <daos_errno.h>
+#include <daos/debug.h>
 #include <daos/drpc.h>
 #include <daos/drpc.pb-c.h>
 #include <daos/drpc_modules.h>
@@ -16,6 +17,7 @@
 
 #include "auth.pb-c.h"
 #include "srv_internal.h"
+#include "acl.h"
 
 /**
  * The default ACLs for pool and container both include ACEs for owner and the
@@ -297,133 +299,6 @@ pool_capas_from_perms(uint64_t perms)
 }
 
 static int
-get_capas_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
-			const char *name, uint64_t (*convert_perms)(uint64_t),
-			uint64_t *capas)
-{
-	struct daos_ace *ace;
-	int		rc;
-
-	D_DEBUG(DB_MGMT, "Checking ACE for principal type %d\n", type);
-
-	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
-	if (rc != 0)
-		return rc;
-
-	*capas = convert_perms(ace->dae_allow_perms);
-	return 0;
-}
-
-static bool
-authsys_has_group(const char *group, Auth__Sys *authsys)
-{
-	size_t i;
-
-	if (strncmp(authsys->group, group,
-		    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
-		return true;
-
-	for (i = 0; i < authsys->n_groups; i++) {
-		if (strncmp(authsys->groups[i], group,
-			    DAOS_ACL_MAX_PRINCIPAL_LEN) == 0)
-			return true;
-	}
-
-	return false;
-}
-
-static int
-add_perms_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
-			const char *name, uint64_t *perms)
-{
-	int		rc;
-	struct daos_ace	*ace = NULL;
-
-	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
-	if (rc == 0)
-		*perms |= ace->dae_allow_perms;
-
-	return rc;
-}
-
-static int
-get_capas_for_groups(struct daos_acl *acl,
-		     struct ownership *ownership,
-		     Auth__Sys *authsys, uint64_t (*convert_perms)(uint64_t),
-		     uint64_t *capas)
-{
-	int		rc;
-	int		i;
-	uint64_t	grp_perms = 0;
-	bool		found = false;
-
-	/*
-	 * Group permissions are a union of the permissions of all groups the
-	 * user is a member of, including the owner group.
-	 */
-	if (authsys_has_group(ownership->group, authsys)) {
-		rc = add_perms_for_principal(acl, DAOS_ACL_OWNER_GROUP, NULL,
-					     &grp_perms);
-		if (rc == 0)
-			found = true;
-	}
-
-	rc = add_perms_for_principal(acl, DAOS_ACL_GROUP, authsys->group,
-				     &grp_perms);
-	if (rc == 0)
-		found = true;
-
-	for (i = 0; i < authsys->n_groups; i++) {
-		rc = add_perms_for_principal(acl, DAOS_ACL_GROUP,
-					     authsys->groups[i], &grp_perms);
-		if (rc == 0)
-			found = true;
-	}
-
-	if (found) {
-		*capas = convert_perms(grp_perms);
-		return 0;
-	}
-
-	return -DER_NONEXIST;
-}
-
-static bool
-authsys_user_is_owner(Auth__Sys *authsys, struct ownership *ownership)
-{
-	return strncmp(authsys->user, ownership->user,
-		       DAOS_ACL_MAX_PRINCIPAL_LEN) == 0;
-}
-
-static int
-get_authsys_capas(struct daos_acl *acl,
-		  struct ownership *ownership,
-		  Auth__Sys *authsys,
-		  uint64_t (*convert_perms)(uint64_t),
-		  uint64_t *capas)
-{
-	int rc;
-
-	/* If this is the owner, and there's an owner entry... */
-	if (authsys_user_is_owner(authsys, ownership)) {
-		rc = get_capas_for_principal(acl, DAOS_ACL_OWNER, NULL,
-					     convert_perms,
-					     capas);
-		if (rc != -DER_NONEXIST)
-			return rc;
-	}
-
-	/* didn't match the owner entry, try the user by name */
-	rc = get_capas_for_principal(acl, DAOS_ACL_USER, authsys->user,
-				     convert_perms, capas);
-	if (rc != -DER_NONEXIST)
-		return rc;
-
-	return get_capas_for_groups(acl, ownership, authsys, convert_perms,
-				    capas);
-}
-
-static int
 get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -459,48 +334,33 @@ filter_pool_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 		*capas = 0;
 }
 
-static bool
-is_ownership_valid(struct ownership *ownership)
-{
-	if (daos_acl_principal_is_valid(ownership->user) &&
-	    daos_acl_principal_is_valid(ownership->group))
-		return true;
-
-	return false;
-}
-
 static int
 get_sec_capas_for_token(Auth__Token *token, struct ownership *ownership,
-			struct daos_acl *acl, uint64_t owner_min_capas,
+			struct daos_acl *acl, uint64_t owner_min_perms,
 			uint64_t (*convert_perms)(uint64_t), uint64_t *capas)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	int		rc;
-	Auth__Sys	*authsys;
+	int			rc;
+	Auth__Sys		*authsys;
+	struct acl_user		user_info = {0};
+	uint64_t		perms = 0;
 
 	rc = get_auth_sys_payload(token, &authsys);
 	if (rc != 0)
 		return rc;
 
-	rc = get_authsys_capas(acl, ownership, authsys, convert_perms, capas);
+	user_info.user = authsys->user;
+	user_info.group = authsys->group;
+	user_info.groups = authsys->groups;
+	user_info.nr_groups = authsys->n_groups;
 
-	/*
-	 * No match found to any specific entry. If there is an Everyone entry,
-	 * we can use the capas for that.
-	 */
-	if (rc == -DER_NONEXIST)
-		rc = get_capas_for_principal(acl, DAOS_ACL_EVERYONE, NULL,
-					     convert_perms, capas);
-
-	/* No match - default no capabilities */
-	if (rc == -DER_NONEXIST) {
-		*capas = 0;
-		rc = 0;
+	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms);
+	if (rc != 0) {
+		D_ERROR("failed to get user permissions: "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
 
-	/* Owner may have certain implicit permissions */
-	if (authsys_user_is_owner(authsys, ownership))
-		*capas |= owner_min_capas;
+	*capas = convert_perms(perms);
 
 	auth__sys__free_unpacked(authsys, &alloc.alloc);
 	return rc;
@@ -577,6 +437,7 @@ ds_sec_cred_get_origin(d_iov_t *cred, char **machine)
 	auth__token__free_unpacked(token, &alloc.alloc);
 	return rc;
 }
+
 int
 ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 			     struct ownership *ownership,
@@ -709,7 +570,7 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred,
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Auth__Token	*token;
 	int		rc;
-	uint64_t	owner_min_perms = CONT_CAPA_GET_ACL | CONT_CAPA_SET_ACL;
+	uint64_t	owner_min_perms = CONT_OWNER_MIN_PERMS;
 
 	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
 		D_ERROR("NULL input\n");
