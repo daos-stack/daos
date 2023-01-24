@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.101
-Release:       7%{?relval}%{?dist}
+Version:       2.3.102
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -558,6 +558,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Jan 25 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.102-1
+- Bump version to 2.3.102
+
 * Tue Jan 24 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.101-7
 - Fix daos-tests-internal requirement for daos-tests
 
