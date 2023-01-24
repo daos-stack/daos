@@ -510,10 +510,10 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg support collect-log command object."""
                 super().__init__("/run/dmg/server/support/*", "collect-log")
-                self.stop = FormattedParameter("{}", None)
-                self.target = FormattedParameter("{}", None)
-                self.archive = FormattedParameter("{}", None)
-                self.custom_logs = FormattedParameter("{}", None)
+                self.stop = FormattedParameter("--stop-on-error", False)
+                self.target = FormattedParameter("--target={}", None)
+                self.archive = FormattedParameter("--archive {}", False)
+                self.custom_logs = FormattedParameter("--extra-logs-dir={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""

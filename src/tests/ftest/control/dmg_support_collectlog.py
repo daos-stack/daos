@@ -14,8 +14,7 @@ class DmgSupportCollectLogTest(ControlTestBase):
     """
 
     def test_dmg_support_collect_log(self):
-        """
-        JIRA ID: DAOS-10625
+        """JIRA ID: DAOS-10625
         Test Description: Test that support collect-log command completes successfully.
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
