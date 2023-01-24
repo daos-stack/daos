@@ -82,6 +82,7 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	cont->scs_cont_hdl = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
 	cont->scs_cont_src = cont_child;
+	cont->scs_props_fetched = cont_child->sc_props_fetched;
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 1;
@@ -328,7 +329,7 @@ scrubbing_ult(void *arg)
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
-		uint32_t sleep_time = 5000;
+		uint32_t sleep_time = 1000;
 
 		rc = vos_scrub_pool(&ctx);
 		if (rc == -DER_SHUTDOWN) {

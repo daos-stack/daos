@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -302,6 +302,12 @@ sc_is_nvme(struct scrub_ctx *ctx)
 	return bio_iov2media(ctx->sc_cur_biov) == DAOS_MEDIA_NVME;
 }
 
+static bool
+sc_is_first_pass(struct scrub_ctx *ctx)
+{
+	return !ctx->sc_first_pass_done;
+}
+
 static int
 sc_handle_corruption(struct scrub_ctx *ctx)
 {
@@ -480,6 +486,11 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 
 	if (BIO_ADDR_IS_CORRUPTED(&biov->bi_addr)) {
 		/* Already know this is corrupt so just return */
+		if (sc_is_first_pass(ctx))
+			/* Because metrics aren't persisted across engine resets,
+			 * need to count the number of corrupted records found previously
+			 */
+			d_tm_inc_counter(ctx->sc_metrics.scm_corruption_total, 1);
 		D_GOTO(out, rc = DER_SUCCESS);
 	} else if (rc != 0) {
 		D_WARN("Unable to fetch data for scrubber: "DF_RC"\n", DP_RC(rc));
@@ -745,8 +756,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
-			D_ERROR("Unable to setup the container. "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("Unable to setup the container. "DF_RC"\n", DP_RC(rc));
 			return 0;
 		}
 
@@ -792,6 +802,72 @@ sc_pool_stop(struct scrub_ctx *ctx)
 	ctx->sc_status = SCRUB_STATUS_NOT_RUNNING;
 }
 
+/* structure for the cont_iter_is_loaded_cb args */
+struct cont_are_loaded_args {
+	struct scrub_ctx	*args_ctx;
+	bool			 args_found_unloaded_container;
+};
+
+/** vos_iter_cb_t */
+static int
+cont_iter_is_loaded_cb(daos_handle_t ih, vos_iter_entry_t *entry,
+		       vos_iter_type_t type, vos_iter_param_t *param,
+		       void *cb_arg, unsigned int *acts)
+{
+	struct cont_are_loaded_args	*args = cb_arg;
+	struct scrub_ctx		*ctx  = args->args_ctx;
+	int				 rc = 0;
+
+	D_ASSERT(type == VOS_ITER_COUUID);
+
+	rc = sc_cont_setup(ctx, entry);
+	if (rc != 0)
+		return rc;
+	if (sc_cont_is_stopping(ctx))
+		return 0;
+
+	/*
+	 * Is loaded when the properties have been fetched. That way the csummer has been
+	 * initialized if csums are enabled
+	 */
+	if (!args->args_found_unloaded_container)
+		args->args_found_unloaded_container = !args->args_ctx->sc_cont.scs_props_fetched;
+
+	sc_cont_teardown(ctx);
+	return 0;
+}
+
+/*
+ * When the scrubber starts, make sure all containers are loaded. Using the "props_fetched" field
+ * from the ds_cont_child which indicates that the csummer has been initialized if checksums are
+ * enabled.
+ */
+static int
+sc_ensure_containers_are_loaded(struct scrub_ctx *ctx)
+{
+	vos_iter_param_t	param = {0};
+	struct cont_are_loaded_args args = {0};
+	int			rc = 0;
+
+	if (ctx->sc_cont_loaded)
+		return 0;
+
+	args.args_ctx = ctx;
+	param.ip_hdl = ctx->sc_vos_pool_hdl;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	do {
+		struct vos_iter_anchors	anchors = {0};
+
+		args.args_found_unloaded_container = false;
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, NULL,
+				 cont_iter_is_loaded_cb, &args, NULL);
+		sc_sleep(ctx, 500);
+	} while (args.args_found_unloaded_container || rc != 0);
+	ctx->sc_cont_loaded = true;
+
+	return rc;
+}
+
 int
 vos_scrub_pool(struct scrub_ctx *ctx)
 {
@@ -808,6 +884,12 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	if (!sc_should_start(ctx))
 		return 0;
 
+	rc = sc_ensure_containers_are_loaded(ctx);
+	if (rc != 0) {
+		D_ERROR("Error ensuring containers are loaded: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
 	sc_pool_start(ctx);
 
 	param.ip_hdl = ctx->sc_vos_pool_hdl;
@@ -818,6 +900,9 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	sc_pool_stop(ctx);
 	if (rc == SCRUB_POOL_OFF)
 		return 0;
+
+	if (sc_is_first_pass(ctx))
+		ctx->sc_first_pass_done = true;
 
 	return rc;
 }
