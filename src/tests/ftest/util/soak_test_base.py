@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -29,7 +29,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_dir, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
     get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline
+    create_app_cmdline, display_job_failures
 
 
 class SoakTestBase(TestWithServers):
@@ -139,6 +139,8 @@ class SoakTestBase(TestWithServers):
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
+            # display the failed job logs
+            display_job_failures(self)
 
         # verify reserved container data
         if self.resv_cont:
@@ -356,7 +358,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(self.log, self.control, str(script))
+                job_id = slurm_utils.run_slurm_script(self.log, str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
