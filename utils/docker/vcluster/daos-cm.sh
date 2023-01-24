@@ -2,7 +2,7 @@
 
 set -o pipefail
 
-VERSION=0.1
+VERSION=0.2
 CWD="$(realpath $(dirname $0))"
 
 DAOS_POOL_SIZE=10G
@@ -136,7 +136,7 @@ function start
 	DAOS_POOL_SIZE="$2"
 
 	info "Starting DAOS virtual cluster containers"
-	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach ; then
+	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_server daos_admin daos_client ; then
 		fatal "DAOS virtual cluster containers could no be started"
 	fi
 

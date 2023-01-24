@@ -15,6 +15,7 @@ from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from ior_test_base import IorTestBase
 
+
 class UpgradeDowngradeBase(IorTestBase):
     # pylint: disable=global-variable-not-assigned,global-statement
     # pylint: disable=too-many-ancestors
