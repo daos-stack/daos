@@ -90,6 +90,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	       bool sep_mode, int max_ctx_num,
 	       uint32_t max_exp_size, uint32_t max_unexp_size)
 {
+	int i;
+
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
 	prov_data->cpg_ctx_num = 0;
@@ -98,6 +100,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	prov_data->cpg_ctx_max_num = max_ctx_num;
 	prov_data->cpg_max_exp_size = max_exp_size;
 	prov_data->cpg_max_unexp_size = max_unexp_size;
+
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		prov_data->cpg_used_idx[i] = false;
 
 	D_DEBUG(DB_ALL, "Provider (%d), sep_mode (%d), sizes (%d/%d)\n",
 		provider, sep_mode, max_exp_size, max_unexp_size);
