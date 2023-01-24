@@ -46,6 +46,68 @@ type PoolCmd struct {
 	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
+type tierRatioFlag struct {
+	ratios []float64
+}
+
+func (tr *tierRatioFlag) IsSet() bool {
+	return len(tr.ratios) > 0
+}
+
+func (tr tierRatioFlag) Ratios() []float64 {
+	if tr.IsSet() {
+		return tr.ratios
+	}
+
+	// Default to 6% SCM:94% NVMe
+	return []float64{0.06, 0.94}
+}
+
+func (tr tierRatioFlag) String() string {
+	var ratioStrs []string
+	for _, ratio := range tr.Ratios() {
+		ratioStrs = append(ratioStrs, fmt.Sprintf("%.2f", ratio))
+	}
+	return strings.Join(ratioStrs, ",")
+}
+
+func (tr *tierRatioFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("no tier ratio specified")
+	}
+
+	var ratios []uint64
+	for _, trStr := range strings.Split(fv, ",") {
+		trUint, err := strconv.ParseUint(strings.TrimSpace(trStr), 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
+		}
+		ratios = append(ratios, trUint)
+	}
+
+	// Handle single tier ratio as a special case and fill
+	// second tier with remainder (-t 6 will assign 6% of total
+	// storage to tier0 and 94% to tier1).
+	if len(ratios) == 1 && ratios[0] < 100 {
+		ratios = append(ratios, 100-ratios[0])
+	}
+
+	tr.ratios = make([]float64, len(ratios))
+	var totalRatios uint64
+	for tierIdx, ratio := range ratios {
+		if ratio > 100 {
+			return errors.New("Storage tier ratio must be a value between 0-100")
+		}
+		totalRatios += ratio
+		tr.ratios[tierIdx] = float64(ratio) / 100
+	}
+	if totalRatios != 100 {
+		return errors.New("Storage tier ratios must add up to 100")
+	}
+
+	return nil
+}
+
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
 	baseCmd
@@ -57,7 +119,7 @@ type PoolCreateCmd struct {
 	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
 	ACLFile    string              `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
 	Size       string              `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
-	TierRatio  string              `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
+	TierRatio  tierRatioFlag       `short:"t" long:"tier-ratio" description:"Percentage of storage tiers for pool storage (auto; default: 6,94)"`
 	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    string              `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
@@ -114,10 +176,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("size", "nranks")
 		}
 
-		// If the user use a tier-ratio equal to the default value, the error will not be
-		// raised.
-		if cmd.TierRatio != `6,94` {
-			return errIncompatFlags("size", "tier-ratio")
+		if cmd.TierRatio.IsSet() {
+			return errIncompatFlags("size=%", "tier-ratio")
 		}
 
 		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
@@ -165,36 +225,16 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 		req.NumRanks = cmd.NumRanks
 
-		tierRatio, err := parseUint64Array(cmd.TierRatio)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse tier ratios")
-		}
-
-		// Handle single tier ratio as a special case and fill
-		// second tier with remainder (-t 6 will assign 6% of total
-		// storage to tier0 and 94% to tier1).
-		if len(tierRatio) == 1 && tierRatio[0] < 100 {
-			tierRatio = append(tierRatio, 100-tierRatio[0])
-		}
-
-		req.TierRatio = make([]float64, len(tierRatio))
-		var totalRatios uint64
-		for tierIdx, ratio := range tierRatio {
-			if ratio > 100 {
-				return errors.New("Storage tier ratio must be a value between 0-100")
-			}
-			totalRatios += ratio
-			req.TierRatio[tierIdx] = float64(ratio) / 100
-		}
-		if totalRatios != 100 {
-			return errors.New("Storage tier ratios must add up to 100")
-		}
+		req.TierRatio = cmd.TierRatio.Ratios()
 		cmd.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
 	default:
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("nranks", "scm-size")
+		}
+		if cmd.TierRatio.IsSet() {
+			return errIncompatFlags("tier-ratio", "scm-size")
 		}
 
 		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)

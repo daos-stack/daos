@@ -128,10 +128,16 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with missing arguments",
+			"Create pool with missing size",
 			"pool create label",
 			"",
 			errors.New("must be supplied"),
+		},
+		{
+			"Create pool with missing label",
+			fmt.Sprintf("pool create --size %s", testSizeStr),
+			"",
+			errors.New("required argument"),
 		},
 		{
 			"Create pool with incompatible arguments (auto nvme-size)",
@@ -146,16 +152,16 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (size nranks)",
+			"Create pool with incompatible arguments (% size nranks)",
 			"pool create label --size 100% --nranks 16",
 			"",
 			errors.New("--size may not be mixed with --nranks"),
 		},
 		{
-			"Create pool with incompatible arguments (size tier-ratio)",
+			"Create pool with incompatible arguments (% size tier-ratio)",
 			"pool create label --size 100% --tier-ratio 16",
 			"",
-			errors.New("--size may not be mixed with --tier-ratio"),
+			errors.New("--size=% may not be mixed with --tier-ratio"),
 		},
 		{
 			"Create pool with invalid arguments (too small ratio)",
@@ -176,10 +182,16 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with invalid tier-ratio (auto)",
+			"Create pool with too-large tier-ratio (auto)",
 			fmt.Sprintf("pool create label --size %s --tier-ratio 200", testSizeStr),
 			"",
 			errors.New("0-100"),
+		},
+		{
+			"Create pool with too-small tier-ratio (auto)",
+			fmt.Sprintf("pool create label --size %s --tier-ratio 30,30", testSizeStr),
+			"",
+			errors.New("100"),
 		},
 		{
 			"Create pool with single tier-ratio (auto)",
@@ -203,6 +215,18 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create label --scm-size %s --nranks 42", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (-s -t)",
+			fmt.Sprintf("pool create label --scm-size %s --tier-ratio 6", testSizeStr),
+			"",
+			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (-n without -s)",
+			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
+			"",
+			errors.New("must be supplied"),
 		},
 		{
 			"Create pool with minimal arguments",
@@ -1403,7 +1427,6 @@ func TestDmg_PoolCreateAllCmd(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			poolCreateCmd.TierRatio = `6,94`
 
 			err := poolCreateCmd.Execute(nil)
 
