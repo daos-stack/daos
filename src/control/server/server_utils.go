@@ -105,6 +105,12 @@ func cfgGetReplicas(cfg *config.Server, lookup ipLookupFn) ([]*net.TCPAddr, erro
 }
 
 func cfgGetRaftDir(cfg *config.Server) string {
+	raftDirName := "control_raft"
+	if cfg.Metadata.Path != "" {
+		return filepath.Join(cfg.Metadata.Directory(), raftDirName)
+	}
+
+	// If no control metadata directory was defined, use the engine SCM storage
 	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
@@ -112,7 +118,7 @@ func cfgGetRaftDir(cfg *config.Server) string {
 		return ""
 	}
 
-	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, raftDirName)
 }
 
 func writeCoreDumpFilter(log logging.Logger, path string, filter uint8) error {

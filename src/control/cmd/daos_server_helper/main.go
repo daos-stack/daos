@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,6 +30,11 @@ func main() {
 
 // addMethodHandlers adds all of daos_server_helper's supported handler functions.
 func addMethodHandlers(app *pbin.App) {
+	app.AddHandler("MetadataMount", &metadataMountHandler{})
+	app.AddHandler("MetadataUnmount", &metadataMountHandler{})
+	app.AddHandler("MetadataFormat", &metadataFormatHandler{})
+	app.AddHandler("MetadataNeedsFormat", &metadataFormatHandler{})
+
 	app.AddHandler("ScmMount", &scmMountUnmountHandler{})
 	app.AddHandler("ScmUnmount", &scmMountUnmountHandler{})
 	app.AddHandler("ScmFormat", &scmFormatCheckHandler{})

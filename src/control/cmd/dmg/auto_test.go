@@ -422,6 +422,7 @@ hyperthreads: false
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 				).
+				WithIndex(1).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
 				WithTargetCount(6).

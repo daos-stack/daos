@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -340,17 +340,58 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
 	resp.Crets = make([]*ctlpb.NvmeControllerResult, 0, len(instances))
 	scmChan := make(chan *ctlpb.ScmMountResult, len(instances))
+	mdFormatted := false
 
-	// TODO: enable per-instance formatting
-	formatting := 0
-	for _, ei := range instances {
-		formatting++
-		go func(e Engine) {
-			scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
-		}(ei)
+	// Format control metadata first, if needed
+	if needs, err := c.storage.ControlMetadataNeedsFormat(); err != nil {
+		return nil, errors.Wrap(err, "detecting if metadata format is needed")
+	} else if needs || req.Reformat {
+		engineIdxs := make([]uint, len(instances))
+		for i, eng := range instances {
+			engineIdxs[i] = uint(eng.Index())
+		}
+
+		c.log.Debug("formatting control metadata storage")
+		if err := c.storage.FormatControlMetadata(engineIdxs); err != nil {
+			return nil, errors.Wrap(err, "formatting control metadata storage")
+		}
+		mdFormatted = true
+	} else {
+		c.log.Debug("no control metadata format needed")
 	}
 
 	instanceErrored := make(map[uint32]string)
+	instanceSkipped := make(map[uint32]bool)
+	// TODO: enable per-instance formatting
+	formatting := 0
+	for _, ei := range instances {
+		if needs, err := ei.GetStorage().ScmNeedsFormat(); err != nil {
+			return nil, errors.Wrap(err, "detecting if SCM format is needed")
+		} else if needs || req.Reformat {
+			formatting++
+			go func(e Engine) {
+				scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
+			}(ei)
+		} else {
+			var mountpoint string
+			if scmConfig, err := ei.GetStorage().GetScmConfig(); err != nil {
+				c.log.Debugf("unable to get mountpoint: %v", err)
+			} else {
+				mountpoint = scmConfig.Scm.MountPoint
+			}
+
+			resp.Mrets = append(resp.Mrets, &ctlpb.ScmMountResult{
+				Instanceidx: ei.Index(),
+				Mntpoint:    mountpoint,
+				State: &ctlpb.ResponseState{
+					Info: "SCM is already formatted",
+				},
+			})
+
+			instanceSkipped[ei.Index()] = true
+		}
+	}
+
 	for formatting > 0 {
 		select {
 		case <-ctx.Done():
@@ -368,8 +409,10 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// allow format to complete on one instance even if another fail
 	// TODO: perform bdev format in parallel
 	for _, ei := range instances {
-		if _, hasError := instanceErrored[ei.Index()]; hasError {
-			// if scm errored, indicate skipping bdev format
+		_, hasError := instanceErrored[ei.Index()]
+		_, skipped := instanceSkipped[ei.Index()]
+		if hasError || (skipped && !mdFormatted) {
+			// if scm errored or was already formatted, indicate skipping bdev format
 			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
