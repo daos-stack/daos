@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,12 +98,12 @@ chkpt_ult(void *arg)
 			sleep_time = 60000; /* wait longer if there's an error */
 		}
 
-		sched_req_sleep(child->spc_scrubbing_req, sleep_time);
+		sched_req_sleep(child->spc_chkpt_req, sleep_time);
 	}
 }
 
 int
-ds_start_scrubbing_ult(struct ds_pool_child *child)
+ds_start_chkpt_ult(struct ds_pool_child *child)
 {
 	struct dss_module_info *dmi = dss_get_module_info();
 	struct sched_req_attr   attr;
@@ -130,14 +130,14 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 }
 
 void
-ds_stop_scrubbing_ult(struct ds_pool_child *child)
+ds_stop_chkpt_ult(struct ds_pool_child *child)
 {
 	D_ASSERT(child != NULL);
 	/* Scrubbing ULT is not started */
-	if (child->spc_scrubbing_req == NULL)
+	if (child->spc_chkpt_req == NULL)
 		return;
 
-	sched_req_wait(child->spc_scrubbing_req, true);
-	sched_req_put(child->spc_scrubbing_req);
-	child->spc_scrubbing_req = NULL;
+	sched_req_wait(child->spc_chkpt_req, true);
+	sched_req_put(child->spc_chkpt_req);
+	child->spc_chkpt_req = NULL;
 }

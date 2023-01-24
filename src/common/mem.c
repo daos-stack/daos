@@ -1657,6 +1657,9 @@ umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_ad
 	struct umem_page *end_page;
 	uint64_t          current_addr = (uint64_t)start_addr;
 
+	if (store->cache == NULL)
+		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
+
 	page     = umem_cache_off2page(cache, offset);
 	end_page = page + num_pages;
 
@@ -1738,10 +1741,16 @@ int
 umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size)
 {
 	struct umem_cache *cache     = store->cache;
-	struct umem_page *page      = umem_cache_off2page(cache, addr);
+	struct umem_page  *page;
 	umem_off_t        end_addr  = addr + size - 1;
-	struct umem_page *end_page  = umem_cache_off2page(cache, end_addr);
+	struct umem_page  *end_page;
 	umem_off_t        start_addr;
+
+	if (cache == NULL)
+		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
+
+	page     = umem_cache_off2page(cache, addr);
+	end_page = umem_cache_off2page(cache, end_addr);
 
 	if (page->pg_copying)
 		return -DER_CHKPT_BUSY;
@@ -1869,6 +1878,9 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	int                          i;
 	int                          rc;
 	int                          inflight = 0;
+
+	if (cache == NULL)
+		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
 
 	if (d_list_empty(&cache->ca_pgs_dirty))
 		return 0;

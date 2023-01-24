@@ -103,13 +103,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		goto out0;
 	}
 
-	rc = umem_cache_alloc(store, 0);
-	if (rc != 0) {
-		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
-		err = rc;
-		goto out1;
-	}
-
 	/* REVISIT: In future pass the meta instance as argument instead of fd */
 	hdl->do_fd = fd;
 	hdl->do_base = base;
@@ -122,7 +115,15 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		D_ERROR("meta context not defined. WAL commit disabled for %s\n",
 			path);
 		hdl->do_store->stor_ops = &_store_ops;
+	} else {
+		rc = umem_cache_alloc(store, 0);
+		if (rc != 0) {
+			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+			err = rc;
+			goto out1;
+		}
 	}
+
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
 	rc = umem_cache_map_range(hdl->do_store, 0, base, sz >> UMEM_CACHE_PAGE_SZ_SHIFT);
