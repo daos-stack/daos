@@ -6,13 +6,15 @@
 import json
 import time
 from osa_utils import OSAUtils
-from avocado.utils import process
+from exception_utils import CommandFailure
 
 
 class VmdLedStatus(OSAUtils):
     """
     Test Class Description: This class methods to get
     the VMD LED status.
+
+    :avocado: recursive
     """
     # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
@@ -23,18 +25,17 @@ class VmdLedStatus(OSAUtils):
 
     def get_nvme_device_ids(self):
         """Get the list of nvme device-ids.
-        Returns: List of uuid
+        Returns:
+            list: List of uuids
         """
         self.dmg.json.value = True
         try:
             result = self.dmg.storage_query_list_devices()
-        except process.CmdError as details:
+        except CommandFailure as details:
             self.fail("dmg command failed: {}".format(details))
-        finally:
-            self.dmg.json.value = False
 
         data = json.loads(result.stdout_text)
-        resp = data['response']
+        resp = result['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:
                 self.fail("dmg command failed: {}".format(data['error']))
@@ -58,13 +59,10 @@ class VmdLedStatus(OSAUtils):
         if device_id is None:
             self.fail("No device id provided")
 
-        self.dmg.json.value = True
         try:
             result = self.dmg.storage_identify_vmd(uuid=device_id)
-        except process.CmdError as details:
+        except CommandFailure as details:
             self.fail("dmg command failed: {}".format(details))
-        finally:
-            self.dmg.json.value = False
 
         data = json.loads(result.stdout_text)
         resp = data['response']
@@ -81,7 +79,7 @@ class VmdLedStatus(OSAUtils):
         Args:
             device_id (str): Device UUID
         Returns:
-            dmg device faulty information.
+            dict: dmg device faulty information.
         """
         if device_id is None:
             self.fail("No device id provided")
@@ -89,7 +87,7 @@ class VmdLedStatus(OSAUtils):
         self.dmg.json.value = True
         try:
             result = self.dmg.storage_set_faulty(uuid=device_id)
-        except process.CmdError as details:
+        except CommandFailure as details:
             self.fail("dmg command failed: {}".format(details))
         finally:
             self.dmg.json.value = False
@@ -106,10 +104,10 @@ class VmdLedStatus(OSAUtils):
     def test_vmd_led_status(self):
         """Jira ID: DAOS-11290
 
-        :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=vmd_led,faults
-        :avocado: tags=vmd_led_basic
+        :avocado: tags=all,manual
+        :avocado: tags=hw,medium
+        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
         dev_id = []
         # Get the list of device ids.
@@ -124,9 +122,9 @@ class VmdLedStatus(OSAUtils):
         """Jira ID: DAOS-11290
 
         :avocado: tags=all,manual
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=vmd_led,faults
-        :avocado: tags=vmd_led_fault
+        :avocado: tags=hw,medium
+        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """
         dev_id = []
         # Get the list of device ids.
@@ -136,14 +134,17 @@ class VmdLedStatus(OSAUtils):
             resp = self.set_device_faulty(val)
             time.sleep(15)
             self.log.info(resp)
+        # TODO
+        # Verify the actual VMD LED status
+        # Presently, we cannot read the value.
 
     def test_disk_failure_recover(self):
         """Jira ID: DAOS-11284
 
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=vmd_led,faults
-        :avocado: tags=vmd_disk_failure_recover
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
         dev_id = []
         # Get the list of device ids.
