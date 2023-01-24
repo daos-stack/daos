@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -323,11 +323,11 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 //
 // Role assignments will be decided based on the following rule set:
 //   - For 1 bdev tier, all roles will be assigned to that tier.
-//   - For 2 bdev tiers, WAL and Meta roles will be assigned to the first bdev tier and Data to
+//   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
 //     the second bdev tier.
 //   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
 //     second bdev tier and Data to all remaining bdev tiers.
-//   - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
+//   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) assignBdevTierRoles() error {
 	scs := tcs.ScmConfigs()
@@ -373,8 +373,8 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 	case 1:
 		tcs[1].WithBdevDeviceRoles(BdevRoleAll)
 	case 2:
-		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleMeta)
-		tcs[2].WithBdevDeviceRoles(BdevRoleData)
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData)
 	default:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)

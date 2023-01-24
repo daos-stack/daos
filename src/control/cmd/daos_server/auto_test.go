@@ -138,16 +138,21 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	ib1 := &control.HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib1", NumaNode: 1, NetDevClass: 32, Priority: 1,
 	}
-	exmplEngineCfgs := []*engine.Config{
-		control.MockEngineCfg(t, 0, 2, 4).WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfg(t, 1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4),
-	}
+	e0 := control.MockEngineCfg(0, 2, 4).WithTargetCount(18).WithHelperStreamCount(4)
+	e0.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
+	e1 := control.MockEngineCfg(1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4)
+	e1.Storage.Tiers[1].WithBdevDeviceRoles(storage.BdevRoleData)
+	exmplEngineCfgs := []*engine.Config{e0, e1}
 	mockMemTotal := humanize.GiByte * 12
 	mockRamdiskSize := 4 // RoundDownGiB(12*0.75/2)
 	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(t, 0, mockRamdiskSize, 2, 4).
+		control.MockEngineCfgTmpfs(0, mockRamdiskSize,
+			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
+			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(t, 1, mockRamdiskSize, 1, 3).
+		control.MockEngineCfgTmpfs(1, mockRamdiskSize,
+			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
+			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
 			WithTargetCount(18).WithHelperStreamCount(4),
 	}
 
@@ -231,7 +236,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
@@ -258,7 +263,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
@@ -355,7 +360,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", tmpfsEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
 				WithNrHugePages(18432).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
