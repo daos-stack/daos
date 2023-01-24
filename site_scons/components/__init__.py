@@ -22,6 +22,7 @@
 
 import platform
 import distro
+from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
 # from prereq_tools import WebRetriever
 
@@ -58,7 +59,8 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        print(f'Using build version of {name}')
+        if not GetOption('help'):
+            print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
@@ -68,7 +70,8 @@ def include(reqs, name, use_value, exclude_value):
     if reqs.included(name):
         print(f'Including {name} optional component from build')
         return use_value
-    print(f'Excluding {name} optional component from build')
+    if not GetOption('help'):
+        print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
@@ -95,7 +98,7 @@ _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
 
 
 def define_mercury(reqs):
-    """mercury definitions"""
+    """Mercury definitions"""
     libs = ['rt']
 
     if reqs.get_env('PLATFORM') == 'darwin':
@@ -216,7 +219,7 @@ def define_mercury(reqs):
 
 
 def define_common(reqs):
-    """common system component definitions"""
+    """Common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
 
     reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],

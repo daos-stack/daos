@@ -1,7 +1,6 @@
 """Build DAOS"""
 import os
 import sys
-import platform
 import subprocess  # nosec
 import time
 import errno
@@ -20,24 +19,139 @@ wrap scons-3.""")
 SCons.Warnings.warningAsException()
 
 
-def get_version(env):
-    """ Read version from VERSION file """
+API_VERSION_MAJOR = "2"
+API_VERSION_MINOR = "7"
+API_VERSION_FIX = "0"
+API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
+
+
+def read_and_save_version(env):
+    """Read version from VERSION file and update daos_version.h"""
+
+    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
+
     with open("VERSION", "r") as version_file:
         version = version_file.read().rstrip()
 
         (major, minor, fix) = version.split('.')
 
-        env.Append(DAOS_VERSION_MAJOR=major)
-        env.Append(DAOS_VERSION_MINOR=minor)
-        env.Append(DAOS_VERSION_FIX=fix)
+        env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + version + '\\"'])
+
+        if GetOption('help'):
+            return version
+
+        tmpl_hdr_in = os.path.join('src', 'include', 'daos_version.h.in')
+        subst_dict = {'@TMPL_MAJOR@': API_VERSION_MAJOR,
+                      '@TMPL_MINOR@': API_VERSION_MINOR,
+                      '@TMPL_FIX@': API_VERSION_FIX,
+                      '@TMPL_PKG_MAJOR@': major,
+                      '@TMPL_PKG_MINOR@': minor,
+                      '@TMPL_PKG_FIX@': fix,
+                      '@Template for @': ''}
+
+        out = env.Substfile(tmpl_hdr_in, SUBST_DICT=subst_dict)
+        print(f'generated daos version header file: {out[0].abspath}')
 
         return version
 
 
-API_VERSION_MAJOR = "2"
-API_VERSION_MINOR = "7"
-API_VERSION_FIX = "0"
-API_VERSION = f'{API_VERSION_MAJOR}.{API_VERSION_MINOR}.{API_VERSION_FIX}'
+def add_command_line_options():
+    """Add command line options"""
+
+    AddOption('--preprocess',
+              dest='preprocess',
+              action='store_true',
+              default=False,
+              help='Preprocess selected files for profiling')
+    AddOption('--no-rpath',
+              dest='no_rpath',
+              action='store_true',
+              default=False,
+              help='Disable rpath')
+    AddOption('--analyze-stack',
+              dest='analyze_stack',
+              metavar='ARGSTRING',
+              default=None,
+              help='Gather stack usage statistics after build')
+
+    # We need to sometimes use alternate tools for building and need to add them to the PATH in the
+    # environment.
+    AddOption('--prepend-path',
+              dest='prepend_path',
+              default=None,
+              help="String to prepend to PATH environment variable.")
+
+    # Allow specifying the locale to be used.  Default "en_US.UTF8"
+    AddOption('--locale-name',
+              dest='locale_name',
+              default='en_US.UTF8',
+              help='locale to use for building. [%default]')
+
+    AddOption('--require-optional',
+              dest='require_optional',
+              action='store_true',
+              default=False,
+              help='Fail the build if check_component fails')
+
+    AddOption('--build-deps',
+              dest='build_deps',
+              type='choice',
+              choices=['yes', 'no', 'only', 'build-only'],
+              default='no',
+              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+
+    # We want to be able to check what dependencies are needed without
+    # doing a build, similar to --dry-run.  We can not use --dry-run
+    # on the command line because it disables running the tests for the
+    # the dependencies.  So we need a new option
+    AddOption('--check-only',
+              dest='check_only',
+              action='store_true',
+              default=False,
+              help="Check dependencies only, do not download or build.")
+
+    # Need to be able to look for an alternate build.config file.
+    AddOption('--build-config',
+              dest='build_config',
+              default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
+              help='build config file to use. [%default]')
+
+
+def parse_and_save_conf(env, opts_file):
+    """Parse daos.conf
+
+    This only sets the initial values, most are set within prereqs as that's where they are used
+    and the defaults are calculated."""
+
+    opts = Variables(opts_file)
+
+    opts.Add(EnumVariable('SCONS_ENV', "Default SCons environment inheritance",
+                          'minimal', ['minimal', 'full'], ignorecase=2))
+
+    opts.Add('GO_BIN', 'Full path to go binary', None)
+
+    # TODO: Should we keep this?
+    opts.Add(PathVariable('ENV_SCRIPT', "Location of environment script",
+                          os.path.expanduser('~/.scons_localrc'),
+                          PathVariable.PathAccept))
+
+    # Finally parse the command line options and save to file if required.
+    opts.Update(env)
+
+    return opts
+
+
+def build_misc(build_prefix):
+    """Build miscellaneous items"""
+    # install the configuration files
+    common = os.path.join('utils', 'config')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
+
+    # install certificate generation files
+    common = os.path.join('utils', 'certs')
+    path = os.path.join(build_prefix, common)
+    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
 
 
 def update_rpm_version(version, tag):
@@ -94,56 +208,8 @@ def update_rpm_version(version, tag):
     return True
 
 
-def is_platform_arm():
-    """Detect if platform is ARM"""
-    processor = platform.machine()
-    arm_list = ["arm", "aarch64", "arm64"]
-    if processor.lower() in arm_list:
-        return True
-    return False
-
-
-def set_defaults(env, daos_version):
-    """set compiler defaults"""
-    AddOption('--preprocess',
-              dest='preprocess',
-              action='store_true',
-              default=False,
-              help='Preprocess selected files for profiling')
-    AddOption('--no-rpath',
-              dest='no_rpath',
-              action='store_true',
-              default=False,
-              help='Disable rpath')
-    AddOption('--analyze-stack',
-              dest='analyze_stack',
-              metavar='ARGSTRING',
-              default=None,
-              help='Gather stack usage statistics after build')
-
-    env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
-    env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
-    env.Append(API_VERSION_FIX=API_VERSION_FIX)
-
-    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
-    env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-
-
-def build_misc(build_prefix):
-    """Build miscellaneous items"""
-    # install the configuration files
-    common = os.path.join('utils', 'config')
-    path = os.path.join(build_prefix, common)
-    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
-
-    # install certificate generation files
-    common = os.path.join('utils', 'certs')
-    path = os.path.join(build_prefix, common)
-    SConscript(os.path.join(common, 'SConscript'), variant_dir=path, duplicate=0)
-
-
-def scons():  # pylint: disable=too-many-locals,too-many-branches
-    """Execute build"""
+def check_for_release_target():  # pylint: disable=too-many-locals
+    """Update GitHub for release tag"""
     if COMMAND_LINE_TARGETS == ['release']:
         # pylint: disable=consider-using-f-string
         try:
@@ -319,42 +385,84 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
         Exit(0)
 
+
+def scons():
+    """Perform the build"""
+
+    check_for_release_target()
+
     deps_env = Environment()
 
-    # Scons strips out the environment, however to be able to build daos using the interception
-    # library we need to add a few things back in.
-    if 'LD_PRELOAD' in os.environ:
-        deps_env['ENV']['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+    add_command_line_options()
 
-        for key in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
-            value = os.environ.get(key, None)
-            if value is not None:
-                deps_env['ENV'][key] = value
+    # Scons strips out the environment, however that is not always desirable so add back in
+    # several options that might be needed.
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
-    opts = Variables(opts_file)
 
-    commits_file = os.path.join(Dir('#').abspath, 'utils/build.config')
-    if not os.path.exists(commits_file):
-        commits_file = None
+    opts = parse_and_save_conf(deps_env, opts_file)
 
-    platform_arm = is_platform_arm()
+    if deps_env.get('SCONS_ENV') == 'full':
+        deps_env.Replace(ENV=os.environ)
+    else:
+        real_env = deps_env['ENV']
 
-    if 'VIRTUAL_ENV' in os.environ:
-        deps_env.PrependENVPath('PATH', os.path.join(os.environ['VIRTUAL_ENV'], 'bin'))
-        deps_env['ENV']['VIRTUAL_ENV'] = os.environ['VIRTUAL_ENV']
+        for var in ['HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
+                    'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE']:
+            value = os.environ.get(var)
+            if value:
+                real_env[var] = value
 
-    config = Configure(deps_env)
-    if not config.CheckHeader('stdatomic.h'):
-        Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
-    config.Finish()
+        # This was used for the daos_build test, set SCONS_ENV=full instead to avoid this logic.
+        # if 'LD_PRELOAD' in os.environ:
+        #    real_env['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
-    prereqs = PreReqComponent(deps_env, opts, commits_file)
-    if prereqs.check_component('valgrind_devel'):
-        deps_env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+        #    for var in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
+        #        value = os.environ.get(var)
+        #        if value:
+        #            real_env[var] = value
 
-    prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
+        deps_env.Replace(ENV=real_env)
+
+        venv_path = os.environ.get('VIRTUAL_ENV')
+        if venv_path:
+            deps_env.PrependENVPath('PATH', os.path.join(venv_path, 'bin'))
+            deps_env['ENV']['VIRTUAL_ENV'] = venv_path
+
+    pre_path = GetOption('prepend_path')
+    if pre_path:
+        deps_env.PrependENVPath('PATH', pre_path)
+
+    locale_name = GetOption('locale_name')
+    if locale_name:
+        deps_env['ENV']['LC_ALL'] = locale_name
+
+    # Legacy, parse a ~/.scons_localrc if it exists.
+    env_script = deps_env.get('ENV_SCRIPT')
+    if os.path.exists(env_script):
+        env = deps_env
+        SConscript(env_script, exports=['env'])
+
+    # This used to be set in prereqs so move it here but it may be best to remove entirely.
+    SetOption('implicit_cache', True)
+
+    # Perform this check early before loading PreReqs as if this header is missing then we want
+    # to exit before building any dependencies.
+    if not GetOption('help'):
+
+        config = deps_env.Configure()
+        if not config.CheckHeader('stdatomic.h'):
+            Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
+        config.Finish()
+
+    # Define and load the components.  This will add more values to opt.
+    prereqs = PreReqComponent(deps_env, opts)
+    # Now save the daos.conf file before attempting to build anything.  This means that options
+    # are sticky even if there's a failed build.
     opts.Save(opts_file, deps_env)
+
+    # This will add a final 'DEPS' value to opts but it will not be persistent.
+    prereqs.run_build(opts)
 
     if GetOption('build_deps') == 'only':
         print('Exiting because --build-deps=only was set')
@@ -362,12 +470,13 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
 
     env = deps_env.Clone(tools=['extra', 'textfile', 'daos_builder', 'compiler_setup'])
 
+    if not GetOption('help'):
+        if prereqs.check_component('valgrind_devel'):
+            env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+
     conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
-    daos_version = get_version(env)
-
-    set_defaults(env, daos_version)
 
     base_env = env.Clone()
 
@@ -386,9 +495,9 @@ def scons():  # pylint: disable=too-many-locals,too-many-branches
     if args is not None:
         env.Tool('stack_analyzer', prefix=build_prefix, args=args)
 
-    # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs')
-    Export('platform_arm', 'conf_dir')
+    daos_version = read_and_save_version(env)
+
+    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'base_env_mpi', 'prereqs', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
     path = os.path.join(build_prefix, 'src')
