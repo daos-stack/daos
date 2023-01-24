@@ -61,6 +61,8 @@ PROVIDER_KEYS = OrderedDict(
         ("tcp", "ofi+tcp"),
     ]
 )
+PROCS_TO_CLEANUP = ["cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -1875,6 +1877,9 @@ class Launch():
         if status:
             return status
 
+        # Stop rogue processes
+        self._cleanup_procs(test, True)
+
         # Generate certificate files for the test
         return self._generate_certs()
 
@@ -2098,6 +2103,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test, stop_daos)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2335,6 +2341,54 @@ class Launch():
         else:
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
+
+    @staticmethod
+    def _cleanup_procs(test, do_stop):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+            do_stop (bool): whether to stop the processes
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+
+        hosts = test.host_info.all_hosts
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.info("Looking for running processes: %s", proc_pattern)
+        pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
+        pgrep_result = run_remote(logger, hosts, pgrep_cmd)
+        if pgrep_result.passed_hosts:
+            if do_stop:
+                logger.info("Killing running processes: %s", proc_pattern)
+                pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
+                pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
+                if not pkill_result.passed:
+                    # For now, just warn and continue
+                    logger.warning(
+                        "Failed to kill running processes on: %s", pkill_result.failed_hosts)
+            any_found = True
+
+        logger.info("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            if do_stop:
+                logger.info("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+                type_list = ",".join(TYPES_TO_UNMOUNT)
+                umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+                umount_result = run_remote(logger, hosts, umount_cmd)
+                if not umount_result.passed:
+                    # For now, just warn and continue
+                    logger.warning("Failed to unmount on: %s", umount_result.failed_hosts)
+            any_found = True
+
+        return 4096 if any_found else 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
@@ -2784,6 +2838,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
