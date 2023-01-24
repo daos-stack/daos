@@ -222,7 +222,7 @@ type containerCreateCmd struct {
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
 	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
 	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
-	CHints          string               `long:"hints" short:"h" description:"container hints"`
+	CHints          string               `long:"hints" short:"H" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
