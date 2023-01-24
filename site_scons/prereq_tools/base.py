@@ -1288,6 +1288,7 @@ class _Component():
         self._parse_config(env, "--cflags")
 
         if GetOption('help'):
+            print('help set')
             return True
 
         print(f"Checking targets for component '{self.name}'")
@@ -1298,6 +1299,7 @@ class _Component():
                 config.Finish()
                 if self.__check_only:
                     env.SetOption('no_exec', True)
+                print('Custom check failed')
                 return True
 
         for prog in self.progs:

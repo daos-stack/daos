@@ -222,8 +222,18 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 timeout = build_time * 60
             start = time.time()
-            ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
-                                              timeout=timeout, expect_rc=0)
+            try:
+                ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
+                                                  timeout=timeout, expect_rc=0)
+            except RuntimeError as error:
+                elapsed = time.time() - start
+                (minutes, seconds) = divmod(elapsed, 60)
+                self.log.info('Failed after %d:%02d (%d%% of timeout)',
+                              minutes, seconds, elapsed / timeout * 100)
+                general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
+                general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
+                                       timeout=30)
+                raise error
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
             self.log.info('Completed in %d:%02d (%d%% of timeout)',
