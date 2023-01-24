@@ -43,6 +43,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
+        :avocado: tags=daos_cmd
         :avocado: tags=security,container_acl
         :avocado: tags=cont_delete_acl_inputs,test_acl_delete_invalid_inputs
         """
@@ -72,6 +73,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command successfully
             removes principal in ACL.
 
+        :avocado: tags=daos_cmd
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_delete_acl,test_delete_valid_acl
         """
@@ -93,6 +95,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container delete command doesn't
             remove principal in ACL without permission.
 
+        :avocado: tags=daos_cmd
         :avocado: tags=all,daily_regression,security,container_acl
         :avocado: tags=cont_delete_acl_noperms,test_no_user_permissions
         """
