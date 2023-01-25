@@ -20,6 +20,7 @@ func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogRe
 	params := support.CollectLogsParams{}
 	params.TargetFolder = req.TargetFolder
 	params.ExtraLogsDir = req.ExtraLogsDir
+	params.TargetHost = req.TargetHost
 	params.JsonOutput = req.JsonOutput
 	params.LogFunction = req.LogFunction
 	params.LogCmd = req.LogCmd

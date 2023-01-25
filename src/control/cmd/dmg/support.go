@@ -7,9 +7,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -32,6 +34,74 @@ type collectLogCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	support.CollectLogSubCmd
+}
+
+// Copy Admin logs to TargetHost (central location) if option is provided.
+func (cmd *collectLogCmd) rsyncAdminLog() error {
+
+	runcmd := strings.Join([]string{
+		"rsync",
+		"-av",
+		"--blocking-io",
+		cmd.TargetFolder + "/",
+		cmd.TargetHost + ":" + cmd.TargetFolder}, " ")
+
+	cmd.Debugf("Rsync Admin Log to TargetHost = %s", runcmd)
+	rsyncCmd := exec.Command("sh", "-c", runcmd)
+	var stdout, stderr bytes.Buffer
+	rsyncCmd.Stdout = &stdout
+	rsyncCmd.Stderr = &stderr
+	err := rsyncCmd.Run()
+	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+	if err != nil {
+		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
+	}
+	cmd.Debugf("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
+
+	return nil
+}
+
+// gRPC call to initiate the rsync and copy the logs to Admin/TargetHost (central location).
+func (cmd *collectLogCmd) rsyncLog() error {
+	hostName, err := support.GetHostName()
+	if err != nil {
+		return err
+	}
+
+	// Admin host will be the central host to collect all the logs if TargetHost option not provided.
+	// In that case only server logs will be rsync to Admin host.
+	if cmd.TargetHost == "" {
+		cmd.TargetHost = hostName
+	} else {
+		// initiate the rsync the copy the Admin logs to targetHost
+		err = cmd.rsyncAdminLog()
+		if err != nil && cmd.Stop {
+			return err
+		}
+	}
+
+	req := &control.CollectLogReq{
+		TargetFolder: cmd.TargetFolder,
+		TargetHost:   cmd.TargetHost,
+		LogFunction:  support.RsyncLogEnum,
+	}
+	cmd.Debugf("Rsync logs from servers to %s:%s ", cmd.TargetHost, cmd.TargetFolder)
+	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	if err != nil && cmd.Stop {
+		return err
+	}
+	if len(resp.GetHostErrors()) > 0 {
+		var bld strings.Builder
+		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+			return err
+		}
+		cmd.Info(bld.String())
+		if cmd.Stop {
+			return resp.Errors()
+		}
+	}
+
+	return nil
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
@@ -118,34 +188,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 		fmt.Printf(progress.Display())
 	}
 
-	// Rsync the logs from servers
-	hostName, err := support.GetHostName()
-	if err != nil {
-		return err
-	}
-
-	req := &control.CollectLogReq{
-		TargetFolder: cmd.TargetFolder,
-		LogFunction:  support.RsyncLogEnum,
-		LogCmd:       hostName,
-	}
-	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
-	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
-	if err != nil && cmd.Stop {
-		return err
-	}
-	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
-			return err
-		}
-		cmd.Info(bld.String())
-		if cmd.Stop {
-			return resp.Errors()
-		}
-	}
-	fmt.Printf(progress.Display())
-
+	// Run dmg command info collection set
 	params = support.CollectLogsParams{}
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
@@ -166,6 +209,13 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			}
 		}
 		fmt.Printf(progress.Display())
+	}
+
+	// Rsync the logs from servers
+	err = cmd.rsyncLog()
+	fmt.Printf(progress.Display())
+	if err != nil && cmd.Stop {
+		return err
 	}
 
 	// Archive the logs

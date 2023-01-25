@@ -44,9 +44,10 @@ const (
 
 type CollectLogSubCmd struct {
 	Stop         bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
-	TargetFolder string `short:"t" long:"target" description:"Target Folder location where log will be copied"`
+	TargetFolder string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
+	TargetHost   string `short:"m" long:"target-host" description:"Rsync all the logs to central system"`
 }
 
 // Folder names to copy logs and configs
@@ -87,10 +88,12 @@ var AgentCmd = []string{
 }
 
 var SystemCmd = []string{
-	//"iperf3 --help",
 	"dmesg",
-	"lspci -D",
+	"df -h",
+	"mount",
+	"ps axf",
 	"top -bcn1 -w512",
+	"lspci -D",
 }
 
 var ServerLog = []string{
@@ -116,6 +119,7 @@ type CollectLogsParams struct {
 	Config       string
 	Hostlist     string
 	TargetFolder string
+	TargetHost   string
 	ExtraLogsDir string
 	JsonOutput   bool
 	LogFunction  int32
@@ -336,7 +340,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
-// Rsync the logs from individual servers to Admin node
+// Rsync the logs from individual servers to Admin/TargetHost node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -347,9 +351,8 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 		"rsync",
 		"-av",
 		"--blocking-io",
-		"--remove-source-files",
 		targetLocation,
-		opts[0].LogCmd + ":" + opts[0].TargetFolder}, " ")
+		opts[0].TargetHost + ":" + opts[0].TargetFolder}, " ")
 
 	rsyncCmd := exec.Command("sh", "-c", cmd)
 	var stdout, stderr bytes.Buffer

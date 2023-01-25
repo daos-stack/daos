@@ -19,6 +19,7 @@ type (
 	CollectLogReq struct {
 		unaryRequest
 		TargetFolder string
+		TargetHost   string
 		ExtraLogsDir string
 		JsonOutput   bool
 		LogFunction  int32
@@ -40,6 +41,7 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return ctlpb.NewCtlSvcClient(conn).CollectLog(ctx, &ctlpb.CollectLogReq{
 			TargetFolder: req.TargetFolder,
+			TargetHost:   req.TargetHost,
 			ExtraLogsDir: req.ExtraLogsDir,
 			JsonOutput:   req.JsonOutput,
 			LogFunction:  req.LogFunction,
