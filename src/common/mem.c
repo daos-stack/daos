@@ -1712,15 +1712,26 @@ umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size)
 	return 0;
 }
 
+#define UMEM_CHUNK_IDX_SHIFT 6
+#define UMEM_CHUNK_IDX_BITS  (1 << UMEM_CHUNK_IDX_SHIFT)
+#define UMEM_CHUNK_IDX_MASK  (UMEM_CHUNK_IDX_BITS - 1)
+
 static inline void
 touch_page(struct umem_store *store, struct umem_page *page, uint64_t wr_tx, umem_off_t first_byte,
 	   umem_off_t last_byte)
 {
 	struct umem_cache *cache = store->cache;
-	int start_bit = (first_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_PAGE_SZ_SHIFT;
-	int end_bit   = (last_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_PAGE_SZ_SHIFT;
+	uint64_t start_bit = (first_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_CHUNK_SZ_SHIFT;
+	uint64_t end_bit   = (last_byte & UMEM_CACHE_PAGE_SZ_MASK) >> UMEM_CACHE_CHUNK_SZ_SHIFT;
+	uint64_t bit_nr;
+	uint64_t bit;
+	uint64_t idx;
 
-	setbit_range((uint8_t *)&page->pg_bmap[0], start_bit, end_bit);
+	for (bit_nr = start_bit; bit_nr <= end_bit; bit_nr++) {
+		idx = bit_nr >> UMEM_CHUNK_IDX_SHIFT; /** uint64_t index */
+		bit = bit_nr & UMEM_CHUNK_IDX_MASK;
+		page->pg_bmap[idx] |= 1ULL << bit;
+	}
 
 	if (!page->pg_waiting && page->pg_last_checkpoint == page->pg_last_inflight) {
 		/** Keep the page in the waiting list if it's waiting for a transaction to
@@ -1800,7 +1811,7 @@ page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
 	d_sg_list_t           *sgl       = &chkpt_data->cd_sg_list;
 	uint64_t               bmap;
 	int       i;
-	int                    lead_bits;
+	uint64_t               first_bit_shift;
 	uint64_t  offset    = (uint64_t)page->pg_id << UMEM_CACHE_PAGE_SZ_SHIFT;
 	uint64_t               map_offset;
 	uint8_t  *page_addr = page->pg_addr;
@@ -1817,16 +1828,17 @@ page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
 
 		bmap = bits[i];
 		do {
-			lead_bits  = __builtin_clzll(bmap);
-			map_offset = lead_bits << UMEM_CACHE_CHUNK_SZ_SHIFT;
+			first_bit_shift = __builtin_ctzll(bmap);
+			map_offset      = first_bit_shift << UMEM_CACHE_CHUNK_SZ_SHIFT;
 			count      = 0;
 			mask       = 0;
-			for (;;) {
-				bit = 1ULL << (63 - lead_bits);
+			while (first_bit_shift != 64) {
+				bit = 1ULL << first_bit_shift;
 				if ((bmap & bit) == 0)
 					break;
 				mask |= bit;
 				count++;
+				first_bit_shift++;
 			}
 
 			store_iod->io_regions[nr].sr_addr = offset + map_offset;
@@ -1840,8 +1852,8 @@ page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
 		} while (bmap != 0);
 
 next_bmap:
-		offset += UMEM_CACHE_CHUNK_SZ << 6;
-		page_addr += UMEM_CACHE_CHUNK_SZ << 6;
+		offset += UMEM_CACHE_CHUNK_SZ << UMEM_CHUNK_IDX_SHIFT;
+		page_addr += UMEM_CACHE_CHUNK_SZ << UMEM_CHUNK_IDX_SHIFT;
 	}
 	sgl->sg_nr_out = sgl->sg_nr = nr;
 	store_iod->io_nr            = nr;
@@ -1873,7 +1885,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	struct umem_checkpoint_data *chkpt_data_all;
 	struct umem_checkpoint_data *chkpt_data;
 	uint64_t                     committed_tx = 0;
-	uint64_t                     chkpt_id     = 0;
+	uint64_t                     chkpt_id     = *out_id;
 	d_list_t                     free_list;
 	int                          i;
 	int                          rc;
@@ -1911,7 +1923,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		 */
 		page->pg_waiting = 1;
 		if (store->stor_ops->so_wal_id_cmp(store, page->pg_last_inflight, chkpt_id) > 0)
-			page->pg_last_inflight = chkpt_id;
+			chkpt_id = page->pg_last_inflight;
 	}
 
 	do {

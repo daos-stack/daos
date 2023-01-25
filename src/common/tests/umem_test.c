@@ -28,11 +28,19 @@
 #include "utest_common.h"
 
 #define POOL_SIZE ((1024 * 1024  * 1024ULL))
+#define MAX_PAGES  10
+#define MAX_CHUNKS 10
 
 struct test_arg {
 	struct utest_context	*ta_utx;
 	uint64_t		*ta_root;
 	char			*ta_pool_name;
+	struct umem_store        ta_store;
+	uint64_t                 ta_offsets[MAX_CHUNKS];
+	uint64_t                 ta_sizes[MAX_CHUNKS];
+	int                      ta_nr[MAX_PAGES];
+	int                      ta_current_page;
+	int                      ta_current_idx;
 };
 
 int
@@ -140,6 +148,8 @@ global_teardown(void **state)
 {
 	struct test_arg	*arg = *state;
 
+	umem_cache_free(&arg->ta_store);
+
 	D_FREE(arg);
 
 	return 0;
@@ -232,20 +242,182 @@ done:
 	assert_int_equal(rc, 0);
 }
 
+static int
+flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_handle_t *fh)
+{
+	struct test_arg *arg;
+	int              i;
+	int              idx;
+
+	arg = container_of(store, struct test_arg, ta_store);
+
+	assert_int_equal(iod->io_nr, arg->ta_nr[arg->ta_current_page]);
+	for (i = arg->ta_current_idx; i < arg->ta_nr[arg->ta_current_page] + arg->ta_current_idx;
+	     i++) {
+		idx = i - arg->ta_current_idx;
+		assert_int_equal(iod->io_regions[idx].sr_addr, arg->ta_offsets[i]);
+		assert_int_equal(iod->io_regions[idx].sr_size, arg->ta_sizes[i]);
+	}
+
+	fh->cookie = (uint64_t)arg;
+
+	return 0;
+}
+
+static int
+flush_copy(daos_handle_t fh, d_sg_list_t *sgl)
+{
+	struct test_arg *arg = (struct test_arg *)fh.cookie;
+	int              i;
+	int              idx;
+
+	assert_int_equal(sgl->sg_nr, arg->ta_nr[arg->ta_current_page]);
+	for (i = arg->ta_current_idx; i < arg->ta_nr[arg->ta_current_page] + arg->ta_current_idx;
+	     i++) {
+		idx = i - arg->ta_current_idx;
+		assert_int_equal(sgl->sg_iovs[idx].iov_buf,
+				 (void *)(arg->ta_offsets[i] + UMEM_CACHE_PAGE_SZ));
+		assert_int_equal(sgl->sg_iovs[idx].iov_len, arg->ta_sizes[i]);
+	}
+
+	arg->ta_current_idx += arg->ta_nr[arg->ta_current_page];
+	arg->ta_current_page++;
+
+	return 0;
+}
+
+static int
+flush_post(daos_handle_t fh, int err)
+{
+	return 0;
+}
+
+static int
+wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
+{
+	if (id1 > id2)
+		return 1;
+	if (id1 < id2)
+		return -1;
+	return 0;
+}
+
+static struct umem_store_ops stor_ops = {
+    .so_flush_prep = flush_prep,
+    .so_flush_copy = flush_copy,
+    .so_flush_post = flush_post,
+    .so_wal_id_cmp = wal_id_cmp,
+};
+
+static void
+wait_cb(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
+{
+	*committed_tx = chkpt_tx;
+}
+
+static void
+test_page_cache(void **state)
+{
+	struct test_arg   *arg = *state;
+	struct umem_cache *cache;
+	uint64_t           id = 0;
+	int                rc;
+
+	arg->ta_store.stor_size = 46 * 1024 * 1024;
+	arg->ta_store.stor_ops  = &stor_ops;
+
+	rc = umem_cache_alloc(&arg->ta_store, 0);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+	assert_int_equal(cache->ca_num_pages, 3);
+	assert_int_equal(cache->ca_max_mapped, 3);
+
+	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), 3);
+	assert_rc_equal(rc, 0);
+
+	/** touch multiple chunks */
+	rc = umem_cache_touch(&arg->ta_store, 1, 0, UMEM_CACHE_CHUNK_SZ + 1);
+	assert_rc_equal(rc, 0);
+
+	/** Span page boundary */
+	rc = umem_cache_touch(&arg->ta_store, 2, UMEM_CACHE_PAGE_SZ - 1, UMEM_CACHE_CHUNK_SZ);
+	assert_rc_equal(rc, 0);
+
+	/** Touch the last page, different tx id */
+	rc = umem_cache_touch(&arg->ta_store, 3, 2 * UMEM_CACHE_PAGE_SZ + 1, 10);
+	assert_rc_equal(rc, 0);
+
+	/** Touch many chunks on last page */
+	rc = umem_cache_touch(&arg->ta_store, 3,
+			      2 * UMEM_CACHE_PAGE_SZ + (UMEM_CACHE_CHUNK_SZ * 2) + 1,
+			      UMEM_CACHE_CHUNK_SZ * 80);
+	assert_rc_equal(rc, 0);
+
+	arg->ta_current_page = 0;
+	/** page 0 */
+	arg->ta_nr[0]      = 2;
+	arg->ta_offsets[0] = 0;
+	arg->ta_sizes[0]   = UMEM_CACHE_CHUNK_SZ * 2;
+	arg->ta_offsets[1] = UMEM_CACHE_PAGE_SZ - UMEM_CACHE_CHUNK_SZ;
+	arg->ta_sizes[1]   = UMEM_CACHE_CHUNK_SZ;
+
+	/** page 1 */
+	arg->ta_nr[1]      = 1;
+	arg->ta_offsets[2] = UMEM_CACHE_PAGE_SZ;
+	arg->ta_sizes[2]   = UMEM_CACHE_CHUNK_SZ;
+
+	/** page 2 */
+	arg->ta_nr[2]      = 3;
+	arg->ta_offsets[3] = 2 * UMEM_CACHE_PAGE_SZ;
+	arg->ta_sizes[3]   = UMEM_CACHE_CHUNK_SZ;
+	/** Size won't span more than one 64-bit mask worth of chunks */
+	arg->ta_offsets[4] = 2 * UMEM_CACHE_PAGE_SZ + UMEM_CACHE_CHUNK_SZ * 2;
+	arg->ta_sizes[4]   = UMEM_CACHE_CHUNK_SZ * 62;
+	arg->ta_offsets[5] = 2 * UMEM_CACHE_PAGE_SZ + UMEM_CACHE_CHUNK_SZ * 64;
+	arg->ta_sizes[5]   = UMEM_CACHE_CHUNK_SZ * 19;
+
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, 3);
+
+	/** This should be a noop so set ta_nr to ridiculous value that will assert */
+	arg->ta_nr[0]        = 1000;
+	arg->ta_current_page = 0;
+	arg->ta_current_idx  = 0;
+	rc                   = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, 3);
+
+	/* Ok, do another round */
+	rc = umem_cache_touch(&arg->ta_store, 4, 10, 40);
+	assert_rc_equal(rc, 0);
+
+	rc = umem_cache_touch(&arg->ta_store, 5, 80, 40);
+	assert_rc_equal(rc, 0);
+
+	arg->ta_nr[0]      = 1;
+	arg->ta_offsets[0] = 0;
+	arg->ta_sizes[0]   = UMEM_CACHE_CHUNK_SZ;
+
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, 5);
+
+	umem_cache_free(&arg->ta_store);
+}
+
 int
 main(int argc, char **argv)
 {
 	static const struct CMUnitTest umem_tests[] = {
-		{ "UMEM001: Test null flags pmem", test_invalid_flags,
-			setup_pmem, teardown_pmem},
-		{ "UMEM002: Test null flags vmem", test_invalid_flags,
-			setup_vmem, teardown_vmem},
-		{ "UMEM003: Test alloc pmem", test_alloc,
-			setup_pmem, teardown_pmem},
-		{ "UMEM004: Test alloc vmem", test_alloc,
-			setup_vmem, teardown_vmem},
-		{ NULL, NULL, NULL, NULL }
-	};
+	    {"UMEM001: Test null flags pmem", test_invalid_flags, setup_pmem, teardown_pmem},
+	    {"UMEM002: Test null flags vmem", test_invalid_flags, setup_vmem, teardown_vmem},
+	    {"UMEM003: Test alloc pmem", test_alloc, setup_pmem, teardown_pmem},
+	    {"UMEM004: Test alloc vmem", test_alloc, setup_vmem, teardown_vmem},
+	    {"UMEM005: Test page cache", test_page_cache, NULL, NULL},
+	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);
 

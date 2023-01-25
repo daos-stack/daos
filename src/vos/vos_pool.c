@@ -241,10 +241,10 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
 
-	/* Not going to call bio_wal_chp_start to start because it returns commit_id.  As such, we
-	 * will calculate the latest uncommitted id which is what we want.  When this is changed,
-	 * we can update this API and assume tx_id will be the same value.
-	 */
+	rc = bio_wal_ckp_start(store->stor_priv, &tx_id);
+	if (rc != 0)
+		return rc;
+
 	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
 
 	if (rc == 0)

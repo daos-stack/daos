@@ -1078,15 +1078,16 @@ umem_cache_wait_cb_t(struct umem_store *store, uint64_t chkpt_tx, uint64_t *comm
  *
  * This function can yield internally, it is called by checkpoint service of upper level stack.
  *
- * \param[in]	store	The umem store
- * \param[in]	wait_cb	the cutoff for checkpointing, should be the latest inflight tx ID
- * \param[in]	wal_tx	the cutoff for checkpointing, should be the latest inflight tx ID
+ * \param[in]		store		The umem store
+ * \param[in]		wait_cb		Callback for to wait for wal commit completion
+ * \param[in]		arg		argument for wait_cb
+ * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
  *
  * \return 0 on success
  */
 int
 umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
-		      uint64_t *checkpointed_id);
+		      uint64_t *chkpt_id);
 
 #endif /** DAOS_PMEM_BUILD */
 
