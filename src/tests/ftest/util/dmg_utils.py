@@ -1329,7 +1329,11 @@ class DmgCommand(DmgCommandBase):
         """Call dmg check enable.
 
         Args:
-            pool
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
         """
         return self._get_json_result(("check", "enable"), pool=pool)
 
@@ -1338,7 +1342,15 @@ class DmgCommand(DmgCommandBase):
         """Call dmg check start.
 
         Args:
-            pool
+            pool (str): Pool label or UUID. Defaults to None.
+            dry_run (bool): Scan only; do not initiate repairs. Defaults to False.
+            reset (bool): Reset the system check state. Defaults to False.
+            failout (bool): Stop on failure. Defaults to False.
+            auto (bool): Attempt to automatically repair problems. Defaults to False.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
         """
         return self._get_json_result(
             ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
@@ -1348,7 +1360,11 @@ class DmgCommand(DmgCommandBase):
         """Call dmg check query.
 
         Args:
-            pool
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
         """
         return self._get_json_result(("check", "query"), pool=pool)
 
@@ -1356,7 +1372,11 @@ class DmgCommand(DmgCommandBase):
         """Call dmg check disable.
 
         Args:
-            pool
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
         """
         return self._get_json_result(("check", "disable"), pool=pool)
 

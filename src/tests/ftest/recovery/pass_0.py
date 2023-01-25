@@ -56,7 +56,7 @@ class Pass0Test(TestWithServers):
                 break
         if not not_checkerstarted_found:
             # All rank's status is "checkerstarted".
-            errors.append("All rank's status is checkerstarted!")
+            self.fail("All rank's status is checkerstarted!")
 
         # 4. Call dmg check start. It should show error because the stopped rank is not at
         # CheckerStarted state.
