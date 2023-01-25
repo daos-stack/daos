@@ -245,10 +245,16 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	if (rc != 0)
 		return rc;
 
+	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
+	       DP_UUID(pool->vp_id), tx_id);
+
 	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
 
 	if (rc == 0)
 		rc = bio_wal_ckp_end(store->stor_priv, tx_id);
+
+	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
+	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
 
 	return rc;
 }
