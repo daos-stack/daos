@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -413,8 +413,17 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint
 search:
 	/* determine if this member is already suspected */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
-		if (item->si_id == id)
+		if (item->si_id == id) {
+			/*
+			 * if the new suspicion is of a newer incarnation,
+			 * reset the existing one
+			 */
+			if (nr > id_state.sms_incarnation) {
+				item->si_from = from;
+				item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
+			}
 			goto update;
+		}
 	}
 
 	/* add to end of suspect list */
@@ -1163,4 +1172,20 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 	swim_ctx_unlock(ctx);
 out:
 	return rc;
+}
+
+void
+swim_member_del(struct swim_context *ctx, swim_id_t id)
+{
+	struct swim_item *item;
+
+	swim_ctx_lock(ctx);
+	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
+		if (item->si_id == id) {
+			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+			D_FREE(item);
+			break;
+		}
+	}
+	swim_ctx_unlock(ctx);
 }
