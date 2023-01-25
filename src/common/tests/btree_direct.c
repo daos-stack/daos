@@ -1171,7 +1171,7 @@ main(int argc, char **argv)
 		if (strcmp(argv[3], "-m") == 0) {
 			D_PRINT("Using pmem\n");
 			rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-					       sizeof(*sk_root), &sk_utx);
+					       sizeof(*sk_root), NULL, &sk_utx);
 			D_ASSERT(rc == 0);
 		}
 	} else {
@@ -1184,7 +1184,7 @@ main(int argc, char **argv)
 			if (opt == 'm') {
 				D_PRINT("Using pmem\n");
 				rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-						       sizeof(*sk_root),
+						       sizeof(*sk_root), NULL,
 						       &sk_utx);
 				D_ASSERT(rc == 0);
 				break;

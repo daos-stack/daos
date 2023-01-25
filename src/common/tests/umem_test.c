@@ -104,7 +104,7 @@ setup_pmem(void **state)
 	}
 
 	rc = utest_pmem_create(arg->ta_pool_name, POOL_SIZE,
-			       sizeof(*arg->ta_root), &arg->ta_utx);
+			       sizeof(*arg->ta_root), NULL, &arg->ta_utx);
 	if (rc != 0) {
 		perror("Could not create pmem context");
 		rc = 1;
