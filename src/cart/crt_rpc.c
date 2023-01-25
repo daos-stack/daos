@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1386,16 +1386,13 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		}
 	}
 
+	D_ASSERT(req->cr_ctx != NULL);
+
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	/* Take a reference to ensure rpc_priv is valid for duration of this
 	 * function.  Referenced dropped at end of this function.
 	 */
 	RPC_ADDREF(rpc_priv);
-
-	if (req->cr_ctx == NULL) {
-		D_ERROR("invalid parameter (NULL req->cr_ctx).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rpc_priv->crp_complete_cb = complete_cb;
 	rpc_priv->crp_arg = arg;
@@ -1685,6 +1682,12 @@ crt_handle_rpc(void *arg)
 	 */
 	if (rpc_priv->crp_srv || (rpc_priv->crp_coll && !rpc_priv->crp_srv))
 		RPC_DECREF(rpc_priv);
+
+	/*
+	 * Corresponding ADDREF in crt_rpc_handler_common before call to
+	 * crt_ctx->cc_rpc_cb()
+	 */
+	RPC_DECREF(rpc_priv);
 }
 
 int
@@ -1747,10 +1750,14 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
 	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
+		/* Corresponding decref in crt_handle_rpc() */
+		RPC_ADDREF(rpc_priv);
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
 					&rpc_priv->crp_pub,
 					crt_handle_rpc,
 					crt_ctx->cc_rpc_cb_arg);
+		if (rc != 0)
+			RPC_DECREF(rpc_priv);
 	} else {
 		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
 		/*

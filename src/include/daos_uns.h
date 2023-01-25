@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -228,6 +228,26 @@ duns_set_sys_name(struct duns_attr_t *attrp, const char *sys);
  */
 void
 duns_destroy_attr(struct duns_attr_t *attrp);
+
+/**
+ * Create a special directory (POSIX) or file (HDF5) depending on the container type that links to
+ * an existing DAOS container. This is similar to duns_create_path except for the fact that a new
+ * container is not created, and the container that is passed should be an existing container in the
+ * \a poh. Note that it is possible that a user creates multiple paths in the namespace to the same
+ * container, however when any path is destroyed, the container is destroyed with it, leaving other
+ * dangling paths in the namespace to a non-existing container. It is the responsibility of the user
+ * to cleanup those dangling paths in the namespace and ensure that the container is not going to be
+ * accessed anymore through the remaining paths after the destroy operation on any of the paths that
+ * were created to that container.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	cont	Existing container in the pool to create the uns path to.
+ * \param[in]	path	Path in an existing namespace to create with the uns link to the container.
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_link_cont(daos_handle_t poh, const char *cont, const char *path);
 
 #if defined(__cplusplus)
 }

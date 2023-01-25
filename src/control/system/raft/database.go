@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -352,6 +352,15 @@ func (db *Database) CheckReplica() error {
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
+// errNotSysLeader returns an error indicating that the node is not
+// the current system leader.
+func errNotSysLeader(svc raftService, db *Database) error {
+	return &system.ErrNotLeader{
+		LeaderHint: string(svc.Leader()),
+		Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+	}
+}
+
 // CheckLeader returns an error if the node is not a replica
 // or is not the current system leader. The error can be inspected
 // for hints about where to find the current leader.
@@ -362,10 +371,7 @@ func (db *Database) CheckLeader() error {
 
 	if err := db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return nil
 	}); err != nil {
@@ -1062,20 +1068,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 
-	ps, err := db.FindPoolServiceByUUID(poolUUID)
-	if err != nil {
-		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
-		return
-	}
-
-	// If the pool service is not in the Ready state, ignore the update.
-	if ps.State != system.PoolServiceStateReady {
-		return
-	}
-
-	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
-		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
-
+	// Attempt to take the lock first, to cut down on log spam.
 	ctx := context.Background()
 	lock, err := db.TakePoolLock(ctx, poolUUID)
 	if err != nil {
@@ -1083,6 +1076,26 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 	defer lock.Release()
+
+	ps, err := db.FindPoolServiceByUUID(poolUUID)
+	if err != nil {
+		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	// If the pool service is in the Creating state, set it to Ready, as
+	// we know that it's ready if it's sending us a RAS event. The pool
+	// create may have completed on a previous MS leader.
+	if ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("automatically moving pool %s from Creating to Ready due to svc update", dbgUuidStr(ps.PoolUUID))
+		ps.State = system.PoolServiceStateReady
+	} else if ps.State == system.PoolServiceStateDestroying {
+		// Don't update the pool service if it's being destroyed.
+		return
+	}
+
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
 
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		dbgUuidStr(ps.PoolUUID), ps.State, ps.Replicas, ei.SvcReplicas)

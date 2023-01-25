@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -37,6 +38,7 @@ type FabricConfig struct {
 	CrtTimeout            uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
 }
 
 // GetPrimaryProvider parses the primary provider from the Provider string.
@@ -155,6 +157,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.DisableSRX == false {
 		fc.DisableSRX = other.DisableSRX
 	}
+	if fc.AuthKey == "" {
+		fc.AuthKey = other.AuthKey
+	}
 	if len(fc.NumSecondaryEndpoints) == 0 {
 		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
 	}
@@ -214,6 +219,11 @@ func (fc *FabricConfig) Validate() error {
 	return nil
 }
 
+// GetAuthKeyEnv returns the environment variable string for the auth key.
+func (fc *FabricConfig) GetAuthKeyEnv() string {
+	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
+}
+
 // cleanEnvVars scrubs the supplied slice of environment
 // variables by removing all variables not included in the
 // allow list.
@@ -232,46 +242,6 @@ func cleanEnvVars(in, allowed []string) (out []string) {
 			continue
 		}
 		out = append(out, pair)
-	}
-
-	return
-}
-
-// mergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
-	mergeMap := make(map[string]string)
-	for _, pair := range curVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in curVars; shouldn't be any
-		// but this will ensure it.
-		if _, found := mergeMap[kv[0]]; found {
-			continue
-		}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	mergedKeys := make(map[string]struct{})
-	for _, pair := range newVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in newVars
-		if _, found := mergedKeys[kv[0]]; found {
-			continue
-		}
-		mergedKeys[kv[0]] = struct{}{}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	merged = make([]string, 0, len(mergeMap))
-	for key, val := range mergeMap {
-		merged = append(merged, strings.Join([]string{key, val}, "="))
 	}
 
 	return
@@ -401,10 +371,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = mergeEnvVars(env, sEnv)
+		env = common.MergeEnvVars(env, sEnv)
 	}
 
-	return mergeEnvVars(c.EnvVars, env), nil
+	return common.MergeEnvVars(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -426,9 +396,8 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		return "", err
 	}
 
-	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
-
-	for _, keyPair := range c.EnvVars {
+	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+	for _, keyPair := range env {
 		keyValue := strings.SplitN(keyPair, "=", 2)
 		if keyValue[0] == name {
 			return keyValue[1], nil
@@ -442,7 +411,7 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeEnvVars(c.EnvVars, newVars)
 
 	return c
 }
@@ -533,6 +502,12 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	c.Fabric.InterfacePort = fmt.Sprintf("%d", ifacePort)
+	return c
+}
+
+// WithFabricAuthKey sets the fabric authorization key.
+func (c *Config) WithFabricAuthKey(key string) *Config {
+	c.Fabric.AuthKey = key
 	return c
 }
 

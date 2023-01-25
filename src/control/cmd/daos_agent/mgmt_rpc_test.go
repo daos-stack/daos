@@ -307,14 +307,14 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 							Domain:      "d0",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers: common.NewStringSet("ofi+verbs"),
+								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
 							},
 						},
 						{
 							Name:        "fi0",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers: common.NewStringSet("ofi+tcp"),
+								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
 							},
 						},
 					},
@@ -324,21 +324,21 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 							Domain:      "d1",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers: common.NewStringSet("ofi+verbs"),
+								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+verbs"}),
 							},
 						},
 						{
 							Name:        "fi1",
 							NetDevClass: hardware.Infiniband,
 							hw: &hardware.FabricInterface{
-								Providers: common.NewStringSet("ofi+tcp"),
+								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "ofi+tcp"}),
 							},
 						},
 						{
 							Name:        "bad1",
 							NetDevClass: hardware.Ether,
 							hw: &hardware.FabricInterface{
-								Providers: common.NewStringSet("badidx"),
+								Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "badidx"}),
 							},
 						},
 					},
@@ -420,7 +420,7 @@ func TestAgent_mgmtModule_getAttachInfo_cacheResp(t *testing.T) {
 		Name:          "test0",
 		NetInterfaces: common.NewStringSet("test0"),
 		DeviceClass:   hardware.Ether,
-		Providers:     common.NewStringSet("ofi+tcp"),
+		Providers:     testFabricProviderSet("ofi+tcp"),
 	})
 
 	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
@@ -595,7 +595,7 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("test0"),
 					DeviceClass:   hardware.Ether,
-					Providers:     common.NewStringSet("ofi+tcp"),
+					Providers:     testFabricProviderSet("ofi+tcp"),
 				}),
 			},
 		}),

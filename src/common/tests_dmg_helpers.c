@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -403,6 +403,12 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		D_ERROR("failed parsing uuid_str\n");
 		return -DER_INVAL;
 	}
+
+	if (!json_object_object_get_ex(json_pool, "svc_ldr", &tmp)) {
+		D_ERROR("unable to extract pool leader from JSON\n");
+		return -DER_INVAL;
+	}
+	pool_info->mgpi_ldr = json_object_get_int(tmp);
 
 	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
 		D_ERROR("unable to parse pool svcreps from JSON\n");
@@ -1221,6 +1227,59 @@ int verify_blobstore_state(int state, const char *state_str)
 	return 1;
 }
 
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (force != 0) {
+		args = cmd_push_arg(args, &argcount, " --force ");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system start", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg failed");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
 const char *
 daos_target_state_enum_to_str(int state)
 {

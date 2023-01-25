@@ -82,7 +82,8 @@ message ClientNetHint {
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
 	int32 srv_srx_set = 7;		// Server SRX setting (-1, 0, 1; -1 == unset)
-	uint32 provider_idx = 8;	// Provider index - anything > 0 is a secondary provider
+	repeated string env_vars = 8;	// Client-side environment variables to set
+	uint32 provider_idx = 9;	// Provider index - anything > 0 is a secondary provider
 }
 
 message GetAttachInfoResp {

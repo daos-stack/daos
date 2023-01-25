@@ -36,11 +36,16 @@ type FabricInterface struct {
 
 // Providers returns a slice of the providers associated with the interface.
 func (f *FabricInterface) Providers() []string {
-	return f.hw.Providers.ToSlice()
+	provs := f.hw.Providers.ToSlice()
+	provStrs := make([]string, len(provs))
+	for i, p := range provs {
+		provStrs[i] = p.Name
+	}
+	return provStrs
 }
 
 // ProviderSet returns a StringSet of the providers associated with the interface.
-func (f *FabricInterface) ProviderSet() common.StringSet {
+func (f *FabricInterface) ProviderSet() *hardware.FabricProviderSet {
 	return f.hw.Providers
 }
 

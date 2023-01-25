@@ -144,6 +144,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
+			MemberStateErrored:  true,
 		},
 		MemberStateErrored: {
 			MemberStateReady:    true,

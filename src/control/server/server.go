@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -61,7 +61,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricInterfaceSet) error {
 	processFabricProvider(cfg)
 
-	hpi, err := common.GetHugePageInfo()
+	mi, err := common.GetMemInfo()
 	if err != nil {
 		return errors.Wrapf(err, "retrieve hugepage info")
 	}
@@ -75,7 +75,7 @@ func processConfig(log logging.Logger, cfg *config.Server, fis *hardware.FabricI
 		return errors.Wrap(err, "failed to set engine affinities")
 	}
 
-	if err := cfg.Validate(log, hpi.PageSizeKb); err != nil {
+	if err := cfg.Validate(log, mi.HugePageSizeKb); err != nil {
 		return errors.Wrapf(err, "%s: validation failed", cfg.Path)
 	}
 
@@ -436,6 +436,7 @@ func (srv *server) setupGrpc() error {
 			NetDevClass:     uint32(srv.netDevClass[i]),
 			SrvSrxSet:       srxSetting,
 			ProviderIdx:     uint32(i),
+			EnvVars:         srv.cfg.ClientEnvVars,
 		})
 	}
 	srv.mgmtSvc.clientNetworkHint = clientNetHints
@@ -484,7 +485,7 @@ func (srv *server) registerEvents() {
 			return nil
 		},
 		func(ctx context.Context) error {
-			return srv.mgmtSvc.checkPools(ctx)
+			return srv.mgmtSvc.checkPools(ctx, true)
 		},
 	)
 	srv.sysdb.OnLeadershipLost(func() error {
