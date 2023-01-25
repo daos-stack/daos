@@ -1,3 +1,9 @@
+daos (2.2.0-7) unstable; urgency=medium
+  [ Joseph Moore ]
+  * Update Mercury version to 2.2.0-6
+
+ -- Joseph Moore <joseph.moored@intel.com> Mon, Jan 23 2023 12:15:00 - 0100
+
 daos (2.2.0-6) unstable; urgency=medium
   [ Joseph Moore ]
   * Use latest Mercury (remove pin to 2.2.0-1).
