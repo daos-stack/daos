@@ -11,7 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/fs"
+	"os"
 
 	"github.com/pkg/errors"
 )
@@ -52,7 +52,7 @@ type CertificateConfig struct {
 	PrivateKeyPath  string           `yaml:"key"`
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
-	maxKeyPerms     fs.FileMode      `yaml:"-"`
+	maxKeyPerms     os.FileMode      `yaml:"-"`
 }
 
 // DefaultAgentTransportConfig provides a default transport config disabling
