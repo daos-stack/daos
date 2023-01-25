@@ -106,7 +106,7 @@ class VmdLedStatus(OSAUtils):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_status
         """
         dev_id = []
@@ -123,7 +123,7 @@ class VmdLedStatus(OSAUtils):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_vmd_led_faulty
         """
         dev_id = []
@@ -143,7 +143,7 @@ class VmdLedStatus(OSAUtils):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=vmd,vmd_led,faults
+        :avocado: tags=vmd,vmd_led
         :avocado: tags=VmdLedStatus,test_disk_failure_recover
         """
         dev_id = []
