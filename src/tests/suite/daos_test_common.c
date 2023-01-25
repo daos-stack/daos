@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -862,7 +862,6 @@ void
 daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 		  const char *grp, d_rank_list_t *svc, d_rank_t rank)
 {
-	char	dmg_cmd[DTS_CFG_MAX];
 	int	rc;
 
 	if (d_rank_in_rank_list(svc, rank))
@@ -870,13 +869,8 @@ daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	print_message("\tstart rank %d (svc->rl_nr %d)!\n", rank, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system start -r %d", rank);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
-
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
+	rc = dmg_system_start_rank(dmg_config_file, rank);
+	print_message(" dmg start: %d, rc %#x\n", rank, rc);
 	assert_rc_equal(rc, 0);
 
 	daos_cont_status_clear(arg->coh, NULL);
@@ -892,7 +886,6 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 	int		max_failure;
 	int		i;
 	int		rc;
-	char		dmg_cmd[DTS_CFG_MAX];
 
 	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
 	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) /
@@ -921,13 +914,10 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);
 
-	/* build and invoke dmg cmd to stop the server */
-	dts_create_config(dmg_cmd, "dmg system stop -r %d --force", rank);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
+	/* stop the rank */
+	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	print_message(" dmg stop, rc %#x\n", rc);
 
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
 	assert_rc_equal(rc, 0);
 
 	daos_cont_status_clear(arg->coh, NULL);
