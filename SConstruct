@@ -413,7 +413,8 @@ def scons():
             if value:
                 real_env[var] = value
 
-        # This was used for the daos_build test, set SCONS_ENV=full instead to avoid this logic.
+        # This is used for the daos_build test, we could move to using SCONS_ENV=full instead to
+        # avoid this logic however this still has known issues.
         if 'LD_PRELOAD' in os.environ:
             real_env['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
