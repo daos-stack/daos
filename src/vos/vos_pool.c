@@ -198,7 +198,7 @@ vos_pool_needs_checkpoint(daos_handle_t poh)
 	pool = vos_hdl2pool(poh);
 	D_ASSERT(pool != NULL);
 
-	/** TOOD: Revisit. */
+	/** TODO: Revisit. */
 	return bio_nvme_configured(SMD_DEV_TYPE_META);
 }
 
@@ -242,8 +242,15 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	store = &umm->umm_pool->up_store;
 
 	rc = bio_wal_ckp_start(store->stor_priv, &tx_id);
-	if (rc != 0)
+	if (rc != 0) {
+		if (rc == -DER_ALREADY) {
+			D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n",
+				DP_UUID(pool->vp_id));
+			rc = 0;
+		}
+
 		return rc;
+	}
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
 	       DP_UUID(pool->vp_id), tx_id);

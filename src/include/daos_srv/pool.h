@@ -331,7 +331,7 @@ ds_pool_get_version(struct ds_pool *pool)
 
 int
 ds_start_chkpt_ult(struct ds_pool_child *child);
-int
+void
 ds_stop_chkpt_ult(struct ds_pool_child *child);
 
 #endif /* __DAOS_SRV_POOL_H__ */

@@ -29,7 +29,7 @@ is_idle()
 }
 
 static int
-cc_wait_fn(struct chkpt_ctx *ctx)
+wait_fn(struct chkpt_ctx *ctx)
 {
 	ABT_eventual eventual;
 	int          rc;
@@ -39,7 +39,7 @@ cc_wait_fn(struct chkpt_ctx *ctx)
 		return dss_abterr2der(rc);
 
 	ctx->cc_eventual = &eventual;
-	rc               = ABT_eventual_wait(&eventual, NULL);
+	rc               = ABT_eventual_wait(eventual, NULL);
 	if (rc != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);
 
@@ -50,7 +50,7 @@ cc_wait_fn(struct chkpt_ctx *ctx)
 }
 
 static void
-cc_wake_fn(struct chkpt_ctx *ctx)
+wake_fn(struct chkpt_ctx *ctx)
 {
 	if (ctx->cc_eventual == NULL)
 		return;
@@ -89,12 +89,12 @@ chkpt_ult(void *arg)
 		rc = vos_pool_checkpoint(&ctx);
 		if (rc == -DER_SHUTDOWN) {
 			D_ERROR("tgt_id %d shutting down. Checkpointer should quit\n",
-				ctx.sc_dmi->dmi_tgt_id);
+				ctx.cc_dmi->dmi_tgt_id);
 			break;
 		}
 		if (rc != 0) {
 			D_ERROR("Issue with VOS checkpoint (tgt_id: %d): " DF_RC "\n",
-				ctx.sc_dmi->dmi_tgt_id, DP_RC(rc));
+				ctx.cc_dmi->dmi_tgt_id, DP_RC(rc));
 			sleep_time = 60000; /* wait longer if there's an error */
 		}
 

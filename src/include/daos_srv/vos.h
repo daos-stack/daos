@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1233,7 +1233,7 @@ void vos_db_fini(void);
 struct chkpt_ctx;
 typedef bool (*cc_is_idle_fn_t)();
 typedef int (*cc_yield_fn_t)(struct chkpt_ctx *);
-typedef void (*cc_wait_fn_t)(struct chkpt_ctx *);
+typedef int (*cc_wait_fn_t)(struct chkpt_ctx *);
 typedef void (*cc_wake_fn_t)(struct chkpt_ctx *);
 
 /* Scrub the pool */
