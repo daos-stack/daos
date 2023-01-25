@@ -366,8 +366,8 @@ This includes replicated or erasure-coded objects. Attempts to open an
 object with a class that does not support data redundancy (e.g., SX)
 will fail.
 
-For rd\_fac2, only objects with at least 3-way replication or erasure code with
-two parities or more can be stored in the container.
+For redundancy factor 2, only objects with at least 3-way replication or erasure
+code with two parities or more can be stored in the container.
 
 As long as the number of simultaneous engine failures is below the redundancy
 factor, the container is reported as healthy. if not, then the container is
