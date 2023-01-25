@@ -63,9 +63,7 @@ static void
 sc_m_pool_start(struct scrub_ctx *ctx)
 {
 	d_tm_record_timestamp(ctx->sc_metrics.scm_start);
-	d_tm_mark_duration_start(
-		ctx->sc_metrics.scm_last_duration,
-		D_TM_CLOCK_REALTIME);
+	d_tm_mark_duration_start(ctx->sc_metrics.scm_last_duration, D_TM_CLOCK_REALTIME);
 }
 
 static void
@@ -75,8 +73,7 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 
 	d_tm_mark_duration_end(ctx->sc_metrics.scm_last_duration);
 	d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, ctx->sc_pool_last_csum_calcs);
-
-	d_tm_record_timestamp(ctx->sc_metrics.scm_end);
+	d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, 0);
 }
 
 static void
@@ -173,11 +170,16 @@ sc_scrub_enabled(struct scrub_ctx *ctx)
 static bool
 sc_frequency_time_over(struct scrub_ctx *ctx)
 {
-	struct timespec period_over = ctx->sc_pool_start_scrub;
+	struct timespec	period_over = ctx->sc_pool_start_scrub;
+	int64_t		ns_left;
 
 	d_timeinc(&period_over, SEC2NS(ctx->sc_pool->sp_scrub_freq_sec));
 
-	return d_timeleft_ns(&period_over) <= 0;
+	ns_left = d_timeleft_ns(&period_over);
+
+	d_tm_set_gauge(ctx->sc_metrics.scm_next_tree_scrub, ns_left / NSEC_PER_SEC);
+
+	return ns_left <= 0;
 }
 
 static uint32_t
@@ -193,6 +195,36 @@ sc_get_ms_between_scrubs(struct scrub_ctx *ctx)
 				      ctx->sc_pool_csum_calcs - 1);
 }
 
+static inline void
+sc_m_set_busy_time(struct scrub_ctx *ctx, uint64_t ns)
+{
+	d_tm_set_gauge(ctx->sc_metrics.scm_busy_time, ns / NSEC_PER_SEC);
+}
+
+static inline void
+sc_m_track_idle(struct scrub_ctx *ctx)
+{
+	sc_m_set_busy_time(ctx, 0);
+	ctx->sc_metrics.scm_busy_start.tv_nsec = 0;
+	ctx->sc_metrics.scm_busy_start.tv_sec = 0;
+}
+
+static void
+sc_m_track_busy(struct scrub_ctx *ctx)
+{
+	struct timespec now;
+
+	if (d_time2us(ctx->sc_metrics.scm_busy_start) == 0) {
+		d_gettime(&ctx->sc_metrics.scm_busy_start);
+		return;
+	}
+
+	d_gettime(&now);
+	int64_t diff_ns = d_timediff_ns(&ctx->sc_metrics.scm_busy_start, &now);
+
+	sc_m_set_busy_time(ctx, diff_ns);
+}
+
 static bool
 sc_should_start(struct scrub_ctx *ctx)
 {
@@ -201,10 +233,15 @@ sc_should_start(struct scrub_ctx *ctx)
 		return false;
 
 	if (ctx->sc_pool_scrub_count == 0 || sc_frequency_time_over(ctx)) {
-		if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_LAZY)
-			/* only run if idle */
-			return sc_is_idle(ctx);
-		else if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_TIMED)
+		if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_LAZY) { /* only run if idle */
+			bool is_idle = sc_is_idle(ctx);
+
+			if (!is_idle)
+				sc_m_track_busy(ctx);
+			else
+				sc_m_track_idle(ctx);
+			return is_idle;
+		} else if (ctx->sc_pool->sp_scrub_mode == DAOS_SCRUB_MODE_TIMED)
 			return true;
 		D_ASSERTF(false, "Unknown scrubbing mode");
 	}
@@ -240,12 +277,21 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		uint64_t	msec_between;
 
 		d_gettime(&now);
-		while ((msec_between = sc_get_ms_between_scrubs(ctx)) > 0)
-			sc_sleep(ctx, min(5000, msec_between)); /* don't wait longer than 5 sec */
+		while ((msec_between = sc_get_ms_between_scrubs(ctx)) > 0) {
+			d_tm_set_gauge(ctx->sc_metrics.scm_next_csum_scrub, msec_between);
+			/* don't wait longer than 1 sec each loop */
+			sc_sleep(ctx, min(1000, msec_between));
+		}
 	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 		sc_sleep(ctx, 0);
-		while (!ctx->sc_is_idle_fn())
-			sc_sleep(ctx, 5000);
+		while (!ctx->sc_is_idle_fn()) {
+			sc_m_track_busy(ctx);
+			/* Don't actually know how long it will be but wait for 1 second before
+			 * trying again
+			 */
+			sc_sleep(ctx, 1000);
+		}
+		sc_m_track_idle(ctx);
 	} else {
 		D_ASSERTF(false, "Unknown Scrub Mode\n");
 	}
