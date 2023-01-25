@@ -140,13 +140,13 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """Return the allowed size of SCM storage space lost for a given number of pools.
 
         As indicated in JIRA tickets DAOS-11987 and DAOS-12428, some SCM storage are lost when
-        a pool is sucessively created and destroyed.  This was observed for SCM on RAM and it will
+        a pool is successively created and destroyed.  This was observed for SCM on RAM and it will
         be investigated if the same issue arise with SCM on DPCM.  The space lost with SCM on RAM is
         not the same when the huge pages are enabled or not.  When huge pages are disabled,
         approximately 8192 Bytes (i.e. 2 pages) are lost for each cycle.  With huge pages enabled,
         the size of the pages is far bigger than the size of the space leaked at each iteration.
         Thus, it needs several cycles to effectively lost some storage space.  As illustrated on the
-        Figures of the JIRA tickets, the storage lost occures by step of 4MiB (i.e. 2 pages).
+        Figures of the JIRA tickets, the storage lost occurs by step of 4MiB (i.e. 2 pages).
 
         Args:
             pool_count: Number of pool to create and destroy.
