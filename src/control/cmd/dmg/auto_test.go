@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,7 +47,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with no nvme",
-			"config generate -a foo --min-ssds 0",
+			"config generate -a foo --scm-only",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -55,7 +55,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with storage parameters",
-			"config generate -a foo --num-engines 2 --min-ssds 4",
+			"config generate -a foo --num-engines 2",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -63,7 +63,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 		},
 		{
 			"Generate with short option storage parameters",
-			"config generate -a foo -e 2 -s 4",
+			"config generate -a foo -e 2 -s",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -102,6 +102,14 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("Invalid value"),
 		},
 		{
+			"Generate with tmpfs scm",
+			"config generate -a foo --use-tmpfs-scm",
+			strings.Join([]string{
+				printRequest(t, &control.NetworkScanReq{}),
+			}, " "),
+			errors.New("no host responses"),
+		},
+		{
 			"Nonexistent subcommand",
 			"network quack",
 			"",
@@ -131,73 +139,25 @@ func TestAuto_confGen(t *testing.T) {
 		Addr:    "host1",
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
-	exmplEngineCfg := control.DefaultEngineCfg(0).
-		WithPinnedNumaNode(0).
-		WithFabricInterface("ib0").
-		WithFabricInterfacePort(31416).
-		WithFabricProvider("ofi+psm2").
-		WithStorage(
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassDcpm.String()).
-				WithScmDeviceList("/dev/pmem0").
-				WithScmMountPoint("/mnt/daos0"),
-			storage.NewTierConfig().
-				WithNumaNodeIndex(0).
-				WithStorageClass(storage.ClassNvme.String()).
-				WithBdevDeviceList(
-					storage.MockNvmeController(2).PciAddr,
-					storage.MockNvmeController(4).PciAddr,
-					storage.MockNvmeController(6).PciAddr,
-					storage.MockNvmeController(8).PciAddr),
-		).
-		WithTargetCount(16).
-		WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{
-		exmplEngineCfg,
-		control.DefaultEngineCfg(1).
-			WithPinnedNumaNode(1).
-			WithFabricInterface("ib1").
-			WithFabricInterfacePort(32416).
-			WithFabricProvider("ofi+psm2").
-			WithFabricNumaNodeIndex(1).
-			WithStorage(
-				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
-					WithStorageClass(storage.ClassDcpm.String()).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1"),
-				storage.NewTierConfig().
-					WithNumaNodeIndex(1).
-					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(
-						storage.MockNvmeController(1).PciAddr,
-						storage.MockNvmeController(3).PciAddr,
-						storage.MockNvmeController(5).PciAddr,
-						storage.MockNvmeController(7).PciAddr),
-			).
-			WithStorageNumaNodeIndex(1).
-			WithTargetCount(16).
-			WithHelperStreamCount(4),
+		control.MockEngineCfg(t, 0, 2, 4, 6, 8).WithHelperStreamCount(4),
+		control.MockEngineCfg(t, 1, 1, 3, 5, 7).WithHelperStreamCount(4),
 	}
-	baseConfig := func(prov string, ecs []*engine.Config) *config.Server {
-		for idx, ec := range ecs {
-			ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
-				WithStorageVosEnv("NVME")
-		}
-		return config.DefaultServer().
-			WithControlLogFile("").
-			WithFabricProvider(prov).
-			WithDisableVMD(false).
-			WithEngines(ecs...)
+	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
+	tmpfsEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(t, 0, mockRamdiskSize, 2, 4, 6, 8).
+			WithHelperStreamCount(4),
+		control.MockEngineCfgTmpfs(t, 1, mockRamdiskSize, 1, 3, 5, 7).
+			WithHelperStreamCount(4),
 	}
 
 	for name, tc := range map[string]struct {
 		hostlist         []string
 		accessPoints     string
 		nrEngines        int
-		minNrSSDs        int
+		scmOnly          bool
 		netClass         string
+		tmpfsSCM         bool
 		uErr             error
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
@@ -228,7 +188,7 @@ func TestAuto_confGen(t *testing.T) {
 				{netHostResp},
 				{storHostResp},
 			},
-			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(16384).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
@@ -239,16 +199,20 @@ func TestAuto_confGen(t *testing.T) {
 				{netHostResp},
 				{storHostResp},
 			},
-			expCfg: baseConfig("ofi+psm2", exmplEngineCfgs).
+			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
 				WithNrHugePages(16384).
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"successful fetch of host storage and fabric; unmet min nr ssds": {
-			minNrSSDs: 8,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
-				{storHostResp},
+				{
+					&control.HostResponse{
+						Addr:    "host1",
+						Message: control.MockServerScanResp(t, "nvmeSingle"),
+					},
+				},
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
@@ -268,15 +232,22 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
+		"successful fetch of host storage and fabric; tmpfs scm": {
+			tmpfsSCM: true,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expCfg: control.MockServerCfg(t, "ofi+psm2", tmpfsEngineCfgs).
+				WithNrHugePages(16384).
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
 			// Mimic go-flags default values.
-			if tc.minNrSSDs == 0 {
-				tc.minNrSSDs = 1
-			}
 			if tc.netClass == "" {
 				tc.netClass = "infiniband"
 			}
@@ -287,8 +258,9 @@ func TestAuto_confGen(t *testing.T) {
 			cmd := &configGenCmd{
 				AccessPoints: tc.accessPoints,
 				NrEngines:    tc.nrEngines,
-				MinNrSSDs:    tc.minNrSSDs,
+				SCMOnly:      tc.scmOnly,
 				NetClass:     tc.netClass,
+				UseTmpfsSCM:  tc.tmpfsSCM,
 			}
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
