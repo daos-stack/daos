@@ -414,13 +414,13 @@ def scons():
                 real_env[var] = value
 
         # This was used for the daos_build test, set SCONS_ENV=full instead to avoid this logic.
-        # if 'LD_PRELOAD' in os.environ:
-        #    real_env['LD_PRELOAD'] = os.environ['LD_PRELOAD']
+        if 'LD_PRELOAD' in os.environ:
+            real_env['LD_PRELOAD'] = os.environ['LD_PRELOAD']
 
-        #    for var in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
-        #        value = os.environ.get(var)
-        #        if value:
-        #            real_env[var] = value
+            for var in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
+                value = os.environ.get(var)
+                if value:
+                    real_env[var] = value
 
         deps_env.Replace(ENV=real_env)
 

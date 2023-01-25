@@ -115,6 +115,13 @@ class DaosBuild(DfuseTestBase):
 
     def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
         """Run an actual test from above."""
+
+        def check_failure_reason():
+            """Run some commands to help debug failure"""
+            general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
+            general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
+                                   timeout=30)
+
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
@@ -153,7 +160,7 @@ class DaosBuild(DfuseTestBase):
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
-            build_time = 60
+            build_time = 120
             cont_attrs['dfuse-data-cache'] = True
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -162,7 +169,7 @@ class DaosBuild(DfuseTestBase):
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time = 60
+            build_time = 120
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -211,8 +218,9 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                'scons -C {} --jobs {} --build-deps=only SCONS_ENV=full'.format(build_dir,
-                                                                                build_jobs),
+                # 'scons -C {} --jobs {} --build-deps=only SCONS_ENV=full'.format(build_dir,
+                #                                                                build_jobs),
+                'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
                 'cat {}/daos.conf'.format(build_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
@@ -230,9 +238,7 @@ class DaosBuild(DfuseTestBase):
                 (minutes, seconds) = divmod(elapsed, 60)
                 self.log.info('Failed after %d:%02d (%d%% of timeout)',
                               minutes, seconds, elapsed / timeout * 100)
-                general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
-                general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
-                                       timeout=30)
+                check_failure_reason()
                 raise error
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
