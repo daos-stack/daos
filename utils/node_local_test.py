@@ -3952,6 +3952,7 @@ def test_pydaos_kv(server, conf):
     kv = container.get('my_test_kv')
     kv = None
     container = None
+    daos.DCheck(pool, c_uuid)
     # pylint: disable=protected-access
     daos._cleanup()
     log_test(conf, pydaos_log_file.name)
