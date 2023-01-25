@@ -22,7 +22,14 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         self.scm_avail_bytes = self.get_available_bytes()
 
     def get_available_bytes(self, ranks=None):
-        """Return the available size of SCM storage."""
+        """Return the available size of SCM storage.
+
+        Args:
+            ranks (list): List of server ranks to filter. Defaults to None.
+
+        Returns:
+            int: Available size for creating a pool.
+        """
         self.assertGreater(len(self.server_managers), 0, "No server managers")
         try:
             self.log.info("Retrieving available size")
@@ -130,16 +137,28 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
             msg.format(scm_unused_bytes, self.scm_avail_bytes, delta_bytes))
 
     def get_recycle_pools_delta_bytes(self, pool_count):
-        """ Return the allowed size growth of metadata """
+        """Return the allowed size of SCM storage space lost for a given number of pools.
 
+        As indicated in JIRA tickets DAOS-11987 and DAOS-12428, some SCM storage are lost when
+        a pool is sucessively created and destroyed.  This was observed for SCM on RAM and it will
+        be investigated if the same issue arise with SCM on DPCM.  The space lost with SCM on RAM is
+        not the same when the huge pages are enabled or not.  When huge pages are disabled,
+        approximately 8192 Bytes (i.e. 2 pages) are lost for each cycle.  With huge pages enabled,
+        the size of the pages is far bigger than the size of the space leaked at each iteration.
+        Thus, it needs several cycles to effectively lost some storage space.  As illustrated on the
+        Figures of the JIRA tickets, the storage lost occures by step of 4MiB (i.e. 2 pages).
+
+        Args:
+            pool_count: Number of pool to create and destroy.
+
+        Returns:
+            int: SCM storage space lost.
+        """
         scm_hugepages_disabled = self.params.get(
             "scm_hugepages_disabled",
             "/run/server_config/engines/0/storage/0/*",
             False)
 
-        # These value are empirical ones: management of RAM page fs by the Linux kernel is not
-        # easily predictable.   More details could be found in the comments of the JIRA ticket
-        # DAOS-11987.
         delta_rank_bytes = 0
         if scm_hugepages_disabled:
             delta_bytes_max = 8 << 20   # 8 MiB
@@ -170,7 +189,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         delta_bytes = self.get_recycle_pools_delta_bytes(pool_count)
         scm_avail_bytes = self.get_available_bytes()
         self.log.debug(
-            "{pool_count} pools to create/destrory with SCM storage"
+            "{pool_count} pools to create/destroy with SCM storage"
             " of {scm_avail_bytes} Bytes (max metadata size of {delta_bytes} Bytes)")
         for pool_id in range(pool_count):
             self.log.info("Creating pool %d", pool_id)
