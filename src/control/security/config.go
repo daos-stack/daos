@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io/fs"
 
 	"github.com/pkg/errors"
 )
@@ -51,6 +52,7 @@ type CertificateConfig struct {
 	PrivateKeyPath  string           `yaml:"key"`
 	tlsKeypair      *tls.Certificate `yaml:"-"`
 	caPool          *x509.CertPool   `yaml:"-"`
+	maxKeyPerms     fs.FileMode      `yaml:"-"`
 }
 
 // DefaultAgentTransportConfig provides a default transport config disabling
@@ -66,14 +68,14 @@ func DefaultAgentTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultAgentKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
 
 // DefaultClientTransportConfig provides a default transport config disabling
 // certificate usage and specifying certificates located under /etc/daos/certs.
-// As this
-// credential is meant to be used as a client credential it specifies a default
+// As this credential is meant to be used as a client credential it specifies a default
 // ServerName as well.
 func DefaultClientTransportConfig() *TransportConfig {
 	return &TransportConfig{
@@ -86,6 +88,7 @@ func DefaultClientTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxGroupKeyPerm,
 		},
 	}
 }
@@ -103,6 +106,7 @@ func DefaultServerTransportConfig() *TransportConfig {
 			PrivateKeyPath:  defaultServerKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
+			maxKeyPerms:     MaxUserOnlyKeyPerm,
 		},
 	}
 }
@@ -119,7 +123,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 		// In order to reload data use ReloadCertDatA
 		return nil
 	}
-	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath)
+	certificate, certPool, err := loadCertWithCustomCA(tc.CARootPath, tc.CertificatePath, tc.PrivateKeyPath, tc.maxKeyPerms)
 	if err != nil {
 		return err
 	}

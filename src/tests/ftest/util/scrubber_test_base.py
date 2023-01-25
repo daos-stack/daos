@@ -10,7 +10,6 @@ from ior_test_base import IorTestBase
 
 
 class TestWithScrubber(IorTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test with scrubber enabled.
 
     :avocado: recursive
@@ -34,16 +33,17 @@ class TestWithScrubber(IorTestBase):
         self.final_metrics = {}
 
     def verify_scrubber_metrics_value(self, initial_metrics, final_metrics):
-        """ Compare the initial metrics value to final value after
-            IO data. The counters should increase from initial value.
+        """Compare the initial metrics value to final value after IO data.
+
+        The counters should increase from initial value.
 
         Args:
             initial_metrics (dict): Initial metrics dictionary before testing.
             final_metrics (dict): Final metrics dictionary after testing is complete.
 
-            Returns:
-                status (bool): True :  if all metric value changed.
-                False: if any metrics value doesn't increment or change.
+        Returns:
+            status (bool): True :  if all metric value changed.
+            False: if any metrics value doesn't increment or change.
         """
         self.log.info("Verifying the scrubber metrics values")
         status = True
@@ -84,8 +84,7 @@ class TestWithScrubber(IorTestBase):
             pool_prop = "scrub:timed,scrub-freq:1"
         if cont_prop is None:
             cont_prop = "cksum:crc16"
-        x = pool_prop.split(",")
-        for prop_val in x:
+        for prop_val in pool_prop.split(","):
             if prop_val is not None:
                 value = prop_val.split(":")
                 self.pool.set_property(value[0], value[1])
@@ -103,7 +102,7 @@ class TestWithScrubber(IorTestBase):
             fail_on_warning (bool, optional): [description]. Defaults to True.
 
         Returns:
-            status(bool) : True (Srubber working), False(Scrubber not working)
+            status(bool) : True (Scrubber working), False(Scrubber not working)
         """
         status = False
         self.initial_metrics = self.scrubber.get_csum_total_metrics()
