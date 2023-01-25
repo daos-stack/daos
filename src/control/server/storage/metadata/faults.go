@@ -11,6 +11,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
 var (
@@ -23,11 +24,16 @@ var (
 
 // FaultBadFilesystem is an error that can occur if the control metadata path points at a
 // filesystem that cannot be used.
-func FaultBadFilesystem(fs string) *fault.Fault {
+func FaultBadFilesystem(fs *system.FsType) *fault.Fault {
+	noSUIDStr := ""
+	if fs.NoSUID {
+		noSUIDStr = " with nosuid set"
+	}
+
 	return metadataFault(
 		code.ControlMetadataBadFilesystem,
-		fmt.Sprintf("%q is not a usable filesystem for the control metadata storage directory", fs),
-		"Configure the control_metadata path to a directory that is not on a networked filesystem",
+		fmt.Sprintf("%q%s is not usable for the control metadata storage directory", fs.Name, noSUIDStr),
+		"Configure the control_metadata path to a directory that is not on a networked or nosuid filesystem",
 	)
 }
 

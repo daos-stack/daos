@@ -26,7 +26,7 @@ type SystemProvider interface {
 	Getfs(device string) (string, error)
 	Chown(string, int, int) error
 	Stat(string) (os.FileInfo, error)
-	GetFsType(path string) (string, error)
+	GetFsType(path string) (*system.FsType, error)
 }
 
 const defaultDevFS = "ext4"
@@ -121,10 +121,9 @@ func (p *Provider) setupRootDir(req storage.MetadataFormatRequest) error {
 	for {
 		fsType, err := p.sys.GetFsType(fsPath)
 		if err == nil {
-			if !isUsableFS(fsType) {
+			if !p.isUsableFS(fsType, fsPath) {
 				return FaultBadFilesystem(fsType)
 			}
-
 			break
 		}
 
@@ -144,15 +143,28 @@ func (p *Provider) setupRootDir(req storage.MetadataFormatRequest) error {
 	return nil
 }
 
-func isUsableFS(fs string) bool {
-	switch fs {
+func (p *Provider) isUsableFS(fs *system.FsType, path string) bool {
+	if fs.NoSUID {
+		p.log.Errorf("cannot use filesystem with nosuid flag set (%s) for control metadata", path)
+		return false
+	}
+
+	switch fs.Name {
 	case system.FsTypeNfs:
 		// NB: Using NFS as a metadata location could cause conflicts if all servers have
 		// access to the location, which is intended to store node-local data.
 		// The daos_server_helper also gets into some trouble creating the directory if
 		// root squash is enabled.
+		p.log.Errorf("cannot use filesystem %s (%s) for control metadata", fs.Name, path)
 		return false
+	case system.FsTypeTmpfs, system.FsTypeExt4, system.FsTypeBtrfs, system.FsTypeNtfs, system.FsTypeXfs, system.FsTypeZfs:
+		// Common local filesystems
+		return true
 	default:
+		// As there are many filesystems that may be safely used, we'll allow others we don't recognize, with a
+		// warning.
+		p.log.Errorf("%q is not using one of the recommended filesystems for control metadata. If this is a distributed "+
+			"filesystem, DAOS will not operate correctly.", path)
 		return true
 	}
 }
