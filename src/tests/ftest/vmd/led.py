@@ -26,7 +26,7 @@ class VmdLedStatus(OSAUtils):
     def get_nvme_device_ids(self):
         """Get the list of nvme device-ids.
         Returns:
-            list: List of uuids
+            list: List of UUID
         """
         self.dmg.json.value = True
         try:
@@ -134,9 +134,6 @@ class VmdLedStatus(OSAUtils):
             resp = self.set_device_faulty(val)
             time.sleep(15)
             self.log.info(resp)
-        # TODO
-        # Verify the actual VMD LED status
-        # Presently, we cannot read the value.
 
     def test_disk_failure_recover(self):
         """Jira ID: DAOS-11284
