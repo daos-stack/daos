@@ -5,7 +5,6 @@
 """
 from collections import defaultdict
 from ior_test_base import IorTestBase
-from apricot import skipForTicket
 
 
 class PerServerFaultDomainTest(IorTestBase):
@@ -91,7 +90,6 @@ class PerServerFaultDomainTest(IorTestBase):
 
         return rank_to_ip
 
-    @skipForTicket("DAOS-12394")
     def test_rf1_healthy(self):
         """Jira ID: DAOS-11200
 
@@ -136,7 +134,6 @@ class PerServerFaultDomainTest(IorTestBase):
             create_pool=True, ranks_to_stop=ranks_to_stop, properties=properties,
             expected_status="HEALTHY")
 
-    @skipForTicket("DAOS-12394")
     def test_rf1_unclean(self):
         """Jira ID: DAOS-11200
 
@@ -175,7 +172,6 @@ class PerServerFaultDomainTest(IorTestBase):
             create_pool=True, ranks_to_stop=ranks_to_stop, properties=properties,
             expected_status="UNCLEAN")
 
-    @skipForTicket("DAOS-12394")
     def test_rf2_healthy(self):
         """Jira ID: DAOS-11200
 
@@ -252,7 +248,6 @@ class PerServerFaultDomainTest(IorTestBase):
             create_pool=False, ranks_to_stop=ranks_to_stop, properties=properties,
             expected_status="HEALTHY")
 
-    @skipForTicket("DAOS-12394")
     def test_rf2_unclean(self):
         """Jira ID: DAOS-11200
 
