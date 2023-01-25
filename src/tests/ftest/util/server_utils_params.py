@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,7 @@ class DaosServerTransportCredentials(TransportCredentials):
     # pylint: disable=too-few-public-methods
     """Transport credentials listing certificates for secure communication."""
 
-    def __init__(self, log_dir="/tmp"):
+    def __init__(self, log_dir=os.path.join(os.sep, "tmp")):
         """Initialize a TransportConfig object."""
         super().__init__("/run/server_config/transport_config/*", "transport_config", log_dir)
 
@@ -103,7 +103,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         self.provider = BasicParameter(None, default_provider)
         self.crt_timeout = BasicParameter(None, 10)
@@ -130,7 +130,7 @@ class DaosServerYamlParameters(YamlParameters):
         # parameters - for the config_file_gen.py tool. Calling get_params()
         # will update the list to match the number of I/O Engines requested by
         # the self.engines_per_host.value.
-        self.engine_params = [EngineYamlParameters(0)]
+        self.engine_params = [EngineYamlParameters(self.namespace, 0)]
 
         # Maximum number of detectable storage tiers. This can be used to limit what is read from
         # test yaml. If changed, get_params() should be called.
@@ -153,7 +153,8 @@ class DaosServerYamlParameters(YamlParameters):
         self.engine_params = []
         for index in range(self.engines_per_host.value or 0):
             self.engine_params.append(
-                EngineYamlParameters(index, self.provider.value, self.max_storage_tiers))
+                EngineYamlParameters(
+                    self.namespace, index, self.provider.value, self.max_storage_tiers))
             self.engine_params[-1].get_params(test)
 
     def get_yaml_data(self):
@@ -314,13 +315,11 @@ class DaosServerYamlParameters(YamlParameters):
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
 
-    def override_params(self, data, storage_class=None):
+    def override_params(self, data):
         """Override the values of the daos server yaml config file with the external data.
 
         Args:
             data (dict): external server configuration data.
-            storage_class (list, optional): if set only include storage classes identified in the
-                list. Defaults to None.
         """
         self.log.info("Overriding server config with external data")
         self.engine_params = []
@@ -328,8 +327,9 @@ class DaosServerYamlParameters(YamlParameters):
             self.engines_per_host.update(len(data["engines"]), "engines_per_host")
             for engine, engine_data in enumerate(data["engines"]):
                 self.engine_params.append(
-                    EngineYamlParameters(engine, data["provider"], self.max_storage_tiers))
-                self.engine_params[-1].override_params(engine_data, storage_class)
+                    EngineYamlParameters(
+                        self.namespace, engine, data["provider"], self.max_storage_tiers))
+                self.engine_params[-1].override_params(engine_data)
         else:
             self.engines_per_host.update(0, "engines_per_host")
 
@@ -342,8 +342,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
-        "ofi+tcp": [
-            "SWIM_PING_TIMEOUT=10"],
+        "ofi+tcp": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [
@@ -351,19 +350,21 @@ class EngineYamlParameters(YamlParameters):
             "CRT_MRC_ENABLE=1"],
     }
 
-    def __init__(self, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
+    def __init__(self, base_namespace, index, provider=None, max_storage_tiers=MAX_STORAGE_TIERS):
         """Create a SingleServerConfig object.
 
         Args:
+            base_namespace (str): namespace for the server configuration
             index (int): engine index number for the namespace path
             provider (str, optional): index number for the namespace path used
                 when specifying multiple engines per host. Defaults to None.
             max_storage_tiers (int, optional): maximum number of storage tiers that can be detected.
                 Defaults to MAX_STORAGE_TIERS.
         """
+        namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
         self._index = index
         self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
-        super().__init__(f"/run/server_config/engines/{self._index}/*")
+        super().__init__(os.path.join(*namespace))
 
         # Use environment variables to get default parameters
         default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
@@ -372,7 +373,7 @@ class EngineYamlParameters(YamlParameters):
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
-        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+        log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         # Parameters
         #   targets:                I/O service threads per engine
@@ -413,7 +414,7 @@ class EngineYamlParameters(YamlParameters):
         self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
 
         # the storage configuration for this engine
-        self.storage = StorageYamlParameters(self._index, max_storage_tiers)
+        self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)
 
     def get_params(self, test):
         """Get values for the daos server yaml config file.
@@ -551,31 +552,28 @@ class EngineYamlParameters(YamlParameters):
 
         return value
 
-    def override_params(self, data, storage_class=None):
+    def override_params(self, data):
         """Override the values of the daos server yaml config file with the external data.
 
         Args:
             data (dict): external engine configuration data.
-            storage_class (list, optional): if set only include storage classes identified in the
-                list. Defaults to None.
         """
         self.log.info("Overriding engine %s config with external data", self._index)
-        self.storage.override_params(data, storage_class)
+        self.storage.override_params(data)
 
 
 class StorageYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for all of the storage tiers for an engine."""
 
-    def __init__(self, engine, max_tiers=MAX_STORAGE_TIERS):
+    def __init__(self, base_namespace, max_tiers=MAX_STORAGE_TIERS):
         """Create a SingleServerConfig object.
 
         Args:
-            engine (int) index number for the server engine namespace path.
+            base_namespace (str): namespace for the server engine configuration
             max_tiers (int, optional): maximum number of storage tiers that can be detected.
                 Defaults to MAX_STORAGE_TIERS.
         """
-        self._engine_index = engine
-        super().__init__(f"/run/server_config/engines/{self._engine_index}/*")
+        super().__init__(base_namespace)
 
         # Maximum number of detectable storage tiers. This can be used to limit what is read from
         # test yaml. If changed, DaosServerManager.get_params() should be called.
@@ -584,7 +582,7 @@ class StorageYamlParameters(YamlParameters):
         # Each engine can define one or more storage tiers. Default to one storage tier for this
         # engine - for the config_file_gen.py tool. Calling get_params() will update the list to
         # match what is specified by the test yaml.
-        self.storage_tiers = [StorageTierYamlParameters(self._engine_index, 0)]
+        self.storage_tiers = [StorageTierYamlParameters(self.namespace, 0)]
 
     @property
     def using_nvme(self):
@@ -632,12 +630,13 @@ class StorageYamlParameters(YamlParameters):
         self.storage_tiers = []
         while len(self.storage_tiers) < self._max_tiers:
             tier_index = len(self.storage_tiers)
-            namespace = f"/run/server_config/engines/{self._engine_index}/storage/{tier_index}/*"
-            if test.params.get("class", namespace, None) is None:
+            storage_tier_params = StorageTierYamlParameters(self.namespace, tier_index)
+            self.log.debug("Checking for storage tier in %s ", storage_tier_params.namespace)
+            if test.params.get("class", storage_tier_params.namespace, None) is None:
                 break
 
-            # Create this storage tier parameters
-            self.storage_tiers.append(StorageTierYamlParameters(self._engine_index, tier_index))
+            # Add the storage tier parameters
+            self.storage_tiers.append(storage_tier_params)
             self.storage_tiers[-1].get_params(test)
 
     def get_yaml_data(self):
@@ -724,40 +723,33 @@ class StorageYamlParameters(YamlParameters):
 
         return value
 
-    def override_params(self, data, storage_class=None):
+    def override_params(self, data):
         """Override the values of the daos server yaml config file with the external data.
 
         Args:
             data (dict): external server configuration data.
-            storage_class (list, optional): if set only include storage classes identified in the
-                list. Defaults to None.
         """
-        self.log.info("Overriding engine %s storage config with external data", self._engine_index)
         self.storage_tiers = []
         if "storage" in data:
             for tier, storage_data in enumerate(data["storage"]):
                 if "class" in storage_data:
-                    if storage_class and storage_data["class"] not in storage_class:
-                        self.log.info(
-                            "  Skipping storage with class %s - class not in %s",
-                            storage_data["class"], storage_class)
-                        continue
-                    self.storage_tiers.append(StorageTierYamlParameters(self._engine_index, tier))
+                    self.storage_tiers.append(StorageTierYamlParameters(self.namespace, tier))
                     self.storage_tiers[-1].override_params(storage_data)
 
 
 class StorageTierYamlParameters(YamlParameters):
     """Defines the configuration yaml parameters for each storage tier for an engine."""
 
-    def __init__(self, engine, tier):
+    def __init__(self, base_namespace, tier):
         """Create a SingleServerConfig object.
 
         Args:
-            engine (int) index number for the server engine namespace path.
+            base_namespace (str): namespace for the server engine configuration
             tier (int) index number for the storage tier namespace path.
         """
+        namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["storage", str(tier), "*"]
         self._tier = tier
-        super().__init__(f"/run/server_config/engines/{engine}/storage/{self._tier}/*")
+        super().__init__(os.path.join(*namespace))
 
         # Example storage tier definition in a test yaml file:
         #

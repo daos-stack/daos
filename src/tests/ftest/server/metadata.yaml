@@ -51,11 +51,11 @@ pool:
   control_method: dmg
 container:
   control_method: API
-  silent: True
+  silent: true
 ior:
   clientslots:
     slots: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorwriteflags: "-w -W -k -G 1"
   iorreadflags: "-r -R -G 1"
   dfs_oclass: "SX"

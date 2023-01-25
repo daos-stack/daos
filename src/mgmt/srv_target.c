@@ -374,7 +374,6 @@ ds_mgmt_tgt_setup(void)
 	/* create lock/cv and hash table to track outstanding pool creates */
 	D_ALLOC_PTR(pooltgts);
 	if (pooltgts == NULL) {
-		D_ERROR("failed to allocate pooltgts struct\n");
 		D_GOTO(err_zombies, rc = -DER_NOMEM);
 	}
 
@@ -636,6 +635,8 @@ tgt_create_preallocate(void *arg)
 		 * failed
 		 */
 		rc = dir_fsync(tca->tca_path);
+		D_DEBUG(DB_MGMT, "reuse existing tca_path: %s, dir_fsync rc: "DF_RC"\n",
+			tca->tca_path, DP_RC(rc));
 	} else if (errno == ENOENT) { /** target doesn't exist, create one */
 		/** create the pool directory under NEWBORNS */
 		rc = path_gen(tca->tca_ptrec->dptr_uuid, newborns_path, NULL,
@@ -756,24 +757,23 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		/* Try to join with thread - either canceled or normal exit. */
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
-			if (canceled_thread) {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_create thread canceled\n",
-					DP_UUID(tc_in->tc_pool_uuid));
-				rc = -DER_CANCELED;
-			} else {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_create thread finished\n",
-					DP_UUID(tc_in->tc_pool_uuid));
-				rc = tca.tca_rc;
-			}
+			rc = canceled_thread ? -DER_CANCELED : tca.tca_rc;
 			break;
 		}
 		ABT_thread_yield();
 	}
 	/* check the result of tgt_create_preallocate() */
-	if (rc)
+	if (rc == -DER_CANCELED) {
+		D_DEBUG(DB_MGMT, DF_UUID": tgt preallocate thread canceled\n",
+			DP_UUID(tc_in->tc_pool_uuid));
 		goto out;
+	} else if (rc) {
+		D_ERROR(DF_UUID": tgt preallocate thread failed, "DF_RC"\n",
+			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		goto out;
+	} else {
+		D_INFO(DF_UUID": tgt preallocate thread succeeded\n", DP_UUID(tc_in->tc_pool_uuid));
+	}
 
 	if (tca.tca_newborn != NULL) {
 		struct vos_pool_arg vpa = {0};
@@ -784,8 +784,11 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		vpa.vpa_scm_size = 0;
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
 		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
-		if (rc)
+		if (rc) {
+			D_ERROR(DF_UUID": thread collective tgt_vos_create_one failed, "DF_RC"\n",
+				DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 			goto out;
+		}
 
 		/** ready for prime time, move away from NEWBORNS dir */
 		rc = rename(tca.tca_newborn, tca.tca_path);
@@ -815,6 +818,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
+	} else {
+		D_INFO(DF_UUID": started pool\n", DP_UUID(tc_in->tc_pool_uuid));
 	}
 out:
 	if (rc && tca.tca_newborn != NULL) {
@@ -824,6 +829,8 @@ out:
 		 */
 		(void)tgt_destroy(tca.tca_ptrec->dptr_uuid,
 				  tca.tca_newborn);
+		D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
+			DP_UUID(tc_in->tc_pool_uuid));
 	}
 	D_FREE(tca.tca_newborn);
 	D_FREE(tca.tca_path);
@@ -917,22 +924,17 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 		/* Try to join with thread - either canceled or normal exit. */
 		rc = pthread_tryjoin_np(thread, &res);
 		if (rc == 0) {
-			if (res == PTHREAD_CANCELED) {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_destroy_cleanup thread "
-					"canceled\n", DP_UUID(pool_uuid));
-				rc = -DER_CANCELED;
-			} else {
-				D_DEBUG(DB_MGMT,
-					DF_UUID": tgt_destroy_cleanup thread "
-					"finished\n", DP_UUID(pool_uuid));
-				rc = tda.tda_rc;
-			}
+			rc = (res == PTHREAD_CANCELED) ? -DER_CANCELED : tda.tda_rc;
 			break;
 		}
 		ABT_thread_yield();
 	}
 out:
+	if (rc)
+		D_ERROR(DF_UUID": tgt_destroy_cleanup() thread failed, "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+	else
+		D_INFO(DF_UUID": tgt_destroy_cleanup() thread finished\n", DP_UUID(pool_uuid));
 	return rc;
 }
 

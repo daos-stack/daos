@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -231,7 +232,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 	// basic engine configs populated enough to complete validation
 	basicEngineCfg := func(i int) *engine.Config {
 		return engine.MockConfig().WithFabricInterfacePort(20000).
-			WithPinnedNumaNode(uint(i)).WithFabricInterface(fmt.Sprintf("ib%d", i))
+			WithFabricInterface(fmt.Sprintf("ib%d", i))
 	}
 	scmTier := func(i int) *storage.TierConfig {
 		return storage.NewTierConfig().WithStorageClass(storage.ClassDcpm.String()).
@@ -555,6 +556,54 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			expMemSize:      16384,
 			expHugePageSize: 2,
 		},
+		"4 engines; hugepage alloc across numa 0,1": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+				)
+			},
+			hugePagesFree: 16384,
+			expPrepCall: &storage.BdevPrepareRequest{
+				HugePageCount: 8194, // 2 extra huge pages requested per-engine
+				HugeNodes:     "0,1",
+				TargetUser:    username,
+				PCIAllowList: strings.Join(test.MockPCIAddrs(0, 1, 2, 3),
+					storage.BdevPciAddrSep),
+				EnableVMD: true,
+			},
+			expMemSize:      8192, // 16384 pages * 2mib divided by 4 engines
+			expHugePageSize: 2,
+		},
+		"4 engines; uneven numa distribution": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithNrHugePages(16384).WithEngines(
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(0), nvmeTier(0)),
+					engine.MockConfig().WithFabricInterfacePort(21000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(1), nvmeTier(1)),
+					engine.MockConfig().WithFabricInterfacePort(22000).
+						WithPinnedNumaNode(0).WithFabricInterface("ib0").
+						WithTargetCount(8).WithStorage(scmTier(2), nvmeTier(2)),
+					engine.MockConfig().WithFabricInterfacePort(20000).
+						WithPinnedNumaNode(1).WithFabricInterface("ib1").
+						WithTargetCount(8).WithStorage(scmTier(3), nvmeTier(3)),
+				)
+			},
+			expPrepErr: errors.New("uneven distribution"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -565,8 +614,20 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				cfg = tc.srvCfgExtra(cfg)
 			}
 
+			mockAffSrc := func(l logging.Logger, e *engine.Config) (uint, error) {
+				iface := e.Fabric.Interface
+				l.Debugf("eval affinity of iface %q", iface)
+				switch iface {
+				case "ib0":
+					return 0, nil
+				case "ib1":
+					return 1, nil
+				}
+				return 0, errors.Errorf("unrecognized fabric interface: %s", iface)
+			}
+
 			// ensure that the engine affinities are set.
-			if err := cfg.SetEngineAffinities(log); err != nil {
+			if err := cfg.SetEngineAffinities(log, mockAffSrc); err != nil {
 				t.Fatal(err)
 			}
 
@@ -586,8 +647,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 			srv.ctlSvc = &ControlService{
 				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
+					sp, scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
 					mbp),
 				srvCfg: cfg,
 			}
@@ -596,7 +656,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				srv.runningUser = &user.User{Username: tc.overrideUser}
 			}
 
-			gotErr := prepBdevStorage(srv, !tc.iommuDisabled)
+			gotPrepErr := prepBdevStorage(srv, !tc.iommuDisabled)
 
 			mbb.RLock()
 			if tc.expPrepCall != nil {
@@ -611,7 +671,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 			}
 			mbb.RUnlock()
 
-			test.CmpErr(t, tc.expPrepErr, gotErr)
+			test.CmpErr(t, tc.expPrepErr, gotPrepErr)
 			if tc.expPrepErr != nil {
 				return
 			}
@@ -620,19 +680,19 @@ func TestServer_prepBdevStorage(t *testing.T) {
 				return
 			}
 
-			mockGetHugePageInfo := func() (*common.HugePageInfo, error) {
+			mockGetMemInfo := func() (*common.MemInfo, error) {
 				t.Logf("returning %d free hugepages from mock", tc.hugePagesFree)
-				return &common.HugePageInfo{
-					PageSizeKb: 2048,
-					Free:       tc.hugePagesFree,
+				return &common.MemInfo{
+					HugePageSizeKb: 2048,
+					HugePagesFree:  tc.hugePagesFree,
 				}, tc.getHpiErr
 			}
 
 			runner := engine.NewRunner(log, srv.cfg.Engines[0])
 			ei := NewEngineInstance(log, srv.ctlSvc.storage, nil, runner)
 
-			gotErr = updateMemValues(srv, ei, mockGetHugePageInfo)
-			test.CmpErr(t, tc.expMemChkErr, gotErr)
+			gotMemChkErr := updateMemValues(srv, ei, mockGetMemInfo)
+			test.CmpErr(t, tc.expMemChkErr, gotMemChkErr)
 			if tc.expMemChkErr != nil {
 				return
 			}
@@ -771,7 +831,7 @@ func TestServer_setEngineBdevs(t *testing.T) {
 				WithStorage(
 					storage.NewTierConfig().
 						WithStorageClass("nvme").
-						WithBdevDeviceList("0000:80:00.0"),
+						WithBdevDeviceList("0000:00:00.0"),
 				),
 			engineIdx:        1,
 			scanResp:         &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},
@@ -821,6 +881,16 @@ func TestServer_setEngineBdevs(t *testing.T) {
 			test.AssertEqual(t, tc.expLastBdevCount, tc.lastBdevCount, "unexpected last bdev count")
 		})
 	}
+}
+
+func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	providers := []*hardware.FabricProvider{}
+	for _, p := range prov {
+		providers = append(providers, &hardware.FabricProvider{
+			Name: p,
+		})
+	}
+	return hardware.NewFabricProviderSet(providers...)
 }
 
 func TestServer_getNetDevClass(t *testing.T) {
@@ -888,27 +958,27 @@ func TestServer_getNetDevClass(t *testing.T) {
 					Name:          "eth0",
 					NetInterfaces: common.NewStringSet("eth0"),
 					DeviceClass:   hardware.Ether,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "eth1",
 					NetInterfaces: common.NewStringSet("eth1"),
 					DeviceClass:   hardware.Ether,
 					NUMANode:      1,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "ib0",
 					NetInterfaces: common.NewStringSet("ib0"),
 					DeviceClass:   hardware.Infiniband,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 				&hardware.FabricInterface{
 					Name:          "ib1",
 					NetInterfaces: common.NewStringSet("ib1"),
 					DeviceClass:   hardware.Infiniband,
 					NUMANode:      1,
-					Providers:     common.NewStringSet("test"),
+					Providers:     testFabricProviderSet("test"),
 				},
 			)
 

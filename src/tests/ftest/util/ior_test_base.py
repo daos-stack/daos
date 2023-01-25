@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -15,7 +15,6 @@ from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base IOR test class.
 
     :avocado: recursive
@@ -71,23 +70,6 @@ class IorTestBase(DfuseTestBase):
         self.container = self.get_container(self.pool, **params)
 
         return self.container
-
-    def display_pool_space(self, pool=None):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
-
-        Args:
-            pool (TestPool, optional): The pool for which to display space.
-                    Default is self.pool.
-        """
-        if not pool:
-            pool = self.pool
-
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
                           test_file="daos:/testFile", create_pool=True,
@@ -255,7 +237,7 @@ class IorTestBase(DfuseTestBase):
 
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             out = manager.run()
 
             if self.subprocess:
@@ -278,10 +260,10 @@ class IorTestBase(DfuseTestBase):
             # ior thread (eg: thread1 --> thread2 --> ior)
             if out_queue is not None:
                 out_queue.put("IOR Failed")
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("IOR Failed")
         finally:
             if not self.subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         return None
 
@@ -300,16 +282,15 @@ class IorTestBase(DfuseTestBase):
             return self.job_manager.stop()
         except CommandFailure as error:
             self.log.error("IOR stop Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("Failed to stop in-progress IOR command")
         finally:
-            self.display_pool_space()
+            self.pool.display_space()
 
         return None
 
     def run_ior_multiple_variants(self, obj_class, apis, transfer_block_size,
                                   flags, mount_dir):
-        """Run multiple ior commands with various different combination
-           of ior input params.
+        """Run multiple ior commands with various different combination of ior input params.
 
         Args:
             obj_class(list): List of different object classes
@@ -403,8 +384,8 @@ class IorTestBase(DfuseTestBase):
 
         except CommandFailure as error:
             # Report an error if any command fails
-            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.log.error("Failed to execute command: %s", str(error))
+            self.fail("Failed to execute command")
 
         return result
 

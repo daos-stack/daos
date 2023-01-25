@@ -15,7 +15,6 @@ setup:
   start_agents: true
 server_config:
   name: daos_server
-  provider: ofi+verbs;ofi_rxm
   control_log_mask: INFO
   control_log_file: daos_control0.log
   crt_timeout: 60
@@ -98,7 +97,7 @@ soak_stress:
   test_timeout: 48
   joblist:
     - fio_stress
-    #- daos_racer
+    - daos_racer
     - ior_stress
     - mdtest_stress
     - vpic_stress
@@ -145,6 +144,8 @@ ior_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 fio_stress:
   job_timeout: 30
   names:
@@ -180,6 +181,8 @@ fio_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
+    thread_count: 8
+    cores: '0-3'
 daos_racer:
   runtime: 120
 vpic_stress:
@@ -198,7 +201,7 @@ vpic_stress:
   oclass:
     - "EC_2P1GX"
 lammps_stress:
-  job_timeout: 30
+  job_timeout: 35
   nodesperjob:
     - 8
   taskspernode:
@@ -209,6 +212,8 @@ lammps_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 mdtest_stress:
@@ -246,6 +251,8 @@ mdtest_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -275,6 +282,8 @@ macsio_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:

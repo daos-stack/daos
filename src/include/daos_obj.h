@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -477,13 +477,19 @@ typedef struct {
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
+static uint32_t
+daos_obj_id2ord(daos_obj_id_t oid)
+{
+	return (oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT;
+}
+
 static inline daos_oclass_id_t
 daos_obj_id2class(daos_obj_id_t oid)
 {
 	enum daos_obj_redun ord;
 	uint32_t nr_grps;
 
-	ord = (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
+	ord = daos_obj_id2ord(oid);
 	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
 
 	return (ord << OC_REDUN_SHIFT) | nr_grps;
@@ -1098,6 +1104,25 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors);
  */
 int
 daos_obj_anchor_set(daos_handle_t oh, uint32_t index, daos_anchor_t *anchor);
+
+/**
+ * Set an anchor to start a particular dkey or akey for enumeration.
+ *
+ * \param[in]   oh	Open object handle.
+ * \param[in]   dkey    dkey to set the anchor at (if akey is NULL - dkey enumeration).
+ * \param[in]   akey    (optional) akey to set the anchor at (for akey enumeration).
+ * \param[out]	anchor	Hash anchor to set.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_obj_key2anchor(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey, daos_key_t *akey,
+		    daos_anchor_t *anchor, daos_event_t *ev);
 
 /**
  * Open Object Index Table (OIT) of an container

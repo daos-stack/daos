@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,8 +62,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             space_tag2 : IOR run (1,2,3)
         """
         for pool in self.pool:
-            space_used_by_ior = (self.free_space_dict[pool.uuid][space_tag1] -
-                                 self.free_space_dict[pool.uuid][space_tag2])
+            space_used_by_ior = (self.free_space_dict[pool.uuid][space_tag1]
+                                 - self.free_space_dict[pool.uuid][space_tag2])
             self.log.info("Pool %s Space used by ior = %s", pool.uuid,
                           space_used_by_ior)
             self.assertGreater(self.free_space_dict[pool.uuid][space_tag1],
@@ -130,8 +130,8 @@ class DaosAggregationMultiPoolCont(IorTestBase):
             # The free space should be equal to the free space almost close
             # to free space after 1st IOR run.
             for pool in self.pool:
-                percentage = int((self.free_space_dict[pool.uuid][1] /
-                                  self.free_space_dict[pool.uuid][3]) * 100)
+                percentage = int((self.free_space_dict[pool.uuid][1]
+                                  / self.free_space_dict[pool.uuid][3]) * 100)
                 self.assertGreater(percentage, 97,
                                    "Aggregation did not reclaim the space")
 
@@ -166,7 +166,7 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_single_pool
+        :avocado: tags=aggregate_single_pool,test_aggregation_single_pool
         """
         self.longrun_aggregation(1, 2)
 
@@ -192,6 +192,6 @@ class DaosAggregationMultiPoolCont(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=aggregation
-        :avocado: tags=aggregate_multiple_pools
+        :avocado: tags=aggregate_multiple_pools,test_aggregation_multiple_pools
         """
         self.longrun_aggregation(2, 3)

@@ -46,11 +46,11 @@ ior:
   api: "DFS"
   client_processes:
     ppn: 32
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -w -r -R"
   sw_deadline: 120
   test_file: /testFile
   transfer_size: '4K'
   block_size: '100G'
   dfs_oclass: "SX"
-  subprocess: True
+  subprocess: true

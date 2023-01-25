@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -34,6 +34,7 @@ import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	Link        containerLinkCmd        `command:"link" description:"create a UNS link to an existing container"`
 	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
@@ -133,13 +134,15 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
 	var cType [10]C.char
 
-	props, entries, err := allocProps(2)
+	props, entries, err := allocProps(3)
 	if err != nil {
 		return nil, err
 	}
 	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
 	props.dpp_nr++
 	entries[1].dpe_type = C.DAOS_PROP_CO_LABEL
+	props.dpp_nr++
+	entries[2].dpe_type = C.DAOS_PROP_CO_REDUN_FAC
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
@@ -158,6 +161,8 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		cStr := C.get_dpe_str(&entries[1])
 		ci.ContainerLabel = C.GoString(cStr)
 	}
+
+	ci.RedundancyFactor = uint32(C.get_dpe_val(&entries[2]))
 
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
@@ -215,14 +220,14 @@ type containerCreateCmd struct {
 	Path            string               `long:"path" short:"p" description:"container namespace path"`
 	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
-	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
-	CHints          string               `long:"hints" short:"h" description:"container hints"`
+	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
+	CHints          string               `long:"hints" short:"H" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User            string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group           string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	User            ui.ACLPrincipalFlag  `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
@@ -234,6 +239,22 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	if cmd.Args.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't supply label arg and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
+			return err
+		}
+		cmd.contLabel = cmd.Args.Label
+	}
+
+	if cmd.Properties.props != nil {
+		ap.props = cmd.Properties.props
+	}
 
 	if cmd.PoolID().Empty() {
 		if cmd.Path == "" {
@@ -263,32 +284,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
-		ap.user = C.CString(cmd.User)
+		ap.user = C.CString(cmd.User.String())
 		defer freeString(ap.user)
 	}
 	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group)
+		ap.group = C.CString(cmd.Group.String())
 		defer freeString(ap.group)
 	}
 	if cmd.ACLFile != "" {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
-	}
-
-	if cmd.Args.Label != "" {
-		for key := range cmd.Properties.ParsedProps {
-			if key == "label" {
-				return errors.New("can't supply label arg and --properties label:")
-			}
-		}
-		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
-			return err
-		}
-		cmd.contLabel = cmd.Args.Label
-	}
-
-	if cmd.Properties.props != nil {
-		ap.props = cmd.Properties.props
 	}
 
 	ap._type = cmd.Type.Type
@@ -732,7 +737,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
-	if ci.ContainerLabel != "" && ci.ContainerLabel != labelNotSetStr {
+	if ci.ContainerLabel != "" {
 		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
 	}
 	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
@@ -740,7 +745,8 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	if verbose {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
-			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Container redundancy factor": fmt.Sprintf("%d", ci.RedundancyFactor)},
+			{"Number of open handles": fmt.Sprintf("%d", *ci.NumHandles)},
 			{"Latest open time": fmt.Sprintf("%#x (%s)", *ci.OpenTime, daos.HLC(*ci.OpenTime))},
 			{"Latest close/modify time": fmt.Sprintf("%#x (%s)", *ci.CloseModifyTime, daos.HLC(*ci.CloseModifyTime))},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
@@ -775,7 +781,8 @@ type containerInfo struct {
 	ContainerUUID    *uuid.UUID `json:"container_uuid"`
 	ContainerLabel   string     `json:"container_label,omitempty"`
 	LatestSnapshot   *uint64    `json:"latest_snapshot"`
-	RedundancyFactor *uint32    `json:"redundancy_factor"`
+	RedundancyFactor uint32     `json:"redundancy_factor"`
+	NumHandles       *uint32    `json:"num_handles"`
 	NumSnapshots     *uint32    `json:"num_snapshots"`
 	OpenTime         *uint64    `json:"open_time"`
 	CloseModifyTime  *uint64    `json:"close_modify_time"`
@@ -804,7 +811,7 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.PoolUUID = poolUUID
 	ci.ContainerUUID = contUUID
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
-	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
+	ci.NumHandles = (*uint32)(&ci.dci.ci_nhandles)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
 	ci.OpenTime = (*uint64)(&ci.dci.ci_md_otime)
 	ci.CloseModifyTime = (*uint64)(&ci.dci.ci_md_mtime)
@@ -877,10 +884,26 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 	rc := C.cont_clone_hdlr(ap)
 
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to clone container %s",
-			cmd.Source)
+		return errors.Wrapf(err, "failed to clone container %s", cmd.Source)
 	}
+
+	if cmd.shouldEmitJSON {
+		return cmd.outputJSON(struct {
+			SourcePool string `json:"src_pool"`
+			SourceCont string `json:"src_cont"`
+			DestPool   string `json:"dst_pool"`
+			DestCont   string `json:"dst_cont"`
+		}{
+			C.GoString(&ap.dm_args.src_pool[0]),
+			C.GoString(&ap.dm_args.src_cont[0]),
+			C.GoString(&ap.dm_args.dst_pool[0]),
+			C.GoString(&ap.dm_args.dst_cont[0]),
+		}, nil)
+	}
+
+	// Compat with old-style output
+	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
+	cmd.Infof("Successfully copied to destination container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 
 	return nil
 }
@@ -1168,13 +1191,13 @@ func (cmd *containerSetPropCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
+	ap.props = cmd.Properties.props
+
 	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
-	ap.props = cmd.Properties.props
 
 	rc := C.cont_set_prop_hdlr(ap)
 	if err := daosError(rc); err != nil {
@@ -1256,4 +1279,60 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 
 	return
+}
+
+type containerLinkCmd struct {
+	containerBaseCmd
+
+	Path string `long:"path" short:"p" description:"container namespace path to create"`
+	Args struct {
+		Container ContainerID `positional-arg-name:"container name or UUID" description:"Container to link in the namespace"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *containerLinkCmd) ContainerID() ContainerID {
+	return cmd.Args.Container
+}
+
+func (cmd *containerLinkCmd) Execute(_ []string) (err error) {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	var cleanup func()
+	cleanup, err = cmd.connectPool(C.DAOS_COO_RO, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	cmd.Debugf("Creating a namespace link %s for container %s", cmd.Path, cmd.ContainerID())
+
+	cPath := C.CString(cmd.Path)
+	defer freeString(cPath)
+
+	var rc C.int
+	switch {
+	case cmd.ContainerID().HasUUID():
+		cmd.contUUID = cmd.ContainerID().UUID
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cUUIDstr, cPath)
+	case cmd.ContainerID().Label != "":
+		cLabel := C.CString(cmd.ContainerID().Label)
+		defer freeString(cLabel)
+		rc = C.duns_link_cont(cmd.cPoolHandle, cLabel, cPath)
+	default:
+		return errors.New("no UUID or label for container")
+	}
+
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to link container %s in the namespace",
+			cmd.ContainerID())
+	}
+
+	return nil
 }

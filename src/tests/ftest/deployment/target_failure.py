@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -20,8 +20,8 @@ class TargetFailure(IorTestBase):
 
     :avocado: recursive
     """
-    def run_ior_report_error(self, results, job_num, file_name, pool, container,
-                             namespace):
+
+    def run_ior_report_error(self, results, job_num, file_name, pool, container, namespace):
         """Run IOR command and store the results to results dictionary.
 
         Create a new IorCommand object instead of using the one in IorTestBase because
@@ -97,8 +97,7 @@ class TargetFailure(IorTestBase):
         job_num = 1
         job = threading.Thread(
             target=self.run_ior_report_error,
-            args=[ior_results, job_num, "test_file_1", self.pool, self.container,
-                  ior_namespace])
+            args=[ior_results, job_num, "test_file_1", self.pool, self.container, ior_namespace])
 
         job.start()
 
@@ -113,7 +112,7 @@ class TargetFailure(IorTestBase):
         self.pool.exclude(ranks=[1], tgt_idx="1")
         # If we exclude back to back, it would cause an error. Wait for the rebuild to
         # start before excluding the next target.
-        self.pool.wait_for_rebuild(to_start=True)
+        self.pool.wait_for_rebuild_to_start()
         self.pool.exclude(ranks=[0], tgt_idx="1")
         self.pool.measure_rebuild_time(operation="Exclude 2 targets", interval=5)
 
@@ -137,12 +136,10 @@ class TargetFailure(IorTestBase):
         # Reintegrate one target and wait for rebuild to finish before reintegrating the
         # next one.
         self.pool.reintegrate(rank="1", tgt_idx="1")
-        self.pool.measure_rebuild_time(
-            operation="Reintegrate rank 1 -> target 1", interval=5)
+        self.pool.measure_rebuild_time(operation="Reintegrate rank 1 -> target 1", interval=5)
         self.log.info("Reintegrate rank 0 target 1")
         self.pool.reintegrate(rank="0", tgt_idx="1")
-        self.pool.measure_rebuild_time(
-            operation="Reintegrate rank 0 -> target 1", interval=5)
+        self.pool.measure_rebuild_time(operation="Reintegrate rank 0 -> target 1", interval=5)
 
         # 7. Verify that the container's Health property is HEALTHY.
         if not self.container.verify_health(expected_health="HEALTHY"):
@@ -201,8 +198,8 @@ class TargetFailure(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_wo_rf
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """
         # 1. Create a pool and a container.
         self.add_pool(namespace="/run/pool_size_ratio_80/*")
@@ -279,9 +276,9 @@ class TargetFailure(IorTestBase):
         See verify_target_failure_with_protection for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_rp
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_with_rp
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_rp/*")
 
@@ -295,9 +292,9 @@ class TargetFailure(IorTestBase):
         See verify_target_failure_with_protection for test steps.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_with_ec
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_with_ec
         """
         self.verify_failure_with_protection(ior_namespace="/run/ior_with_ec/*")
 
@@ -318,9 +315,9 @@ class TargetFailure(IorTestBase):
         10. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=deployment,target_failure
-        :avocado: tags=target_failure_parallel
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,target_failure,rebuild
+        :avocado: tags=TargetFailure,test_target_failure_parallel
         """
         self.pool = []
         self.container = []

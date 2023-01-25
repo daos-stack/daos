@@ -189,9 +189,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -211,6 +213,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -284,6 +287,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -308,6 +312,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -339,6 +344,7 @@ puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -361,6 +367,7 @@ rpc
 rpms
 rsvc
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -373,6 +380,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
@@ -386,6 +394,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -409,6 +418,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
@@ -448,6 +458,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
@@ -462,6 +474,7 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs

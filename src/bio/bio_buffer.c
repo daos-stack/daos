@@ -33,9 +33,14 @@ dma_alloc_chunk(unsigned int cnt)
 	int rc;
 
 	D_ASSERT(bytes > 0);
+
+	if (DAOS_FAIL_CHECK(DAOS_NVME_ALLOCBUF_ERR)) {
+		D_ERROR("Injected DMA buffer allocation error.\n");
+		return NULL;
+	}
+
 	D_ALLOC_PTR(chunk);
 	if (chunk == NULL) {
-		D_ERROR("Failed to allocate chunk\n");
 		return NULL;
 	}
 
@@ -287,8 +292,7 @@ bio_iod_free(struct bio_desc *biod)
 	for (i = 0; i < biod->bd_sgl_cnt; i++)
 		bio_sgl_fini(&biod->bd_sgls[i]);
 
-	if (biod->bd_bulk_hdls != NULL)
-		D_FREE(biod->bd_bulk_hdls);
+	D_FREE(biod->bd_bulk_hdls);
 
 	D_FREE(biod);
 }

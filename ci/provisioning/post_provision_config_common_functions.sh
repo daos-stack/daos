@@ -188,7 +188,8 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
+    if [ "$repo_server" = "artifactory" ] &&
+       { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
        [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
@@ -320,6 +321,34 @@ post_provision_config_nodes() {
             fi
         fi
     fi
+
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+        # Need this module file
+        version="$(rpm -q --qf "%{version}" openmpi)"
+        mkdir -p /etc/modulefiles/mpi/
+        cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+#%Module 1.0
+#
+#  OpenMPI module for use with 'environment-modules' package:
+#
+conflict		mpi
+prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
+prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
+prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
+prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
+setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
+setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
+setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
+setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
+setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
+setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
+setenv			MPI_COMPILER	openmpi-x86_64
+setenv			MPI_SUFFIX	_openmpi
+setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
+EOF
+
+        printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
+    fi 
 
     distro_custom
 
