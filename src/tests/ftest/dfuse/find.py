@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,6 @@ from io_utilities import DirTree
 
 
 class DfuseFind(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base DfuseFind test class.
 
     :avocado: recursive
@@ -216,7 +215,6 @@ class DfuseFind(DfuseTestBase):
 
     def _create_dir_forest(self, paths, height, subdirs, files_per_node, needles):
         """Create a directory tree on each path listed in the paths variable"""
-
         remote_pythonpath = ":".join(sys.path)
 
         count = 0
@@ -245,10 +243,7 @@ class DfuseFind(DfuseTestBase):
         self.dfuse = None
 
     def _setup_challenger(self, test_path, directories):
-        """
-        Create the paths where the directory trees of the challenger will be
-        created.
-        """
+        """Create the paths where the directory trees of the challenger will be created."""
         challenger_dirs = []
 
         self.log.info("Challenger test root %s", test_path)

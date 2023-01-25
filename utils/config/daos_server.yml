@@ -102,6 +102,13 @@
 #
 #disable_srx: false
 #
+## CART: Fabric authorization key
+## If the fabric requires an authorization key, set it here to
+## be used on the server and clients.
+#
+#fabric_auth_key: foo:bar
+#
+#
 ## Core Dump Filter
 ## Optional filter to control which mappings are written to the core
 ## dump in the event of a crash. See the following URL for more detail:
@@ -231,6 +238,14 @@
 ## default endpoint state: disabled
 ## default endpoint port: 9191
 #telemetry_port: 9191
+#
+#
+## If desired, a set of client-side environment variables may be
+## defined here. Note that these are intended to be defaults and
+## may be overridden by manually-set environment variables when
+## the client application is launched.
+#client_env_vars:
+#  - foo=bar
 #
 #
 ## When per-engine definitions exist, auto-allocation of resources is not
