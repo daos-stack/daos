@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,10 +66,10 @@ class DdbTest(TestWithServers):
         6. Restart the server for the cleanup.
         7. Reset the container and the pool to prepare for the cleanup.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_ls
+        :avocado: tags=ddb_cmd,test_recovery_ddb_ls
         """
         # Create a pool and a container.
         self.add_pool()
@@ -271,10 +271,10 @@ class DdbTest(TestWithServers):
         17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that the
         object was removed.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_rm
+        :avocado: tags=ddb_cmd,test_recovery_ddb_rm
         """
         # 1. Create a pool and a container. Insert objects, dkeys, and akeys.
         self.add_pool(connect=True)
@@ -417,10 +417,10 @@ class DdbTest(TestWithServers):
         7. Reset the object, container, and pool to use the API.
         8. Verify the data in the akey with single_fetch().
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_load
+        :avocado: tags=ddb_cmd,test_recovery_ddb_load
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
@@ -514,10 +514,10 @@ class DdbTest(TestWithServers):
         7. Restart the server for the cleanup.
         8. Reset the object, container, and pool to prepare for the cleanup.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_dump_value
+        :avocado: tags=ddb_cmd,test_recovery_ddb_dump_value
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
