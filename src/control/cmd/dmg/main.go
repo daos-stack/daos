@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -87,7 +87,6 @@ func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
 		} else {
 			status = int(daos.MiscError)
 		}
-		in = nil // response should be null if err isn't
 	}
 
 	data, err := json.MarshalIndent(struct {

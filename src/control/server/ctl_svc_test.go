@@ -59,7 +59,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 
 		sp := storage.MockProvider(log, 0, &ec.Storage, sp,
 			scm.NewProvider(log, scm.NewMockBackend(smbc), sp, mounter),
-			bdev.NewMockProvider(log, bmbc))
+			bdev.NewMockProvider(log, bmbc), nil)
 		ei := NewEngineInstance(log, sp, nil, runner)
 		ei.setSuperblock(&Superblock{
 			Rank: ranklist.NewRankPtr(uint32(idx)),

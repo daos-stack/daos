@@ -44,6 +44,8 @@ type (
 		SourceToTarget  map[string]string
 		GetfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
+		GetFsTypeStr    string
+		GetFsTypeErr    []error
 		StatErrors      map[string]error
 		RealStat        bool
 	}
@@ -51,9 +53,11 @@ type (
 	// MockSysProvider gives a mock SystemProvider implementation.
 	MockSysProvider struct {
 		sync.RWMutex
-		log       logging.Logger
-		cfg       MockSysConfig
-		isMounted MountMap
+		log             logging.Logger
+		cfg             MockSysConfig
+		isMounted       MountMap
+		IsMountedInputs []string
+		GetFsTypeCount  int
 	}
 )
 
@@ -82,6 +86,8 @@ func (msp *MockSysProvider) GetMountOpts(target string) (string, error) {
 
 	msp.Lock()
 	defer msp.Unlock()
+
+	msp.IsMountedInputs = append(msp.IsMountedInputs, target)
 
 	// lookup target of a given source device (target actually a source
 	// device in this case)
@@ -131,7 +137,7 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	return msp.cfg.UnmountErr
 }
 
-func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
+func (msp *MockSysProvider) Mkfs(_ MkfsReq) error {
 	return msp.cfg.MkfsErr
 }
 
@@ -154,6 +160,22 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	}
 	resp := msp.cfg.GetfsUsageResps[msp.cfg.GetfsIndex-1]
 	return resp.Total, resp.Avail, resp.Err
+}
+
+func (msp *MockSysProvider) GetFsType(path string) (string, error) {
+	idx := msp.GetFsTypeCount
+	msp.GetFsTypeCount++
+	var err error
+	var str string
+	if idx < len(msp.cfg.GetFsTypeErr) {
+		err = msp.cfg.GetFsTypeErr[idx]
+	}
+
+	if err == nil {
+		str = msp.cfg.GetFsTypeStr
+	}
+
+	return str, err
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {

@@ -27,6 +27,76 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
+func TestIOEngineInstance_MountControlMetadata(t *testing.T) {
+	cfg := &storage.Config{
+		ControlMetadata: storage.ControlMetadata{
+			Path:       "/dontcare",
+			DevicePath: "/dev/dontcare",
+		},
+		Tiers: storage.TierConfigs{
+			{
+				Class: storage.ClassRam,
+				Scm: storage.ScmConfig{
+					MountPoint:  defaultStoragePath,
+					RamdiskSize: 1,
+				},
+			},
+		},
+	}
+
+	for name, tc := range map[string]struct {
+		meta   *storage.MockMetadataProvider
+		sysCfg *system.MockSysConfig
+		expErr error
+	}{
+		"check mounted fails": {
+			sysCfg: &system.MockSysConfig{
+				IsMountedErr: errors.New("mock IsMounted"),
+			},
+			expErr: errors.New("mock IsMounted"),
+		},
+		"already mounted": {
+			sysCfg: &system.MockSysConfig{
+				IsMountedBool: true,
+			},
+			meta: &storage.MockMetadataProvider{
+				MountErr: errors.New("mount was called!"),
+			},
+		},
+		"mount fails": {
+			meta: &storage.MockMetadataProvider{
+				MountErr: errors.New("mock mount"),
+			},
+			expErr: errors.New("mock mount"),
+		},
+		"success": {
+			meta: &storage.MockMetadataProvider{
+				MountRes: &storage.MountResponse{},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.meta == nil {
+				tc.meta = &storage.MockMetadataProvider{}
+			}
+
+			ec := engine.MockConfig().
+				WithStorageControlMetadataPath(cfg.ControlMetadata.Path).
+				WithStorageControlMetadataDevice(cfg.ControlMetadata.DevicePath)
+			runner := engine.NewRunner(log, ec)
+			sysProv := system.NewMockSysProvider(log, tc.sysCfg)
+			provider := storage.MockProvider(log, 0, cfg, sysProv, nil, nil, tc.meta)
+			instance := NewEngineInstance(log, provider, nil, runner)
+
+			gotErr := instance.MountMetadata()
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
 func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 	testDir, cleanup := test.CreateTestDir(t)
 	defer cleanup()
@@ -124,7 +194,7 @@ func TestIOEngineInstance_MountScmDevice(t *testing.T) {
 			runner := engine.NewRunner(log, ec)
 			sys := system.NewMockSysProvider(log, tc.msCfg)
 			scm := scm.NewMockProvider(log, nil, tc.msCfg)
-			provider := storage.MockProvider(log, 0, tc.cfg, sys, scm, nil)
+			provider := storage.MockProvider(log, 0, tc.cfg, sys, scm, nil, nil)
 			instance := NewEngineInstance(log, provider, nil, runner)
 
 			gotErr := instance.MountScm()
@@ -243,7 +313,7 @@ func TestEngineInstance_NeedsScmFormat(t *testing.T) {
 			mp := storage.NewProvider(log, 0, &tc.engineCfg.Storage,
 				system.NewMockSysProvider(log, tc.msCfg),
 				scm.NewMockProvider(log, tc.mbCfg, tc.msCfg),
-				nil)
+				nil, nil)
 			instance := NewEngineInstance(log, mp, nil, runner)
 
 			gotNeedsFormat, gotErr := instance.GetStorage().ScmNeedsFormat()
@@ -343,7 +413,7 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			mp := storage.NewProvider(log, 0, &dcpmCfg.Storage,
 				system.NewMockSysProvider(log, &msc),
 				scm.NewMockProvider(log, &mbc, &msc),
-				nil)
+				nil, nil)
 			engine := NewEngineInstance(log, mp, nil, runner)
 
 			engine.setIndex(tc.engineIndex)

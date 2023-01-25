@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultMountPointPerms = 0700
+	defaultMountPointPerms = 0755
 	defaultUnmountFlags    = 0
 )
 
@@ -173,8 +173,8 @@ func (p *Provider) MakeMountPath(path string, tgtUID, tgtGID int) error {
 				return errors.Wrapf(err, "failed to create directory %q", ps)
 			}
 			if err := os.Chown(ps, tgtUID, tgtGID); err != nil {
-				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d",
-					ps, tgtUID, tgtGID)
+				return errors.Wrapf(err, "failed to set ownership of %s to %d.%d from %d.%d",
+					ps, tgtUID, tgtGID, os.Geteuid(), os.Getegid())
 			}
 		case err != nil:
 			return errors.Wrapf(err, "unable to stat %q", ps)
