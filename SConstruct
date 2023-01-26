@@ -130,7 +130,6 @@ def parse_and_save_conf(env, opts_file):
 
     opts.Add('GO_BIN', 'Full path to go binary', None)
 
-    # TODO: Should we keep this?
     opts.Add(PathVariable('ENV_SCRIPT', "Location of environment script",
                           os.path.expanduser('~/.scons_localrc'),
                           PathVariable.PathAccept))
@@ -386,6 +385,15 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         Exit(0)
 
 
+def load_local(env_script, env):
+    """Function for importing custom scons file.
+
+    Making this a function allows us to export 'env' without namespace pollution in the parent.
+    """
+    # pylint: disable=unused-argument
+    SConscript(env_script, exports=['env'])
+
+
 # Environment variables that are kept when SCONS_ENV=minimal (the default).
 MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
                'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE')
@@ -446,11 +454,10 @@ def scons():
     if locale_name:
         deps_env['ENV']['LC_ALL'] = locale_name
 
-    # Legacy, parse a ~/.scons_localrc if it exists.
+    # parse a ~/.scons_localrc file if it exists.
     env_script = deps_env.get('ENV_SCRIPT')
     if os.path.exists(env_script):
-        env = deps_env
-        SConscript(env_script, exports=['env'])
+        load_local(env_script, deps_env)
 
     # This used to be set in prereqs so move it here but it may be best to remove entirely.
     SetOption('implicit_cache', True)

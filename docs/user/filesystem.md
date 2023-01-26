@@ -177,6 +177,10 @@ at create time.
 It is anticipated that in this mode DFuse will be configured to start at boot time and run as a
 general purpose filesystem providing access to multiple users.
 
+Multi-user mode requires the fuse package to be reconfigured as it's disabled by default.  In order
+to run the setting `user_allow_other` needs to be set in `/etc/fuse.conf` or `/etc/fuse3.conf`
+which will need to be done as root and takes effect for all users on that node.
+
 ### Launching
 
 #### Via dfuse command
@@ -199,6 +203,7 @@ Additionally, there are several optional command-line options:
 | --foreground               | run in foreground                |
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
+| --multi-use                | Run in multi user mode           |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
