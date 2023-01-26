@@ -6,7 +6,7 @@ timeouts:
   test_one_pool: 240
   test_rank_filter: 240
   test_two_pools: 160
-  test_recycle_pools: 1280
+  test_recycle_pools: 780
 server_config:
   name: daos_server
   engines_per_host: 1
