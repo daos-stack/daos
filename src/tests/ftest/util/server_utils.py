@@ -412,6 +412,9 @@ class DaosServerManager(SubprocessManager):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
+        # Sanity check for md on ssd enablement
+        self.manager.check_log_for_pattern("MD on SSD")
+
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
 

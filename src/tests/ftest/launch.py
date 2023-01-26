@@ -116,7 +116,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -1439,6 +1440,9 @@ class Launch():
                 tier_0_type = "ram"
                 scm_size = 100
                 max_nvme_tiers = 5
+
+                # Use this to define the same named env var in the server config file
+                os.environ["DAOS_MD_ON_SSD"] = "1"
 
         self.details["storage"] = storage_info.device_dict()
 
