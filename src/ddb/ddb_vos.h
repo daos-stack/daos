@@ -7,7 +7,7 @@
 #ifndef DAOS_DDB_VOS_H
 #define DAOS_DDB_VOS_H
 
-#include <vos_layout.h>
+#include <daos_prop.h>
 #include <daos_srv/vos_types.h>
 #include "ddb_common.h"
 
@@ -27,6 +27,7 @@ struct ddb_obj {
 struct ddb_key {
 	daos_key_t	ddbk_key;
 	uint32_t	ddbk_idx;
+	vos_iter_type_t ddbk_child_type;
 };
 
 struct ddb_sv {

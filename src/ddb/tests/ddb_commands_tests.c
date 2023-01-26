@@ -6,8 +6,9 @@
 #include <gurt/debug.h>
 #include <daos/tests_lib.h>
 #include <ddb_common.h>
-#include <ddb_cmd_options.h>
+#include <ddb.h>
 #include <daos_srv/vos.h>
+#include <ddb_vos.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
@@ -23,6 +24,7 @@ struct ddb_ctx g_ctx = {
 	.dc_io_ft.ddb_read_file = dvt_fake_read_file,
 	.dc_io_ft.ddb_get_file_size = dvt_fake_get_file_size,
 	.dc_io_ft.ddb_get_file_exists = dvt_fake_get_file_exists,
+	.dc_write_mode = true,
 };
 
 static uint32_t fake_write_file_called;
@@ -94,7 +96,7 @@ dump_value_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
 	struct ddb_ctx			 ctx = {0};
-	struct dump_value_options	 opt = {0};
+	struct value_dump_options	 opt = {0};
 
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
 	ctx.dc_io_ft.ddb_print_error = dvt_fake_print;
@@ -102,19 +104,19 @@ dump_value_cmd_tests(void **state)
 	ctx.dc_poh = tctx->dvt_poh;
 
 	/* requires a path to dump */
-	assert_invalid(ddb_run_dump_value(&ctx, &opt));
+	assert_invalid(ddb_run_value_dump(&ctx, &opt));
 
 	/* path must be complete (to a value) */
 	opt.path = "[0]";
-	assert_invalid(ddb_run_dump_value(&ctx, &opt));
+	assert_invalid(ddb_run_value_dump(&ctx, &opt));
 
 	/* Path is complete, but needs destination */
 	opt.path = "[0]/[0]/[0]/[1]";
-	assert_invalid(ddb_run_dump_value(&ctx, &opt));
+	assert_success(ddb_run_value_dump(&ctx, &opt));
 
 	/* success */
 	opt.dst = "/tmp/dumped_file";
-	assert_success(ddb_run_dump_value(&ctx, &opt));
+	assert_success(ddb_run_value_dump(&ctx, &opt));
 	assert_true(fake_write_file_called >= 1);
 }
 
@@ -123,30 +125,30 @@ dump_ilog_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
 	struct ddb_ctx			 ctx = {0};
-	struct dump_ilog_options	 opt = {0};
+	struct ilog_dump_options	 opt = {0};
 
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
 	ctx.dc_io_ft.ddb_print_error = dvt_fake_print;
 	ctx.dc_io_ft.ddb_write_file = fake_write_file;
 	ctx.dc_poh = tctx->dvt_poh;
 
-	assert_invalid(ddb_run_dump_ilog(&ctx, &opt));
+	assert_invalid(ddb_run_ilog_dump(&ctx, &opt));
 
 	/* Dump object ilog */
 	dvt_fake_print_called = 0;
 	opt.path = "[0]/[0]";
-	assert_success(ddb_run_dump_ilog(&ctx, &opt));
+	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
 
 	/* Dump dkey ilog */
 	dvt_fake_print_called = 0;
 	opt.path = "[0]/[0]/[0]";
-	assert_success(ddb_run_dump_ilog(&ctx, &opt));
+	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 	assert_true(dvt_fake_print_called);
 
 	/* Dump akey ilog */
 	opt.path = "[0]/[0]/[0]/[0]";
-	assert_success(ddb_run_dump_ilog(&ctx, &opt));
+	assert_success(ddb_run_ilog_dump(&ctx, &opt));
 }
 
 static void
@@ -158,7 +160,7 @@ dump_superblock_cmd_tests(void **state)
 	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
 	ctx.dc_poh = tctx->dvt_poh;
 
-	ddb_run_dump_superblock(&ctx);
+	ddb_run_superblock_dump(&ctx);
 
 	assert_true(dvt_fake_print_called >= 1); /* Should have printed at least once */
 }
@@ -168,7 +170,7 @@ dump_dtx_cmd_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
 	struct ddb_ctx		 ctx = {0};
-	struct dump_dtx_options	 opt = {0};
+	struct dtx_dump_options	 opt = {0};
 	daos_handle_t		 coh;
 
 	dvt_fake_print_reset();
@@ -177,7 +179,7 @@ dump_dtx_cmd_tests(void **state)
 	ctx.dc_io_ft.ddb_print_error = dvt_fake_print;
 	ctx.dc_poh = tctx->dvt_poh;
 
-	assert_invalid(ddb_run_dump_dtx(&ctx, &opt));
+	assert_invalid(ddb_run_dtx_dump(&ctx, &opt));
 
 	assert_success(vos_cont_open(tctx->dvt_poh, g_uuids[0], &coh));
 
@@ -185,7 +187,7 @@ dump_dtx_cmd_tests(void **state)
 	vos_cont_close(coh);
 
 	opt.path = "[0]";
-	assert_success(ddb_run_dump_dtx(&ctx, &opt));
+	assert_success(ddb_run_dtx_dump(&ctx, &opt));
 
 	assert_string_contains(dvt_fake_print_buffer, "Active Transactions:");
 	assert_string_contains(dvt_fake_print_buffer, "Committed Transactions:");
@@ -194,19 +196,13 @@ dump_dtx_cmd_tests(void **state)
 static void
 rm_cmd_tests(void **state)
 {
-	struct dt_vos_pool_ctx	*tctx = *state;
-	struct ddb_ctx		 ctx = {0};
 	struct rm_options	 opt = {0};
 
-	ctx.dc_poh = tctx->dvt_poh;
-	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
-	ctx.dc_io_ft.ddb_print_error = dvt_fake_print;
-
-	assert_invalid(ddb_run_rm(&ctx, &opt));
+	assert_invalid(ddb_run_rm(&g_ctx, &opt));
 
 	dvt_fake_print_reset();
 	opt.path = "[0]";
-	assert_success(ddb_run_rm(&ctx, &opt));
+	assert_success(ddb_run_rm(&g_ctx, &opt));
 	assert_string_equal(dvt_fake_print_buffer,
 			    "/12345678-1234-1234-1234-123456789001 deleted\n");
 }
@@ -214,35 +210,35 @@ rm_cmd_tests(void **state)
 static void
 load_cmd_tests(void **state)
 {
-	struct load_options	opt = {0};
+	struct value_load_options	opt = {0};
 	char			buf[256];
 	daos_unit_oid_t		new_oid = g_oids[0];
 
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
+	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 
 	opt.dst = "/[0]/[0]/[0]/[1]";
 	opt.src = "/tmp/value_src";
 	dvt_fake_get_file_exists_result = true;
 	snprintf(dvt_fake_read_file_buf, ARRAY_SIZE(dvt_fake_read_file_buf), "Some text");
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
+	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 	dvt_fake_get_file_size_result = strlen(dvt_fake_read_file_buf);
 	dvt_fake_read_file_result = strlen(dvt_fake_read_file_buf);
-	assert_success(ddb_run_load(&g_ctx, &opt));
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new 'a' key */
 	opt.dst = "/[0]/[0]/[0]/'a-new-key'";
-	assert_success(ddb_run_load(&g_ctx, &opt));
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new 'd' key */
 	opt.dst = "/[0]/[0]/'a-new-key'/'a-new-key'";
-	assert_success(ddb_run_load(&g_ctx, &opt));
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new object */
 	new_oid.id_pub.lo = 999;
 	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_uuids_str[3],
 		DP_OID(new_oid.id_pub));
 	opt.dst = buf;
-	assert_success(ddb_run_load(&g_ctx, &opt));
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/*
 	 * Error cases ...
@@ -250,89 +246,89 @@ load_cmd_tests(void **state)
 
 	/* File not found */
 	dvt_fake_get_file_exists_result = false;
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
+	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 	dvt_fake_get_file_exists_result = true;
 
 	/* incomplete path */
 	opt.dst = "/[0]/[0]/";
-	assert_invalid(ddb_run_load(&g_ctx, &opt));
+	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 
 	/* Can't use index for a new path */
 	opt.dst = "/[0]/[0]/[0]/[9999]";
-	assert_rc_equal(-DER_INVAL, ddb_run_load(&g_ctx, &opt));
+	assert_rc_equal(-DER_INVAL, ddb_run_value_load(&g_ctx, &opt));
 
 	/* can't create new container */
 	sprintf(buf, "%s/"DF_OID"/'dkey_new'/'akey_new'", g_invalid_uuid_str,
 		DP_OID(g_oids[0].id_pub));
 	opt.dst = buf;
-	assert_rc_equal(-DER_NONEXIST, ddb_run_load(&g_ctx, &opt));
+	assert_rc_equal(-DER_NONEXIST, ddb_run_value_load(&g_ctx, &opt));
 }
 
 static void
 rm_ilog_cmd_tests(void **state)
 {
-	struct rm_ilog_options opt = {0};
+	struct ilog_clear_options opt = {0};
 
-	assert_invalid(ddb_run_rm_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_ilog_clear(&g_ctx, &opt));
 	opt.path = "[0]"; /* just container ... bad */
-	assert_invalid(ddb_run_rm_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_ilog_clear(&g_ctx, &opt));
 
 	opt.path = "[1]/[0]"; /* object */
-	assert_success(ddb_run_rm_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_ilog_clear(&g_ctx, &opt));
 	opt.path = "[2]/[0]/[0]"; /* dkey */
-	assert_success(ddb_run_rm_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_ilog_clear(&g_ctx, &opt));
 }
 
 static void
 process_ilog_cmd_tests(void **state)
 {
-	struct commit_ilog_options opt = {0};
+	struct ilog_commit_options opt = {0};
 
-	assert_invalid(ddb_run_commit_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_ilog_commit(&g_ctx, &opt));
 	opt.path = "[0]"; /* just container ... bad */
-	assert_invalid(ddb_run_commit_ilog(&g_ctx, &opt));
+	assert_invalid(ddb_run_ilog_commit(&g_ctx, &opt));
 
 	opt.path = "[1]/[0]"; /* object */
-	assert_success(ddb_run_commit_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_ilog_commit(&g_ctx, &opt));
 	opt.path = "[2]/[0]/[0]"; /* dkey */
-	assert_success(ddb_run_commit_ilog(&g_ctx, &opt));
+	assert_success(ddb_run_ilog_commit(&g_ctx, &opt));
 }
 
 static void
 clear_cmt_dtx_cmd_tests(void **state)
 {
-	struct clear_cmt_dtx_options opt = {0};
+	struct dtx_cmt_clear_options opt = {0};
 
-	assert_invalid(ddb_run_clear_cmt_dtx(&g_ctx, &opt));
+	assert_invalid(ddb_run_dtx_cmt_clear(&g_ctx, &opt));
 
 	opt.path = "[0]";
-	assert_success(ddb_run_clear_cmt_dtx(&g_ctx, &opt));
+	assert_success(ddb_run_dtx_cmt_clear(&g_ctx, &opt));
 }
 
 static void
 dtx_commit_entry_tests(void **state)
 {
-	struct dtx_commit_options opt = {0};
+	struct dtx_act_commit_options opt = {0};
 
-	assert_invalid(ddb_run_dtx_commit(&g_ctx, &opt));
+	assert_invalid(ddb_run_dtx_act_commit(&g_ctx, &opt));
 	opt.path = "[0]/[0]";
-	assert_invalid(ddb_run_dtx_commit(&g_ctx, &opt));
+	assert_invalid(ddb_run_dtx_act_commit(&g_ctx, &opt));
 
 	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
-	assert_success(ddb_run_dtx_commit(&g_ctx, &opt));
+	assert_success(ddb_run_dtx_act_commit(&g_ctx, &opt));
 }
 
 static void
 dtx_abort_entry_tests(void **state)
 {
-	struct dtx_abort_options opt = {0};
+	struct dtx_act_abort_options opt = {0};
 
-	assert_invalid(ddb_run_dtx_abort(&g_ctx, &opt));
+	assert_invalid(ddb_run_dtx_act_abort(&g_ctx, &opt));
 
 	opt.path = "[0]/[0]";
-	assert_invalid(ddb_run_dtx_abort(&g_ctx, &opt));
+	assert_invalid(ddb_run_dtx_act_abort(&g_ctx, &opt));
 	opt.dtx_id = "12345678-1234-1234-1234-123456789012.1234";
-	assert_success(ddb_run_dtx_abort(&g_ctx, &opt));
+	assert_success(ddb_run_dtx_act_abort(&g_ctx, &opt));
 }
 
 /*
@@ -350,7 +346,7 @@ dcv_suit_setup(void **state)
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
 
 	g_ctx.dc_poh = tctx->dvt_poh;
 
@@ -364,7 +360,7 @@ dcv_suit_teardown(void **state)
 
 	if (tctx == NULL)
 		fail_msg("Test not setup correctly");
-	assert_success(vos_pool_close(tctx->dvt_poh));
+	assert_success(dv_pool_close(tctx->dvt_poh));
 	ddb_teardown_vos(state);
 
 	return 0;
