@@ -222,6 +222,7 @@ class DaosBuild(DfuseTestBase):
             timeout = 10 * 60
             if cmd.startswith('scons'):
                 timeout = build_time * 60
+                timeout = 60
             start = time.time()
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)

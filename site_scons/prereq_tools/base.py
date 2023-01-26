@@ -649,7 +649,6 @@ class PreReqComponent():
         self._setup_path_var('GOPATH')
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
-        self._setup_parallel_build()
 
         if config_file is not None:
             self._configs = configparser.ConfigParser()
@@ -829,13 +828,6 @@ class PreReqComponent():
         if self.__check_only:
             # Restore the dry run state
             env.SetOption('no_exec', True)
-
-    def _setup_parallel_build(self):
-        """Set the parallel options for builds"""
-        # Multiple go jobs can be running at once via the -j option so limit each to 1 proc.
-        # This allows for compilation to continue on systems with limited processor resources where
-        # the number of go procs will be multiplied by jobs_opt.
-        self.__env["ENV"]["GOMAXPROCS"] = "1"
 
     def save_build_info(self):
         """Save build info to file for later use"""
