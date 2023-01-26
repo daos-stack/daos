@@ -218,8 +218,14 @@ chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, 
 	int               rc;
 
 	rc = bio_wal_set_ckp_id(store->stor_priv, chkpt_tx, chkpt_notify, ctx);
-	if (rc == -DER_ALREADY)
+	if (rc == -DER_ALREADY) {
+		/** Sometimes we may need to yield here to make progress such as when we need
+		 *  more DMA buffers to prepare entries.
+		 */
+		if (!ctx->cc_is_idle_fn())
+			ctx->cc_yield_fn(ctx);
 		goto done;
+	}
 
 	ctx->cc_wait_fn(ctx);
 done:

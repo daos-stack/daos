@@ -1944,17 +1944,19 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			page->pg_copying = 1;
 			rc = store->stor_ops->so_flush_prep(store, &chkpt_data->cd_store_iod,
 							    &chkpt_data->cd_fh);
-
-			/** Need to figure out what errors are possible here and how to handle
-			 *  them.  This is wrong but will suffice to get the system kicking
-			 */
-			D_ASSERT(rc == 0);
+			if (rc != 0) {
+				/** Just put the page back and break the loop */
+				page->pg_copying = 0;
+				d_list_add(&page->pg_link, &cache->ca_pgs_copying);
+				d_list_add(&chkpt_data->cd_link, &free_list);
+				break;
+			}
 
 			page->pg_last_checkpoint = page->pg_last_inflight;
 
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
-			/** Same comment as above.  Fix this later */
+			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
 
 			page->pg_copying = 0;
