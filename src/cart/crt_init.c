@@ -19,6 +19,46 @@ static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
 static void
+crt_lib_init(void) __attribute__((__constructor__));
+
+static void
+crt_lib_fini(void) __attribute__((__destructor__));
+
+/* Library initialization/constructor */
+static void
+crt_lib_init(void)
+{
+	int		rc;
+	uint64_t	start_rpcid;
+
+	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
+	D_ASSERT(rc == 0);
+
+	/*
+	 * avoid size mis-matching between client/server side
+	 * /see crt_proc_uuid_t().
+	 */
+	D_CASSERT(sizeof(uuid_t) == 16);
+
+	crt_gdata.cg_refcount = 0;
+	crt_gdata.cg_inited = 0;
+	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
+
+	d_srand(d_timeus_secdiff(0) + getpid());
+	start_rpcid = ((uint64_t)d_rand()) << 32;
+
+	crt_gdata.cg_rpcid = start_rpcid;
+	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+/* Library deinit */
+static void
+crt_lib_fini(void)
+{
+	D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);
+}
+
+static void
 dump_envariables(void)
 {
 	int	i;
@@ -118,6 +158,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	uint32_t	max_expect_size = 0;
 	uint32_t	max_unexpect_size = 0;
 	uint32_t	max_num_ctx = CRT_SRV_CONTEXT_NUM;
+	int		i;
 	int		rc;
 
 	rc = D_MUTEX_INIT(&prov_data->cpg_mutex, NULL);
@@ -174,6 +215,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
 
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
+		prov_data->cpg_used_idx[i] = false;
+
 	/* By default set number of secondary remote tags to 1 */
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
@@ -194,7 +238,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	mrc_enable = 0;
-	uint64_t	start_rpcid;
 	uint32_t	is_secondary;
 	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
@@ -203,30 +246,8 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	dump_envariables();
 
-	/*
-	 * avoid size mis-matching between client/server side
-	 * /see crt_proc_uuid_t().
-	 */
-	D_CASSERT(sizeof(uuid_t) == 16);
-
-	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to init cg_rwlock\n");
-		D_GOTO(exit, rc);
-	}
-
-	crt_gdata.cg_refcount = 0;
-	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
-
-	d_srand(d_timeus_secdiff(0) + getpid());
-	start_rpcid = ((uint64_t)d_rand()) << 32;
-
-	crt_gdata.cg_rpcid = start_rpcid;
-	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n", start_rpcid,
-		crt_gdata.cg_num_cores);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n",
+		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -336,7 +357,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 
 	gdata_init_flag = 1;
-exit:
 	return rc;
 }
 
@@ -895,11 +915,6 @@ crt_finalize(void)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-		rc = D_RWLOCK_DESTROY(&crt_gdata.cg_rwlock);
-		if (rc != 0) {
-			D_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
-			D_GOTO(out, rc);
-		}
 
 		/* allow the same program to re-initialize */
 		crt_gdata.cg_refcount = 0;

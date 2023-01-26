@@ -70,7 +70,6 @@ def build_tests(prereqs, env):
     # ftest
     SConscript('ftest/SConscript')
 
-
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'base_env_mpi', 'prereqs', 'dc_credit')
@@ -101,12 +100,13 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../common')])
     denv.AppendUnique(LIBPATH=[Dir('../client/api')])
     denv.AppendUnique(LIBPATH=[Dir('../cart')])
+    denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
 
-    libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid']
+    libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
 
     denv.d_program('simple_array', 'simple_array.c', LIBS=libs_client)
     denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)
-
+    denv.d_program('simple_dfs', 'simple_dfs.c', LIBS=libs_client)
 
 if __name__ == "SCons.Script":
     scons()

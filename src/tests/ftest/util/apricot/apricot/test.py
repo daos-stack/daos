@@ -1487,8 +1487,9 @@ class TestWithServers(TestWithoutServers):
                 labels = []
 
             # Destroy each pool found
-            # Elevate log_mask to DEBUG, then restore after pool destroy
-            manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
+            if len(labels) > 0:
+                self.log.info("Elevating engines log_mask before destroying found pools")
+                manager.dmg.server_set_logmasks("DEBUG", raise_exception=False)
 
             for label in labels:
                 try:
@@ -1497,7 +1498,9 @@ class TestWithServers(TestWithoutServers):
                 except CommandFailure as error:
                     error_list.append("Error destroying pool: {}".format(error))
 
-            manager.dmg.server_set_logmasks(raise_exception=False)
+            if len(labels) > 0:
+                self.log.info("Restoring engines log_mask after destroying found pools")
+                manager.dmg.server_set_logmasks(raise_exception=False)
 
         return error_list
 
