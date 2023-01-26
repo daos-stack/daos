@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -64,6 +65,8 @@ type Server struct {
 	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
+
+	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -155,6 +158,12 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
+	return cfg
+}
+
+// WithControlMetadata sets the control plane metadata.
+func (cfg *Server) WithControlMetadata(md storage.ControlMetadata) *Server {
+	cfg.Metadata = md
 	return cfg
 }
 
@@ -470,6 +479,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 	cfg.AccessPoints = newAPs
 
+	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
+		return FaultConfigControlMetadataNoPath
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -501,6 +514,8 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	cfgHasBdevs := false
 	cfgTargetCount := 0
 	for idx, ec := range cfg.Engines {
+		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.EngineIdx = uint(idx)
 		cfgTargetCount += ec.TargetCount
 
 		ec.ConvertLegacyStorage(log, idx)

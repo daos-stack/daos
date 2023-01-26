@@ -758,7 +758,8 @@ func MockEngineCfgTmpfs(numaID, ramdiskSize int, bdevTiers ...*storage.TierConfi
 func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 	for idx, ec := range ecs {
 		ec.WithStorageConfigOutputPath(fmt.Sprintf("/mnt/daos%d/daos_nvme.conf", idx)).
-			WithStorageVosEnv("NVME")
+			WithStorageVosEnv("NVME").
+			WithStorageIndex(uint32(idx))
 	}
 
 	return config.DefaultServer().
