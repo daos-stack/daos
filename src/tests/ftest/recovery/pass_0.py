@@ -36,7 +36,6 @@ class Pass0Test(TestWithServers):
         :avocado: tags=recovery,pass_0
         :avocado: tags=test_checker_on_admin_excluded
         """
-        errors = []
         dmg_command = self.get_dmg_command()
 
         # 1. Call dmg check enable.
@@ -79,8 +78,6 @@ class Pass0Test(TestWithServers):
         self.log.info("Restart stopped rank for cleanup.")
         dmg_command.system_start(ranks="1")
 
-        report_errors(test=self, errors=errors)
-
     def test_enable_disable_admin_excluded(self):
         """Test admin can enable and disable the rank state to AdminExcluded when the
         rank is down.
@@ -121,7 +118,7 @@ class Pass0Test(TestWithServers):
                     admin_excluded_found = True
                 break
         if not admin_excluded_found:
-            errors.append("Rank 1 state is not AdminExcluded! {}".format(rank_1_state))
+            self.fail("Rank 1 state is not AdminExcluded!: {}".format(rank_1_state))
 
         # 4. Verify that the checker can be run with AdminExcluded state.
         try:
