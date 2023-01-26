@@ -325,6 +325,24 @@ int dc_mgmt_net_get_num_srv_ranks(void)
 	return g_num_serv_ranks;
 }
 
+static int
+_split_env(char *env, char **name, char **value)
+{
+	char *sep;
+
+	if (strnlen(env, 1024) == 1024)
+		return -DER_INVAL;
+
+	sep = strchr(env, '=');
+	if (sep == NULL)
+		return -DER_INVAL;
+	*sep = '\0';
+	*name = env;
+	*value = sep + 1;
+
+	return 0;
+}
+
 /*
  * Get the CaRT network configuration for this client node
  * via the get_attach_info() dRPC.
@@ -345,6 +363,30 @@ int dc_mgmt_net_cfg(const char *name)
 	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
 	if (rc != 0)
 		return rc;
+
+	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
+		int i;
+		char *env = NULL;
+		char *v_name = NULL;
+		char *v_value = NULL;
+
+		for (i = 0; i < resp->client_net_hint->n_env_vars; i++) {
+			env = resp->client_net_hint->env_vars[i];
+			if (env == NULL)
+				continue;
+
+			rc = _split_env(env, &v_name, &v_value);
+			if (rc != 0) {
+				D_ERROR("invalid client env var: %s", env);
+				continue;
+			}
+
+			rc = setenv(v_name, v_value, 0);
+			if (rc != 0)
+				D_GOTO(cleanup, rc = d_errno2der(errno));
+			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
+		}
+	}
 
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
@@ -426,6 +468,34 @@ int dc_mgmt_net_cfg(const char *name)
 cleanup:
 	put_attach_info(&info, resp);
 
+	return rc;
+}
+
+int dc_mgmt_net_cfg_check(const char *name)
+{
+	int rc;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
+	Mgmt__GetAttachInfoResp *resp;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	if (rc != 0)
+		return rc;
+
+	/* Client may not set it if the server hasn't. */
+	if (info.srv_srx_set == -1) {
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+
+out:
+	put_attach_info(&info, resp);
 	return rc;
 }
 

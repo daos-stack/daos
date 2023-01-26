@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -55,6 +56,7 @@ type Server struct {
 	FaultPath           string                    `yaml:"fault_path,omitempty"`
 	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
 	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars       []string                  `yaml:"client_env_vars,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -63,6 +65,8 @@ type Server struct {
 	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
+
+	Metadata storage.ControlMetadata `yaml:"control_metadata,omitempty"`
 
 	// unused (?)
 	FaultCb      string `yaml:"fault_cb"`
@@ -123,6 +127,22 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 	return cfg
 }
 
+// WithFabricAuthKey sets the top-level fabric authorization key.
+func (cfg *Server) WithFabricAuthKey(key string) *Server {
+	cfg.Fabric.AuthKey = key
+	cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	for _, engine := range cfg.Engines {
+		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
+	}
+	return cfg
+}
+
+// WithClientEnvVars sets the environment variables to be sent to the client.
+func (cfg *Server) WithClientEnvVars(envVars []string) *Server {
+	cfg.ClientEnvVars = envVars
+	return cfg
+}
+
 // WithCrtCtxShareAddr sets the top-level CrtCtxShareAddr.
 func (cfg *Server) WithCrtCtxShareAddr(addr uint32) *Server {
 	cfg.Fabric.CrtCtxShareAddr = addr
@@ -138,6 +158,12 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	for _, engine := range cfg.Engines {
 		engine.Fabric.Update(cfg.Fabric)
 	}
+	return cfg
+}
+
+// WithControlMetadata sets the control plane metadata.
+func (cfg *Server) WithControlMetadata(md storage.ControlMetadata) *Server {
+	cfg.Metadata = md
 	return cfg
 }
 
@@ -328,6 +354,10 @@ func (cfg *Server) Load() error {
 		cfg.updateServerConfig(&cfg.Engines[i])
 	}
 
+	if cfg.Fabric.AuthKey != "" {
+		cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	}
+
 	return nil
 }
 
@@ -449,6 +479,10 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	}
 	cfg.AccessPoints = newAPs
 
+	if cfg.Metadata.DevicePath != "" && cfg.Metadata.Path == "" {
+		return FaultConfigControlMetadataNoPath
+	}
+
 	// A config without engines is valid when initially discovering hardware prior to adding
 	// per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -480,6 +514,8 @@ func (cfg *Server) Validate(log logging.Logger, hugePageSize int) (err error) {
 	cfgHasBdevs := false
 	cfgTargetCount := 0
 	for idx, ec := range cfg.Engines {
+		ec.Storage.ControlMetadata = cfg.Metadata
+		ec.Storage.EngineIdx = uint(idx)
 		cfgTargetCount += ec.TargetCount
 
 		ec.ConvertLegacyStorage(log, idx)

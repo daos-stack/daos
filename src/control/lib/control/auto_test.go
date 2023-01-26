@@ -1142,8 +1142,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: ib1,
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfg(t, 0),
-				MockEngineCfg(t, 1),
+				MockEngineCfg(0),
+				MockEngineCfg(1),
 			},
 		},
 		"missing scm on second numa": {
@@ -1227,8 +1227,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfg(t, 0, 0, 1, 2),
-				MockEngineCfg(t, 1, 3, 4, 5),
+				MockEngineCfg(0, 0, 1, 2),
+				MockEngineCfg(1, 3, 4, 5),
 			},
 		},
 		"dual tmpfs; single ssd per numa": {
@@ -1242,11 +1242,11 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(1)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(t, 0, 9, 0),
-				MockEngineCfgTmpfs(t, 1, 9, 1),
+				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0)),
+				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 1)),
 			},
 		},
-		"dual tmpfs; multiple ssds per numa": {
+		"dual tmpfs; three ssds per numa": {
 			scmCls:     storage.ClassRam,
 			memTotal:   humanize.GiByte * 25,
 			numaSet:    []int{0, 1},
@@ -1257,8 +1257,23 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(t, 0, 9, 0, 1, 2),
-				MockEngineCfgTmpfs(t, 1, 9, 3, 4, 5),
+				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+		},
+		"dual tmpfs; six ssds per numa": {
+			scmCls:     storage.ClassRam,
+			memTotal:   humanize.GiByte * 25,
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3, 4, 5)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(6, 7, 8, 9, 10, 11)...),
+			},
+			expCfgs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 9, mockBdevTier(0, 0, 1), mockBdevTier(0, 2, 3, 4, 5)),
+				MockEngineCfgTmpfs(1, 9, mockBdevTier(1, 6, 7), mockBdevTier(1, 8, 9, 10, 11)),
 			},
 		},
 		"vmd enabled; balanced nr ssds": {
@@ -1284,8 +1299,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(0).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:5d:05.5").
-							WithBdevDeviceRoles(storage.BdevRoleData),
+							WithBdevDeviceList("0000:5d:05.5"),
 					).
 					WithTargetCount(16).
 					WithHelperStreamCount(2),
@@ -1305,8 +1319,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 						storage.NewTierConfig().
 							WithNumaNodeIndex(1).
 							WithStorageClass(storage.ClassNvme.String()).
-							WithBdevDeviceList("0000:d7:07.1").
-							WithBdevDeviceRoles(storage.BdevRoleData),
+							WithBdevDeviceList("0000:d7:07.1"),
 					).
 					WithStorageNumaNodeIndex(1).
 					WithTargetCount(16).
@@ -1440,8 +1453,8 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 
 func TestControl_AutoConfig_genConfig(t *testing.T) {
 	defHpSizeKb := 2048
-	exmplEngineCfg0 := MockEngineCfg(t, 0, 0, 1, 2)
-	exmplEngineCfg1 := MockEngineCfg(t, 1, 3, 4, 5)
+	exmplEngineCfg0 := MockEngineCfg(0, 0, 1, 2)
+	exmplEngineCfg1 := MockEngineCfg(1, 3, 4, 5)
 
 	for name, tc := range map[string]struct {
 		accessPoints []string // list of access point host/ip addresses
@@ -1469,7 +1482,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
 			hpSize:       defHpSizeKb,
-			expCfg: MockServerCfg(t, exmplEngineCfg0.Fabric.Provider,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 				}).WithNrHugePages(8192).WithAccessPoints("hostX:10002"),
@@ -1481,7 +1494,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				exmplEngineCfg1,
 			},
 			hpSize: defHpSizeKb,
-			expCfg: MockServerCfg(t, exmplEngineCfg0.Fabric.Provider,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 					exmplEngineCfg1.WithHelperStreamCount(0),

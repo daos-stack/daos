@@ -176,7 +176,7 @@ func CreateDatabaseConfig(cfg *config.Server) (*raft.DatabaseConfig, error) {
 
 	raftDir := cfgGetRaftDir(cfg)
 	if raftDir == "" {
-		return nil, errors.New("raft directory not available (missing SCM in config?)")
+		return nil, errors.New("raft directory not available (missing SCM or control metadata in config?)")
 	}
 
 	return &raft.DatabaseConfig{
@@ -399,6 +399,7 @@ func (srv *server) setupGrpc() error {
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 		NetDevClass:     uint32(srv.netDevClass),
 		SrvSrxSet:       srxSetting,
+		EnvVars:         srv.cfg.ClientEnvVars,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 

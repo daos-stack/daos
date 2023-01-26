@@ -97,6 +97,10 @@ struct umem_store_ops {
 			   d_sg_list_t *sgl);
 	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
 			    d_sg_list_t *sgl);
+	int	(*so_flush_prep)(struct umem_store *store, struct umem_store_iod *iod,
+				 daos_handle_t *fh);
+	int	(*so_flush_copy)(daos_handle_t fh, d_sg_list_t *sgl);
+	int	(*so_flush_post)(daos_handle_t fh, int err);
 	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
 	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
 				 void *data_iod);

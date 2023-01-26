@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -551,7 +551,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	blk_hdr.th_magic = WAL_HDR_MAGIC;
 	blk_hdr.th_gen = si->si_header.wh_gen;
 	blk_hdr.th_id = tx->utx_id;
-	blk_hdr.th_tot_ents = umem_tx_act_nr(tx);
+	blk_hdr.th_tot_ents = umem_tx_act_nr(tx) + dc_arr->dca_nr;
 	blk_hdr.th_tot_payload = umem_tx_act_payload_sz(tx);
 
 	/* Initialize first entry block */
@@ -637,6 +637,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 			entry.te_off = act->ac_csum.addr;
 			entry.te_len = act->ac_csum.size;
 			entry.te_data = act->ac_csum.csum;
+			place_entry(&entry_blk, &entry);
 			break;
 		default:
 			D_ASSERTF(0, "Invalid opc %u\n", act->ac_opc);
@@ -663,7 +664,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 static inline uint64_t
 off2lba(struct wal_super_info *si, unsigned int blk_off)
 {
-	return (blk_off + WAL_HDR_BLKS) * si->si_header.wh_blk_bytes;
+	return (uint64_t)(blk_off + WAL_HDR_BLKS) * si->si_header.wh_blk_bytes;
 }
 
 struct wal_tx_desc {
@@ -1759,20 +1760,6 @@ bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id)
 out:
 	D_FREE(buf);
 	return rc;
-}
-
-int
-bio_meta_readv(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_readv(mc->mc_meta, bsgl, sgl);
-}
-
-int
-bio_meta_writev(struct bio_meta_context *mc, struct bio_sglist *bsgl, d_sg_list_t *sgl)
-{
-	D_ASSERT(mc->mc_meta != NULL);
-	return bio_writev(mc->mc_meta, bsgl, sgl);
 }
 
 void

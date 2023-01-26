@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,7 +45,34 @@ const (
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
+
+	ControlMetadataSubdir = "daos_control"
 )
+
+// ControlMetadata describes configuration options for control plane metadata storage on the
+// DAOS server.
+type ControlMetadata struct {
+	Path       string `yaml:"path,omitempty"`
+	DevicePath string `yaml:"device,omitempty"`
+}
+
+// Directory returns the full path to the directory where the control plane metadata is saved.
+func (cm ControlMetadata) Directory() string {
+	if cm.Path == "" {
+		return ""
+	}
+	return filepath.Join(cm.Path, ControlMetadataSubdir)
+}
+
+// EngineDirectory returns the full path to the directory where the per-engine metadata is saved.
+func (cm ControlMetadata) EngineDirectory(idx uint) string {
+	return ControlMetadataEngineDir(cm.Directory(), idx)
+}
+
+// HasPath returns true if the ControlMetadata path is set.
+func (cm ControlMetadata) HasPath() bool {
+	return cm.Path != ""
+}
 
 // Class indicates a specific type of storage.
 type Class string
@@ -323,11 +350,11 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 //
 // Role assignments will be decided based on the following rule set:
 //   - For 1 bdev tier, all roles will be assigned to that tier.
-//   - For 2 bdev tiers, WAL and Meta roles will be assigned to the first bdev tier and Data to
+//   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
 //     the second bdev tier.
 //   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
 //     second bdev tier and Data to all remaining bdev tiers.
-//   - If the scm tier is of class dcpm, the first bdev tier should have the Data role only.
+//   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) assignBdevTierRoles() error {
 	scs := tcs.ScmConfigs()
@@ -373,8 +400,8 @@ func (tcs TierConfigs) assignBdevTierRoles() error {
 	case 1:
 		tcs[1].WithBdevDeviceRoles(BdevRoleAll)
 	case 2:
-		tcs[1].WithBdevDeviceRoles(BdevRoleWAL | BdevRoleMeta)
-		tcs[2].WithBdevDeviceRoles(BdevRoleData)
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData)
 	default:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
@@ -919,13 +946,15 @@ type SpdkRpcServer struct {
 }
 
 type Config struct {
-	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool          `yaml:"-"`
-	NumaNodeIndex    uint          `yaml:"-"`
-	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
-	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
+	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
+	EngineIdx        uint            `yaml:"-"`
+	Tiers            TierConfigs     `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string          `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string          `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool            `yaml:"-"`
+	NumaNodeIndex    uint            `yaml:"-"`
+	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {
@@ -957,12 +986,12 @@ func (c *Config) Validate() error {
 	}
 	c.Tiers = pruned
 
+	if len(c.Tiers) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
 	scmCfgs := c.Tiers.ScmConfigs()
 	bdevCfgs := c.Tiers.BdevConfigs()
-
-	if len(scmCfgs) == 0 {
-		return errors.New("missing scm storage tier in config")
-	}
 
 	// set persistent location for engine bdev config file to be consumed by provider
 	// backend, set to empty when no devices specified
@@ -970,7 +999,16 @@ func (c *Config) Validate() error {
 		c.ConfigOutputPath = ""
 		return nil
 	}
-	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
+	var nvmeConfigRoot string
+	if c.ControlMetadata.HasPath() {
+		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
+	} else if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	} else {
+		nvmeConfigRoot = scmCfgs[0].Scm.MountPoint
+	}
+	c.ConfigOutputPath = filepath.Join(nvmeConfigRoot, BdevOutConfName)
 
 	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
 		return FaultBdevConfigTypeMismatch

@@ -70,10 +70,14 @@ func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storag
 
 // NewStorageControlService returns an initialized *StorageControlService
 func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(engineCfgs) > 0 {
+		topCfg.ControlMetadata = engineCfgs[0].Storage.ControlMetadata
+	}
 	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
+		storage.DefaultProvider(log, 0, topCfg),
 		common.GetMemInfo,
 	)
 }
@@ -84,7 +88,7 @@ func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Confi
 	return newStorageControlService(log, engineCfgs,
 		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
-		}, sys, scm, bdev),
+		}, sys, scm, bdev, nil),
 		func() (*common.MemInfo, error) {
 			return nil, nil
 		},

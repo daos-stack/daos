@@ -11,6 +11,7 @@
 struct stats_transient {
 	uint64_t heap_run_allocated;
 	uint64_t heap_run_active;
+	uint64_t heap_prev_pval; /* previous persisted value of curr allocated */
 };
 
 struct stats_persistent {
@@ -55,5 +56,6 @@ struct dav_obj;
 
 struct stats *stats_new(struct dav_obj *pop);
 void stats_delete(struct dav_obj *pop, struct stats *stats);
+void stats_persist(struct dav_obj *pop, struct stats *s);
 
 #endif /* __DAOS_COMMON_STATS_H */

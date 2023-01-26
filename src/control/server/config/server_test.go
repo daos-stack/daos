@@ -40,6 +40,7 @@ const (
 
 var (
 	defConfigCmpOpts = []cmp.Option{
+		cmpopts.SortSlices(func(x, y string) bool { return x < y }),
 		cmpopts.IgnoreUnexported(
 			security.CertificateConfig{},
 		),
@@ -216,6 +217,10 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// possible to construct an identical configuration with the helpers.
 	constructed := DefaultServer().
 		WithControlPort(10001).
+		WithControlMetadata(storage.ControlMetadata{
+			Path:       "/home/daos_server/control_meta",
+			DevicePath: "/dev/sdb1",
+		}).
 		WithBdevExclude("0000:81:00.1").
 		WithDisableVFIO(true).   // vfio enabled by default
 		WithDisableVMD(true).    // vmd enabled by default
@@ -233,6 +238,8 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
 		WithFaultPath("/vcdu0/rack1/hostname").
+		WithClientEnvVars([]string{"foo=bar"}).
+		WithFabricAuthKey("foo:bar").
 		WithHyperthreads(true) // hyper-threads disabled by default
 
 	// add engines explicitly to test functionality applied in WithEngines()
@@ -258,6 +265,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(0).
@@ -287,6 +295,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithBypassHealthChk(&bypass).
@@ -316,12 +325,15 @@ func TestServerConfig_Validation(t *testing.T) {
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
 
+	testMetadataDir := filepath.Join(testDir, "control_md")
+
 	baseCfg := func() *Server {
 		config, err := mockConfigFromFile(t, testFile)
 		if err != nil {
 			t.Fatalf("failed to load %s: %s", testFile, err)
 		}
-		return config
+		// Clear the control metadata by default. We'll add it manually in tests that use it.
+		return config.WithControlMetadata(storage.ControlMetadata{})
 	}
 	defaultEngineCfg := func() *engine.Config {
 		return engine.NewConfig().
@@ -700,6 +712,164 @@ func TestServerConfig_Validation(t *testing.T) {
 							WithScmMountPoint("/foo"),
 					),
 				),
+		},
+		"control metadata multi-engine": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+					WithEngines(
+						defaultEngineCfg().
+							WithFabricInterfacePort(1234).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages().
+									WithScmRamdiskSize(16),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f"),
+							),
+						defaultEngineCfg().
+							WithFabricInterfacePort(5678).
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/2").
+									WithStorageClass("ram").
+									WithScmDisableHugepages().
+									WithScmRamdiskSize(16),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+									WithBdevBusidRange("0x90-0x9f"),
+							),
+					)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path:       testMetadataDir,
+					DevicePath: "/dev/something",
+				}).
+				WithNrHugePages(8192).
+				WithEngines(
+					defaultEngineCfg().
+						WithFabricInterfacePort(1234).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/1").
+								WithStorageClass("ram").
+								WithScmDisableHugepages().
+								WithScmRamdiskSize(16),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+								WithBdevBusidRange("0x80-0x8f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine0",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+					defaultEngineCfg().
+						WithStorageIndex(1).
+						WithFabricInterfacePort(5678).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmMountPoint("/mnt/daos/2").
+								WithStorageClass("ram").
+								WithScmDisableHugepages().
+								WithScmRamdiskSize(16),
+							storage.NewTierConfig().
+								WithStorageClass("nvme").
+								WithBdevDeviceList("0000:91:00.0", "0000:92:00.0").
+								WithBdevBusidRange("0x90-0x9f").
+								WithBdevDeviceRoles(storage.BdevRoleAll),
+						).
+						WithStorageVosEnv("NVME").
+						WithStorageControlMetadataPath(testMetadataDir).
+						WithStorageControlMetadataDevice("/dev/something").
+						WithStorageConfigOutputPath(filepath.Join(
+							testMetadataDir,
+							storage.ControlMetadataSubdir,
+							"engine1",
+							"daos_nvme.conf",
+						)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"control metadata has path only": {
+			extraConfig: func(c *Server) *Server {
+				return c.
+					WithControlMetadata(storage.ControlMetadata{
+						Path: testMetadataDir,
+					}).
+					WithEngines(
+						defaultEngineCfg().
+							WithStorage(
+								storage.NewTierConfig().
+									WithScmMountPoint("/mnt/daos/1").
+									WithStorageClass("ram").
+									WithScmDisableHugepages().
+									WithScmRamdiskSize(16),
+								storage.NewTierConfig().
+									WithStorageClass("nvme").
+									WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+									WithBdevBusidRange("0x80-0x8f"),
+							),
+					)
+			},
+			expConfig: baseCfg().
+				WithAccessPoints("hostname1:10001").
+				WithControlMetadata(storage.ControlMetadata{
+					Path: testMetadataDir,
+				}).
+				WithNrHugePages(4096).
+				WithEngines(defaultEngineCfg().
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmMountPoint("/mnt/daos/1").
+							WithStorageClass("ram").
+							WithScmDisableHugepages().
+							WithScmRamdiskSize(16),
+						storage.NewTierConfig().
+							WithStorageClass("nvme").
+							WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
+							WithBdevBusidRange("0x80-0x8f").
+							WithBdevDeviceRoles(storage.BdevRoleAll),
+					).
+					WithStorageVosEnv("NVME").
+					WithStorageControlMetadataPath(testMetadataDir).
+					WithStorageControlMetadataDevice("").
+					WithStorageConfigOutputPath(filepath.Join(
+						testMetadataDir,
+						storage.ControlMetadataSubdir,
+						"engine0",
+						"daos_nvme.conf",
+					)), // NVMe conf should end up in metadata dir
+				),
+		},
+		"control metadata has device only": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlMetadata(storage.ControlMetadata{
+					DevicePath: "/dev/sdb0",
+				}).
+					WithEngines(defaultEngineCfg().
+						WithStorage(
+							storage.NewTierConfig().
+								WithStorageClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/foo"),
+						))
+			},
+			expErr: FaultConfigControlMetadataNoPath,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

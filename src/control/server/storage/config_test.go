@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -328,7 +328,7 @@ func TestStorage_BdevDeviceRoles_FromYAML(t *testing.T) {
 	}{
 		"section missing": {
 			input:          ``,
-			expValidateErr: errors.New("missing scm storage tier"),
+			expValidateErr: errors.New("no storage tiers"),
 		},
 		"unspecified roles; implicit role assignment; one bdev tier": {
 			input: `
@@ -374,12 +374,12 @@ storage:
 					WithTier(1).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:80:00.0").
-					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleWAL),
+					WithBdevDeviceRoles(BdevRoleWAL),
 				NewTierConfig().
 					WithTier(2).
 					WithStorageClass("nvme").
 					WithBdevDeviceList("0000:81:00.0", "0000:82:00.0").
-					WithBdevDeviceRoles(BdevRoleData),
+					WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData),
 			},
 		},
 		"unspecified roles; implicit role assignment; three bdev tiers": {
@@ -883,6 +883,77 @@ acceleration:
 			if diff := cmp.Diff(strings.TrimLeft(tc.expOut, "\n"), string(bytes), defConfigCmpOpts()...); diff != "" {
 				t.Fatalf("bad yaml output (-want +got):\n%s", diff)
 			}
+		})
+	}
+}
+
+func TestStorage_ControlMetadata_Directory(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cm        ControlMetadata
+		expResult string
+	}{
+		"empty": {},
+		"path": {
+			cm: ControlMetadata{
+				Path: "/some/thing",
+			},
+			expResult: "/some/thing/daos_control",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.cm.Directory(), "")
+		})
+	}
+}
+
+func TestStorage_ControlMetadata_EngineDirectory(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cm        ControlMetadata
+		idx       uint
+		expResult string
+	}{
+		"empty": {},
+		"path": {
+			cm: ControlMetadata{
+				Path: "/some/thing",
+			},
+			idx:       123,
+			expResult: "/some/thing/daos_control/engine123",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.cm.EngineDirectory(tc.idx), "")
+		})
+	}
+}
+
+func TestStorage_ControlMetadata_HasPath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cm        ControlMetadata
+		expResult bool
+	}{
+		"empty": {},
+		"path": {
+			cm: ControlMetadata{
+				Path: "/some/thing",
+			},
+			expResult: true,
+		},
+		"path and device": {
+			cm: ControlMetadata{
+				Path:       "/some/thing",
+				DevicePath: "/other/thing",
+			},
+			expResult: true,
+		},
+		"device only": {
+			cm: ControlMetadata{
+				DevicePath: "/some/thing",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.cm.HasPath(), "")
 		})
 	}
 }
