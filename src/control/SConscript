@@ -69,7 +69,7 @@ def install_go_bin(env, name, libs=None, install_man=False):
     libs.extend(['daos_common', 'cart', 'gurt'])
 
     target = env.d_run_command(name, sources, libs,
-                               f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
+                               f'cd {gosrc}; {env.d_go_bin} build -x -mod vendor '
                                + f'-ldflags "{go_ldflags()}" '
                                + f'{get_build_flags(env)} '
                                + f'{get_build_tags(env)} '
@@ -126,6 +126,7 @@ def scons():
                              "-L$BUILD_DIR/src/client/dfs "
                              "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
+        # Needs spdk.
         install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
                        install_man=True)
 
@@ -136,6 +137,7 @@ def scons():
 
     denv.AppendENVPath("CGO_CFLAGS", denv.subst("$_CPPINCFLAGS"), sep=" ")
 
+    # Needed above for client.
     SConscript('lib/spdk/SConscript', exports='denv')
 
     denv.d_add_rpaths("..", True, True)

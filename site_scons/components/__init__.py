@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -91,10 +91,13 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
+    print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
-    return config.TryCompile(code, ".c")
+    rc = config.TryCompile(code, ".c")
+    print('yes' if rc else 'no')
+    return rc
 
 
 def define_mercury(reqs):

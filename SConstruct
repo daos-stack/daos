@@ -386,6 +386,15 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         Exit(0)
 
 
+# Environment variables that are kept when SCONS_ENV=minimal (the default).
+MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
+               'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE')
+
+# Environment variables that are also kept when LD_PRELOAD is set.
+PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
+               'DD_SUBSYS', 'PATH')
+
+
 def scons():
     """Perform the build"""
 
@@ -405,23 +414,22 @@ def scons():
     if deps_env.get('SCONS_ENV') == 'full':
         deps_env.Replace(ENV=os.environ)
     else:
+
+        def _copy_env(var_list):
+            for var in var_list:
+                value = os.environ.get(var)
+                if value:
+                    print(f'Setting {var}={value}')
+                    real_env[var] = value
+
         real_env = deps_env['ENV']
 
-        for var in ['HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
-                    'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE']:
-            value = os.environ.get(var)
-            if value:
-                real_env[var] = value
+        _copy_env(MINIMAL_ENV)
 
         # This is used for the daos_build test, we could move to using SCONS_ENV=full instead to
         # avoid this logic however this still has known issues.
         if 'LD_PRELOAD' in os.environ:
-            real_env['LD_PRELOAD'] = os.environ['LD_PRELOAD']
-
-            for var in ['D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK', 'DD_SUBSYS']:
-                value = os.environ.get(var)
-                if value:
-                    real_env[var] = value
+            _copy_env(PRELOAD_ENV)
 
         deps_env.Replace(ENV=real_env)
 

@@ -211,9 +211,9 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
-                # 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                'scons -C {} --jobs {} --build-deps=only SCONS_ENV=full'.format(build_dir,
-                                                                                build_jobs),
+                'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
+                # 'scons -C {} --jobs {} --build-deps=only SCONS_ENV=full'.format(build_dir,
+                #                                                                 build_jobs),
                 'cat {}/daos.conf'.format(build_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
@@ -253,7 +253,6 @@ class DaosBuild(DfuseTestBase):
             self.log.error('BuildDaos Test Failed')
 
             if cmd.startswith('scons'):
-                general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
                 general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                                        timeout=30)
             if intercept:
