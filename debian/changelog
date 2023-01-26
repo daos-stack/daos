@@ -1,3 +1,9 @@
+daos (2.2.0-8) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  *  Update libfabric to 1.17.0
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com> Thu, Jan 26 2023 12:15:00 - 0100
+
 daos (2.2.0-7) unstable; urgency=medium
   [ Joseph Moore ]
   * Update Mercury version to 2.2.0-6

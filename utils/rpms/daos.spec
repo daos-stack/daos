@@ -4,7 +4,7 @@
 %define sysctl_script_name 10-daos_server.conf
 
 %global mercury_version 2.2.0-6%{?dist}
-%global libfabric_version 1.15.1-1
+%global libfabric_version 1.17.0-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.2.0
-Release:       7%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -571,6 +571,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jan 26 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.2.0-8
+- Test upgrade of libfabric to 1.17.0
+
 * Mon Jan 23 2023 Joseph G. Moore <joseph.moore@intel.com> 2.2.0-7
 - Update Mercury to 2.2.0-6
 
