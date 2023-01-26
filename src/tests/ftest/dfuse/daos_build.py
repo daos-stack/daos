@@ -153,7 +153,7 @@ class DaosBuild(DfuseTestBase):
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
-            build_time = 6
+            build_time = 60
             cont_attrs['dfuse-data-cache'] = True
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -162,7 +162,7 @@ class DaosBuild(DfuseTestBase):
                 build_time = 120
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time = 6
+            build_time = 60
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
@@ -212,8 +212,6 @@ class DaosBuild(DfuseTestBase):
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                # 'scons -C {} --jobs {} --build-deps=only SCONS_ENV=full'.format(build_dir,
-                #                                                                 build_jobs),
                 'cat {}/daos.conf'.format(build_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
@@ -222,7 +220,6 @@ class DaosBuild(DfuseTestBase):
             timeout = 10 * 60
             if cmd.startswith('scons'):
                 timeout = build_time * 60
-                timeout = 60
             start = time.time()
             ret_code = general_utils.run_pcmd(self.hostlist_clients, command, verbose=True,
                                               timeout=timeout, expect_rc=0)
