@@ -35,7 +35,7 @@ class VmdLedStatus(OSAUtils):
             self.fail("dmg command failed: {}".format(details))
 
         data = json.loads(result.stdout_text)
-        resp = result['response']
+        resp = data['response']
         if data['error'] or len(resp['host_errors']) > 0:
             if data['error']:
                 self.fail("dmg command failed: {}".format(data['error']))
