@@ -52,7 +52,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
-TEST_EXPECT_CORE_FILES = ["./harness/core_files.py", "./dfuse/daos_build.py"]
+TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -2655,6 +2655,12 @@ class Launch():
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
+
+        # One of the dfuse tests intermittently creates a core file which is known so make a
+        # special case for that test.
+        if str(test) == './dfuse/daos_build.py' and './conftes' in core_file_processing.exe_names:
+            logger.info('conftest core file exists from daos_build test, ignoring')
+            corefiles_processed = corefiles_processed - 1
 
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"

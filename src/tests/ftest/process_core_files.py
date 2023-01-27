@@ -43,6 +43,7 @@ class CoreFileProcessing():
         from util.distro_utils import detect
 
         self.log = log
+        self.exe_names = set()
         self.distro_info = detect()
 
     def process_core_files(self, directory, delete, test=None):
@@ -201,6 +202,7 @@ class CoreFileProcessing():
             find_char = " "
         exe_name = cmd[:cmd.find(find_char)]
         self.log.debug("  executable name: %s", exe_name)
+        self.exe_names.add(exe_name)
         return exe_name
 
     def install_debuginfo_packages(self):
