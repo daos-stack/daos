@@ -7,11 +7,24 @@
 #include <daos/common.h>
 #include "ddb_common.h"
 #include "ddb_parse.h"
-#include "ddb_cmd_options.h"
+#include "ddb.h"
 #include "ddb_vos.h"
 #include "ddb_printer.h"
+#include "daos.h"
 
 #define ilog_path_required_error_message "Path to object, dkey, or akey required\n"
+#define error_msg_write_mode_only "Can only modify the VOS tree in 'write mode'\n"
+
+int
+ddb_run_version(struct ddb_ctx *ctx)
+{
+	ddb_printf(ctx, "ddb version %d.%d.%d\n",
+		   DAOS_VERSION_MAJOR,
+		   DAOS_VERSION_MINOR,
+		   DAOS_VERSION_FIX);
+
+	return 0;
+}
 
 int
 ddb_run_help(struct ddb_ctx *ctx)
@@ -31,6 +44,11 @@ ddb_run_quit(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
+	if (daos_handle_is_valid(ctx->dc_poh)) {
+		ddb_error(ctx, "Must close pool before can open another\n");
+		return -DER_EXIST;
+	}
+	ctx->dc_write_mode = opt->write_mode;
 	return dv_pool_open(opt->path, &ctx->dc_poh);
 }
 
@@ -38,11 +56,14 @@ int ddb_run_close(struct ddb_ctx *ctx)
 {
 	int rc;
 
-	if (daos_handle_is_inval(ctx->dc_poh))
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "No pool open to close\n");
 		return 0;
+	}
 
 	rc = dv_pool_close(ctx->dc_poh);
 	ctx->dc_poh = DAOS_HDL_INVAL;
+	ctx->dc_write_mode = false;
 
 	return rc;
 }
@@ -153,6 +174,10 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path_builder vtp = {0};
 	struct ls_ctx lsctx = {0};
 
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		return -DER_NONEXIST;
+	}
 	rc = init_path(ctx->dc_poh, opt->path, &vtp);
 	if (!SUCCESS(rc))
 		return rc;
@@ -181,7 +206,7 @@ print_superblock_cb(void *cb_arg, struct ddb_superblock *sb)
 }
 
 int
-ddb_run_dump_superblock(struct ddb_ctx *ctx)
+ddb_run_superblock_dump(struct ddb_ctx *ctx)
 {
 	int rc;
 
@@ -198,6 +223,25 @@ struct dump_value_args {
 	struct dv_tree_path		*dva_vtp;
 	char				*dva_dst_path;
 };
+
+static int
+print_value_cb(void *cb_args, d_iov_t *value)
+{
+	struct dump_value_args *args = cb_args;
+	struct ddb_ctx *ctx = args->dva_ctx;
+	char buf[256];
+
+	if (value->iov_len == 0) {
+		ddb_print(ctx, "No value at: ");
+		vtp_print(ctx, args->dva_vtp, true);
+		return 0;
+	}
+
+	ddb_iov_to_printable_buf(value, buf, ARRAY_SIZE(buf));
+	ddb_printf(ctx, "Value (size: %lu):\n", value->iov_len);
+	ddb_printf(ctx, "%s\n", buf);
+	return 0;
+}
 
 static int
 write_file_value_cb(void *cb_args, d_iov_t *value)
@@ -220,18 +264,15 @@ write_file_value_cb(void *cb_args, d_iov_t *value)
 }
 
 int
-ddb_run_dump_value(struct ddb_ctx *ctx, struct dump_value_options *opt)
+ddb_run_value_dump(struct ddb_ctx *ctx, struct value_dump_options *opt)
 {
 	struct dv_tree_path_builder	vtp = {.vtp_poh = ctx->dc_poh};
 	struct dump_value_args		dva = {0};
+	dv_dump_value_cb		cb = NULL;
 	int				rc;
 
 	if (!opt->path) {
 		ddb_error(ctx, "A VOS path to dump is required.\n");
-		return -DER_INVAL;
-	}
-	if (!opt->dst) {
-		ddb_error(ctx, "A destination path is required.\n");
 		return -DER_INVAL;
 	}
 
@@ -247,10 +288,15 @@ ddb_run_dump_value(struct ddb_ctx *ctx, struct dump_value_options *opt)
 		return -DER_INVAL;
 	}
 
+	if (opt->dst && strlen(opt->dst) > 0)
+		cb = write_file_value_cb;
+	else
+		cb = print_value_cb;
+
 	dva.dva_dst_path = opt->dst;
 	dva.dva_ctx = ctx;
 	dva.dva_vtp = &vtp.vtp_path;
-	rc = dv_dump_value(ctx->dc_poh, &vtp.vtp_path, write_file_value_cb, &dva);
+	rc = dv_dump_value(ctx->dc_poh, &vtp.vtp_path, cb, &dva);
 	ddb_vtp_fini(&vtp);
 
 	return rc;
@@ -267,7 +313,7 @@ dump_ilog_entry_cb(void *cb_arg, struct ddb_ilog_entry *entry)
 }
 
 int
-ddb_run_dump_ilog(struct ddb_ctx *ctx, struct dump_ilog_options *opt)
+ddb_run_ilog_dump(struct ddb_ctx *ctx, struct ilog_dump_options *opt)
 {
 	struct dv_tree_path_builder	 vtpb = {0};
 	struct dv_tree_path		*vtp = &vtpb.vtp_path;
@@ -342,14 +388,13 @@ committed_cb(struct dv_dtx_committed_entry *entry, void *cb_arg)
 }
 
 int
-ddb_run_dump_dtx(struct ddb_ctx *ctx, struct dump_dtx_options *opt)
+ddb_run_dtx_dump(struct ddb_ctx *ctx, struct dtx_dump_options *opt)
 {
 	struct dv_tree_path_builder	vtp;
 	int				rc;
 	daos_handle_t			coh;
 	bool				both = !(opt->committed ^ opt->active);
 	struct dtx_cb_args	args = {.ctx = ctx, .entry_count = 0};
-
 
 	rc = init_path(ctx->dc_poh, opt->path, &vtp);
 	if (!SUCCESS(rc))
@@ -401,6 +446,11 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 	struct dv_tree_path_builder	vtpb;
 	int				rc;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	rc = init_path(ctx->dc_poh, opt->path, &vtpb);
 
 	if (!SUCCESS(rc))
@@ -424,12 +474,17 @@ ddb_run_rm(struct ddb_ctx *ctx, struct rm_options *opt)
 }
 
 int
-ddb_run_load(struct ddb_ctx *ctx, struct load_options *opt)
+ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 {
 	struct dv_tree_path_builder	pb;
 	d_iov_t				iov = {0};
 	size_t				file_size;
 	int				rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	rc = init_path(ctx->dc_poh, opt->dst, &pb);
 	if (rc == -DER_NONEXIST) {
@@ -497,6 +552,11 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 	int				 rc;
 	struct dv_tree_path		*vtp = &vtpb.vtp_path;
 
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
+
 	if (path == NULL) {
 		ddb_error(ctx, ilog_path_required_error_message);
 		return -DER_INVAL;
@@ -543,24 +603,29 @@ process_ilog_op(struct ddb_ctx *ctx, char *path, enum ddb_ilog_op op)
 }
 
 int
-ddb_run_rm_ilog(struct ddb_ctx *ctx, struct rm_ilog_options *opt)
+ddb_run_ilog_clear(struct ddb_ctx *ctx, struct ilog_clear_options *opt)
 {
 	return process_ilog_op(ctx, opt->path, DDB_ILOG_OP_ABORT);
 }
 
 int
-ddb_run_commit_ilog(struct ddb_ctx *ctx, struct commit_ilog_options *opt)
+ddb_run_ilog_commit(struct ddb_ctx *ctx, struct ilog_commit_options *opt)
 {
 	return process_ilog_op(ctx, opt->path, DDB_ILOG_OP_PERSIST);
 }
 
 int
-ddb_run_clear_cmt_dtx(struct ddb_ctx *ctx, struct clear_cmt_dtx_options *opt)
+ddb_run_dtx_cmt_clear(struct ddb_ctx *ctx, struct dtx_cmt_clear_options *opt)
 {
 	struct dv_tree_path_builder	 vtpb = {0};
 	struct dv_tree_path		*vtp = &vtpb.vtp_path;
 	daos_handle_t			 coh = {0};
 	int				 rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	if (opt->path == NULL) {
 		ddb_error(ctx, "path is required\n");
@@ -619,9 +684,9 @@ ddb_run_smd_sync(struct ddb_ctx *ctx, struct smd_sync_options *opt)
 		return -DER_INVAL;
 	}
 
-	if (opt->nvme_conf != NULL)
+	if (opt->nvme_conf != NULL && strlen(opt->nvme_conf) > 0)
 		strncpy(nvme_conf, opt->nvme_conf, ARRAY_SIZE(nvme_conf) - 1);
-	if (opt->db_path != NULL)
+	if (opt->db_path != NULL && strlen(opt->db_path) > 0)
 		strncpy(db_path, opt->db_path, ARRAY_SIZE(db_path) - 1);
 
 	ddb_printf(ctx, "Using nvme config file: '%s' and smd db path: '%s'\n", nvme_conf, db_path);
@@ -651,7 +716,7 @@ dump_vea_cb(void *cb_arg, struct vea_free_extent *vfe)
 }
 
 int
-ddb_run_dump_vea(struct ddb_ctx *ctx)
+ddb_run_vea_dump(struct ddb_ctx *ctx)
 {
 	struct dump_vea_cb_args args = {.dva_ctx = ctx, .dva_count = 0};
 	int			rc;
@@ -728,11 +793,16 @@ verify_free(struct ddb_ctx *ctx, uint64_t offset, uint32_t blk_cnt)
 }
 
 int
-ddb_run_update_vea(struct ddb_ctx *ctx, struct update_vea_options *opt)
+ddb_run_vea_update(struct ddb_ctx *ctx, struct vea_update_options *opt)
 {
 	uint64_t				offset;
 	uint32_t				blk_cnt;
 	int					rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	offset = parse_uint32_t(opt->offset);
 	if (offset <= 0) {
@@ -810,10 +880,15 @@ dtx_modify_fini(struct dtx_modify_args *args)
 }
 
 int
-ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt)
+ddb_run_dtx_act_commit(struct ddb_ctx *ctx, struct dtx_act_commit_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
 	if (!SUCCESS(rc))
@@ -834,10 +909,15 @@ ddb_run_dtx_commit(struct ddb_ctx *ctx, struct dtx_commit_options *opt)
 	return rc;
 }
 
-int ddb_run_dtx_abort(struct ddb_ctx *ctx, struct dtx_abort_options *opt)
+int ddb_run_dtx_act_abort(struct ddb_ctx *ctx, struct dtx_act_abort_options *opt)
 {
 	struct dtx_modify_args	args = {0};
 	int			rc;
+
+	if (!ctx->dc_write_mode) {
+		ddb_error(ctx, error_msg_write_mode_only);
+		return -DER_INVAL;
+	}
 
 	rc = dtx_modify_init(ctx, opt->path, opt->dtx_id, &args);
 	if (!SUCCESS(rc))

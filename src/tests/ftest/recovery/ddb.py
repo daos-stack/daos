@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,10 +66,10 @@ class DdbTest(TestWithServers):
         6. Restart the server for the cleanup.
         7. Reset the container and the pool to prepare for the cleanup.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_ls
+        :avocado: tags=ddb_cmd,test_recovery_ddb_ls
         """
         # Create a pool and a container.
         self.add_pool()
@@ -198,7 +198,7 @@ class DdbTest(TestWithServers):
                 if self.random_akey not in actual_akey:
                     msg = ("Unexpected akey! obj_index = {}; dkey_index = {}; "
                            "Expected = {}; Actual = {}").format(
-                               obj_index, dkey_index, self.random_akey, actual_akey)
+                        obj_index, dkey_index, self.random_akey, actual_akey)
                     errors.append(msg)
 
                 # Verify akey size.
@@ -207,7 +207,7 @@ class DdbTest(TestWithServers):
                 if len(akey_string) != akey_size:
                     msg = ("Wrong akey size! obj_index = {}; dkey_index = {}; "
                            "akey = {}; akey size = {}").format(
-                               obj_index, dkey_index, akey_string, akey_size)
+                        obj_index, dkey_index, akey_string, akey_size)
                     errors.append(msg)
 
         # Verify there is one akey for every dkey.
@@ -271,10 +271,10 @@ class DdbTest(TestWithServers):
         17. Call "daos container list-objects <pool_uuid> <cont_uuid>" to verify that the
         object was removed.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_rm
+        :avocado: tags=ddb_cmd,test_recovery_ddb_rm
         """
         # 1. Create a pool and a container. Insert objects, dkeys, and akeys.
         self.add_pool(connect=True)
@@ -406,7 +406,7 @@ class DdbTest(TestWithServers):
         self.log.info("##################")
 
     def test_recovery_ddb_load(self):
-        """Test ddb load.
+        """Test ddb value_load.
 
         1. Create a pool and a container.
         2. Insert one object with one dkey with the API.
@@ -417,10 +417,10 @@ class DdbTest(TestWithServers):
         7. Reset the object, container, and pool to use the API.
         8. Verify the data in the akey with single_fetch().
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_load
+        :avocado: tags=ddb_cmd,test_recovery_ddb_load
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
@@ -468,10 +468,11 @@ class DdbTest(TestWithServers):
                 mkdir=False)
         except DaosTestError as error:
             raise CommandFailure(
-                "ERROR: Copying new_data.txt to {}: {}".format(host, error)) from error
+                "ERROR: Copying new_data.txt to {0}: {1}".format(host, error)) \
+                from error
 
         # The file with the new data is ready. Run ddb load.
-        ddb_command.load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
+        ddb_command.value_load(component_path="[0]/[0]/[0]/[0]", load_file_path=load_file_path)
 
         # 6. Restart the server.
         dmg_command.system_start()
@@ -513,10 +514,10 @@ class DdbTest(TestWithServers):
         7. Restart the server for the cleanup.
         8. Reset the object, container, and pool to prepare for the cleanup.
 
-        :avocado: tags=all,weekly_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb,test_recovery_ddb_dump_value
+        :avocado: tags=ddb_cmd,test_recovery_ddb_dump_value
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
@@ -543,10 +544,10 @@ class DdbTest(TestWithServers):
 
         # 5. Dump the two akeys to files.
         akey1_file_path = os.path.join(self.test_dir, "akey1.txt")
-        ddb_command.dump_value(
+        ddb_command.value_dump(
             component_path="[0]/[0]/[0]/[0]", out_file_path=akey1_file_path)
         akey2_file_path = os.path.join(self.test_dir, "akey2.txt")
-        ddb_command.dump_value(
+        ddb_command.value_dump(
             component_path="[0]/[0]/[0]/[1]", out_file_path=akey2_file_path)
 
         # Copy them from remote server node to local test node.
@@ -582,7 +583,7 @@ class DdbTest(TestWithServers):
                 actual_akey2_data not in str_data_list:
             msg = ("Unexpected dumped value! Dumped akey data 1 = {}; "
                    "Dumped akey data 2 = {}; Expected data list = {}").format(
-                       actual_akey1_data, actual_akey2_data, str_data_list)
+                actual_akey1_data, actual_akey2_data, str_data_list)
             errors.append(msg)
 
         # 7. Restart the server for the cleanup.
