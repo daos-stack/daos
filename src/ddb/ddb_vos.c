@@ -5,7 +5,6 @@
  */
 
 #include <string.h>
-#include <libpmemobj/types.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -37,7 +36,8 @@ dv_pool_open(char *path, daos_handle_t *poh)
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
+			path_parts.vf_db_path, DP_RC(rc));
 		return rc;
 	}
 
@@ -46,6 +46,17 @@ dv_pool_open(char *path, daos_handle_t *poh)
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
+
+	return rc;
+}
+
+int
+dv_pool_close(daos_handle_t poh)
+{
+	int rc;
+
+	rc = vos_pool_close(poh);
+	vos_self_fini();
 
 	return rc;
 }
@@ -68,17 +79,6 @@ dv_cont_close(daos_handle_t *coh)
 	rc = vos_cont_close(*coh);
 
 	*coh = DAOS_HDL_INVAL;
-
-	return rc;
-}
-
-int
-dv_pool_close(daos_handle_t poh)
-{
-	int rc;
-
-	rc = vos_pool_close(poh);
-	vos_self_fini();
 
 	return rc;
 }
@@ -580,6 +580,8 @@ handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_dkey_handler);
 	dkey.ddbk_idx = ctx->dkey_seen++;
 	dkey.ddbk_key = entry->ie_key;
+	dkey.ddbk_child_type = entry->ie_child_type;
+
 	ctx->current_dkey = entry->ie_key;
 
 	/* Restart the akey count for the dkey */
@@ -596,6 +598,8 @@ handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_akey_handler);
 	akey.ddbk_idx = ctx->akey_seen++;
 	akey.ddbk_key = entry->ie_key;
+	akey.ddbk_child_type = entry->ie_child_type;
+
 	ctx->current_akey = entry->ie_key;
 
 
@@ -613,7 +617,6 @@ handle_sv(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_sv_handler);
 	value.ddbs_record_size = entry->ie_rsize;
 	value.ddbs_idx = ctx->value_seen++;
-
 
 	return ctx->handlers->ddb_sv_handler(&value, ctx->handler_args);
 }

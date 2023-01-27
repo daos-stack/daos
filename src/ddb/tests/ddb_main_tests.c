@@ -5,8 +5,8 @@
  */
 #include <daos/tests_lib.h>
 #include <ddb_main.h>
-#include <ddb_cmd_options.h>
-#include <daos_srv/vos.h>
+#include <ddb.h>
+#include <ddb_vos.h>
 #include "ddb_cmocka.h"
 #include "ddb_test_driver.h"
 
@@ -157,9 +157,9 @@ do { \
 	dvt_fake_get_file_exists_result = true;
 	dvt_fake_get_file_size_result = 10;
 	dvt_fake_read_file_result = dvt_fake_get_file_size_result;
-	assert_requires_write_mode("load src [0]/[0]/[0]/[1]");
+	assert_requires_write_mode("value_load src [0]/[0]/[0]/[1]");
 
-	assert_requires_write_mode("clear_cmt_dtx [0]");
+	assert_requires_write_mode("dtx_cmt_clear [0]");
 }
 
 static void
@@ -188,21 +188,21 @@ run_many_commands_with_option_f_tests(void **state)
 	/* multiple lines/commands */
 	dvt_fake_get_file_exists_result = true;
 	dvt_fake_get_lines_called = 0;
-	set_fake_inputs("ls", "dump_superblock", "ls [0]");
+	set_fake_inputs("ls", "superblock_dump", "ls [0]");
 	assert_main(tctx->dvt_pmem_file, "-f", "file_path");
 	assert_int_equal(1, dvt_fake_get_lines_called);
 
 	/* empty lines are ignored */
 	dvt_fake_get_file_exists_result = true;
 	dvt_fake_get_lines_called = 0;
-	set_fake_inputs("ls", "", "dump_superblock");
+	set_fake_inputs("ls", "", "superblock_dump");
 	assert_main(tctx->dvt_pmem_file, "-f", "file_path");
 	assert_int_equal(1, dvt_fake_get_lines_called);
 
 	/* Lines with just whitespace are ignored */
 	dvt_fake_get_file_exists_result = true;
 	dvt_fake_get_lines_called = 0;
-	set_fake_inputs("ls", "\t   \t \t\n", "dump_superblock", "\n");
+	set_fake_inputs("ls", "\t   \t \t\n", "superblock_dump", "\n");
 	assert_main(tctx->dvt_pmem_file, "-f", "file_path");
 	assert_int_equal(1, dvt_fake_get_lines_called);
 
@@ -241,7 +241,7 @@ ddb_main_suit_setup(void **state)
 
 	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
 	tctx = *state;
-	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &tctx->dvt_poh));
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
 
 	return 0;
 }
@@ -253,7 +253,7 @@ ddb_main_suit_teardown(void **state)
 
 	if (tctx == NULL)
 		fail_msg("Test not setup correctly");
-	assert_success(vos_pool_close(tctx->dvt_poh));
+	assert_success(dv_pool_close(tctx->dvt_poh));
 	ddb_teardown_vos(state);
 
 	return 0;

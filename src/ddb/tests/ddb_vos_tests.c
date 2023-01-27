@@ -186,7 +186,10 @@ open_pool_test(void **state)
 	assert_rc_equal(-DER_INVAL, dv_pool_open("/bad/path", &poh));
 
 	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh));
+	assert_success(dv_pool_close(poh));
 
+	/* should be able to open again after closing */
+	assert_success(dv_pool_open(tctx->dvt_pmem_file, &poh));
 	assert_success(dv_pool_close(poh));
 }
 
@@ -1054,6 +1057,7 @@ dv_suit_teardown(void **state)
 
 	if (tctx == NULL)
 		fail_msg("Test context wasn't setup. Possible issue in test setup\n");
+
 	ddb_teardown_vos(state);
 
 	return 0;

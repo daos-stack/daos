@@ -99,10 +99,12 @@ function setup_environment()
 	# allow cgo to find and link to third-party libs
 	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib}
 	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64}"
+	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64/daos_srv}"
 	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
 	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
 	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
 	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
+	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64/daos_srv}"
 	CGO_LDFLAGS+="${SL_BUILD_DIR+ -L${SL_BUILD_DIR}/src/control/lib/spdk}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
 	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
