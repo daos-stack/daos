@@ -95,6 +95,7 @@ ds3_connect(const char *pool, const char *sys, ds3_t **ds3, daos_event_t *ev)
 
 	/** Copy pool name */
 	strncpy(ds3_tmp->pool, pool, DAOS_PROP_LABEL_MAX_LEN);
+	ds3_tmp->pool[DAOS_PROP_LABEL_MAX_LEN] = '\0';
 
 	/** Connect to the pool first */
 	rc = daos_pool_connect(pool, sys, DAOS_PC_RW, &ds3_tmp->poh, &ds3_tmp->pinfo, ev);
@@ -146,7 +147,9 @@ err:
 
 #undef X
 
-	dfs_disconnect(ds3_tmp->meta_dfs);
+	rc2 = dfs_disconnect(ds3_tmp->meta_dfs);
+	if (rc2)
+		D_ERROR("dfs_disconnect() Failed %d (%s)\n", rc2, strerror(rc2));
 err_poh:
 	rc2 = daos_pool_disconnect(ds3_tmp->poh, NULL);
 	if (rc2)
