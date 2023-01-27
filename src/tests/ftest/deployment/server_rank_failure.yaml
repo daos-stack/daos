@@ -67,7 +67,7 @@ pool_size_value:
 container:
   type: POSIX
   control_method: daos
-  properties: rf:2
+  properties: rd_fac:2
 container_wo_rf:
   type: POSIX
   control_method: daos
