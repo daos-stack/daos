@@ -97,5 +97,5 @@ ior_with_rp:
 ior_with_ec:
   <<: *ior_base
   block_size: 150G
-  dfs_oclass: EC_4P2GX
-  dfs_dir_oclass: EC_4P2GX
+  dfs_oclass: EC_4P1GX
+  dfs_dir_oclass: EC_4P1GX
