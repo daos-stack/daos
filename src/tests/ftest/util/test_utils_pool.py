@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -40,7 +40,7 @@ def add_pool(test, namespace=POOL_NAMESPACE, create=True, connect=True, index=0,
     """
     pool = TestPool(
         namespace=namespace, context=test.context, dmg_command=test.get_dmg_command(index),
-        label_generator=test.label_generator)
+        label_generator=test.pool_label_generator)
     pool.get_params(test)
     if params:
         pool.update_params(**params)

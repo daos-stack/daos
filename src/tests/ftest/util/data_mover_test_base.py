@@ -3,6 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 
 import os
 from os.path import join
@@ -376,7 +377,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         container.container.uuid = str_to_c_uuid(cont_uuid)
         container.container.poh = pool.pool.handle
         container.uuid = container.container.get_uuid_str()
-        container.label.value = cont_label
+        container.update_params(label=cont_label, type=query_response['container_type'])
+        container.control_method.update(
+            self.params.get('control_method', container.namespace, container.control_method.value))
 
         return container
 
