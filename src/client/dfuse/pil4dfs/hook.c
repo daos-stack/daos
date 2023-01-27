@@ -6,7 +6,7 @@
 /**
  * This is a mini framework to intercept the functions in shared libraries under Linux.
  * It only works on x86_64 at this time. It will be extend it to support ARM64 in future.
- * libcapstone was adopted to disasseble binary code on x86_64. 
+ * libcapstone was adopted to disasseble binary code on x86_64.
  */
 
 #include <stdio.h>
@@ -161,7 +161,7 @@ determine_lib_path(void)
  */
 static void
 query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_NAME],
-		void* func_addr_list[], long int func_len_list[], const long int img_base_addr,
+		void *func_addr_list[], long int func_len_list[], const long int img_base_addr,
 		const int num_func)
 {
 	int		fd, i, j, k;
@@ -193,13 +193,13 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 	
 	for (i = 0; i < header->e_shnum; i++) {
 		if ( (sections[i].sh_type == SHT_DYNSYM) || (sections[i].sh_type == SHT_SYMTAB) ) {
-			symb_base_addr = (void*)(sections[i].sh_offset + map_start);
+			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size = sections[i].sh_entsize;
 			num_sym = sections[i].sh_size / sections[i].sh_entsize;
 			
 			/* tricky here!!! */
 			for (j = i - 1; j < i+2; j++) {
-				if ( (sections[j].sh_type == SHT_STRTAB) ) {
+				if ( sections[j].sh_type == SHT_STRTAB ) {
 					strtab_offset = (int)(sections[j].sh_offset);
 				}
 			}
@@ -207,12 +207,13 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 			/* Hash table would be more efficient. */
 			for(j = 0; j < num_sym; j++) {
 				rec_addr = sym_rec_size*j;
-				sym_offset = *( (int *)( symb_base_addr + rec_addr ) ) & 0xFFFFFFFF;
+				sym_offset = *( (int *)( symb_base_addr + rec_addr ) ) 
+					& 0xFFFFFFFF;
 				sym_name = (char *)( map_start + strtab_offset + sym_offset );
 				
 				for(k=0; k<num_func; k++) {
 					if( strcmp(sym_name, func_name_list[k])==0 ) { 
-						func_addr_list[k] =  (void*)( ( (long int)
+						func_addr_list[k] =  (void *)( ( (long int)
 							( *((int *)(symb_base_addr + rec_addr + 8))
 						) & 0xFFFFFFFF ) + img_base_addr);
 						func_len_list[k] = (*((int *)(symb_base_addr 
@@ -300,7 +301,7 @@ query_lib_name_in_list(const char *lib_name_str)
 			return i;
 		}
 	}
-	// Try partial match
+	/* Try partial match */
 	for (i = 0; i < num_lib_in_map; i++) {
 		if (strstr(lib_name_list[i], lib_name_str)) {
 			return i;
@@ -344,7 +345,7 @@ get_position_of_next_line(const char buff[], const int pos_start, const int max_
 		/* A new line */
 		if(buff[i] == 0xA) {
 			i++;
-			return ( (i>=max_buff_size) ? (-1) : (i) );
+			return ( (i >= max_buff_size) ? (-1) : (i) );
 		} else {
 			i++;
 		}
@@ -371,7 +372,8 @@ get_module_maps(void)
 	uint64_t	addr_B, addr_E;
 	
 	snprintf(szName, sizeof(szName), "/proc/%d/maps", getpid());
-	fIn = fopen(szName, "rb");	// non-seekable file. fread is needed!!!
+	/* non-seekable file. fread is needed!!! */
+	fIn = fopen(szName, "rb");
 	if(fIn == NULL)	{
 		printf("Fail to open file: %s\nQuit\n", szName);
 		exit(1);
@@ -393,7 +395,8 @@ get_module_maps(void)
 	num_lib_in_map = 0;
 	szBuf[FileSize] = 0;
 	
-	iPos = 0;	// start from the beginging
+	/* start from the beginging */
+	iPos = 0;
 	while (iPos >= 0) {
 		ReadItem = sscanf(szBuf+iPos, "%lx-%lx", &addr_B, &addr_E);
 		if (ReadItem == 2) {
