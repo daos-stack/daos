@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -413,7 +413,8 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Sanity check for md on ssd enablement
-        self.manager.check_log_for_pattern("MD on SSD")
+        if hasattr(self.manager, "check_log_for_pattern"):
+            self.manager.check_log_for_pattern("MD on SSD")
 
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()

@@ -671,7 +671,7 @@ class Systemctl(JobManager):
 
         """
         return self.check_logs(
-            "subprocess startup detected", self.job.pattern, self.timestamps["start"], None,
+            self.job.pattern, self.timestamps["start"], None,
             self.job.pattern_count, self.job.pattern_timeout.value)
 
     def assign_hosts(self, hosts, path=None, slots=None):
@@ -982,8 +982,7 @@ class Systemctl(JobManager):
                 data.append("    {}".format(line))
         return "\n".join(data)
 
-    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False,
-                    max_loops=None):
+    def search_logs(self, pattern, since, until, quantity=1, timeout=60, verbose=False):
         """Search the command logs on each host for a specified string.
 
         Args:
@@ -997,8 +996,6 @@ class Systemctl(JobManager):
                 the specified pattern. Defaults to 60.
             verbose (bool, optional): whether or not to display the log data upon successful pattern
                 detection. Defaults to False.
-            max_loops (int, optional): maximum number of search loops to perform. Defaults to None,
-                no maximum.
 
         Returns:
             tuple:
@@ -1015,7 +1012,6 @@ class Systemctl(JobManager):
         timed_out = False
         start = time.time()
         duration = 0
-        loops = 0
 
         # Search for patterns in the subprocess output until:
         #   - the expected number of pattern matches are detected (success)
@@ -1036,11 +1032,6 @@ class Systemctl(JobManager):
             if verbose:
                 self.display_log_data(log_data)
 
-            loops += 1
-            if max_loops is not None and loops >= max_loops:
-                self.log.info("maximum loops detected: %s", loops)
-                break
-
         # Summarize results
         msg = "{}/{} '{}' messages detected in".format(detected, quantity, pattern)
         runtime = "{}/{} seconds".format(duration, timeout)
@@ -1059,12 +1050,10 @@ class Systemctl(JobManager):
 
         return complete, " ".join([msg, runtime])
 
-    def check_logs(self, description, pattern, since, until, quantity=1, timeout=60,
-                   max_loops=None):
+    def check_logs(self, pattern, since, until, quantity=1, timeout=60):
         """Check the command logs on each host for a specified string.
 
         Args:
-            description (str): description of what is being checked.
             pattern (str): regular expression to search for in the logs
             since (str): search log entries from this date.
             until (str, optional): search log entries up to this date. Defaults
@@ -1073,8 +1062,6 @@ class Systemctl(JobManager):
                 pattern per host. Defaults to 1.
             timeout (int, optional): maximum number of seconds to wait to detect
                 the specified pattern. Defaults to 60.
-            max_loops (int, optional): maximum number of search loops to perform. Defaults to None,
-                no maximum.
 
         Returns:
             bool: whether or not the search string was found in the logs on each
@@ -1082,27 +1069,34 @@ class Systemctl(JobManager):
 
         """
         # Find the pattern in the logs
-        complete, message = self.search_logs(
-            pattern, since, until, quantity, timeout, False, max_loops)
+        complete, message = self.search_logs(pattern, since, until, quantity, timeout, False)
         if complete:
             # Report the successful start
-            self.log.info("%s %s - %s", self._command, description, message)
+            self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def check_log_for_pattern(self, pattern):
-        """Verify the pattern exists in a subprocess output.
-
-        Performs a single search.
+    def check_log_for_pattern(self, pattern, timeout=60):
+        """Determine how many times a pattern exists in a subprocess output.
 
         Args:
             pattern (str): regular expression to search for in the logs
+            timeout (int, optional): maximum number of seconds to wait to detect
+                the specified pattern. Defaults to 60.
 
         Returns:
-            bool: whether or not the pattern has been detected
+            int: number of pattern matches detected
 
         """
-        return self.check_logs(
-            "log entry detected", pattern, self.timestamps["start"], None, max_loops=1)
+        command = get_journalctl_command(
+            self.timestamps["start"], None, units=self._systemctl.service.value)
+        self.log.info("Searching for '%s' in '%s' output on %s", pattern, command, self._hosts)
+        log_data = self.get_log_data(self._hosts, command, timeout)
+        detected = 0
+        for entry in log_data:
+            match = re.findall(pattern, "\n".join(entry["data"]))
+            detected += len(match) if match else 0
+        self.log.info("Number of '%s' matches in '%s' output: %s", pattern, command, detected)
+        return detected
 
     def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
