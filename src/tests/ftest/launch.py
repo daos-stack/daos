@@ -2658,7 +2658,7 @@ class Launch():
 
         # One of the dfuse tests intermittently creates a core file which is known so make a
         # special case for that test.
-        if str(test) == './dfuse/daos_build.py' and './conftes' in core_file_processing.exe_names:
+        if str(test) == './dfuse/daos_build.py' and './conftest' in core_file_processing.exe_names:
             logger.info('conftest core file exists from daos_build test, ignoring')
             corefiles_processed = corefiles_processed - 1
 
