@@ -204,16 +204,13 @@ class DaosBuild(DfuseTestBase):
         if intercept:
             intercept_jobs = 1
 
-        # TODO: Remove the checkout.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
-                'git -C {} checkout amd/scons-env'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                'cat {}/daos.conf'.format(build_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)

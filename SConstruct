@@ -427,7 +427,6 @@ def scons():
             for var in var_list:
                 value = os.environ.get(var)
                 if value:
-                    print(f'Setting {var}={value}')
                     real_env[var] = value
 
         real_env = deps_env['ENV']
