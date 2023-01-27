@@ -5,10 +5,12 @@
 """
 import base64
 from apricot import TestWithServers
+from general_utils import report_errors
 
 
 # Test container set-attr, get-attr, and list-attrs with different
 # types of characters.
+# pylint: disable=anomalous-backslash-in-string
 test_strings = [
     "abcd",
     "1234",
@@ -71,8 +73,7 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container
-        :avocado: tags=daos_cmd
+        :avocado: tags=container,daos_cmd
         :avocado: tags=cont_query_attr,test_container_query_attr
         """
         # Create a pool and a container.
@@ -136,7 +137,7 @@ class ContainerQueryAttributeTest(TestWithServers):
             else:
                 expected_attrs.append(attr_value[0])
 
-        self.assertEqual(len(errors), 0, "; ".join(errors))
+        report_errors(self, errors)
 
         # Verify that attr-lists works with test_strings.
         expected_attrs.sort()
@@ -162,8 +163,7 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container
-        :avocado: tags=daos_cmd
+        :avocado: tags=container,daos_cmd
         :avocado: tags=cont_query_attr,test_container_query_attrs
         """
         # Create a pool and a container.
@@ -233,7 +233,7 @@ class ContainerQueryAttributeTest(TestWithServers):
                         "Unexpected output for get_attr: {} != {}\n".format(
                             actual_val, attr_values[key]))
 
-        self.assertEqual(len(errors), 0, "; ".join(errors))
+        report_errors(self, errors)
 
     def test_list_attrs_long(self):
         """JIRA ID: DAOS-4640
@@ -246,8 +246,7 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container
-        :avocado: tags=daos_cmd
+        :avocado: tags=container,daos_cmd
         :avocado: tags=cont_list_attrs,test_list_attrs_long
         """
         # Create a pool and a container.

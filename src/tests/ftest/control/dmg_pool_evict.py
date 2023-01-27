@@ -32,8 +32,7 @@ class DmgPoolEvictTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daos_cmd
-        :avocado: tags=control
+        :avocado: tags=control,daos_cmd
         :avocado: tags=dmg_pool_evict,test_dmg_pool_evict
         """
         # Create 2 pools and create a container in each pool.

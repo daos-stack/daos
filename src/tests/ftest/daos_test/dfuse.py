@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,8 +30,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=daos_cmd
-        :avocado: tags=dfuse,dfuse_test
+        :avocado: tags=dfuse,dfuse_test,daos_cmd
         :avocado: tags=dfuse_unit,test_daos_dfuse_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfuse_test')

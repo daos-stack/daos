@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -139,8 +139,7 @@ class NvmePoolExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daos_cmd
-        :avocado: tags=nvme,checksum,nvme_osa,rebuild
+        :avocado: tags=nvme,checksum,nvme_osa,rebuild,daos_cmd
         :avocado: tags=NvmePoolExtend,test_nvme_pool_extend
         """
         self.run_nvme_pool_extend(3)

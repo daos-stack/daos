@@ -28,8 +28,7 @@ class DaosBuild(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse
-        :avocado: tags=daos_cmd
+        :avocado: tags=daosio,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
         """
         self.run_build_test("writeback")

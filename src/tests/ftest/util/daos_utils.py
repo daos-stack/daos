@@ -305,7 +305,7 @@ class DaosCommand(DaosCommandBase):
 
         Args:
             pool (str): Pool UUID.
-            attrs (map): Attribute name/value map.
+            attrs (dict): Attribute name/value pairs.
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
@@ -406,7 +406,7 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            props (map): Property name/value pairs.
+            props (dict): Property name/value pairs.
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
@@ -614,7 +614,7 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): Pool UUID.
             cont (str): Container UUID.
-            attrs (map): Attribute key/val pairs.
+            attrs (dict): Attribute key/val pairs.
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
