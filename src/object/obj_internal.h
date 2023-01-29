@@ -864,7 +864,7 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
 	     tse_task_t *task);
 
 int
-dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
+dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task, bool sync);
 
 int
 iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);

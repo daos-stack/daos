@@ -77,6 +77,7 @@ struct dc_tx {
 	uint64_t		 tx_flags;
 	uint32_t		 tx_fixed_epoch:1, /** epoch is specified. */
 				 tx_retry:1, /** Retry the commit RPC. */
+				 tx_sync:1, /** Sync commit the transaction. */
 				 tx_set_resend:1, /** Set 'resend' flag. */
 				 tx_for_convert:1,
 				 tx_has_cond:1,
@@ -2171,6 +2172,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	oci->oci_flags = ORF_CPD_LEADER | (tx->tx_set_resend ? ORF_RESEND : 0);
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
+	if (tx->tx_sync)
+		oci->oci_flags |= ORF_DTX_SYNC;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;
@@ -3560,7 +3563,7 @@ out:
 }
 
 int
-dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
+dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task, bool sync)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc = 0;
@@ -3583,6 +3586,8 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	/* Hold another reference on TX to avoid being freed duing dc_tx_attach(). */
 	dc_tx_addref(tx);
 	tx->tx_for_convert = 1;
+	if (sync)
+		tx->tx_sync = 1;
 	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task);
 
 	if (!tx->tx_has_cond)

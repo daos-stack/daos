@@ -2375,9 +2375,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	epoch.oe_first = orw->orw_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
-	if (orw->orw_flags & ORF_DTX_SYNC)
-		dtx_flags |= DTX_SYNC;
-
 	rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 		       orw->orw_map_ver, &orw->orw_oid,
 		       orw->orw_dti_cos.ca_arrays,
@@ -3320,9 +3317,6 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	epoch.oe_value = opi->opi_epoch;
 	epoch.oe_first = epoch.oe_value; /* unused for TGT_PUNCH */
 	epoch.oe_flags = orf_to_dtx_epoch_flags(opi->opi_flags);
-
-	if (opi->opi_flags & ORF_DTX_SYNC)
-		dtx_flags |= DTX_SYNC;
 
 	/* Start the local transaction */
 	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
@@ -4330,9 +4324,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		D_GOTO(out, rc = rc1);
 	}
 
-	if (oci->oci_flags & ORF_DTX_SYNC)
-		dtx_flags |= DTX_SYNC;
-
 	rc = dtx_begin(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
 		       dcde->dcde_write_cnt, oci->oci_map_ver,
 		       &dcsh->dcsh_leader_oid, NULL, 0, dtx_flags,
@@ -4570,6 +4561,8 @@ again:
 		dtx_flags |= DTX_PREPARED;
 	else
 		dtx_flags &= ~DTX_PREPARED;
+	if (oci->oci_flags & ORF_DTX_SYNC)
+		dtx_flags |= DTX_SYNC;
 
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,

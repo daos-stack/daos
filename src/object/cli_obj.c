@@ -5654,7 +5654,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		}
 
 		obj_auxi->tx_convert = 0;
-		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
+		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task, false);
 	}
 
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, args->dkey);
@@ -6563,7 +6563,7 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		 * internal transaction to handle that to guarantee the
 		 * atomicity of punch object.
 		 */
-		return dc_tx_convert(obj, opc, task);
+		return dc_tx_convert(obj, opc, task, true);
 
 	rc = obj_task_init(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 	if (rc != 0) {
@@ -6573,7 +6573,7 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 
 	if (obj_auxi->tx_convert) {
 		obj_auxi->tx_convert = 0;
-		return dc_tx_convert(obj, opc, task);
+		return dc_tx_convert(obj, opc, task, false);
 	}
 
 	if (opc == DAOS_OBJ_RPC_PUNCH) {
