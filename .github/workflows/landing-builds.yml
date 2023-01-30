@@ -385,6 +385,6 @@ jobs:
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
       - name: Try reproduce DAOS-12407
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
