@@ -1843,6 +1843,8 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	return rc < 0 ? nd1 : nd2;
 }
 
+/** Maximum dynamic root size before switching to user-specified order */
+#define MAX_DYN_ROOT 7
 /** Expand the dynamic tree root node if it is currently full and not
  *  already at full size
  */
@@ -1870,7 +1872,7 @@ evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
 	old_order = tcx->tc_order;
 	old_size  = evt_node_size(tcx, true);
 
-	if (tcx->tc_order == 7)
+	if (tcx->tc_order == MAX_DYN_ROOT)
 		tcx->tc_order = tcx->tc_max_order;
 	else
 		tcx->tc_order = ((tcx->tc_order + 1) << 1) - 1;
@@ -1885,10 +1887,8 @@ evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
 	new_node = umem_off2ptr(evt_umm(tcx), new_off);
 	memcpy(new_node, nd_cur, old_size);
 	rc = umem_free(evt_umm(tcx), trace->tr_node);
-	if (rc != 0) {
-		tcx->tc_order = old_order;
+	if (rc != 0)
 		goto failed;
-	}
 
 	rc = evt_root_tx_add(tcx);
 	if (rc != 0)
