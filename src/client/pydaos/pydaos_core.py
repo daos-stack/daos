@@ -148,46 +148,6 @@ class DCont():
         return 'daos://{}/{}'.format(self.pool, self.cont)
 
 
-class DCheck():
-    """
-    Class representing of DAOS python container checker
-    Can be identified via a path or a combination of pool label and container
-    label (alternatively, UUID strings are supported too).
-
-    Attributes
-    ----------
-    pool : string
-        Pool label or UUID string
-    cont : string
-        Container label or UUID string
-    path : string
-        Path for container representation in unified namespace
-    """
-
-    def __init__(self, pool=None, cont=None, path=None):
-        self._dc = DaosClient()
-        if path is None and (pool is None or cont is None):
-            raise PyDError("invalid pool or container labels", -pydaos_shim.DER_INVAL)
-        if path is not None:
-            self.pool = None
-            self.cont = None
-            ret = pydaos_shim.cont_check_by_path(DAOS_MAGIC, path, 0)
-        else:
-            self.pool = pool
-            self.cont = cont
-            ret = pydaos_shim.cont_check(DAOS_MAGIC, pool, cont, 0)
-        if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to access container", ret)
-
-    def __str__(self):
-        return '{}/{}'.format(self.pool, self.cont)
-
-    def __repr__(self):
-        return 'daos://{}/{}'.format(self.pool, self.cont)
-
-# pylint: disable=too-few-public-methods
-
-
 class _DObj():
     # pylint: disable=no-member
 
@@ -442,3 +402,28 @@ class DArray(_DObj):
 
     def __array_function__(self, func, types, args, kwargs):
         raise NotImplementedError
+
+
+def DCheck(pool=None, cont=None, path=None):
+    """
+    Function invoking the container checker
+
+    Attributes
+    ----------
+    pool : string
+        Pool label or UUID string
+    cont : string
+        Container label or UUID string
+    path : string
+        Path for container representation in unified namespace
+    """
+
+    DaosClient()
+    if path is None and (pool is None or cont is None):
+        raise PyDError("invalid pool or container labels", -pydaos_shim.DER_INVAL)
+    if path is not None:
+        ret = pydaos_shim.cont_check_by_path(DAOS_MAGIC, path, 0)
+    else:
+        ret = pydaos_shim.cont_check(DAOS_MAGIC, pool, cont, 0)
+    if ret != pydaos_shim.DER_SUCCESS:
+        raise PyDError("failed to access container", ret)

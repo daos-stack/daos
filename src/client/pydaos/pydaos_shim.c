@@ -460,7 +460,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 	size_t			size = sizeof(entry);
 	d_iov_t			marker;
 	bool			mark_data = true;
-	int			rc;
+	int			rc = 0;
 
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL)
@@ -487,8 +487,10 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 			char *key;
 
 			D_ALLOC(key, kds[i].kd_key_len + 1);
-			if (key == NULL)
-				return -DER_NOMEM;
+			if (key == NULL) {
+				rc = -DER_NOMEM;
+				goto out;
+			}
 
 			memcpy(key, ptr, kds[i].kd_key_len);
 			key[kds[i].kd_key_len + 1] = '\0';
@@ -510,7 +512,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 
 out:
 	D_FREE(buf);
-	return 0;
+	return rc;
 }
 
 static PyObject *
