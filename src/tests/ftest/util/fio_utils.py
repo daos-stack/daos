@@ -6,8 +6,7 @@
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import pcmd
-from command_utils_base import \
-    BasicParameter, FormattedParameter, CommandWithParameters
+from command_utils_base import BasicParameter, FormattedParameter, CommandWithParameters
 from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
 
@@ -25,7 +24,7 @@ class FioCommand(ExecutableCommand):
         """
         super().__init__("/run/fio/*", "fio", path)
 
-        # fio commandline options
+        # fio command-line options
         self.debug = FormattedParameter("--debug={}")
         self.parse_only = FormattedParameter("--parse-only", False)
         self.output = FormattedParameter("--output={}")

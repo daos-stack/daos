@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,6 @@ from ior_test_base import IorTestBase
 
 
 class SparseFile(IorTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Dfuse Sparse File base class.
 
     :avocado: recursive
