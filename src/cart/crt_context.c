@@ -1248,7 +1248,7 @@ static void
 crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_context	*crt_ctx = rpc_priv->crp_pub.cr_ctx;
-	struct crt_ep_inflight	*epi = rpc_priv->crp_epi;;
+	struct crt_ep_inflight	*epi = rpc_priv->crp_epi;
 
 	D_ASSERT(crt_ctx != NULL);
 	D_ASSERT(epi != NULL);
@@ -1348,8 +1348,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_timeout_track(tmp_rpc);
 			D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 			if (rc != 0)
-				RPC_ERROR(tmp_rpc,
-					"crt_req_timeout_track failed, rc: %d.\n", rc);
+				RPC_ERROR(tmp_rpc, "crt_req_timeout_track failed, rc: %d.\n", rc);
 
 			/* remove from waitq and add to in-flight queue */
 			d_list_move_tail(&tmp_rpc->crp_epi_link, &epi->epi_req_q);
