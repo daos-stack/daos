@@ -93,8 +93,8 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
             test_desc + "(DAOS->DAOS)",
             "DAOS", daos_src_path, pool1, cont1,
             "DAOS", daos_dst_path, pool1, cont1)
-        # self.compare_data(dfuse_src_path, dfuse_dst_path,
-        #                   cmp_times=preserve_on, cmp_xattr=preserve_on)
+        self.compare_data(dfuse_src_path, dfuse_dst_path,
+                          cmp_times=preserve_on, cmp_xattr=preserve_on)
 
         # DAOS -> POSIX
         posix_dst_path = self.new_posix_test_path(create=False, parent=self.workdir)
