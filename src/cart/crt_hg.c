@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1176,21 +1176,19 @@ mem_free:
 static hg_return_t
 crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
-	struct crt_cb_info	crt_cbinfo;
 	crt_rpc_t		*rpc_pub;
 	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
 	hg_return_t		hg_ret = HG_SUCCESS;
-	crt_rpc_state_t		state;
 	int			rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
-	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+	crt_rpc_lock(rpc_priv);
 
 	rpc_pub = &rpc_priv->crp_pub;
 	if (crt_rpc_completed(rpc_priv)) {
-		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
 		return rc;
 	}
@@ -1198,7 +1196,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n", hg_cbinfo->ret);
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
-		state = RPC_STATE_COMPLETED;
+		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
 		if (!CRT_RANK_PRESENT(rpc_pub->cr_ep.ep_grp, rpc_pub->cr_ep.ep_rank)) {
@@ -1211,25 +1209,21 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			RPC_TRACE(DB_NET, rpc_priv, "request canceled\n");
 			rc = -DER_CANCELED;
 		}
-		state = RPC_STATE_CANCELED;
-		rpc_priv->crp_state = state;
+		rpc_priv->crp_state = RPC_STATE_CANCELED;
 		hg_ret = hg_cbinfo->ret;
 		break;
 	default:
-		state  = RPC_STATE_COMPLETED;
-		rc     = crt_hgret_2_der(hg_cbinfo->ret);
+		rpc_priv->crp_state = RPC_STATE_COMPLETED;
+		rc = crt_hgret_2_der(hg_cbinfo->ret);
 		hg_ret = hg_cbinfo->ret;
 		RPC_TRACE(DB_NET, rpc_priv, "hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 		break;
 	}
 
-	if (rpc_priv->crp_complete_cb == NULL) {
-		rpc_priv->crp_state = state;
+	if (rpc_priv->crp_complete_cb == NULL)
 		D_GOTO(out, hg_ret);
-	}
 
 	if (rc == 0) {
-		rpc_priv->crp_state = RPC_STATE_REPLY_RECVED;
 		if (rpc_priv->crp_opc_info->coi_no_reply == 0) {
 			/* HG_Free_output in crt_hg_req_destroy */
 			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle, &rpc_pub->cr_output);
@@ -1248,28 +1242,31 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			rc = -DER_HLC_SYNC;
 	}
 
-	crt_cbinfo.cci_rpc = rpc_pub;
-	crt_cbinfo.cci_arg = rpc_priv->crp_arg;
-	crt_cbinfo.cci_rc = rc;
-
-	if (crt_cbinfo.cci_rc != 0)
-		RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
-			   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
-
-	RPC_TRACE(DB_TRACE, rpc_priv,
-		  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
-		  rpc_priv->crp_pub.cr_ep.ep_rank,
-		  rpc_priv->crp_pub.cr_ep.ep_tag,
-		  DP_RC(crt_cbinfo.cci_rc));
-
-	rpc_priv->crp_complete_cb(&crt_cbinfo);
-
-	rpc_priv->crp_state = state;
-
 out:
 	crt_context_req_untrack(rpc_priv);
 
-	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+	crt_rpc_unlock(rpc_priv);
+
+	/* Invoke the completion callback after releasing crp_mutex. */
+	if (rpc_priv->crp_complete_cb != NULL) {
+		struct crt_cb_info crt_cbinfo;
+
+		crt_cbinfo.cci_rpc = rpc_pub;
+		crt_cbinfo.cci_arg = rpc_priv->crp_arg;
+		crt_cbinfo.cci_rc = rc;
+
+		if (crt_cbinfo.cci_rc != 0)
+			RPC_CERROR(crt_quiet_error(crt_cbinfo.cci_rc), DB_NET, rpc_priv,
+				   "RPC failed; rc: " DF_RC "\n", DP_RC(crt_cbinfo.cci_rc));
+
+		RPC_TRACE(DB_TRACE, rpc_priv,
+			  "Invoking RPC callback (rank %d tag %d) rc: " DF_RC "\n",
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag,
+			  DP_RC(crt_cbinfo.cci_rc));
+
+		rpc_priv->crp_complete_cb(&crt_cbinfo);
+	}
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	RPC_DECREF(rpc_priv);

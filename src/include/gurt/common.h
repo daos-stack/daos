@@ -871,6 +871,17 @@ d_hlc_epsilon_get_bound(uint64_t hlc);
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);
 
+/** Vector of pointers */
+struct d_vec_pointers {
+	void		**p_buf;
+	uint32_t	  p_cap;
+	uint32_t	  p_len;
+};
+
+int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
+void d_vec_pointers_fini(struct d_vec_pointers *pointers);
+int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
+
 #if defined(__cplusplus)
 }
 #endif

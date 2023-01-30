@@ -75,7 +75,6 @@ typedef enum {
 	RPC_STATE_INITED = 0x36,
 	RPC_STATE_QUEUED, /* queued for flow controlling */
 	RPC_STATE_REQ_SENT,
-	RPC_STATE_REPLY_RECVED,
 	RPC_STATE_COMPLETED,
 	RPC_STATE_CANCELED,
 	RPC_STATE_TIMEOUT,
@@ -198,6 +197,18 @@ struct crt_rpc_priv {
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
+
+static inline void
+crt_rpc_lock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+}
+
+static inline void
+crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+}
 
 #define CRT_PROTO_INTERNAL_VERSION 4
 #define CRT_PROTO_FI_VERSION 3

@@ -801,7 +801,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	grp_priv = chained_rpc_priv->crp_grp_priv;
 	ul_in = crt_req_get(lookup_rpc);
 
-	D_MUTEX_LOCK(&chained_rpc_priv->crp_mutex);
+	crt_rpc_lock(chained_rpc_priv);
 
 	RPC_PUB_DECREF(chained_rpc_priv->crp_ul_req);
 	chained_rpc_priv->crp_ul_req = NULL;
@@ -908,13 +908,14 @@ retry:
 	}
 
 out:
-	/* Force complete and destroy chained rpc */
-	if (rc != 0) {
+	if (rc == 0) {
+		crt_rpc_unlock(chained_rpc_priv);
+	} else {
+		/* Force complete and destroy chained rpc */
 		crt_context_req_untrack(chained_rpc_priv);
-		crt_rpc_complete(chained_rpc_priv, rc);
+		crt_rpc_complete_and_unlock(chained_rpc_priv, rc);
 	}
 
-	D_MUTEX_UNLOCK(&chained_rpc_priv->crp_mutex);
 
 	/* Addref done in crt_issue_uri_lookup() */
 	RPC_DECREF(chained_rpc_priv);
@@ -1256,21 +1257,11 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 				    rpc_priv->crp_pub.cr_ep.ep_tag,
 				    &hg_addr);
 	if (rc != 0) {
-		D_ERROR("Failed to insert\n");
-		rpc_priv->crp_state = RPC_STATE_FWD_UNREACH;
-		D_GOTO(finish_rpc, rc);
+		D_ERROR("Failed to insert: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
 	rpc_priv->crp_hg_addr = hg_addr;
-
-finish_rpc:
-	if (rc != 0) {
-		crt_context_req_untrack(rpc_priv);
-		crt_rpc_complete(rpc_priv, rc);
-
-		/* Do not propagate error further as we've completed the rpc */
-		rc = DER_SUCCESS;
-	}
 
 out:
 	return rc;
@@ -1442,7 +1433,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "submitted.\n");
 
-	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+	crt_rpc_lock(rpc_priv);
 	locked = true;
 
 	rc = crt_context_req_track(rpc_priv);
@@ -1468,7 +1459,8 @@ out:
 	/* internally destroy the req when failed */
 	if (rc != 0) {
 		if (!rpc_priv->crp_coll) {
-			crt_rpc_complete(rpc_priv, rc);
+			crt_rpc_complete_and_unlock(rpc_priv, rc);
+			locked = false;
 			/* failure already reported through complete cb */
 			if (complete_cb != NULL)
 				rc = 0;
@@ -1478,7 +1470,7 @@ out:
 	}
 
 	if (locked)
-		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+		crt_rpc_unlock(rpc_priv);
 
 	/* corresponds to RPC_ADDREF in this function */
 	RPC_DECREF(rpc_priv);
@@ -1538,12 +1530,12 @@ crt_req_abort(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	ctx = rpc_priv->crp_pub.cr_ctx;
 
-	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+	crt_rpc_lock(rpc_priv);
 
 	if (rpc_priv->crp_state == RPC_STATE_CANCELED ||
 	    rpc_priv->crp_state == RPC_STATE_COMPLETED ||
 	    rpc_priv->crp_state == RPC_STATE_TIMEOUT) {
-		D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+		crt_rpc_unlock(rpc_priv);
 		RPC_TRACE(DB_NET, rpc_priv, "aborted or completed, need not abort again.\n");
 		return 0;
 	}
@@ -1561,7 +1553,7 @@ crt_req_abort(crt_rpc_t *req)
 	}
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
-	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+	crt_rpc_unlock(rpc_priv);
 	return 0;
 }
 
