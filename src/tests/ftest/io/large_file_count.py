@@ -25,7 +25,7 @@ class LargeFileCount(FileCountTestBase):
             Run MDTEST to create 1M files with DFS and POSIX
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=io,daosio,dfuse
         :avocado: tags=LargeFileCount,test_largefilecount
         """
