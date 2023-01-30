@@ -457,10 +457,6 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
-	/**
-	 * Pass MD mode as int to enable custom umem allocator to be requested e.g. PMEM (0),
-	 * BMEM (1) and ADMEM (2). For MD on SSD specify (1) for now.
-	 */
 	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
@@ -802,6 +798,10 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto out;
 	}
 #endif
+	rc = vos_self_nvme_init(db_path, tgt_id);
+	if (rc)
+		goto failed;
+
 	rc = vos_mod_init();
 	if (rc)
 		goto failed;
@@ -838,10 +838,6 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 
 	rc = smd_init(db);
-	if (rc)
-		goto failed;
-
-	rc = vos_self_nvme_init(db_path, tgt_id);
 	if (rc)
 		goto failed;
 
