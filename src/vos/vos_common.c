@@ -776,7 +776,6 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char		*evt_mode;
 	int		 rc = 0;
-	char		*lmm_db_path = NULL;
 	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
@@ -807,6 +806,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		/* LMM DB path same as VOS DB path argument in self init case */
 		if (use_sys_db)
 			rc = lmm_db_init(db_path);
 		else

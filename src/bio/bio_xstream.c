@@ -8,7 +8,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <uuid/uuid.h>
 #include <abt.h>
 #include <spdk/log.h>

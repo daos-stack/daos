@@ -67,18 +67,19 @@ umempobj_settings_init(bool md_on_ssd)
 	}
 
 	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
-	switch {
-	case (md_mode > DAOS_MD_ADMEM):
+	if (md_mode > DAOS_MD_ADMEM) {
 		D_ERROR("invalid MD mode value %d\n", md_mode);
 		return -DER_INVAL;
-	} else if (md_mode == DAOS_MD_ADMEM) {
+	}
+
+	if (md_mode == DAOS_MD_ADMEM) {
 		daos_md_backend = DAOS_MD_ADMEM;
 		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
-	} else {
-		daos_md_backend = DAOS_MD_BMEM;
-		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
-	};
+		return 0;
+	}
 
+	daos_md_backend = DAOS_MD_BMEM;
+	D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
 	return 0;
 }
 

@@ -16,6 +16,7 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
+#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/sys_db.h>
