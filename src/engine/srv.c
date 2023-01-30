@@ -1183,7 +1183,6 @@ enum {
 	XD_INIT_ULT_BARRIER,
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
-	XD_INIT_NVME,
 	XD_INIT_SYS_DB,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
@@ -1218,9 +1217,6 @@ dss_srv_fini(bool force)
 		/* fall through */
 	case XD_INIT_SYS_DB:
 		dss_sys_db_fini();
-		/* fall through */
-	case XD_INIT_NVME:
-		bio_nvme_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
 		dss_tls_fini(xstream_data.xd_dtc);
@@ -1331,12 +1327,6 @@ dss_srv_init(void)
 	if (!xstream_data.xd_dtc)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
-
-	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
-	if (rc != 0)
-		D_GOTO(failed, rc);
-	xstream_data.xd_init_step = XD_INIT_NVME;
 
 	rc = dss_sys_db_init();
 	if (rc != 0)
