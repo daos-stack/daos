@@ -25,7 +25,7 @@
  * umoff	Unified Memory offset
  */
 
-int umempobj_settings_init(int md_mode);
+int umempobj_settings_init(bool md_on_ssd);
 
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1

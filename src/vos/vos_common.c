@@ -461,7 +461,7 @@ vos_mod_init(void)
 	 * Pass MD mode as int to enable custom umem allocator to be requested e.g. PMEM (0),
 	 * BMEM (1) and ADMEM (2). For MD on SSD specify (1) for now.
 	 */
-	rc = vos_pool_settings_init((int)bio_nvme_configured(SMD_DEV_TYPE_META));
+	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
 		return rc;

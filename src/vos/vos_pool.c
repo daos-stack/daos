@@ -191,9 +191,9 @@ struct umem_store_ops vos_store_ops = {
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
-vos_pool_settings_init(int md_mode)
+vos_pool_settings_init(bool md_on_ssd)
 {
-	return umempobj_settings_init(md_mode);
+	return umempobj_settings_init(md_on_ssd);
 }
 
 static inline enum bio_mc_flags

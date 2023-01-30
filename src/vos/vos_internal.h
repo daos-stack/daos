@@ -1400,12 +1400,12 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 
 /** Init VOS pool settings
  *
- *  \param md_mode[IN]	Instruct umem backend of MD mode to use, 1 indicates MD on SSD
+ *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
  *
  *  \return		Zero on Success, Error otherwise
  */
 int
-vos_pool_settings_init(int md_mode);
+vos_pool_settings_init(bool md_on_ssd);
 
 /** Raise a RAS event on incompatible durable format
  *

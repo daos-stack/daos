@@ -42,20 +42,20 @@ enum {
 
 static int daos_md_backend = DAOS_MD_PMEM;
 
-/** Sets up global settings for the pmem objects.
+/** Initializes global settings for the pmem objects.
  *
- *  \param	md_on_ssd[IN]	Indicate if MD-on-SSD mode is set.
+ *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
  *
  *  \return	0 on success, non-zero on failure.
  */
 int
-umempobj_settings_init(int md_mode)
+umempobj_settings_init(bool md_on_ssd)
 {
 	int					rc;
 	enum pobj_arenas_assignment_type	atype;
+	unsigned int				md_mode = DAOS_MD_BMEM;
 
-	switch (md_mode) {
-	case DAOS_MD_PMEM:
+	if (!md_on_ssd) {
 		daos_md_backend = DAOS_MD_PMEM;
 		atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
 
@@ -64,18 +64,21 @@ umempobj_settings_init(int md_mode)
 			D_ERROR("Could not configure PMDK for global arena: %s\n",
 				strerror(errno));
 		return rc;
-	case DAOS_MD_BMEM:
-		daos_md_backend = DAOS_MD_BMEM;
-		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
-		return 0;
-	case DAOS_MD_ADMEM:
-		daos_md_backend = DAOS_MD_ADMEM;
-		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
-		return 0;
-	default:
+	}
+
+	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
+	switch {
+	case (md_mode > DAOS_MD_ADMEM):
 		D_ERROR("invalid MD mode value %d\n", md_mode);
 		return -DER_INVAL;
+	} else if (md_mode == DAOS_MD_ADMEM) {
+		daos_md_backend = DAOS_MD_ADMEM;
+		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
+	} else {
+		daos_md_backend = DAOS_MD_BMEM;
+		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
 	};
+
 	return 0;
 }
 
