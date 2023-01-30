@@ -685,7 +685,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
+vos_self_nvme_init(const char *vos_path)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -724,11 +724,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 		goto out;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
-	if (rc) {
-		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 out:
 	D_FREE(nvme_conf);
 	return rc;
@@ -797,7 +792,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto out;
 	}
 #endif
-	rc = vos_self_nvme_init(db_path, tgt_id);
+	rc = vos_self_nvme_init(db_path);
 	if (rc)
 		goto failed;
 
@@ -825,6 +820,12 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	rc = smd_init(db);
 	if (rc)
 		goto failed;
+
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
+	if (rc) {
+		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {
