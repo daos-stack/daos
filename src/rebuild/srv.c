@@ -1855,15 +1855,17 @@ regenerate_task_internal(struct ds_pool *pool, struct pool_target *tgts,
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_fseq,
 						 eph, 0, &id_list, rebuild_op, 0);
 		} else {
-			D_ASSERT(rebuild_op == RB_OP_REINT);
+			daos_rebuild_opc_t new_op = rebuild_op;
+
+			D_ASSERT(new_op == RB_OP_REINT);
 			/* For new target, let's turn to EXTEND command to match
 			 * the original action.
 			 */
 			if (tgt->ta_comp.co_fseq <= 1)
-				rebuild_op = RB_OP_EXTEND;
+				new_op = RB_OP_EXTEND;
 
 			rc = ds_rebuild_schedule(pool, tgt->ta_comp.co_in_ver,
-						 eph, 0, &id_list, rebuild_op, 0);
+						 eph, 0, &id_list, new_op, 0);
 		}
 		if (rc) {
 			D_ERROR(DF_UUID" schedule op %d ver %d failed: "

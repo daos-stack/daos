@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	defaultMountPointPerms = 0755
+	defaultMountPointPerms = 0750
 	defaultUnmountFlags    = 0
 )
 

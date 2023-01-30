@@ -244,7 +244,7 @@ def define_common(reqs):
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
-    reqs.define('lmdb', headers=['lmdb.h'], package='lmdb-devel-devel')
+    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
 
     reqs.define('event', libs=['event'], package='libevent-devel')
 
