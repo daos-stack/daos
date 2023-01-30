@@ -404,7 +404,7 @@ class DArray(_DObj):
         raise NotImplementedError
 
 
-def DCheck(pool=None, cont=None, path=None):
+def check(pool=None, cont=None, path=None):
     """
     Function invoking the container checker
 
