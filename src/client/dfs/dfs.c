@@ -6561,7 +6561,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	/** open the entry name and get the oid */
 	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
 	if (rc) {
-		D_ERROR("dfs_lookup_rel() if %s failed: %d\n", name, rc);
+		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
 		return rc;
 	}
 
@@ -6839,8 +6839,14 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		}
 	}
 
-	/** list all unmarked oids */
+	/*
+	 * list all unmarked oids and print / remove / punch. In the case of the L+F relink flag, we
+	 * need 2 passes instead of 1:
+	 * Pass 1: relink directories only and then descend the namespace there to mark oids.
+	 * Pass 2: relink remaining files in the L+F root that are unmarked still after first pass.
+	 */
 	memset(&anchor, 0, sizeof(anchor));
+	/** Start Pass 1 */
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_entries = DFS_ITER_NR;
 		rc = daos_oit_list_unmarked(oit_args->oit, oids, &nr_entries, &anchor, NULL);
@@ -6850,6 +6856,66 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		}
 
 		for (i = 0; i < nr_entries; i++) {
+			if (flags & DFS_CHECK_RELINK) {
+				struct dfs_entry	entry = {0};
+				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
+				char			oid_name[DFS_MAX_NAME + 1];
+				daos_size_t		len;
+				daos_anchor_t		anchor_dir = {0};
+				uint32_t		nr = DFS_ITER_NR;
+				dfs_obj_t		*dir;
+
+				/** Pass 1 - if a file is seen, skip in this pass */
+				if (daos_is_array_type(otype))
+					continue;
+
+				entry.mode = S_IFDIR | 0755;
+				entry.uid = uid;
+				entry.gid = gid;
+				oid_cp(&entry.oid, oids[i]);
+				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
+				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
+					now.tv_nsec;
+				entry.chunk_size = dfs->attr.da_chunk_size;
+
+				len = sprintf(oid_name, "%"PRIu64".%"PRIu64"",
+					      oids[i].hi, oids[i].lo);
+				D_ASSERT(len <= DFS_MAX_NAME);
+				rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
+						  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
+				if (rc) {
+					D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
+					D_GOTO(out_lf2, rc);
+				}
+
+				/*
+				 * Ppen the new directory that was relinked and scan it marking the
+				 * oids so we don't see them in pass 2.
+				 */
+				rc = dfs_lookup_rel(dfs, now_dir, oid_name, O_RDONLY, &dir,
+						    NULL, NULL);
+				if (rc) {
+					D_ERROR("dfs_lookup_rel() of %s failed: %d\n",
+						oid_name, rc);
+					return rc;
+				}
+
+				while (!daos_anchor_is_eof(&anchor_dir)) {
+					rc = dfs_iterate(dfs, now_dir, &anchor_dir, &nr,
+							 DFS_MAX_NAME * nr, oit_mark_cb, oit_args);
+					if (rc) {
+						dfs_release(dir);
+						D_ERROR("dfs_iterate() failed: %d\n", rc);
+						D_GOTO(out_lf2, rc);
+					}
+					nr = DFS_ITER_NR;
+				}
+
+				rc = dfs_release(dir);
+				if (rc)
+					D_GOTO(out_lf2, rc);
+			}
+
 			if (flags & DFS_CHECK_PRINT)
 				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
 					DP_OID(oids[i]));
@@ -6887,77 +6953,100 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
 			}
 
-			if (flags & DFS_CHECK_RELINK) {
-				struct dfs_entry	entry = {0};
-				enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
-				char			oid_name[DFS_MAX_NAME + 1];
-				daos_size_t		len;
-
-				entry.uid = uid;
-				entry.gid = gid;
-				oid_cp(&entry.oid, oids[i]);
-				entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-				entry.atime_nano = entry.mtime_nano = entry.ctime_nano =
-					now.tv_nsec;
-				entry.chunk_size = dfs->attr.da_chunk_size;
-
-				/*
-				 * Check if the oid corresponds to a file or dir using the oid type
-				 * and set the mode accordingly. symlink oids are never used/written
-				 * to since the value is stored in the entry itself and so will not
-				 * appear in this list.
-				 * Files are always arrays objects, so objects that are not arrays
-				 * have to be directories in this list.
-				 */
-				if (daos_is_array_type(otype)) {
-					entry.mode = S_IFREG | 0755;
-					/*
-					 * If this is a regular file / array object, the user might
-					 * have used a different chunk size than the default
-					 * one. Since we lost the directory entry where the chunks
-					 * size for that file would have been stored, we can make a
-					 * best attempt to set the chunk size. To do that, we get
-					 * the largest offset of every dkey in the array to see if
-					 * it's larger than the default chunk size. If it is, adjust
-					 * the chunk size to that, otherwise leave the chunk size as
-					 * default. This of course does not account for the fact
-					 * that if the chunk size is smaller than the default or is
-					 * larger than the largest offset seen then we have added or
-					 * removed existing holes from the file respectively. This
-					 * can be fixed later by the user by adjusting the chunk
-					 * size to the correct one they know using the daos tool.
-					 */
-					rc = adjust_chunk_size(dfs->coh, oids[i],
-							       &entry.chunk_size);
-					if (rc)
-						D_GOTO(out_lf2, rc);
-				} else {
-					entry.mode = S_IFDIR | 0755;
-				}
-
-				len = sprintf(oid_name, "%"PRIu64".%"PRIu64"",
-					      oids[i].hi, oids[i].lo);
-				D_ASSERT(len <= DFS_MAX_NAME);
-				rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
-						  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
-				if (rc) {
-					D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
-					D_GOTO(out_lf2, rc);
-				}
-			}
 			unmarked_entries++;
 		}
 	}
 
+	/** Start Pass 2 only if L+F flag is used */
+	if (!(flags & DFS_CHECK_RELINK))
+		goto done;
+
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = DFS_ITER_NR;
+		rc = daos_oit_list_unmarked(oit_args->oit, oids, &nr_entries, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_lf2, rc = daos_der2errno(rc));
+		}
+
+		for (i = 0; i < nr_entries; i++) {
+			struct dfs_entry	entry = {0};
+			enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
+			char			oid_name[DFS_MAX_NAME + 1];
+			daos_size_t		len;
+
+			/** in Pass 2 we should only see files */
+			if (!daos_is_array_type(otype)) {
+				D_ERROR("Directories should not be seen in Pass 2\n");
+				D_GOTO(out_lf2, rc = EIO);
+			}
+
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
+					DP_OID(oids[i]));
+
+			if (flags & DFS_CHECK_VERIFY) {
+				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
+				if (rc == -DER_NOSYS) {
+					oit_args->skipped++;
+				} else if (rc == -DER_MISMATCH) {
+					oit_args->failed++;
+					if (flags & DFS_CHECK_PRINT)
+						D_PRINT(""DF_OID" failed data consistency check!\n",
+							DP_OID(oids[i]));
+				} else if (rc) {
+					D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+				}
+			}
+
+			entry.mode = S_IFREG | 0755;
+			entry.uid = uid;
+			entry.gid = gid;
+			oid_cp(&entry.oid, oids[i]);
+			entry.atime = entry.mtime = entry.ctime = now.tv_sec;
+			entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+			entry.chunk_size = dfs->attr.da_chunk_size;
+
+			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+			D_ASSERT(len <= DFS_MAX_NAME);
+			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
+					  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
+			if (rc) {
+				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
+				D_GOTO(out_lf2, rc);
+			}
+
+			/*
+			 * If this is a regular file / array object, the user might have used a
+			 * different chunk size than the default one. Since we lost the directory
+			 * entry where the chunks size for that file would have been stored, we can
+			 * make a best attempt to set the chunk size. To do that, we get the largest
+			 * offset of every dkey in the array to see if it's larger than the default
+			 * chunk size. If it is, adjust the chunk size to that, otherwise leave the
+			 * chunk size as default. This of course does not account for the fact that
+			 * if the chunk size is smaller than the default or is larger than the
+			 * largest offset seen then we have added or removed existing holes from the
+			 * file respectively. This can be fixed later by the user by adjusting the
+			 * chunk size to the correct one they know using the daos tool.
+			 */
+			rc = adjust_chunk_size(dfs->coh, oids[i], &entry.chunk_size);
+			if (rc)
+				D_GOTO(out_lf2, rc);
+			unmarked_entries++;
+		}
+	}
+
+done:
 	if (flags & DFS_CHECK_PRINT)
 		D_PRINT("Number of Leaked OIDs in Namespace = "DF_U64"\n", unmarked_entries);
 	if (flags & DFS_CHECK_VERIFY) {
 		if (oit_args->failed) {
 			D_ERROR(""DF_U64" OIDs failed data consistency check!\n", oit_args->failed);
-			D_GOTO(out_lf2, rc = -DER_MISMATCH);
+			D_GOTO(out_lf2, rc = EIO);
 		}
 	}
-
 out_lf2:
 	if (flags & DFS_CHECK_RELINK) {
 		rc2 = dfs_release(now_dir);

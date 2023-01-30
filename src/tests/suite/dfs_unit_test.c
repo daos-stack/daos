@@ -2356,7 +2356,7 @@ dfs_test_checker(void **state)
 	rc = dfs_release(root);
 	assert_int_equal(rc, 0);
 
-	/** create 100 files and dirs */
+	/** create 100 files and  100 dirs */
 	for (i = 0; i < nr; i++) {
 		dfs_obj_t	*dir, *file;
 		d_sg_list_t	sgl;
@@ -2370,7 +2370,7 @@ dfs_test_checker(void **state)
 		assert_int_equal(rc, 0);
 
 		sprintf(name, "RD_file_%d", i);
-		rc = dfs_open(dfs, dir, name, S_IFREG | S_IWUSR | S_IRUSR,
+		rc = dfs_open(dfs, NULL, name, S_IFREG | S_IWUSR | S_IRUSR,
 			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &file);
 		assert_int_equal(rc, 0);
 
@@ -2392,6 +2392,16 @@ dfs_test_checker(void **state)
 		}
 		rc = dfs_release(file);
 		assert_int_equal(rc, 0);
+
+		/** create an additional file under each dir */
+		rc = dfs_open(dfs, dir, "newfile", S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT, OC_S1, 0, NULL, &file);
+		assert_int_equal(rc, 0);
+		rc = dfs_write(dfs, file, &sgl, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(file);
+		assert_int_equal(rc, 0);
+
 		rc = dfs_release(dir);
 		assert_int_equal(rc, 0);
 	}
@@ -2400,8 +2410,8 @@ dfs_test_checker(void **state)
 	assert_int_equal(rc, 0);
 
 	/*
-	 * Using lower level obj API, punch 10 directory entry leaving orphaned directory object and
-	 * the file that was created under it.
+	 * Using lower level obj API, punch 10 files and 10 directory entries leaving orphaned
+	 * directory object and the file that was created under it.
 	 */
 	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -2415,14 +2425,19 @@ dfs_test_checker(void **state)
 		d_iov_set(&dkey, name, strlen(name));
 		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
 		assert_rc_equal(rc, 0);
+
+		sprintf(name, "RD_file_%d", i);
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container before invoking the checker */
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
-	/** should be 200 + SB + root object */
-	assert_true(nr_oids == 202);
+	/** should be 300 + SB + root object */
+	assert_int_equal((int)nr_oids, 302);
 
 	rc = dfs_cont_check(arg->pool.poh, "cont_chkr",
 			    DFS_CHECK_PRINT | DFS_CHECK_REMOVE | DFS_CHECK_VERIFY, NULL);
@@ -2430,12 +2445,12 @@ dfs_test_checker(void **state)
 
 	/** check how many OIDs in container after invoking the checker */
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
-	/** should be 200 - 20 punched objects + SB + root object */
-	assert_true(nr_oids == 182);
+	/** should be 300 - 30 punched objects + SB + root object */
+	assert_int_equal((int)nr_oids, 272);
 
 	/*
-	 * Using lower level obj API, punch 10 directory entry leaving orphaned directory object and
-	 * the file that was created under it.
+	 * Using lower level obj API, punch 10 more file and directory entries leaving orphaned
+	 * directory objects and the file that was created under it.
 	 */
 	rc = daos_cont_open(arg->pool.poh, "cont_chkr", DAOS_COO_RW, &coh, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -2449,14 +2464,19 @@ dfs_test_checker(void **state)
 		d_iov_set(&dkey, name, strlen(name));
 		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
 		assert_rc_equal(rc, 0);
+
+		sprintf(name, "RD_file_%d", i);
+		d_iov_set(&dkey, name, strlen(name));
+		rc = daos_obj_punch_dkeys(root_oh, DAOS_TX_NONE, DAOS_COND_PUNCH, 1, &dkey, NULL);
+		assert_rc_equal(rc, 0);
 	}
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
 
 	/** check how many OIDs in container before invoking the checker */
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
-	/** should be 180 + SB + root object */
-	assert_true(nr_oids == 182);
+	/** should be 270 + SB + root object */
+	assert_int_equal((int)nr_oids, 272);
 
 	rc = dfs_cont_check(arg->pool.poh, "cont_chkr",
 			    DFS_CHECK_PRINT | DFS_CHECK_RELINK | DFS_CHECK_VERIFY, "tlf");
@@ -2464,8 +2484,8 @@ dfs_test_checker(void **state)
 
 	/** check how many OIDs in container after invoking the checker */
 	get_nr_oids(arg->pool.poh, "cont_chkr", &nr_oids);
-	/** should be 184 (180 + SB + root object + LF dir + timestamp dir) */
-	assert_true(nr_oids == 184);
+	/** should be 274 (270 + SB + root object + LF dir + timestamp dir) */
+	assert_int_equal((int)nr_oids, 274);
 
 	/** readdir of /lost+found/tlf confirming there are 10 files and dirs */
 	int			num_files = 0;
