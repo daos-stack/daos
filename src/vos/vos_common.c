@@ -667,10 +667,6 @@ struct dss_module vos_srv_module =  {
 static void
 vos_self_nvme_fini(void)
 {
-	if (self_mode.self_xs_ctxt != NULL) {
-		bio_xsctxt_free(self_mode.self_xs_ctxt);
-		self_mode.self_xs_ctxt = NULL;
-	}
 	if (self_mode.self_nvme_init) {
 		bio_nvme_fini();
 		self_mode.self_nvme_init = false;
@@ -732,6 +728,10 @@ out:
 static void
 vos_self_fini_locked(void)
 {
+	if (self_mode.self_xs_ctxt != NULL) {
+		bio_xsctxt_free(self_mode.self_xs_ctxt);
+		self_mode.self_xs_ctxt = NULL;
+	}
 
 	vos_self_nvme_fini();
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))

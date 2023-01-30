@@ -36,9 +36,6 @@ extern unsigned int	 dss_tgt_nr;
 /** Storage path (hack) */
 extern const char	*dss_storage_path;
 
-/** Number of storage tiers (hack) */
-extern unsigned int	 dss_storage_tiers;
-
 /** NVMe config file */
 extern const char	*dss_nvme_conf;
 
