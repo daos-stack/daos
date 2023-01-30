@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -244,7 +244,7 @@ class Dfuse(DfuseCommand):
             raise CommandFailure("Dfuse missing environment variables for D_LOG_FILE")
 
         if 'D_LOG_MASK' not in self.env:
-            self.env['D_LOG_MASK'] = 'INFO,DFUSE=DEBUG'
+            self.env['D_LOG_MASK'] = 'INFO'
 
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'

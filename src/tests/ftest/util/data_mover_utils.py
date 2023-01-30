@@ -81,7 +81,7 @@ class MfuCommandBase(ExecutableCommand):
         param_names.sort(key=self.__param_sort)
         return param_names
 
-    def run(self, processes, job_manager, ppn=None):
+    def run(self, processes, job_manager, ppn=None, env=None):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
@@ -89,6 +89,7 @@ class MfuCommandBase(ExecutableCommand):
             processes (int): Number of processes for the command.
             job_manager (JobManager): Job manager variable to set/assign
             ppn (int, optional): client processes per node for the command.
+            env (dict, optional): environment variables to update before running
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -108,6 +109,7 @@ class MfuCommandBase(ExecutableCommand):
             job_manager.ppn.update(ppn, 'mpirun.ppn')
             job_manager.processes.update(None, 'mpirun.np')
         job_manager.exit_status_exception = self.exit_status_exception
+        job_manager.assign_environment(env or {}, True)
 
         # Run the command
         out = job_manager.run()
