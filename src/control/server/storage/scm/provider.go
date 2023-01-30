@@ -374,7 +374,7 @@ func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatR
 		// since we don't use xattr
 		"-I", "128",
 		// reduce the inode per bytes ratio
-		// one inode for 64M is more than enough
+		// one inode for 64MiB is more than enough
 		"-i", "67108864",
 	}
 	opts = append(opts, getDistroArgs()...)
