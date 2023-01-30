@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -329,9 +329,7 @@ sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
 
-	if (xs_type != DSS_XS_SYS)
-		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
-
+	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,12 +41,6 @@ bs_state_query(void *arg)
 	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_type, bxc);
 }
 
-static inline int
-tgt2xs_type(int tgt_id)
-{
-	return tgt_id == BIO_SYS_TGT_ID ? DSS_XS_SYS : DSS_XS_VOS;
-}
-
 /*
  * CaRT RPC handler for management service "get blobstore state" (C API)
  *
@@ -54,47 +48,51 @@ tgt2xs_type(int tgt_id)
  */
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 {
-	ABT_thread			thread;
-	int				tgt_id;
-	int				rc;
-	struct bs_state_query_arg	bs_arg;
-	int				xs_type;
+	struct smd_dev_info		*dev_info;
+	ABT_thread			 thread;
+	int				 tgt_id;
+	int				 rc;
+	struct bs_state_query_arg	 bs_arg;
 
+	bs_arg.bs_arg_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get target ID(s) for given device.
 	 */
 	if (!uuid_is_null(bs_uuid)) {
-		tgt_id = bio_dev_owner_xs_id(bs_uuid);
-		if (tgt_id < 0) {
-			D_ERROR("Device UUID:"DF_UUID" not found\n",
+		rc = smd_dev_get_by_id(bs_uuid, &dev_info);
+		if (rc != 0) {
+			D_ERROR("Blobstore UUID:"DF_UUID" not found\n",
 				DP_UUID(bs_uuid));
-			return tgt_id;
+			return rc;
 		}
+		if (dev_info->sdi_tgts == NULL) {
+			D_ERROR("No targets mapped to device\n");
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		/* Default tgt_id is the first mapped tgt */
+		tgt_id = dev_info->sdi_tgts[0];
 	} else {
 		D_ERROR("Blobstore UUID is not provided for state query\n");
 		return -DER_INVAL;
 	}
 
-	xs_type = tgt2xs_type(tgt_id);
-	if (xs_type == DSS_XS_SYS)
-		bs_arg.bs_arg_type = SMD_DEV_TYPE_META;
-	else
-		bs_arg.bs_arg_type = SMD_DEV_TYPE_DATA;
-
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	uuid_copy(bs_arg.bs_arg_uuid, bs_uuid);
-	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, xs_type,
+	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, DSS_XS_VOS,
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
-		return rc;
+		goto out;
 	}
 	*bs_state = bs_arg.bs_arg_state;
 
 	ABT_thread_join(thread);
 	ABT_thread_free(&thread);
 
+out:
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -156,11 +154,10 @@ int
 ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 			char *tgt)
 {
-	struct smd_dev_info	*dev_info = NULL;
+	struct smd_dev_info	*dev_info;
 	ABT_thread		 thread;
 	int			 tgt_id;
 	int			 rc = 0;
-	int			 xs_type;
 
 	if (uuid_is_null(dev_uuid) && strlen(tgt) == 0) {
 		/* Either dev uuid or tgt id needs to be specified for query */
@@ -168,15 +165,16 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		return -DER_INVAL;
 	}
 
+	mbh->mb_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get either target ID(s) for given
 	 * device or alternatively the device mapped to a given target.
 	 */
-	if (uuid_is_null(dev_uuid)) {
-		tgt_id = atoi(tgt);
-		rc = smd_dev_get_by_tgt(tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
+	if (!uuid_is_null(dev_uuid)) {
+		rc = smd_dev_get_by_id(dev_uuid, &dev_info);
 		if (rc != 0) {
-			D_ERROR("Tgt_id:%d not found\n", tgt_id);
+			D_ERROR("Device UUID:"DF_UUID" not found\n",
+				DP_UUID(dev_uuid));
 			return rc;
 		}
 		if (dev_info->sdi_tgts == NULL) {
@@ -184,28 +182,26 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 			rc = -DER_NONEXIST;
 			goto out;
 		}
+		/* Default tgt_id is the first mapped tgt */
+		tgt_id = dev_info->sdi_tgts[0];
+	} else {
+		tgt_id = atoi(tgt);
+		rc = smd_dev_get_by_tgt(tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
+		if (rc != 0) {
+			D_ERROR("Tgt_id:%d not found\n", tgt_id);
+			return rc;
+		}
 		uuid_copy(dev_uuid, dev_info->sdi_id);
-	}
-
-	tgt_id = bio_dev_owner_xs_id(dev_uuid);
-	if (tgt_id < 0) {
-		D_ERROR("Device UUID:"DF_UUID" could be not found\n", DP_UUID(dev_uuid));
-		rc = tgt_id;
-		goto out;
 	}
 
 	D_DEBUG(DB_MGMT, "Querying BIO Health Data for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
 	uuid_copy(mbh->mb_devid, dev_uuid);
 
-	xs_type = tgt2xs_type(tgt_id);
-	if (xs_type == DSS_XS_SYS)
-		mbh->mb_dev_type = SMD_DEV_TYPE_META;
-	else
-		mbh->mb_dev_type = SMD_DEV_TYPE_DATA;
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_health_query, mbh, xs_type, tgt_id, 0, &thread);
+	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
+			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
@@ -215,8 +211,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 	ABT_thread_free(&thread);
 
 out:
-	if (dev_info)
-		smd_dev_free_info(dev_info);
+	smd_dev_free_info(dev_info);
 	return rc;
 }
 
@@ -568,7 +563,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	Ctl__LedState			 led_state;
 	int				 tgt_id;
 	int				 rc = 0;
-	int				 xs_type;
 
 	if (uuid_is_null(dev_uuid))
 		return -DER_INVAL;
@@ -576,6 +570,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	D_DEBUG(DB_MGMT, "Setting FAULTY SMD device state for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
 
+	faulty_info.bf_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get NVMe device info for given
 	 * device UUID.
@@ -590,22 +585,13 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 		D_ERROR("No targets mapped to device\n");
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
-	tgt_id = bio_dev_owner_xs_id(dev_uuid);
-	if (tgt_id < 0) {
-		D_ERROR("Device UUID:"DF_UUID" could be not found\n", DP_UUID(dev_uuid));
-		D_GOTO(out, rc = tgt_id);
-	}
-
-	xs_type = tgt2xs_type(tgt_id);
-	if (xs_type == DSS_XS_SYS)
-		faulty_info.bf_dev_type = SMD_DEV_TYPE_META;
-	else
-		faulty_info.bf_dev_type = SMD_DEV_TYPE_DATA;
+	/* Default tgt_id is the first mapped tgt */
+	tgt_id = dev_info->sdi_tgts[0];
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info,
-			    xs_type, tgt_id, 0, &thread);
+	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info, DSS_XS_VOS, tgt_id, 0,
+			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
