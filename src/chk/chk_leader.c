@@ -2339,7 +2339,10 @@ reset:
 	if (rc != 0)
 		goto out;
 
-	ins->ci_start_flags |= CSF_RESET_ALL | CSF_ORPHAN_POOL;
+	ins->ci_start_flags |= CSF_RESET_ALL;
+	if (pool_nr <= 0)
+		ins->ci_start_flags |= CSF_ORPHAN_POOL;
+
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_LEADER;
 	cbk->cb_version = DAOS_CHK_VERSION;
