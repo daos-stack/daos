@@ -438,15 +438,6 @@ void bio_nvme_fini(void);
  */
 bool bio_nvme_configured(enum smd_dev_type type);
 
-/**
- * Retrieve suitable LMM DB path.
- *
- * \param[OUT] lmm_db_path	Path to use for LMM DB
- *
- * \return		Zero on success, negative value on error
- */
-int bio_get_lmm_db_path(char *lmm_db_path);
-
 enum {
 	/* Notify BIO that all xsxtream contexts created */
 	BIO_CTL_NOTIFY_STARTED	= 0,

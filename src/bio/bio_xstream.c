@@ -1117,29 +1117,6 @@ bio_nvme_configured(enum smd_dev_type type)
 	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
 }
 
-int
-bio_get_lmm_db_path(char *lmm_db_path)
-{
-	char	*nvme_conf_path = NULL;
-
-	if (lmm_db_path != NULL)
-		return -DER_INVAL;
-	if (nvme_glb.bd_nvme_conf == NULL) {
-		D_ERROR("nvme conf path not set\n");
-		return -DER_INVAL;
-	}
-
-	D_STRNDUP(nvme_conf_path, nvme_glb.bd_nvme_conf, PATH_MAX);
-	if (nvme_conf_path == NULL)
-		return -DER_NOMEM;
-	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
-	if (lmm_db_path == NULL)
-		return -DER_NOMEM;
-
-	D_FREE(nvme_conf_path);
-	return 0;
-}
-
 static struct bio_bdev *
 choose_device(int tgt_id, enum smd_dev_type st)
 {

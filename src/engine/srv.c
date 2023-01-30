@@ -1249,6 +1249,7 @@ dss_sys_db_init()
 {
 	int	 rc;
 	char	*lmm_db_path = NULL;
+	char	*nvme_conf_path = NULL;
 
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = vos_db_init(dss_storage_path);
@@ -1260,10 +1261,19 @@ dss_sys_db_init()
 		return rc;
 	}
 
-	rc = bio_get_lmm_db_path(lmm_db_path);
-	if (rc) {
-		return rc;
+	if (dss_nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
 	}
+
+	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
+	if (lmm_db_path == NULL)
+		return -DER_NOMEM;
+
+	D_FREE(nvme_conf_path);
 
 	rc = lmm_db_init(lmm_db_path);
 	if (rc)

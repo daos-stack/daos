@@ -807,26 +807,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		bool	needs_free = false;
-
-		rc = bio_get_lmm_db_path(lmm_db_path);
-		if (rc) {
-			if (rc == -DER_INVAL)
-				lmm_db_path = LMMDB_PATH;
-			else
-				goto failed;
-		} else {
-			needs_free = true;
-		}
-
 		if (use_sys_db)
-			rc = lmm_db_init(lmm_db_path);
+			rc = lmm_db_init(db_path);
 		else
-			rc = lmm_db_init_ex(lmm_db_path, "self_db", true, true);
+			rc = lmm_db_init_ex(db_path, "self_db", true, true);
 		db = lmm_db_get();
-
-		if (needs_free)
-			D_FREE(lmm_db_path);
 	} else {
 		if (use_sys_db)
 			rc = vos_db_init(db_path);
