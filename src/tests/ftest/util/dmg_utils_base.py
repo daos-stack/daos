@@ -323,6 +323,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool create command object."""
                 super().__init__("/run/dmg/pool/create/*", "create")
+                self.label = BasicParameter(None, position=1)
                 self.group = FormattedParameter("--group={}", None)
                 self.user = FormattedParameter("--user={}", None)
                 self.acl_file = FormattedParameter("--acl-file={}", None)
@@ -334,7 +335,6 @@ class DmgCommandBase(YamlCommand):
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
-                self.label = FormattedParameter("--label={}", None)
                 self.nranks = FormattedParameter("--nranks={}", None)
 
         class DeleteAclSubCommand(CommandWithParameters):
