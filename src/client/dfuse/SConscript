@@ -68,6 +68,7 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv.Replace(CFLAGS='')
     pil4dfsenv.Replace(CCFLAGS='-O0 -g -fPIC -Isrc/client/dfs')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
     pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'dl', 'capstone'])
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:

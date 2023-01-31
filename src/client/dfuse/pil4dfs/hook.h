@@ -25,7 +25,7 @@ enum ERROR_CODE_REGISTER_HOOK {
  */
 int
 register_a_hook(const char *module_name, const char *func_Name, const void *new_func_addr,
-				const long int *ptr_org_func);
+		const long int *ptr_org_func);
 
 /**
  * Install hooks by setting up trampolines for all functions registered.
