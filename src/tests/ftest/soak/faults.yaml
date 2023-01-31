@@ -66,12 +66,12 @@ pool_reserved:
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
   control_method: daos
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 faults:
   fault_list:
@@ -138,9 +138,7 @@ ior_faults:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - 'RP_2G1'
-  dfs_dir_oclass:
-    - 'RP_2G1'
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true

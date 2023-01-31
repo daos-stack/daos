@@ -76,7 +76,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -133,11 +134,7 @@ ior_smoke:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
@@ -167,11 +164,7 @@ fio_smoke:
       - 'rw'
       - 'randrw'
     oclass:
-      - "EC_2P1GX"
-      # - "EC_4P1G1"
-      # - "EC_4P2GX"
-      # - "EC_8P2G1"
-      # - "EC_16P2GX"
+      - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
@@ -194,7 +187,7 @@ vpic_smoke:
     thread_count: 8
     cores: '0-3'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 lammps_smoke:
   job_timeout: 10
   nodesperjob:
@@ -210,7 +203,7 @@ lammps_smoke:
     thread_count: 8
     cores: '0-3'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 mdtest_smoke:
   # maximum timeout for a single job in test in minutes
   job_timeout: 10
@@ -233,11 +226,7 @@ mdtest_smoke:
   depth:
     - 0
   dfs_oclass:
-    - "EC_2P1G1"
-    # - "EC_4P1G1"
-    # - "EC_4P2G1"
-    # - "EC_8P2G1"
-    # - "EC_16P2G1"
+    - ["EC_2P1G1", "RP_2G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
@@ -262,11 +251,7 @@ macsio_smoke:
   num_dumps: 2
   debug_level: 1
   oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true

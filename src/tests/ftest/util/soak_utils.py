@@ -67,13 +67,13 @@ def add_pools(self, pool_names):
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
-def add_containers(self, pool, oclass=None, path="/run/container/*"):
+def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/container/*"):
     """Create a list of containers that the various jobs use for storage.
 
     Args:
         pool: pool to create container
-        oclass: object class of container
-
+        file_oclass: file oclass for daos container cmd
+        dir oclass: directory oclass for daos container cmd
 
     """
     rd_fac = None
@@ -82,11 +82,13 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
-    # include rd_fac based on the class
-    if oclass:
-        self.container[-1].oclass.update(oclass)
-        redundancy_factor = extract_redundancy_factor(oclass)
+    # include rd_fac based on the oclass
+    if file_oclass:
+        self.container[-1].file_oclass.update(file_oclass)
+        redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+    if dir_oclass:
+        self.container[-1].dir_oclass.update(dir_oclass)
     properties = self.container[-1].properties.value
     cont_properties = (",").join(filter(None, [properties, rd_fac]))
     if cont_properties is not None:
@@ -856,21 +858,21 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     for api in api_list:
         for b_size in bsize_list:
             for t_size in tsize_list:
-                for o_type in oclass_list:
+                for file_oclass, dir_oclass in oclass_list:
                     # Cancel for ticket DAOS-6095
                     if (api in ["HDF5-VOL", "HDF5", "POSIX"]
                             and t_size == "4k"
-                            and o_type in ["RP_2G1", 'RP_2GX']):
+                            and file_oclass in ["RP_2G1", 'RP_2GX']):
                         self.add_cancel_ticket(
                             "DAOS-6095",
                             "IOR -a {} with -t {} and -o {}".format(
-                                api, t_size, o_type))
+                                api, t_size, file_oclass))
                         continue
                     # Cancel for ticket DAOS-6308
-                    if api == "MPIIO" and o_type == "RP_2GX":
+                    if api == "MPIIO" and file_oclass == "RP_2GX":
                         self.add_cancel_ticket(
                             "DAOS-6308",
-                            "IOR -a {} with -o {}".format(api, o_type))
+                            "IOR -a {} with -o {}".format(api, file_oclass))
                         continue
                     if api in ["HDF5-VOL", "HDF5", "POSIX"] and ppn > 16:
                         continue
@@ -888,17 +890,17 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.dfs_oclass.update(None)
                         ior_cmd.dfs_dir_oclass.update(None)
                     else:
-                        ior_cmd.dfs_oclass.update(o_type)
-                        ior_cmd.dfs_dir_oclass.update(o_type)
+                        ior_cmd.dfs_oclass.update(file_oclass)
+                        ior_cmd.dfs_dir_oclass.update(dir_oclass)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
-                    add_containers(self, pool, o_type)
+                    add_containers(self, pool, file_oclass, dir_oclass)
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size,
-                        o_type, nodesperjob * ppn, nodesperjob, ppn)
+                        file_oclass, nodesperjob * ppn, nodesperjob, ppn)
                     daos_log = os.path.join(
                         self.soaktest_dir, self.test_name + "_" + log_name
                         + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
@@ -955,8 +957,8 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
     plugin_path = self.params.get("plugin_path", "/run/hdf5_vol/")
     # update macsio cmdline for each additional MACsio obj
     for api in api_list:
-        for o_type in oclass_list:
-            add_containers(self, pool, o_type)
+        for file_oclass, dir_oclass in oclass_list:
+            add_containers(self, pool, file_oclass, dir_oclass)
             macsio = MacsioCommand()
             macsio.namespace = macsio_params
             macsio.daos_pool = pool.uuid
@@ -964,7 +966,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             macsio.daos_cont = self.container[-1].uuid
             macsio.get_params(self)
             log_name = "{}_{}_{}_{}_{}_{}".format(
-                job_spec, api, o_type, nodesperjob * ppn, nodesperjob, ppn)
+                job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
                 self.soaktest_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
@@ -1040,7 +1042,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
                 for depth in depth_list:
-                    for oclass in oclass_list:
+                    for file_oclass, dir_oclass in oclass_list:
                         # Get the parameters for Mdtest
                         mdtest_cmd = MdtestCommand()
                         mdtest_cmd.namespace = mdtest_params
@@ -1051,24 +1053,15 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.depth.update(depth)
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
-                        mdtest_cmd.dfs_oclass.update(oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(oclass)
-                        if "EC" in oclass:
-                            # oclass_dir can not be EC must be RP based on rf
-                            rf = extract_redundancy_factor(oclass)
-                            if rf >= 2:
-                                mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
-                            elif rf == 1:
-                                mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
-                            else:
-                                mdtest_cmd.dfs_dir_oclass.update("SX")
-                        add_containers(self, pool, oclass)
+                        mdtest_cmd.dfs_oclass.update(file_oclass)
+                        mdtest_cmd.dfs_dir_oclass.update(dir_oclass)
+                        add_containers(self, pool, file_oclass, dir_oclass)
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
-                            oclass, nodesperjob * ppn, nodesperjob,
+                            file_oclass, nodesperjob * ppn, nodesperjob,
                             ppn)
                         daos_log = os.path.join(
                             self.soaktest_dir, self.test_name + "_" + log_name
@@ -1082,8 +1075,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             dfuse, dfuse_start_cmdlist = start_dfuse(
                                 self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                             sbatch_cmds.extend(dfuse_start_cmdlist)
-                            mdtest_cmd.test_dir.update(
-                                dfuse.mount_dir.value)
+                            mdtest_cmd.test_dir.update(dfuse.mount_dir.value)
                         mpirun_cmd = Mpirun(mdtest_cmd, mpi_type=self.mpi_module)
                         mpirun_cmd.get_params(self)
                         mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1169,7 +1161,7 @@ def create_fio_cmdline(self, job_spec, pool):
     for blocksize in bs_list:
         for size in size_list:
             for rw in rw_list:
-                for o_type in oclass_list:
+                for file_oclass, dir_oclass in oclass_list:
                     # update fio params
                     fio_cmd.update(
                         "global", "blocksize", blocksize,
@@ -1185,14 +1177,14 @@ def create_fio_cmdline(self, job_spec, pool):
                     if fio_cmd.api.value == "POSIX":
                         # Connect to the pool, create container
                         # and then start dfuse
-                        add_containers(self, pool, o_type)
+                        add_containers(self, pool, file_oclass, dir_oclass)
                         daos_cmd = DaosCommand(self.bin)
                         daos_cmd.container_set_attr(pool.uuid,
                                                     self.container[-1].uuid,
                                                     'dfuse-direct-io-disable',
                                                     'on')
                         log_name = "{}_{}_{}_{}_{}".format(
-                            job_spec, blocksize, size, rw, o_type)
+                            job_spec, blocksize, size, rw, file_oclass)
                         dfuse, cmds = start_dfuse(
                             self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                     # Update the FIO cmdline
@@ -1240,11 +1232,11 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         return commands
 
     oclass_list = self.params.get("oclass", app_params)
-    for oclass in oclass_list:
-        add_containers(self, pool, oclass)
+    for file_oclass, dir_oclass in oclass_list:
+        add_containers(self, pool, file_oclass, dir_oclass)
         sbatch_cmds = ["module purge", "module load {}".format(self.mpi_module)]
         log_name = "{}_{}_{}_{}_{}".format(
-            job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
+            job_spec, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
         # include dfuse cmdlines
         if posix:
             dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1270,7 +1262,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         if posix:
             if mpi_module != self.mpi_module:
                 sbatch_cmds.extend(["module purge", "module load {}".format(self.mpi_module)])
-                sbatch_cmds.extend(stop_dfuse(dfuse))
+            sbatch_cmds.extend(stop_dfuse(dfuse))
         commands.append([sbatch_cmds, log_name])
         self.log.info("<<{} cmdlines>>:".format(job_spec.upper()))
         for cmd in sbatch_cmds:

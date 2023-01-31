@@ -77,7 +77,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -135,12 +136,12 @@ ior_stress:
     - '1m'
     - '4k'
   dfs_oclass:
-    - "SX"
-    - "EC_2P1GX"
-    #  - "EC_4P1G1"
-    #  - "EC_4P2GX"
-    #  - "EC_8P2G1"
-    #  - "EC_16P2GX"
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    #  - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
@@ -152,6 +153,7 @@ fio_stress:
     - global
     - test
   global:
+    create_serialize: 0
     directory: "/tmp/daos_dfuse/fio/"
     ioengine: 'libaio'
     thread: 1
@@ -172,12 +174,12 @@ fio_stress:
       - 'rw'
       - 'randrw'
     oclass:
-      - "SX"
-      - "EC_2P1GX"
-      # - "EC_4P1G1"
-      # - "EC_4P2GX"
-      # - "EC_8P2G1"
-      # - "EC_16P2GX"
+      - ["SX","SX"]
+      - ["EC_2P1GX", "RP_2GX"]
+      #  - ["EC_4P1G1", "RP_2GX"]
+      #  - ["EC_4P2GX", "RP_3GX"]
+      #  - ["EC_8P2G1", "RP_3GX"]
+      #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
@@ -199,7 +201,7 @@ vpic_stress:
     mount_dir: "/tmp/daos_dfuse/vpic/"
     disable_caching: true
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
   job_timeout: 35
   nodesperjob:
@@ -215,7 +217,7 @@ lammps_stress:
     thread_count: 8
     cores: '0-3'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 mdtest_stress:
   # maximum timeout for a single job in test in minutes
   job_timeout: 40
@@ -241,12 +243,12 @@ mdtest_stress:
     - 10
     - 0
   dfs_oclass:
-    - "S1"
-    - "EC_2P1G1"
-    #  - "EC_4P1G1"
-    #  - "EC_4P2G1"
-    #  - "EC_8P2G1"
-    #  - "EC_16P2G1"
+    - ["S1","S1"]
+    - ["EC_2P1G1", "RP_2G1"]
+    #  - ["EC_4P1G1", "RP_2G1"]
+    #  - ["EC_4P2G1", "RP_3G1"]
+    #  - ["EC_8P2G1", "RP_3G1"]
+    #  - ["EC_16P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
@@ -273,12 +275,12 @@ macsio_stress:
   num_dumps: 2
   debug_level: 1
   oclass:
-    - "SX"
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["SX","SX"]
+    - ["EC_2P1GX", "RP_2GX"]
+    #  - ["EC_4P1G1", "RP_2GX"]
+    #  - ["EC_4P2GX", "RP_3GX"]
+    #  - ["EC_8P2G1", "RP_3GX"]
+    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
