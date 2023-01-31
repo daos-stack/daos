@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -28,17 +28,17 @@ from ClusterShell.NodeSet import NodeSet
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing
+from process_core_files import CoreFileProcessing, CoreFileException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from host_utils import get_node_set, get_local_host, HostInfo, HostException    # noqa: E402
-from logger_utils import get_console_handler, get_file_handler                  # noqa: E402
-from results_utils import create_html, create_xml, Job, Results, TestResult     # noqa: E402
-from run_utils import run_local, run_remote, RunException                       # noqa: E402
-from slurm_utils import show_partition, create_partition, delete_partition      # noqa: E402
-from user_utils import get_chown_command                                        # noqa: E402
+from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
+from logger_utils import get_console_handler, get_file_handler                # noqa: E402
+from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
+from user_utils import get_chown_command                                      # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -48,6 +48,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
@@ -221,28 +222,6 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
-def find_command(source, pattern, depth, other=None):
-    """Get the find command.
-
-    Args:
-        source (str): where the files are currently located
-        pattern (str): pattern used to limit which files are processed
-        depth (int): max depth for find command
-        other (object, optional): other commands, as a list or str, to include at the end of the
-            base find command. Defaults to None.
-
-    Returns:
-        str: the find command
-
-    """
-    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
-    if isinstance(other, list):
-        command.extend(other)
-    elif isinstance(other, str):
-        command.append(other)
-    return " ".join(command)
-
-
 class AvocadoInfo():
     """Information about this version of avocado."""
 
@@ -359,7 +338,7 @@ class AvocadoInfo():
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
             try:
-                result = run_local(logger, ["avocado", "-v"], check=True)
+                result = run_local(logger, "avocado -v", check=True)
             except RunException as error:
                 message = "Error obtaining avocado version after failed avocado.core.version import"
                 raise LaunchException(message) from error
@@ -409,7 +388,7 @@ class AvocadoInfo():
 
         except ModuleNotFoundError:
             # Once lightweight runs are using python3-avocado, this can be removed
-            result = run_local(logger, ["avocado", "config"], check=True)
+            result = run_local(logger, "avocado config", check=True)
             try:
                 return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
             except IndexError:
@@ -1689,7 +1668,7 @@ class Launch():
 
         # Find all the test files that contain tests matching the tags
         logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, command, check=True)
+        output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
             self.tests.append(TestInfo(test_file, index + 1))
@@ -1705,7 +1684,7 @@ class Launch():
         """
         logger.debug("Checking for fault injection enablement via 'fault_status':")
         try:
-            run_local(logger, ["fault_status"], check=True)
+            run_local(logger, "fault_status", check=True)
             logger.debug("  Fault injection is enabled")
             return True
         except RunException:
@@ -1738,7 +1717,7 @@ class Launch():
             if args.extra_yaml:
                 command.extend(args.extra_yaml)
             command.extend(["--summary", "3"])
-            run_local(logger, command, check=False)
+            run_local(logger, " ".join(command), check=False)
 
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
@@ -1966,7 +1945,7 @@ class Launch():
             # Optionally display a diff of the yaml file
             if args.verbose > 0:
                 command = ["diff", "-y", orig_yaml_file, yaml_file]
-                run_local(logger, command, check=False)
+                run_local(logger, " ".join(command), check=False)
 
         # Return the untouched or modified yaml file
         return yaml_file
@@ -2174,7 +2153,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, ["df", "-h", path], check=False)
+            run_local(logger, " ".join(["df", "-h", path]), check=False)
         except RunException:
             pass
 
@@ -2309,8 +2288,8 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, ["/usr/bin/rm", "-rf", certs_dir])
-            run_local(logger, [command, daos_test_log_dir])
+            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
+            run_local(logger, " ".join([command, daos_test_log_dir]))
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2339,7 +2318,8 @@ class Launch():
         start_time = int(time.time())
 
         try:
-            return_code = run_local(logger, command, capture_output=False, check=False).returncode
+            return_code = run_local(
+                logger, " ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
                 logger.debug("All avocado test variants passed")
             elif return_code == 2:
@@ -2379,9 +2359,10 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, ["mkdir", "-p", latest_crash_dir], check=True)
+                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
                     for crash_file in crash_files:
-                        run_local(logger, ["mv", crash_file, latest_crash_dir], check=True)
+                        run_local(
+                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
@@ -2491,7 +2472,7 @@ class Launch():
                     continue
                 return_code |= self._archive_files(
                     summary, data["hosts"].copy(), data["source"], data["pattern"],
-                    data["destination"], data["depth"], threshold, data["timeout"])
+                    data["destination"], data["depth"], threshold, data["timeout"], test)
 
         # Optionally rename the test results directory for this test
         if rename:
@@ -2653,7 +2634,7 @@ class Launch():
         return 0
 
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
-                       timeout):
+                       timeout, test=None):
         """Archive the files from the source to the destination.
 
         Args:
@@ -2665,6 +2646,7 @@ class Launch():
             depth (int): max depth for find command
             threshold (str): optional upper size limit for test log files
             timeout (int): number of seconds to wait for the command to complete.
+            test (TestInfo): the test information
 
         Returns:
             int: status code: 0 = success, 16 = failure
@@ -2704,9 +2686,9 @@ class Launch():
         # Move the test files to the test-results directory on this host
         return_code |= self._move_files(file_hosts, source, pattern, destination, depth, timeout)
 
-        if "core files" in summary:
+        if test and "core files" in summary:
             # Process the core files
-            return_code |= self._process_core_files(os.path.split(destination)[0])
+            return_code |= self._process_core_files(os.path.split(destination)[0], test)
 
         return return_code
 
@@ -2924,10 +2906,10 @@ class Launch():
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
-        command = ["clush", "-w", str(hosts), "-v", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
+        command = ["clush", "-w", str(hosts), "-pv", "--rcopy", tmp_copy_dir, "--dest", rcopy_dest]
         return_code = 0
         try:
-            run_local(logger, command, check=True, timeout=timeout)
+            run_local(logger, " ".join(command), check=True, timeout=timeout)
 
         except RunException:
             message = f"Error copying remote files to {destination}"
@@ -2944,29 +2926,39 @@ class Launch():
 
         return return_code
 
-    def _process_core_files(self, test_job_results):
+    def _process_core_files(self, test_job_results, test):
         """Generate a stacktrace for each core file detected.
 
         Args:
             test_job_results (str): the location of the core files
+            test (TestInfo): the test information
 
         Returns:
-            int: status code: 0 = success, 256 = failure
+            int: status code: 2048 = Core file exist; 256 = failure; 0 = success
 
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            error_count = core_file_processing.process_core_files(test_job_results, True)
-            if error_count:
-                message = f"Errors detected processing test core files: {error_count}"
-                self._fail_test(self.result.tests[-1], "Process", message)
-                return 256
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+
+        except CoreFileException:
+            message = "Errors detected processing test core files"
+            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            return 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
+            message = "One or more core files detected after test execution"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 2048
+        if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
+            message = "No core files detected when expected"
+            self._fail_test(self.result.tests[-1], "Process", message, None)
+            return 256
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
@@ -3087,6 +3079,7 @@ class Launch():
             256: "ERROR: Failed to process core files after one or more tests!",
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
+            2048: "ERROR: Core stack trace files detected!",
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:

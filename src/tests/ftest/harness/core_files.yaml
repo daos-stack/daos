@@ -1,0 +1,6 @@
+hosts:
+  test_servers: 2
+timeout: 120
+pool:
+  size: 2G
+  control_method: dmg
