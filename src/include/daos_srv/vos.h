@@ -1253,6 +1253,7 @@ struct chkpt_ctx {
 	cc_wait_fn_t            cc_wait_fn;
 	cc_wake_fn_t            cc_wake_fn;
 	uint64_t                cc_commit_id;
+	uint64_t                cc_wait_id;
 	void                   *cc_sched_arg;
 	void                   *cc_eventual;
 };

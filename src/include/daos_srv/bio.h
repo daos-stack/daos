@@ -1036,22 +1036,6 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  */
 int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
 
-typedef void (*ckp_notify_cb)(uint64_t commit_id, void *arg);
-
-/*
- * Set a callback to notify upper layer if chkpt_id is committed.
- *
- * \param[in]	mc		BIO meta context
- * \param[in]	chkpt_id	wal ID checkpoint is waiting for
- * \param[in]	notify_cb	Callback to invoke
- * \param[in]	arg		Arg to pass to callback
- *
- * \return			Zero on success, -DER_ALREADY if no wait is necessary
- */
-int
-     bio_wal_set_ckp_id(struct bio_meta_context *mc, uint64_t chkpt_id, ckp_notify_cb notify_cb,
-			void *arg);
-
 /*
  * Query meta capacity & meta block size & meta blob header blocks.
  */
