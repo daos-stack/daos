@@ -90,7 +90,7 @@ class NvmePoolCapacity(TestWithServers):
             results.put("FAIL")
 
     def test_create_delete(self, num_pool=2, num_cont=5, total_count=100,
-                           scm_size=100000000000, nvme_size=300000000000):
+                           scm_size_percent=50, nvme_size_percent=90):
         """
         Test Description:
             This method is used to create/delete pools
@@ -113,9 +113,9 @@ class NvmePoolCapacity(TestWithServers):
             for val in range(0, num_pool):
                 self.pool.append(self.get_pool(create=False))
                 # Split total SCM and NVME size for creating multiple pools.
-                temp = int(scm_size) / num_pool
-                self.pool[-1].scm_size.update(str(temp))
-                temp = int(nvme_size) / num_pool
+                temp = "{}{}".format((int(scm_size_percent) / num_pool),"%")
+                self.pool[-1].scm_size.update(temp)
+                temp = "{}{}".format((int(nvme_size_percent) / num_pool),"%")
                 self.pool[-1].nvme_size.update(str(temp))
                 self.pool[-1].create()
 
@@ -167,8 +167,8 @@ class NvmePoolCapacity(TestWithServers):
             for val in range(0, num_pool):
                 self.pool.append(self.get_pool(create=False))
                 # Split total SCM and NVME size for creating multiple pools.
-                self.pool[-1].scm_size.value = int(test[0]) / num_pool
-                self.pool[-1].nvme_size.value = int(test[1]) / num_pool
+                self.pool[-1].scm_size.value = "{}{}".format(int(test[0]) / num_pool,"%")
+                self.pool[-1].nvme_size.value = "{}{}".format(int(test[1]) / num_pool,"%")
                 self.pool[-1].create()
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
