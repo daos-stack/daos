@@ -58,7 +58,7 @@ static int found_libc = 1;
 static unsigned char instruction_bounce[] = {0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x78, 0x56,
 					     0x34, 0x12, 0x78, 0x56, 0x34, 0x12};
 
-/* The list of memory blocks alloated to hold patches for hook */
+/* The list of memory blocks allocated to hold patches for hook */
 static struct patch_block_t patch_blk_list[MAX_MODULE];
 
 /* start to compile list of memory blocks in /proc/pid/maps */
@@ -71,7 +71,7 @@ static struct patch_block_t patch_blk_list[MAX_MODULE];
 
 static int num_seg, num_lib_in_map;
 
-/* List of min and max addreses of segments in /proc/pid/maps */
+/* List of min and max addresses of segments in /proc/pid/maps */
 static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 
 /* List of base addresses of loaded libraries */
@@ -152,7 +152,7 @@ determine_lib_path(void)
  * query_func_addr - Determine the addresses and code sizes of functions in func_name_list[].
  *   @lib_path: The full path of the shared object file
  *   @func_name_list: A list of function names in this lib to be intercepted
- *   @func_addr_list: A list to hold the addreses of functions
+ *   @func_addr_list: A list to hold the addresses of functions
  *   @func_len_list:  A list of hold the size (number of bytes) of functions
  *   @img_base_addr:  The base address of this loaded module
  *   @num_func:       The number of functions in the list of func_name_list[]
@@ -187,7 +187,7 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 		printf("Fail to mmap file %s\nQuit\n", lib_path);
 		exit(1);
 	}
-	header = (Elf64_Ehdr *) map_start;
+	header = (Elf64_Ehdr *)map_start;
 
 	sections = (Elf64_Shdr *)((char *)map_start + header->e_shoff);
 
@@ -261,7 +261,7 @@ uninstall_hook(void)
 				printf("Error in executing p_mp().\n");
 				exit(1);
 			}
-			/* save orginal code for uninstall */
+			/* save original code for uninstall */
 			memcpy(tramp_list[iFunc].addr_org_func, tramp_list[iFunc].org_code, 5);
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
 				printf("Error in executing p_mp().\n");
@@ -435,7 +435,6 @@ get_module_maps(void)
 		}
 	}
 }
-#undef MAX_MAP_SIZE
 
 /*
  * find_usable_block - Try to find an allocated memory block that is close enough to

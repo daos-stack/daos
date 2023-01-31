@@ -66,7 +66,7 @@ def build_client_libs_shared(env, prereqs):
     pil4dfsenv = env.Clone()
     pil4dfsenv.Replace(CFLAGS = '')
     pil4dfsenv.Replace(CCFLAGS = '-O0 -g -fPIC -Isrc/client/dfs')
-    pil4dfsenv.Replace(LINKFLAGS = '-g -O0 -shared -lpthread -ldaos -ldfs -ldl -lcapstone')
+    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'dl', 'capstone'])
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:
         pil4dfs_obj += pil4dfsenv.SharedObject(os.path.join('pil4dfs', src), SHOBJPREFIX='s_')

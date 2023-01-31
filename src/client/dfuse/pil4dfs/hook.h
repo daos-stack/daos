@@ -17,7 +17,7 @@ enum ERROR_CODE_REGISTER_HOOK {
  *				full name ("ld-2.17.so") are accepted.
  * \param[in]	func_Name	The function name string
  * \param[in]	new_func_addr	The address of our new implementation.
- * \param[out]	ptr_org_func	*ptr_org_func will hold the address of orginal function
+ * \param[out]	ptr_org_func	*ptr_org_func will hold the address of original function
  *				implemented in lib module_name.
  *
  * \return			0		success

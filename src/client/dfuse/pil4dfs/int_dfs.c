@@ -241,7 +241,7 @@ static int (*real_fxstatat)(int ver, int dirfd, const char *path, struct stat *s
 	int flags);
 
 static int (*real_statx)(int dirfd, const char *path, int flags, unsigned int mask,
-	struct statx *statx_buf);
+			 struct statx *statx_buf);
 
 static int (*real_isatty)(int fd);
 
@@ -282,7 +282,7 @@ static int (*real_utimes)(const char *path, const struct timeval times[2]);
 static int (*real_futimens)(int fd, const struct timespec times[2]);
 
 static int (*real_utimensat)(int dirfd, const char *path, const struct timespec times[2],
-	int flags);
+			     int flags);
 
 static int (*real_openat)(int dirfd, const char *pathname, int flags, ...);
 

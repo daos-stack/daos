@@ -35,7 +35,7 @@
  */
 #define OFFSET_NEW_FUNC_ADDR	(6)
 
-/* The max number of bytes to disassemble for the entry code of orginal functions */
+/* The max number of bytes to disassemble for the entry code of original functions */
 #define MAX_LEN_TO_DISASSEMBLE	(24)
 
 /* The max length of an instruction */
@@ -66,13 +66,13 @@ struct module_patch_info_t {
 };
 
 struct trampoline_t {
-	/* save the orginal function entry code and jump instrument */
+	/* save the original function entry code and jump instrument */
 	unsigned char	trampoline[MAX_TRAMPOLINE_LEN];
 	/* the code can jmp to my hook function. +3 for padding */
 	unsigned char	bounce[BOUNCE_CODE_LEN+2];
 	/* to save 5 bytes of the entry instruction of original function */
 	char		org_code[12];
-	/* the address of orginal function */
+	/* the address of original function */
 	void		*addr_org_func;
 	/* the number of bytes copied of the entry instructions of the original function. */
 	/* Needed when removing hooks. */
@@ -89,7 +89,7 @@ struct patch_block_t {
 };
 
 /**
- * Queries the addresses of all orginal functions to hook.
+ * Queries the addresses of all original functions to hook.
  */
 static void
 query_all_org_func_addr(void);
@@ -140,7 +140,7 @@ allocate_memory_block_for_patches(void);
 /**
  * Query the index of the name of a library in lib_name_list[].
  *
- * \param[in]	lib_name_str	The ibrary name
+ * \param[in]	lib_name_str	The library name
  *
  * \return			The index in lib_name_list[].
  *				-1	Not found in the list
