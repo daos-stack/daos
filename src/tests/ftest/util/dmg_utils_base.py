@@ -499,7 +499,7 @@ class DmgCommandBase(YamlCommand):
             """Get the dmg storage sub command object."""
             if self.sub_command.value == "led":
                 self.sub_command_class = self.LedSubCommand()
-            if self.sub_command.value == "replace":
+            elif self.sub_command.value == "replace":
                 self.sub_command_class = self.ReplaceSubCommand()
             elif self.sub_command.value == "format":
                 self.sub_command_class = self.FormatSubCommand()
@@ -549,7 +549,7 @@ class DmgCommandBase(YamlCommand):
                 """Get the dmg storage led sub command object."""
                 if self.sub_command.value == "identify":
                     self.sub_command_class = self.IdentifySubCommand()
-                if self.sub_command.value == "check":
+                elif self.sub_command.value == "check":
                     self.sub_command_class = self.CheckSubCommand()
                 else:
                     self.sub_command_class = None

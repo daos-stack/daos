@@ -19,7 +19,7 @@ class VmdLedStatus(OSAUtils):
     # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
         super().setUp()
-        self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
+        self.targets = self.params.get("targets", "/run/server_config/engines/0/*")
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
@@ -48,30 +48,53 @@ class VmdLedStatus(OSAUtils):
                     uuid.append(value['storage']['smd_info']['devices'][target]['uuid'])
         return uuid
 
-    def get_led_status_value(self, device_id=None):
-        """Get LED Status value.
+    def run_vmd_led_identify(self, device_id=None):
+        """Run the VMD LED identify command.
 
         Args:
             device_id (str): Device UUID
         Returns:
-            dmg LED status information
+            dmg LED identify command response.
         """
         if device_id is None:
             self.fail("No device id provided")
 
         try:
-            result = self.dmg.storage_identify_vmd(uuid=device_id)
+            result = self.dmg.storage_led_identify(ids=device_id)
         except CommandFailure as details:
             self.fail("dmg command failed: {}".format(details))
 
-        data = json.loads(result.stdout_text)
-        resp = data['response']
-        if data['error'] or len(resp['host_errors']) > 0:
-            if data['error']:
-                self.fail("dmg command failed: {}".format(data['error']))
+        self.log.info(result)
+        if result['error'] or len(result['reponse']['host_errors']) > 0:
+            if result['error']:
+                self.fail("dmg command failed: {}".format(result['error']))
             else:
-                self.fail("dmg command failed: {}".format(resp['host_errors']))
-        return resp
+                self.fail("dmg command failed: {}".format(result['reponse']['host_errors']))
+        return result
+
+    def get_led_status_value(self, device_id=None):
+        """Get the LED status value (VMD or NVME)
+
+        Args:
+            device_id (str): Device UUID
+        Returns:
+            Get the LED status value.
+        """
+        if device_id is None:
+            self.fail("No device id provided")
+
+        try:
+            result = self.dmg.storage_led_check(ids=device_id)
+        except CommandFailure as details:
+            self.fail("dmg command failed: {}".format(details))
+
+        self.log.info(result)
+        if result['error'] or len(result['response']['host_errors']) > 0:
+            if result['error']:
+                self.fail("dmg command failed: {}".format(result['error']))
+            else:
+                self.fail("dmg command failed: {}".format(result['response']['host_errors']))
+        return result
 
     def set_device_faulty(self, device_id=None):
         """Get a device to faulty state.
@@ -114,9 +137,11 @@ class VmdLedStatus(OSAUtils):
         dev_id = self.get_nvme_device_ids()
         self.log.info("%s", dev_id)
         for val in dev_id:
-            resp = self.get_led_status_value(val)
+            led_identify_result = self.run_vmd_led_identify(val)
+            get_led_ressult = self.get_led_status_value(val)
             time.sleep(15)
-            self.log.info(resp)
+            self.log.info(led_identify_result)
+            self.log.info(get_led_ressult)
 
     def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290

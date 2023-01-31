@@ -11,6 +11,7 @@ server_config:
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
+      targets: 8
       log_file: daos_server0.log
       storage:
         0:
@@ -26,6 +27,7 @@ server_config:
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
+      targets: 8
       log_file: daos_server1.log
       storage:
         0:
