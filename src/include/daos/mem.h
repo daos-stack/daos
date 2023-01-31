@@ -914,8 +914,6 @@ struct umem_cache {
 	d_list_t                 ca_pgs_dirty;
 	/** Pages waiting for copy to DMA buffer */
 	d_list_t                 ca_pgs_copying;
-	/** Pages waiting for a WAL commit to checkpoint */
-	d_list_t                 ca_pgs_waiting;
 	/** LRU list all pages not in one of the other states for future eviction support */
 	d_list_t                 ca_pgs_lru;
 	/** TODO: some other global status */

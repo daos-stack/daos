@@ -1605,7 +1605,6 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_copying);
-	D_INIT_LIST_HEAD(&cache->ca_pgs_waiting);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_lru);
 
 	for (idx = 0; idx < num_pages; idx++)
@@ -1785,26 +1784,41 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 	return 0;
 }
 
-/** We can look into other methods later. For now, only handle a few in-flight pages
- *  being checkpointed at a time.  This will limit how much memory we use in each
- *  xstream for checkpointing.
- */
-#define MAX_INFLIGHT 8
+/** Maximum number of sets of pages in-flight at a time */
+#define MAX_INFLIGHT_SETS 4
+/** Maximum contiguous range to checkpoint */
+#define MAX_IO_SIZE       (8 * 1024 * 1024)
+/** Maximum number of pages that can be in one set */
+#define MAX_PAGES_PER_SET 10
+/** Maximum number of ranges that can be in one page */
+#define MAX_IOD_PER_PAGE  ((UMEM_CACHE_BMAP_SZ << 6) / 2)
+/** Maximum number of IODs a set can handle */
+#define MAX_IOD_PER_SET   (2 * MAX_IOD_PER_PAGE)
+
 struct umem_checkpoint_data {
+	/** List link for inflight sets */
 	d_list_t                 cd_link;
+	/* List of storage ranges being checkpointed */
 	struct umem_store_iod    cd_store_iod;
+	/** Ranges in the storage to checkpoint */
+	struct umem_store_region cd_regions[MAX_IOD_PER_SET];
+	/** list of cached page ranges to checkpoint */
 	d_sg_list_t              cd_sg_list;
-	/** Each page can have at most every other chunk so reserve enough space up front to
-	 *  handle that.
-	 */
-	struct umem_store_region cd_regions[UMEM_CACHE_BMAP_SZ / 2];
-	d_iov_t                  cd_iovs[UMEM_CACHE_BMAP_SZ / 2];
+	/** Ranges in memory to checkpoint */
+	d_iov_t                  cd_iovs[MAX_IOD_PER_SET];
 	/** Handle for the underlying I/O operations */
 	daos_handle_t            cd_fh;
+	/** Pointer to pages in set */
+	struct umem_page        *cd_pages[MAX_PAGES_PER_SET];
+	/** Highest transaction ID for pages in set */
+	uint64_t                 cd_max_tx;
+	/** Number of pages included in the set */
+	uint32_t                 cd_nr_pages;
 };
 
 static void
-page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
+page2chkpt(struct umem_store *store, struct umem_page *page,
+	   struct umem_checkpoint_data *chkpt_data)
 {
 	uint64_t *bits = &page->pg_bmap[0];
 	struct umem_store_iod *store_iod = &chkpt_data->cd_store_iod;
@@ -1815,12 +1829,16 @@ page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
 	uint64_t  offset    = (uint64_t)page->pg_id << UMEM_CACHE_PAGE_SZ_SHIFT;
 	uint64_t               map_offset;
 	uint8_t  *page_addr = page->pg_addr;
-	int       nr        = 0;
+	int                    nr        = sgl->sg_nr_out;
 	int                    count;
 	uint64_t               mask;
 	uint64_t               bit;
 
 	page->pg_chkpt_data = chkpt_data;
+	chkpt_data->cd_pages[chkpt_data->cd_nr_pages++] = page;
+	if (store->stor_ops->so_wal_id_cmp(store, chkpt_data->cd_max_tx, page->pg_last_inflight) <
+	    0)
+		chkpt_data->cd_max_tx = page->pg_last_inflight;
 
 	for (i = 0; i < UMEM_CACHE_BMAP_SZ; i++) {
 		if (bits[i] == 0)
@@ -1839,6 +1857,8 @@ page2chkpt(struct umem_page *page, struct umem_checkpoint_data *chkpt_data)
 				mask |= bit;
 				count++;
 				first_bit_shift++;
+				if ((count << UMEM_CACHE_CHUNK_SZ_SHIFT) == MAX_IO_SIZE)
+					break;
 			}
 
 			store_iod->io_regions[nr].sr_addr = offset + map_offset;
@@ -1857,23 +1877,30 @@ next_bmap:
 	}
 	sgl->sg_nr_out = sgl->sg_nr = nr;
 	store_iod->io_nr            = nr;
+	/** Presently, the flush API can yield. Yielding is fine but ideally,
+	 *  we would like it to fail in such cases so we can re-run the checkpoint
+	 *  creation for the pages in the set. As it stands, we must set the copying
+	 *  bit here to avoid changes to the page.
+	 */
+	page->pg_copying = 1;
 }
 
 /** This is O(n) but the list is tiny so let's keep it simple */
 static void
-page_insert_sorted(struct umem_store *store, struct umem_page *page, d_list_t *list)
+chkpt_insert_sorted(struct umem_store *store, struct umem_checkpoint_data *chkpt_data,
+		    d_list_t *list)
 {
-	struct umem_page *other;
+	struct umem_checkpoint_data *other;
 
-	d_list_for_each_entry(other, list, pg_link) {
-		if (store->stor_ops->so_wal_id_cmp(store, page->pg_last_checkpoint,
-						   other->pg_last_checkpoint) < 0) {
-			d_list_add(&page->pg_link, &other->pg_link);
+	d_list_for_each_entry(other, list, cd_link) {
+		if (store->stor_ops->so_wal_id_cmp(store, chkpt_data->cd_max_tx, other->cd_max_tx) <
+		    0) {
+			d_list_add(&chkpt_data->cd_link, &other->cd_link);
 			return;
 		}
 	}
 
-	d_list_add_tail(&page->pg_link, list);
+	d_list_add_tail(&chkpt_data->cd_link, list);
 }
 
 int
@@ -1887,6 +1914,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	uint64_t                     committed_tx = 0;
 	uint64_t                     chkpt_id     = *out_id;
 	d_list_t                     free_list;
+	d_list_t                     waiting_list;
 	int                          i;
 	int                          rc;
 	int                          inflight = 0;
@@ -1900,12 +1928,13 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	D_ASSERT(store != NULL);
 
 	D_INIT_LIST_HEAD(&free_list);
-	D_ALLOC_ARRAY(chkpt_data_all, MAX_INFLIGHT);
+	D_INIT_LIST_HEAD(&waiting_list);
+	D_ALLOC_ARRAY(chkpt_data_all, MAX_INFLIGHT_SETS);
 	if (chkpt_data_all == NULL)
 		return -DER_NOMEM;
 
 	/** Setup the inflight IODs */
-	for (i = 0; i < MAX_INFLIGHT; i++) {
+	for (i = 0; i < MAX_INFLIGHT_SETS; i++) {
 		chkpt_data = &chkpt_data_all[i];
 		d_list_add_tail(&chkpt_data->cd_link, &free_list);
 		chkpt_data->cd_store_iod.io_regions = &chkpt_data->cd_regions[0];
@@ -1927,65 +1956,81 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	}
 
 	do {
-		/** first try to add up to MAX_INFLIGHT pages to the waiting queue */
-		while (inflight < MAX_INFLIGHT &&
-		       (page = d_list_pop_entry(&cache->ca_pgs_copying, struct umem_page,
-						pg_link)) != NULL) {
+		/** first try to add up to MAX_INFLIGHT_SETS to the waiting queue */
+		while (inflight < MAX_INFLIGHT_SETS && !d_list_empty(&cache->ca_pgs_copying)) {
 			chkpt_data =
 			    d_list_pop_entry(&free_list, struct umem_checkpoint_data, cd_link);
-			D_ASSERT(chkpt_data != NULL);
-			page2chkpt(page, chkpt_data);
 
-			/** Presently, the flush API can yield.  Yielding is fine but ideally,
-			 *  we would like it to fail in such cases so we can run page2chkpt again.
-			 *  As it stands, we must set the copying bit here to avoid changes to the
-			 *  page.
-			 */
-			page->pg_copying = 1;
+			D_ASSERT(chkpt_data != NULL);
+
+			chkpt_data->cd_nr_pages      = 0;
+			chkpt_data->cd_sg_list.sg_nr = chkpt_data->cd_sg_list.sg_nr_out = 0;
+			chkpt_data->cd_store_iod.io_nr                                  = 0;
+			chkpt_data->cd_max_tx                                           = 0;
+
+			while (chkpt_data->cd_nr_pages < MAX_PAGES_PER_SET &&
+			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_SET &&
+			       (page = d_list_pop_entry(&cache->ca_pgs_copying, struct umem_page,
+							pg_link)) != NULL) {
+				D_ASSERT(chkpt_data != NULL);
+				page2chkpt(store, page, chkpt_data);
+			}
+
 			rc = store->stor_ops->so_flush_prep(store, &chkpt_data->cd_store_iod,
 							    &chkpt_data->cd_fh);
 			if (rc != 0) {
-				/** Just put the page back and break the loop */
-				page->pg_copying = 0;
-				d_list_add(&page->pg_link, &cache->ca_pgs_copying);
+				/** Just put the pages back and break the loop */
+				for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
+					page             = chkpt_data->cd_pages[i];
+					page->pg_copying = 0;
+					d_list_add(&page->pg_link, &cache->ca_pgs_copying);
+				}
 				d_list_add(&chkpt_data->cd_link, &free_list);
 				break;
 			}
 
-			page->pg_last_checkpoint = page->pg_last_inflight;
+			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
+				page                     = chkpt_data->cd_pages[i];
+				page->pg_last_checkpoint = page->pg_last_inflight;
+			}
 
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
 			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
 
-			page->pg_copying = 0;
+			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
+				page             = chkpt_data->cd_pages[i];
+				page->pg_copying = 0;
+				memset(&page->pg_bmap[0], 0, sizeof(page->pg_bmap));
+			}
 
-			page_insert_sorted(store, page, &cache->ca_pgs_waiting);
+			chkpt_insert_sorted(store, chkpt_data, &waiting_list);
 
-			memset(&page->pg_bmap[0], 0, sizeof(page->pg_bmap));
 			inflight++;
 		}
 
-		page = d_list_pop_entry(&cache->ca_pgs_waiting, struct umem_page, pg_link);
+		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
 
-		wait_cb(store, page->pg_last_checkpoint, &committed_tx, arg);
+		wait_cb(store, chkpt_data->cd_max_tx, &committed_tx, arg);
 
 		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
-							page->pg_last_checkpoint) >= 0);
+							chkpt_data->cd_max_tx) >= 0);
 
 		/** Since the flush API only allows one at a time, let's just do one at a time
 		 *  before copying another page.  We can revisit this later if the API allows
 		 *  to pass more than one fh.
 		 */
-		chkpt_data = page->pg_chkpt_data;
 		rc         = store->stor_ops->so_flush_post(chkpt_data->cd_fh, 0);
 		D_ASSERT(rc == 0);
-		if (page->pg_last_inflight != page->pg_last_checkpoint)
-			d_list_add_tail(&page->pg_link, &cache->ca_pgs_dirty);
-		else
-			d_list_add_tail(&page->pg_link, &cache->ca_pgs_lru);
-		page->pg_waiting = 0;
+		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
+			page = chkpt_data->cd_pages[i];
+			if (page->pg_last_inflight != page->pg_last_checkpoint)
+				d_list_add_tail(&page->pg_link, &cache->ca_pgs_dirty);
+			else
+				d_list_add_tail(&page->pg_link, &cache->ca_pgs_lru);
+			page->pg_waiting = 0;
+		}
 		inflight--;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
