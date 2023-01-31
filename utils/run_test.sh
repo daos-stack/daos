@@ -150,9 +150,7 @@ if [ -d "/mnt/daos" ]; then
         dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
         sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
-        export DAOS_MD_ON_SSD_MODE=1
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
-        unset DAOS_MD_ON_SSD_MODE
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
