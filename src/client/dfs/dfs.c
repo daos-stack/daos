@@ -6889,7 +6889,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				}
 
 				/*
-				 * Ppen the new directory that was relinked and scan it marking the
+				 * Open the new directory that was relinked and scan it marking the
 				 * oids so we don't see them in pass 2.
 				 */
 				rc = dfs_lookup_rel(dfs, now_dir, oid_name, O_RDONLY, &dir,
@@ -6897,7 +6897,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				if (rc) {
 					D_ERROR("dfs_lookup_rel() of %s failed: %d\n",
 						oid_name, rc);
-					return rc;
+					D_GOTO(out_lf2, rc);
 				}
 
 				while (!daos_anchor_is_eof(&anchor_dir)) {
@@ -6997,7 +6997,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 							DP_OID(oids[i]));
 				} else if (rc) {
 					D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out_oit, rc = daos_der2errno(rc));
+					D_GOTO(out_lf2, rc = daos_der2errno(rc));
 				}
 			}
 
