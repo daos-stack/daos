@@ -438,6 +438,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 %{_datarootdir}/%{name}
 %exclude %{_datarootdir}/%{name}/ioil-ld-opts
+%exclude %{_datarootdir}/%{name}/pil4dfs-ld-opts
 %{_unitdir}/%{server_svc_name}
 %{_sysctldir}/%{sysctl_script_name}
 
@@ -475,6 +476,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %endif
 %{python3_sitearch}/pydaos/pydaos_shim.so
 %{_datarootdir}/%{name}/ioil-ld-opts
+%{_datarootdir}/%{name}/pil4dfs-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %{_unitdir}/%{agent_svc_name}
 %{_mandir}/man8/daos.8*
