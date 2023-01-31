@@ -3,7 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
+# pylint: disable=too-many-lines
 import os
 from os.path import join
 import re
