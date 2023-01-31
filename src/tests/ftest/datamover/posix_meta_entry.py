@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 from os.path import join
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
@@ -77,10 +76,6 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         # Create 1 source posix path with test data
         posix_src_path = self.new_posix_test_path(parent=self.workdir)
         self.create_data(posix_src_path)
-
-        # Sleep a short while to ensure uncorrected times would be different.  Without this then
-        # mtime values occasionally be correct, even if they are not set.
-        time.sleep(5)
 
         # Run each variation with and without the --preserve option
         # For each case, create a new destination directory.
