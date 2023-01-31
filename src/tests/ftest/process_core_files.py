@@ -43,7 +43,6 @@ class CoreFileProcessing():
         from util.distro_utils import detect
 
         self.log = log
-        self.exe_names = set()
         self.distro_info = detect()
 
     def process_core_files(self, directory, delete, test=None):
@@ -193,16 +192,15 @@ class CoreFileProcessing():
         result = run_local(self.log, " ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
         self.log.debug("  last line:       %s", last_line)
-        cmd = last_line[7:]
+        cmd = last_line[7:-1]
         self.log.debug("  last_line[7:-1]: %s", cmd)
         # assume there are no arguments on cmd
         find_char = "'"
         if cmd.find(" ") > -1:
             # there are arguments on cmd
             find_char = " "
-        exe_name = cmd[:cmd.find(find_char)]
+        exe_name = cmd[0:cmd.find(find_char)]
         self.log.debug("  executable name: %s", exe_name)
-        self.exe_names.add(exe_name)
         return exe_name
 
     def install_debuginfo_packages(self):
