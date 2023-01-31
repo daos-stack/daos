@@ -34,6 +34,7 @@ OPS_SRC = ['create',
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
 PIL4DFS_SRC = ['int_dfs.c', 'hook.c']
 
+
 def build_common(env, files, is_shared):
     """Build the common objects as shared or static"""
     common = []
@@ -64,8 +65,8 @@ def build_client_libs_shared(env, prereqs):
         il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
 
     pil4dfsenv = env.Clone()
-    pil4dfsenv.Replace(CFLAGS = '')
-    pil4dfsenv.Replace(CCFLAGS = '-O0 -g -fPIC -Isrc/client/dfs')
+    pil4dfsenv.Replace(CFLAGS='')
+    pil4dfsenv.Replace(CCFLAGS='-O0 -g -fPIC -Isrc/client/dfs')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'dl', 'capstone'])
     pil4dfs_obj = []
