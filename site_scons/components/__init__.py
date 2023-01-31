@@ -235,6 +235,8 @@ def define_common(reqs):
 
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
+    reqs.define('capstone', headers=['capstone/capstone.h'], package='capstone-devel')
+
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
 
     reqs.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')

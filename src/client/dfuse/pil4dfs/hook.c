@@ -283,7 +283,7 @@ uninstall_hook(void)
 
 /*
  * query_lib_name_in_list - Query the index of the name of a library in lib_name_list[].
- *   @lib_name_str: The ibrary name
+ *   @lib_name_str: The library name
  * Returns:
  *   The index in lib_name_list[]. (-1) means not found in the list.
  */
@@ -307,7 +307,7 @@ query_lib_name_in_list(const char *lib_name_str)
 
 /*
  * query_registered_module - Query the index of the name of a library in module_list[].
- *   @lib_name_str: The ibrary name
+ *   @lib_name_str: The library name
  * Returns:
  *   The index in module_list[]. (-1) means not found in the list.
  */
@@ -457,7 +457,7 @@ find_usable_block(int idx_mod)
 		p_MemBlk = (((long int)(patch_blk_list[i].patch_addr) +
 			(long int)(patch_blk_list[i].patch_addr_end)) / 2);
 		if ((labs(p_Min - p_MemBlk) < NULL_RIP_VAR_OFFSET) &&
-			(labs(p_Max - p_MemBlk) < NULL_RIP_VAR_OFFSET)) {
+		    (labs(p_Max - p_MemBlk) < NULL_RIP_VAR_OFFSET)) {
 			return i;
 		}
 	}
@@ -479,7 +479,7 @@ allocate_memory_block_for_patches(void)
 
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		if ((module_list[idx_mod].old_func_addr_min == 0) &&
-			(module_list[idx_mod].old_func_addr_max == 0)) {
+		    (module_list[idx_mod].old_func_addr_max == 0)) {
 			continue;
 		}
 		IdxBlk = find_usable_block(idx_mod);
@@ -626,8 +626,9 @@ int install_hook(void)
 
 			insn = NULL;
 			num_inst = cs_disasm(handle,
-				(unsigned char *)tramp_list[nFunc_InBlk].addr_org_func,
-				MAX_LEN_DISASSEMBLE, 0, 0, &insn);
+					     (unsigned char *)
+					     tramp_list[nFunc_InBlk].addr_org_func,
+					     MAX_LEN_DISASSEMBLE, 0, 0, &insn);
 			if (num_inst <= 0) {
 				printf("Failed to disassemble code.\n");
 				exit(1);
@@ -705,7 +706,7 @@ int install_hook(void)
 
 			/* set up function pointers for original functions */
 			/* tramp_list[].trampoline holds the entry address */
-			/* to call orginal function                        */
+			/* to call original function                        */
 			*(module_list[idx_mod].ptr_old_func_add_list[iFunc])
 				= (long int)(tramp_list[nFunc_InBlk].trampoline);
 
@@ -722,7 +723,7 @@ int install_hook(void)
 				exit(1);
 			}
 
-			/* save orginal code for uninstall */
+			/* save original code for uninstall */
 			memcpy(tramp_list[nFunc_InBlk].org_code,
 			       tramp_list[nFunc_InBlk].addr_org_func, 5);
 
@@ -762,7 +763,7 @@ int install_hook(void)
  *                 are accepted.
  *   @func_Name:   The function name.
  *   @new_func_addr: The address of our new implementation.
- *   @ptr_org_func: *ptr_org_func will hold the address of orginal function implemented in
+ *   @ptr_org_func: *ptr_org_func will hold the address of original function implemented in
  *                  lib module_name.
  * Returns:
  *   0: success; otherwise fail.
@@ -839,7 +840,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		num_module++;
 	} else {
 		if (module_list[idx_mod].module_base_addr != lib_base_addr[idx])
-			printf("WARING> module_base_addr != lib_base_addr\n");
+			printf("WARNING> module_base_addr != lib_base_addr\n");
 
 		strcpy(module_list[idx_mod].func_name_list[module_list[idx_mod].num_hook],
 		       func_name);
@@ -861,7 +862,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 }
 
 /*
- * query_all_org_func_addr - Queries the addresses of all orginal functions to hook.
+ * query_all_org_func_addr - Queries the addresses of all original functions to hook.
  * Returns:
  *   void
  */
