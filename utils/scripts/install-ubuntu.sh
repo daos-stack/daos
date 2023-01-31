@@ -53,7 +53,8 @@ apt-get install \
     python3-venv \
     uuid-dev \
     valgrind \
-    yasm
+    yasm \
+    libcapstone-dev
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

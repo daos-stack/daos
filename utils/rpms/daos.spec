@@ -58,9 +58,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -460,6 +462,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw

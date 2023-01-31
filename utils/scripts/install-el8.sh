@@ -62,7 +62,8 @@ dnf --nodocs install \
     systemd \
     valgrind-devel \
     which \
-    yasm
+    yasm \
+    capstone-devel
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then
