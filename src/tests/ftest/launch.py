@@ -2656,12 +2656,6 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
-        # One of the dfuse tests intermittently creates core files which is known so make a
-        # special case for that test.
-        if str(test) == './dfuse/daos_build.py' and './conftest' in core_file_processing.exe_names:
-            logger.info('conftest core file exists from daos_build test, ignoring')
-            corefiles_processed = len(core_file_processing.exe_names) - 1
-
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
