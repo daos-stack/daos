@@ -22,7 +22,6 @@ from general_utils import get_host_data, get_random_string, \
     run_pcmd, list_to_str, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
-from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
@@ -1186,11 +1185,7 @@ def create_fio_cmdline(self, job_spec, pool):
                         # Connect to the pool, create container
                         # and then start dfuse
                         add_containers(self, pool, o_type)
-                        daos_cmd = DaosCommand(self.bin)
-                        daos_cmd.container_set_attr(pool.uuid,
-                                                    self.container[-1].uuid,
-                                                    'dfuse-direct-io-disable',
-                                                    'on')
+                        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
                         log_name = "{}_{}_{}_{}_{}".format(
                             job_spec, blocksize, size, rw, o_type)
                         dfuse, cmds = start_dfuse(
