@@ -21,7 +21,7 @@ logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
-CORE_FILES_IGNORE = {'/dfuse/daos_build.py': ('./conftest')}
+CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
 
 
 class CoreFileException(Exception):
