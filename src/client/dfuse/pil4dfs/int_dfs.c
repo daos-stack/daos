@@ -41,59 +41,55 @@
 #define FAKE_ST_INO(path)	(d_hash_string_u32(path, strlen(path)))
 
 /* structure allocated for a FD for a file */
-typedef struct	{
-	dfs_obj_t 	*file_obj;
+struct FILESTATUS {
+	dfs_obj_t	*file_obj;
 	dfs_obj_t	*parent;
-	int		open_flag;	// the flag used in open()
+	int		open_flag;
 	int		ref_count;
 	int		fd_dup_pre;
 	int		fd_dup_next;
 	unsigned int	st_ino;
 	off_t		offset;
-//	off_t		 MaxDataRange;	// the largest offset in write(). 
-//	size_t		 FileSize;	// inode and file size
-	struct timespec modification_time;	// most recent modification time. 16 bytes. 
 	char item_name[MAX_FILE_NAME_LEN];
-}FILESTATUS, *PFILESTATUS;
+};
 
 /* structure allocated for a FD for a dir */
-typedef struct
-{
-	int 		fd;				// File descriptor
+struct DIRSTATUS {
+	int		fd;
 	uint32_t	num_ents;
-	dfs_obj_t 	*dir_obj;
-	long int	offset;			// the number of entries have been retrieved
+	dfs_obj_t	*dir_obj;
+	long int	offset;
 	int		ref_count;
 	int		fd_dup_pre;
 	int		fd_dup_next;
-	int 		open_flag;
+	int		open_flag;
 	daos_anchor_t	anchor;
 	char		path[MAX_FILE_NAME_LEN];
 	struct dirent	ents[READ_DIR_BATCH_SIZE];
-}DIRSTATUS;
+};
 
-typedef struct	{
+struct FD_DUP2ED {
 	int fd_src, fd_dest;
-}FD_DUP2ED, *PFD_DUP2ED;
+};
 
 /* working dir of current process */
-static char	cur_dir[MAX_FILE_NAME_LEN]="";
+static char	cur_dir[MAX_FILE_NAME_LEN] = "";
 
 /* the flag to indicate whether initlization is finished or not */
-static int	inited=0;
-static pthread_mutex_t lock_fd;
-static pthread_mutex_t lock_dirfd;
+static int		inited;
+static pthread_mutex_t	lock_fd;
+static pthread_mutex_t	lock_dirfd;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t	mode_not_umask;
 
 static daos_handle_t	poh;
 static daos_handle_t	coh;
-static dfs_t 			*dfs = NULL;
-static struct d_hash_table *dfs_dir_hash = NULL;
-static char *fs_root = NULL;
+static dfs_t		*dfs;
+static struct d_hash_table *dfs_dir_hash;
+static char *fs_root;
 static int len_fs_root;
-static int fd_stdin=-1, fd_stdout=-1, fd_stderr=-1;
+static int fd_stdin = -1, fd_stdout = -1, fd_stderr = -1;
 
 
 static void init_dfs(void);
@@ -156,11 +152,11 @@ static d_hash_table_ops_t hdl_hash_ops = {
 static dfs_obj_t *
 lookup_insert_dir(const char *name, mode_t *mode)
 {
-	struct dir_hdl *hdl;
-	dfs_obj_t *oh;
-	d_list_t *rlink;
-	size_t len = strlen(name);
-	int rc;
+	struct dir_hdl	*hdl;
+	dfs_obj_t	*oh;
+	d_list_t	*rlink;
+	size_t		len = strlen(name);
+	int		rc;
 
 	rlink = d_hash_rec_find(dfs_dir_hash, name, len);
 	if (rlink != NULL) {
@@ -197,218 +193,157 @@ lookup_insert_dir(const char *name, mode_t *mode)
 }
 /* end   copied from https://github.com/hpc/ior/blob/main/src/aiori-DFS.c */
 
-typedef int (*org_open)(const char *pathname, int oflags, ...);
-org_open real_open_ld = NULL;
-org_open real_open_libc = NULL;
-org_open real_open_pthread = NULL;
+static int (*real_open_ld)(const char *pathname, int oflags, ...);
+static int (*real_open_libc)(const char *pathname, int oflags, ...);
+static int (*real_open_pthread)(const char *pathname, int oflags, ...);
 
-typedef int (*org_close_nocancel)(int fd);
-static org_close_nocancel real_close_nocancel = NULL;
+static int (*real_close_nocancel)(int fd);
 
-typedef int (*org_close)(int fd);
-static org_close real_close_libc = NULL;
-static org_close real_close_pthread = NULL;
+static int (*real_close_libc)(int fd);
+static int (*real_close_pthread)(int fd);
 
-typedef ssize_t (*org_read)(int fd, void *buf, size_t count);
-static org_read real_read_libc=NULL;
-static org_read real_read_pthread=NULL;
+static ssize_t (*real_read_libc)(int fd, void *buf, size_t count);
+static ssize_t (*real_read_pthread)(int fd, void *buf, size_t count);
 
-typedef ssize_t (*org_pread)(int fd, void *buf, size_t size, off_t offset);
-static org_pread real_pread=NULL;
+static ssize_t (*real_pread)(int fd, void *buf, size_t size, off_t offset);
 
-typedef ssize_t (*org_write)(int fd, const void *buf, size_t count);
-static org_write real_write_libc=NULL;
-static org_write real_write_pthread=NULL;
+static ssize_t (*real_write_libc)(int fd, const void *buf, size_t count);
+static ssize_t (*real_write_pthread)(int fd, const void *buf, size_t count);
 
-typedef ssize_t (*org_pwrite)(int fd, const void *buf, size_t size, off_t offset);
-static org_pwrite real_pwrite=NULL;
+static ssize_t (*real_pwrite)(int fd, const void *buf, size_t size, off_t offset);
 
-typedef off_t (*org_lseek)(int fd, off_t offset, int whence);
-static org_lseek real_lseek_libc=NULL;
-static org_lseek real_lseek_pthread=NULL;
+static off_t (*real_lseek_libc)(int fd, off_t offset, int whence);
+static off_t (*real_lseek_pthread)(int fd, off_t offset, int whence);
 
-typedef int (*org_fxstat)(int vers, int fd, struct stat *buf);
-static org_fxstat real_fxstat=NULL;
+static int (*real_fxstat)(int vers, int fd, struct stat *buf);
 
-typedef int (*org_statfs)(const char *pathname, struct statfs *buf);
-static org_statfs real_statfs=NULL;
+static int (*real_statfs)(const char *pathname, struct statfs *buf);
 
-typedef int (*org_statvfs)(const char *pathname, struct statvfs *buf);
-static org_statvfs real_statvfs=NULL;
+static int (*real_statvfs)(const char *pathname, struct statvfs *buf);
 
-typedef DIR * (*org_opendir)(const char *name);
-static org_opendir real_opendir=NULL;
+static DIR * (*real_opendir)(const char *name);
 
-typedef DIR * (*org_fdopendir)(int fd);
-org_fdopendir real_fdopendir=NULL;
+static DIR * (*real_fdopendir)(int fd);
 
-typedef int (*org_closedir)(DIR *dirp);
-static org_closedir real_closedir=NULL;
+static int (*real_closedir)(DIR *dirp);
 
-typedef struct dirent* (*org_readdir)(DIR *dirp);
-static org_readdir real_readdir=NULL;
+static struct dirent * (*real_readdir)(DIR *dirp);
 
-typedef int (*org_mkdir)(const char *path, mode_t mode);
-static org_mkdir real_mkdir=NULL;
+static int (*real_mkdir)(const char *path, mode_t mode);
 
-typedef int (*org_mkdirat)(int dirfd, const char *pathname, mode_t mode);
-static org_mkdirat real_mkdirat=NULL;
+static int (*real_mkdirat)(int dirfd, const char *pathname, mode_t mode);
 
-typedef int (*org_xstat)(int ver, const char *path, struct stat *stat_buf);
-static org_xstat real_xstat=NULL;
+static int (*real_xstat)(int ver, const char *path, struct stat *stat_buf);
 
-typedef int (*org_lxstat)(int ver, const char *path, struct stat *stat_buf);
-static org_lxstat real_lxstat=NULL;
+static int (*real_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
-typedef int (*org_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
-static org_fxstatat real_fxstatat=NULL;
+static int (*real_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf,
+	int flags);
 
-typedef int (*org_statx)(int dirfd, const char *path, int flags, unsigned int mask, struct statx *statx_buf);
-static org_statx real_statx=NULL;
+static int (*real_statx)(int dirfd, const char *path, int flags, unsigned int mask,
+	struct statx *statx_buf);
 
-typedef int (*org_isatty)(int fd);
-static org_isatty real_isatty=NULL;
+static int (*real_isatty)(int fd);
 
-typedef int (*org_access)(const char *pathname, int mode);
-static org_access real_access=NULL;
+static int (*real_access)(const char *pathname, int mode);
 
-typedef int (*org_faccessat)(int dirfd, const char *pathname, int mode, int flags);
-static org_faccessat real_faccessat=NULL;
+static int (*real_faccessat)(int dirfd, const char *pathname, int mode, int flags);
 
-typedef int (*org_chdir)(const char *path);
-static org_chdir real_chdir=NULL;
+static int (*real_chdir)(const char *path);
 
-typedef int (*org_fchdir)(int fd);
-static org_fchdir real_fchdir=NULL;
+static int (*real_fchdir)(int fd);
 
-typedef int (*org_rmdir)(const char *path);
-static org_rmdir real_rmdir=NULL;
+static int (*real_rmdir)(const char *path);
 
-typedef int (*org_rename)(const char *old_name, const char *new_name);
-static org_rename real_rename=NULL;
+static int (*real_rename)(const char *old_name, const char *new_name);
 
-typedef char * (*org_getcwd)(char *buf, size_t size);
-static org_getcwd real_getcwd=NULL;
+static char * (*real_getcwd)(char *buf, size_t size);
 
-typedef int (*org_unlink)(const char *path);
-static org_unlink real_unlink=NULL;
+static int (*real_unlink)(const char *path);
 
-typedef int (*org_unlinkat)(int dirfd, const char *path, int flags);
-org_unlinkat real_unlinkat=NULL;
+static int (*real_unlinkat)(int dirfd, const char *path, int flags);
 
-typedef int (*org_fsync)(int fd);
-static org_fsync real_fsync=NULL;
+static int (*real_fsync)(int fd);
 
-typedef int (*org_truncate)(const char *path, off_t length);
-static org_truncate real_truncate=NULL;
+static int (*real_truncate)(const char *path, off_t length);
 
-typedef int (*org_ftruncate)(int fd, off_t length);
-static org_ftruncate real_ftruncate=NULL;
+static int (*real_ftruncate)(int fd, off_t length);
 
-typedef int (*org_chmod)(const char *path, mode_t mode);
-static org_chmod real_chmod=NULL;
+static int (*real_chmod)(const char *path, mode_t mode);
 
-typedef int (*org_fchmod)(int fd, mode_t mode);
-static org_fchmod real_fchmod=NULL;
+static int (*real_fchmod)(int fd, mode_t mode);
 
-typedef int (*org_fchmodat)(int dirfd, const char *path, mode_t mode, int flags);
-static org_fchmodat real_fchmodat=NULL;
+static int (*real_fchmodat)(int dirfd, const char *path, mode_t mode, int flags);
 
-typedef int (*org_utime)(const char *path, const struct utimbuf *times);
-static org_utime real_utime=NULL;
+static int (*real_utime)(const char *path, const struct utimbuf *times);
 
-typedef int (*org_utimes)(const char *path, const struct timeval times[2]);
-static org_utimes real_utimes=NULL;
+static int (*real_utimes)(const char *path, const struct timeval times[2]);
 
-typedef int (*org_futimens)(int fd, const struct timespec times[2]);
-static org_futimens real_futimens=NULL;
+static int (*real_futimens)(int fd, const struct timespec times[2]);
 
-typedef int (*org_utimensat)(int dirfd, const char *path, const struct timespec times[2], int flags);
-org_utimensat real_utimensat=NULL;
+static int (*real_utimensat)(int dirfd, const char *path, const struct timespec times[2],
+	int flags);
 
-typedef int (*org_openat)(int dirfd, const char *pathname, int flags,...);
-org_openat real_openat=NULL;
+static int (*real_openat)(int dirfd, const char *pathname, int flags, ...);
 
-typedef int (*org_openat_2)(int dirfd, const char *pathname, int flags);
-org_openat_2 real_openat_2=NULL;
+static int (*real_openat_2)(int dirfd, const char *pathname, int flags);
 
-typedef int (*org_fcntl)(int fd, int cmd, ...);
-org_fcntl real_fcntl=NULL;
+static int (*real_fcntl)(int fd, int cmd, ...);
 
-typedef int (*org_ioctl)(int fd, unsigned long request, ...);
-org_ioctl real_ioctl=NULL;
+static int (*real_ioctl)(int fd, unsigned long request, ...);
 
-typedef int (*org_dup)(int oldfd);
-static org_dup real_dup=NULL;
+static int (*real_dup)(int oldfd);
 
-typedef int (*org_dup2)(int oldfd, int newfd);
-static org_dup2 real_dup2=NULL;
+static int (*real_dup2)(int oldfd, int newfd);
 
-//typedef int (*org_dup3)(int oldfd, int newfd, int flags);
-//static org_dup3 real_dup3=NULL;
-/*
-typedef int (*org_execve)(const char *filename, char *const argv[], char *const envp[]);
-static org_execve real_execve=NULL;
+/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
+/* static org_dup3 real_dup3=NULL; */
 
-typedef int (*org_execvp)(const char *filename, char *const argv[]);
-static org_execvp real_execvp=NULL;
+/**
+ *static int (*real_execve)(const char *filename, char *const argv[], char *const envp[]);
+ * static int (*real_execvp)(const char *filename, char *const argv[]);
+ * static int (*real_execv)(const char *filename, char *const argv[]);
+ * static pid_t (*real_fork)();
+ */
 
-typedef int (*org_execv)(const char *filename, char *const argv[]);
-static org_execv real_execv=NULL;
+/* start NOT supported by DAOS */
+static int (*real_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
+static int (*real_flock)(int fd, int operation);
+static int (*real_fallocate)(int fd, int mode, off_t offset, off_t len);
+static int (*real_posix_fallocate)(int fd, off_t offset, off_t len);
+static int (*real_posix_fallocate64)(int fd, off64_t offset, off64_t len);
+static int (*real_tcgetattr)(int fd, void *termios_p);
+/* end NOT supported by DAOS */
 
-typedef pid_t (*org_fork)();
-static org_fork real_fork=NULL;
-*/
-
-// start NOT supported by DAOS
-typedef int (*org_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
-org_posix_fadvise real_posix_fadvise=NULL;
-
-typedef int (*org_flock)(int fd, int operation);
-org_flock real_flock=NULL;
-
-typedef int (*org_fallocate)(int fd, int mode, off_t offset, off_t len);
-org_fallocate real_fallocate=NULL;
-
-typedef int (*org_posix_fallocate)(int fd, off_t offset, off_t len);
-org_posix_fallocate real_posix_fallocate=NULL;
-
-typedef int (*org_posix_fallocate64)(int fd, off64_t offset, off64_t len);
-org_posix_fallocate64 real_posix_fallocate64=NULL;
-
-typedef int (*org_tcgetattr)(int fd, void *termios_p);
-static org_tcgetattr real_tcgetattr = NULL;
-// end NOT supported by DAOS
-
-// to do
-/*
-
-typedef char * (*org_realpath)(const char *pathname, char *resolved_path);
-org_realpath real_realpath=NULL;
-*/
+/* to do!! */
+/**
+ * static char * (*org_realpath)(const char *pathname, char *resolved_path);
+ * org_realpath real_realpath=NULL;
+ */
 
 static void remove_dot_dot(char szPath[]);
 static int remove_dot(char szPath[]);
 
-static FILESTATUS *file_list = NULL;
-static DIRSTATUS *dir_list = NULL;
+static struct FILESTATUS *file_list;
+static struct DIRSTATUS *dir_list;
 
 /* last_fd==-1 means the list is empty. No active fd in list. */
-static int next_free_fd=0, last_fd=-1, num_fd=0;
-static int next_free_dirfd=0, last_dirfd=-1, num_dirfd=0;
+static int next_free_fd, last_fd = -1, num_fd;
+static int next_free_dirfd, last_dirfd = -1, num_dirfd;
 
 static int find_next_available_fd(void);
 static int find_next_available_dirfd(void);
 static void free_fd(int idx);
 static void free_dirfd(int idx);
 
-static int num_fd_dup2ed=0;
-FD_DUP2ED fd_dup2_list[MAX_FD_DUP2ED];
+static int num_fd_dup2ed;
+struct FD_DUP2ED fd_dup2_list[MAX_FD_DUP2ED];
 
 static void init_fd_dup2_list(void);
-static int query_fd_forward_dest(int fd_src);	// return dest fd
-//static int Query_Fd_Forward_Src(int fd_dest, int *Closed);	// return src fd
-//static void Close_Duped_All_Fd(void);
+/* return dest fd */
+static int query_fd_forward_dest(int fd_src);
+/* static int Query_Fd_Forward_Src(int fd_dest, int *Closed);	// return src fd */
+/* static void Close_Duped_All_Fd(void); */
 
 static int new_close_common(int (*real_close)(int fd), int fd);
 
@@ -424,7 +359,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	/* absolute path */
 	if (strncmp(szInput, ".", 2) == 0) {
 		strcpy(full_path_loc, cur_dir);
-	} else if( szInput[0] == '/')	{
+	} else if (szInput[0] == '/')	{
 		strcpy(full_path_loc, szInput);
 	} else {
 		/* relative path */
@@ -434,7 +369,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	remove_dot_dot(full_path_loc);
 	len = remove_dot(full_path_loc);
 
-	if(strncmp(full_path_loc, fs_root, len_fs_root) == 0)	{
+	if (strncmp(full_path_loc, fs_root, len_fs_root) == 0)	{
 		*is_target_path = 1;
 
 		if (full_path)
@@ -449,10 +384,9 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			if (full_path)
 				strcpy(full_path, "/");
 		} else {
-			for(pos=len-1; pos>=len_fs_root; pos--) {
-				if (full_path_loc[pos] == '/') {
+			for (pos = len-1; pos >= len_fs_root; pos--) {
+				if (full_path_loc[pos] == '/')
 					break;
-				}
 			}
 			strcpy(item_name, full_path_loc + pos + 1);
 			/* the item under root directory */
@@ -461,17 +395,16 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				parent_dir[0] = '/';
 				parent_dir[1] = '\0';
 				return 0;
-			} else {
-				/* Need to look up the parent directory */
-				full_path_loc[pos] = 0;
-				strcpy(parent_dir, full_path_loc + len_fs_root);
-				*parent = lookup_insert_dir(parent_dir, &mode);
-				if (*parent == NULL) {
-					/* parent dir does not exist or something wrong */
-					printf("Dir %s does not exist or error to query. %s\n",
-						full_path_loc, strerror(errno));
-					rc = 1;
-				}
+			}
+			/* Need to look up the parent directory */
+			full_path_loc[pos] = 0;
+			strcpy(parent_dir, full_path_loc + len_fs_root);
+			*parent = lookup_insert_dir(parent_dir, &mode);
+			if (*parent == NULL) {
+				/* parent dir does not exist or something wrong */
+				printf("Dir %s does not exist or error to query. %s\n",
+					full_path_loc, strerror(errno));
+				rc = 1;
 			}
 		}
 	} else {
@@ -488,35 +421,33 @@ static void
 remove_dot_dot(char szPath[])
 {
 	char *p_Offset_2Dots, *p_Back, *pTmp, *pMax, *pNewStr;
-	int i, nLen, nNonZero=0;
-	
+	int i, nLen, nNonZero = 0;
+
 	nLen = strlen(szPath);
 
 	p_Offset_2Dots = strstr(szPath, "..");
-	if( p_Offset_2Dots == (szPath+1) )	{
+	if (p_Offset_2Dots == (szPath+1))	{
 		printf("Must be something wrong in path: %s\n", szPath);
 		return;
 	}
 
-	while(p_Offset_2Dots > 0)	{
+	while (p_Offset_2Dots > 0)	{
 		pMax = p_Offset_2Dots + 2;
-		for(p_Back=p_Offset_2Dots-2; p_Back>= szPath; p_Back--)	{
-			if(*p_Back == '/')	{
-				for(pTmp=p_Back; pTmp<pMax; pTmp++)	{
+		for (p_Back = p_Offset_2Dots-2; p_Back >= szPath; p_Back--) {
+			if (*p_Back == '/')	{
+				for (pTmp = p_Back; pTmp < pMax; pTmp++)
 					*pTmp = 0;
-				}
 				break;
 			}
 		}
 		p_Offset_2Dots = strstr(p_Offset_2Dots + 2, "..");
-		if(p_Offset_2Dots == NULL)	{
+		if (p_Offset_2Dots == NULL)
 			break;
-		}
 	}
 
 	pNewStr = szPath;
-	for(i=0; i<nLen; i++)	{
-		if(szPath[i])	{
+	for (i = 0; i < nLen; i++)	{
+		if (szPath[i])	{
 			pNewStr[nNonZero] = szPath[i];
 			nNonZero++;
 		}
@@ -528,42 +459,40 @@ static int
 remove_dot(char szPath[])
 {
 	char *p_Offset_Dots, *p_Offset_Slash, *pNewStr;
-	int i, nLen, nNonZero=0;
-	
+	int i, nLen, nNonZero = 0;
+
 	nLen = strlen(szPath);
 
 	p_Offset_Dots = strstr(szPath, "/./");
 
-	while(p_Offset_Dots > 0)	{
+	while (p_Offset_Dots > 0)	{
 		p_Offset_Dots[0] = 0;
 		p_Offset_Dots[1] = 0;
 		p_Offset_Dots = strstr(p_Offset_Dots + 2, "/./");
-		if(p_Offset_Dots == NULL)	{
+		if (p_Offset_Dots == NULL)
 			break;
-		}
 	}
 
 	/* replace "//" with "/" */
 	p_Offset_Slash = strstr(szPath, "//");
-	while(p_Offset_Slash > 0)	{
+	while (p_Offset_Slash > 0)	{
 		p_Offset_Slash[0] = 0;
 		p_Offset_Slash = strstr(p_Offset_Slash + 1, "//");
-		if(p_Offset_Slash == NULL)	{
+		if (p_Offset_Slash == NULL)
 			break;
-		}
 	}
 
 	pNewStr = szPath;
-	for(i=0; i<nLen; i++)	{
-		if(szPath[i])	{
+	for (i = 0; i < nLen; i++)	{
+		if (szPath[i])	{
 			pNewStr[nNonZero] = szPath[i];
 			nNonZero++;
 		}
 	}
 	/* remove "/" at the end of path */
 	pNewStr[nNonZero] = 0;
-	for(i=nNonZero-1; i>=0; i--)	{
-		if(pNewStr[i] == '/')	{
+	for (i = nNonZero-1; i >= 0; i--)	{
+		if (pNewStr[i] == '/')	{
 			pNewStr[i] = 0;
 			nNonZero--;
 		} else {
@@ -579,31 +508,30 @@ init_fd_list(void)
 {
 	int i;
 
-	if( pthread_mutex_init(&lock_fd, NULL) != 0 ) {
+	if (pthread_mutex_init(&lock_fd, NULL) != 0) {
 		printf("\n mutex create_new_lock lock_fd init failed\n");
 		exit(1);
 	}
-	if( pthread_mutex_init(&lock_dirfd, NULL) != 0 ) {
+	if (pthread_mutex_init(&lock_dirfd, NULL) != 0) {
 		printf("\n mutex create_new_lock lock_dirfd init failed\n");
 		exit(1);
 	}
 
-	file_list = (FILESTATUS *)malloc(sizeof(FILESTATUS)*MAX_OPENED_FILE);
-	dir_list = (DIRSTATUS *)malloc(sizeof(DIRSTATUS)*MAX_OPENED_DIR);
-	memset(file_list, 0, sizeof(FILESTATUS)*MAX_OPENED_FILE);
-	memset(dir_list, 0, sizeof(DIRSTATUS)*MAX_OPENED_DIR);
+	file_list = (struct FILESTATUS *)malloc(sizeof(struct FILESTATUS)*MAX_OPENED_FILE);
+	dir_list = (struct DIRSTATUS *)malloc(sizeof(struct DIRSTATUS)*MAX_OPENED_DIR);
+	memset(file_list, 0, sizeof(struct FILESTATUS)*MAX_OPENED_FILE);
+	memset(dir_list, 0, sizeof(struct DIRSTATUS)*MAX_OPENED_DIR);
 
-	for(i=0; i<MAX_OPENED_FILE; i++)	{
+	for (i = 0; i < MAX_OPENED_FILE; i++)
 		file_list[i].file_obj = NULL;
-	}
-	for(i=0; i<MAX_OPENED_DIR; i++)	{
+	for (i = 0; i < MAX_OPENED_DIR; i++) {
 		dir_list[i].fd = -1;
 		dir_list[i].dir_obj = NULL;
 	}
-	next_free_fd=0;
-	last_fd=-1;
-	next_free_dirfd=0;
-	last_dirfd=-1;
+	next_free_fd = 0;
+	last_fd = -1;
+	next_free_dirfd = 0;
+	last_dirfd = -1;
 	num_fd = num_dirfd = 0;
 }
 
@@ -613,25 +541,24 @@ find_next_available_fd(void)
 	int i, idx = -1;
 
 	pthread_mutex_lock(&lock_fd);
-	if(next_free_fd < 0)	{
+	if (next_free_fd < 0)	{
 		pthread_mutex_unlock(&lock_fd);
 		return next_free_fd;
 	}
 	idx = next_free_fd;
-	if(next_free_fd > last_fd)	{
+	if (next_free_fd > last_fd)
 		last_fd = next_free_fd;
-	}
 	next_free_fd = -1;
 
-	for(i=idx+1; i<MAX_OPENED_FILE; i++)	{
-		if(file_list[i].file_obj == NULL)	{	// available
-			next_free_fd = i;	// update next_free_fd
+	for (i = idx+1; i < MAX_OPENED_FILE; i++) {
+		if (file_list[i].file_obj == NULL) {
+			/* available, then update next_free_fd */
+			next_free_fd = i;
 			break;
 		}
 	}
-	if(next_free_fd < 0)	{
+	if (next_free_fd < 0)
 		printf("WARNING> All space for file_list are used.\n");
-	}
 
 	num_fd++;
 	pthread_mutex_unlock(&lock_fd);
@@ -645,25 +572,25 @@ find_next_available_dirfd(void)
 	int i, idx = -1;
 
 	pthread_mutex_lock(&lock_dirfd);
-	if(next_free_dirfd < 0)	{
+	if (next_free_dirfd < 0) {
 		pthread_mutex_unlock(&lock_dirfd);
 		return next_free_dirfd;
 	}
 	idx = next_free_dirfd;
-	if(next_free_dirfd > last_dirfd)	{
+	if (next_free_dirfd > last_dirfd)
 		last_dirfd = next_free_dirfd;
-	}
+
 	next_free_dirfd = -1;
 
-	for(i=idx+1; i<MAX_OPENED_DIR; i++)	{
-		if(dir_list[i].dir_obj == NULL)	{	// available
-			next_free_dirfd = i;	// update next_free_fd
+	for (i = idx+1; i < MAX_OPENED_DIR; i++) {
+		if (dir_list[i].dir_obj == NULL) {
+			/* available, then update next_free_dirfd */
+			next_free_dirfd = i;
 			break;
 		}
 	}
-	if(next_free_dirfd < 0)	{
+	if (next_free_dirfd < 0)
 		printf("WARNING> All space for dir_list are used.\n");
-	}
 
 	num_dirfd++;
 	pthread_mutex_unlock(&lock_dirfd);
@@ -680,13 +607,12 @@ free_fd(int idx)
 	pthread_mutex_lock(&lock_fd);
 	file_list[idx].file_obj = NULL;
 
-	if(idx < next_free_fd)	{
+	if (idx < next_free_fd)
 		next_free_fd = idx;
-	}
 
-	if(idx == last_fd)	{
-		for(i=idx-1; i>=0; i--)	{
-			if(file_list[i].file_obj)	{
+	if (idx == last_fd)	{
+		for (i = idx-1; i >= 0; i--)	{
+			if (file_list[i].file_obj)	{
 				last_fd = i;
 				break;
 			}
@@ -701,11 +627,11 @@ static void
 free_dirfd(int idx)
 {
 	int		i, fd_dup_pre, fd_dup_next, ready_to_release = 0, rc;
-	dfs_obj_t 	*dir_obj = NULL;
+	dfs_obj_t	*dir_obj = NULL;
 
 	pthread_mutex_lock(&lock_dirfd);
 
-	dir_list[idx].ref_count --;
+	dir_list[idx].ref_count--;
 	if (dir_list[idx].ref_count > 0) {
 		pthread_mutex_unlock(&lock_dirfd);
 		return;
@@ -714,13 +640,12 @@ free_dirfd(int idx)
 	dir_obj = dir_list[idx].dir_obj;
 	dir_list[idx].dir_obj = NULL;
 
-	if(idx < next_free_dirfd)	{
+	if (idx < next_free_dirfd)
 		next_free_dirfd = idx;
-	}
 
-	if(idx == last_dirfd)	{
-		for(i=idx-1; i>=0; i--)	{
-			if(dir_list[i].dir_obj)	{
+	if (idx == last_dirfd) {
+		for (i = idx-1; i >= 0; i--) {
+			if (dir_list[i].dir_obj) {
 				last_dirfd = i;
 				break;
 			}
@@ -734,13 +659,11 @@ free_dirfd(int idx)
 
 	if (fd_dup_pre >= 0) {
 		dir_list[fd_dup_pre].fd_dup_next = fd_dup_next;
-		if (fd_dup_next >= 0) {
+		if (fd_dup_next >= 0)
 			dir_list[fd_dup_next].fd_dup_pre = fd_dup_pre;
-		}
 	}
-	if ( (fd_dup_pre == -1) && (fd_dup_next == -1) ) {
+	if ((fd_dup_pre == -1) && (fd_dup_next == -1))
 		ready_to_release = 1;
-	}
 
 	pthread_mutex_unlock(&lock_dirfd);
 
@@ -750,33 +673,27 @@ free_dirfd(int idx)
 	}
 }
 
-inline static int
+static inline int
 Get_Fd_Redirected(int fd)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if (fd_dup2_list[i].fd_src == fd)	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++) {
+		if (fd_dup2_list[i].fd_src == fd)
 			return fd_dup2_list[i].fd_dest;
-		}
 	}
 
-	if(fd >= 3)	{
+	if (fd >= 3)	{
 		return fd;
-	} else if(fd == 0)	{
-		if(fd_stdin > 0)	{
+	} else if (fd == 0) {
+		if (fd_stdin > 0)
 			return fd_stdin;
-		}
-	}
-	else if(fd == 1)	{
-		if(fd_stdout > 0)	{
+	} else if (fd == 1) {
+		if (fd_stdout > 0)
 			return fd_stdout;
-		}
-	}
-	else if(fd == 2)	{
-		if(fd_stderr > 0)	{
+	} else if (fd == 2) {
+		if (fd_stderr > 0)
 			return fd_stderr;
-		}
 	}
 
 	return fd;
@@ -787,7 +704,7 @@ init_fd_dup2_list(void)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		fd_dup2_list[i].fd_src = -1;
 		fd_dup2_list[i].fd_dest = -1;
 	}
@@ -798,7 +715,7 @@ free_fd_in_dup2_list(int fd)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
 		if (fd_dup2_list[i].fd_src == fd) {
 			fd_dup2_list[i].fd_src = -1;
 			fd_dup2_list[i].fd_dest = -1;
@@ -811,38 +728,36 @@ find_free_fd_dup2_list(void)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if (fd_dup2_list[i].fd_src == -1)	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+		if (fd_dup2_list[i].fd_src == -1)
 			return i;
-		}
 	}
 	printf("ERROR: num_fd_dup2ed >= MAX_FD_DUP2ED\n");
 	errno = EMFILE;
 	return (-1);
 }
-/*
-static int
-is_a_duped_fd(int fd)
-{
-	int i;
-
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if (fd_dup2_list[i].fd_src == fd)	{
-			return 1;
-		}
-	}
-	return 0;
-}
-*/
+/**
+ * static int
+ * is_a_duped_fd(int fd)
+ * {
+ *	int i;
+ *
+ *	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+ *		if (fd_dup2_list[i].fd_src == fd)	{
+ *			return 1;
+ *		}
+ *	}
+ *	return 0;
+ * }
+ */
 static int
 query_fd_forward_dest(int fd_src)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if(fd_src == fd_dup2_list[i].fd_src)	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+		if (fd_src == fd_dup2_list[i].fd_src)
 			return fd_dup2_list[i].fd_dest;
-		}
 	}
 	return -1;
 }
@@ -854,7 +769,8 @@ allocate_a_fd_from_kernel(void)
 	char		file_name[128];
 
 	clock_gettime(CLOCK_REALTIME, &times_loc);
-	snprintf(file_name, sizeof(file_name) - 1, "dummy_%ld_%ld", times_loc.tv_sec, times_loc.tv_nsec);
+	snprintf(file_name, sizeof(file_name) - 1, "dummy_%ld_%ld", times_loc.tv_sec,
+		 times_loc.tv_nsec);
 	return memfd_create("dummy", 0);
 }
 
@@ -863,67 +779,71 @@ close_all_duped_fd(void)
 {
 	int i;
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if( fd_dup2_list[i].fd_src >= 0 )	{
+	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+		if (fd_dup2_list[i].fd_src >= 0)	{
 			fd_dup2_list[i].fd_src = -1;
 			new_close_common(real_close_libc, fd_dup2_list[i].fd_dest);
 		}
 	}
 }
 
-/*
+/**
+ *static int
+ * Query_Fd_Forward_Src(int fd_dest, int *Closed)
+ * {
+ *	int i;
+ *
+ *	for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+ *		if (fd_dest == fd_dup2_list[i].fd_dest)	{
+ *			return fd_dup2_list[i].fd_src;
+ *		}
+ *	}
+ *	return -1;
+ * }
+ */
 static int
-Query_Fd_Forward_Src(int fd_dest, int *Closed)
-{
-	int i;
-
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if(fd_dest == fd_dup2_list[i].fd_dest)	{
-			return fd_dup2_list[i].fd_src;
-		}
-	}
-	return -1;
-}
-*/
-static int
-open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *szCallerName, const char *pathname, int oflags, ...)
+open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *szCallerName,
+	    const char *pathname, int oflags, ...)
 {
 	unsigned int mode = 0664;
-	int two_args=1, rc, is_target_path, idx_fd, idx_dirfd;
+	int two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t * file_obj;
-	dfs_obj_t * parent;
+	dfs_obj_t *file_obj;
+	dfs_obj_t *parent;
 	mode_t mode_query = 0;
 
 	if (oflags & O_CREAT)   {
 		va_list arg;
 		va_start(arg, oflags);
 		mode = va_arg(arg, unsigned int);
-//		if (strstr(pathname, "dbgfile")) printf("DBG> mode = %d\n", mode);
 		mode = mode & mode_not_umask;
 		va_end(arg);
-		two_args=0;
+		two_args = 0;
 	}
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if(is_target_path) {	// file/dir should be handled by our FS
+	if (is_target_path) {
+		/* file/dir should be handled by our FS */
 		if (oflags & O_CREAT) {
-			rc = dfs_open(dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0, NULL, &file_obj);
+			rc = dfs_open(dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0,
+				      NULL, &file_obj);
 			mode_query = S_IFREG;
-		} else if ( !parent && (strncmp(item_name, "/", 2) == 0 ) ) {
+		} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 			rc = dfs_lookup(dfs, "/", oflags, &file_obj, &mode_query, NULL);
 		} else {
-			rc = dfs_lookup_rel(dfs, parent, item_name, oflags, &file_obj, &mode_query, NULL);
+			rc = dfs_lookup_rel(dfs, parent, item_name, oflags, &file_obj, &mode_query,
+					    NULL);
 		}
-	
+
 		if (rc) {
-			printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s rc = %d\n", pathname, rc);
+			printf("open_common> Error: Fail to dfs_open/dfs_lookup_rel %s rc = %d\n",
+			       pathname, rc);
 			errno = rc;
 			return (-1);
 		}
-		if ( S_ISDIR(mode_query) ) {
+		if (S_ISDIR(mode_query)) {
 			idx_dirfd = find_next_available_dirfd();
 			assert(idx_dirfd >= 0);
 
@@ -949,14 +869,13 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		file_list[idx_fd].fd_dup_next = -1;
 		file_list[idx_fd].st_ino = FAKE_ST_INO(full_path);
 		file_list[idx_fd].open_flag = oflags;
-		file_list[idx_fd].offset = 0;	// NEED to set at the end of file if O_APPEND!!!!!
-		file_list[idx_fd].modification_time.tv_sec = 0;
-		file_list[idx_fd].modification_time.tv_nsec = 0;
+		/* NEED to set at the end of file if O_APPEND!!!!!!!! */
+		file_list[idx_fd].offset = 0;
 		strcpy(file_list[idx_fd].item_name, item_name);
-		return (idx_fd + FD_FILE_BASE);		
+		return (idx_fd + FD_FILE_BASE);
 	}
 
-	if(two_args)    {
+	if (two_args)    {
 		rc = real_open(pathname, oflags);
 	} else {
 		rc = real_open(pathname, oflags, mode);
@@ -965,76 +884,73 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	return rc;
 }
 
-// When the open() in ld.so is called, new_open_ld() will be executed. 
+/* When the open() in ld.so is called, new_open_ld() will be executed. */
+
 static int
 new_open_ld(const char *pathname, int oflags, ...)
 {
 	unsigned int mode;
-	int two_args=1, rc;
+	int two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
 		va_start(arg, oflags);
 		mode = va_arg(arg, unsigned int);
 		va_end(arg);
-		two_args=0;
+		two_args = 0;
 	}
-	
-	if(two_args)	{
+
+	if (two_args)
 		rc = open_common(real_open_ld, "new_open_ld", pathname, oflags);
-	}
-	else	{
+	else
 		rc = open_common(real_open_ld, "new_open_ld", pathname, oflags, mode);
-	}
 
 	return rc;
 }
 
-// When the open() in libc.so is called, new_open_libc() will be executed.
+/* When the open() in libc.so is called, new_open_libc() will be executed. */
 static int
 new_open_libc(const char *pathname, int oflags, ...)
 {
 	unsigned int mode;
-	int two_args=1, rc;
+	int two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
 		va_start(arg, oflags);
 		mode = va_arg(arg, unsigned int);
 		va_end(arg);
-		two_args=0;
+		two_args = 0;
 	}
 
-	if(two_args)	{
+	if (two_args)
 		rc = open_common(real_open_libc, "new_open_libc", pathname, oflags);
-	}
-	else	{
+	else
 		rc = open_common(real_open_libc, "new_open_libc", pathname, oflags, mode);
-	}
+
 	return rc;
 }
 
-// When the open() in libpthread.so is called, new_open_pthread() will be executed.
+/* When the open() in libpthread.so is called, new_open_pthread() will be executed. */
 static int
 new_open_pthread(const char *pathname, int oflags, ...)
 {
 	unsigned int mode;
-	int two_args=1, rc;
+	int two_args = 1, rc;
 
 	if (oflags & O_CREAT)	{
 		va_list arg;
 		va_start(arg, oflags);
 		mode = va_arg(arg, unsigned int);
 		va_end(arg);
-		two_args=0;
+		two_args = 0;
 	}
 
-	if(two_args)	{
+	if (two_args)
 		rc = open_common(real_open_pthread, "new_open_pthread", pathname, oflags);
-	}
-	else	{
+	else
 		rc = open_common(real_open_pthread, "new_open_pthread", pathname, oflags, mode);
-	}
+
 	return rc;
 }
 
@@ -1043,25 +959,26 @@ new_close_common(int (*real_close)(int fd), int fd)
 {
 	int rc, fd_Directed, idx;
 
-	if(! inited) {       // init() not finished yet
+	if (!inited)
 		return real_close(fd);
-	}
+
 	fd_Directed = Get_Fd_Redirected(fd);
 
-	if(fd_Directed >= FD_DIR_BASE)	{	// directory
-		if(fd_Directed == DUMMY_FD_DIR)	{
+	if (fd_Directed >= FD_DIR_BASE)	{
+		/* directory */
+		if (fd_Directed == DUMMY_FD_DIR)	{
 			printf("ERROR> Unexpected fd == DUMMY_FD_DIR in close().\n");
 			return 0;
 		}
 		free_dirfd(fd_Directed-FD_DIR_BASE);
 		return 0;
-	}
-	else if(fd_Directed >= FD_FILE_BASE)	{	// regular file
+	} else if (fd_Directed >= FD_FILE_BASE) {
+		/* regular file */
 		idx = fd_Directed - FD_FILE_BASE;
-		file_list[idx].ref_count --;
+		file_list[idx].ref_count--;
 		if (file_list[idx].ref_count == 0) {
 			rc = dfs_release(file_list[idx].file_obj);
-			if(rc)	{
+			if (rc)	{
 				errno = rc;
 				return (-1);
 			}
@@ -1076,7 +993,7 @@ new_close_common(int (*real_close)(int fd), int fd)
 		return 0;
 	}
 
-	return real_close(fd);	
+	return real_close(fd);
 }
 
 static int
@@ -1096,24 +1013,16 @@ new_close_nocancel(int fd)
 {
 	int rc;
 
-	if(fd >= FD_DIR_BASE)	{	// directory
-		if(fd == DUMMY_FD_DIR)	{
+	if (fd >= FD_DIR_BASE) {
+		if (fd == DUMMY_FD_DIR)	{
 			printf("ERROR> Unexpected fd == DUMMY_FD_DIR in close().\n");
 			return 0;
 		}
 		free_dirfd(fd-FD_DIR_BASE);
 		return 0;
-	}
-	else if(fd >= FD_FILE_BASE)	{	// regular file
-//		if (file_list[fd-FD_FILE_BASE].parent) {
-//			rc = dfs_release(file_list[fd-FD_FILE_BASE].parent);
-//			if(rc)	{
-//				errno = rc;
-//				return (-1);
-//			}
-//		}
+	} else if (fd >= FD_FILE_BASE) {
 		rc = dfs_release(file_list[fd-FD_FILE_BASE].file_obj);
-		if(rc)	{
+		if (rc)	{
 			errno = rc;
 			return (-1);
 		}
@@ -1129,11 +1038,10 @@ read_comm(ssize_t (*real_read)(int fd, void *buf, size_t size), int fd, void *bu
 {
 	ssize_t rc;
 
-	if(fd >= FD_FILE_BASE) {
+	if (fd >= FD_FILE_BASE) {
 		rc = pread(fd, buf, size, file_list[fd-FD_FILE_BASE].offset);
-		if(rc >= 0)	{ // update file pointer
+		if (rc >= 0)
 			file_list[fd-FD_FILE_BASE].offset += rc;
-		}
 		return rc;
 	} else {
 		return real_read(fd, buf, size);
@@ -1161,16 +1069,16 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	d_iov_t iov;
 	d_sg_list_t sgl;
 
-	if(size == 0)	return 0;	// NO NEED to do anything!!!!
+	if (size == 0)
+		return 0;
 
-	if(real_pread==NULL)	{
-		real_pread = (org_pread)dlsym(RTLD_NEXT, "pread64");
+	if (real_pread == NULL)	{
+		real_pread = dlsym(RTLD_NEXT, "pread64");
 		assert(real_pread != NULL);
 	}
 
-	if(fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_pread(fd, buf, size, offset);
-	}
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
@@ -1178,26 +1086,26 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	sgl.sg_iovs = &iov;
 	rc = dfs_read(dfs, file_list[fd-FD_FILE_BASE].file_obj, &sgl, offset, &bytes_read, NULL);
 	if (rc) {
-		printf("dfs_read(%p, %zu) failed (%d): %s\n", (void*)ptr, size, rc, strerror(rc));
+		printf("dfs_read(%p, %zu) failed (%d): %s\n", (void *)ptr, size, rc, strerror(rc));
 		errno = rc;
 		bytes_read = -1;
 	}
 
 	return (ssize_t)bytes_read;
 }
-ssize_t pread64(int fd, void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pread")) );
-ssize_t __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pread")) );
+ssize_t pread64(int fd, void *buf, size_t size, off_t offset) __attribute__ ((alias("pread")));
+ssize_t __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__ ((alias("pread")));
 
 ssize_t
-write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, const void *buf, size_t size)
+write_comm(ssize_t (*real_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
+	   size_t size)
 {
 	ssize_t rc;
 
-	if(fd >= FD_FILE_BASE) {
+	if (fd >= FD_FILE_BASE) {
 		rc = pwrite(fd, buf, size, file_list[fd-FD_FILE_BASE].offset);
-		if(rc >= 0)	{ // update file pointer
+		if (rc >= 0)
 			file_list[fd-FD_FILE_BASE].offset += rc;
-		}
 		return rc;
 	} else {
 		return real_write(fd, buf, size);
@@ -1224,15 +1132,16 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	d_iov_t iov;
 	d_sg_list_t sgl;
 
-	if(size == 0)	return 0;	// NO NEED to do anything!!!!
+	if (size == 0)
+		return 0;
 
-	if(real_pwrite==NULL)	{
-		real_pwrite = (org_pwrite)dlsym(RTLD_NEXT, "pwrite64");
+	if (real_pwrite == NULL)	{
+		real_pwrite = dlsym(RTLD_NEXT, "pwrite64");
+		assert(real_pwrite != NULL);
 	}
 
-	if(fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_pwrite(fd, buf, size, offset);
-	}
 
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
@@ -1240,22 +1149,25 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	sgl.sg_iovs = &iov;
 	rc = dfs_write(dfs, file_list[fd-FD_FILE_BASE].file_obj, &sgl, offset, NULL);
 	if (rc) {
-		printf("dfs_write(%p, %zu) failed (%d): %s\n", (void*)ptr, size, rc, strerror(rc));
+		printf("dfs_write(%p, %zu) failed (%d): %s\n",
+		       (void *)ptr, size, rc, strerror(rc));
 		errno = rc;
 		return (-1);
 	}
 
 	return size;
 }
-ssize_t pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
-ssize_t __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__ ( (alias ("pwrite")) );
+ssize_t pwrite64(int fd, const void *buf, size_t size, off_t offset)
+	__attribute__ ((alias("pwrite")));
+ssize_t __pwrite64(int fd, const void *buf, size_t size, off_t offset)
+	__attribute__ ((alias("pwrite")));
 
 static int
 new_fxstat(int vers, int fd, struct stat *buf)
 {
 	int rc;
 
-	if(fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE) {
 		return real_fxstat(vers, fd, buf);
 	} else if (fd < FD_DIR_BASE) {
 		rc = dfs_ostat(dfs, file_list[fd-FD_FILE_BASE].file_obj, buf);
@@ -1278,17 +1190,16 @@ static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int is_target_path, rc;
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 	char full_path[MAX_FILE_NAME_LEN];
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_xstat(ver, path, stat_buf);
-	}
 
-	if ( !parent && (strncmp(item_name, "/", 2) == 0 ) )
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs, NULL, NULL, stat_buf);
 	else
 		rc = dfs_stat(dfs, parent, item_name, stat_buf);
@@ -1307,11 +1218,11 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 {
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if (path[0] == '/') {	// absolute path, dirfd is ignored
+	if (path[0] == '/')
+		/* absolute path, dirfd is ignored */
 		return new_xstat(1, path, stat_buf);
-	}
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
 		return new_xstat(1, full_path, stat_buf);
 	} else if (dirfd == AT_FDCWD) {
@@ -1355,20 +1266,21 @@ statx(int dirfd, const char *path, int flags, unsigned int mask, struct statx *s
 	struct stat stat_buf;
 	int rc;
 
-	if(real_statx == NULL)	{
-		real_statx = (org_statx)dlsym(RTLD_NEXT, "statx");
+	if (real_statx == NULL)	{
+		real_statx = dlsym(RTLD_NEXT, "statx");
 		assert(real_statx != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_statx(dirfd, path, flags, mask, statx_buf);
 
-	if (path[0] == '/') {	// absolute path, dirfd is ignored
+	if (path[0] == '/') {
+		/* absolute path, dirfd is ignored */
 		rc = new_xstat(1, path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
 		return rc;
 	}
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
 		rc = new_xstat(1, full_path, &stat_buf);
 		copy_stat_to_statx(&stat_buf, statx_buf);
@@ -1387,18 +1299,17 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int is_target_path, rc;
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 	char full_path[MAX_FILE_NAME_LEN];
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_xstat(ver, path, stat_buf);
-	}
 
-	// Need to compare with using dfs_lookup!!!
-	if ( !parent && (strncmp(item_name, "/", 2) == 0 ) )
+	/* Need to compare with using dfs_lookup!!! */
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs, NULL, NULL, stat_buf);
 	else
 		rc = dfs_stat(dfs, parent, item_name, stat_buf);
@@ -1418,30 +1329,30 @@ lseek_comm(off_t (*real_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	off_t new_offset;
 	struct stat fstat;
 
-	if(fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_lseek(fd, offset, whence);
+
+	switch (whence) {
+	case SEEK_SET:
+		new_offset = offset;
+		break;
+	case SEEK_CUR:
+		new_offset = file_list[fd-FD_FILE_BASE].offset + offset;
+		break;
+	case SEEK_END:
+		fstat.st_size = 0;
+		rc = new_fxstat(1, fd, &fstat);
+		if (rc != 0) {
+			return (-1);
+		} else {
+			new_offset = fstat.st_size + offset;
+		}
+		break;
+	default:
+		errno = EINVAL;
+		return (-1);
 	}
 
-	switch(whence)	{
-		case SEEK_SET:
-			new_offset = offset;
-			break;
-		case SEEK_CUR:
-			new_offset = file_list[fd-FD_FILE_BASE].offset + offset;
-			break;
-		case SEEK_END:
-			fstat.st_size = 0;
-			rc = new_fxstat(1, fd, &fstat);
-			if(rc != 0) {
-				return (-1);
-			} else {
-				new_offset = fstat.st_size + offset;
-			}
-			break;
-		default:
-			errno = EINVAL;
-			return (-1);
-	}
 	if (new_offset < 0) {
 		errno = EINVAL;
 		return (-1);
@@ -1467,22 +1378,22 @@ int
 statfs(const char *pathname, struct statfs *sfs)
 {
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	int rc, is_target_path;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 
-	if(real_statfs==NULL)	{
-		real_statfs = (org_statfs)dlsym(RTLD_NEXT, "statfs");
+	if (real_statfs == NULL) {
+		real_statfs = dlsym(RTLD_NEXT, "statfs");
+		assert(real_statfs != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_statfs(pathname, sfs);
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_statfs(pathname, sfs);
-	}
 
 	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	assert(rc == 0);
@@ -1500,29 +1411,29 @@ statfs(const char *pathname, struct statfs *sfs)
 		rc = -1;
     return rc;
 }
-int statfs64(const char *pathname, struct statfs64 *sfs) __attribute__ ( (alias ("statfs")) );
-int __statfs(const char *pathname, struct statfs *sfs) __attribute__ ( (alias ("statfs")) );
+int statfs64(const char *pathname, struct statfs64 *sfs) __attribute__ ((alias("statfs")));
+int __statfs(const char *pathname, struct statfs *sfs) __attribute__ ((alias("statfs")));
 
 int
 statvfs(const char *pathname, struct statvfs *svfs)
 {
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	int rc, is_target_path;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 
-	if(real_statvfs==NULL)	{
-		real_statvfs = (org_statvfs)dlsym(RTLD_NEXT, "statvfs");
+	if (real_statvfs == NULL)	{
+		real_statvfs = dlsym(RTLD_NEXT, "statvfs");
+		assert(real_statvfs != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_statvfs(pathname, svfs);
 
 	parse_path(pathname, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_statvfs(pathname, svfs);
-	}
 
 	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
 	assert(rc == 0);
@@ -1542,7 +1453,8 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	}
     return rc;
 }
-int statvfs64 (const char *__restrict pathname, struct statvfs64 *__restrict svfs) __attribute__ ( (alias ("statvfs")) );
+int statvfs64 (const char *__restrict pathname, struct statvfs64 *__restrict svfs)
+	__attribute__ ((alias("statvfs")));
 
 DIR *
 opendir(const char *path)
@@ -1553,29 +1465,27 @@ opendir(const char *path)
 	char full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t *parent, *dir_obj;
 	mode_t mode;
-//	struct dirent *ent_list = NULL;
+/*	struct dirent *ent_list = NULL; */
 
-	if(real_opendir==NULL)	{
-		real_opendir = (org_opendir)dlsym(RTLD_NEXT, "opendir");
+	if (real_opendir == NULL)	{
+		real_opendir = dlsym(RTLD_NEXT, "opendir");
+		assert(real_opendir != NULL);
 	}
-	if(! inited)
+	if (!inited)
 		return real_opendir(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_opendir(path);
-	}
 
-	if ( !parent && (strncmp(item_name, "/", 2) == 0 ) ) {
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_lookup(dfs, "/", O_RDWR, &dir_obj, &mode, NULL);
-	}
-	else {
+	else
 		rc = dfs_open(dfs, parent, item_name, S_IFDIR, O_RDONLY, 0, 0, NULL, &dir_obj);
-	}
 
-//	rc = dfs_lookup(dfs, full_path, O_RDWR, &dir_obj, &mode, NULL);
-	
-//	rc = dfs_lookup(dfs, full_path, O_RDONLY | O_NOFOLLOW, &dir_obj, &mode, NULL);
+/*	rc = dfs_lookup(dfs, full_path, O_RDWR, &dir_obj, &mode, NULL); */
+
+/*	rc = dfs_lookup(dfs, full_path, O_RDONLY | O_NOFOLLOW, &dir_obj, &mode, NULL); */
 	if (rc) {
 		errno = rc;
 		return NULL;
@@ -1605,35 +1515,34 @@ opendir(const char *path)
 	ent_list[1].d_type = DT_DIR;
 	strcpy(ent_list[1].d_name, "..");
 */
-	return (DIR *)( &(dir_list[idx_dirfd]) );
+	return (DIR *)(&(dir_list[idx_dirfd]));
 }
 
 DIR *
 fdopendir(int fd)
 {
-	if(real_fdopendir == NULL)	{
-		real_fdopendir = (org_fdopendir)dlsym(RTLD_NEXT, "fdopendir");
+	if (real_fdopendir == NULL)	{
+		real_fdopendir = dlsym(RTLD_NEXT, "fdopendir");
 		assert(real_fdopendir != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_fdopendir(fd);
 
-	if (fd < FD_DIR_BASE)	{
+	if (fd < FD_DIR_BASE)
 		return real_fdopendir(fd);;
-	}
 
-	return (DIR *)( &(dir_list[fd - FD_DIR_BASE]) );
+	return (DIR *)(&(dir_list[fd - FD_DIR_BASE]));
 }
 
 int
 openat(int dirfd, const char *pathname, int oflags, ...)
 {
 	unsigned int mode;
-	int two_args=1, rc;
+	int two_args = 1;
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if(real_openat == NULL)	{
-		real_openat = (org_openat)dlsym(RTLD_NEXT, "openat");
+	if (real_openat == NULL)	{
+		real_openat = dlsym(RTLD_NEXT, "openat");
 		assert(real_openat != NULL);
 	}
 
@@ -1642,86 +1551,79 @@ openat(int dirfd, const char *pathname, int oflags, ...)
 		va_start(arg, oflags);
 		mode = va_arg(arg, unsigned int);
 		va_end(arg);
-		two_args=0;
+		two_args = 0;
 	}
 
-	if (! inited)
+	if (!inited)
 		goto out;
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, pathname);
-		if(two_args)	{
-			rc = open_common(real_open_libc, "new_openat", full_path, oflags);
-		}
-		else	{
-			rc = open_common(real_open_libc, "new_openat", full_path, oflags, mode);
-		}
-		return rc;
+		if (two_args)
+			return open_common(real_open_libc, "new_openat", full_path, oflags);
+		else
+			return open_common(real_open_libc, "new_openat", full_path, oflags, mode);
 	} else if (dirfd == AT_FDCWD) {
-		if(strncmp(pathname, fs_root, len_fs_root) == 0)	{
-			if(two_args)    {
+		if (strncmp(pathname, fs_root, len_fs_root) == 0)	{
+			if (two_args)
 				return open_common(real_open_libc, "new_openat", pathname, oflags);
-			}
-			else	{
-				return open_common(real_open_libc, "new_openat", pathname, oflags, mode);
-			}
+			else
+				return open_common(real_open_libc, "new_openat", pathname, oflags,
+						   mode);
 		}
 	}
 
 out:
-	if(two_args)	{
-		rc = real_openat(dirfd, pathname, oflags);
-	}
-	else	{
-		rc = real_openat(dirfd, pathname, oflags, mode);
-	}
-	return rc;
+	if (two_args)
+		return real_openat(dirfd, pathname, oflags);
+	else
+		return real_openat(dirfd, pathname, oflags, mode);
 }
-int openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__ ( (alias ("openat")) );
+int openat64(int dirfd, const char *pathname, int oflags, ...) __attribute__ ((alias("openat")));
 
 int
 __openat_2(int dirfd, const char *pathname, int oflags)
 {
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if(real_openat_2 == NULL)	{
-		real_openat_2 = (org_openat_2)dlsym(RTLD_NEXT, "__openat_2");
+	if (real_openat_2 == NULL)	{
+		real_openat_2 = dlsym(RTLD_NEXT, "__openat_2");
 		assert(real_openat_2 != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_openat_2(dirfd, pathname, oflags);
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, pathname);
 		return open_common(real_open_libc, "__openat_2", full_path, oflags);
 	} else if (dirfd == AT_FDCWD) {
-		if(strncmp(pathname, fs_root, len_fs_root) == 0)	{
+		if (strncmp(pathname, fs_root, len_fs_root) == 0)
 			return open_common(real_open_libc, "__openat_2", pathname, oflags);
-		}
 	}
 
 	return real_openat(dirfd, pathname, oflags);
 }
 
 int
-closedir(DIR * dirp)
+closedir(DIR *dirp)
 {
 	int fd;
 
-	if(real_closedir==NULL)	{
-		real_closedir = (org_closedir)dlsym(RTLD_NEXT, "closedir");
+	if (real_closedir == NULL)	{
+		real_closedir = dlsym(RTLD_NEXT, "closedir");
+		assert(real_closedir != NULL);
 	}
-	if( ! inited )
+	if (!inited)
 		return real_closedir(dirp);
 
-	if(! dirp)	{
+	if (!dirp)	{
 		printf("dirp == NULL in closedir().\nQuit\n");
 		errno = EINVAL;
 		return (-1);
 	}
 
 	fd = dirfd(dirp);
-	if( fd >= FD_DIR_BASE)	{
+	if (fd >= FD_DIR_BASE)	{
 		free_dirfd(dirfd(dirp) - FD_DIR_BASE);
 		return 0;
 	} else {
@@ -1733,7 +1635,7 @@ static struct dirent *
 new_readdir(DIR *dirp)
 {
 	int rc = 0;
-	DIRSTATUS *mydir = (DIRSTATUS *)dirp;
+	struct DIRSTATUS *mydir = (struct DIRSTATUS *)dirp;
 
 	if (mydir->fd < FD_FILE_BASE) {
 		return real_readdir(dirp);
@@ -1748,7 +1650,8 @@ new_readdir(DIR *dirp)
 
 	mydir->num_ents = READ_DIR_BATCH_SIZE;
 	while (!daos_anchor_is_eof(&mydir->anchor)) {
-		rc = dfs_readdir(dfs, mydir->dir_obj, &mydir->anchor, &mydir->num_ents, mydir->ents);
+		rc = dfs_readdir(dfs, mydir->dir_obj, &mydir->anchor, &mydir->num_ents,
+				 mydir->ents);
 		if (rc != 0)
 			goto out_null_readdir;
 
@@ -1764,12 +1667,13 @@ out_null_readdir:
 out_readdir:
 	mydir->num_ents--;
 	mydir->offset++;
-//	mydir->ents[mydir->num_ents].d_ino = mydir->offset;
+/*	mydir->ents[mydir->num_ents].d_ino = mydir->offset; */
 	return &mydir->ents[mydir->num_ents];
 }
 
 /*
-char* envp_lib[] = { "LD_PRELOAD=/scratch/leihuan1/tickets/12142/latest/daos/install/lib64/libpil4dfs.so",
+char* envp_lib[] = {
+	"LD_PRELOAD=/scratch/leihuan1/tickets/12142/latest/daos/install/lib64/libpil4dfs.so",
 	"DAOS_POOL=testpool",
 	"DAOS_CONTAINER=testcont",
 	"DAOS_MOUNT_POINT=/dfs", NULL };
@@ -1784,17 +1688,17 @@ static char** pre_envp(char *const envp[])
 	} else if (envp[0] == NULL) {
 		num_entry = 0;
 	} else {
-		while(envp[num_entry])	{
+		while (envp[num_entry])	{
 			num_entry++;
 		}
 	}
 
 	new_envp = malloc(sizeof(char *) * (num_entry + 5));
 	assert(new_envp != NULL);
-	for(i = 0; i < num_entry; i++)	{
+	for (i = 0; i < num_entry; i++)	{
 		new_envp[i] = envp[i];
 	}
-	for(i = 0; i < 5; i++)	{
+	for (i = 0; i < 5; i++)	{
 		new_envp[num_entry + i] = envp_lib[i];
 	}
 
@@ -1843,18 +1747,18 @@ mkdir(const char *path, mode_t mode)
 	int is_target_path, rc;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 
-	if(real_mkdir == NULL)	{
-		real_mkdir = (org_mkdir)dlsym(RTLD_NEXT, "mkdir");
+	if (real_mkdir == NULL)	{
+		real_mkdir = dlsym(RTLD_NEXT, "mkdir");
+		assert(real_mkdir != NULL);
 	}
-	if(! inited)
+	if (!inited)
 		return real_mkdir(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_mkdir(path, mode);
-	}
 
 	rc = dfs_mkdir(dfs, parent, item_name, mode & mode_not_umask, 0);
 	if (rc) {
@@ -1869,16 +1773,15 @@ int mkdirat(int dirfd, const char *path, mode_t mode)
 {
 	int rc;
 
-	if(real_mkdirat == NULL)	{
-		real_mkdirat = (org_mkdirat)dlsym(RTLD_NEXT, "mkdirat");
+	if (real_mkdirat == NULL)	{
+		real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
+		assert(real_mkdirat != NULL);
 	}
-	if(! inited) {       // init() not finished yet
+	if (!inited)
 		return real_mkdirat(dirfd, path, mode);
-	}
 
-	if (dirfd < FD_DIR_BASE) {
+	if (dirfd < FD_DIR_BASE)
 		return real_mkdirat(dirfd, path, mode);
-	}
 
 	rc = dfs_mkdir(dfs, dir_list[dirfd - FD_DIR_BASE].dir_obj, path, mode, 0);
 	if (rc) {
@@ -1894,19 +1797,18 @@ int rmdir(const char *path)
 	int is_target_path, rc;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 
-	if(real_rmdir == NULL)	{
-		real_rmdir = (org_rmdir)dlsym(RTLD_NEXT, "rmdir");
+	if (real_rmdir == NULL)	{
+		real_rmdir = dlsym(RTLD_NEXT, "rmdir");
+		assert(real_rmdir != NULL);
 	}
-	if(! inited) {       // init() not finished yet
+	if (!inited)
 		return real_rmdir(path);
-	}
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_rmdir(path);
-	}
 
 	rc = dfs_remove(dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -1924,36 +1826,37 @@ int rename(const char *old_name, const char *new_name)
 	char parent_dir_old[MAX_FILE_NAME_LEN], parent_dir_new[MAX_FILE_NAME_LEN];
 	dfs_obj_t *parent_old, *parent_new;
 
-	if(real_rename == NULL)	{
-		real_rename = (org_rename)dlsym(RTLD_NEXT, "rename");
+	if (real_rename == NULL)	{
+		real_rename = dlsym(RTLD_NEXT, "rename");
+		assert(real_rename != NULL);
 	}
-	if(! inited) {       // init() not finished yet
+	if (!inited)
 		return real_rename(old_name, new_name);
-	}
 
 	parse_path(old_name, &is_target_path, &parent_old, item_name_old, parent_dir_old, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_rename(old_name, new_name);
-	}
 
 	if (parent_old == NULL) {
 		printf("rename(): Failed to lookup parent: %s\n", old_name);
-		errno = ENOTDIR;	// NEED to double check
+		/* NEED to double check !!! */
+		errno = ENOTDIR;
 		return (-1);
 	}
 
 	parse_path(new_name, &is_target_path, &parent_new, item_name_new, parent_dir_new, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_rename(old_name, new_name);
-	}
 
 	if (parent_new == NULL) {
 		printf("rename(): Failed to lookup parent: %s\n", new_name);
-		errno = ENOTDIR;	// NEED to double check
+		/* NEED to double check !!! */
+		errno = ENOTDIR;
 		return (-1);
 	}
 
-	rc = dfs_move(dfs, parent_old, item_name_old, parent_new, item_name_new, NULL);	// assume both src and dest are in the same container
+	/* assume both src and dest are in the same container */
+	rc = dfs_move(dfs, parent_old, item_name_old, parent_new, item_name_new, NULL);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -1964,24 +1867,24 @@ int rename(const char *old_name, const char *new_name)
 char
 *getcwd(char *buf, size_t size)
 {
-	if(real_getcwd == NULL) {
-		real_getcwd = (org_getcwd)dlsym(RTLD_NEXT, "getcwd");
+	if (real_getcwd == NULL) {
+		real_getcwd = dlsym(RTLD_NEXT, "getcwd");
 		assert(real_getcwd != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_getcwd(buf, size);
 
-	if(cur_dir[0] != '/')
+	if (cur_dir[0] != '/')
 		update_cwd();
 
-	if( strncmp(cur_dir, fs_root, len_fs_root) != 0)
+	if (strncmp(cur_dir, fs_root, len_fs_root) != 0)
 		return real_getcwd(buf, size);
 
-	if(buf == NULL) {
-		char *szPath=NULL;
-		szPath = (char*)malloc(strlen(cur_dir) + 256);
-		if(szPath == NULL)      {
+	if (buf == NULL) {
+		char *szPath = NULL;
+		szPath = (char *)malloc(strlen(cur_dir) + 256);
+		if (szPath == NULL)      {
 			printf("Fail to allocate memory for szPath in getcwd().\nQuit\n");
 			exit(1);
 		}
@@ -1997,25 +1900,21 @@ char
 int
 isatty(int fd)
 {
-//	int fd_Directed;
-
-	if(real_isatty==NULL)	{
-		real_isatty = (org_isatty)dlsym(RTLD_NEXT, "isatty");
+	if (real_isatty == NULL)	{
+		real_isatty = dlsym(RTLD_NEXT, "isatty");
 		assert(real_isatty != NULL);
 	}
-	if(! inited)
+	if (!inited)
 		return real_isatty(fd);
 
-//	fd_Directed = Get_Fd_Redirected(fd);
-//	if(fd_Directed >= FD_FILE_BASE)	{
-	if(fd >= FD_FILE_BASE)	{
-		return 0;	// non-terminal
-	}
-	else	{
+	if (fd >= FD_FILE_BASE)	{
+		/* non-terminal */
+		return 0;
+	} else {
 		return real_isatty(fd);
 	}
 }
-int __isatty(int fd) __attribute__ ( (alias ("isatty")) );
+int __isatty(int fd) __attribute__ ((alias("isatty")));
 
 int
 access(const char *path, int mode)
@@ -2023,14 +1922,14 @@ access(const char *path, int mode)
 	char full_path[MAX_FILE_NAME_LEN];
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	int rc, is_target_path;
 
-	if(real_access == NULL)	{
-		real_access = (org_access)dlsym(RTLD_NEXT, "access");
+	if (real_access == NULL)	{
+		real_access = dlsym(RTLD_NEXT, "access");
 		assert(real_access != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_access(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
@@ -2052,18 +1951,19 @@ faccessat(int dirfd, const char *path, int mode, int flags)
 {
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if(real_faccessat==NULL)	{
-		real_faccessat = (org_faccessat)dlsym(RTLD_NEXT, "faccessat");
+	if (real_faccessat == NULL)	{
+		real_faccessat = dlsym(RTLD_NEXT, "faccessat");
 		assert(real_faccessat != NULL);
 	}
-	if(! inited)
+	if (!inited)
 		return real_faccessat(dirfd, path, mode, flags);
 
-	if (path[0] == '/') {	// absolute path, dirfd is ignored
+	if (path[0] == '/') {
+		/* absolute path, dirfd is ignored */
 		return access(path, mode);
 	}
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
 		return access(full_path, mode);
 	} else if (dirfd == AT_FDCWD) {
@@ -2081,25 +1981,25 @@ chdir(const char *path)
 	char full_path[MAX_FILE_NAME_LEN];
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 	struct stat stat_buf;
-	
-	if(real_chdir == NULL)  {
-		real_chdir = (org_chdir)dlsym(RTLD_NEXT, "chdir");
+
+	if (real_chdir == NULL)  {
+		real_chdir = dlsym(RTLD_NEXT, "chdir");
 		assert(real_chdir != NULL);
 	}
-	if( ! inited )
+	if (!inited)
 		return real_chdir(path);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path) {
 		rc = real_chdir(path);
 		if (rc == 0)
 			update_cwd();
 		return rc;
 	}
 
-	if ( !parent && (strncmp(item_name, "/", 2) == 0 ) )
+	if (!parent && (strncmp(item_name, "/", 2) == 0))
 		rc = dfs_stat(dfs, NULL, NULL, &stat_buf);
 	else
 		rc = dfs_stat(dfs, parent, item_name, &stat_buf);
@@ -2119,16 +2019,15 @@ chdir(const char *path)
 int
 fchdir(int dirfd)
 {
-	if(real_fchdir == NULL)  {
-		real_fchdir = (org_fchdir)dlsym(RTLD_NEXT, "fchdir");
+	if (real_fchdir == NULL)  {
+		real_fchdir = dlsym(RTLD_NEXT, "fchdir");
 		assert(real_fchdir != NULL);
 	}
-	if( ! inited )
+	if (!inited)
 		return real_fchdir(dirfd);
 
-	if (dirfd < FD_DIR_BASE) {
+	if (dirfd < FD_DIR_BASE)
 		return real_fchdir(dirfd);
-	}
 
 	strcpy(cur_dir, dir_list[dirfd - FD_DIR_BASE].path);
 	return 0;
@@ -2140,12 +2039,11 @@ new_unlink(const char *path)
 	int is_target_path, rc;
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_unlink(path);
-	}
 
 	rc = dfs_remove(dfs, parent, item_name, false, NULL);
 	if (rc) {
@@ -2161,18 +2059,19 @@ unlinkat(int dirfd, const char *path, int flags)
 {
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if(real_unlinkat == NULL)	{
-		real_unlinkat = (org_unlinkat)dlsym(RTLD_NEXT, "unlinkat");
+	if (real_unlinkat == NULL)	{
+		real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
 		assert(real_unlinkat != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_unlinkat(dirfd, path, flags);
 
-	if (path[0] == '/') {	// absolute path, dirfd is ignored
+	if (path[0] == '/') {
+		/* absolute path, dirfd is ignored */
 		return new_unlink(path);
 	}
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
 		return new_unlink(full_path);
 	} else if (dirfd == AT_FDCWD) {
@@ -2186,11 +2085,11 @@ unlinkat(int dirfd, const char *path, int flags)
 int
 fsync(int fd)
 {
-	if(real_fsync == NULL)  {
-		real_fsync = (org_fsync)dlsym(RTLD_NEXT, "fsync");
+	if (real_fsync == NULL)  {
+		real_fsync = dlsym(RTLD_NEXT, "fsync");
 		assert(real_fsync != NULL);
 	}
-	if( ! inited )
+	if (!inited)
 		return real_fsync(fd);
 
 	if (fd < FD_FILE_BASE) {
@@ -2200,7 +2099,7 @@ fsync(int fd)
 		return (-1);
 	}
 
-	// TODO real fsync
+	/* TODO real fsync */
 	return 0;
 }
 
@@ -2209,11 +2108,11 @@ ftruncate(int fd, off_t length)
 {
 	int rc;
 
-	if(real_ftruncate == NULL)  {
-		real_ftruncate = (org_ftruncate)dlsym(RTLD_NEXT, "ftruncate");
+	if (real_ftruncate == NULL)  {
+		real_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
 		assert(real_ftruncate != NULL);
 	}
-	if( ! inited )
+	if (!inited)
 		return real_ftruncate(fd, length);
 
 	if (fd < FD_FILE_BASE) {
@@ -2240,19 +2139,18 @@ truncate(const char *path, off_t length)
 	dfs_obj_t *parent, *file_obj;
 	mode_t mode;
 
-	if(real_truncate == NULL)	{
-		real_truncate = (org_truncate)dlsym(RTLD_NEXT, "truncate");
+	if (real_truncate == NULL)	{
+		real_truncate = dlsym(RTLD_NEXT, "truncate");
 		assert(real_truncate != NULL);
 	}
-	if(! inited)
+	if (!inited)
 		return real_truncate(path, length);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, NULL);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_truncate(path, length);
-	}
 
-//	rc = dfs_lookup(dfs, full_path, O_RDWR, &file_obj, &mode, NULL);
+	/* rc = dfs_lookup(dfs, full_path, O_RDWR, &file_obj, &mode, NULL); */
 	rc = dfs_open(dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
 	if (rc) {
 		errno = rc;
@@ -2279,19 +2177,19 @@ chmod(const char *path, mode_t mode)
 	char item_name[MAX_FILE_NAME_LEN];
 	char parent_dir[MAX_FILE_NAME_LEN];
 	char full_path[MAX_FILE_NAME_LEN];
-	dfs_obj_t * parent;
+	dfs_obj_t *parent;
 
-	if(real_chmod==NULL)	{
-		real_chmod = (org_chmod)dlsym(RTLD_NEXT, "chmod");
+	if (real_chmod == NULL)	{
+		real_chmod = dlsym(RTLD_NEXT, "chmod");
 		assert(real_chmod != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_chmod(path, mode);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
 
-	if(is_target_path) {
+	if (is_target_path) {
 		rc = dfs_chmod(dfs, parent, item_name, mode);
 		if (rc) {
 			errno = rc;
@@ -2307,12 +2205,12 @@ fchmod(int fd, mode_t mode)
 {
 	int rc;
 
-	if(real_fchmod==NULL)	{
-		real_fchmod = (org_fchmod)dlsym(RTLD_NEXT, "fchmod");
+	if (real_fchmod == NULL)	{
+		real_fchmod = dlsym(RTLD_NEXT, "fchmod");
 		assert(real_fchmod != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_fchmod(fd, mode);
 
 	if (fd < FD_FILE_BASE) {
@@ -2322,7 +2220,8 @@ fchmod(int fd, mode_t mode)
 		return (-1);
 	}
 
-	rc = dfs_chmod(dfs, file_list[fd-FD_FILE_BASE].parent, file_list[fd-FD_FILE_BASE].item_name, mode);
+	rc = dfs_chmod(dfs, file_list[fd-FD_FILE_BASE].parent, file_list[fd-FD_FILE_BASE].item_name,
+		       mode);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -2334,21 +2233,20 @@ fchmod(int fd, mode_t mode)
 int
 fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 {
-	if(real_fchmodat==NULL)	{
-		real_fchmodat = (org_fchmodat)dlsym(RTLD_NEXT, "fchmodat");
+	if (real_fchmodat == NULL)	{
+		real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
 		assert(real_fchmodat != NULL);
 	}
 
-	if(! inited)
+	if (!inited)
 		return real_fchmodat(dirfd, path, mode, flag);
 
-//	if(path[0] == '/')	{
-//	}
-
-	if(dirfd == AT_FDCWD)	{
-		if (strncmp(cur_dir, fs_root, len_fs_root) != 0) {
-			real_fchmodat(dirfd, path, mode, flag);
-		}
+/*	if (path[0] == '/')	{
+	}
+*/
+	if (dirfd == AT_FDCWD)	{
+		if (strncmp(cur_dir, fs_root, len_fs_root) != 0)
+			return real_fchmodat(dirfd, path, mode, flag);
 	} else if (dirfd < FD_FILE_BASE) {
 		return real_fchmodat(dirfd, path, mode, flag);
 	} else if (dirfd < FD_DIR_BASE) {
@@ -2356,7 +2254,7 @@ fchmodat(int dirfd, const char *path, mode_t mode, int flag)
 		return (-1);
 	}
 
-	// Need more work!!!
+	/* Need more work!!! */
 /*
 	rc = dfs_chmod(dfs, dir_list[dirfd-FD_DIR_BASE].dir_obj, path, mode);
 	if (rc) {
@@ -2376,29 +2274,28 @@ utime(const char *path, const struct utimbuf *times)
 	char full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t *file_obj, *parent;
 	struct stat	stbuf;
-//	mode_t mode_query;
+/*	mode_t mode_query; */
 	struct timespec times_loc;
 
-	if(real_utime == NULL)	{
-		real_utime = (org_utime)dlsym(RTLD_NEXT, "utime");
+	if (real_utime == NULL)	{
+		real_utime = dlsym(RTLD_NEXT, "utime");
 		assert(real_utime != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_utime(path, times);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_utime(path, times);
-	}
 
-//	rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf);
+	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
 	rc = dfs_open(dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
 		return (-1);
 	}
-	
+
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc);
 		stbuf.st_atim.tv_sec = times_loc.tv_sec;
@@ -2436,29 +2333,28 @@ utimes(const char *path, const struct timeval times[2])
 	char full_path[MAX_FILE_NAME_LEN];
 	dfs_obj_t *file_obj, *parent;
 	struct stat	stbuf;
-//	mode_t mode_query;
+/*	mode_t mode_query; */
 	struct timespec times_loc;
 
-	if(real_utimes == NULL)	{
-		real_utimes = (org_utimes)dlsym(RTLD_NEXT, "utimes");
+	if (real_utimes == NULL)	{
+		real_utimes = dlsym(RTLD_NEXT, "utimes");
 		assert(real_utimes != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_utimes(path, times);
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path)
 		return real_utimes(path, times);
-	}
 
-//	rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf);
+	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
 	rc = dfs_open(dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to lookup %s. %s\n", full_path, strerror(rc));
 		errno = rc;
 		return (-1);
 	}
-	
+
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc);
 		stbuf.st_atim.tv_sec = times_loc.tv_sec;
@@ -2500,7 +2396,7 @@ new_utimens_timespec(const char *path, const struct timespec times[2])
 	struct timeval times_us[2];
 
 	parse_path(path, &is_target_path, &parent, item_name, parent_dir, full_path);
-	if (! is_target_path) {
+	if (!is_target_path) {
 		times_us[0].tv_sec = times[0].tv_sec;
 		times_us[0].tv_usec = times[0].tv_nsec/100;
 		times_us[1].tv_sec = times[1].tv_sec;
@@ -2508,14 +2404,14 @@ new_utimens_timespec(const char *path, const struct timespec times[2])
 		return real_utimes(path, times_us);
 	}
 
-//	rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf);
+	/* rc = dfs_lookup(dfs, full_path, S_IFREG, &file_obj, &mode_query, &stbuf); */
 	rc = dfs_open(dfs, parent, item_name, S_IFREG, O_RDWR, 0, 0, NULL, &file_obj);
 	if (rc) {
 		printf("utime> Error: Fail to dfs_open %s. %s\n", full_path, strerror(rc));
 		errno = rc;
 		return (-1);
 	}
-	
+
 	if (times == NULL) {
 		clock_gettime(CLOCK_REALTIME, &times_loc);
 		stbuf.st_atim.tv_sec = times_loc.tv_sec;
@@ -2544,38 +2440,39 @@ new_utimens_timespec(const char *path, const struct timespec times[2])
 	return 0;
 }
 
-/*
-TODO:
-    The flags field is a bit mask that may be 0, or include the
-    following constant, defined in <fcntl.h>:
-
-    AT_SYMLINK_NOFOLLOW
-        If pathname specifies a symbolic link, then update the
-        timestamps of the link, rather than the file to which it
-        refers.
-*/
+/**
+ * TODO:
+ *	The flags field is a bit mask that may be 0, or include the
+ *	following constant, defined in <fcntl.h>:
+ *
+ *	AT_SYMLINK_NOFOLLOW
+ *	If pathname specifies a symbolic link, then update the
+ *	timestamps of the link, rather than the file to which it
+ *	refers.
+ */
 int
 utimensat(int dirfd, const char *path, const struct timespec times[2], int flags)
 {
 	char full_path[MAX_FILE_NAME_LEN+4];
 
-	if(real_utimensat == NULL)	{
-		real_utimensat = (org_utimensat)dlsym(RTLD_NEXT, "utimensat");
+	if (real_utimensat == NULL)	{
+		real_utimensat = dlsym(RTLD_NEXT, "utimensat");
 		assert(real_utimensat != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_utimensat(dirfd, path, times, flags);
 
-	if(path == NULL) {
+	if (path == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if (path[0] == '/') {	// absolute path, dirfd is ignored
+	if (path[0] == '/') {
+		/* absolute path, dirfd is ignored */
 		return new_utimens_timespec(path, times);
 	}
 
-	if( dirfd >= FD_DIR_BASE ) {
+	if (dirfd >= FD_DIR_BASE) {
 		sprintf(full_path, "%s/%s", dir_list[dirfd - FD_DIR_BASE].path, path);
 		return new_utimens_timespec(full_path, times);
 	} else if (dirfd == AT_FDCWD) {
@@ -2593,11 +2490,11 @@ futimens(int fd, const struct timespec times[2])
 	struct timespec times_loc;
 	struct stat	stbuf;
 
-	if(real_futimens == NULL)	{
-		real_futimens = (org_futimens)dlsym(RTLD_NEXT, "futimens");
+	if (real_futimens == NULL)	{
+		real_futimens = dlsym(RTLD_NEXT, "futimens");
 		assert(real_futimens != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_futimens(fd, times);
 
 	if (fd < FD_FILE_BASE)
@@ -2627,16 +2524,16 @@ futimens(int fd, const struct timespec times[2])
 }
 
 static int
-new_fcntl(int fd, int cmd,...)
+new_fcntl(int fd, int cmd, ...)
 {
-	int fd_save, fd_Directed, param, OrgFunc=1, fd_dup2ed_Dest=-1, Next_Dirfd, Next_fd;
+	int fd_save, fd_Directed, param, OrgFunc = 1, fd_dup2ed_Dest = -1, Next_Dirfd, Next_fd;
 	int dup_next;
 	va_list arg;
 
 	fd_Directed = Get_Fd_Redirected(fd);
 	fd_save = fd_Directed;
 
-	switch(cmd)     {
+	switch (cmd)     {
 	case F_DUPFD:
 	case F_DUPFD_CLOEXEC:
 	case F_GETFD:
@@ -2649,54 +2546,49 @@ new_fcntl(int fd, int cmd,...)
 	case F_NOTIFY:
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
-		va_start (arg, cmd);
-		param = va_arg (arg, int);
-		va_end (arg);
+		va_start(arg, cmd);
+		param = va_arg(arg, int);
+		va_end(arg);
 
-		if(! inited) {	// init() not finished yet
+		if (!inited)
 			return real_fcntl(fd, cmd, param);
-		}
 
-		if(cmd == F_GETFL)	{
-			if(fd_Directed >= FD_DIR_BASE) {
+		if (cmd == F_GETFL)	{
+			if (fd_Directed >= FD_DIR_BASE)
 				return dir_list[fd_Directed - FD_DIR_BASE].open_flag;
-			}
-			else if(fd_Directed >= FD_FILE_BASE) {
+			else if (fd_Directed >= FD_FILE_BASE)
 				return file_list[fd_Directed - FD_FILE_BASE].open_flag;
-			}
-			else {
+			else
 				return real_fcntl(fd_Directed, cmd);
-			}
 		}
 
 		fd_dup2ed_Dest = query_fd_forward_dest(fd_Directed);
-		if(fd_dup2ed_Dest >= FD_FILE_BASE)	{
-			if( cmd == F_SETFD )	{
+		if (fd_dup2ed_Dest >= FD_FILE_BASE)	{
+			if (cmd == F_SETFD)
 				return 0;
-			}
-			else if( cmd == F_GETFL )	{
+			else if (cmd == F_GETFL)
 				return file_list[fd_dup2ed_Dest - FD_FILE_BASE].open_flag;
-			}
 		}
 
-		if(fd_Directed >= FD_DIR_BASE)	{
+		if (fd_Directed >= FD_DIR_BASE) {
 			fd_Directed -= FD_DIR_BASE;
-			OrgFunc=0;
-		}
-		else if(fd_Directed >= FD_FILE_BASE)	{
+			OrgFunc = 0;
+		} else if (fd_Directed >= FD_FILE_BASE) {
 			fd_Directed -= FD_FILE_BASE;
-			OrgFunc=0;
+			OrgFunc = 0;
 		}
 
-		if( (cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC) )	{
-			if(fd_save >= FD_DIR_BASE)	{
-				if(fd_save == DUMMY_FD_DIR)	{
-					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
+		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC))	{
+			if (fd_save >= FD_DIR_BASE)	{
+				if (fd_save == DUMMY_FD_DIR)	{
+					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in \n"
+					       "fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
 					return (-1);
 				}
 
 				Next_Dirfd = find_next_available_dirfd();
-				memcpy(&(dir_list[Next_Dirfd]), &(dir_list[fd_Directed]), sizeof(DIRSTATUS));
+				memcpy(&(dir_list[Next_Dirfd]), &(dir_list[fd_Directed]),
+					sizeof(struct DIRSTATUS));
 				dup_next = dir_list[fd_Directed].fd_dup_next;
 				dir_list[fd_Directed].fd_dup_next = Next_Dirfd;
 				dir_list[Next_Dirfd].fd_dup_pre = fd_Directed;
@@ -2707,7 +2599,8 @@ new_fcntl(int fd, int cmd,...)
 				return (Next_Dirfd + FD_DIR_BASE);
 			} else if (fd_save >= FD_FILE_BASE) {
 				Next_fd = find_next_available_fd();
-				memcpy(&(file_list[Next_fd]), &(file_list[fd_Directed]), sizeof(FILESTATUS));
+				memcpy(&(file_list[Next_fd]), &(file_list[fd_Directed]),
+					sizeof(struct FILESTATUS));
 				dup_next = file_list[fd_Directed].fd_dup_next;
 				file_list[fd_Directed].fd_dup_next = Next_fd;
 				file_list[Next_fd].fd_dup_pre = fd_Directed;
@@ -2717,14 +2610,13 @@ new_fcntl(int fd, int cmd,...)
 				file_list[Next_fd].ref_count = 1;
 				return (Next_fd + FD_FILE_BASE);
 			}
-		}
-		else if( (cmd == F_GETFD) || (cmd == F_SETFD) )	{
-			if(OrgFunc == 0)	{	// Do nothing
+		} else if ((cmd == F_GETFD) || (cmd == F_SETFD)) {
+			if (OrgFunc == 0)
 				return 0;
-			}
 		}
-//		else if(cmd == F_GETFL)	{
-//		}
+/**		else if (cmd == F_GETFL)	{
+ *		}
+*/
 		return real_fcntl(fd, cmd, param);
 	case F_SETLK:
 	case F_SETLKW:
@@ -2734,13 +2626,13 @@ new_fcntl(int fd, int cmd,...)
 	case F_OFD_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		va_start (arg, cmd);
-		param = va_arg (arg, int);
-		va_end (arg);
+		va_start(arg, cmd);
+		param = va_arg(arg, int);
+		va_end(arg);
 
-		if(! inited) {       // init() not finished yet
+		if (!inited)
 			return real_fcntl(fd, cmd, param);
-		}
+
 		return real_fcntl(fd, cmd, param);
 	default:
 		return real_fcntl(fd, cmd);
@@ -2753,7 +2645,7 @@ new_fcntl(int fd, int cmd,...)
 typedef struct {
 	uid_t uid;
 	gid_t gid;
-}dfuse_user_reply;
+} dfuse_user_reply;
 
 int
 ioctl(int fd, unsigned long request, ...)
@@ -2762,21 +2654,22 @@ ioctl(int fd, unsigned long request, ...)
 	void *param;
 	dfuse_user_reply *reply;
 
-	va_start (arg, request);
-	param = va_arg (arg, void *);
-	va_end (arg);
+	va_start(arg, request);
+	param = va_arg(arg, void *);
+	va_end(arg);
 
-	if(real_ioctl == NULL)	{
-		real_ioctl = (org_ioctl)dlsym(RTLD_NEXT, "ioctl");
+	if (real_ioctl == NULL)	{
+		real_ioctl = dlsym(RTLD_NEXT, "ioctl");
 		assert(real_ioctl != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_ioctl(fd, request, param);
 
 	if (fd < FD_FILE_BASE)
 		return real_ioctl(fd, request, param);
-	
-	if (request == 0xffffffff8008a3ca) {	// DFUSE_IOCTL_DFUSE_USER
+
+	if (request == 0xffffffff8008a3ca) {
+		/* DFUSE_IOCTL_DFUSE_USER */
 		reply = (dfuse_user_reply *)param;
 		reply->uid = getuid();
 		reply->gid = getgid();
@@ -2793,13 +2686,13 @@ dup(int oldfd)
 {
 	int fd_Directed, fd, idx;
 
-	if(real_dup == NULL)	{
-		real_dup = (org_dup)dlsym(RTLD_NEXT, "dup");
+	if (real_dup == NULL)	{
+		real_dup = dlsym(RTLD_NEXT, "dup");
 		assert(real_dup != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_dup(oldfd);
-	
+
 	if (oldfd >= FD_FILE_BASE) {
 		fd = allocate_a_fd_from_kernel();
 		idx = find_free_fd_dup2_list();
@@ -2840,11 +2733,11 @@ dup2(int oldfd, int newfd)
 {
 	int fd, fd_Directed, idx, rc;
 
-	if(real_dup2 == NULL)	{
-		real_dup2 = (org_dup2)dlsym(RTLD_NEXT, "dup2");
+	if (real_dup2 == NULL)	{
+		real_dup2 = dlsym(RTLD_NEXT, "dup2");
 		assert(real_dup2 != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_dup2(oldfd, newfd);
 	if (oldfd == newfd) {
 		if (oldfd < FD_FILE_BASE)
@@ -2852,7 +2745,7 @@ dup2(int oldfd, int newfd)
 		else
 			return newfd;
 	}
-	if ( (oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE) )
+	if ((oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
 		return real_dup2(oldfd, newfd);
 
 	fd_Directed = query_fd_forward_dest(newfd);
@@ -2863,14 +2756,14 @@ dup2(int oldfd, int newfd)
 		fd_Directed = query_fd_forward_dest(oldfd);
 		if (oldfd >= FD_FILE_BASE)
 			fd_Directed = oldfd;
-		if ( fd_Directed >= FD_FILE_BASE ) {
+		if (fd_Directed >= FD_FILE_BASE) {
 			rc = close(newfd);
-			if (rc != 0) {
+			if (rc != 0)
 				return -1;
-			}
 			fd = allocate_a_fd_from_kernel();
 			if (fd != newfd) {
-				printf("allocate_a_fd_from_kernel() failed to get the desired fd.\n");
+				printf("allocate_a_fd_from_kernel() failed to get the \n"
+				       "desired fd.\n");
 				errno = EAGAIN;
 				return (-1);
 			}
@@ -2890,18 +2783,18 @@ dup2(int oldfd, int newfd)
 	}
 	return -1;
 }
-int __dup2(int oldfd, int newfd) __attribute__ ( (alias ("dup2")) );
+int __dup2(int oldfd, int newfd) __attribute__ ((alias("dup2")));
 /*
 int
 dup3(int oldfd, int newfd, int flags)
 {
 	int i, fd_Directed;
 
-	if(real_dup3 == NULL)	{
-		real_dup3 = (org_dup3)dlsym(RTLD_NEXT, "dup3");
+	if (real_dup3 == NULL)	{
+		real_dup3 = dlsym(RTLD_NEXT, "dup3");
 		assert(real_dup3 != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_dup3(oldfd, newfd, flags);
 	if (oldfd == newfd) {
 		if (oldfd < FD_FILE_BASE)
@@ -2914,23 +2807,23 @@ dup3(int oldfd, int newfd, int flags)
 
 	fd_Directed = Get_Fd_Redirected(oldfd);
 
-	for(i=0; i<MAX_FD_DUP2ED; i++)	{
-		if( (fd_dup2_list[i].fd_dest != oldfd) && (fd_dup2_list[i].fd_src==newfd) )	{	// dup2 again
-			close(fd_dup2_list[i].fd_dest);	// close previous opened fd
+	for (i = 0; i <MAX_FD_DUP2ED; i++)	{
+		if ((fd_dup2_list[i].fd_dest != oldfd) && (fd_dup2_list[i].fd_src==newfd))	{
+			close(fd_dup2_list[i].fd_dest);
 			fd_dup2_list[i].fd_src = -1;
 			fd_dup2_list[i].fd_dest = -1;
 		}
 	}
 
-	if( (fd_Directed>=FD_FILE_BASE) && (newfd<FD_FILE_BASE) )	{
-		if(num_fd_dup2ed >= MAX_FD_DUP2ED)	{
+	if ((fd_Directed>=FD_FILE_BASE) && (newfd<FD_FILE_BASE))	{
+		if (num_fd_dup2ed >= MAX_FD_DUP2ED)	{
 			printf("ERROR: num_fd_dup2ed >= MAX_FD_DUP2ED\n");
 			errno = EBADF;
 			return -1;
 		}
 		else	{
-			for(i=0; i<MAX_FD_DUP2ED; i++)	{
-				if(fd_dup2_list[i].fd_src == -1)	{	// available
+			for (i = 0; i < MAX_FD_DUP2ED; i++)	{
+				if (fd_dup2_list[i].fd_src == -1)	{	// available
 					fd_dup2_list[i].fd_src = newfd;
 					fd_dup2_list[i].fd_dest = fd_Directed;
 					num_fd_dup2ed++;
@@ -2939,7 +2832,7 @@ dup3(int oldfd, int newfd, int flags)
 			}
 		}
 	}
-	else if( (fd_Directed == newfd) && (fd_Directed>=FD_FILE_BASE) )	{
+	else if ((fd_Directed == newfd) && (fd_Directed >= FD_FILE_BASE))	{
 		return newfd;
 	}
 	else {
@@ -2951,36 +2844,35 @@ dup3(int oldfd, int newfd, int flags)
 int
 posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
-	if(real_posix_fadvise == NULL)	{
-		real_posix_fadvise = (org_posix_fadvise)dlsym(RTLD_NEXT, "posix_fadvise");
+	if (real_posix_fadvise == NULL)	{
+		real_posix_fadvise = dlsym(RTLD_NEXT, "posix_fadvise");
 		assert(real_posix_fadvise != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_posix_fadvise(fd, offset, len, advice);
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_posix_fadvise(fd, offset, len, advice);
-	}
 
 	printf("Error: DAOS does not support posix_fadvise yet.\n");
 	errno = ENOTSUP;
 	return -1;
 }
-int posix_fadvise64(int fd, off_t offset, off_t len, int advice) __attribute__ ( (alias ("posix_fadvise")) );
+int posix_fadvise64(int fd, off_t offset, off_t len, int advice)
+	__attribute__ ((alias("posix_fadvise")));
 
 int
 flock(int fd, int operation)
 {
-	if(real_flock == NULL)	{
-		real_flock = (org_flock)dlsym(RTLD_NEXT, "flock");
+	if (real_flock == NULL)	{
+		real_flock = dlsym(RTLD_NEXT, "flock");
 		assert(real_flock != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_flock(fd, operation);
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_flock(fd, operation);
-	}
 
 	printf("Error: DAOS does not support flock yet.\n");
 	errno = ENOTSUP;
@@ -2990,16 +2882,15 @@ flock(int fd, int operation)
 int
 fallocate(int fd, int mode, off_t offset, off_t len)
 {
-	if(real_fallocate == NULL)	{
-		real_fallocate = (org_fallocate)dlsym(RTLD_NEXT, "fallocate");
+	if (real_fallocate == NULL)	{
+		real_fallocate = dlsym(RTLD_NEXT, "fallocate");
 		assert(real_fallocate != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_fallocate(fd, mode, offset, len);
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_fallocate(fd, mode, offset, len);
-	}
 
 	printf("Error: DAOS does not support fallocate yet.\n");
 	errno = ENOTSUP;
@@ -3009,16 +2900,15 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 int
 posix_fallocate(int fd, off_t offset, off_t len)
 {
-	if(real_posix_fallocate == NULL)	{
-		real_posix_fallocate = (org_posix_fallocate)dlsym(RTLD_NEXT, "posix_fallocate");
+	if (real_posix_fallocate == NULL)	{
+		real_posix_fallocate = dlsym(RTLD_NEXT, "posix_fallocate");
 		assert(real_posix_fallocate != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_posix_fallocate(fd, offset, len);
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_posix_fallocate(fd, offset, len);
-	}
 
 	printf("Error: DAOS does not support posix_fallocate yet.\n");
 	errno = ENOTSUP;
@@ -3028,16 +2918,16 @@ posix_fallocate(int fd, off_t offset, off_t len)
 int
 posix_fallocate64(int fd, off64_t offset, off64_t len)
 {
-	if(real_posix_fallocate64 == NULL)	{
-		real_posix_fallocate64 = (org_posix_fallocate64)dlsym(RTLD_NEXT, "posix_fallocate64");
+	if (real_posix_fallocate64 == NULL)	{
+		real_posix_fallocate64 = dlsym(RTLD_NEXT,
+			"posix_fallocate64");
 		assert(real_posix_fallocate64 != NULL);
 	}
-	if (! inited)
+	if (!inited)
 		return real_posix_fallocate64(fd, offset, len);
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_posix_fallocate64(fd, offset, len);
-	}
 
 	printf("Error: DAOS does not support posix_fallocate64 yet.\n");
 	errno = ENOTSUP;
@@ -3047,14 +2937,13 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 int
 tcgetattr(int fd, void *termios_p)
 {
-	if(real_tcgetattr==NULL)	{
-		real_tcgetattr = (org_tcgetattr)dlsym(RTLD_NEXT, "tcgetattr");
+	if (real_tcgetattr == NULL)	{
+		real_tcgetattr = dlsym(RTLD_NEXT, "tcgetattr");
 		assert(real_tcgetattr != NULL);
 	}
 
-	if (fd < FD_FILE_BASE) {
+	if (fd < FD_FILE_BASE)
 		return real_tcgetattr(fd, termios_p);
-	}
 
 	printf("Error: DAOS does not support tcgetattr yet.\n");
 	errno = ENOTSUP;
@@ -3064,21 +2953,20 @@ tcgetattr(int fd, void *termios_p)
 static void
 update_cwd(void)
 {
-	char *cwd=NULL;
-	
+	char *cwd = NULL;
+
 	cwd = get_current_dir_name();
-	
-	if(cwd == NULL)       {
+
+	if (cwd == NULL) {
 		printf("Fail to get CWD with get_current_dir_name().\nQuit\n");
 		exit(1);
-	}
-	else    {
+	} else {
 		strcpy(cur_dir, cwd);
 		free(cwd);
 	}
 }
 
-static __attribute__((constructor)) void init_myhook()
+static __attribute__((constructor)) void init_myhook(void)
 {
 	mode_t umask_old;
 
@@ -3089,61 +2977,44 @@ static __attribute__((constructor)) void init_myhook()
 
 	init_fd_list();
 
-	register_a_hook("ld", "open64", (void*)new_open_ld, (long int *)(&real_open_ld));
-	register_a_hook("libc", "open64", (void*)new_open_libc, (long int *)(&real_open_libc));
-	register_a_hook("libpthread", "open64", (void*)new_open_pthread, (long int *)(&real_open_pthread));
+	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&real_open_ld));
+	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&real_open_libc));
+	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
+		(long int *)(&real_open_pthread));
 
-	register_a_hook("libc", "__close", (void*)new_close_libc, (long int *)(&real_close_libc));
-	register_a_hook("libpthread", "__close", (void*)new_close_pthread, (long int *)(&real_close_pthread));
-	register_a_hook("libc", "__close_nocancel", (void*)new_close_nocancel, (long int *)(&real_close_nocancel));
+	register_a_hook("libc", "__close", (void *)new_close_libc, (long int *)(&real_close_libc));
+	register_a_hook("libpthread", "__close", (void *)new_close_pthread,
+		(long int *)(&real_close_pthread));
+	register_a_hook("libc", "__close_nocancel", (void *)new_close_nocancel,
+		(long int *)(&real_close_nocancel));
 
-	register_a_hook("libc", "__read", (void*)new_read_libc, (long int *)(&real_read_libc));
-	register_a_hook("libpthread", "__read", (void*)new_read_pthread, (long int *)(&real_read_pthread));
-	register_a_hook("libc", "__write", (void*)new_write_libc, (long int *)(&real_write_libc));
-	register_a_hook("libpthread", "__write", (void*)new_write_pthread, (long int *)(&real_write_pthread));
+	register_a_hook("libc", "__read", (void *)new_read_libc, (long int *)(&real_read_libc));
+	register_a_hook("libpthread", "__read", (void *)new_read_pthread,
+		(long int *)(&real_read_pthread));
+	register_a_hook("libc", "__write", (void *)new_write_libc, (long int *)(&real_write_libc));
+	register_a_hook("libpthread", "__write", (void *)new_write_pthread,
+		(long int *)(&real_write_pthread));
 
-	register_a_hook("libc", "lseek64", (void*)new_lseek_libc, (long int *)(&real_lseek_libc));
-	register_a_hook("libpthread", "lseek64", (void*)new_lseek_pthread, (long int *)(&real_lseek_pthread));
+	register_a_hook("libc", "lseek64", (void *)new_lseek_libc, (long int *)(&real_lseek_libc));
+	register_a_hook("libpthread", "lseek64", (void *)new_lseek_pthread,
+		(long int *)(&real_lseek_pthread));
 
-	register_a_hook("libc", "unlink", (void*)new_unlink, (long int *)(&real_unlink));
+	register_a_hook("libc", "unlink", (void *)new_unlink, (long int *)(&real_unlink));
 
-	register_a_hook("libc", "__fxstat", (void*)new_fxstat, (long int *)(&real_fxstat));
-
-	register_a_hook("libc", "__xstat", (void*)new_xstat, (long int *)(&real_xstat));
-
-//	register_a_hook("libc", "statx", (void*)new_statx, (long int *)(&real_statx));
+	register_a_hook("libc", "__fxstat", (void *)new_fxstat, (long int *)(&real_fxstat));
+	register_a_hook("libc", "__xstat", (void *)new_xstat, (long int *)(&real_xstat));
 	/* Many variants for lxstat: _lxstat, __lxstat, ___lxstat, __lxstat64 */
-	register_a_hook("libc", "__lxstat", (void*)new_lxstat, (long int *)(&real_lxstat));
-	register_a_hook("libc", "__fxstatat", (void*)new_fxstatat, (long int *)(&real_fxstatat));
-	register_a_hook("libc", "readdir", (void*)new_readdir, (long int *)(&real_readdir));
+	register_a_hook("libc", "__lxstat", (void *)new_lxstat, (long int *)(&real_lxstat));
+	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&real_fxstatat));
+	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&real_readdir));
 
-//	register_a_hook("libc", "mkdir", (void*)new_mkdir, (long int *)(&real_mkdir));
-//	register_a_hook("libc", "utime", (void*)new_utime, (long int *)(&real_utime));
-//	register_a_hook("libc", "utimes", (void*)new_utimes, (long int *)(&real_utimes));
-//	register_a_hook("libc", "utimensat", (void*)new_utimensat, (long int *)(&real_utimensat));
-//	register_a_hook("libc", "futimens", (void*)new_futimens, (long int *)(&real_futimens));
-//	register_a_hook("libc", "fdopendir", (void*)new_fdopendir, (long int *)(&real_fdopendir));
-//	register_a_hook("libc", "opendir", (void*)new_opendir, (long int *)(&real_opendir));
-//	register_a_hook("libc", "closedir", (void*)new_closedir, (long int *)(&real_closedir));
-//	register_a_hook("libc", "unlinkat", (void*)new_unlinkat, (long int *)(&real_unlinkat));
+	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&real_fcntl));
 
-//	register_a_hook("libc", "statvfs", (void*)new_statvfs, (long int *)(&real_statvfs));
-//	register_a_hook("libc", "statfs", (void*)new_statfs, (long int *)(&real_statfs));
-//	register_a_hook("libc", "access", (void*)new_access, (long int *)(&real_access));	// access@@GLIBC_2.2.5
-//	register_a_hook("libc", "openat", (void*)new_openat, (long int *)(&real_openat));
-//	register_a_hook("libc", "__openat_2", (void*)new_openat_2, (long int *)(&real_openat_2));
-//	register_a_hook("libc", "posix_fadvise", (void*)new_posix_fadvise, (long int *)(&real_posix_fadvise));
-//	register_a_hook("libc", "flock", (void*)new_flock, (long int *)(&real_flock));
-//	register_a_hook("libc", "fallocate", (void*)new_fallocate, (long int *)(&real_fallocate));
-//	register_a_hook("libc", "posix_fallocate", (void*)new_posix_fallocate, (long int *)(&real_posix_fallocate));
-	register_a_hook("libc", "fcntl", (void*)new_fcntl, (long int *)(&real_fcntl));
-
-//	register_a_hook("libc", "execve", (void*)new_execve, (long int *)(&real_execve));
-//	register_a_hook("libc", "execvp", (void*)new_execvp, (long int *)(&real_execvp));
-//	register_a_hook("libc", "execv", (void*)new_execv, (long int *)(&real_execv));
-
-//	register_a_hook("libc", "fork", (void*)new_fork, (long int *)(&real_fork));
-	
+/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
+*	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
+*	register_a_hook("libc", "execv", (void *)new_execv, (long int *)(&real_execv));
+*	register_a_hook("libc", "fork", (void *)new_fork, (long int *)(&real_fork));
+ */
 
 	init_dfs();
 	install_hook();
@@ -3152,7 +3023,7 @@ static __attribute__((constructor)) void init_myhook()
 	inited = 1;
 }
 
-static __attribute__((destructor)) void finalize_myhook()
+static __attribute__((destructor)) void finalize_myhook(void)
 {
 	close_all_duped_fd();
 
@@ -3170,7 +3041,6 @@ static void
 init_dfs(void)
 {
 	int rc;
-
 	char *pool = NULL;
 	char *container = NULL;
 
@@ -3192,7 +3062,7 @@ init_dfs(void)
 		exit(1);
 	}
 	len_fs_root = strlen(fs_root);
-	
+
 	rc = daos_init();
 	assert(rc == 0);
 	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
@@ -3202,7 +3072,8 @@ init_dfs(void)
 	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
 	assert(rc == 0);
 
-	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 6, NULL, &hdl_hash_ops, &dfs_dir_hash);
+	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_NOLOCK | D_HASH_FT_LRU, 6, NULL,
+				 &hdl_hash_ops, &dfs_dir_hash);
 }
 
 static void

@@ -41,25 +41,25 @@
 
 #define	MAX_LEN_DISASSEMBLE	(28)
 
-static int num_hook = 0;
-static int num_module = 0;
-static int num_patch_blk = 0, is_uninstalled = 0;
-static int get_module_maps_inited = 0;
+static int num_hook;
+static int num_module;
+static int num_patch_blk, is_uninstalled;
+static int get_module_maps_inited;
 
-static module_patch_info_t module_list[MAX_MODULE];
+static struct module_patch_info_t module_list[MAX_MODULE];
 
 /* The flag whethere libc.so is found or not. */
-static int found_libc=1;
+static int found_libc = 1;
 
-/* The instruction to jump to new function. 
+/* The instruction to jump to new function.
  * 00:  ff 25 00 00 00 00       jmp    QWORD PTR [rip+0x0]        # 6 <_main+0x6>
- * The long int +6 (0x1234567812345678) needs be replaced by the address of new function. 
+ * The long int +6 (0x1234567812345678) needs be replaced by the address of new function.
  */
-static unsigned char instruction_bounce[] = {0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x78, 0x56, \
+static unsigned char instruction_bounce[] = {0xff, 0x25, 0x00, 0x00, 0x00, 0x00, 0x78, 0x56,
 					     0x34, 0x12, 0x78, 0x56, 0x34, 0x12};
 
 /* The list of memory blocks alloated to hold patches for hook */
-static patch_block_t patch_blk_list[MAX_MODULE];
+static struct patch_block_t patch_blk_list[MAX_MODULE];
 
 /* start to compile list of memory blocks in /proc/pid/maps */
 
@@ -69,7 +69,7 @@ static patch_block_t patch_blk_list[MAX_MODULE];
 /* The max number of segments in /proc/pid/maps */
 #define MAX_NUM_SEG	(2048)
 
-static int num_seg=0, num_lib_in_map=0;
+static int num_seg, num_lib_in_map;
 
 /* List of min and max addreses of segments in /proc/pid/maps */
 static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
@@ -82,34 +82,34 @@ static char lib_name_list[MAX_NUM_LIB][MAX_LEN_PATH_NAME];
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char path_ld[512]="";
-static char path_libc[512]="";
-static char path_libpthread[512]="";
+static char path_ld[512] = "";
+static char path_libc[512] = "";
+static char path_libpthread[512] = "";
 
 /*
- * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so 
- * and libpthread.so. 
+ * determine_lib_path - Determine the full paths of three libraries, ld.so, libc.so
+ * and libpthread.so.
  */
 static void
 determine_lib_path(void)
 {
 	int	i, pid, size_read;
-	char	read_buff_map[32768], path_file_map[64], *pPos=NULL, *pStart=NULL, *pEnd=NULL;
+	char	read_buff_map[32768], path_file_map[64], *pPos = NULL, *pStart = NULL, *pEnd = NULL;
 	char	lib_ver_str[32], lib_dir_str[256];
 	FILE	*fp;
-	
+
 	pid = getpid();
 	snprintf(path_file_map, sizeof(path_file_map), "/proc/%d/maps", pid);
 	fp = fopen(path_file_map, "rb");
 	assert(fp != NULL);
-	
+
 	size_read = fread(read_buff_map, 1, sizeof(read_buff_map)-1, fp);
 	fclose(fp);
 	if (size_read < 0) {
 		printf("Error to read %s\nQuit\n", path_file_map);
 		exit(1);
 	}
-	
+
 	pPos = strstr(read_buff_map, "/ld-2.");
 	if (pPos == NULL) {
 		found_libc = 0;
@@ -126,7 +126,7 @@ determine_lib_path(void)
 		exit(1);
 	}
 	for (i = 0; i < 100; i++) {
-		if(strncmp(pPos-i, "  /", 3)==0)        {
+		if (strncmp(pPos-i, "  /", 3) == 0) {
 			pStart = pPos - i + 2;
 			break;
 		}
@@ -135,14 +135,14 @@ determine_lib_path(void)
 		printf("Fail to determine the starting position of libc path.\nQuit\n");
 		exit(1);
 	}
-	
+
 	memcpy(path_ld, pStart, pEnd-pStart);
 	path_ld[pEnd-pStart] = 0;
 	memcpy(lib_ver_str, pPos+4, pEnd-3-(pPos+4));
 	lib_ver_str[pEnd-3-(pPos+4)] = 0;
 	memcpy(lib_dir_str, pStart, pPos-pStart);
 	lib_dir_str[pPos-pStart] = 0;
-	
+
 	snprintf(path_libc, sizeof(path_libc), "%s/libc-%s.so", lib_dir_str, lib_ver_str);
 	snprintf(path_libpthread, sizeof(path_libpthread), "%s/libpthread-%s.so", lib_dir_str,
 		 lib_ver_str);
@@ -173,50 +173,48 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 	void		*symb_base_addr = NULL;
 	int		num_sym = 0, sym_rec_size = 0, sym_offset, rec_addr;
 	char		*sym_name;
-	
+
 	stat(lib_path, &file_stat);
-	
+
 	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
 		printf("Fail to open file %s\nQuit\n", lib_path);
 		exit(1);
 	}
-	
+
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
 		printf("Fail to mmap file %s\nQuit\n", lib_path);
 		exit(1);
 	}
 	header = (Elf64_Ehdr *) map_start;
-	
+
 	sections = (Elf64_Shdr *)((char *)map_start + header->e_shoff);
-	
+
 	for (i = 0; i < header->e_shnum; i++) {
-		if ( (sections[i].sh_type == SHT_DYNSYM) || (sections[i].sh_type == SHT_SYMTAB) ) {
+		if ((sections[i].sh_type == SHT_DYNSYM) || (sections[i].sh_type == SHT_SYMTAB)) {
 			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size = sections[i].sh_entsize;
 			num_sym = sections[i].sh_size / sections[i].sh_entsize;
-			
+
 			/* tricky here!!! */
 			for (j = i - 1; j < i+2; j++) {
-				if ( sections[j].sh_type == SHT_STRTAB ) {
+				if (sections[j].sh_type == SHT_STRTAB)
 					strtab_offset = (int)(sections[j].sh_offset);
-				}
 			}
-			
+
 			/* Hash table would be more efficient. */
-			for(j = 0; j < num_sym; j++) {
+			for (j = 0; j < num_sym; j++) {
 				rec_addr = sym_rec_size*j;
-				sym_offset = *( (int *)( symb_base_addr + rec_addr ) ) 
+				sym_offset = *((int *)(symb_base_addr + rec_addr))
 					& 0xFFFFFFFF;
-				sym_name = (char *)( map_start + strtab_offset + sym_offset );
-				
-				for(k=0; k<num_func; k++) {
-					if( strcmp(sym_name, func_name_list[k])==0 ) { 
-						func_addr_list[k] =  (void *)( ( (long int)
-							( *((int *)(symb_base_addr + rec_addr + 8))
-						) & 0xFFFFFFFF ) + img_base_addr);
-						func_len_list[k] = (*((int *)(symb_base_addr 
+				sym_name = (char *)(map_start + strtab_offset + sym_offset);
+				for (k = 0; k < num_func; k++) {
+					if (strcmp(sym_name, func_name_list[k]) == 0) {
+						func_addr_list[k] =  (void *)(((long int)
+							(*((int *)(symb_base_addr + rec_addr + 8)))
+						& 0xFFFFFFFF) + img_base_addr);
+						func_len_list[k] = (*((int *)(symb_base_addr
 							+ rec_addr + 16))) & 0xFFFFFFFF;
 					}
 				}
@@ -238,24 +236,24 @@ uninstall_hook(void)
 	int			i, iBlk, iFunc;
 	void			*pbaseOrg;
 	size_t			MemSize_Modify;
-	trampoline_t		*tramp_list;
+	struct trampoline_t	*tramp_list;
 	unsigned long int	page_size, mask;
-	
-	if (found_libc==0 || is_uninstalled == 1)
+
+	if (found_libc == 0 || is_uninstalled == 1)
 		return;
-	
+
 	page_size = sysconf(_SC_PAGESIZE);
 	mask = ~(page_size - 1);
-	
+
 	for (iBlk = 0; iBlk < num_patch_blk; iBlk++) {
-		tramp_list = (trampoline_t *)(patch_blk_list[iBlk].patch_addr);
-		
-		for(iFunc = 0; iFunc < patch_blk_list[iBlk].num_trampoline; iFunc++) {
+		tramp_list = (struct trampoline_t *)(patch_blk_list[iBlk].patch_addr);
+
+		for (iFunc = 0; iFunc < patch_blk_list[iBlk].num_trampoline; iFunc++) {
 			/* fast mod */
-			pbaseOrg = (void *)( (long int)(tramp_list[iFunc].addr_org_func) & mask );
+			pbaseOrg = (void *)((long int)(tramp_list[iFunc].addr_org_func) & mask);
 			MemSize_Modify = determine_mem_block_size(
 				(const void *)(tramp_list[iFunc].addr_org_func), page_size);
-			
+
 			if (pbaseOrg == NULL)
 				continue;
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_WRITE | PROT_EXEC)
@@ -271,16 +269,15 @@ uninstall_hook(void)
 			}
 		}
 	}
-	
+
 	for (i = 0; i < num_patch_blk; i++) {
 		if (patch_blk_list[i].patch_addr) {
-			if (munmap(patch_blk_list[i].patch_addr, MIN_MEM_SIZE)) {
+			if (munmap(patch_blk_list[i].patch_addr, MIN_MEM_SIZE))
 				perror("munmap");
-			}
 			patch_blk_list[i].patch_addr = 0;
 		}
 	}
-	
+
 	is_uninstalled = 1;
 }
 
@@ -288,7 +285,7 @@ uninstall_hook(void)
  * query_lib_name_in_list - Query the index of the name of a library in lib_name_list[].
  *   @lib_name_str: The ibrary name
  * Returns:
- *   The index in lib_name_list[]. (-1) means not found in the list. 
+ *   The index in lib_name_list[]. (-1) means not found in the list.
  */
 static int
 query_lib_name_in_list(const char *lib_name_str)
@@ -297,15 +294,13 @@ query_lib_name_in_list(const char *lib_name_str)
 
 	/* Try exact match first */
 	for (i = 0; i < num_lib_in_map; i++) {
-		if (strcmp(lib_name_str, lib_name_list[i]) == 0) {
+		if (strcmp(lib_name_str, lib_name_list[i]) == 0)
 			return i;
-		}
 	}
 	/* Try partial match */
 	for (i = 0; i < num_lib_in_map; i++) {
-		if (strstr(lib_name_list[i], lib_name_str)) {
+		if (strstr(lib_name_list[i], lib_name_str))
 			return i;
-		}
 	}
 	return (-1);
 }
@@ -314,15 +309,14 @@ query_lib_name_in_list(const char *lib_name_str)
  * query_registered_module - Query the index of the name of a library in module_list[].
  *   @lib_name_str: The ibrary name
  * Returns:
- *   The index in module_list[]. (-1) means not found in the list. 
+ *   The index in module_list[]. (-1) means not found in the list.
  */
 static int
 query_registered_module(const char *lib_name_str)
 {
 	for (int i = 0; i < num_module; i++) {
-		if (strcmp(lib_name_str, module_list[i].module_name) == 0) {
+		if (strcmp(lib_name_str, module_list[i].module_name) == 0)
 			return i;
-		}
 	}
 	return (-1);
 }
@@ -334,33 +328,32 @@ query_registered_module(const char *lib_name_str)
  *   @pos_start: The starting offset to search
  *   @max_buff_size: The max length of buff[]
  * Returns:
- *   The offset of the next new line. (-1) means reaching the end of buffer. 
+ *   The offset of the next new line. (-1) means reaching the end of buffer.
  */
 static int
 get_position_of_next_line(const char buff[], const int pos_start, const int max_buff_size)
 {
 	int	i = pos_start;
-	
+
 	while (i < max_buff_size) {
 		/* A new line */
-		if(buff[i] == 0xA) {
+		if (buff[i] == 0xA) {
 			i++;
-			return ( (i >= max_buff_size) ? (-1) : (i) );
-		} else {
-			i++;
+			return ((i >= max_buff_size) ? (-1) : (i));
 		}
+		i++;
 	}
 	return (-1);
 }
 
 /**
  * The max size of read "/proc/%pid/maps". This size set here should be sufficient
- * for normal applications. 
+ * for normal applications.
  */
 #define MAX_MAP_SIZE	(524288)
 
 /*
- * get_module_maps - Read "/proc/%pid/maps" and extract the names of modules. 
+ * get_module_maps - Read "/proc/%pid/maps" and extract the names of modules.
  */
 static void
 get_module_maps(void)
@@ -370,15 +363,15 @@ get_module_maps(void)
 	int		iPos, iPos_Save, ReadItem;
 	long int	FileSize;
 	uint64_t	addr_B, addr_E;
-	
+
 	snprintf(szName, sizeof(szName), "/proc/%d/maps", getpid());
 	/* non-seekable file. fread is needed!!! */
 	fIn = fopen(szName, "rb");
-	if(fIn == NULL)	{
+	if (fIn == NULL)	{
 		printf("Fail to open file: %s\nQuit\n", szName);
 		exit(1);
 	}
-	
+
 	/* fgets seems not working. */
 	/* fread can read complete file. read() does not most of time!!! */
 	FileSize = fread(szBuf, 1, MAX_MAP_SIZE, fIn);
@@ -388,13 +381,13 @@ get_module_maps(void)
 		printf("Warning> FileSize == MAX_MAP_SIZE\n"
 		       "You might need to increase MAX_MAP_SIZE.\n");
 	}
-	
+
 	szBuf[FileSize] = 0;
-	
+
 	num_seg = 0;
 	num_lib_in_map = 0;
 	szBuf[FileSize] = 0;
-	
+
 	/* start from the beginging */
 	iPos = 0;
 	while (iPos >= 0) {
@@ -414,11 +407,11 @@ get_module_maps(void)
 		iPos_Save = iPos;
 		/* find the next line */
 		iPos = get_position_of_next_line(szBuf, iPos + 38, FileSize);
-		if ( (iPos - iPos_Save) > 73 )	{
+		if ((iPos - iPos_Save) > 73)	{
 			/* with a lib name */
 			ReadItem = sscanf(szBuf+iPos_Save+73, "%s", szLibName);
-			if ( ReadItem == 1 )	{
-				if (strncmp(szLibName, "[stack]", 7)==0) {
+			if (ReadItem == 1)	{
+				if (strncmp(szLibName, "[stack]", 7) == 0) {
 					num_seg--;
 					break;
 				}
@@ -428,7 +421,7 @@ get_module_maps(void)
 					lib_base_addr[num_lib_in_map] = addr_B;
 					num_lib_in_map++;
 					if (num_lib_in_map >= MAX_NUM_LIB) {
-						printf("Warning> lib_base_addr is FULL. "
+						printf("Warning> lib_base_addr is FULL.\n"
 						       "You may need to increase MAX_NUM_LIB.\n");
 						break;
 					}
@@ -445,31 +438,31 @@ get_module_maps(void)
 #undef MAX_MAP_SIZE
 
 /*
- * find_usable_block - Try to find an allocated memory block that is close enough to 
+ * find_usable_block - Try to find an allocated memory block that is close enough to
  * a give module/shared object.
- *   @idx_mod: The name of shared library. Both short name ("ld") and full name ("ld-2.17.so") 
- *             are accepted. 
+ *   @idx_mod: The name of shared library. Both short name ("ld") and full name ("ld-2.17.so")
+ *             are accepted.
  * Returns:
- *   The index of memory block for patches. (-1) means not found usable block. 
+ *   The index of memory block for patches. (-1) means not found usable block.
  */
 static int
 find_usable_block(int idx_mod)
 {
 	int		i;
 	long int	p_Min, p_Max, p_MemBlk;
-	
+
 	p_Min = (long int)(module_list[idx_mod].old_func_addr_min);
 	p_Max = (long int)(module_list[idx_mod].old_func_addr_max);
-	
+
 	for (i = 0; i < num_patch_blk; i++) {
-		p_MemBlk = ( ( (long int)(patch_blk_list[i].patch_addr) + 
-			(long int)(patch_blk_list[i].patch_addr_end)) / 2 );
-		if ( ( labs(p_Min - p_MemBlk) < NULL_RIP_VAR_OFFSET ) && 
-			( labs(p_Max - p_MemBlk) < NULL_RIP_VAR_OFFSET ) ) {
+		p_MemBlk = (((long int)(patch_blk_list[i].patch_addr) +
+			(long int)(patch_blk_list[i].patch_addr_end)) / 2);
+		if ((labs(p_Min - p_MemBlk) < NULL_RIP_VAR_OFFSET) &&
+			(labs(p_Max - p_MemBlk) < NULL_RIP_VAR_OFFSET)) {
 			return i;
 		}
 	}
-	
+
 	return (-1);
 }
 
@@ -482,38 +475,37 @@ allocate_memory_block_for_patches(void)
 	int		i, iSeg, idx_mod, IdxBlk;
 	void		*p_Alloc;
 	uint64_t	pCheck;
-	
+
 	num_patch_blk = 0;
-	
+
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
-		if ( (module_list[idx_mod].old_func_addr_min == 0) && 
-			(module_list[idx_mod].old_func_addr_max == 0) ) {
+		if ((module_list[idx_mod].old_func_addr_min == 0) &&
+			(module_list[idx_mod].old_func_addr_max == 0)) {
 			continue;
 		}
 		IdxBlk = find_usable_block(idx_mod);
-		if(IdxBlk >= 0)	{
+		if (IdxBlk >= 0)	{
 			module_list[idx_mod].idx_patch_blk = IdxBlk;
-		}
-		else	{
+		} else {
 			/* does not exist */
-			pCheck = ((uint64_t)(module_list[idx_mod].old_func_addr_min) + 
-				  (uint64_t)(module_list[idx_mod].old_func_addr_max) )/2;
-			
+			pCheck = ((uint64_t)(module_list[idx_mod].old_func_addr_min) +
+				  (uint64_t)(module_list[idx_mod].old_func_addr_max))/2;
+
 			iSeg = -1;
 			for (i = 0; i < num_seg; i++) {
-				if((pCheck >= addr_min[i]) && (pCheck <= addr_max[i])) {
+				if ((pCheck >= addr_min[i]) && (pCheck <= addr_max[i])) {
 					iSeg = i;
 					break;
 				}
 			}
-			
+
 			if (iSeg < 0) {
-				printf("Something wrong! The address you queried is not inside"
-				       " any module!\nQuit\n");
+				printf("Something wrong! The address you queried is not\n"
+				       "inside any module! Quit\n");
 				exit(1);
 			}
-			p_Alloc = (void*)(addr_max[iSeg]);
-			
+			p_Alloc = (void *)(addr_max[iSeg]);
+
 			if (iSeg < (num_seg - 1)) {
 				if ((addr_min[iSeg+1] - addr_max[iSeg]) < MIN_MEM_SIZE) {
 					printf("Only %" PRIu64 " bytes available.\nQuit\n",
@@ -521,7 +513,7 @@ allocate_memory_block_for_patches(void)
 					exit(1);
 				}
 			}
-			
+
 			patch_blk_list[num_patch_blk].patch_addr = mmap(p_Alloc, MIN_MEM_SIZE,
 				PROT_READ | PROT_WRITE | PROT_EXEC,
 				MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -529,41 +521,38 @@ allocate_memory_block_for_patches(void)
 				printf("Fail to allocate code block at %p with mmap().\nQuit\n",
 				       p_Alloc);
 				exit(1);
-			} else if(patch_blk_list[num_patch_blk].patch_addr != p_Alloc) {
+			} else if (patch_blk_list[num_patch_blk].patch_addr != p_Alloc) {
 				printf("Allocated at %p. Desired at %p\n",
 				       patch_blk_list[num_patch_blk].patch_addr, p_Alloc);
 			}
-			
+
 			patch_blk_list[num_patch_blk].num_trampoline = 0;
 			patch_blk_list[num_patch_blk].patch_addr_end =
 				patch_blk_list[num_patch_blk].patch_addr + MIN_MEM_SIZE;
 			num_patch_blk++;
 		}
 	}
-	
-	return;
 }
 
 /*
- * determine_mem_block_size - Determine we need to change the permission of one or two pages 
+ * determine_mem_block_size - Determine we need to change the permission of one or two pages
  * for a given address.
  *   @addr: The address of the entry of original function. We will change it to a jmp instruction.
- *   @page_size: The size of one page in current system. 
+ *   @page_size: The size of one page in current system.
 * Returns:
- *   The number of bytes we need to change permission with mprotect(). 
+ *   The number of bytes we need to change permission with mprotect().
  */
 static size_t
 determine_mem_block_size(const void *addr, const unsigned long int page_size)
 {
 	unsigned long int	res, addr_code;
-	
+
 	addr_code = (unsigned long int)addr;
 	res = addr_code % page_size;
-	if((res + 5) > page_size)	{
+	if ((res + 5) > page_size) {
 		/* close to the boundary of two memory pages */
 		return (size_t)(page_size*2);
-	}
-	else	{
+	} else {
 		return (size_t)(page_size);
 	}
 }
@@ -574,7 +563,7 @@ determine_mem_block_size(const void *addr, const unsigned long int page_size)
 /*
  * install_hook - Install hooks by setting up trampolines for all functions registered.
  * Returns:
- *   The number of hooks actually installed. 
+ *   The number of hooks actually installed.
  */
 int install_hook(void)
 {
@@ -589,15 +578,14 @@ int install_hook(void)
 	cs_insn			*insn = NULL;
 	size_t			num_inst, idx_inst;
 	unsigned long int	page_size, mask;
-	trampoline_t		*tramp_list;
-	
-	if (found_libc==0) {
+	struct trampoline_t	*tramp_list;
+
+	if (found_libc == 0)
 		return 0;
-	}
 
 	page_size = sysconf(_SC_PAGESIZE);
 	mask = ~(page_size - 1);
-	
+
 	query_all_org_func_addr();
 	allocate_memory_block_for_patches();
 
@@ -605,20 +593,19 @@ int install_hook(void)
 		printf("ERROR: Failed to initialize engine!\n");
 		exit(1);
 	}
-	
+
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
-		tramp_list = (trampoline_t *)
+		tramp_list = (struct trampoline_t *)
 			(patch_blk_list[module_list[idx_mod].idx_patch_blk].patch_addr);
 		nFunc_InBlk = patch_blk_list[module_list[idx_mod].idx_patch_blk].num_trampoline;
-		
+
 		for (iFunc = 0; iFunc < module_list[idx_mod].num_hook; iFunc++) {
-			if (module_list[idx_mod].is_patch_disabled[iFunc]) {
+			if (module_list[idx_mod].is_patch_disabled[iFunc])
 				continue;
-			}
 			for (iFunc2 = 0; iFunc2 < iFunc; iFunc2++) {
 				if (module_list[idx_mod].is_patch_disabled[iFunc2] == 0) {
 					/* a valid patch */
-					if (module_list[idx_mod].old_func_addr_list[iFunc] == 
+					if (module_list[idx_mod].old_func_addr_list[iFunc] ==
 						module_list[idx_mod].old_func_addr_list[iFunc2]) {
 						module_list[idx_mod].is_patch_disabled[iFunc] = 1;
 						/* disable duplicated patch */
@@ -627,17 +614,17 @@ int install_hook(void)
 					}
 				}
 			}
-			if (module_list[idx_mod].is_patch_disabled[iFunc]) {	// recheck
+			/* recheck */
+			if (module_list[idx_mod].is_patch_disabled[iFunc])
 				continue;
-			}
-			
-			WithJmp[nFunc_InBlk]=-1;
-			
+
+			WithJmp[nFunc_InBlk] = -1;
+
 			tramp_list[nFunc_InBlk].addr_org_func =
 				(void *)(module_list[idx_mod].old_func_addr_list[iFunc]);
 			tramp_list[nFunc_InBlk].offset_rIP_var = NULL_RIP_VAR_OFFSET;
 			tramp_list[nFunc_InBlk].saved_code_len = 0;
-			
+
 			insn = NULL;
 			num_inst = cs_disasm(handle,
 				(unsigned char *)tramp_list[nFunc_InBlk].addr_org_func,
@@ -646,21 +633,17 @@ int install_hook(void)
 				printf("Failed to disassemble code.\n");
 				exit(1);
 			}
-			
+
 			for (idx_inst = 0; idx_inst < num_inst; idx_inst++) {
 				OffsetList[idx_inst] = insn[idx_inst].address;
-				if ( OffsetList[idx_inst] >= JMP_INSTRCTION_LEN ) {
+				if (OffsetList[idx_inst] >= JMP_INSTRCTION_LEN) {
 					tramp_list[nFunc_InBlk].saved_code_len =
 						OffsetList[idx_inst];
-					if ( (idx_inst > 0) && (insn[idx_inst-1].bytes[0] ==
-						0xe9) ) {
-						if (insn[idx_inst-1].size == 5) {
-							/* found a jmp instruction here!!! */
-							if (idx_inst >= 2) {
-								WithJmp[nFunc_InBlk] =
-									insn[idx_inst-2].size + 1;
-							}
-						}
+					if (idx_inst >= 2 &&
+						insn[idx_inst-1].bytes[0] == 0xe9 &&
+						insn[idx_inst-1].size == 5) {
+						/* found a jmp instruction here!!! */
+						WithJmp[nFunc_InBlk] = insn[idx_inst-2].size + 1;
 					}
 					break;
 				}
@@ -668,40 +651,40 @@ int install_hook(void)
 				pSubStr = strstr(insn[idx_inst].op_str, "[rip + ");
 				if (pSubStr) {
 					ReadItem = sscanf(pSubStr+6, "%x]", &RIP_Offset);
-					if (ReadItem == 1) {
+					if (ReadItem == 1)
 						tramp_list[nFunc_InBlk].offset_rIP_var = RIP_Offset;
-					}
 				}
 			}
-			
+
 			memcpy(tramp_list[nFunc_InBlk].bounce, instruction_bounce, BOUNCE_CODE_LEN);
 			/* the address of new function */
 			*((unsigned long int *)(tramp_list[nFunc_InBlk].bounce +
 				OFFSET_NEW_FUNC_ADDR)) = (unsigned long int)
 				(module_list[idx_mod].new_func_addr_list[iFunc]);
-			
-			memcpy(tramp_list[nFunc_InBlk].trampoline, 
+
+			memcpy(tramp_list[nFunc_InBlk].trampoline,
 			       tramp_list[nFunc_InBlk].addr_org_func,
 			       tramp_list[nFunc_InBlk].saved_code_len);
 			/* E9 is a jmp instruction */
-			tramp_list[nFunc_InBlk].trampoline[tramp_list[nFunc_InBlk].saved_code_len] 
+			tramp_list[nFunc_InBlk].trampoline[tramp_list[nFunc_InBlk].saved_code_len]
 				= 0xE9;
-			Jmp_Offset = (int) ( ( (long int)(tramp_list[nFunc_InBlk].addr_org_func)
-					  - ( (long int)(tramp_list[nFunc_InBlk].trampoline) + 5) )
+			Jmp_Offset = (int) (((long int)(tramp_list[nFunc_InBlk].addr_org_func)
+					  - ((long int)(tramp_list[nFunc_InBlk].trampoline) + 5))
 					  & 0xFFFFFFFF);
-			*((int*)(tramp_list[nFunc_InBlk].trampoline +
+			*((int *)(tramp_list[nFunc_InBlk].trampoline +
 				tramp_list[nFunc_InBlk].saved_code_len + 1))
 				= Jmp_Offset;
-			
+
 			if (tramp_list[nFunc_InBlk].offset_rIP_var != NULL_RIP_VAR_OFFSET) {
 				jMax = tramp_list[nFunc_InBlk].saved_code_len - 4;
 				for (j = jMax-2; j <= jMax; j++) {
 					p_int = (int *)(tramp_list[nFunc_InBlk].trampoline + j);
-					if ( *p_int == tramp_list[nFunc_InBlk].offset_rIP_var ) {
+					if (*p_int == tramp_list[nFunc_InBlk].offset_rIP_var) {
 						/* correct relative offset of PIC var */
-						*p_int += ( (int)( ( (long int)
+						*p_int += ((int)(((long int)
 							(tramp_list[nFunc_InBlk].addr_org_func) -
-							(long int)(tramp_list[nFunc_InBlk].trampoline) )  ) );
+							(long int)
+							(tramp_list[nFunc_InBlk].trampoline))));
 					}
 				}
 			}
@@ -710,7 +693,7 @@ int install_hook(void)
 					+ WithJmp[nFunc_InBlk]);
 				*p_int += ( (int)( (
 					(long int)(tramp_list[nFunc_InBlk].addr_org_func) -
-					(long int)(tramp_list[nFunc_InBlk].trampoline) )  ) );
+					(long int)(tramp_list[nFunc_InBlk].trampoline))));
 			}
 			if (tramp_list[nFunc_InBlk].trampoline[0] == 0xE9) {
 				/* First instruction is JMP xxxx. Needs address correction */
@@ -718,18 +701,19 @@ int install_hook(void)
 				/* the next four bytes are supposed to be the relative offset */
 				*p_int += ( (int)( (
 					(long int)(tramp_list[nFunc_InBlk].addr_org_func) -
-					(long int)(tramp_list[nFunc_InBlk].trampoline) )  ) );
+					(long int)(tramp_list[nFunc_InBlk].trampoline))));
 			}
-			
+
 			/* set up function pointers for original functions */
-			/* tramp_list[].trampoline holds the entry address to call orginal function */
+			/* tramp_list[].trampoline holds the entry address */
+			/* to call orginal function                        */
 			*(module_list[idx_mod].ptr_old_func_add_list[iFunc])
 				= (long int)(tramp_list[nFunc_InBlk].trampoline);
-			
+
 			/* fast mod */
-			pbaseOrg = (void *)( (long int)(tramp_list[nFunc_InBlk].addr_org_func)
-				& mask );
-			
+			pbaseOrg = (void *)((long int)(tramp_list[nFunc_InBlk].addr_org_func)
+				& mask);
+
 			MemSize_Modify = determine_mem_block_size(
 				(void *)(tramp_list[nFunc_InBlk].addr_org_func), page_size);
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_WRITE | PROT_EXEC)
@@ -738,23 +722,23 @@ int install_hook(void)
 				       module_list[idx_mod].func_name_list[iFunc]);
 				exit(1);
 			}
-			
+
 			/* save orginal code for uninstall */
 			memcpy(tramp_list[nFunc_InBlk].org_code,
 			       tramp_list[nFunc_InBlk].addr_org_func, 5);
-			
+
 			pOpOrgEntry = (char *)(tramp_list[nFunc_InBlk].addr_org_func);
 			pOpOrgEntry[0] = 0xE9;
 			*((int *)(pOpOrgEntry+1)) = (int)(
 				(long int)(tramp_list[nFunc_InBlk].bounce)
-				- (long int)(tramp_list[nFunc_InBlk].addr_org_func) - 5 );
-			
+				- (long int)(tramp_list[nFunc_InBlk].addr_org_func) - 5);
+
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
 				printf("Error in executing mprotect(). %s\n",
 				       module_list[idx_mod].func_name_list[iFunc]);
 				exit(1);
 			}
-			
+
 			nFunc_InBlk++;
 			num_hook_installed++;
 
@@ -766,7 +750,7 @@ int install_hook(void)
 		patch_blk_list[module_list[idx_mod].idx_patch_blk].num_trampoline
 			+= module_list[idx_mod].num_hook;
 	}
-	
+
 	cs_close(&handle);
 
 	return num_hook_installed;
@@ -776,12 +760,13 @@ int install_hook(void)
 /*
  * register_a_hook - Add one target function into the list of the functions to intercept.
  *   @module_name: The name of shared library. Both short name ("ld") and full name ("ld-2.17.so")
- *                 are accepted. 
- *   @func_Name:   The function name. 
- *   @new_func_addr: The address of our new implementation. 
- *   @ptr_org_func: *ptr_org_func will hold the address of orginal function implemented in lib module_name. 
+ *                 are accepted.
+ *   @func_Name:   The function name.
+ *   @new_func_addr: The address of our new implementation.
+ *   @ptr_org_func: *ptr_org_func will hold the address of orginal function implemented in
+ *                  lib module_name.
  * Returns:
- *   0: success; otherwise fail. 
+ *   0: success; otherwise fail.
  */
 int
 register_a_hook(const char *module_name, const char *func_name, const void *new_func_addr,
@@ -791,43 +776,39 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	int	idx, idx_mod;
 	char	module_name_local[MAX_LEN_PATH_NAME];
 
-	// make sure module_name[] and func_name[] are not too long. 
-	if (strlen(module_name) >= MAX_LEN_PATH_NAME) {
+	/* make sure module_name[] and func_name[] are not too long. */
+	if (strlen(module_name) >= MAX_LEN_PATH_NAME)
 		return REGISTER_MODULE_NAME_TOO_LONG;
-	}
-	if (strlen(func_name) >= MAX_LEN_FUNC_NAME) {
+	if (strlen(func_name) >= MAX_LEN_FUNC_NAME)
 		return REGISTER_FUNC_NAME_TOO_LONG;
-	}
 
 	/* Do initialization work at the very first time. */
-	if ( !num_hook ) {
-		memset(module_list, 0, sizeof(module_patch_info_t)*MAX_MODULE);
-		memset(patch_blk_list, 0, sizeof(patch_block_t)*MAX_MODULE);
+	if (!num_hook) {
+		memset(module_list, 0, sizeof(struct module_patch_info_t)*MAX_MODULE);
+		memset(patch_blk_list, 0, sizeof(struct patch_block_t)*MAX_MODULE);
 		determine_lib_path();
 	}
-	
-	if (found_libc == 0) {
+
+	if (found_libc == 0)
 		return REGISTER_NOT_FOUND_LIBC;
-	}
 
 	if (get_module_maps_inited == 0) {
 		get_module_maps();
 		get_module_maps_inited = 1;
 	}
-	
-	if (strcmp(module_name, "ld") == 0) {
+
+	if (strcmp(module_name, "ld") == 0)
 		strcpy(module_name_local, path_ld);
-	} else if (strcmp(module_name, "libc") == 0) {
+	else if (strcmp(module_name, "libc") == 0)
 		strcpy(module_name_local, path_libc);
-	} else if (strcmp(module_name, "libpthread") == 0) {
+	else if (strcmp(module_name, "libpthread") == 0)
 		strcpy(module_name_local, path_libpthread);
-	} else {
+	else
 		strcpy(module_name_local, module_name);
-	}
-	
+
 	if (module_name_local[0] == '/') {
 		/* absolute path */
-		if ( query_lib_name_in_list(module_name_local) == -1 ) {
+		if (query_lib_name_in_list(module_name_local) == -1) {
 			/* not loaded yet, then load the library */
 			module = dlopen(module_name_local, RTLD_LAZY);
 			if (module == NULL) {
@@ -837,13 +818,13 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 			get_module_maps();
 		}
 	}
-	
+
 	idx = query_lib_name_in_list(module_name_local);
-	if ( idx == -1 ) {
+	if (idx == -1) {
 		printf("Failed to find %s in /proc/pid/maps\nQuit\n", module_name_local);
 		exit(1);
 	}
-	
+
 	idx_mod = query_registered_module(module_name_local);
 	if (idx_mod == -1) {
 		/* not registered module name. Register it. */
@@ -852,17 +833,15 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		strcpy(module_list[num_module].func_name_list[module_list[num_module].num_hook],
 		       func_name);
 		module_list[num_module].new_func_addr_list[module_list[num_module].num_hook]
-			= (void*)new_func_addr;
+			= (void *)new_func_addr;
 		module_list[num_module].ptr_old_func_add_list[module_list[num_module].num_hook]
 			= (long int *)ptr_org_func;
 		module_list[num_module].num_hook = 1;
 		num_module++;
-	} else {		
-		if (module_list[idx_mod].module_base_addr != lib_base_addr[idx]) {
-			printf("WARING> module_list[idx_mod].module_base_addr "
-			       "!= lib_base_addr[idx]\n");
-		}
-		
+	} else {
+		if (module_list[idx_mod].module_base_addr != lib_base_addr[idx])
+			printf("WARING> module_base_addr != lib_base_addr\n");
+
 		strcpy(module_list[idx_mod].func_name_list[module_list[idx_mod].num_hook],
 		       func_name);
 		module_list[idx_mod].new_func_addr_list[module_list[idx_mod].num_hook]
@@ -871,9 +850,9 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 			= (long int *)ptr_org_func;
 		module_list[idx_mod].num_hook++;
 	}
-	
+
 	num_hook++;
-	
+
 	if (num_hook > MAX_PATCH) {
 		printf("Error> num_hook > MAX_PATCH\nQuit\n");
 		return REGISTER_TOO_MANY_HOOKS;
@@ -891,14 +870,14 @@ static void
 query_all_org_func_addr(void)
 {
 	int	idx, idx_mod, iFunc;
-	
+
 	/* update module map */
 	get_module_maps();
-	
+
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		/* update module base address */
 		idx = query_lib_name_in_list(module_list[idx_mod].module_name);
-		
+
 		if (idx == -1) {
 			/* a new name not in list */
 			printf("Fail to find library %s in maps.\nQuit\n",
@@ -909,7 +888,7 @@ query_all_org_func_addr(void)
 			module_list[idx_mod].module_base_addr = lib_base_addr[idx];
 		}
 	}
-	
+
 	for (idx_mod = 0; idx_mod < num_module; idx_mod++) {
 		query_func_addr(module_list[idx_mod].module_name,
 				module_list[idx_mod].func_name_list,
@@ -917,7 +896,7 @@ query_all_org_func_addr(void)
 				module_list[idx_mod].old_func_len_list,
 				module_list[idx_mod].module_base_addr,
 				module_list[idx_mod].num_hook);
-		
+
 		for (iFunc = 0; iFunc < module_list[idx_mod].num_hook; iFunc++) {
 			if (module_list[idx_mod].old_func_addr_list[iFunc]) {
 				module_list[idx_mod].old_func_addr_min
@@ -927,9 +906,9 @@ query_all_org_func_addr(void)
 				break;
 			}
 		}
-		
-		for (iFunc=0; iFunc<module_list[idx_mod].num_hook; iFunc++) {
-			if ( module_list[idx_mod].old_func_addr_list[iFunc] == 0 ) {
+
+		for (iFunc = 0; iFunc < module_list[idx_mod].num_hook; iFunc++) {
+			if (module_list[idx_mod].old_func_addr_list[iFunc] == 0) {
 				/* Ignore if fail to find the entry address for function */
 				module_list[idx_mod].is_patch_disabled[iFunc] = 1;
 				continue;
