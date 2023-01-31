@@ -71,8 +71,10 @@ umempobj_settings_init(bool md_on_ssd)
 	switch (md_mode) {
 	case DAOS_MD_BMEM:
 		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
+		break;
 	case DAOS_MD_ADMEM:
 		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
+		break;
 	default:
 		D_ERROR("DAOS_MD_ON_SSD_MODE=%d envar invalid, use %d for BMEM or %d for ADMEM\n",
 			md_mode, DAOS_MD_BMEM, DAOS_MD_ADMEM);
