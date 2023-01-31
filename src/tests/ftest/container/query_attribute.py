@@ -214,9 +214,9 @@ class ContainerQueryAttributeTest(TestWithServers):
 
         for attr_resp in data:
             key = attr_resp["name"]
-            for k, v in escape_to_not.items():
-                if v == key:
-                    key = k
+            for esc_key, val in escape_to_not.items():
+                if val == key:
+                    key = esc_key
                     break
 
             actual_val = base64.b64decode(attr_resp["value"]).decode()

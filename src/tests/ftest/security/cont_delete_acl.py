@@ -75,13 +75,12 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,daily_regression,security,container_acl,daos_cmd
         :avocado: tags=cont_delete_acl,test_delete_valid_acl
         """
-        for principal in self.principals_table:
+        for principal, entry in self.principals_table.items():
             self.daos_cmd.container_delete_acl(
                 self.pool.uuid,
                 self.container.uuid,
                 principal)
-            if (self.principals_table[principal] in
-                    self.daos_cmd.result.stdout_text):
+            if entry in self.daos_cmd.result.stdout_text:
                 self.fail(
                     "Found acl that was to be deleted in output: {}".format(
                         self.daos_cmd.result.stdout_text))
