@@ -11,7 +11,6 @@ from daos_utils import DaosCommand
 
 
 class ContRedundancyFactor(RebuildTestBase):
-    # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 
     :avocado: recursive
@@ -114,6 +113,7 @@ class ContRedundancyFactor(RebuildTestBase):
 
     def create_test_container_and_write_obj(self, negative_test=False):
         """Create a container and write objects
+
            for positive testcase, enable the exception with write objects
            for negative testcase, disable the exception with write objects
            and expecting failure with RC: -1003.

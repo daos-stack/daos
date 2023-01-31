@@ -213,6 +213,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -311,6 +312,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -392,6 +394,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -415,6 +418,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset

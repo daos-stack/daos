@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1509,8 +1509,10 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 	crt_swim_csm_unlock(csm);
 
-	if (rc == 0)
+	if (rc == 0) {
 		D_FREE(cst);
+		swim_member_del(csm->csm_ctx, rank);
+	}
 
 	return rc;
 }
@@ -1534,6 +1536,10 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 			SWIM_STATUS_CHARS[cst->cst_state.sms_status],
 			cst->cst_state.sms_incarnation);
 		D_FREE(cst);
+
+		crt_swim_csm_unlock(csm);
+		swim_member_del(csm->csm_ctx, rank);
+		crt_swim_csm_lock(csm);
 	}
 	crt_swim_csm_unlock(csm);
 }

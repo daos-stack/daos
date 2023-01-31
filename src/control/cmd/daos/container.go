@@ -220,14 +220,14 @@ type containerCreateCmd struct {
 	Path            string               `long:"path" short:"p" description:"container namespace path"`
 	ChunkSize       ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass     ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
-	DirObjectClass  ObjClassFlag         `long:"dir_oclass" short:"d" description:"default directory object class"`
-	FileObjectClass ObjClassFlag         `long:"file_oclass" short:"f" description:"default file object class"`
-	CHints          string               `long:"hints" short:"h" description:"container hints"`
+	DirObjectClass  ObjClassFlag         `long:"dir-oclass" short:"d" description:"default directory object class"`
+	FileObjectClass ObjClassFlag         `long:"file-oclass" short:"f" description:"default file object class"`
+	CHints          string               `long:"hints" short:"H" description:"container hints"`
 	Properties      CreatePropertiesFlag `long:"properties" description:"container properties"`
 	Mode            ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
 	ACLFile         string               `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User            string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group           string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	User            ui.ACLPrincipalFlag  `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group           ui.ACLPrincipalFlag  `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
 	Args            struct {
 		Label string `positional-arg-name:"label"`
 	} `positional-args:"yes"`
@@ -284,11 +284,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
-		ap.user = C.CString(cmd.User)
+		ap.user = C.CString(cmd.User.String())
 		defer freeString(ap.user)
 	}
 	if cmd.Group != "" {
-		ap.group = C.CString(cmd.Group)
+		ap.group = C.CString(cmd.Group.String())
 		defer freeString(ap.group)
 	}
 	if cmd.ACLFile != "" {
