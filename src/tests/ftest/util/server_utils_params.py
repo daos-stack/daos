@@ -341,8 +341,7 @@ class EngineYamlParameters(YamlParameters):
     REQUIRED_ENV_VARS = {
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
-            "COVFILE=/tmp/test.cov",
-            "DAOS_MD_ON_SSD={}".format(os.environ.get("DAOS_MD_ON_SSD", 0)),],
+            "COVFILE=/tmp/test.cov"],
         "ofi+tcp": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
@@ -405,11 +404,6 @@ class EngineYamlParameters(YamlParameters):
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
         ]
-
-        # This can be removed when DAOS_LMM_DB_PATH is no longer needed
-        self.REQUIRED_ENV_VARS["common"].append(
-            "DAOS_LMM_DB_PATH=/mnt/daos{0}/daos_control/engine{0}".format(self._index))
-
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
             if name in self.REQUIRED_ENV_VARS:
