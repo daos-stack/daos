@@ -175,22 +175,6 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
 }
 
-// mapCtrlrs maps each controller to it's PCI address.
-func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
-	ctrlrMap := make(map[string]*storage.NvmeController)
-
-	for _, ctrlr := range ctrlrs {
-		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s",
-				ctrlr.PciAddr)
-		}
-
-		ctrlrMap[ctrlr.PciAddr] = ctrlr
-	}
-
-	return ctrlrMap, nil
-}
-
 // scanAssignedBdevs retrieves up-to-date NVMe controller info including
 // health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
@@ -198,7 +182,7 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // assigned to I/O Engines.
 func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
 	instances := cs.harness.Instances()
-	ctrlrs := storage.NvmeControllers{}
+	ctrlrs := new(storage.NvmeControllers)
 
 	for _, ei := range instances {
 		if !ei.GetStorage().HasBlockDevices() {
@@ -210,32 +194,35 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			return nil, err
 		}
 
-		// If the engine is not running or we aren't interested in temporal
-		// statistics for the bdev devices then continue to next.
-		if !ei.IsReady() || !statsReq {
-			for _, tsr := range tsrs {
-				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
+		// Build slice of controllers in all tiers.
+		tierCtrlrs := make([]storage.NvmeController, 0)
+		for _, tsr := range tsrs {
+			for _, c := range tsr.Result.Controllers {
+				tierCtrlrs = append(tierCtrlrs, *c)
 			}
+		}
+
+		// If the engine is not running or we aren't interested in temporal
+		// statistics for the bdev devices then continue to next engine.
+		if !ei.IsReady() || !statsReq {
+			ctrlrs.Update(tierCtrlrs...)
 			continue
 		}
+
+		cs.log.Debugf("updating stats for %d bdev(s) on instance %d", len(tierCtrlrs),
+			ei.Index())
 
 		// If engine is running and has claimed the assigned devices for
 		// each tier, iterate over scan results for each tier and send query
 		// over drpc to update controller details with current health stats
 		// and smd info.
-		for _, tsr := range tsrs {
-			ctrlrMap, err := mapCtrlrs(tsr.Result.Controllers)
-			if err != nil {
-				return nil, errors.Wrap(err, "create controller map")
-			}
-
-			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
-				return nil, err
-			}
-
-			ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
+		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs)
+		if err != nil {
+			return nil, errors.Wrapf(err, "instance %d: update online bdevs", ei.Index())
 		}
+
+		ctrlrs.Update(updatedCtrlrs...)
 	}
 
-	return &storage.BdevScanResponse{Controllers: ctrlrs}, nil
+	return &storage.BdevScanResponse{Controllers: *ctrlrs}, nil
 }

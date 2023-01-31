@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -87,8 +87,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "storage led identify", "storage led check", "storage led clear":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool create":
-				testArgs = append(testArgs, "-s", "1TB")
-			case "pool destroy", "pool evict", "pool query", "pool get-acl":
+				testArgs = append(testArgs, "-s", "1TB", "label")
+			case "pool destroy", "pool evict", "pool query", "pool get-acl", "pool upgrade":
 				testArgs = append(testArgs, test.MockUUID())
 			case "pool overwrite-acl", "pool update-acl":
 				testArgs = append(testArgs, test.MockUUID(), "-a", aclPath)

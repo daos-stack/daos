@@ -278,8 +278,8 @@ func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.Member
 
 func (mi *MockInstance) requestStart(_ context.Context) {}
 
-func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ map[string]*storage.NvmeController) error {
-	return nil
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController) ([]storage.NvmeController, error) {
+	return []storage.NvmeController{}, nil
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -273,6 +273,24 @@ bio_bs_hold(struct bio_blobstore *bbs)
 out:
 	ABT_mutex_unlock(bbs->bb_mutex);
 	return rc;
+}
+
+struct bio_xs_blobstore *
+bio_xs_blobstore_by_devid(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid)
+{
+	enum smd_dev_type	 st;
+	struct bio_xs_blobstore *bxb = NULL;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (!bxb)
+			continue;
+
+		if (uuid_compare(bxb->bxb_blobstore->bb_dev->bb_uuid, dev_uuid) == 0)
+			return bxb;
+	}
+
+	return NULL;
 }
 
 /**

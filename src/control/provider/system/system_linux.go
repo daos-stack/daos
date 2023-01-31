@@ -23,17 +23,35 @@ import (
 const (
 	FsTypeNone    = "none"
 	FsTypeExt4    = "ext4"
+	FsTypeBtrfs   = "btrfs"
+	FsTypeXfs     = "xfs"
+	FsTypeZfs     = "zfs"
+	FsTypeNtfs    = "ntfs"
 	FsTypeTmpfs   = "tmpfs"
 	FsTypeNfs     = "nfs"
 	FsTypeUnknown = "unknown"
 
 	parseFsUnformatted = "data"
 
-	// magic numbers harvested from linux/magic.h
+	// magic numbers harvested from statfs man page
 	MagicTmpfs = 0x01021994
 	MagicExt4  = 0xEF53
+	MagicBtrfs = 0x9123683E
+	MagicXfs   = 0x58465342
+	MagicZfs   = 0x2FC12FC1
+	MagicNtfs  = 0x5346544e
 	MagicNfs   = 0x6969
 )
+
+var magicToStr = map[int64]string{
+	MagicBtrfs: FsTypeBtrfs,
+	MagicExt4:  FsTypeExt4,
+	MagicNfs:   FsTypeNfs,
+	MagicNtfs:  FsTypeNtfs,
+	MagicTmpfs: FsTypeTmpfs,
+	MagicXfs:   FsTypeXfs,
+	MagicZfs:   FsTypeZfs,
+}
 
 // DefaultProvider returns the package-default provider implementation.
 func DefaultProvider() *LinuxProvider {
@@ -182,28 +200,33 @@ func (s LinuxProvider) GetfsUsage(target string) (uint64, uint64, error) {
 	return frSize * stBuf.Blocks, frSize * stBuf.Bavail, nil
 }
 
+type FsType struct {
+	Name   string
+	NoSUID bool
+}
+
 // GetFsType retrieves the filesystem type for a path.
-func (s LinuxProvider) GetFsType(path string) (string, error) {
+func (s LinuxProvider) GetFsType(path string) (*FsType, error) {
 	stBuf := new(unix.Statfs_t)
 
 	if err := unix.Statfs(path, stBuf); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return fsStrFromMagic(stBuf.Type), nil
+	fsType := &FsType{
+		Name:   fsStrFromMagic(stBuf.Type),
+		NoSUID: (stBuf.Flags&unix.ST_NOSUID != 0),
+	}
+
+	return fsType, nil
 }
 
 func fsStrFromMagic(typeMagic int64) string {
-	switch typeMagic {
-	case MagicExt4:
-		return FsTypeExt4
-	case MagicTmpfs:
-		return FsTypeTmpfs
-	case MagicNfs:
-		return FsTypeNfs
-	default:
+	str, found := magicToStr[typeMagic]
+	if !found {
 		return FsTypeUnknown
 	}
+	return str
 }
 
 func (s LinuxProvider) checkDevice(device string) error {

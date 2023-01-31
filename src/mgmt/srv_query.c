@@ -17,7 +17,6 @@
 struct bs_state_query_arg {
 	int			bs_arg_state;
 	uuid_t			bs_arg_uuid;
-	enum smd_dev_type	bs_arg_type;
 };
 
 static void
@@ -38,7 +37,13 @@ bs_state_query(void *arg)
 		return;
 	}
 
-	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_type, bxc);
+	bio_get_bs_state(&bs_arg->bs_arg_state, bs_arg->bs_arg_uuid, bxc);
+}
+
+static inline int
+tgt2xs_type(int tgt_id)
+{
+	return tgt_id == BIO_SYS_TGT_ID ? DSS_XS_SYS : DSS_XS_VOS;
 }
 
 /*
@@ -54,7 +59,6 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	int				 rc;
 	struct bs_state_query_arg	 bs_arg;
 
-	bs_arg.bs_arg_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get target ID(s) for given device.
 	 */
@@ -80,7 +84,7 @@ int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state)
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
 	uuid_copy(bs_arg.bs_arg_uuid, bs_uuid);
-	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, DSS_XS_VOS,
+	rc = dss_ult_create(bs_state_query, (void *)&bs_arg, tgt2xs_type(tgt_id),
 			    tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -143,7 +147,7 @@ bio_health_query(void *arg)
 		return;
 	}
 
-	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_dev_type, bxc);
+	rc = bio_get_dev_state(&mbh->mb_dev_state, mbh->mb_devid, bxc);
 	if (rc != 0) {
 		D_ERROR("Error getting BIO device state\n");
 		return;
@@ -165,7 +169,6 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		return -DER_INVAL;
 	}
 
-	mbh->mb_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get either target ID(s) for given
 	 * device or alternatively the device mapped to a given target.
@@ -182,8 +185,6 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 			rc = -DER_NONEXIST;
 			goto out;
 		}
-		/* Default tgt_id is the first mapped tgt */
-		tgt_id = dev_info->sdi_tgts[0];
 	} else {
 		tgt_id = atoi(tgt);
 		rc = smd_dev_get_by_tgt(tgt_id, SMD_DEV_TYPE_DATA, &dev_info);
@@ -193,6 +194,8 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 		}
 		uuid_copy(dev_uuid, dev_info->sdi_id);
 	}
+	/* Default tgt_id is the first mapped tgt */
+	tgt_id = dev_info->sdi_tgts[0];
 
 	D_DEBUG(DB_MGMT, "Querying BIO Health Data for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
@@ -200,7 +203,7 @@ ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t dev_uuid,
 
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_health_query, mbh, DSS_XS_VOS, tgt_id, 0,
+	rc = dss_ult_create(bio_health_query, mbh, tgt2xs_type(tgt_id), tgt_id, 0,
 			    &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
@@ -524,7 +527,7 @@ out:
 }
 
 struct bio_faulty_dev_info {
-	enum smd_dev_type bf_dev_type;
+	uuid_t	bf_dev_uuid;
 };
 
 static void
@@ -546,7 +549,7 @@ bio_faulty_state_set(void *arg)
 		return;
 	}
 
-	rc = bio_dev_set_faulty(bxc, bfdi->bf_dev_type);
+	rc = bio_dev_set_faulty(bxc, bfdi->bf_dev_uuid);
 	if (rc != 0) {
 		D_ERROR("Error setting FAULTY BIO device state\n");
 		return;
@@ -570,7 +573,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	D_DEBUG(DB_MGMT, "Setting FAULTY SMD device state for dev:"DF_UUID"\n",
 		DP_UUID(dev_uuid));
 
-	faulty_info.bf_dev_type = SMD_DEV_TYPE_DATA;
 	/*
 	 * Query per-server metadata (SMD) to get NVMe device info for given
 	 * device UUID.
@@ -588,10 +590,11 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	/* Default tgt_id is the first mapped tgt */
 	tgt_id = dev_info->sdi_tgts[0];
 
+	uuid_copy(faulty_info.bf_dev_uuid, dev_uuid);
 	/* Create a ULT on the tgt_id */
 	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:%d\n", tgt_id);
-	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info, DSS_XS_VOS, tgt_id, 0,
-			    &thread);
+	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info,
+			    tgt2xs_type(tgt_id), tgt_id, 0, &thread);
 	if (rc != 0) {
 		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
 		goto out;
