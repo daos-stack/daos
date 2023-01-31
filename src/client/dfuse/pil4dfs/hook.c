@@ -640,8 +640,8 @@ int install_hook(void)
 					tramp_list[nFunc_InBlk].saved_code_len =
 						OffsetList[idx_inst];
 					if (idx_inst >= 2 &&
-						insn[idx_inst-1].bytes[0] == 0xe9 &&
-						insn[idx_inst-1].size == 5) {
+					    insn[idx_inst-1].bytes[0] == 0xe9 &&
+					    insn[idx_inst-1].size == 5) {
 						/* found a jmp instruction here!!! */
 						WithJmp[nFunc_InBlk] = insn[idx_inst-2].size + 1;
 					}
@@ -668,7 +668,7 @@ int install_hook(void)
 			/* E9 is a jmp instruction */
 			tramp_list[nFunc_InBlk].trampoline[tramp_list[nFunc_InBlk].saved_code_len]
 				= 0xE9;
-			Jmp_Offset = (int) (((long int)(tramp_list[nFunc_InBlk].addr_org_func)
+			Jmp_Offset = (int)(((long int)(tramp_list[nFunc_InBlk].addr_org_func)
 					  - ((long int)(tramp_list[nFunc_InBlk].trampoline) + 5))
 					  & 0xFFFFFFFF);
 			*((int *)(tramp_list[nFunc_InBlk].trampoline +
@@ -707,7 +707,7 @@ int install_hook(void)
 			/* set up function pointers for original functions */
 			/* tramp_list[].trampoline holds the entry address */
 			/* to call original function                        */
-			*(module_list[idx_mod].ptr_old_func_add_list[iFunc])
+			*module_list[idx_mod].ptr_old_func_add_list[iFunc]
 				= (long int)(tramp_list[nFunc_InBlk].trampoline);
 
 			/* fast mod */
@@ -755,7 +755,6 @@ int install_hook(void)
 
 	return num_hook_installed;
 }
-#undef MAX_INSTUMENTS
 
 /*
  * register_a_hook - Add one target function into the list of the functions to intercept.
@@ -881,7 +880,7 @@ query_all_org_func_addr(void)
 		if (idx == -1) {
 			/* a new name not in list */
 			printf("Fail to find library %s in maps.\nQuit\n",
-				module_list[idx_mod].module_name);
+			       module_list[idx_mod].module_name);
 			exit(1);
 		} else {
 			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);

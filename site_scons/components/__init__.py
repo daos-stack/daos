@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -235,7 +235,7 @@ def define_common(reqs):
 
     reqs.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
 
-    reqs.define('capstone', headers=['capstone/capstone.h'], package='capstone-devel')
+#    reqs.define('capstone', headers=['capstone/capstone.h'], package='capstone-devel')
 
     reqs.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
 
