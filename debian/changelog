@@ -1,3 +1,9 @@
+daos (2.3.103-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.3.103
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 27 Jan 2023 02:30:00 -0500
+
 daos (2.3.102-1) unstable; urgency=medium
   [ Johann Lombardi ]
   * Bump version to 2.3.102
