@@ -5,6 +5,7 @@
 """
 # pylint: disable=too-many-lines
 
+from collections import defaultdict
 from getpass import getuser
 import math
 import os
@@ -413,8 +414,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("Failed to start servers after format")
 
         # Sanity check for md on ssd enablement
-        if hasattr(self.manager, "check_log_for_pattern"):
-            self.manager.check_log_for_pattern("MD on SSD")
+        self.search_log("MD on SSD")
 
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
@@ -1126,3 +1126,39 @@ class DaosServerManager(SubprocessManager):
                 command="sudo {} -S {} --csv".format(daos_metrics_exe, engine))
             engines.append(results)
         return engines
+
+    def search_log(self, pattern):
+        """Search the server log files on the remote hosts for the specified pattern.
+
+        Args:
+            pattern (str): the egrep pattern to use to search the server log files
+
+        Returns:
+            int: number of patterns found
+
+        """
+        # Determine how many ranks per host
+        host_ranks = defaultdict(list)
+        for rank, host in self.ranks.items():
+            host_ranks[str(host)].append(rank)
+
+        # Determine which engine log files to search on each set of hosts
+        log_files = self.manager.job.get_engine_values("log_file")
+        log_file_hosts = defaultdict(NodeSet)
+        for engine, log_file in enumerate(log_files):
+            for host, ranks in host_ranks.items():
+                if len(ranks) > engine:
+                    log_file_hosts[log_file].add(host)
+
+        # Search for the pattern in the remote log files
+        matches = 0
+        for log_file, hosts in log_file_hosts:
+            log_file_matches = 0
+            self.log.debug("Searching for '%s' in '%s' on %s", pattern, log_file, hosts)
+            result = run_remote(self.log, hosts, f"grep -E '{pattern}' {log_file}")
+            for data in result.output:
+                if data.returncode == 0:
+                    log_file_matches += len(data.stdout)
+            self.log.debug("  - found %s matches on %s", log_file_matches, hosts)
+            matches += log_file_matches
+        return matches

@@ -1075,29 +1075,6 @@ class Systemctl(JobManager):
             self.log.info("%s subprocess startup detected - %s", self._command, message)
         return complete
 
-    def check_log_for_pattern(self, pattern, timeout=60):
-        """Determine how many times a pattern exists in a subprocess output.
-
-        Args:
-            pattern (str): regular expression to search for in the logs
-            timeout (int, optional): maximum number of seconds to wait to detect
-                the specified pattern. Defaults to 60.
-
-        Returns:
-            int: number of pattern matches detected
-
-        """
-        command = get_journalctl_command(
-            self.timestamps["start"], None, units=self._systemctl.service.value)
-        self.log.info("Searching for '%s' in '%s' output on %s", pattern, command, self._hosts)
-        log_data = self.get_log_data(self._hosts, command, timeout)
-        detected = 0
-        for entry in log_data:
-            match = re.findall(pattern, "\n".join(entry["data"]))
-            detected += len(match) if match else 0
-        self.log.info("Number of '%s' matches in '%s' output: %s", pattern, command, detected)
-        return detected
-
     def dump_logs(self, hosts=None, timestamp=None):
         """Display the journalctl log data since detecting server start.
 

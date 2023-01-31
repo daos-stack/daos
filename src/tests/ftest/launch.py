@@ -1441,9 +1441,6 @@ class Launch():
                 scm_size = 100
                 max_nvme_tiers = 5
 
-                # Use this to define the same named env var in the server config file
-                os.environ["DAOS_MD_ON_SSD"] = "1"
-
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
