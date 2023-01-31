@@ -25,7 +25,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
             Verifies that POSIX metadata is preserved for dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,mfu,mfu_dcp,dfuse
+        :avocado: tags=datamover,mfu,mfu_dcp,dfs,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
         :avocado: tags=test_dm_posix_meta_entry_dcp
         """
