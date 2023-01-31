@@ -148,7 +148,6 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
-        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
 
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 

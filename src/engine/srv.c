@@ -1267,10 +1267,10 @@ dss_sys_db_init()
 	if (nvme_conf_path == NULL)
 		return -DER_NOMEM;
 	D_STRNDUP(lmm_db_path, dirname(nvme_conf_path), PATH_MAX);
-	if (lmm_db_path == NULL)
-		return -DER_NOMEM;
-
 	D_FREE(nvme_conf_path);
+	if (lmm_db_path == NULL) {
+		return -DER_NOMEM;
+	}
 
 	rc = lmm_db_init(lmm_db_path);
 	if (rc)
