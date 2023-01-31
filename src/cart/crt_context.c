@@ -620,7 +620,8 @@ out:
 void
 crt_context_free(struct crt_context *ctx)
 {
-	int rc;
+	int	provider = ctx->cc_hg_ctx.chc_provider;
+	int	rc;
 
 	rc = d_hash_table_destroy_inplace(&ctx->cc_epi_table, true /* force */);
 	if (rc)
@@ -633,6 +634,13 @@ crt_context_free(struct crt_context *ctx)
 	if (rc)
 		D_ERROR("crt_hg_ctx_fini failed() rc: " DF_RC "\n", DP_RC(rc));
 
+	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
+
+	crt_provider_put_ctx_idx(ctx->cc_primary, provider, ctx->cc_idx);
+	d_list_del(&ctx->cc_link);
+
+	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
 	D_MUTEX_DESTROY(&ctx->cc_mutex);
 	D_DEBUG(DB_TRACE, "destroyed context (idx %d)\n", ctx->cc_idx);
 	D_FREE(ctx);
@@ -644,7 +652,6 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	struct crt_context	*ctx;
 	uint32_t		 timeout_sec;
 	int			 flags;
-	int                      provider;
 	int			 rc = 0;
 	int			 i;
 
@@ -694,15 +701,6 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(err_unlock, rc);
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
-
-	provider = ctx->cc_hg_ctx.chc_provider;
-
-	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-
-	crt_provider_put_ctx_idx(ctx->cc_primary, provider, ctx->cc_idx);
-	d_list_del(&ctx->cc_link);
-
-	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	CTX_DECREF(ctx);
 
@@ -754,6 +752,7 @@ crt_rank_abort(d_rank_t rank)
 	int			 flags;
 	int			 rc = 0;
 	d_list_t		*ctx_list;
+	int			 ctx_num;
 	struct d_vec_pointers	 ctxs;
 	struct d_vec_pointers	 epis;
 	int			 i;
@@ -763,27 +762,28 @@ crt_rank_abort(d_rank_t rank)
 	 * orders, we hold at most one of them at a time.
 	 */
 
-	rc = d_vec_pointers_init(&ctxs, 8 /* cap */);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	rc = d_vec_pointers_init(&epis, 16 /* cap */);
-	if (rc != 0)
-		D_GOTO(out_ctxs, rc);
-
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 	/* TODO: Do we need to handle secondary providers? */
-	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
+	crt_provider_get_ctx_list_and_num(true, crt_gdata.cg_primary_prov, &ctx_list, &ctx_num);
+	rc = d_vec_pointers_init(&ctxs, ctx_num);
+	if (rc != 0) {
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		D_GOTO(out, rc);
+	}
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		CTX_ADDREF(ctx);
 		rc = d_vec_pointers_append(&ctxs, ctx);
 		if (rc != 0) {
 			CTX_DECREF(ctx);
-			D_GOTO(out_epis, rc);
+			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+			D_GOTO(out_ctxs, rc);
 		}
 	}
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
+	rc = d_vec_pointers_init(&epis, 16 /* cap */);
+	if (rc != 0)
+		D_GOTO(out_ctxs, rc);
 	for (i = 0; i < ctxs.p_len; i++) {
 		ctx = ctxs.p_buf[i];
 		D_MUTEX_LOCK(&ctx->cc_mutex);

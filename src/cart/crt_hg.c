@@ -623,6 +623,15 @@ d_list_t
 	return &prov_data->cpg_ctx_list;
 }
 
+void
+crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num)
+{
+	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(primary, provider);
+
+	*list = &prov_data->cpg_ctx_list;
+	*num = prov_data->cpg_ctx_num;
+}
+
 static int
 crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 {
