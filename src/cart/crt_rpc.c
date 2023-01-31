@@ -1323,10 +1323,9 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_send_immediately(rpc_priv);
 		} else if (uri_exists == true) {
 			/* send addr lookup req */
-			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
 			if (rc == 0)
-				D_GOTO(send_immediately, rc);
+				rc = crt_req_send_immediately(rpc_priv);
 			else
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
 					"rc %d, opc: %#x.\n", rc, req->cr_opc);
@@ -1347,18 +1346,13 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_send_immediately(rpc_priv);
 		} else {
 			/* send addr lookup req */
-			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
 			if (rc == 0)
-				D_GOTO(send_immediately, rc);
+				rc = crt_req_send_immediately(rpc_priv);
 			else
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
 					"rc %d, opc: %#x.\n", rc, req->cr_opc);
 		}
-		break;
-	case RPC_STATE_ADDR_LOOKUP:
-send_immediately:
-		rc = crt_req_send_immediately(rpc_priv);
 		break;
 	case RPC_STATE_CANCELED:
 	case RPC_STATE_COMPLETED:

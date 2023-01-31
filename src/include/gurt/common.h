@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -519,6 +519,7 @@ d_errno2der(int err)
 	case EEXIST:	return -DER_EXIST;
 	case ENOENT:	return -DER_NONEXIST;
 	case ECANCELED:	return -DER_CANCELED;
+	case EBUSY:	return -DER_BUSY;
 	default:	return -DER_MISC;
 	}
 	return 0;

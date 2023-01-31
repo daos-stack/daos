@@ -188,7 +188,6 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
 	int			 cc_idx;	/** context index */
-	ATOMIC uint32_t		 cc_refcount;	/** reference count */
 	struct crt_hg_context	 cc_hg_ctx;	/** HG context */
 	bool			 cc_primary;	/** primary provider flag */
 
@@ -224,13 +223,6 @@ struct crt_context {
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
 };
-
-#define CTX_ADDREF(ctx) atomic_fetch_add(&ctx->cc_refcount, 1)
-
-#define CTX_DECREF(ctx) do {									\
-	if (atomic_fetch_sub(&ctx->cc_refcount, 1) == 1)					\
-		crt_context_free(ctx);								\
-} while (0)
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
 struct crt_ep_inflight {
