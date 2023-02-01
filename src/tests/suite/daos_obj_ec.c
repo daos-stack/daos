@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1807,6 +1807,124 @@ ec_rec_parity_list(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+ec_update_2akeys(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_iov_t		 non_exist_dkey;
+	d_sg_list_t	 sgl[2];
+	d_iov_t		 sg_iov[2];
+	daos_iod_t	 iod[2];
+	daos_recx_t	 recx[2];
+	char		*buf[2];
+	char		*buf_cmp[2];
+	char		*akey[2];
+	const char	*akey_fmt = "akey21_%d";
+	int		 i, rc;
+	daos_size_t	 size;
+	uint16_t	 fail_shards[2];
+	uint64_t	 fail_val;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&non_exist_dkey, "non_dkey", strlen("non_dkey"));
+
+	for (i = 0; i < 2; i++) {
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
+
+		if (i == 0)
+			size = ec_cell_size * 4;
+		else
+			size = 8192;
+		D_ALLOC(buf[i], size);
+		assert_non_null(buf[i]);
+		D_ALLOC(buf_cmp[i], size);
+		assert_non_null(buf_cmp[i]);
+
+		dts_buf_render(buf[i], size);
+		memcpy(buf_cmp[i], buf[i], size);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size);
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		iod[i].iod_nr		= 1;
+		iod[i].iod_size		= 1;
+		iod[i].iod_recxs	= &recx[i];
+		iod[i].iod_type		= DAOS_IOD_ARRAY;
+		if (i == 0) {
+			recx[i].rx_idx		= 0;
+			recx[i].rx_nr		= size;
+		} else {
+			recx[i].rx_idx		= ec_cell_size;
+			recx[i].rx_nr		= size;
+		}
+	}
+
+	/* test the case that update 2 akeys in one IO, one akey is full-stripe update,
+	 * another is partial update, fail two parity shards, then will select data shard 0
+	 * as leader and 2nd akey update is empty on the leader.
+	 */
+	fail_shards[0] = 4;
+	fail_shards[1] = 5;
+	fail_val = daos_shard_fail_value(fail_shards, 2);
+	daos_fail_value_set(fail_val);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 2; i++)
+		iod[i].iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < 2; i++)
+		assert_int_equal(iod[i].iod_size, 1);
+
+	for (i = 0; i < 2; i++) {
+		if (i == 0)
+			size = ec_cell_size * 4;
+		else
+			size = 8192;
+		memset(buf[i], 0, size);
+		d_iov_set(&sg_iov[i], buf[i], size);
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 2, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(buf[0], buf_cmp[0], ec_cell_size * 4);
+	assert_memory_equal(buf[1], buf_cmp[1], 8192);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	for (i = 0; i < 2; i++) {
+		D_FREE(akey[i]);
+		D_FREE(buf[i]);
+		D_FREE(buf_cmp[i]);
+	}
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -1850,6 +1968,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC19: ec few partial stripe update", ec_few_partial_stripe_aggregation, async_disable,
 	 test_case_teardown},
 	{"EC20: ec recx list from parity", ec_rec_parity_list, async_disable, test_case_teardown},
+	{"EC21: ec update two akeys and parity shards failed", ec_update_2akeys, async_disable,
+	 test_case_teardown},
 };
 
 int
