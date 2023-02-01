@@ -141,6 +141,8 @@ ior_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 fio_smoke:
   job_timeout: 10
   names:
@@ -172,6 +174,9 @@ fio_smoke:
       # - "EC_16P2GX"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_wb_caching: true
+    thread_count: 8
+    cores: '0-3'
 daos_racer:
   runtime: 120
 vpic_smoke:
@@ -186,6 +191,8 @@ vpic_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 lammps_smoke:
@@ -200,6 +207,8 @@ lammps_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 mdtest_smoke:
@@ -233,6 +242,8 @@ mdtest_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -259,6 +270,8 @@ macsio_smoke:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:
