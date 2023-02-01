@@ -413,14 +413,14 @@ class DaosServerManager(SubprocessManager):
             self.manager.kill()
             raise ServerFailed("Failed to start servers after format")
 
-        # Sanity check for md on ssd enablement
-        self.search_log("MD on SSD")
-
         # Update the dmg command host list to work with pool create/destroy
         self._prepare_dmg_hostlist()
 
         # Define the expected states for each rank
         self._expected_states = self.get_current_state()
+
+        # Sanity check for md on ssd enablement
+        self.search_log("MD on SSD")
 
     def get_detected_engine_count(self, sub_process):
         """Get the number of detected joined engines.
@@ -1131,12 +1131,14 @@ class DaosServerManager(SubprocessManager):
         """Search the server log files on the remote hosts for the specified pattern.
 
         Args:
-            pattern (str): the egrep pattern to use to search the server log files
+            pattern (str): the grep -E pattern to use to search the server log files
 
         Returns:
             int: number of patterns found
 
         """
+        self.log.debug("Searching %s logs for '%s'", self.manager.job.command, pattern)
+
         # Determine how many ranks per host
         host_ranks = defaultdict(list)
         for rank, host in self.ranks.items():
@@ -1159,6 +1161,9 @@ class DaosServerManager(SubprocessManager):
             for data in result.output:
                 if data.returncode == 0:
                     log_file_matches += len(data.stdout)
-            self.log.debug("  - found %s matches on %s", log_file_matches, hosts)
+            self.log.debug("Found %s matches on %s", log_file_matches, hosts)
             matches += log_file_matches
+        self.log.debug(
+            "Found %s total matches for '%s' in the %s logs",
+            matches, pattern, self.manager.job.command)
         return matches
