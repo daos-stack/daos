@@ -7,16 +7,16 @@
  * This file is part of CaRT. It implements CaRT init and finalize related
  * APIs/handling.
  */
-
 #include <malloc.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include "crt_internal.h"
 
-struct crt_gdata crt_gdata;
-static volatile int   gdata_init_flag;
+struct crt_gdata	crt_gdata;
+static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
+static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));
@@ -506,11 +506,25 @@ out:
 	return rc;
 }
 
-static int
+static void
+apply_if_not_set(const char *env_name, const char *new_value)
+{
+	char *old_val;
+
+	old_val = getenv(env_name);
+
+	if (old_val == NULL) {
+		D_INFO("%s not set, setting to %s\n", env_name, new_value);
+		setenv(env_name, new_value, true);
+	}
+}
+
+static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
-	char	*srx_env;
-	int	rc = 0;
+	/* Avoid applying same settings multiple times */
+	if (g_prov_settings_applied[prov] == true)
+		return;
 
 	/* rxm and verbs providers only works with regular EP */
 	if (prov != CRT_PROV_OFI_PSM2 &&
@@ -523,12 +537,8 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
-
-		srx_env = getenv("FI_OFI_RXM_USE_SRX");
-		if (srx_env == NULL) {
-			D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
-			setenv("FI_OFI_RXM_USE_SRX", "1", true);
-		}
+		/* Use shared receive queues to avoid large mem consumption */
+		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
 	}
 
 	/* Print notice that "ofi+psm2" will be deprecated*/
@@ -539,7 +549,17 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	}
 
 
-	return rc;
+	if (prov == CRT_PROV_OFI_CXI) {
+		apply_if_not_set("FI_CXI_OPTIMIZED_MRS", "0");
+		apply_if_not_set("FI_CXI_RX_MATCH_MODE", "hybrid");
+		apply_if_not_set("FI_MR_CACHE_MONITOR", "memhooks");
+		apply_if_not_set("FI_CXI_REQ_BUF_MIN_POSTED", "8");
+		apply_if_not_set("FI_CXI_REQ_BUF_SIZE", "8388608");
+		apply_if_not_set("FI_CXI_DEFAULT_SQ_SIZE", "131072");
+		apply_if_not_set("FI_CXI_OFLOW_BUF_SIZE", "8388608");
+	}
+
+	g_prov_settings_applied[prov] = true;
 }
 
 int
