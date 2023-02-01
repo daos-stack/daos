@@ -9,6 +9,8 @@ def scons():
 
     tenv.d_test_program('btree', ['btree.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
+    tenv.d_test_program('umem_test_bmem', ['umem_test_bmem.c', utest_utils],
+                        LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
     tenv.d_test_program('umem_test', ['umem_test.c', utest_utils],
                         LIBS=['daos_common_pmem', 'gurt', 'pmemobj', 'cmocka'])
     tenv.d_test_program('btree_direct', ['btree_direct.c', utest_utils],

@@ -190,6 +190,7 @@ dav_wal_tx_reserve(struct dav_obj *hdl)
 	uint64_t id;
 	int rc;
 
+	D_ASSERT(hdl->do_utx->utx_id == ULLONG_MAX);
 	rc = hdl->do_store->stor_ops->so_wal_reserv(hdl->do_store, &id);
 	D_ASSERT(rc == 0);
 	hdl->do_utx->utx_id = id;
