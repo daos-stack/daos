@@ -710,6 +710,7 @@ struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 struct obj_io_context {
 	struct ds_cont_hdl	*ioc_coh;
 	struct ds_cont_child	*ioc_coc;
+	crt_rpc_t		*ioc_rpc;
 	struct daos_oclass_attr	 ioc_oca;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_layout_ver;
