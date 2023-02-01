@@ -170,12 +170,11 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
-				 DLOG_DBG, DLOG_ERR,
-				 DF_UOID " %s end failed: "DF_RC"\n",
-				 DP_UOID(orwi->orw_oid),
-				 update ? "Update" : "Fetch", DP_RC(rc));
+				     rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				     rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				     rc == -DER_CHKPT_BUSY,
+				 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n",
+				 DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch", DP_RC(rc));
 			if (status == 0)
 				status = rc;
 		}
