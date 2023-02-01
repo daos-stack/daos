@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,25 +21,6 @@
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
-
-static int _wal_reserv(struct umem_store *store, uint64_t *id)
-{
-	static uint64_t dav_wal_id;
-
-	*id = ++dav_wal_id;
-	return 0;
-}
-
-static int _wal_submit(struct umem_store *store, struct umem_wal_tx *wal_tx,
-		       void *data_iod)
-{
-	return 0;
-}
-
-struct umem_store_ops _store_ops = {
-	.so_wal_reserv = _wal_reserv,
-	.so_wal_submit = _wal_submit,
-};
 
 /*
  * get_uuid_lo -- (internal) evaluates XOR sum of least significant
@@ -111,11 +92,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 	/* REVISIT */
 	hdl->do_store = store;
-	if (hdl->do_store->stor_priv == NULL) {
-		D_ERROR("meta context not defined. WAL commit disabled for %s\n",
-			path);
-		hdl->do_store->stor_ops = &_store_ops;
-	}
+	D_ASSERT(hdl->do_store->stor_priv != NULL);
 	D_STRNDUP(hdl->do_path, path, strlen(path));
 
 	if (flags & DAV_HEAP_INIT) {
