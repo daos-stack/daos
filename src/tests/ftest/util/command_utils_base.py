@@ -736,7 +736,7 @@ class EnvironmentVariables(dict):
             kv_list (list):  list of environment variable assignment (key=value) strings
         """
         for kv in kv_list:
-            key, *value = kv.split('=')
+            key, *value = kv.split('=', maxsplit=1)
             self[key] = value[0] if value else None
 
     def to_export_str(self, separator=";"):

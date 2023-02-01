@@ -55,7 +55,7 @@ utest_tx_add(struct utest_context *utx, void *ptr, size_t size)
 
 int
 utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
-		  struct utest_context **utx)
+		  struct umem_store *store, struct utest_context **utx)
 {
 	struct utest_context	*ctx;
 	struct utest_root	*root;
@@ -71,7 +71,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	strcpy(ctx->uc_pool_name, name);
 	ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
 	ctx->uc_uma.uma_pool = umempobj_create(name, "utest_pool",
-				UMEMPOBJ_ENABLE_STATS, pool_size, 0666, NULL);
+				UMEMPOBJ_ENABLE_STATS, pool_size, 0666, store);
 
 	if (ctx->uc_uma.uma_pool == NULL) {
 		perror("Utest pmem pool couldn't be created");
@@ -99,7 +99,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	if (rc != 0)
 		goto end;
 
-	root->ur_class = UMEM_CLASS_PMEM;
+	root->ur_class = ctx->uc_umm.umm_id;
 	root->ur_root_size = root_size;
 	root->ur_ref_cnt = 1;
 end:

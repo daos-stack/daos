@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -100,7 +100,7 @@ struct umem_store_ops {
 	int	(*so_flush_prep)(struct umem_store *store, struct umem_store_iod *iod,
 				 daos_handle_t *fh);
 	int	(*so_flush_copy)(daos_handle_t fh, d_sg_list_t *sgl);
-	int	(*so_flush_post)(daos_handle_t fh, int err);
+	int (*so_flush_post)(daos_handle_t fh, int err);
 	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
 	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
 				 void *data_iod);
@@ -112,6 +112,9 @@ struct umem_store_ops {
 	int	(*so_wal_id_cmp)(struct umem_store *store, uint64_t id1, uint64_t id2);
 };
 
+/** The offset of an object from the base address of the pool */
+typedef uint64_t umem_off_t;
+
 struct umem_store {
 	/**
 	 * Size of the umem storage, excluding blob header which isn't visible to allocator.
@@ -121,6 +124,9 @@ struct umem_store {
 	uint32_t		 stor_hdr_blks;
 	/** private data passing between layers */
 	void			*stor_priv;
+	void                    *chkpt_ctx;
+	/** Cache for this store */
+	struct umem_cache       *cache;
 	/**
 	 * Callbacks provided by upper level stack, umem allocator uses them to operate
 	 * the storage device.
@@ -156,9 +162,6 @@ struct umem_slab_desc {
 /** Set the slab description with specific size for the pmem obj pool */
 int umempobj_set_slab_desc(struct umem_pool *pool, struct umem_slab_desc *slab);
 
-
-/** The offset of an object from the base address of the pool */
-typedef uint64_t		umem_off_t;
 /** Number of flag bits to reserve for encoding extra information in
  *  a umem_off_t entry.
  */
@@ -781,9 +784,9 @@ umem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
 	return;
 }
 
-int umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
-		   int stage, umem_tx_cb_t cb, void *data);
-#endif
+int
+umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd, int stage,
+	       umem_tx_cb_t cb, void *data);
 
 static inline int
 umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
@@ -861,5 +864,229 @@ struct umem_action {
 		} ac_csum;	/**< it is checksum of data stored in @addr */
 	};
 };
+
+#define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
+#define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
+#define UMEM_CACHE_PAGE_SZ_MASK   (UMEM_CACHE_PAGE_SZ - 1)
+
+#define UMEM_CACHE_CHUNK_SZ_SHIFT 14 /* 16KB */
+#define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
+#define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
+
+#define UMEM_CACHE_BMAP_SZ        (1 << (UMEM_CACHE_PAGE_SZ_SHIFT - UMEM_CACHE_CHUNK_SZ_SHIFT - 6))
+
+/** 16 MB page */
+struct umem_page {
+	/** page ID */
+	unsigned int		 pg_id;
+	/** refcount */
+	int			 pg_ref;
+	uint64_t                 pg_waiting : 1, /** Page is copied, but waiting for commit */
+	    pg_copying                      : 1; /** Page is being copied. Blocks writes. */
+	/** Highest transaction ID checkpointed.  This is set before the page is copied. The
+	 *  checkpoint will not be executed until the last committed ID is greater than or
+	 *  equal to this value.  If that's not the case immediately, the waiting flag is set
+	 *  along with this field.
+	 */
+	uint64_t                 pg_last_checkpoint;
+	/** Highest transaction ID of writes to the page */
+	uint64_t		 pg_last_inflight;
+	/** link chain on global dirty list or LRU list */
+	d_list_t                 pg_link;
+	/** page memory address */
+	uint8_t                 *pg_addr;
+	/** Information about inflight checkpoint */
+	void                    *pg_chkpt_data;
+	/** bitmap for each dirty 16K unit */
+	uint64_t                 pg_bmap[UMEM_CACHE_BMAP_SZ];
+};
+
+/** Global cache status for each umem_store */
+struct umem_cache {
+	struct umem_store	*ca_store;
+	/** Total pages store */
+	uint64_t                 ca_num_pages;
+	/** Total pages in cache */
+	uint64_t                 ca_mapped;
+	/** Maximum number of cached pages */
+	uint64_t                 ca_max_mapped;
+	/** all the dirty pages */
+	d_list_t                 ca_pgs_dirty;
+	/** Pages waiting for copy to DMA buffer */
+	d_list_t                 ca_pgs_copying;
+	/** LRU list all pages not in one of the other states for future eviction support */
+	d_list_t                 ca_pgs_lru;
+	/** TODO: some other global status */
+	/** All pages, sorted by umem_page::pg_id */
+	struct umem_page         ca_pages[0];
+};
+
+static inline uint64_t
+umem_cache_size2pages(uint64_t len)
+{
+	D_ASSERT((len & UMEM_CACHE_PAGE_SZ_MASK) == 0);
+
+	return len >> UMEM_CACHE_PAGE_SZ_SHIFT;
+}
+
+static inline uint64_t
+umem_cache_size_round(uint64_t len)
+{
+	return (len + UMEM_CACHE_PAGE_SZ_MASK) & ~UMEM_CACHE_PAGE_SZ_MASK;
+}
+
+static inline struct umem_page *
+umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
+{
+	uint64_t idx = offset >> UMEM_CACHE_PAGE_SZ_SHIFT;
+
+	D_ASSERTF(idx < cache->ca_num_pages,
+		  "offset=" DF_U64 ", num_pages=" DF_U64 ", idx=" DF_U64 "\n", offset,
+		  cache->ca_num_pages, idx);
+
+	return &cache->ca_pages[idx];
+}
+
+/** From the offset within umem_store, return the mapped address */
+static inline void *
+umem_cache_off2ptr(struct umem_cache *cache, umem_off_t offset)
+{
+	return umem_cache_off2page(cache, offset)->pg_addr + (offset & UMEM_CACHE_PAGE_SZ_MASK);
+}
+
+/** From a mapped page address, return the umem_cache it belongs to */
+static inline struct umem_cache *
+umem_page2cache(struct umem_page *page)
+{
+	return (struct umem_cache *)container_of(&page[-page->pg_id], struct umem_cache, ca_pages);
+}
+
+/** From a mapped page address, return the umem_store it belongs to */
+static inline struct umem_store *
+umem_page2store(struct umem_page *page)
+{
+	return umem_page2cache(page)->ca_store;
+}
+
+/** Allocate global cache for umem store.  All 16MB pages are initially unmapped
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	max_mapped	0 or Maximum number of mapped 16MB pages (must be 0 for now)
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
+
+/** Free global cache for umem store.  Pages must be unmapped first
+ *
+ * \param[in]	store	Store for which to free cache
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_free(struct umem_store *store);
+
+/** Query if the page cache has enough space to map a range
+ *
+ * \param[in]	store		The store
+ * \param[in]	num_pages	Number of pages to bring into cache
+ *
+ * \return number of pages that need eviction to support mapping the range
+ */
+int
+umem_cache_check(struct umem_store *store, uint64_t num_pages);
+
+/** Evict the pages.   This invokes the unmap callback. (XXX: not yet implemented)
+ *
+ * \param[in]	store		The store
+ * \param[in]	num_pages	Number of pages to evict
+ *
+ * \return 0 on success, -DER_BUSY means a checkpoint is needed to evict the pages
+ */
+int
+umem_cache_evict(struct umem_store *store, uint64_t num_pages);
+
+/** Adds a mapped range of pages to the page cache.
+ *
+ * \param[in]	store		The store
+ * \param[in]	offset		The offset in the umem cache
+ * \param[in]	start_addr	Start address of mapping
+ * \param[in]	num_pages	Number of consecutive 16MB pages to being cached
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
+		     uint64_t num_pages);
+
+/** Take a reference on the pages in the range.   Only needed for cases where we need the page to
+ *  stay loaded across a yield, such as the VOS object cache.  Pages in the range must be mapped.
+ *
+ *  \param[in]	store	The umem store
+ *  \param[in]	addr	The address of the hold
+ *  \param[in]	size	The size of the hold
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+
+/** Release a reference on pages in the range.  Pages in the range must be mapped and held.
+ *
+ *  \param[in]	store	The umem store
+ *  \param[in]	addr	The address of the hold
+ *  \param[in]	size	The size of the hold
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+
+/**
+ * Touched the region identified by @addr and @size, it will mark pages in this region as
+ * dirty (also set bitmap within each page), and put it on dirty list
+ *
+ * This function is called by allocator(probably VOS as well) each time it creates memory
+ * snapshot (calls tx_snap) or just to mark a region to be flushed.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	wr_tx	The writing transaction
+ * \param[in]	addr	The start address
+ * \param[in]	size	size of dirty region
+ *
+ * \return 0 on success, -DER_CHKPT_BUSY if a checkpoint is in progress on the page. The calling
+ *         transaction must either abort or find another location to modify.
+ */
+int
+umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
+
+/** Callback for checkpoint to wait for the commit of chkpt_tx.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
+ * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
+ */
+typedef void
+umem_cache_wait_cb_t(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx,
+		     void *arg);
+
+/**
+ * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
+ *
+ * This function can yield internally, it is called by checkpoint service of upper level stack.
+ *
+ * \param[in]		store		The umem store
+ * \param[in]		wait_cb		Callback for to wait for wal commit completion
+ * \param[in]		arg		argument for wait_cb
+ * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
+		      uint64_t *chkpt_id);
+
+#endif /** DAOS_PMEM_BUILD */
 
 #endif /* __DAOS_MEM_H__ */

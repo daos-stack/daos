@@ -452,18 +452,21 @@ tx_create_wal_entry(struct ulog_entry_base *e, void *arg,
 int
 lw_tx_begin(dav_obj_t *pop)
 {
-	struct umem_wal_tx	*utx = pop->do_utx;
+	struct umem_wal_tx	*utx = NULL;
 	int			 rc;
 
-	D_ASSERT(utx == NULL);
-	utx = dav_umem_wtx_new(pop);
-	if (utx == NULL)
-		return obj_tx_fail_err(EINVAL, 0);
+	if (pop->do_utx == NULL) {
+		utx = dav_umem_wtx_new(pop);
+		if (utx == NULL)
+			return obj_tx_fail_err(EINVAL, 0);
+	}
 	rc = dav_wal_tx_reserve(pop);
 	if (rc) {
 		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
-		D_FREE(utx);
-		pop->do_utx = NULL;
+		if (utx) {
+			D_FREE(utx);
+			pop->do_utx = NULL;
+		}
 	}
 	return rc;
 }
@@ -510,11 +513,10 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 
 		VALGRIND_START_TX;
 	} else if (tx->stage == DAV_TX_STAGE_NONE) {
-		struct umem_wal_tx *utx;
+		struct umem_wal_tx *utx = NULL;
 
 		DAV_DBG("");
-		utx = pop->do_utx;
-		if (utx == NULL) {
+		if (pop->do_utx == NULL) {
 			utx = dav_umem_wtx_new(pop);
 			if (utx == NULL) {
 				err = ENOMEM;
@@ -524,8 +526,10 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 		err = dav_wal_tx_reserve(pop);
 		if (err) {
 			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
-			D_FREE(utx);
-			pop->do_utx = NULL;
+			if (utx) {
+				D_FREE(utx);
+				pop->do_utx = NULL;
+			}
 			goto err_abort;
 		}
 		tx = get_tx();
@@ -1808,8 +1812,9 @@ dav_free(dav_obj_t *pop, uint64_t off)
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
 	lw_tx_begin(pop);
 	ctx = pop->external;
+	operation_start(ctx);
 
-	palloc_operation(pop->do_heap, off, &off, 0, NULL, NULL,
+	palloc_operation(pop->do_heap, off, NULL, 0, NULL, NULL,
 			0, 0, 0, 0, ctx);
 
 	lw_tx_end(pop, NULL);

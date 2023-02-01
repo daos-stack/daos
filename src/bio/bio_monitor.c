@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -140,6 +140,7 @@ bio_get_dev_state(struct nvme_stats *state, uuid_t dev_uuid,
 		return dss_abterr2der(rc);
 
 	dsm.xs = xs;
+	uuid_copy(dsm.dev_uuid, dev_uuid);
 	spdk_thread_send_msg(owner_thread(bxb->bxb_blobstore),
 			     bio_get_dev_state_internal, &dsm);
 	rc = ABT_eventual_wait(dsm.eventual, NULL);
