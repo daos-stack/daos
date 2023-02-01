@@ -1969,7 +1969,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 			chkpt_data->cd_max_tx                                           = 0;
 
 			while (chkpt_data->cd_nr_pages < MAX_PAGES_PER_SET &&
-			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_SET &&
+			       chkpt_data->cd_store_iod.io_nr <= MAX_IOD_PER_PAGE &&
 			       (page = d_list_pop_entry(&cache->ca_pgs_copying, struct umem_page,
 							pg_link)) != NULL) {
 				D_ASSERT(chkpt_data != NULL);
