@@ -237,7 +237,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
-	uint32_t	mrc_enable = 0;
 	uint32_t	is_secondary;
 	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
@@ -310,12 +309,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (fi_univ_size == 0) {
 		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
-	}
-
-	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
-	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	if (credits == 0) {
@@ -522,6 +515,8 @@ apply_if_not_set(const char *env_name, const char *new_value)
 static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
+	uint32_t mrc_enable = 0;
+
 	/* Avoid applying same settings multiple times */
 	if (g_prov_settings_applied[prov] == true)
 		return;
@@ -548,15 +543,13 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 	}
 
+	if (prov == CRT_PROV_OFI_CXI)
+		mrc_enable = 1;
 
-	if (prov == CRT_PROV_OFI_CXI) {
-		apply_if_not_set("FI_CXI_OPTIMIZED_MRS", "0");
-		apply_if_not_set("FI_CXI_RX_MATCH_MODE", "hybrid");
-		apply_if_not_set("FI_MR_CACHE_MONITOR", "memhooks");
-		apply_if_not_set("FI_CXI_REQ_BUF_MIN_POSTED", "8");
-		apply_if_not_set("FI_CXI_REQ_BUF_SIZE", "8388608");
-		apply_if_not_set("FI_CXI_DEFAULT_SQ_SIZE", "131072");
-		apply_if_not_set("FI_CXI_OFLOW_BUF_SIZE", "8388608");
+	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	if (mrc_enable == 0) {
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	g_prov_settings_applied[prov] = true;
