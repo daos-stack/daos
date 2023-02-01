@@ -238,7 +238,7 @@ static int (*real_xstat)(int ver, const char *path, struct stat *stat_buf);
 static int (*real_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*real_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf,
-	    int flags);
+			    int flags);
 
 static int (*real_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
@@ -2590,7 +2590,7 @@ new_fcntl(int fd, int cmd, ...)
 
 				Next_Dirfd = find_next_available_dirfd();
 				memcpy(&dir_list[Next_Dirfd], &dir_list[fd_Directed],
-					sizeof(struct DIRSTATUS));
+				       sizeof(struct DIRSTATUS));
 				dup_next = dir_list[fd_Directed].fd_dup_next;
 				dir_list[fd_Directed].fd_dup_next = Next_Dirfd;
 				dir_list[Next_Dirfd].fd_dup_pre = fd_Directed;
@@ -2602,7 +2602,7 @@ new_fcntl(int fd, int cmd, ...)
 			} else if (fd_save >= FD_FILE_BASE) {
 				Next_fd = find_next_available_fd();
 				memcpy(&file_list[Next_fd], &file_list[fd_Directed],
-					sizeof(struct FILESTATUS));
+				       sizeof(struct FILESTATUS));
 				dup_next = file_list[fd_Directed].fd_dup_next;
 				file_list[fd_Directed].fd_dup_next = Next_fd;
 				file_list[Next_fd].fd_dup_pre = fd_Directed;
