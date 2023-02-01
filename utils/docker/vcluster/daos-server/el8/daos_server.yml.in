@@ -1,11 +1,10 @@
----
 # DAOS Server configuration file
 
 name: daos_server
 access_points: ['daos-server']
 port: 10001
 
-provider: ofi+tcp
+provider: ofi+tcp;ofi_rxm
 socket_dir: /var/run/daos_server
 nr_hugepages: @DAOS_HUGEPAGES_NBR@
 
