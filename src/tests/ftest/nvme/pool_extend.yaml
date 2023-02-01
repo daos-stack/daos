@@ -43,8 +43,6 @@ server_config:
           class: nvme
           bdev_list: ["bbbb:bb:bb.b"]
 pool:
-  scm_size: 25%
-  nvme_size: 90%
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -67,12 +65,12 @@ ior:
     dfs_oclass: RP_2G8
     dfs_dir_oclass: RP_2G8
     ior_test_sequence:
-      # - [scm_size, nvme_size, transfersize, blocksize]
+      # - [scm_size percent, nvme_size percent, transfersize, blocksize]
       #   The values are set to be in the multiples of 10.
       #   Values are appx GB.
-      - [5000000000, 30000000000, 4000, 50000000]          # [4K, 51M]
-      - [5000000000, 30000000000, 1000000, 500000000]      # [1M, 512M]
-      - [5000000000, 30000000000, 1000000000, 8000000000]  # [1G, 8G]
+      - [30, 90, 4000, 50000000]          # [4K, 51M]
+      - [30, 90, 1000000, 500000000]      # [1M, 512M]
+      - [30, 90, 1000000000, 8000000000]  # [1G, 8G]
 test_obj_class:
   oclass:
     - RP_3G6

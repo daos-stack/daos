@@ -54,7 +54,13 @@ class NvmePoolExtend(OSAUtils):
         # Create the pools
         pools = []
         for _ in range(0, num_pool):
-            pools.append(self.get_pool(properties="reclaim:disabled"))
+            pools.append(self.get_pool(properties="reclaim:disabled", create=False))
+            # Split total SCM and NVME size for creating multiple pools.
+            temp = "{}{}".format((int(ior_test_sequence[0]) / num_pool), "%")
+            pools[-1].scm_size.update(temp)
+            temp = "{}{}".format((int(ior_test_sequence[1]) / num_pool), "%")
+            pools[-1].nvme_size.update(temp)
+            pools[-1].create()
             # pools[-1].set_property("reclaim", "disabled")
 
         # On each pool (max 3), extend the ranks
