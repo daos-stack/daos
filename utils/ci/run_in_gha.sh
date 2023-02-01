@@ -83,3 +83,9 @@ echo ::endgroup::
 echo ::group::Container copy test
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
+
+echo ::group::Checking for corefile
+ls -la core*
+cat /proc/sys/kernel/core_pattern
+echo ::endgroup::
+
