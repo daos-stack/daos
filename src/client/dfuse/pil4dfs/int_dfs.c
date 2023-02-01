@@ -238,7 +238,7 @@ static int (*real_xstat)(int ver, const char *path, struct stat *stat_buf);
 static int (*real_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*real_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf,
-	int flags);
+	    int flags);
 
 static int (*real_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
@@ -403,7 +403,7 @@ parse_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			if (*parent == NULL) {
 				/* parent dir does not exist or something wrong */
 				printf("Dir %s does not exist or error to query. %s\n",
-					full_path_loc, strerror(errno));
+				       full_path_loc, strerror(errno));
 				rc = 1;
 			}
 		}
@@ -855,7 +855,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			dir_list[idx_dirfd].ref_count = 1;
 			dir_list[idx_dirfd].dir_obj = file_obj;
 			dir_list[idx_dirfd].num_ents = 0;
-			memset(&(dir_list[idx_dirfd].anchor), 0, sizeof(daos_anchor_t));
+			memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 			sprintf(dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
 
 			return (idx_dirfd+FD_DIR_BASE);
@@ -1499,7 +1499,7 @@ opendir(const char *path)
 	dir_list[idx_dirfd].offset = 0;
 	dir_list[idx_dirfd].dir_obj = dir_obj;
 	dir_list[idx_dirfd].num_ents = 0;
-	memset(&(dir_list[idx_dirfd].anchor), 0, sizeof(daos_anchor_t));
+	memset(&dir_list[idx_dirfd].anchor, 0, sizeof(daos_anchor_t));
 	sprintf(dir_list[idx_dirfd].path, "%s%s", fs_root, full_path);
 /**
  *	ent_list = dir_list[idx_dirfd].ents;
@@ -1516,7 +1516,7 @@ opendir(const char *path)
  *	ent_list[1].d_type = DT_DIR;
  *	strcpy(ent_list[1].d_name, "..");
  */
-	return (DIR *)(&(dir_list[idx_dirfd]));
+	return (DIR *)(&dir_list[idx_dirfd]);
 }
 
 DIR *
@@ -1532,7 +1532,7 @@ fdopendir(int fd)
 	if (fd < FD_DIR_BASE)
 		return real_fdopendir(fd);
 
-	return (DIR *)(&(dir_list[fd - FD_DIR_BASE]));
+	return (DIR *)(&dir_list[fd - FD_DIR_BASE]);
 }
 
 int
@@ -2516,7 +2516,7 @@ futimens(int fd, const struct timespec times[2])
 	}
 
 	rc = dfs_osetattr(dfs, file_list[fd-FD_FILE_BASE].file_obj, &stbuf,
-					  DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+			  DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -2583,13 +2583,13 @@ new_fcntl(int fd, int cmd, ...)
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC))	{
 			if (fd_save >= FD_DIR_BASE)	{
 				if (fd_save == DUMMY_FD_DIR)	{
-					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in \n"
+					printf("ERROR> Unexpected fd == DUMMY_FD_DIR in "
 						"fcntl(fd, F_DUPFD / F_DUPFD_CLOEXEC)\n");
 					return (-1);
 				}
 
 				Next_Dirfd = find_next_available_dirfd();
-				memcpy(&(dir_list[Next_Dirfd]), &(dir_list[fd_Directed]),
+				memcpy(&dir_list[Next_Dirfd], &dir_list[fd_Directed],
 					sizeof(struct DIRSTATUS));
 				dup_next = dir_list[fd_Directed].fd_dup_next;
 				dir_list[fd_Directed].fd_dup_next = Next_Dirfd;
@@ -2601,7 +2601,7 @@ new_fcntl(int fd, int cmd, ...)
 				return (Next_Dirfd + FD_DIR_BASE);
 			} else if (fd_save >= FD_FILE_BASE) {
 				Next_fd = find_next_available_fd();
-				memcpy(&(file_list[Next_fd]), &(file_list[fd_Directed]),
+				memcpy(&file_list[Next_fd], &file_list[fd_Directed],
 					sizeof(struct FILESTATUS));
 				dup_next = file_list[fd_Directed].fd_dup_next;
 				file_list[fd_Directed].fd_dup_next = Next_fd;
@@ -2764,8 +2764,8 @@ dup2(int oldfd, int newfd)
 				return -1;
 			fd = allocate_a_fd_from_kernel();
 			if (fd != newfd) {
-				printf("allocate_a_fd_from_kernel() failed to get the \n"
-					"desired fd.\n");
+				printf("allocate_a_fd_from_kernel() failed to get the "
+				       "desired fd.\n");
 				errno = EAGAIN;
 				return (-1);
 			}
@@ -2921,8 +2921,7 @@ int
 posix_fallocate64(int fd, off64_t offset, off64_t len)
 {
 	if (real_posix_fallocate64 == NULL)	{
-		real_posix_fallocate64 = dlsym(RTLD_NEXT,
-			"posix_fallocate64");
+		real_posix_fallocate64 = dlsym(RTLD_NEXT, "posix_fallocate64");
 		assert(real_posix_fallocate64 != NULL);
 	}
 	if (!inited)
@@ -2982,24 +2981,24 @@ static __attribute__((constructor)) void init_myhook(void)
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&real_open_ld));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&real_open_libc));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
-		(long int *)(&real_open_pthread));
+			(long int *)(&real_open_pthread));
 
 	register_a_hook("libc", "__close", (void *)new_close_libc, (long int *)(&real_close_libc));
 	register_a_hook("libpthread", "__close", (void *)new_close_pthread,
-		(long int *)(&real_close_pthread));
+			(long int *)(&real_close_pthread));
 	register_a_hook("libc", "__close_nocancel", (void *)new_close_nocancel,
-		(long int *)(&real_close_nocancel));
+			(long int *)(&real_close_nocancel));
 
 	register_a_hook("libc", "__read", (void *)new_read_libc, (long int *)(&real_read_libc));
 	register_a_hook("libpthread", "__read", (void *)new_read_pthread,
-		(long int *)(&real_read_pthread));
+			(long int *)(&real_read_pthread));
 	register_a_hook("libc", "__write", (void *)new_write_libc, (long int *)(&real_write_libc));
 	register_a_hook("libpthread", "__write", (void *)new_write_pthread,
-		(long int *)(&real_write_pthread));
+			(long int *)(&real_write_pthread));
 
 	register_a_hook("libc", "lseek64", (void *)new_lseek_libc, (long int *)(&real_lseek_libc));
 	register_a_hook("libpthread", "lseek64", (void *)new_lseek_pthread,
-		(long int *)(&real_lseek_pthread));
+			(long int *)(&real_lseek_pthread));
 
 	register_a_hook("libc", "unlink", (void *)new_unlink, (long int *)(&real_unlink));
 
