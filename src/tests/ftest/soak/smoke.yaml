@@ -30,14 +30,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -47,14 +40,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   scm_size: 12GB
