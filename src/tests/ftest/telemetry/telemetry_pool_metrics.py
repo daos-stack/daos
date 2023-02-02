@@ -33,7 +33,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         """Return the expected metrics value output.
 
         This function returns a hash map of pairs defining min and max values of each tested
-        telemetry metrics.  The hash map of pairs returned depends of the tested object class, and
+        telemetry metrics.  The hash map of pairs returned depends on the tested object class, and
         the values are weighted according to the number of timeout rpc and resent update rpc.
 
         Note:
