@@ -572,7 +572,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Thu Jan 26 2023 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.2.0-8
-- Test upgrade of libfabric to 1.17.0
+- Test upgrade of libfabric to version 1.17.0
 
 * Mon Jan 23 2023 Joseph G. Moore <joseph.moore@intel.com> 2.2.0-7
 - Update Mercury to 2.2.0-6
