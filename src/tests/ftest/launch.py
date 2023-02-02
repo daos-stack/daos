@@ -1440,7 +1440,8 @@ class Launch():
 
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
-            common_extra_yaml = [updater.update(extra, yaml_dir) for extra in args.extra_yaml]
+            common_extra_yaml = [
+                updater.update(extra, yaml_dir) or extra for extra in args.extra_yaml]
             for test in self.tests:
                 test.extra_yaml.extend(common_extra_yaml)
 
@@ -1453,8 +1454,7 @@ class Launch():
             if new_yaml_file:
                 if args.verbose > 0:
                     # Optionally display a diff of the yaml file
-                    command = ["diff", "-y", test.yaml_file, new_yaml_file]
-                    run_local(logger, command, check=False)
+                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}", check=False)
                 test.yaml_file = new_yaml_file
 
             # Display the modified yaml file variants with debug
@@ -1846,7 +1846,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Current disk space usage of %s", path)
         try:
-            run_local(logger, " ".join(["df", "-h", path]), check=False)
+            run_local(logger, f"df -h {path}", check=False)
         except RunException:
             pass
 
@@ -1989,8 +1989,8 @@ class Launch():
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
-            run_local(logger, " ".join(["/usr/bin/rm", "-rf", certs_dir]))
-            run_local(logger, " ".join([command, daos_test_log_dir]))
+            run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
+            run_local(logger, f"{command} {daos_test_log_dir}")
         except RunException:
             message = "Error generating certificates"
             self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
@@ -2060,10 +2060,9 @@ class Launch():
             if crash_files:
                 latest_crash_dir = os.path.join(avocado_logs_dir, "latest", "crashes")
                 try:
-                    run_local(logger, " ".join(["mkdir", "-p", latest_crash_dir]), check=True)
+                    run_local(logger, f"mkdir -p {latest_crash_dir}", check=True)
                     for crash_file in crash_files:
-                        run_local(
-                            logger, " ".join(["mv", crash_file, latest_crash_dir]), check=True)
+                        run_local(logger, f"mv {crash_file} {latest_crash_dir}", check=True)
                 except RunException:
                     message = "Error collecting crash files"
                     self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
