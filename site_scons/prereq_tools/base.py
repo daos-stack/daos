@@ -26,12 +26,9 @@ import sys
 import json
 import datetime
 import traceback
-import hashlib
-import time
 import errno
 import shutil
 import subprocess  # nosec
-import tarfile
 import configparser
 from SCons.Variables import BoolVariable
 from SCons.Variables import EnumVariable
@@ -66,39 +63,6 @@ class DownloadFailure(Exception):
         return f'Failed to get {self.component} from {self.repo}'
 
 
-class ExtractionError(Exception):
-    """Exception raised when source couldn't be extracted
-
-    Attributes:
-        component -- Component
-        reason    -- Reason for problem
-    """
-
-    def __init__(self, component):
-        super().__init__()
-        self.component = component
-
-    def __str__(self):
-        """Exception string"""
-        return f'Failed to extract {self.component}'
-
-
-class UnsupportedCompression(Exception):
-    """Exception raised when library doesn't support extraction method
-
-    Attributes:
-        component -- Component
-    """
-
-    def __init__(self, component):
-        super().__init__()
-        self.component = component
-
-    def __str__(self):
-        """Exception string"""
-        return f"Don't know how to extract {self.component}"
-
-
 class BadScript(Exception):
     """Exception raised when a preload script has errors
 
@@ -131,22 +95,6 @@ class MissingDefinition(Exception):
     def __str__(self):
         """Exception string"""
         return f'No definition for {self.component}'
-
-
-class MissingPath(Exception):
-    """Exception raised when user specifies a path that doesn't exist
-
-    Attributes:
-        variable    -- Variable specified
-    """
-
-    def __init__(self, variable):
-        super().__init__()
-        self.variable = variable
-
-    def __str__(self):
-        """Exception string"""
-        return f"{self.variable} specifies a path that doesn't exist"
 
 
 class BuildFailure(Exception):
@@ -246,8 +194,8 @@ class Runner():
 
     def run_commands(self, commands, subdir=None, env=None):
         """Runs a set of commands in specified directory"""
-        if not self.env:
-            raise Exception("PreReqComponent not initialized")
+        # Check that PreReqComponent is initialized
+        assert self.env
         retval = True
 
         passed_env = env or self.env
@@ -387,108 +335,6 @@ build with random upstream changes.
         self._update_submodules(subdir)
         # Now apply any patches specified
         self._apply_patches(subdir, kw.get("patches", {}))
-
-
-class WebRetriever():
-    """Identify a location from where to download a source package"""
-
-    def __init__(self, url, md5):
-        self.url = url
-        self.md5 = md5
-        self.__dry_run = GetOption('check_only')
-        if self.__dry_run:
-            SetOption('no_exec', True)
-        self.__dry_run = GetOption('no_exec')
-
-    def check_md5(self, filename):
-        """Return True if md5 matches"""
-        if not os.path.exists(filename):
-            return False
-
-        with open(filename, "rb") as src:
-            hexdigest = hashlib.md5(src.read()).hexdigest()  # nosec
-
-        if hexdigest != self.md5:
-            print(f'Removing existing file {filename}: md5 {self.md5} != {hexdigest}')
-            os.remove(filename)
-            return False
-
-        print(f'File {filename} matches md5 {self.md5}')
-        return True
-
-    def download(self, basename):
-        """Download the file"""
-        initial_sleep = 1
-        retries = 3
-        # Retry download a few times if it fails
-        for idx in range(0, retries + 1):
-            command = ['curl',
-                       '-sSf',
-                       '--location',
-                       '--remote-name',
-                       self.url]
-
-            failure_reason = "Download command failed"
-            if RUNNER.run_commands(command):
-                if self.check_md5(basename):
-                    print(f'Successfully downloaded {self.url}')
-                    return True
-
-                failure_reason = "md5 mismatch"
-
-            print(f'Try #{idx + 1} to get {self.url} failed: {failure_reason}')
-
-            if idx != retries:
-                time.sleep(initial_sleep)
-                initial_sleep *= 2
-
-        return False
-
-    def get(self, subdir, **_kw):
-        """Downloads and extracts sources from a url into subdir"""
-        basename = os.path.basename(self.url)
-
-        if os.path.exists(subdir):
-            # assume that nothing has changed
-            return
-
-        if not self.check_md5(basename) and not self.download(basename):
-            raise DownloadFailure(self.url, subdir)
-
-        if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
-            if self.__dry_run:
-                print(f'Would unpack gzipped tar file: {basename}')
-                return
-            try:
-                with tarfile.open(basename, 'r:gz') as tfile:
-                    members = tfile.getnames()
-                    prefix = os.path.commonprefix(members)
-
-                    def is_within_directory(directory, target):
-
-                        abs_directory = os.path.abspath(directory)
-                        abs_target = os.path.abspath(target)
-
-                        prefix = os.path.commonprefix([abs_directory, abs_target])
-
-                        return prefix == abs_directory
-
-                    def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
-
-                        for member in tar.getmembers():
-                            member_path = os.path.join(path, member.name)
-                            if not is_within_directory(path, member_path):
-                                raise Exception("Attempted Path Traversal in Tar File")
-
-                        tar.extractall(path, members, numeric_owner=numeric_owner)
-
-                    safe_extract(tfile)
-                os.rename(prefix, subdir)
-            except (IOError, tarfile.TarError) as io_error:
-                print(traceback.format_exc())
-                raise ExtractionError(subdir) from io_error
-        else:
-            raise UnsupportedCompression(subdir)
 
 
 class BuildInfo():
@@ -1571,10 +1417,6 @@ class _Component():
         return changes
 
 
-__all__ = ["GitRepoRetriever", "WebRetriever",
-           "DownloadFailure", "ExtractionError",
-           "UnsupportedCompression", "BadScript",
-           "MissingPath", "BuildFailure",
-           "MissingDefinition", "MissingTargets",
-           "MissingSystemLibs", "DownloadRequired",
-           "PreReqComponent", "BuildRequired"]
+__all__ = ["GitRepoRetriever", "DownloadFailure", "BadScript", "BuildFailure", "MissingDefinition",
+           "MissingTargets", "MissingSystemLibs", "DownloadRequired", "PreReqComponent",
+           "BuildRequired"]

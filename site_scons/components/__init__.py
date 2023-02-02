@@ -24,7 +24,6 @@ import platform
 import distro
 from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
-# from prereq_tools import WebRetriever
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()

@@ -342,10 +342,9 @@ def check_for_release_target():  # pylint: disable=too-many-locals
                         # Use ssh agent for authentication
                         return pygit2.KeypairFromAgent(username_from_url)
                 else:
-                    raise Exception("No supported credential types allowed "
-                                    "by remote end.  SSH_AUTH_SOCK not found "
-                                    "in your environment.  Are you running an "
-                                    "ssh-agent?")
+                    print("No supported credential types allowed by remote end.  SSH_AUTH_SOCK not "
+                          "found in your environment.  Are you running an ssh-agent?")
+                    Exit(1)
                 return None
 
         # and push it
