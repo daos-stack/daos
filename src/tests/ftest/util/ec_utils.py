@@ -73,9 +73,7 @@ def check_aggregation_status(log, pool, quick_check=True, attempt=20):
 
 
 class ErasureCodeIor(ServerFillUp):
-    # pylint: disable=too-many-ancestors
-    """
-    Class to used for EC testing.
+    """Class to used for EC testing.
 
     It will get the object types from yaml file write the IOR data set with IOR.
     """
@@ -139,7 +137,6 @@ class ErasureCodeIor(ServerFillUp):
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
-        # pylint: disable=too-many-arguments
         """Write IOR single data set with EC object.
 
         Args:
@@ -250,8 +247,6 @@ class ErasureCodeIor(ServerFillUp):
 
 
 class ErasureCodeSingle(TestWithServers):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-instance-attributes
     """Class to used for EC testing for single type data."""
 
     def __init__(self, *args, **kwargs):
@@ -412,7 +407,6 @@ class ErasureCodeSingle(TestWithServers):
 
 
 class ErasureCodeMdtest(MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Class to used for EC testing for MDtest Benchmark."""
 
     def __init__(self, *args, **kwargs):
@@ -471,7 +465,6 @@ class ErasureCodeMdtest(MdtestBase):
 
 
 class ErasureCodeFio(FioBase):
-    # pylint: disable=too-many-ancestors
     """Class to use for EC testing with Fio Benchmark."""
 
     def __init__(self, *args, **kwargs):

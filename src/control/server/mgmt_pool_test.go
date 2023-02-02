@@ -589,12 +589,32 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	// We should only be trying to create on the Joined ranks.
 	wantReq.Ranks = []uint32{0, 2, 3}
 
+	// These properties are automatically added by PoolCreate
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubMode,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+	wantReq.Properties = append(wantReq.Properties, &mgmtpb.PoolProperty{
+		Number: daos.PoolPropertyScrubThresh,
+		Value: &mgmtpb.PoolProperty_Numval{
+			Numval: 0,
+		},
+	})
+
 	gotReq := new(mgmtpb.PoolCreateReq)
 	if err := proto.Unmarshal(dc.calls[0].Body, gotReq); err != nil {
 		t.Fatal(err)
 	}
 
-	if diff := cmp.Diff(wantReq, gotReq, test.DefaultCmpOpts()...); diff != "" {
+	cmpOpts := append(test.DefaultCmpOpts(),
+		// Ensure stable ordering of properties to avoid intermittent failures.
+		protocmp.SortRepeated(func(a, b *mgmtpb.PoolProperty) bool {
+			return a.Number < b.Number
+		}),
+	)
+	if diff := cmp.Diff(wantReq, gotReq, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected pool create req (-want, +got):\n%s\n", diff)
 	}
 }

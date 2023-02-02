@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1239,43 +1239,18 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 {
 	bool			exists;
 	int			daos_mode;
-	daos_handle_t		th = DAOS_TX_NONE;
 	bool			oexcl = flags & O_EXCL;
 	bool			ocreat = flags & O_CREAT;
 	int			rc;
 
-	/*
-	 * we only need a DTX in the case of O_CREAT without O_EXCL since we
-	 * don't use a conditional insert.
-	 */
-	if (ocreat && !oexcl && dfs->use_dtx) {
-		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
-		if (rc) {
-			D_ERROR("daos_tx_open() failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc = daos_der2errno(rc));
-		}
-	}
-
-restart:
 	if (ocreat) {
 		struct timespec		now;
 
 		/*
-		 * If O_CREATE | O_EXCL, we just use conditional check to fail
-		 * when inserting the file. Otherwise we need the fetch to make
-		 * sure there is no existing entry that is not a file, or it's
-		 * just a file open if the file entry exists.
+		 * Create the entry with conditional insert. If we get EEXIST:
+		 * - With O_EXCL operation fails.
+		 * - Without O_EXCL we can just open the file.
 		 */
-		if (!oexcl) {
-			rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false,
-					 &exists, entry, 0, NULL, NULL, NULL);
-			if (rc)
-				D_GOTO(out, rc);
-
-			/** Just open the file */
-			if (exists)
-				goto fopen;
-		}
 
 		/** set oclass for file. order: API, parent dir, cont default */
 		if (cid == 0) {
@@ -1296,110 +1271,91 @@ restart:
 		/** Get new OID for the file */
 		rc = oid_gen(dfs, cid, true, &file->oid);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			return rc;
 		oid_cp(&entry->oid, file->oid);
 
 		/** Open the array object for the file */
-		rc = daos_array_open_with_attr(dfs->coh, file->oid, th, DAOS_OO_RW, 1, chunk_size,
-					       &file->oh, NULL);
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
+					       chunk_size, &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc = daos_der2errno(rc));
+			return daos_der2errno(rc);
 		}
 
 		/** Create and insert entry in parent dir object. */
 		entry->mode = file->mode;
 		rc = clock_gettime(CLOCK_REALTIME, &now);
 		if (rc)
-			D_GOTO(out, rc = errno);
+			return errno;
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size = chunk_size;
 
-		rc = insert_entry(dfs->layout_v, parent->oh, th, file->name, len,
-				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
+				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
-			/** just try refetching entry to open the file */
+			/** just try fetching entry to open the file */
 			daos_array_close(file->oh, NULL);
 		} else if (rc) {
 			daos_array_close(file->oh, NULL);
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
-			D_GOTO(out, rc);
+			return rc;
 		} else {
-			/** Success, commit */
-			D_GOTO(commit, rc);
+			D_ASSERT(rc == 0);
+			return 0;
 		}
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(dfs->layout_v, parent->oh, th, file->name, len, false, &exists,
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
-		D_GOTO(out, rc);
+		return rc;
 	}
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
-fopen:
 	if (!S_ISREG(entry->mode)) {
 		D_FREE(entry->value);
-		D_GOTO(out, rc = EINVAL);
+		return EINVAL;
 	}
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
-		D_GOTO(out, rc = EINVAL);
+		return EINVAL;
 
 	D_ASSERT(entry->chunk_size);
 
 	/** Open the byte array */
 	file->mode = entry->mode;
-	rc = daos_array_open_with_attr(dfs->coh, entry->oid, th, daos_mode, 1,
+	rc = daos_array_open_with_attr(dfs->coh, entry->oid, DAOS_TX_NONE, daos_mode, 1,
 				       entry->chunk_size, &file->oh, NULL);
 	if (rc != 0) {
-		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n",
-			DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+		D_ERROR("daos_array_open_with_attr() failed, "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
 	}
 
 	if (flags & O_TRUNC) {
-		rc = daos_array_set_size(file->oh, th, 0, NULL);
+		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
 		if (rc) {
 			D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
-			D_GOTO(out, rc = daos_der2errno(rc));
+			return daos_der2errno(rc);
 		}
 		if (size)
 			*size = 0;
 	} else if (size) {
-		rc = daos_array_get_size(file->oh, th, size, NULL);
+		rc = daos_array_get_size(file->oh, DAOS_TX_NONE, size, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
 			daos_array_close(file->oh, NULL);
-			D_GOTO(out, rc = daos_der2errno(rc));
+			return daos_der2errno(rc);
 		}
 	}
-
 	oid_cp(&file->oid, entry->oid);
-
-commit:
-	if (daos_handle_is_valid(th) && dfs->use_dtx) {
-		rc = daos_tx_commit(th, NULL);
-		if (rc) {
-			if (rc != -DER_TX_RESTART)
-				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc = daos_der2errno(rc));
-		}
-	}
-
-out:
-	rc = check_tx(th, rc);
-	if (rc == ERESTART)
-		goto restart;
-
-	return rc;
+	return 0;
 }
 
 /*
@@ -1440,7 +1396,6 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 {
 	bool			exists;
 	int			daos_mode;
-	daos_handle_t		th = DAOS_TX_NONE;
 	bool			oexcl = flags & O_EXCL;
 	bool			ocreat = flags & O_CREAT;
 	daos_handle_t		parent_oh;
@@ -1448,44 +1403,14 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 
 	parent_oh = parent ? parent->oh : dfs->super_oh;
 
-	/*
-	 * we only need a DTX in the case of O_CREAT without O_EXCL since we don't use a conditional
-	 * insert.
-	 */
-	if (ocreat && !oexcl && dfs->use_dtx) {
-		rc = daos_tx_open(dfs->coh, &th, 0, NULL);
-		if (rc) {
-			D_ERROR("daos_tx_open() failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc = daos_der2errno(rc));
-		}
-	}
-
-restart:
 	if (ocreat) {
-		struct timespec		now;
+		struct timespec	now;
 
 		D_ASSERT(parent);
-
-		/*
-		 * If O_CREATE | O_EXCL, we just use conditional check to fail when inserting the
-		 * file. Otherwise we need the fetch to make sure there is no existing entry that is
-		 * not a dir, or it's just a dir open if the dir entry exists.
-		 */
-		if (!oexcl) {
-			rc = fetch_entry(dfs->layout_v, parent->oh, th, dir->name, len, false,
-					 &exists, entry, 0, NULL, NULL, NULL);
-			if (rc)
-				D_GOTO(out, rc);
-
-			/** Just open the dir */
-			if (exists)
-				goto dopen;
-		}
-
 		/** this generates the OID and opens the object */
 		rc = create_dir(dfs, parent, cid, dir);
 		if (rc)
-			D_GOTO(out, rc);
+			return rc;
 
 		entry->oid = dir->oid;
 		entry->mode = dir->mode;
@@ -1493,7 +1418,7 @@ restart:
 		if (rc) {
 			rc = errno;
 			daos_obj_close(dir->oh, NULL);
-			D_GOTO(out, rc);
+			return rc;
 		}
 		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
 		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
@@ -1501,69 +1426,53 @@ restart:
 		entry->oclass = parent->d.oclass;
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(dfs->layout_v, parent->oh, th, dir->name, len,
-				  (!dfs->use_dtx || oexcl) ? DAOS_COND_DKEY_INSERT : 0, entry);
+		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
+				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
-			/** just try refetching entry to open the file */
+			/** just try fetching entry to open the file */
 			daos_obj_close(dir->oh, NULL);
 		} else if (rc) {
 			daos_obj_close(dir->oh, NULL);
 			D_DEBUG(DB_TRACE, "Insert dir entry %s failed (%d)\n", dir->name, rc);
-			D_GOTO(out, rc);
+			return rc;
 		} else {
 			/** Success, commit */
+			D_ASSERT(rc == 0);
 			dir->d.chunk_size = entry->chunk_size;
 			dir->d.oclass = entry->oclass;
-			D_GOTO(commit, rc);
+			return 0;
 		}
 	}
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, th, dir->name, len, false, &exists, entry, 0,
-			 NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false, &exists,
+			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);
-		D_GOTO(out, rc);
+		return rc;
 	}
 
 	if (!exists)
-		D_GOTO(out, rc = ENOENT);
+		return ENOENT;
 
-dopen:
 	/* Check that the opened object is the type that's expected. */
 	if (!S_ISDIR(entry->mode))
-		D_GOTO(out, rc = ENOTDIR);
+		return ENOTDIR;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
-		D_GOTO(out, rc = EINVAL);
+		return EINVAL;
 
 	rc = daos_obj_open(dfs->coh, entry->oid, daos_mode, &dir->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_obj_open() Failed, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
+		return daos_der2errno(rc);
 	}
 	dir->mode = entry->mode;
 	oid_cp(&dir->oid, entry->oid);
 	dir->d.chunk_size = entry->chunk_size;
 	dir->d.oclass = entry->oclass;
-
-commit:
-	if (daos_handle_is_valid(th) && dfs->use_dtx) {
-		rc = daos_tx_commit(th, NULL);
-		if (rc) {
-			if (rc != -DER_TX_RESTART)
-				D_ERROR("daos_tx_commit() failed (%d)\n", rc);
-			D_GOTO(out, rc = daos_der2errno(rc));
-		}
-	}
-
-out:
-	rc = check_tx(th, rc);
-	if (rc == ERESTART)
-		goto restart;
-
-	return rc;
+	return 0;
 }
 
 static int
@@ -1995,7 +1904,6 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 		D_GOTO(err_super, rc = errno);
 	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
 	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
-	entry.chunk_size = dattr.da_chunk_size;
 	entry.uid = geteuid();
 	entry.gid = getegid();
 

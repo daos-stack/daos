@@ -75,6 +75,8 @@ const (
 )
 
 const (
+	// PoolPropertyMin before any pool property
+	PoolPropertyMin = C.DAOS_PROP_PO_MIN
 	// PoolPropertyLabel is a string that a user can associate with a pool.
 	PoolPropertyLabel = C.DAOS_PROP_PO_LABEL
 	// PoolPropertyACL is the Access Control List for a pool.

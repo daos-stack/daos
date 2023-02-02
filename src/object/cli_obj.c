@@ -570,7 +570,9 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint3
 		shard = grp_start + tgt_idx;
 		pl_shard = obj_get_shard(obj, shard);
 		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
-		    pl_shard->po_rebuilding) {
+		    pl_shard->po_rebuilding ||
+		    (DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
+		     daos_shard_in_fail_value(grp_size - 1 - i))) {
 			/* Then try former one */
 			continue;
 		}
@@ -1761,6 +1763,9 @@ obj_shard_is_invalid(struct dc_object *obj, uint32_t shard_idx, uint32_t opc)
 /**
  * Check if there are any EC parity shards still alive under the oh/dkey_hash.
  * 1: alive,  0: no alive  < 0: failure.
+ * NB: @shard suppose to return real shard from oclass, since it needs to compare
+ * with .id_shard to know whether it is right parity shard (see migrate_enum_unpack_cb()),
+ * so it has to use daos_oclass_grp_size to get the @shard.
  */
 int
 obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
@@ -1783,16 +1788,20 @@ obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard)
 	oca = obj_get_oca(obj);
 	p_shard = obj_ec_parity_start(obj, dkey_hash);
 	for (i = 0; i < obj_ec_parity_tgt_nr(oca); i++, p_shard++) {
-		*shard = p_shard % obj_get_grp_size(obj) + grp_idx * obj_get_grp_size(obj);
-		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", *shard,
-			obj->cob_shards->do_shards[*shard].do_rebuilding,
-			obj->cob_shards->do_shards[*shard].do_reintegrating,
-			obj->cob_shards->do_shards[*shard].do_target_id,
-			obj->cob_shards->do_shards[*shard].do_shard,
-			obj->cob_shards->do_shards[*shard].do_shard_idx);
-		if (!obj_shard_is_invalid(obj, *shard, DAOS_OBJ_RPC_FETCH) &&
-		    !obj->cob_shards->do_shards[*shard].do_reintegrating)
+		uint32_t shard_idx = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
+				     grp_idx * obj_get_grp_size(obj);
+		D_DEBUG(DB_TRACE, "shard %u %d/%d/%d/%d/%d\n", shard_idx,
+			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
+			obj->cob_shards->do_shards[shard_idx].do_reintegrating,
+			obj->cob_shards->do_shards[shard_idx].do_target_id,
+			obj->cob_shards->do_shards[shard_idx].do_shard,
+			obj->cob_shards->do_shards[shard_idx].do_shard_idx);
+		if (!obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) &&
+		    !obj->cob_shards->do_shards[shard_idx].do_reintegrating) {
+			*shard = p_shard % daos_oclass_grp_size(&obj->cob_oca) +
+				 grp_idx * daos_oclass_grp_size(&obj->cob_oca);
 			D_GOTO(out_put, rc = 1);
+		}
 	}
 
 out_put:
@@ -3135,82 +3144,137 @@ struct comp_iter_arg {
 	bool		retry;
 };
 
-static int
-merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch_t eph)
+static struct obj_auxi_list_recx *
+merge_recx_create_one(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch_t eph)
 {
 	struct obj_auxi_list_recx *new;
 
 	D_ALLOC_PTR(new);
 	if (new == NULL)
-		return -DER_NOMEM;
+		return NULL;
 
 	new->recx.rx_idx = offset;
 	new->recx.rx_nr = size;
 	new->recx_eph = eph;
 	D_INIT_LIST_HEAD(&new->recx_list);
 	d_list_add(&new->recx_list, prev);
+
+	return new;
+}
+
+static bool
+recx_can_merge_with_boundary(daos_recx_t *recx, uint64_t offset,
+			     uint64_t size, uint64_t boundary)
+{
+	if (!daos_recx_can_merge_with_offset_size(recx, offset, size))
+		return false;
+
+	if (boundary == 0)
+		return true;
+
+	D_ASSERTF(recx->rx_idx / boundary == (DAOS_RECX_END(*recx) - 1) / boundary,
+		  DF_U64"/"DF_U64" boundary "DF_U64"\n", recx->rx_idx, recx->rx_nr,
+		  boundary);
+
+	D_ASSERTF(offset / boundary == (offset + size - 1) / boundary,
+		  DF_U64"/"DF_U64" boundary "DF_U64"\n", offset, size,
+		  boundary);
+
+	if (recx->rx_idx / boundary == (offset + size - 1) / boundary)
+		return true;
+
+	return false;
+}
+
+static int
+merge_recx_insert(struct obj_auxi_list_recx *prev, d_list_t *head, uint64_t offset,
+		  uint64_t size, daos_epoch_t eph, uint64_t boundary)
+{
+	uint64_t end = offset + size;
+
+	while (size > 0) {
+		struct obj_auxi_list_recx	*new;
+		uint64_t			new_size;
+		daos_epoch_t			new_eph;
+
+		/* Split by boundary */
+		if (boundary > 0) {
+			new_size = min(roundup(offset + 1, boundary), end) - offset;
+			if ((offset % boundary) == 0 || prev == NULL)
+				new_eph = eph;
+			else
+				new_eph = max(prev->recx_eph, eph);
+		} else {
+			new_size = size;
+			new_eph = eph;
+		}
+
+		/* Check if merging with previous recx or creating new one. */
+		if (prev && recx_can_merge_with_boundary(&prev->recx, offset, new_size,
+							 boundary)) {
+			daos_recx_merge_with_offset_size(&prev->recx, offset, new_size);
+			prev->recx_eph = max(prev->recx_eph, new_eph);
+		} else {
+			new = merge_recx_create_one(prev == NULL ? head : &prev->recx_list,
+						    offset, new_size, new_eph);
+			if (new == NULL)
+				return -DER_NOMEM;
+			prev = new;
+		}
+
+		offset += new_size;
+		size -= new_size;
+	}
+
 	return 0;
 }
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph, uint64_t boundary)
 {
 	struct obj_auxi_list_recx	*recx;
-	struct obj_auxi_list_recx	*new_recx = NULL;
 	struct obj_auxi_list_recx	*tmp;
 	struct obj_auxi_list_recx	*prev = NULL;
 	bool				inserted = false;
 	daos_off_t			end = offset + size;
 	int				rc = 0;
 
+	D_DEBUG(DB_TRACE, "merge "DF_U64"/"DF_U64" "DF_X64", boundary "DF_U64"\n",
+		offset, size, eph, boundary);
+
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
-		daos_off_t recx_start = recx->recx.rx_idx;
-		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
-		daos_epoch_t recx_eph = recx->recx_eph;
-
-		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64" "DF_X64"\n",
-			recx_start, recx_end, recx_eph);
-		if (end < recx_start) {
-			if (!inserted) {
-				rc = merge_recx_insert(prev == NULL ?
-						       head : &prev->recx_list,
-						       offset, size, eph);
-				inserted = true;
-			}
-			break;
-		}
-
-		/* merge with current recx, and try to merge with next recxs */
-		if (max(recx_start, offset) <= min(recx_end, end)) {
-			if (new_recx == NULL) {
-				new_recx = recx;
-				new_recx->recx_eph = max(eph, new_recx->recx_eph);
-			}
-
-			new_recx->recx.rx_idx = min(recx_start, offset);
-			new_recx->recx.rx_nr = max(recx_end, end) -
-					       new_recx->recx.rx_idx;
-
-			new_recx->recx_eph = max(recx_eph, new_recx->recx_eph);
-
-			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64" "DF_U64"\n",
-				new_recx->recx.rx_idx, new_recx->recx.rx_nr,
-				new_recx->recx_eph);
-			offset = new_recx->recx.rx_idx;
-			end = offset + new_recx->recx.rx_nr;
-			D_DEBUG(DB_TRACE, "offset "DF_U64"/"DF_U64"\n", offset, end);
+		if (end < recx->recx.rx_idx ||
+		    daos_recx_can_merge_with_offset_size(&recx->recx, offset, size)) {
+			rc = merge_recx_insert(prev, head, offset, size, eph, boundary);
 			inserted = true;
-			if (recx != new_recx) {
-				d_list_del(&recx->recx_list);
-				D_FREE(recx);
-			}
+			break;
 		}
 		prev = recx;
 	}
 
 	if (!inserted)
-		rc = merge_recx_insert(prev == NULL ? head : &prev->recx_list,
-				       offset, size, eph);
+		rc = merge_recx_insert(prev, head, offset, size, eph, boundary);
+	if (rc)
+		return rc;
+
+	prev = NULL;
+	/* Check if the recx can be merged. */
+	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
+		if (prev == NULL) {
+			prev = recx;
+			continue;
+		}
+
+		if (recx_can_merge_with_boundary(&prev->recx, recx->recx.rx_idx,
+						 recx->recx.rx_nr, boundary)) {
+			daos_recx_merge(&recx->recx, &prev->recx);
+			prev->recx_eph = max(prev->recx_eph, recx->recx_eph);
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		} else {
+			prev = recx;
+		}
+	}
 
 	return rc;
 }
@@ -3266,7 +3330,7 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr, shard);
 		data_size = min(roundup(cur_off + 1, cell_nr) - cur_off,
 				total_size);
-		rc = merge_recx(merged_list, daos_off, data_size, 0);
+		rc = merge_recx(merged_list, daos_off, data_size, 0, 0);
 		if (rc)
 			break;
 		D_DEBUG(DB_IO, "total "DF_U64" merge "DF_U64"/"DF_U64"\n",
@@ -3499,7 +3563,7 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 				 */
 				rc = merge_recx(iter_arg->merged_list,
 						shard_arg->la_recxs[index].rx_idx,
-						shard_arg->la_recxs[index].rx_nr, 0);
+						shard_arg->la_recxs[index].rx_nr, 0, 0);
 				if (rc)
 					return rc;
 			}

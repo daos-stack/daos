@@ -90,11 +90,15 @@ struct migrate_pool_tls {
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
+	ABT_cond		mpt_init_cond;
+	ABT_mutex		mpt_init_mutex;
+
 	/* The new layout version for upgrade job */
 	uint32_t		mpt_new_layout_ver;
 
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+				mpt_init_tls:1,
 				mpt_fini:1;
 };
 
@@ -417,11 +421,6 @@ fill_oid(daos_unit_oid_t oid, struct ds_obj_enum_arg *arg);
 
 /* srv_ec.c */
 struct obj_rw_in;
-int obj_ec_rw_req_split(daos_unit_oid_t oid, uint32_t start_tgt, struct obj_iod_array *iod_array,
-			uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
-			uint32_t leader_id, void *tgt_map, uint32_t map_size,
-			struct daos_oclass_attr *oca, uint32_t tgt_nr, struct daos_shard_tgt *tgts,
-			struct obj_ec_split_req **split_req, struct obj_pool_metrics *opm);
-void obj_ec_split_req_fini(struct obj_ec_split_req *req);
+void obj_ec_metrics_process(struct obj_iod_array *iod_array, struct obj_io_context *ioc);
 
 #endif /* __DAOS_OBJ_SRV_INTENRAL_H__ */
