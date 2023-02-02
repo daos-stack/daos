@@ -25,7 +25,7 @@ class PoolCreateAllVmTests(PoolCreateAllTestBase):
         """Return the available size of SCM storage.
 
         Args:
-            ranks (list): List of server ranks to filter. Defaults to None.
+            ranks (list, optional): List of server ranks to filter. Defaults to None.
 
         Returns:
             int: Available size for creating a pool.
