@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 3
-  test_clients: 1
+  test_servers: 5
+  test_clients: 3
 timeout: 5000
 server_config:
   name: daos_server
