@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1309,6 +1309,7 @@ dfs_test_mtime(void **state)
 	struct stat		stbuf;
 	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
+	dfs_obj_t		*tmp_obj;
 	int			rc;
 
 	if (arg->myrank != 0)
@@ -1376,6 +1377,14 @@ dfs_test_mtime(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_size, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookupx(dfs_mt, NULL, f, O_RDWR, &tmp_obj, NULL, &stbuf, 0, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(check_ts(prev_ts, stbuf.st_mtim));
+	rc = dfs_release(tmp_obj);
+	assert_int_equal(rc, 0);
+
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
