@@ -322,7 +322,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	daos_size_t len;
 
 	if (p_buf_len != NULL)
-	*p_buf_len = 0;
+		*p_buf_len = 0;
 
 	if (idx->iov_idx >= sgl->sg_nr)
 		return true; /** no data in sgl to get bytes from */
@@ -330,7 +330,9 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
 		sgl->sg_iovs[idx->iov_idx].iov_len;
 
-	D_ASSERT(idx->iov_offset < len);
+	D_ASSERT(idx->iov_offset <= len);
+	if (len == 0)
+		goto next_iov;
 	/** Point to current idx */
 	if (p_buf != NULL)
 		*p_buf = sgl->sg_iovs[idx->iov_idx].iov_buf + idx->iov_offset;
@@ -345,6 +347,7 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	idx->iov_offset += buf_len;
 
 	/** If end of iov was reached, go to next iov */
+next_iov:
 	if (idx->iov_offset == len) {
 		idx->iov_idx++;
 		idx->iov_offset = 0;
