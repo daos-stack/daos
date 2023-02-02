@@ -91,7 +91,9 @@ func (h *metadataFormatHandler) Handle(log logging.Logger, req *pbin.Request) *p
 	case "MetadataNeedsFormat":
 		var result bool
 		result, err = h.mdProvider.NeedsFormat(mReq)
-		resp = pbin.NewResponseWithPayload(&result)
+		if err == nil {
+			resp = pbin.NewResponseWithPayload(&result)
+		}
 	}
 	if err != nil {
 		return pbin.NewResponseWithError(err)

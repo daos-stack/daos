@@ -162,7 +162,7 @@ func (p *Provider) MountControlMetadata() error {
 	return err
 }
 
-// ControlMetadataIsMounted determines whether the control metadata storage is a;ready mounted.
+// ControlMetadataIsMounted determines whether the control metadata storage is already mounted.
 func (p *Provider) ControlMetadataIsMounted() (bool, error) {
 	if p == nil {
 		return false, errors.New("nil provider")

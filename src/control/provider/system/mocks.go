@@ -44,7 +44,7 @@ type (
 		SourceToTarget  map[string]string
 		GetfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
-		GetFsTypeStr    string
+		GetFsTypeRes    *FsType
 		GetFsTypeErr    []error
 		StatErrors      map[string]error
 		RealStat        bool
@@ -162,20 +162,20 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	return resp.Total, resp.Avail, resp.Err
 }
 
-func (msp *MockSysProvider) GetFsType(path string) (string, error) {
+func (msp *MockSysProvider) GetFsType(path string) (*FsType, error) {
 	idx := msp.GetFsTypeCount
 	msp.GetFsTypeCount++
 	var err error
-	var str string
+	var result *FsType
 	if idx < len(msp.cfg.GetFsTypeErr) {
 		err = msp.cfg.GetFsTypeErr[idx]
 	}
 
 	if err == nil {
-		str = msp.cfg.GetFsTypeStr
+		result = msp.cfg.GetFsTypeRes
 	}
 
-	return str, err
+	return result, err
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {

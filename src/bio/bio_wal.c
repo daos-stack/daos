@@ -754,6 +754,7 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 		D_ASSERT(si->si_tx_failed == 0);
 
 		si->si_commit_id = wal_tx->td_id;
+
 		si->si_commit_blks = wal_tx->td_blks;
 	}
 
@@ -1664,10 +1665,8 @@ bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id)
 		return -DER_ALREADY;
 
 	/*
-	 * Caller doesn't have to checkpoint to this highest committed ID, instead,
-	 * it could pick reasonable amount of pages for checkpointing in the committed
-	 * ID order, so that the WAL space will be gradually reclaimed in a more
-	 * prompt way.
+	 * Caller will checkpoint to the latest id because there are inflight updates to
+	 * that point.
 	 */
 	*tx_id = si->si_commit_id;
 	return 0;

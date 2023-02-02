@@ -828,7 +828,7 @@ setup_builtin(void **state)
 	}
 
 	rc = utest_pmem_create(arg->ta_pool_name, POOL_SIZE,
-			       sizeof(*arg->ta_root), &arg->ta_utx);
+			       sizeof(*arg->ta_root), NULL, &arg->ta_utx);
 	if (rc != 0) {
 		perror("Evtree internal test couldn't create pool");
 		rc = 1;
@@ -2513,7 +2513,7 @@ main(int argc, char **argv)
 	/* Create pool - pmem or vmem */
 	if (create_pmem) {
 		rc = utest_pmem_create(POOL_NAME, POOL_SIZE, sizeof(*ts_root),
-				       &ts_utx);
+				       NULL, &ts_utx);
 	} else {
 		rc = utest_vmem_create(sizeof(*ts_root), &ts_utx);
 	}

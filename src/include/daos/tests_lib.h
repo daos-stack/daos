@@ -14,14 +14,6 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_success(r)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != 0)						\
-			fail_msg("Not successful!! Error code: "	\
-				 DF_RC, DP_RC(__rc));			\
-	} while (0)
-
 #define assert_rc_equal(rc, expected_rc)				\
 	do {								\
 		if ((rc) == (expected_rc))				\
@@ -33,6 +25,9 @@
 		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
 		assert_int_equal(rc, expected_rc);			\
 	} while (0)
+
+/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
+#define assert_success(r) assert_rc_equal(r, 0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 

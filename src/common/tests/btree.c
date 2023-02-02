@@ -894,7 +894,7 @@ use_pmem() {
 
 	D_PRINT("Using pmem\n");
 	rc = utest_pmem_create(POOL_NAME, POOL_SIZE,
-			       sizeof(*ik_root),
+			       sizeof(*ik_root), NULL,
 			       &ik_utx);
 	D_ASSERT(rc == 0);
 	return rc;

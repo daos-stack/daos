@@ -152,11 +152,31 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 	return bio_wal_reserve(store->stor_priv, tx_id);
 }
 
+static void
+vos_wal_on_commit(struct umem_store *store, uint64_t id)
+{
+	struct chkpt_ctx *ctx = store->chkpt_ctx;
+
+	if (ctx == NULL)
+		return; /** Checkpointing not active */
+
+	ctx->cc_commit_id = id;
+
+	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0)
+		ctx->cc_wake_fn(ctx);
+}
+
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
+	int rc;
+
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+
+	vos_wal_on_commit(store, wal_tx->utx_id);
+
+	return rc;
 }
 
 static inline int
@@ -175,20 +195,93 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 	return bio_wal_id_cmp(store->stor_priv, id1, id2);
 }
 
+static void
+chkpt_wait(struct umem_store *store, uint64_t chkpt_tx, uint64_t *committed_tx, void *arg)
+{
+	struct chkpt_ctx *ctx = arg;
+
+	if (store->stor_ops->so_wal_id_cmp(store, chkpt_tx, ctx->cc_commit_id) <= 0) {
+		/** Sometimes we may need to yield here to make progress such as when we need
+		 *  more DMA buffers to prepare entries.
+		 */
+		if (!ctx->cc_is_idle_fn())
+			ctx->cc_yield_fn(ctx);
+		goto done;
+	}
+
+	ctx->cc_wait_id = chkpt_tx;
+	ctx->cc_wait_fn(ctx);
+done:
+	*committed_tx = ctx->cc_commit_id;
+}
+
 struct umem_store_ops vos_store_ops = {
-	.so_read	= vos_meta_readv,
-	.so_write	= vos_meta_writev,
-	.so_flush_prep	= vos_meta_flush_prep,
-	.so_flush_copy	= vos_meta_flush_copy,
-	.so_flush_post	= vos_meta_flush_post,
-	.so_wal_reserv	= vos_wal_reserve,
-	.so_wal_submit	= vos_wal_commit,
-	.so_wal_replay	= vos_wal_replay,
-	.so_wal_id_cmp	= vos_wal_id_cmp,
+    .so_read       = vos_meta_readv,
+    .so_write      = vos_meta_writev,
+    .so_flush_prep = vos_meta_flush_prep,
+    .so_flush_copy = vos_meta_flush_copy,
+    .so_flush_post = vos_meta_flush_post,
+    .so_wal_reserv = vos_wal_reserve,
+    .so_wal_submit = vos_wal_commit,
+    .so_wal_replay = vos_wal_replay,
+    .so_wal_id_cmp = vos_wal_id_cmp,
 };
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh)
+{
+	struct vos_pool *pool;
+
+	pool = vos_hdl2pool(poh);
+	D_ASSERT(pool != NULL);
+
+	/** TODO: Revisit. */
+	return bio_nvme_configured(SMD_DEV_TYPE_META);
+}
+
+int
+vos_pool_checkpoint(struct chkpt_ctx *ctx)
+{
+	struct vos_pool      *pool;
+	uint64_t              tx_id;
+	struct umem_instance *umm;
+	struct umem_store    *store;
+	int                   rc;
+
+	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	umm   = vos_pool2umm(pool);
+	store = &umm->umm_pool->up_store;
+
+	rc = bio_wal_ckp_start(store->stor_priv, &tx_id);
+	if (rc != 0) {
+		if (rc == -DER_ALREADY) {
+			D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n",
+				DP_UUID(pool->vp_id));
+			rc = 0;
+		}
+
+		return rc;
+	}
+
+	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
+	       DP_UUID(pool->vp_id), tx_id);
+	ctx->cc_commit_id = tx_id;
+
+	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
+
+	if (rc == 0)
+		rc = bio_wal_ckp_end(store->stor_priv, tx_id);
+
+	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
+	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
+
+	return rc;
+}
 
 int
 vos_pool_settings_init(bool md_on_ssd)

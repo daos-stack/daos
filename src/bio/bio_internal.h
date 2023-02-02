@@ -632,6 +632,8 @@ int bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags fla
 		  enum smd_dev_type st, spdk_blob_id open_blobid);
 struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
+struct bio_xs_blobstore *
+bio_xs_blobstore_by_devid(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid);
 
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);

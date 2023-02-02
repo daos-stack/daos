@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,7 @@ type SystemProvider interface {
 	Getfs(device string) (string, error)
 	Chown(string, int, int) error
 	Stat(string) (os.FileInfo, error)
-	GetFsType(path string) (string, error)
+	GetFsType(path string) (*system.FsType, error)
 }
 
 const defaultDevFS = "ext4"
@@ -121,10 +121,9 @@ func (p *Provider) setupRootDir(req storage.MetadataFormatRequest) error {
 	for {
 		fsType, err := p.sys.GetFsType(fsPath)
 		if err == nil {
-			if !isUsableFS(fsType) {
+			if !p.isUsableFS(fsType, fsPath) {
 				return FaultBadFilesystem(fsType)
 			}
-
 			break
 		}
 
@@ -144,15 +143,33 @@ func (p *Provider) setupRootDir(req storage.MetadataFormatRequest) error {
 	return nil
 }
 
-func isUsableFS(fs string) bool {
-	switch fs {
-	case system.FsTypeNfs:
-		// NB: Using NFS as a metadata location could cause conflicts if all servers have
-		// access to the location, which is intended to store node-local data.
-		// The daos_server_helper also gets into some trouble creating the directory if
-		// root squash is enabled.
+func (p *Provider) isUsableFS(fs *system.FsType, path string) bool {
+	if fs.NoSUID {
+		// The daos_server_helper runs with the suid bit to set up the control metadata
+		// device/directories, as some of these steps require superuser privileges.
+		p.log.Errorf("cannot use filesystem with nosuid flag set (%s) for control metadata", path)
 		return false
+	}
+
+	switch fs.Name {
+	case system.FsTypeNfs:
+		// If multiple servers use the same control_metadata directory on distributed storage,
+		// they will corrupt and override each other's data. The control_metadata path is
+		// strongly recommended to be on local storage.
+		// There is another issue with NFS: The daos_server_helper also gets confusing failures
+		// creating the directory when root squash is enabled. Root squash is the default for
+		// NFS, and we unfortunately cannot easily detect the option at runtime. It is not
+		// identical to the nosuid flag.
+		p.log.Errorf("cannot use filesystem %s (%s) for control metadata", fs.Name, path)
+		return false
+	case system.FsTypeTmpfs, system.FsTypeExt4, system.FsTypeBtrfs, system.FsTypeNtfs, system.FsTypeXfs, system.FsTypeZfs:
+		// Common local filesystems that we know will be okay.
+		return true
 	default:
+		// As there are many filesystems that may be safely used, we'll allow others we don't recognize, with a
+		// warning. Any distributed filesystem is subject to the same concerns as NFS above.
+		p.log.Errorf("%q is not using one of the recommended filesystems for control metadata. If this is a distributed "+
+			"filesystem, DAOS may not operate correctly.", path)
 		return true
 	}
 }
