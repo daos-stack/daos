@@ -55,6 +55,10 @@ class NLTestTimeout(NLTestFail):
     """Used to indicate that an operation timed out"""
 
 
+class NLTError(Exception):
+    """Used to indicate a general error"""
+
+
 instance_num = 0  # pylint: disable=invalid-name
 
 
@@ -399,7 +403,7 @@ def load_conf(args):
             break
         file_self = os.path.dirname(file_self)
         if file_self == '/':
-            raise Exception('build file not found')
+            raise NLTError('build file not found')
     return NLTConf(json_file, args)
 
 
@@ -741,7 +745,7 @@ class DaosServer():
                 print(rc)
                 res = 'daos server died waiting for start'
                 self._add_test_case('format', failure=res)
-                raise Exception(res)
+                raise NLTError(res)
             except subprocess.TimeoutExpired:
                 pass
             rc = self.run_dmg(cmd)
@@ -1197,12 +1201,12 @@ class DFuse():
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
                 os.rmdir(self.dir)
-                raise Exception('dfuse died waiting for start')
+                raise NLTError('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
             total_time += 1
             if total_time > 60:
-                raise Exception('Timeout starting dfuse')
+                raise NLTError('Timeout starting dfuse')
 
         self._daos.add_fuse(self)
 
@@ -3360,7 +3364,7 @@ def log_test(conf,
     # Check if the log file has wrapped, if it has then log parsing checks do
     # not work correctly.
     if os.path.exists(f'{filename}.old'):
-        raise Exception('Log file exceeded max size')
+        raise NLTError('Log file exceeded max size')
     fstat = os.stat(filename)
     if fstat.st_size == 0:
         os.unlink(filename)
@@ -3405,8 +3409,8 @@ def log_test(conf,
         raise NLTestNoFunction('dfuse___fxstat')
 
     if conf.max_log_size and fstat.st_size > conf.max_log_size:
-        raise Exception(f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
-                        '{sizeof_fmt(conf.max_log_size}')
+        raise NLTError(f'Max log size exceeded, {sizeof_fmt(fstat.st_size)} > '
+                       '{sizeof_fmt(conf.max_log_size}')
 
     return lto.fi_location
 
