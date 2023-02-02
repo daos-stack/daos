@@ -1759,6 +1759,11 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
 
+	if (wr_tx == -1ULL) {
+		store->stor_ops->so_wal_peek(store, &wr_tx);
+		D_ASSERT(wr_tx != -1ULL);
+	}
+
 	page     = umem_cache_off2page(cache, addr);
 	end_page = umem_cache_off2page(cache, end_addr);
 

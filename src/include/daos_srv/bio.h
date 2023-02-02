@@ -963,10 +963,12 @@ struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type
  *
  * \param[in]	mc		BIO meta context
  * \param[out]	tx_id		Reserved transaction ID
+ * \param[in]	peek_only	No reservation, just grab next speculative id.
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
+int
+     bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, bool peek_only);
 
 /*
  * Submit WAL I/O and wait for completion
