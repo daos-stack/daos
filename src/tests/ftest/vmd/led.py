@@ -19,7 +19,6 @@ class VmdLedStatus(OSAUtils):
     # pylint: disable=too-many-instance-attributes,too-many-ancestors
     def setUp(self):
         super().setUp()
-        self.targets = self.params.get("targets", "/run/server_config/engines/0/*")
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
@@ -44,8 +43,9 @@ class VmdLedStatus(OSAUtils):
         uuid = []
         for value in list(resp['host_storage_map'].values()):
             if value['storage']['smd_info']['devices']:
-                for target in range(self.targets):
-                    uuid.append(value['storage']['smd_info']['devices'][target]['uuid'])
+                total_uuid = len(value['storage']['smd_info']['devices'])
+                for device in total_uuid:
+                    uuid.append(value['storage']['smd_info']['devices'][device]['uuid'])
         return uuid
 
     def run_vmd_led_identify(self, device_id=None):
