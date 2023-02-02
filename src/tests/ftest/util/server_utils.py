@@ -1135,31 +1135,43 @@ class DaosServerManager(SubprocessManager):
             dict: host keys with lists of log files on that host values
 
         """
-        self.log.debug("Determining current %s log files", self.manager.job.command)
+        self.log.debug("Determining the current %s log files", self.manager.job.command)
 
-        # Determine how many ranks per host
-        host_ranks = defaultdict(list)
-        for rank, host in self.ranks.items():
-            host_ranks[str(host)].append(rank)
-        self.log.debug("host_ranks: %s", dict(host_ranks))
-
-        # Determine which engine log files to search on each set of hosts
-        log_files = self.manager.job.get_engine_values("log_file")
-        self.log.debug("log_files:  %s", log_files)
-        host_log_files = defaultdict(list)
-        for host, ranks in host_ranks.items():
-            result = run_remote(self.log, host, "pgrep daos_engine")
-            if result.passed and result.homogeneous:
-                index = 0
-                for line in result.output[0].stdout:
+        # Get a list of engine pids from all of the hosts
+        host_engine_pids = defaultdict(list)
+        result = run_remote(self.log, self.hosts, "pgrep daos_engine")
+        for data in result.output:
+            if data.returncode == 0:
+                # Search each individual line of output independently to ensure a pid match
+                for line in data.stdout:
                     match = re.findall(r'(^[0-9]+)', line)
+                    for host in data.hosts:
+                        host_engine_pids[host].extend(match)
+
+        # Find the log files that match the engine pids on each host
+        host_log_files = defaultdict(list)
+        log_files = self.manager.job.get_engine_values("log_file")
+        for host, pid_list in host_engine_pids.items():
+            # Generate a list of all of the possible log files that could exist on this host
+            file_search = []
+            for log_file in log_files:
+                for pid in pid_list:
+                    file_search.append(".".join([log_file, pid]))
+            # Determine which of those log files actually do exist on this host
+            # This matches the engine pid to the engine log file name
+            result = run_remote(self.log, host, f"ls -1 {' '.join(file_search)}")
+            for data in result.output:
+                for line in data.stdout if data.returncode == 0 else []:
+                    match = re.findall(fr"^({'|'.join(file_search)})", line)
                     if match:
-                        self.log.debug("pids found: %s", match)
-                        if index < len(ranks) and index < len(log_files):
-                            log_file = ".".join([log_files[index], match[0]])
-                            host_log_files[host].append(log_file)
-                        index += 1
-        self.log.debug("host_log_files: %s", dict(host_log_files))
+                        host_log_files[host].append(match[0])
+
+        self.log.debug("Engine log files per host")
+        for host in sorted(host_log_files):
+            self.log.debug("  %s:", host)
+            for log_file in sorted(host_log_files[host]):
+                self.log.debug("    %s", log_file)
+
         return host_log_files
 
     def search_log(self, pattern):
