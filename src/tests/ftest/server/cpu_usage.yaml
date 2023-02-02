@@ -9,14 +9,7 @@ server_config:
       targets: 8
       nr_xs_helpers: 8
       fabric_iface: ib0
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
 ior:
   client_processes:
     np: 1
