@@ -2643,7 +2643,8 @@ class Launch():
         """
         core_file_processing = CoreFileProcessing(logger)
         try:
-            corefiles_processed = core_file_processing.process_core_files(test_job_results, True)
+            corefiles_processed = core_file_processing.process_core_files(test_job_results, True,
+                                                                          test=str(test))
 
         except CoreFileException:
             message = "Errors detected processing test core files"
