@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -56,9 +56,9 @@ class NvmePoolExtend(OSAUtils):
         for _ in range(0, num_pool):
             pools.append(self.get_pool(properties="reclaim:disabled", create=False))
             # Split total SCM and NVME size for creating multiple pools.
-            temp = "{}{}".format((int(ior_test_sequence[0]) / num_pool), "%")
+            temp = "{}{}".format(str(int(ior_test_sequence[0]) / num_pool), "%")
             pools[-1].scm_size.update(temp)
-            temp = "{}{}".format((int(ior_test_sequence[1]) / num_pool), "%")
+            temp = "{}{}".format(str(int(ior_test_sequence[1]) / num_pool), "%")
             pools[-1].nvme_size.update(temp)
             pools[-1].create()
             # pools[-1].set_property("reclaim", "disabled")
