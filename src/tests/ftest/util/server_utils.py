@@ -9,6 +9,7 @@ from collections import defaultdict
 from getpass import getuser
 import math
 import os
+import re
 import time
 import random
 
@@ -914,8 +915,8 @@ class DaosServerManager(SubprocessManager):
 
         """
         rank_list = []
-        for rank in self._expected_states:
-            if self._expected_states[rank]["host"] in hosts:
+        for rank, data in self._expected_states.items():
+            if data["host"] in hosts:
                 rank_list.append(rank)
         return rank_list
 
@@ -1127,6 +1128,40 @@ class DaosServerManager(SubprocessManager):
             engines.append(results)
         return engines
 
+    def get_host_log_files(self):
+        """Get the active engine log file names on each host.
+
+        Returns:
+            dict: host keys with lists of log files on that host values
+
+        """
+        self.log.debug("Determining current %s log files", self.manager.job.command)
+
+        # Determine how many ranks per host
+        host_ranks = defaultdict(list)
+        for rank, host in self.ranks.items():
+            host_ranks[str(host)].append(rank)
+        self.log.debug("host_ranks: %s", dict(host_ranks))
+
+        # Determine which engine log files to search on each set of hosts
+        log_files = self.manager.job.get_engine_values("log_file")
+        self.log.debug("log_files:  %s", log_files)
+        host_log_files = defaultdict(list)
+        for host, ranks in host_ranks.items():
+            result = run_remote(self.log, host, "pgrep daos_engine")
+            if result.passed and result.homogeneous:
+                index = 0
+                for line in result.output[0].stdout:
+                    match = re.findall(r'(^[0-9]+)', line)
+                    if match:
+                        self.log.debug("pids found: %s", match)
+                        if index < len(ranks) and index < len(log_files):
+                            log_file = ".".join([log_files[index], match[0]])
+                            host_log_files[host].append(log_file)
+                        index += 1
+        self.log.debug("host_log_files: %s", dict(host_log_files))
+        return host_log_files
+
     def search_log(self, pattern):
         """Search the server log files on the remote hosts for the specified pattern.
 
@@ -1138,30 +1173,19 @@ class DaosServerManager(SubprocessManager):
 
         """
         self.log.debug("Searching %s logs for '%s'", self.manager.job.command, pattern)
-
-        # Determine how many ranks per host
-        host_ranks = defaultdict(list)
-        for rank, host in self.ranks.items():
-            host_ranks[str(host)].append(rank)
-
-        # Determine which engine log files to search on each set of hosts
-        log_files = self.manager.job.get_engine_values("log_file")
-        log_file_hosts = defaultdict(NodeSet)
-        for engine, log_file in enumerate(log_files):
-            for host, ranks in host_ranks.items():
-                if len(ranks) > engine:
-                    log_file_hosts[log_file].add(host)
+        host_log_files = self.get_host_log_files()
 
         # Search for the pattern in the remote log files
         matches = 0
-        for log_file, hosts in log_file_hosts:
+        for host, log_files in host_log_files.items():
             log_file_matches = 0
-            self.log.debug("Searching for '%s' in '%s' on %s", pattern, log_file, hosts)
-            result = run_remote(self.log, hosts, f"grep -E '{pattern}' {log_file}")
+            self.log.debug("Searching for '%s' in %s on %s", pattern, log_files, host)
+            result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
             for data in result.output:
                 if data.returncode == 0:
-                    log_file_matches += len(data.stdout)
-            self.log.debug("Found %s matches on %s", log_file_matches, hosts)
+                    matches = re.findall(fr'{pattern}', data.stdout)
+                    log_file_matches += len(matches)
+            self.log.debug("Found %s matches on %s", log_file_matches, host)
             matches += log_file_matches
         self.log.debug(
             "Found %s total matches for '%s' in the %s logs",
