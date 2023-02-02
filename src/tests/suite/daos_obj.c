@@ -610,21 +610,8 @@ int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 static int
 set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
 {
-	char	uuid_str[37] = {0};
-	char	dmg_cmd[DTS_CFG_MAX];
-	int	rc;
-
-	/* build and invoke dmg cmd to set DAOS_PROP_PO_RECLAIM property */
-	uuid_unparse(arg->pool.pool_uuid, uuid_str);
-	dts_create_config(dmg_cmd, "dmg pool set-prop %s --name=reclaim --value=%s",
-			  uuid_str, (char *)strategy);
-	if (arg->dmg_config != NULL)
-		dts_append_config(dmg_cmd, " -o %s", arg->dmg_config);
-
-	rc = system(dmg_cmd);
-	print_message(" %s rc %#x\n", dmg_cmd, rc);
-
-	return rc;
+	return dmg_pool_set_prop(arg->dmg_config, "reclaim",
+				 strategy, arg->pool.pool_uuid);
 }
 
 /**
