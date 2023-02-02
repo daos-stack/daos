@@ -146,17 +146,10 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 }
 
 static inline int
-vos_wal_peek(struct umem_store *store, uint64_t *tx_id)
-{
-	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_reserve(store->stor_priv, tx_id, true);
-}
-
-static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_reserve(store->stor_priv, tx_id, false);
+	return bio_wal_reserve(store->stor_priv, tx_id);
 }
 
 static void
@@ -228,7 +221,6 @@ struct umem_store_ops vos_store_ops = {
     .so_flush_prep = vos_meta_flush_prep,
     .so_flush_copy = vos_meta_flush_copy,
     .so_flush_post = vos_meta_flush_post,
-    .so_wal_peek   = vos_wal_peek,
     .so_wal_reserv = vos_wal_reserve,
     .so_wal_submit = vos_wal_commit,
     .so_wal_replay = vos_wal_replay,

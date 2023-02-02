@@ -277,18 +277,14 @@ ioc2dma_stats(struct bio_io_context *bic)
 	return &bic->bic_xs_ctxt->bxc_dma_buf->bdb_stats;
 }
 
-/* Caller must guarantee no yield between bio_wal_reserve() and bio_wal_submit() unless
- * peek_only is set in which case, the id can't be used for wal updates.
+/* Caller must guarantee no yield between bio_wal_reserve() and bio_wal_submit()
  */
 int
-bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, bool peek_only)
+bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct bio_dma_stats	*stats = ioc2dma_stats(mc->mc_wal);
 	int			 rc = 0;
-
-	if (peek_only)
-		goto done;
 
 	if (!si->si_rsrv_waiters && reserve_allowed(si))
 		goto done;
