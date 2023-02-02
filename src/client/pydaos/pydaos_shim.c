@@ -629,12 +629,15 @@ cont_check(int ret, char *pool, char *cont, int flags)
 			/** Insert leaked oid back in root with oid as the name */
 			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
 			D_ASSERT(len < 42);
-
 			dentry.oid = oids[i];
-			if (type == DAOS_OT_KV_HASHED)
+
+			if (type == DAOS_OT_KV_HASHED) {
+				printf("Adding leaked Dictionary back as: %s\n", oid_name);
 				dentry.otype = PYDAOS_DICT;
-			else
+			} else {
+				printf("Adding leaked Array back as: %s\n", oid_name);
 				dentry.otype = PYDAOS_ARRAY;
+			}
 
 			rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, oid_name,
 					 sizeof(dentry), &dentry, NULL);

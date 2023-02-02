@@ -6754,7 +6754,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				if (daos_is_array_type(otype))
 					continue;
 
-				entry.mode = S_IFDIR | 0755;
+				entry.mode = S_IFDIR | 0700;
 				entry.uid = uid;
 				entry.gid = gid;
 				oid_cp(&entry.oid, oids[i]);
@@ -6886,7 +6886,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				}
 			}
 
-			entry.mode = S_IFREG | 0755;
+			entry.mode = S_IFREG | 0600;
 			entry.uid = uid;
 			entry.gid = gid;
 			oid_cp(&entry.oid, oids[i]);
@@ -6974,8 +6974,10 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 	struct daos_prop_entry		*entry;
 	struct daos_prop_co_roots	*roots;
 	daos_handle_t			super_oh;
+	struct dfs_entry		rentry = {0};
+	struct timespec			now;
 	int				i;
-	int				rc;
+	int				rc, rc2;
 
 	if (attr == NULL)
 		return EINVAL;
@@ -7013,10 +7015,28 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
 	if (rc)
 		D_GOTO(out_prop, rc);
 
-	rc = daos_obj_close(super_oh, NULL);
+	/** relink the root object */
+	rentry.oid = roots->cr_oids[1];
+	rentry.mode = S_IFDIR | 0755;
+	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
-		D_GOTO(out_prop, rc);
+		D_GOTO(out_super, rc = errno);
+	rentry.atime = rentry.mtime = rentry.ctime = now.tv_sec;
+	rentry.atime_nano = rentry.mtime_nano = rentry.ctime_nano = now.tv_nsec;
+	rentry.uid = geteuid();
+	rentry.gid = getegid();
 
+	rc = insert_entry(DFS_LAYOUT_VERSION, super_oh, DAOS_TX_NONE, "/", 1, DAOS_COND_DKEY_INSERT,
+			  &rentry);
+	if (rc) {
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_super, rc);
+	}
+
+out_super:
+	rc2 = daos_obj_close(super_oh, NULL);
+	if (rc == 0)
+		rc = rc2;
 out_prop:
 	daos_prop_free(prop);
 	return rc;
