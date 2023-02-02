@@ -56,10 +56,12 @@ class NvmePoolExtend(OSAUtils):
         for _ in range(0, num_pool):
             pools.append(self.get_pool(properties="reclaim:disabled", create=False))
             # Split total SCM and NVME size for creating multiple pools.
-            temp = "{}{}".format(str(int(ior_test_sequence[0]) / num_pool), "%")
-            pools[-1].scm_size.update(temp)
-            temp = "{}{}".format(str(int(ior_test_sequence[1]) / num_pool), "%")
-            pools[-1].nvme_size.update(temp)
+            scm_size_string = "{}{}".format(str(int(ior_test_sequence[0]) / num_pool), "%")
+            nvme_size_string = "{}{}".format(str(int(ior_test_sequence[1]) / num_pool), "%")
+            params = self.server_managers[0].autosize_pool_params(
+                    None, None, scm_size=scm_size_string, nvme_size=nvme_size_string)
+            pools[-1].scm_size.update(params["scm_size"])
+            pools[-1].nvme_size.update(params["nvme_size"])
             pools[-1].create()
             # pools[-1].set_property("reclaim", "disabled")
 
