@@ -168,6 +168,12 @@ enum {
 	D_TM_INCLUDE_TYPE		= 0x004,
 };
 
+/* iterate ops */
+enum {
+	D_TM_ITER_READ			= 0x001,
+	D_TM_ITER_RESET			= 0x002,
+};
+
 /**
  * @brief Statistics for gauge and duration metrics
  *

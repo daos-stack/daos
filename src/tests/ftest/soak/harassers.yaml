@@ -1,6 +1,6 @@
 hosts:
   # servers if no server partition is defined
-  test_servers: 10
+  test_servers: 8
   # servers if a server partition is defined
   # server_partition: daos_server
   client_partition: daos_client
@@ -29,14 +29,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -46,14 +39,7 @@ server_config:
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   scm_size: 200GB
@@ -108,7 +94,7 @@ soak_harassers:
     # - server-stop_server-start
     # - server-stop_server-start-offline
     # - server-stop_server-reintegrate
-    # - server-stop_server-reintegrate-offline
+    - server-stop_server-reintegrate-offline
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true

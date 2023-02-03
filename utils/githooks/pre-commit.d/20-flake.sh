@@ -2,12 +2,16 @@
 
 # Runs flake8 for the DAOS project.
 #
-# Will first check uncomiited code, then either the entire tree or against an entire
+# Will first check uncommitted code, then either the entire tree or against an entire
 # pull request if possible.
 #
 # To get the most out of this hook the 'gh' command should be installed and working.
 #
 # Picks up flake config settings from .flake8
+
+# Flake8 has removed the --diff option, to make this check work you need a previous version
+# of flake.
+# python3 -m pip install "flake8<6.0.0"
 
 set -ue
 

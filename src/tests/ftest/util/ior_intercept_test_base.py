@@ -11,8 +11,6 @@ from general_utils import percent_change
 
 
 class IorInterceptTestBase(IorTestBase):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-few-public-methods
     """Base IOR interception test class.
 
     :avocado: recursive

@@ -51,12 +51,6 @@ swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
 	if (strlen(swim_seq_by_rank[rank]) < maxlen)
 		strcat(swim_seq_by_rank[rank], swim_state_str);
-
-	/* Remove rank from context, so we stop sending swim RPCs to it. */
-	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
-		/* avoid checkpatch warning */
-		crt_group_rank_remove(NULL, rank);
-	}
 }
 
 void
