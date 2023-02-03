@@ -116,7 +116,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -1389,6 +1390,12 @@ class Launch():
         #                             'filter' in the device description. If generating automatic
         #                             storage extra files, use a 'class: dcpm' first storage tier.
         #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
         #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
         #                             found to exist on all server hosts. If a 'filter' is specified
         #                             use it to find devices with the 'filter' in the device
@@ -1427,6 +1434,13 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_0_type = "ram"
+                scm_size = 100
+                max_nvme_tiers = 5
+
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
@@ -2839,6 +2853,11 @@ def main():
         "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
         "\t\twith the 'filter' in the device description. If generating automatic storage extra",
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
         "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
@@ -2922,7 +2941,8 @@ def main():
         action="store",
         help="Detect available disk options for replacing the devices specified in the server "
              "storage yaml configuration file. Supported options include:  auto[:filter], "
-             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",
