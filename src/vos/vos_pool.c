@@ -249,6 +249,7 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	uint64_t              tx_id;
 	struct umem_instance *umm;
 	struct umem_store    *store;
+	struct bio_wal_info   wal_info;
 	int                   rc;
 
 	pool = vos_hdl2pool(ctx->cc_vos_pool_hdl);
@@ -257,16 +258,8 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	umm   = vos_pool2umm(pool);
 	store = &umm->umm_pool->up_store;
 
-	rc = bio_wal_ckp_start(store->stor_priv, &tx_id);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY) {
-			D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n",
-				DP_UUID(pool->vp_id));
-			rc = 0;
-		}
-
-		return rc;
-	}
+	bio_wal_query(store->stor_priv, &wal_info);
+	tx_id = wal_info.wi_commit_id;
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
 	       DP_UUID(pool->vp_id), tx_id);
@@ -275,7 +268,7 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 	rc = umem_cache_checkpoint(store, chkpt_wait, ctx, &tx_id);
 
 	if (rc == 0)
-		rc = bio_wal_ckp_end(store->stor_priv, tx_id);
+		rc = bio_wal_checkpoint(store->stor_priv, tx_id);
 
 	D_INFO("Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
 	       DP_UUID(pool->vp_id), tx_id, DP_RC(rc));

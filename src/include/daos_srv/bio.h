@@ -1015,18 +1015,6 @@ int bio_wal_replay(struct bio_meta_context *mc,
 int bio_wal_flush_header(struct bio_meta_context *mc);
 
 /*
- * Acquire highest committed transaction ID before checkpointing
- *
- * \param[in]	mc		BIO meta context
- * \param[out]	tx_id		Highest committed transaction ID
- *
- * \return			Zero:		Success;
- *				-DER_ALREADY:	Nothing to be checkpointed;
- *				Negative value:	Error;
- */
-int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
-
-/*
  * After checkpointing, set highest checkpointed transaction ID, reclaim WAL space
  *
  * \param[in]	mc		BIO meta context
@@ -1034,7 +1022,7 @@ int bio_wal_ckp_start(struct bio_meta_context *mc, uint64_t *tx_id);
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_ckp_end(struct bio_meta_context *mc, uint64_t tx_id);
+int bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id);
 
 /*
  * Query meta capacity & meta block size & meta blob header blocks.

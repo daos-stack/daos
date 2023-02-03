@@ -152,6 +152,12 @@ if [ -d "/mnt/daos" ]; then
 
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
 
+	COMP="UTEST_bio_wal"
+	rm -f "${AIO_DEV}"
+	dd if=/dev/zero of="${AIO_DEV}" bs=1G count=4
+
+	run_test "sudo -E ${SL_PREFIX}/bin/bio_ut"
+
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
 

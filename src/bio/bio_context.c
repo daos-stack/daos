@@ -660,8 +660,8 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 		return 0;
 
 	D_ASSERT(meta_sz > 0);
-	if (meta_sz <= default_cluster_sz()) {
-		D_ERROR("Meta blob size("DF_U64") is not greater than minimal size(%u)\n",
+	if (meta_sz < default_cluster_sz()) {
+		D_ERROR("Meta blob size("DF_U64") is less than minimal size(%u)\n",
 			meta_sz, default_cluster_sz());
 		rc = -DER_INVAL;
 		goto delete_data;
