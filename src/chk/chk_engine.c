@@ -1954,17 +1954,23 @@ reset:
 	if (rc != 0)
 		goto out;
 
-	rc = ds_mgmt_tgt_pool_iterate(chk_pools_add_from_dir, &ctpa);
-	if (rc != 0)
-		goto out;
+	if (pool_nr > 0) {
+		rc = chk_pools_load_list(ins, gen, api_flags, pool_nr, pools);
+		if (rc != 0)
+			goto out;
+	} else {
+		rc = ds_mgmt_tgt_pool_iterate(chk_pools_add_from_dir, &ctpa);
+		if (rc != 0)
+			goto out;
 
-	rc = ds_mgmt_newborn_pool_iterate(chk_pools_add_from_dir, &ctpa);
-	if (rc != 0)
-		goto out;
+		rc = ds_mgmt_newborn_pool_iterate(chk_pools_add_from_dir, &ctpa);
+		if (rc != 0)
+			goto out;
 
-	rc = ds_mgmt_zombie_pool_iterate(chk_pools_add_from_dir, &ctpa);
-	if (rc != 0)
-		goto out;
+		rc = ds_mgmt_zombie_pool_iterate(chk_pools_add_from_dir, &ctpa);
+		if (rc != 0)
+			goto out;
+	}
 
 	memset(cbk, 0, sizeof(*cbk));
 	cbk->cb_magic = CHK_BK_MAGIC_ENGINE;
