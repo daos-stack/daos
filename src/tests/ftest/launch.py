@@ -650,8 +650,19 @@ class Launch():
             logger.debug(message)
         test_result.status = TestResult.PASS
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.WARN)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -661,12 +672,25 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, fail_class, fail_reason, exc_info, TestResult.ERROR)
+
+    @staticmethod
+    def __set_test_status(test_result, fail_class, fail_reason, exc_info=None, status=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+            status (str, optional): TestResult status to set. Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
 
         if test_result and test_result.fail_count == 0:
             # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -1887,9 +1911,6 @@ class Launch():
         if status:
             return status
 
-        # Stop rogue processes
-        self._cleanup_procs(test, True)
-
         # Generate certificate files for the test
         return self._generate_certs()
 
@@ -2113,7 +2134,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
-            return_code |= self._cleanup_procs(test, stop_daos)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2352,13 +2373,11 @@ class Launch():
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
 
-    @staticmethod
-    def _cleanup_procs(test, do_stop):
+    def _cleanup_procs(self, test):
         """Cleanup any processes left running on remote nodes.
 
         Args:
             test (TestInfo): the test information
-            do_stop (bool): whether to stop the processes
 
         Returns:
             int: status code: 0 = success; 4096 if processes were found
@@ -2372,15 +2391,16 @@ class Launch():
         pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
         pgrep_result = run_remote(logger, hosts, pgrep_cmd)
         if pgrep_result.passed_hosts:
-            if do_stop:
-                logger.info("Killing running processes: %s", proc_pattern)
-                pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
-                pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
-                if not pkill_result.passed:
-                    # For now, just warn and continue
-                    logger.warning(
-                        "Failed to kill running processes on: %s", pkill_result.failed_hosts)
             any_found = True
+            logger.info("Killing running processes: %s", proc_pattern)
+            pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
+            pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
+            if pkill_result.failed_hosts:
+                self._fail_test(
+                    test, "Process", f"Failed to kill processes on {pkill_result.failed_hosts}")
+            else:
+                self._warn_test(
+                    test, "Process", f"Running processes found on {pgrep_result.passed_hosts}")
 
         logger.info("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging
@@ -2388,15 +2408,17 @@ class Launch():
         mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
         mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
         if mount_grep_result.passed_hosts:
-            if do_stop:
-                logger.info("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
-                type_list = ",".join(TYPES_TO_UNMOUNT)
-                umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
-                umount_result = run_remote(logger, hosts, umount_cmd)
-                if not umount_result.passed:
-                    # For now, just warn and continue
-                    logger.warning("Failed to unmount on: %s", umount_result.failed_hosts)
             any_found = True
+            logger.info("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                self._fail_test(
+                    test, "Process", f"Failed to unmount on {umount_result.failed_hosts}")
+            else:
+                self._warn_test(
+                    test, "Process", f"Unexpected mounts on {mount_grep_result.passed_hosts}")
 
         return 4096 if any_found else 0
 
