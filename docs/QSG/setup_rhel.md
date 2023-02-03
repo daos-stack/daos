@@ -76,7 +76,7 @@ daos-server RPM.
 
 4. Install the `daos-admin` RPMs on the admin nodes:
 
-		pdsh -w $ADMIN_NODES 'sudo zypper install -y daos-admin'
+		pdsh -w $ADMIN_NODES 'sudo yum install -y daos-admin'
 
 5. Install the `daos-server` RPMs on the server nodes:
 
