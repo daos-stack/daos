@@ -966,8 +966,7 @@ struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type
  *
  * \return			Zero on success, negative value on error
  */
-int
-     bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
+int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
 
 /*
  * Submit WAL I/O and wait for completion

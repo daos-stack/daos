@@ -22,7 +22,7 @@
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
 
-#define META_READ_BATCH_SIZE (16 * 1024 * 1024)
+#define META_READ_BATCH_SIZE (1024 * 1024)
 static inline void
 umemstor_iod_set(struct umem_store_iod *iod, daos_off_t addr, daos_size_t size)
 {
