@@ -117,18 +117,48 @@ function setup_environment()
 	fi
 }
 
+function emit_junit_failure()
+{
+    cname="run_go_tests"
+    tname="${1:-subtest}"
+    fname="${DAOS_BASE}/test_results/${cname}.${tname}.xml"
+
+    teststr="    <testcase classname=\"$cname\" name=\"$tname\">
+    <failure type=\"format\">
+      <![CDATA[$2
+        ]]>
+    </failure>
+    </testcase>"
+
+    cat > "${fname}" << EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites>
+  <testsuite tests="1" failures="1" errors="0" skipped="0" >
+EOF
+echo "${teststr}" >> "${fname}"
+cat >> "${fname}" << EOF
+  </testsuite>
+</testsuites>
+EOF
+}
+
 function check_formatting()
 {
 	srcdir=${1:-"./"}
 	output=$(find "$srcdir/" -name '*.go' -and -not -path '*vendor*' \
 		-print0 | xargs -0 gofmt -d)
 	if [ -n "$output" ]; then
-		echo "ERROR: Your code hasn't been run through gofmt!"
-		echo "Please configure your editor to run gofmt on save."
-		echo "Alternatively, at a minimum, run the following command:"
-		echo -n "find $srcdir/ -name '*.go' -and -not -path '*vendor*'"
-		echo "| xargs gofmt -w"
-		echo -e "\ngofmt check found the following:\n\n$output\n"
+		errmsg="ERROR: Your code hasn't been run through gofmt!
+Please configure your editor to run gofmt on save.
+Alternatively, at a minimum, run the following command:
+find $srcdir/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
+
+gofmt check found the following:
+
+$output
+"
+		emit_junit_failure "gofmt" "$errmsg"
+		echo "$errmsg"
 		exit 1
 	fi
 }
