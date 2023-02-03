@@ -762,11 +762,17 @@ server_init(int argc, char *argv[])
 	hlc_recovery_end(bound);
 	dss_set_start_epoch();
 
+	/* init nvme */
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_nvme_init, rc);
 	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
@@ -831,6 +837,8 @@ exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
 	dss_srv_fini(true);
+exit_nvme_init:
+	bio_nvme_fini();
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
