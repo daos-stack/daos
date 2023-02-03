@@ -28,7 +28,7 @@ struct acl_user {
 /**
  * Checks whether the ownership struct is populated with valid values.
  *
- * \param[in]	ownership 	User/group ownership
+ * \param[in]	ownership	User/group ownership
  *
  * \return	true if valid, false otherwise
  */
@@ -50,6 +50,6 @@ is_ownership_valid(struct ownership *ownership);
  */
 int
 get_acl_permissions(struct daos_acl *acl, struct ownership *ownership, struct acl_user *user_info,
-		     uint64_t min_owner_perms, uint64_t *permissions);
+		    uint64_t min_owner_perms, uint64_t *permissions);
 
 #endif

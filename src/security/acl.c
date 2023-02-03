@@ -155,7 +155,7 @@ calculate_acl_perms(struct daos_acl *acl, struct ownership *ownership, struct ac
 
 int
 get_acl_permissions(struct daos_acl *acl, struct ownership *ownership, struct acl_user *user_info,
-		     uint64_t min_owner_perms, uint64_t *perms)
+		    uint64_t min_owner_perms, uint64_t *perms)
 {
 	int rc;
 

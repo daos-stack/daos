@@ -237,7 +237,8 @@ get_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t gr
 	int			rc;
 
 	/* These ACL and ownership variables point to the data in-place in the prop, and thus don't
-	   need to be freed here. */
+	 * need to be freed here.
+	 */
 	rc = acl_from_prop(prop, acl_prop, &acl);
 	if (rc != 0)
 		return rc;
@@ -293,7 +294,7 @@ fill_user_info(uid_t uid, gid_t gid, gid_t *gids, size_t nr_gids, struct acl_use
 
 	user_info->nr_groups = 0;
 	for (i = 0; i < nr_gids; i++) {
-		rc = daos_acl_gid_to_principal(gids[i], &(user_info->groups[i]));
+		rc = daos_acl_gid_to_principal(gids[i], &user_info->groups[i]);
 		if (rc != 0) {
 			D_ERROR("failed to convert gid %d to an ACL principal: "DF_RC"\n", gids[i],
 				DP_RC(rc));
