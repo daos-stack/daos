@@ -13,9 +13,9 @@
 %define __find_requires %{SOURCE1}
 %endif
 
-Name:          daos
-Version:       2.2.0
-Release:       7%{?relval}%{?dist}
+Name:         daos
+Version:      2.2.0
+Release:      8%{?relval}%{?dist}
 Summary:      DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -106,10 +106,6 @@ BuildRequires: Lmod
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libpsm2-compat
-BuildRequires: libpsm_infinipath1
-# prefer over libcurl4-mini
-BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
@@ -119,17 +115,9 @@ BuildRequires: python3-distro
 BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
-%if 0%{?is_opensuse}
-%else
-# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
-# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
-BuildRequires: libcurl4
-# have choice for libpsm_infinipath.so.1()(64bit) needed by libfabric1: libpsm2-compat libpsm_infinipath1
-# have choice for libpsm_infinipath.so.1()(64bit) needed by openmpi-libs: libpsm2-compat libpsm_infinipath1
-BuildRequires: libpsm_infinipath1
 %endif
 %endif
-%endif
+BuildRequires: libuuid-devel
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
@@ -571,6 +559,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb  3 2023 Brian J. Murrell <brian.murrell@intel.com> 2.2.0-8
+- Add BR: libuuid-devel
+- Remove some historic, now superfluous BRs for SUSE
+
 * Mon Jan 23 2023 Joseph G. Moore <joseph.moore@intel.com> 2.2.0-7
 - Update Mercury to 2.2.0-6
 
