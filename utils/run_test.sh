@@ -226,6 +226,7 @@ if [ -d "/mnt/daos" ]; then
 
     COMP="UTEST_common"
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
+    run_test "${SL_BUILD_DIR}/src/common/tests/umem_test_bmem"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
