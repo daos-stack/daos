@@ -85,7 +85,7 @@ echo ::group::Container copy test
 echo ::endgroup::
 
 echo ::group::Checking for corefile
-ls -la core*
 cat /proc/sys/kernel/core_pattern
+ls -la core*
 echo ::endgroup::
 
