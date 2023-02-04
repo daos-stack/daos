@@ -332,15 +332,19 @@ func (tcs TierConfigs) validateBdevTierRoles() error {
 		}
 	}
 
+	// When bdev NVMe tiers exist, there should always be at least one Data tier.
+	if foundDataTiers == 0 {
+		return FaultBdevConfigBadNrRoles("Data", 0, 1)
+	}
+	// Allow disabling of MD-on-SSD with explicit role assignment.
+	if foundWALTiers == 0 && foundMetaTiers == 0 {
+		return nil
+	}
 	if foundWALTiers != nrWALTiers {
 		return FaultBdevConfigBadNrRoles("WAL", foundWALTiers, nrWALTiers)
 	}
 	if foundMetaTiers != nrMetaTiers {
 		return FaultBdevConfigBadNrRoles("Meta", foundMetaTiers, nrMetaTiers)
-	}
-	// When bdev NVMe tiers exist, there should always be at least one Data tier.
-	if foundDataTiers == 0 {
-		return FaultBdevConfigBadNrRoles("Data", 0, 1)
 	}
 
 	return nil
