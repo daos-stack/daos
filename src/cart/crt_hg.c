@@ -657,8 +657,8 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 					   start_port + ctx_idx);
 			else
 				D_ASPRINTF(*string, "%s://%s:%d",
-					    provider_str, ip_str,
-					    start_port + ctx_idx);
+					   provider_str, ip_str,
+					   start_port + ctx_idx);
 		}
 	} else {
 		if (ip_str == NULL) {
