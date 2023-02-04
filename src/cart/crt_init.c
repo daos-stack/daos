@@ -686,20 +686,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
 
-		if (domain_env == NULL) {
-			/* For verbs we can't auto-set the domain */
-			if (primary_provider == CRT_PROV_OFI_VERBS_RXM ||
-			    secondary_provider == CRT_PROV_OFI_VERBS_RXM ||
-			    crt_provider_is_ucx(primary_provider) ||
-			    crt_provider_is_ucx(secondary_provider)) {
-				D_ERROR("D_DOMAIN needs to be set to the proper domain name\n");
-				D_GOTO(unlock, rc = -DER_INVAL);
-			}
-
-			D_DEBUG(DB_ALL, "OFI_DOMAIN is not set. Setting it to %s\n", interface_env);
-			domain_env = interface_env;
-		}
-
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			D_ERROR("Requested provider %s not found\n", provider_env);
 			D_GOTO(unlock, rc = -DER_NONEXIST);
