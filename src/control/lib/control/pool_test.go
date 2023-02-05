@@ -1634,10 +1634,11 @@ func TestControl_ListPools(t *testing.T) {
 func TestControl_GetMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
-		ScmBytes  uint64
-		NvmeBytes uint64
-		Error     error
-		Debug     string
+		ScmBytes   uint64
+		NvmeBytes  uint64
+		Error      error
+		QueryError error
+		Debug      string
 	}
 
 	for name, tc := range map[string]struct {
@@ -2042,6 +2043,13 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("host storage response"),
 			},
 		},
+		"query fails (system not ready)": {
+			HostsConfigArray: []MockHostStorageConfig{},
+			ExpectedOutput: ExpectedOutput{
+				QueryError: system.ErrRaftUnavail,
+				Error:      system.ErrRaftUnavail,
+			},
+		},
 		"No SCM storage": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
@@ -2265,8 +2273,19 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := &MockInvokerConfig{
-				UnaryResponse: &UnaryResponse{
-					Responses: []*HostResponse{},
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "foo",
+								Message: &mgmtpb.SystemQueryResp{},
+								Error:   tc.ExpectedOutput.QueryError,
+							},
+						},
+					},
+					{
+						Responses: []*HostResponse{},
+					},
 				},
 			}
 			for _, hostStorageConfig := range tc.HostsConfigArray {
@@ -2282,7 +2301,8 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						Message: storageScanResp,
 					}
 				}
-				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses, hostResponse)
+				scanResp := mockInvokerConfig.UnaryResponseSet[1]
+				scanResp.Responses = append(scanResp.Responses, hostResponse)
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
