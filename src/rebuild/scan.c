@@ -787,6 +787,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t		param = { 0 };
 	struct vos_iter_anchors		anchor = { 0 };
 	daos_handle_t			coh;
+	struct ds_cont_child		*cont_child = NULL;
 	struct dtx_id			dti = { 0 };
 	struct dtx_epoch		epoch = { 0 };
 	daos_unit_oid_t			oid = { 0 };
@@ -823,6 +824,18 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+		if (rc != 0) {
+			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+				DP_UUID(entry->ie_couuid), DP_RC(rc));
+			vos_cont_close(coh);
+			return rc;
+		}
+		cont_child->sc_discarding = 1;
+	}
+
 	epoch.oe_value = rpt->rt_stable_epoch;
 	rc = dtx_begin(coh, &dti, &epoch, 0, rpt->rt_rebuild_ver,
 		       &oid, NULL, 0, DTX_IGNORE_UNCOMMITTED, NULL, &dth);
@@ -847,6 +860,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	dtx_end(dth, NULL, rc);
 
 	vos_cont_close(coh);
+
+	if (cont_child != NULL) {
+		cont_child->sc_discarding = 0;
+		ds_cont_child_put(cont_child);
+	}
 
 	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
