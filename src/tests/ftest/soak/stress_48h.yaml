@@ -30,14 +30,7 @@ server_config:
       env_vars:
         - FI_UNIVERSE_SIZE=2048
         - DAOS_MD_CAP=1024
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -48,14 +41,7 @@ server_config:
       env_vars:
         - FI_UNIVERSE_SIZE=2048
         - DAOS_MD_CAP=1024
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   scm_size: 200GB
@@ -97,7 +83,7 @@ soak_stress:
   test_timeout: 48
   joblist:
     - fio_stress
-    # - daos_racer
+    - daos_racer
     - ior_stress
     - mdtest_stress
     - vpic_stress
@@ -144,6 +130,8 @@ ior_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 fio_stress:
   job_timeout: 30
   names:
@@ -179,6 +167,8 @@ fio_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: true
+    thread_count: 8
+    cores: '0-3'
 daos_racer:
   runtime: 120
 vpic_stress:
@@ -208,6 +198,8 @@ lammps_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
   oclass:
     - "EC_2P1GX"
 mdtest_stress:
@@ -245,6 +237,8 @@ mdtest_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 macsio_stress:
   job_timeout: 30
   nodesperjob:
@@ -274,6 +268,8 @@ macsio_stress:
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-3'
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:

@@ -16,7 +16,7 @@ from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 class DaosCoreBase(TestWithServers):
     # pylint: disable=too-many-nested-blocks
-    """Runs the daos_test subtests with multiple servers.
+    """Runs the daos_test sub-tests with multiple servers.
 
     :avocado: recursive
     """

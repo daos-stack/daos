@@ -904,7 +904,10 @@ ec_singv_array_mixed_io(void **state)
 		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
 		iod[i].iod_nr		= 1;
 		if (i % 2 == 0) {
-			iod[i].iod_size		= size * (i + 1);
+			if (i == 0)
+				iod[i].iod_size = 5;
+			else
+				iod[i].iod_size	= size * (i + 1);
 			iod[i].iod_recxs	= NULL;
 			iod[i].iod_type		= DAOS_IOD_SINGLE;
 		} else {
@@ -929,10 +932,14 @@ ec_singv_array_mixed_io(void **state)
 			    NULL, NULL);
 	assert_rc_equal(rc, 0);
 	for (i = 0; i < NUM_AKEYS; i++) {
-		if (i % 2 == 0)
-			assert_int_equal(iod[i].iod_size, size * (i + 1));
-		else
+		if (i % 2 == 0) {
+			if (i == 0)
+				assert_int_equal(iod[i].iod_size, 5);
+			else
+				assert_int_equal(iod[i].iod_size, size * (i + 1));
+		} else {
 			assert_int_equal(iod[i].iod_size, 1);
+		}
 	}
 
 	for (i = 0; i < NUM_AKEYS; i++)
