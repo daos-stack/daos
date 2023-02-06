@@ -196,13 +196,13 @@ class DaosBuild(DfuseTestBase):
 
         preload_cmd = ';'.join(envs)
 
+        # Run the deps build in parallel for speed/coverage however the daos build itself does
+        # not yet work under the interception library so run this part in serial.
         build_jobs = 6 * 5
         intercept_jobs = build_jobs
         if intercept:
             intercept_jobs = 1
 
-        # Run the deps build in parallel for speed/coverage however the daos build itself does
-        # not yet work, so run this part in serial.  The VMs have 6 cores each.
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
@@ -242,9 +242,14 @@ class DaosBuild(DfuseTestBase):
 
             if cmd_ret['interrupted']:
                 self.log.info('Command timed out')
+                general_utils.run_pcmd(self.hostlist_clients, 'ps auwx', timeout=30)
                 fail_type = 'Timeout building'
 
             self.log.error('BuildDaos Test Failed')
+
+            if cmd.startswith('scons'):
+                general_utils.run_pcmd(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
+                                       timeout=30)
             if intercept:
                 self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
             else:
