@@ -1,6 +1,6 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -171,19 +171,25 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         if cmp_owner:
             field_printf += "Group Name: %G\\n"
             field_printf += "User Name: %U\\n"
+        field_printf_wo_mtime = field_printf
         if cmp_times:
             field_printf += "mtime: %Y\\n"
 
         # Diff the fields for each entry
+        # v2.2 does not support mtime for directories, so skip
         for entry in ["dir1", "dir1/file1", "dir1/link1"]:
+            if entry == "dir1":
+                _printf = field_printf_wo_mtime
+            else:
+                _printf = field_printf
             entry1 = join(path1, entry)
             entry2 = join(path2, entry)
-            if field_printf:
+            if _printf:
                 # Use stat to get perms, etc.
                 stat_cmd1 = "stat --printf '{}' '{}'".format(
-                    field_printf, entry1)
+                    _printf, entry1)
                 stat_cmd2 = "stat --printf '{}' '{}'".format(
-                    field_printf, entry2)
+                    _printf, entry2)
                 diff_cmd = "diff <({} 2>&1) <({} 2>&1)".format(
                     stat_cmd1, stat_cmd2)
                 self.execute_cmd(diff_cmd)

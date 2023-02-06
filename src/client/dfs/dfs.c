@@ -743,6 +743,55 @@ get_num_entries(daos_handle_t oh, daos_handle_t th, uint32_t *nr,
 }
 
 static int
+update_stbuf_times(struct dfs_entry entry, daos_epoch_t max_epoch, struct stat *stbuf,
+		   uint64_t *obj_hlc)
+{
+	struct timespec obj_mtime, entry_mtime;
+	int		rc;
+
+	/** the file/dir have not been touched, so the entry times are accurate */
+	if (max_epoch == 0) {
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+		return 0;
+	}
+
+	rc = crt_hlc2timespec(max_epoch, &obj_mtime);
+	if (rc) {
+		D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	if (obj_hlc)
+		*obj_hlc = max_epoch;
+
+	rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
+	if (rc) {
+		D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	if (obj_mtime.tv_sec == entry_mtime.tv_sec && obj_mtime.tv_nsec == entry_mtime.tv_nsec) {
+		/*
+		 * internal mtime entry set through a user set mtime and is up to date with the
+		 * object epoch time, which means that the user set mtime in the inode entry is the
+		 * correct value to return.
+		 */
+		stbuf->st_mtim.tv_sec = entry.mtime;
+		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+	} else {
+		/*
+		 * the user has not updated the mtime explicitly or the object itself was modified
+		 * after an explicit mtime update.
+		 */
+		stbuf->st_mtim.tv_sec = obj_mtime.tv_sec;
+		stbuf->st_mtim.tv_nsec = obj_mtime.tv_nsec;
+	}
+
+	return 0;
+}
+
+static int
 entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, size_t len,
 	   struct dfs_obj *obj, bool get_size, struct stat *stbuf, uint64_t *obj_hlc)
 {
@@ -820,46 +869,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		}
 
 		size = array_stbuf.st_size;
-		/** object was updated since creation */
-		if (array_stbuf.st_max_epoch) {
-			struct timespec obj_mtime, entry_mtime;
-
-			rc = crt_hlc2timespec(array_stbuf.st_max_epoch, &obj_mtime);
-			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-				return daos_der2errno(rc);
-			}
-
-			if (obj_hlc)
-				*obj_hlc = array_stbuf.st_max_epoch;
-
-			rc = crt_hlc2timespec(entry.obj_hlc, &entry_mtime);
-			if (rc) {
-				D_ERROR("crt_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-				return daos_der2errno(rc);
-			}
-
-			if (obj_mtime.tv_sec == entry_mtime.tv_sec &&
-			    obj_mtime.tv_nsec == entry_mtime.tv_nsec) {
-				/*
-				 * internal mtime entry set through a user set mtime and is up to
-				 * date with the object epoch time, which means that the user set
-				 * mtime in the inode entry is the correct value to return.
-				 */
-				stbuf->st_mtim.tv_sec = entry.mtime;
-				stbuf->st_mtim.tv_nsec = entry.mtime_nano;
-			} else {
-				/*
-				 * the user has not updated the mtime explicitly or the object
-				 * itself was modified after an explicit mtime update.
-				 */
-				stbuf->st_mtim.tv_sec = obj_mtime.tv_sec;
-				stbuf->st_mtim.tv_nsec = obj_mtime.tv_nsec;
-			}
-		} else {
-			stbuf->st_mtim.tv_sec = entry.mtime;
-			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
-		}
+		rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, obj_hlc);
+		if (rc)
+			return rc;
 
 		/*
 		 * TODO - this is not accurate since it does not account for
@@ -888,11 +900,11 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	stbuf->st_ctim.tv_nsec = entry.ctime_nano;
 	if (dfs->layout_v > 2) {
 		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-			stbuf->st_atim.tv_sec = entry.ctime;
-			stbuf->st_atim.tv_nsec = entry.ctime_nano;
+			stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
+			stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
 		} else {
-			stbuf->st_atim.tv_sec = entry.mtime;
-			stbuf->st_atim.tv_nsec = entry.mtime_nano;
+			stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
+			stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 		}
 	} else {
 		stbuf->st_atim.tv_sec = entry.atime;
@@ -3470,17 +3482,21 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 
 		/** we need the file size if stat struct is needed */
 		if (stbuf) {
-			daos_size_t size;
+			daos_array_stbuf_t	array_stbuf = {0};
 
-			rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size,
-						 NULL);
+			rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
 			if (rc) {
 				daos_array_close(obj->oh, NULL);
-				D_ERROR("daos_array_get_size() Failed "DF_RC"\n", DP_RC(rc));
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
-			stbuf->st_size = size;
+			stbuf->st_size = array_stbuf.st_size;
 			stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
+
+			rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf, NULL);
+			if (rc) {
+				daos_array_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc);
+			}
 		}
 		break;
 	case S_IFLNK:
@@ -3494,8 +3510,11 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_FREE(entry.value);
 			if (obj->value == NULL)
 				D_GOTO(err_obj, rc = ENOMEM);
-			if (stbuf)
+			if (stbuf) {
 				stbuf->st_size = entry.value_len;
+				stbuf->st_mtim.tv_sec = entry.mtime;
+				stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+			}
 		} else {
 			dfs_obj_t *sym;
 
@@ -3519,8 +3538,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		break;
 	case S_IFDIR:
-		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh,
-				   NULL);
+		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
 			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -3529,8 +3547,11 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		obj->d.chunk_size = entry.chunk_size;
 		obj->d.oclass = entry.oclass;
 
-		if (stbuf)
+		if (stbuf) {
 			stbuf->st_size = sizeof(entry);
+			stbuf->st_mtim.tv_sec = entry.mtime;
+			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
+		}
 		break;
 	default:
 		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
@@ -3545,17 +3566,15 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = entry.uid;
 		stbuf->st_gid = entry.gid;
-		stbuf->st_mtim.tv_sec = entry.mtime;
-		stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 		stbuf->st_ctim.tv_sec = entry.ctime;
 		stbuf->st_ctim.tv_nsec = entry.ctime_nano;
 		if (dfs->layout_v > 2) {
 			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-				stbuf->st_atim.tv_sec = entry.ctime;
-				stbuf->st_atim.tv_nsec = entry.ctime_nano;
+				stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
+				stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
 			} else {
-				stbuf->st_atim.tv_sec = entry.mtime;
-				stbuf->st_atim.tv_nsec = entry.mtime_nano;
+				stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
+				stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 			}
 		} else {
 			stbuf->st_atim.tv_sec = entry.atime;
