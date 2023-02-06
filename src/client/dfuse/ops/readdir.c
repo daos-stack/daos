@@ -419,14 +419,16 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 	if (!to_seek) {
 		if (hdl->drh_dre_last_index == 0) {
-			if (offset == hdl->drh_dre[hdl->drh_dre_index].dre_offset)
+			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset)
 				to_seek = true;
 		} else {
 			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset)
 				to_seek = true;
 		}
-		DFUSE_TRA_ERROR(oh, "seeking, %#lx %d %#lx", offset, hdl->drh_dre_last_index,
-				hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+		if (to_seek)
+			DFUSE_TRA_ERROR(oh, "seeking, %#lx %d %#lx", offset,
+					hdl->drh_dre_last_index,
+					hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 	}
 
 	if (to_seek) {
