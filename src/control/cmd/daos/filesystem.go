@@ -108,7 +108,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 type fsAttrCmd struct {
 	existingContainerCmd
 
-	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container, when using pool and container instead of --path and the UNS"`
+	DfsPath   string `long:"dfs-path" short:"H" description:"DFS path relative to root of container (required when using pool and container instead of --path)"`
 	DfsPrefix string `long:"dfs-prefix" short:"I" description:"Optional prefix path to the root of the DFS container when using pool and container"`
 }
 
@@ -124,6 +124,11 @@ func setupFSAttrCmd(cmd *fsAttrCmd) (*C.struct_cmd_args_s, func(), error) {
 			return nil, nil, errors.New("Cannot use both --dfs-path and --path")
 		}
 		ap.dfs_path = C.CString(cmd.DfsPath)
+	} else {
+		if cmd.Path == "" {
+			deallocCmdArgs()
+			return nil, nil, errors.New("--dfs-path is required if not using --path")
+		}
 	}
 	if cmd.DfsPrefix != "" {
 		if cmd.Path != "" {
