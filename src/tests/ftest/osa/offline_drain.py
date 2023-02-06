@@ -15,7 +15,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
-    daos_server offline drain test cases.
+    daos_server offline drain test cases
 
     :avocado: recursive
     """
