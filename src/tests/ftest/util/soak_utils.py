@@ -22,9 +22,9 @@ from general_utils import get_host_data, get_random_string, \
     run_pcmd, convert_list, get_log_file
 from command_utils_base import EnvironmentVariables
 import slurm_utils
+from run_utils import run_remote
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
-from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
 from macsio_util import MacsioCommand
@@ -136,7 +136,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
         self (obj): soak obj
         source_dir (str): Source directory to archive
         dest_dir (str): Destination directory
-        host_list (list): list of hosts
+        host_list (NodeSet): list of hosts
 
     Raises:
         SoakTestError: if there is an error with the remote copy
@@ -156,9 +156,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             # tagged with the hostname
             command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(
                 source_dir, shared_dir_tmp)
-            result = slurm_utils.srun(
-                self.log, self.control, NodeSet.fromlist([host]), command, self.srun_params,
-                timeout=300)
+            result = run_remote(self.log, host, command, timeout=300)
             if not result.passed:
                 raise SoakTestError(
                     "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host))
@@ -173,9 +171,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     else:
         # copy the remote dir on all client nodes to a shared directory
         command = "/usr/bin/rsync -avtr --min-size=1B {0} {1}/..".format(source_dir, shared_dir)
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(host_list), command, self.srun_params,
-            timeout=300)
+        result = run_remote(self.log, host_list, command, timeout=300)
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: Soak remote logfiles not copied from clients>>: {}".format(host_list))
@@ -193,8 +189,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     if rm_remote:
         # remove the remote soak logs for this pass
         command = "/usr/bin/rm -rf {0}".format(source_dir)
-        result = slurm_utils.srun(
-            self.log, self.control, NodeSet.fromlist(host_list), command, self.srun_params)
+        result = run_remote(self.log, host_list, command)
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: Soak logfiles removal failed>>: {} on {}".format(directory, host_list))
@@ -817,14 +812,10 @@ def cleanup_dfuse(self):
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
-    result = slurm_utils.srun(
-        self.log, self.control, NodeSet.fromlist(self.hostlist_clients), ";".join(cmd),
-        self.srun_params, timeout=600)
+    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd), timeout=600)
     if not result.passed:
         self.log.info("Dfuse processes not stopped Error")
-    result = slurm_utils.srun(
-        self.log, self.control, NodeSet.fromlist(self.hostlist_clients), ";".join(cmd2),
-        self.srun_params, timeout=600)
+    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd2), timeout=600)
     if not result.passed:
         self.log.info("Dfuse mount points not deleted Error")
 
