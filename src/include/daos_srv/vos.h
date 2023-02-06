@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1230,6 +1230,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
 };
 
 /*
@@ -1325,7 +1326,9 @@ struct scrub_ctx {
 	void			*sc_sched_arg;
 
 	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	uint8_t			 sc_did_yield:1,
+				 sc_cont_loaded :1, /* Have all the containers been loaded */
+				 sc_first_pass_done:1; /* Is this the first pass of the scrubber */
 };
 
 /*
