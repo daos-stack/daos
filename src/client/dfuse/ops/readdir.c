@@ -426,9 +426,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				to_seek = true;
 		}
 		if (to_seek)
-			DFUSE_TRA_ERROR(oh, "seeking, %#lx %d %#lx", offset,
-					hdl->drh_dre_last_index,
-					hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+			DFUSE_TRA_INFO(oh, "seeking, %#lx %d %#lx", offset, hdl->drh_dre_last_index,
+				       hdl->drh_dre[hdl->drh_dre_index].dre_offset);
 	}
 
 	if (to_seek) {
