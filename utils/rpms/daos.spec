@@ -14,7 +14,7 @@
 %endif
 
 Name:          daos
-Version:       2.3.101
+Version:       2.3.103
 Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
