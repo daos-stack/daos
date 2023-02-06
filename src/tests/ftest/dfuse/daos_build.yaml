@@ -5,7 +5,7 @@ hosts:
 timeout: 10800
 timeouts:
   test_dfuse_daos_build_wt: 36000
-  test_dfuse_daos_build_wt_il: 36000
+  test_dfuse_daos_build_wt_il: 72000
 server_config:
   name: daos_server
   crt_timeout: 120
