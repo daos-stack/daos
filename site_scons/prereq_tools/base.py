@@ -522,6 +522,8 @@ class PreReqComponent():
                 self._build_targets.append('server')
         BUILD_TARGETS.append(build_dir)
 
+        env.AddMethod(self.require, 'require')
+
     def run_build(self, opts):
         """Build and dependencies"""
         # argobots is not really needed by client but it's difficult to separate
@@ -552,11 +554,9 @@ class PreReqComponent():
         except Exception as old:
             raise BadScript("components", traceback.format_exc()) from old
 
-        env.AddMethod(self.require, 'require')
-
         # Go ahead and prebuild some components
         for comp in reqs:
-            env.Clone().require(comp)
+            self.__env.Clone().require(comp)
 
     def _setup_build_type(self):
         """Set build type"""
