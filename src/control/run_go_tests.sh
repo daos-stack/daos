@@ -119,11 +119,11 @@ function setup_environment()
 
 function emit_junit_failure()
 {
-    cname="run_go_tests"
-    tname="${1:-subtest}"
-    fname="${DAOS_BASE}/test_results/${cname}.${tname}.xml"
+    local cname="run_go_tests"
+    local tname="${1:-subtest}"
+    local fname="${DAOS_BASE}/test_results/${cname}.${tname}.xml"
 
-    teststr="    <testcase classname=\"$cname\" name=\"$tname\">
+    local teststr="    <testcase classname=\"$cname\" name=\"$tname\">
     <failure type=\"format\">
       <![CDATA[$2
         ]]>
@@ -134,9 +134,7 @@ function emit_junit_failure()
 <?xml version="1.0" encoding="UTF-8" ?>
 <testsuites>
   <testsuite tests="1" failures="1" errors="0" skipped="0" >
-EOF
-echo "${teststr}" >> "${fname}"
-cat >> "${fname}" << EOF
+    ${teststr}
   </testsuite>
 </testsuites>
 EOF
