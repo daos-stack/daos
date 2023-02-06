@@ -3382,6 +3382,13 @@ obj_shard_list_obj_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	ptr += iter_arg->merge_sgl_off;
+	D_ASSERTF(obj_arg->sgl->sg_iovs[0].iov_buf_len >=
+		  obj_arg->sgl->sg_iovs[0].iov_len +
+		  shard_arg->la_sgl->sg_iovs[0].iov_len,
+		  "buf size %zu/%zu shard buf size %zu shard %u "DF_OID" shard_nr %u merge_nr %u\n",
+		  obj_arg->sgl->sg_iovs[0].iov_buf_len, obj_arg->sgl->sg_iovs[0].iov_len,
+		  shard_arg->la_sgl->sg_iovs[0].iov_len, shard_auxi->shard,
+		  DP_OID(obj_auxi->obj->cob_md.omd_id), shard_arg->la_nr, iter_arg->merge_nr);
 	memcpy(ptr, shard_arg->la_sgl->sg_iovs[0].iov_buf,
 	       shard_arg->la_sgl->sg_iovs[0].iov_len);
 	obj_arg->sgl->sg_iovs[0].iov_len +=
