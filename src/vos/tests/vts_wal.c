@@ -1061,9 +1061,9 @@ run_wal_tests(const char *cfg)
 	unsigned int	 val = 0;
 	int		 i, rc;
 
-	d_getenv_int("DAOS_MD_ON_SSD", &val);
+	d_getenv_int("DAOS_MD_ON_SSD_MODE", &val);
 	if (val == 0) {
-		print_message("DAOS_MD_ON_SSD isn't enabled, skip all tests.\n");
+		print_message("DAOS_MD_ON_SSD_MODE isn't enabled, skip all tests.\n");
 		return 0;
 	}
 

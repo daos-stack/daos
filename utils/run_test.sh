@@ -148,17 +148,12 @@ if [ -d "/mnt/daos" ]; then
 
         rm -f "${AIO_DEV}"
         dd if=/dev/zero of="${AIO_DEV}" bs=1G count=20
-        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_7\"+g" ${NVME_CONF}
+        sed -i "s+\"name\": \"AIO_1\"+\"name\": \"AIO_1_1_7\"+g" ${NVME_CONF}
 
-        LMM_DB_PATH=$(mktemp -d /tmp/lmm_db_XXXXX)
-        export DAOS_MD_ON_SSD=1
-        export DAOS_LMM_DB_PATH=$LMM_DB_PATH
         run_test "sudo -E ${SL_PREFIX}/bin/vos_tests" -a
-        unset DAOS_MD_ON_SSD DAOS_LMM_DB_PATH
 
         rm -f "${AIO_DEV}"
         rm -f "${NVME_CONF}"
-        rm -f "${LMM_DB_PATH}"
 
         run_test src/vos/tests/evt_stress.py
         run_test src/vos/tests/evt_stress.py --algo dist_even

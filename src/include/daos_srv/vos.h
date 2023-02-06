@@ -1286,6 +1286,7 @@ struct cont_scrub {
 	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
+	bool			 scs_props_fetched;
 };
 
 /*
@@ -1309,19 +1310,22 @@ enum scrub_status {
 };
 
 struct scrub_ctx_metrics {
-	struct d_tm_node_t *scm_pool_ult_wait_time;
-	struct d_tm_node_t *scm_start;
-	struct d_tm_node_t *scm_end;
-	struct d_tm_node_t *scm_last_duration;
-	struct d_tm_node_t *scm_csum_calcs;
-	struct d_tm_node_t *scm_csum_calcs_last;
-	struct d_tm_node_t *scm_csum_calcs_total;
-	struct d_tm_node_t *scm_bytes_scrubbed;
-	struct d_tm_node_t *scm_bytes_scrubbed_last;
-	struct d_tm_node_t *scm_bytes_scrubbed_total;
-	struct d_tm_node_t *scm_corruption;
-	struct d_tm_node_t *scm_corruption_total;
-	struct d_tm_node_t *scm_scrub_count;
+	struct d_tm_node_t	*scm_next_csum_scrub;
+	struct d_tm_node_t	*scm_next_tree_scrub;
+	struct d_tm_node_t	*scm_busy_time;
+	struct d_tm_node_t	*scm_start;
+	struct d_tm_node_t	*scm_last_duration;
+	struct d_tm_node_t	*scm_csum_calcs;
+	struct d_tm_node_t	*scm_csum_calcs_last;
+	struct d_tm_node_t	*scm_csum_calcs_total;
+	struct d_tm_node_t	*scm_bytes_scrubbed;
+	struct d_tm_node_t	*scm_bytes_scrubbed_last;
+	struct d_tm_node_t	*scm_bytes_scrubbed_total;
+	struct d_tm_node_t	*scm_corruption;
+	struct d_tm_node_t	*scm_corruption_total;
+	struct d_tm_node_t	*scm_scrub_count;
+	struct timespec		 scm_busy_start;
+
 };
 
 /* Scrub the pool */
@@ -1378,7 +1382,9 @@ struct scrub_ctx {
 	void			*sc_sched_arg;
 
 	enum scrub_status	 sc_status;
-	bool			 sc_did_yield;
+	uint8_t			 sc_did_yield:1,
+				 sc_cont_loaded :1, /* Have all the containers been loaded */
+				 sc_first_pass_done:1; /* Is this the first pass of the scrubber */
 };
 
 /*

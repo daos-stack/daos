@@ -23,8 +23,36 @@ engine_1: &engine_1_base
   fabric_iface_port: 31417
   log_file: daos_server1.log
 
-server_configurations: !mux
-  1_tier:
+storage_0: &storage_dcpm
+  class: dcpm
+  scm_list: ["/dev/pmem0"]
+
+storage_1: &storage_ram
+  class: ram
+  scm_size: 100
+
+storage_2: &storage_nvme_all
+  class: nvme
+  roles: [wal, index, data]
+
+storage_3: &storage_nvme_wal_index
+  class: nvme
+  roles: [wal, index]
+
+storage_4: &storage_nvme_wal
+  class: nvme
+  roles: [wal]
+
+storage_5: &storage_nvme_index
+  class: nvme
+  roles: [index]
+
+storage_6: &storage_nvme_data
+  class: nvme
+  roles: [data]
+
+configurations: !mux
+  1_tier_dcpm:
     server_config:
       engines_per_host: 2
       engines:
@@ -32,17 +60,15 @@ server_configurations: !mux
           <<: *engine_0_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
+              <<: *storage_dcpm
               scm_mount: /mnt/daos0
         1:
           <<: *engine_1_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
+              <<: *storage_dcpm
               scm_mount: /mnt/daos1
-  2_tiers:
+  1_tier_implicit:
     server_config:
       engines_per_host: 2
       engines:
@@ -50,8 +76,23 @@ server_configurations: !mux
           <<: *engine_0_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+  2_tiers_dcpm:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_dcpm
               scm_mount: /mnt/daos0
             1:
               class: nvme
@@ -60,13 +101,12 @@ server_configurations: !mux
           <<: *engine_1_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
+              <<: *storage_dcpm
               scm_mount: /mnt/daos1
             1:
               class: nvme
               bdev_list: ["bbbb:bb:bb.b"]
-  3_tiers:
+  2_tiers_implicit:
     server_config:
       engines_per_host: 2
       engines:
@@ -74,8 +114,51 @@ server_configurations: !mux
           <<: *engine_0_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b"]
+  2_tiers_explicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["bbbb:bb:bb.b"]
+  3_tiers_implicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
               scm_mount: /mnt/daos0
             1:
               class: nvme
@@ -87,8 +170,7 @@ server_configurations: !mux
           <<: *engine_1_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
+              <<: *storage_ram
               scm_mount: /mnt/daos1
             1:
               class: nvme
@@ -96,7 +178,7 @@ server_configurations: !mux
             2:
               class: nvme
               bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
-  4_tiers:
+  3_tiers_explicit:
     server_config:
       engines_per_host: 2
       engines:
@@ -104,8 +186,35 @@ server_configurations: !mux
           <<: *engine_0_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem0"]
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["aaaa:aa:aa.a"]
+            2:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["bbbb:bb:bb.b"]
+            2:
+              <<: *storage_nvme_data
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+  4_tiers_implicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
               scm_mount: /mnt/daos0
             1:
               class: nvme
@@ -120,8 +229,7 @@ server_configurations: !mux
           <<: *engine_1_base
           storage:
             0:
-              class: dcpm
-              scm_list: ["/dev/pmem1"]
+              <<: *storage_ram
               scm_mount: /mnt/daos1
             1:
               class: nvme
@@ -132,3 +240,117 @@ server_configurations: !mux
             3:
               class: nvme
               bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+  4_tiers_explicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["aaaa:aa:aa.a"]
+            2:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+            3:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              <<: *storage_nvme_wal
+              bdev_list: ["bbbb:bb:bb.b"]
+            2:
+              <<: *storage_nvme_index
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+            3:
+              <<: *storage_nvme_data
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+  5_tiers_implicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a"]
+            2:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+            3:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+            4:
+              class: nvme
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b"]
+            2:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+            3:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+            4:
+              class: nvme
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+  5_tiers_explicit:
+    server_config:
+      engines_per_host: 2
+      engines:
+        0:
+          <<: *engine_0_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos0
+            1:
+              <<: *storage_nvme_wal_index
+              bdev_list: ["aaaa:aa:aa.a"]
+            2:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+            3:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+            4:
+              <<: *storage_nvme_data
+              bdev_list: ["aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a", "aaaa:aa:aa.a"]
+        1:
+          <<: *engine_1_base
+          storage:
+            0:
+              <<: *storage_ram
+              scm_mount: /mnt/daos1
+            1:
+              <<: *storage_nvme_wal
+              bdev_list: ["bbbb:bb:bb.b"]
+            2:
+              <<: *storage_nvme_index
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+            3:
+              <<: *storage_nvme_data
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
+            4:
+              <<: *storage_nvme_data
+              bdev_list: ["bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b", "bbbb:bb:bb.b"]
