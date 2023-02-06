@@ -2414,11 +2414,11 @@ class Launch():
             umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
             umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
             if umount_result.failed_hosts:
-                self._fail_test(
-                    test, "Process", f"Failed to unmount on {umount_result.failed_hosts}")
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
             else:
-                self._warn_test(
-                    test, "Process", f"Unexpected mounts on {mount_grep_result.passed_hosts}")
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
 
         return 4096 if any_found else 0
 
