@@ -367,6 +367,8 @@ test_simple_commit_tx(void **state)
 	assert_true((gdata.abort_cb == 0) && (gdata.abort_cb_noop == 1));
 	assert_true((gdata.commit_cb == 1) && (gdata.commit_cb_noop == 0));
 	assert_true((gdata.end_cb == 1) && (gdata.end_cb_noop == 0));
+
+	umem_fini_txd(&txd);
 }
 
 static void
@@ -437,6 +439,7 @@ test_simple_abort_tx(void **state)
 
 	ptr = umem_off2ptr(umm, off);
 	assert_true(strcmp(ptr, "0123456789") == 0);
+	umem_fini_txd(&txd);
 }
 
 static void
@@ -516,6 +519,7 @@ test_nested_commit_tx(void **state)
 	assert_true((gdata.abort_cb == 0) && (gdata.abort_cb_noop == 1));
 	assert_true((gdata.commit_cb == 1) && (gdata.commit_cb_noop == 0));
 	assert_true((gdata.end_cb == 1) && (gdata.end_cb_noop == 0));
+	umem_fini_txd(&txd);
 }
 
 static void
@@ -624,6 +628,7 @@ test_nested_outer_abort_tx(void **state)
 	assert_true(strcmp(ptr1, "0123456789") == 0);
 	ptr2 = umem_off2ptr(umm, off2);
 	assert_true(strcmp(ptr2, "ABCDEFGHIJ") == 0);
+	umem_fini_txd(&txd);
 }
 
 static void
@@ -735,6 +740,7 @@ test_nested_inner_abort_tx(void **state)
 	assert_true(strcmp(ptr1, "0123456789") == 0);
 	ptr2 = umem_off2ptr(umm, off2);
 	assert_true(strcmp(ptr2, "ABCDEFGHIJ") == 0);
+	umem_fini_txd(&txd);
 }
 
 static void
@@ -1432,6 +1438,8 @@ main(int argc, char **argv)
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests_name("umem tests", umem_tests,
-					   global_setup, global_teardown);
+	rc = cmocka_run_group_tests_name("umem tests", umem_tests, global_setup, global_teardown);
+
+	daos_debug_fini();
+	return rc;
 }
