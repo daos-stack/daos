@@ -1,4 +1,4 @@
-# Copyright 2016-2022 Intel Corporation
+# Copyright 2016-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,8 +22,8 @@
 
 import platform
 import distro
+from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
-# from prereq_tools import WebRetriever
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -58,7 +58,8 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        print(f'Using build version of {name}')
+        if not GetOption('help'):
+            print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
 
@@ -68,7 +69,8 @@ def include(reqs, name, use_value, exclude_value):
     if reqs.included(name):
         print(f'Including {name} optional component from build')
         return use_value
-    print(f'Excluding {name} optional component from build')
+    if not GetOption('help'):
+        print(f'Excluding {name} optional component from build')
     return exclude_value
 
 
@@ -88,14 +90,17 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
+    print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
-    return config.TryCompile(code, ".c")
+    rc = config.TryCompile(code, ".c")
+    print('yes' if rc else 'no')
+    return rc
 
 
 def define_mercury(reqs):
-    """mercury definitions"""
+    """Mercury definitions"""
     libs = ['rt']
 
     if reqs.get_env('PLATFORM') == 'darwin':
@@ -216,7 +221,7 @@ def define_mercury(reqs):
 
 
 def define_common(reqs):
-    """common system component definitions"""
+    """Common system component definitions"""
     reqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
 
     reqs.define('libunwind', libs=['unwind'], headers=['libunwind.h'],
