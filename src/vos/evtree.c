@@ -1940,9 +1940,15 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		bool                     changed;
 
 		trace	= &tcx->tc_trace[level];
-		rc      = evt_node_extend(tcx, trace);
-		if (rc != 0)
-			goto failed;
+		if (tcx->tc_depth > 1) {
+			D_ASSERTF(tcx->tc_order == tcx->tc_max_order,
+				  "Dynamic ordering for root only. order=%d != max_order=%d\n",
+				  tcx->tc_order, tcx->tc_max_order);
+		} else {
+			rc = evt_node_extend(tcx, trace);
+			if (rc != 0)
+				goto failed;
+		}
 
 		nm_cur	= trace->tr_node;
 		nd_cur = evt_off2node(tcx, nm_cur);

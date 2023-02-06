@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1841,8 +1841,7 @@ test_evt_node_size_internal(void **state)
 		evt_created = false;
 		rc = evt_create(arg->ta_root, ts_feats, order_size,
 				arg->ta_uma, &ts_evt_desc_cbs, &toh);
-		if ((order_size >= EVT_MIN_ORDER) &&
-		(order_size <= EVT_MAX_ORDER)) {
+		if ((order_size >= EVT_ORDER_MIN) && (order_size <= EVT_ORDER_MAX)) {
 			assert_rc_equal(rc, 0);
 			evt_created = true;
 		} else {

@@ -67,10 +67,10 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */
 #define VOS_OBJ_ORDER           15      /* Order of object tree */
-#define VOS_KTR_ORDER           20      /* order of d/a-key tree */
-#define VOS_SVT_ORDER		5	/* order of single value tree */
-#define VOS_EVT_ORDER           EVT_MAX_ORDER /* evtree order */
-#define DTX_BTREE_ORDER	23	/* Order for DTX tree */
+#define VOS_KTR_ORDER           20      /* Order of d/a-key tree */
+#define VOS_SVT_ORDER           5       /* Order of single value tree */
+#define VOS_EVT_ORDER           15      /* Order of evtree */
+#define DTX_BTREE_ORDER         23      /* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
 extern struct dss_module_key vos_module_key;
