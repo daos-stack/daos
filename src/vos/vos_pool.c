@@ -284,9 +284,9 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 }
 
 int
-vos_pool_settings_init(void)
+vos_pool_settings_init(bool md_on_ssd)
 {
-	return umempobj_settings_init();
+	return umempobj_settings_init(md_on_ssd);
 }
 
 static inline enum bio_mc_flags

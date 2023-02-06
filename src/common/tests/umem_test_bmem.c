@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  * (C) Copyright 2023 Hewlett Packard Enterprise Development LP.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
@@ -127,8 +127,7 @@ global_setup(void **state)
 {
 	struct test_arg	*arg;
 
-	setenv("DAOS_MD_ON_SSD", "1", 1);
-	if (umempobj_settings_init() != 0) {
+	if (umempobj_settings_init(true) != 0) {
 		print_message("Failed to set the md_on_ssd tunable\n");
 		return 1;
 	}

@@ -457,7 +457,7 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = d_hlc_get();
 
-	rc = vos_pool_settings_init();
+	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
 		D_ERROR("VOS pool setting initialization error\n");
 		return rc;
@@ -667,10 +667,6 @@ struct dss_module vos_srv_module =  {
 static void
 vos_self_nvme_fini(void)
 {
-	if (self_mode.self_xs_ctxt != NULL) {
-		bio_xsctxt_free(self_mode.self_xs_ctxt);
-		self_mode.self_xs_ctxt = NULL;
-	}
 	if (self_mode.self_nvme_init) {
 		bio_nvme_fini();
 		self_mode.self_nvme_init = false;
@@ -685,7 +681,7 @@ vos_self_nvme_fini(void)
 #define VOS_NVME_NR_TARGET	1
 
 static int
-vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
+vos_self_nvme_init(const char *vos_path)
 {
 	char	*nvme_conf;
 	int	 rc, fd;
@@ -724,11 +720,6 @@ vos_self_nvme_init(const char *vos_path, uint32_t tgt_id)
 		goto out;
 
 	self_mode.self_nvme_init = true;
-	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
-	if (rc) {
-		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
 out:
 	D_FREE(nvme_conf);
 	return rc;
@@ -737,6 +728,10 @@ out:
 static void
 vos_self_fini_locked(void)
 {
+	if (self_mode.self_xs_ctxt != NULL) {
+		bio_xsctxt_free(self_mode.self_xs_ctxt);
+		self_mode.self_xs_ctxt = NULL;
+	}
 
 	vos_self_nvme_fini();
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
@@ -776,18 +771,17 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
 	char		*evt_mode;
 	int		 rc = 0;
-	char		*lmm_db_path = getenv("DAOS_LMM_DB_PATH");
 	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	rc = ABT_init(0, NULL);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	vos_start_epoch = 0;
 
@@ -795,38 +789,43 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
-		D_GOTO(out, rc);
+		goto out;
 	}
 #endif
+	rc = vos_self_nvme_init(db_path);
+	if (rc)
+		goto failed;
+
 	rc = vos_mod_init();
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		/* LMM DB path same as VOS DB path argument in self init case */
+		if (use_sys_db)
+			rc = lmm_db_init(db_path);
+		else
+			rc = lmm_db_init_ex(db_path, "self_db", true, true);
+		db = lmm_db_get();
+	} else {
 		if (use_sys_db)
 			rc = vos_db_init(db_path);
 		else
 			rc = vos_db_init_ex(db_path, "self_db", true, true);
 		db = vos_db_get();
-	} else {
-		if (lmm_db_path == NULL)
-			lmm_db_path = LMMDB_PATH;
-		if (use_sys_db)
-			rc = lmm_db_init(lmm_db_path);
-		else
-			rc = lmm_db_init_ex(lmm_db_path, "self_db", true, true);
-		db = lmm_db_get();
 	}
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
 	rc = smd_init(db);
 	if (rc)
-		D_GOTO(failed, rc);
+		goto failed;
 
-	rc = vos_self_nvme_init(db_path, tgt_id);
-	if (rc)
-		D_GOTO(failed, rc);
+	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
+	if (rc) {
+		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
+		goto failed;
+	}
 
 	evt_mode = getenv("DAOS_EVTREE_MODE");
 	if (evt_mode) {

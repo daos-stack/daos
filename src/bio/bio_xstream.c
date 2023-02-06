@@ -59,8 +59,6 @@ bool bio_spdk_inited;
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
-/* FIXME: Remove it once md on SSD feature is fully done */
-static bool md_on_ssd_enabled;
 unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
 
 struct bio_nvme_data {
@@ -251,8 +249,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
-
-	d_getenv_bool("DAOS_MD_ON_SSD", &md_on_ssd_enabled);
 
 	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
@@ -1116,14 +1112,6 @@ bio_nvme_configured(enum smd_dev_type type)
 
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
-	/*
-	 * FIXME When storage class 'ram' is used in server yaml, control
-	 * plane regards MD on SSD is enabled and meta role will be set to
-	 * bdev name, that'll fail CI tests before the md on SSD feature is
-	 * fully implemented.
-	 */
-	if (type == SMD_DEV_TYPE_META && !md_on_ssd_enabled)
-		return false;
 
 	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
 }

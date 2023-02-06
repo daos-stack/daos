@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1398,8 +1398,14 @@ void
 vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 		   struct vos_akey_data *ad);
 
+/** Init VOS pool settings
+ *
+ *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
+ *
+ *  \return		Zero on Success, Error otherwise
+ */
 int
-vos_pool_settings_init(void);
+vos_pool_settings_init(bool md_on_ssd);
 
 /** Raise a RAS event on incompatible durable format
  *

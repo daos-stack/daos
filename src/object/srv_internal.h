@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -155,7 +155,16 @@ struct obj_tls {
 
 	struct d_tm_node_t	*ot_update_vos_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_vos_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_update_bio_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_fetch_bio_lat[NR_LATENCY_BUCKETS];
 };
+
+static inline struct obj_tls *
+obj_tls_get()
+{
+	return dss_module_key_get(dss_tls_get(), &obj_module_key);
+}
 
 static inline unsigned int
 lat_bucket(uint64_t size)
@@ -175,10 +184,53 @@ lat_bucket(uint64_t size)
 	return 56 - nr;
 }
 
-static inline struct obj_tls *
-obj_tls_get()
+enum latency_type {
+	BULK_LATENCY,
+	BIO_LATENCY,
+	VOS_LATENCY,
+};
+
+static inline void
+obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)
 {
-	return dss_module_key_get(dss_tls_get(), &obj_module_key);
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+
+	latency >>= 10; /* convert to micro seconds */
+
+	if (opc == DAOS_OBJ_RPC_FETCH) {
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_fetch_bio_lat[lat_bucket(io_size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+	} else if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE) {
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_update_bio_lat[lat_bucket(io_size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+	} else {
+		/* Ignore other ops for the moment */
+		return;
+	}
+	d_tm_set_gauge(lat, latency);
 }
 
 struct ds_obj_exec_arg {
