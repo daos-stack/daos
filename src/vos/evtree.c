@@ -1423,11 +1423,9 @@ static int
 evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	       umem_off_t *nd_off_p)
 {
-	struct evt_node		*nd;
-	int                      slab;
+	struct evt_node         *nd;
 	umem_off_t		 nd_off;
-	bool			 leaf = (flags & EVT_NODE_LEAF);
-	int                      size;
+	bool                     leaf = (flags & EVT_NODE_LEAF);
 
 	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))

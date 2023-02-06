@@ -329,31 +329,6 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-/** Slab translation table for keys, which have dynamic order */
-static const int key_order2slab[] = {
-    0,
-    VOS_SLAB_KEY_NODE1, /* order is 1 */
-    0,
-    VOS_SLAB_KEY_NODE3, /* order is 3 */
-    0,
-    0,
-    0,
-    VOS_SLAB_KEY_NODE7, /* order is 7 */
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    VOS_SLAB_KEY_NODE15, /* order is 15 */
-    0,
-    0,
-    0,
-    0,
-    VOS_SLAB_KEY_NODE, /* Order is 20 or VOS_KEY_ORDER */
-};
-
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
@@ -710,13 +685,6 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 	return vos_dtx_check_availability(tins->ti_coh, svt->ir_dtx, *epc,
 					  intent, DTX_RT_SVT, true);
 }
-
-/** Slab translation table for single value, which has dynamic order */
-static const int svt_order2slab[] = {
-    0, VOS_SLAB_SV_NODE1, /* order is 1 */
-    0, VOS_SLAB_SV_NODE3, /* order is 3 */
-    0, VOS_SLAB_SV_NODE,  /* order is 5, or VOS_SVT_ORDER */
-};
 
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
