@@ -284,6 +284,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	int                       added       = 0;
 	int                       rc          = 0;
 	bool                      large_fetch = true;
+	bool                      to_seek     = false;
 	struct dfuse_readdir_hdl *hdl;
 	size_t                    size = *out_size;
 
@@ -342,45 +343,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	 * readdir handle is unique.
 	 */
 	if (oh->doh_rd_offset != offset) {
-		struct dfuse_readdir_hdl *new_hdl;
-		uint32_t                  num;
-
-		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
-
-		oh->doh_kreaddir_invalid = true;
-
-		/* Drop if shared */
-		new_hdl = _handle_make_unique(fs_handle, oh);
-		if (new_hdl == hdl) {
-			dfuse_readdir_reset(hdl);
-		} else {
-			hdl        = new_hdl;
-			oh->doh_rd = new_hdl;
-			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
-		}
-
-		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx(%d) to %#lx (index %d)",
-				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
-				offset, hdl->drh_dre_index);
-
-		num = (uint32_t)offset - OFFSET_BASE;
-		while (num) {
-			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
-					 (NAME_MAX + 1) * num, NULL, NULL);
-			if (rc)
-				D_GOTO(out_reset, rc);
-
-			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
-				dfuse_readdir_reset(hdl);
-				oh->doh_rd_offset = 0;
-				D_GOTO(reply, rc = 0);
-			}
-
-			hdl->drh_anchor_index += num;
-
-			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
-		}
-		large_fetch = false;
+		to_seek = true;
 	} else if (!d_list_empty(&hdl->drh_cache_list)) {
 		/* If there is no seekdir but there is valid cache data then use the cache.
 		 *
@@ -452,6 +415,60 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			oh->doh_rd_nextc = drc;
 			D_GOTO(reply, oh->doh_rd_offset = next_offset);
 		}
+	}
+
+	if (!to_seek) {
+		if (hdl->drh_dre_last_index == 0) {
+			if (offset == hdl->drh_dre[hdl->drh_dre_index].dre_offset)
+				to_seek = true;
+		} else {
+			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset)
+				to_seek = true;
+		}
+		DFUSE_TRA_ERROR(oh, "seeking, %#lx %d %#lx", offset, hdl->drh_dre_last_index,
+				hdl->drh_dre[hdl->drh_dre_index].dre_offset);
+	}
+
+	if (to_seek) {
+		struct dfuse_readdir_hdl *new_hdl;
+		uint32_t                  num;
+
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx to %#lx", oh->doh_rd_offset, offset);
+
+		oh->doh_kreaddir_invalid = true;
+
+		/* Drop if shared */
+		new_hdl = _handle_make_unique(fs_handle, oh);
+		if (new_hdl == hdl) {
+			dfuse_readdir_reset(hdl);
+		} else {
+			hdl        = new_hdl;
+			oh->doh_rd = new_hdl;
+			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
+		}
+
+		DFUSE_TRA_DEBUG(oh, "Seeking from offset %#lx(%d) to %#lx (index %d)",
+				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
+				offset, hdl->drh_dre_index);
+
+		num = (uint32_t)offset - OFFSET_BASE;
+		while (num) {
+			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
+					 (NAME_MAX + 1) * num, NULL, NULL);
+			if (rc)
+				D_GOTO(out_reset, rc);
+
+			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
+				dfuse_readdir_reset(hdl);
+				oh->doh_rd_offset = 0;
+				D_GOTO(reply, rc = 0);
+			}
+
+			hdl->drh_anchor_index += num;
+
+			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
+		}
+		large_fetch = false;
 	}
 
 	/* TODO: Check for EOD when using the cache, we do not want to call dfs_iterate for each
