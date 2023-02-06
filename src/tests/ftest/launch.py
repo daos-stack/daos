@@ -2396,11 +2396,11 @@ class Launch():
             pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
             pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
             if pkill_result.failed_hosts:
-                self._fail_test(
-                    test, "Process", f"Failed to kill processes on {pkill_result.failed_hosts}")
+                message = f"Failed to kill processes on {pkill_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
             else:
-                self._warn_test(
-                    test, "Process", f"Running processes found on {pgrep_result.passed_hosts}")
+                message = f"Running processes found on {pgrep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
 
         logger.info("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging
