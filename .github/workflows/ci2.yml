@@ -53,6 +53,7 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
+        timeout-minutes: 60
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh

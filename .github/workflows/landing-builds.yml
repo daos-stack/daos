@@ -295,10 +295,11 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
+        timeout-minutes: 60
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
-      - name: Checking for corefile
+      - name: Check for corefiles
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
 
