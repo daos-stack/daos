@@ -413,11 +413,8 @@ class IorTestBase(DfuseTestBase):
         if hosts is None:
             hosts = self.hostlist_clients
         result = pcmd(hosts, command, verbose=display_output, timeout=300)
-        if 0 not in result and fail_on_err:
-            hosts = [str(
-                nodes) for code, nodes in list(
-                    result.items()) if code != 0]
-            raise CommandFailure(
-                "Error running '{}' on the following hosts: {}".format(
-                    command, NodeSet(",".join(hosts))))
+        if (0 not in result or len(result) > 1) and fail_on_err:
+            hosts = [str(nodes) for code, nodes in list(result.items()) if code != 0]
+            raise CommandFailure("Error running '{}' on the following hosts: {}".format(
+                command, NodeSet(",".join(hosts))))
         return result
