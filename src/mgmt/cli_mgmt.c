@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -807,7 +807,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	crt_endpoint_t			srv_ep;
 	crt_rpc_t		       *rpc = NULL;
 	struct mgmt_pool_find_in       *rpc_in;
-	struct mgmt_pool_find_out      *rpc_out;
+	struct mgmt_pool_find_out      *rpc_out = NULL;
 	crt_opcode_t			opc;
 	int				i;
 	int				idx;
@@ -876,9 +876,34 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 				DF_RC "\n", DP_RC(rc));
 			crt_req_decref(rpc);
 			idx = (idx + 1) % ms_ranks->rl_nr;
+			success = false;
 			continue;
 		}
-		success = true;
+
+		success = true; /* The RPC invocation succeeded. */
+
+		/* Special case: Unpack the response and check for a
+		 * -DER_NONEXIST from the upcall handler; in which
+		 * case we should retry with another replica.
+		 */
+		rpc_out = crt_reply_get(rpc);
+		D_ASSERT(rpc_out != NULL);
+		if (rpc_out->pfo_rc == -DER_NONEXIST) {
+			/* This MS replica may have a stale copy of the DB. */
+			if (label) {
+				D_DEBUG(DB_MGMT, "%s: pool not found on rank %u\n",
+					label, srv_ep.ep_rank);
+			} else {
+				D_DEBUG(DB_MGMT, DF_UUID": pool not found on rank %u\n",
+					DP_UUID(puuid), srv_ep.ep_rank);
+			}
+			if (i + 1 < ms_ranks->rl_nr) {
+				crt_req_decref(rpc);
+				idx = (idx + 1) % ms_ranks->rl_nr;
+			}
+			continue;
+		}
+
 		break;
 	}
 
@@ -894,7 +919,6 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 		return rc;
 	}
 
-	rpc_out = crt_reply_get(rpc);
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {

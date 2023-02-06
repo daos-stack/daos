@@ -209,7 +209,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		}
 	case *fault.Fault:
 		switch e.Code {
-		case code.ServerDataPlaneNotStarted:
+		case code.ServerDataPlaneNotStarted, code.SystemPoolLocked:
 			return true
 		default:
 			return false
@@ -303,7 +303,17 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		return err
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool destroy failed")
+	if err := ur.getMSError(); err != nil {
+		// If the error is due to a retried destroy failing to find
+		// the pool, then we can assume that the pool was destroyed
+		// via a server-side cleanup and we can intercept it. Everything
+		// else is still an error.
+		if !(ur.retryCount > 0 && system.IsPoolNotFound(err)) {
+			return errors.Wrap(err, "pool destroy failed")
+		}
+	}
+
+	return nil
 }
 
 // PoolUpgradeReq contains the parameters for a pool upgrade request.

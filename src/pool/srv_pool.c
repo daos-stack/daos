@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -967,6 +967,12 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 		goto out;
 	}
 
+	if (event->psv_rank == dss_self_rank() && event->psv_src == CRT_EVS_GRPMOD &&
+	    event->psv_type == CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore exclusion of self\n");
+		goto out;
+	}
+
 	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
 		DP_PS_EVENT(event));
 
@@ -1061,6 +1067,7 @@ init_events(struct pool_svc *svc)
 
 	D_ASSERT(d_list_empty(&events->pse_queue));
 	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
+	D_ASSERT(events->pse_stop == false);
 
 	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
 	if (rc != 0) {
@@ -1116,6 +1123,7 @@ fini_events(struct pool_svc *svc)
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
+	events->pse_stop = false;
 }
 
 static void

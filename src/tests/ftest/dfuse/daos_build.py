@@ -27,7 +27,7 @@ def skip_on_centos7():
 
 class DaosBuild(DfuseTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
-    """Build DAOS over dfuse
+    """Build DAOS over dfuse.
 
     :avocado: recursive
     """
@@ -43,10 +43,11 @@ class DaosBuild(DfuseTestBase):
             Create Posix container
             Mount dfuse
             Checkout and build DAOS sources.
+
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfusedaosbuild
+        :avocado: tags=DaosBuild,test_daos_build
         """
 
         scons = 'scons-3'

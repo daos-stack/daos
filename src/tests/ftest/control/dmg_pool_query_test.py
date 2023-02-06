@@ -1,6 +1,6 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,9 +36,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         pool query command.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_basic,test_pool_query_basic
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
         self.pool.set_query_data()
@@ -105,9 +105,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         argument of the dmg pool subcommand.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_inputs,test_pool_query_inputs
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_inputs
         """
         # Get test UUIDs
         errors_list = []
@@ -152,9 +152,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         accurately show the size changes once there is content in the pool.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=dmg,pool_query,basic,control
-        :avocado: tags=pool_query_write,test_pool_query_ior
+        :avocado: tags=DmgPoolQueryTest,test_pool_query_ior
         """
         # Store original pool info
         self.pool.set_query_data()

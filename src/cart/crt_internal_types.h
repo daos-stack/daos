@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,11 @@
 #define __CRT_INTERNAL_TYPES_H__
 
 #define CRT_CONTEXT_NULL         (NULL)
+
+#ifndef CRT_SRV_CONTEXT_NUM
+#define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
+#endif
+
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
@@ -48,6 +53,9 @@ struct crt_prov_gdata {
 	int			cpg_ctx_num;
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
+
+	/** free-list of indices */
+	bool			cpg_used_idx[CRT_SRV_CONTEXT_NUM];
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
 	uint32_t		cpg_max_exp_size;
@@ -113,6 +121,8 @@ struct crt_gdata {
 	 * others, of type counter
 	 */
 	struct d_tm_node_t	*cg_uri_other;
+	/** Number of cores on a system */
+	long			 cg_num_cores;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -127,13 +137,8 @@ struct crt_event_cb_priv {
 	void			*cecp_args;
 };
 
-/* TODO may use a RPC to query server-side context number */
-#ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(256)
-#endif
-
 #ifndef CRT_PROGRESS_NUM
-# define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
+#define CRT_CALLBACKS_NUM		(4)	/* start number of CBs */
 #endif
 
 /* structure of global fault tolerance data */

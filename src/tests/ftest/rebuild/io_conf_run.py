@@ -1,17 +1,17 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2022 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_io_conf import IoConfTestBase
 
+
 class RbldRunIoConf(IoConfTestBase):
+    # pylint: disable=too-many-ancestors
     """Test daos_run_io_conf.
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
 
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-3150.
@@ -28,6 +28,9 @@ class RbldRunIoConf(IoConfTestBase):
         Use Cases:
             Verify rebuild with data verification.
 
-        :avocado: tags=all,full_regression,hw,large,rebuild,iorebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=rebuild,iorebuild
+        :avocado: tags=RbldRunIoConf,test_daos_run_io_conf
         """
         self.execute_io_conf_run_test()

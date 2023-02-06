@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -220,6 +221,37 @@ type ErrPoolNotFound struct {
 	byLabel *string
 }
 
+func (err *ErrPoolNotFound) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Rank  *Rank
+		UUID  *uuid.UUID
+		Label *string
+	}{
+		Rank:  err.byRank,
+		UUID:  err.byUUID,
+		Label: err.byLabel,
+	})
+}
+
+func (err *ErrPoolNotFound) UnmarshalJSON(data []byte) error {
+	if err == nil {
+		return nil
+	}
+
+	var tmp struct {
+		Rank  *Rank
+		UUID  *uuid.UUID
+		Label *string
+	}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	err.byRank = tmp.Rank
+	err.byUUID = tmp.UUID
+	err.byLabel = tmp.Label
+	return nil
+}
+
 func (err *ErrPoolNotFound) Error() string {
 	switch {
 	case err.byRank != nil:
@@ -238,4 +270,25 @@ func (err *ErrPoolNotFound) Error() string {
 func IsPoolNotFound(err error) bool {
 	_, ok := errors.Cause(err).(*ErrPoolNotFound)
 	return ok
+}
+
+// ErrPoolRankNotFound is a helper function to return a *ErrPoolNotFound
+// error indicating that a pool service with the given rank could not
+// be found.
+func ErrPoolRankNotFound(r Rank) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byRank: &r}
+}
+
+// ErrPoolUUIDNotFound is a helper function to return a *ErrPoolNotFound
+// error indicating that a pool service with the given UUID could not
+// be found.
+func ErrPoolUUIDNotFound(u uuid.UUID) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byUUID: &u}
+}
+
+// ErrPoolLabelNotFound is a helper function to return a *ErrPoolNotFound
+// error indicating that a pool service with the given label could not
+// be found.
+func ErrPoolLabelNotFound(l string) *ErrPoolNotFound {
+	return &ErrPoolNotFound{byLabel: &l}
 }

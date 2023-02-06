@@ -2,11 +2,11 @@ hosts:
   test_servers: server-[1-2]
   test_clients: 1
 extra_servers:
-  test_servers: server-[3-4]
+  test_servers: server-3
 timeout: 1100
 setup:
-  start_servers_once: False
-skip_add_log_msg: True
+  start_servers_once: false
+skip_add_log_msg: true
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -40,11 +40,9 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,md,rebuild
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 6000000000
   nvme_size: 54000000000
-  svcn: 4
+  svcn: 2
   control_method: dmg
 container:
   type: POSIX
@@ -56,7 +54,7 @@ ior:
     slots: 48
   test_file: /testFile
   repetitions: 2
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     write_flags: "-w -F -k -G 1"
     read_flags: "-F -r -R -k -G 1"
@@ -75,7 +73,7 @@ mdtest:
   num_of_files_dirs: 100
   test_dir: "/"
   iteration: 1
-  dfs_destroy: False
+  dfs_destroy: false
   dfs_oclass: RP_2G1
   dfs_dir_oclass: RP_2G1
   manager: "MPICH"
@@ -89,18 +87,16 @@ mdtest:
 test_obj_class:
   oclass:
     - RP_2G8
-    - RP_3G6
-    - S1
     - EC_2P1G1
 loop_test:
   iterations: 3
 aggregation:
-  test_with_aggregation: True
+  test_with_aggregation: true
 rebuild:
-  test_with_rebuild: True
+  test_with_rebuild: true
 checksum:
-  test_with_checksum: False
+  test_with_checksum: false
 snapshot:
-  test_with_snapshot: True
+  test_with_snapshot: true
 test_ranks:
-  rank_list: ["4","5",["6","7"]]
+  rank_list: ["4", "5"]

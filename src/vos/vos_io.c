@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -705,8 +705,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		int iov_nr = iods[i].iod_nr;
 		struct bio_sglist *bsgl;
 
-		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1) ||
-		    (iov_nr == 0 && iods[i].iod_recxs != NULL)) {
+		if ((iods[i].iod_type == DAOS_IOD_SINGLE && iov_nr != 1)) {
 			D_ERROR("Invalid iod_nr=%d, iod_type %d.\n",
 				iov_nr, iods[i].iod_type);
 			rc = -DER_IO_INVAL;
@@ -1720,7 +1719,6 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 
 	if (is_array) {
 		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
-			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
 			D_DEBUG(DB_TRACE, "akey "DF_KEY" update array bypassed - NULL iod_recxs.\n",
 				DP_KEY(&iod->iod_name));
 			return rc;

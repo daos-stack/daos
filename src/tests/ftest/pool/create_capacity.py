@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2021 Intel Corporation.
+(C) Copyright 2021-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,9 +30,9 @@ class PoolCreateTests(PoolTestBase):
             Verify that DAOS is ready to accept requests with in 2 minutes.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_tests,create_performance
+        :avocado: tags=PoolCreateTests,test_create_pool_quantity
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.

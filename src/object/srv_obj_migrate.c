@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2212,6 +2212,11 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	int			rc = 0;
 	int			i;
 
+	if (!daos_oclass_is_valid(daos_obj_id2class(io->ui_oid.id_pub))) {
+		D_WARN("Skip invalid "DF_UOID".\n", DP_UOID(io->ui_oid));
+		return 0;
+	}
+
 	if (!daos_oclass_is_ec(&arg->oc_attr))
 		return migrate_one_create(arg, io);
 
@@ -2552,8 +2557,8 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc && daos_anchor_get_flags(&dkey_anchor) &
-			   DIOF_TO_LEADER) {
+		} else if (rc && rc != -DER_SHUTDOWN &&
+			   daos_anchor_get_flags(&dkey_anchor) & DIOF_TO_LEADER) {
 			if (rc != -DER_INPROGRESS) {
 				daos_anchor_set_flags(&dkey_anchor,
 						      DIOF_WITH_SPEC_EPOCH |
@@ -2583,8 +2588,7 @@ retry:
 			 * -DER_NONEXIST, see obj_ioc_init().
 			 */
 			if (rc == -DER_DATA_LOSS || rc == -DER_NONEXIST) {
-				D_DEBUG(DB_REBUILD, "No replicas for "DF_UOID
-					" %d\n", DP_UOID(arg->oid), rc);
+				D_WARN("No replicas for "DF_UOID" %d\n", DP_UOID(arg->oid), rc);
 				num = 0;
 				rc = 0;
 			}
@@ -2601,6 +2605,8 @@ retry:
 			break;
 		}
 
+		D_ASSERTF(sgl.sg_iovs[0].iov_len <= buf_len, DF_U64" > "DF_U64"\n",
+			  sgl.sg_iovs[0].iov_len, buf_len);
 		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
@@ -2871,6 +2877,10 @@ free:
 		if (cont_child)
 			ds_cont_child_put(cont_child);
 	}
+
+	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
+	    tls->mpt_obj_count >= daos_fail_value_get())
+		rc = -DER_IO;
 
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
@@ -3336,6 +3346,8 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 						  migrate_in->om_max_eph, migrate_in->om_opc);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	if (pool_tls->mpt_fini)
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 
 	/* NB: only create this tree on xstream 0 */
 	rc = migrate_try_create_object_tree(pool_tls);

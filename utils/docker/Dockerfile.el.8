@@ -94,6 +94,8 @@ RUN if $QUICKBUILD; then                                          \
 
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then \
+      dnf install -y zip && \
+      dnf clean all;     \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
       mkdir -p bullseye; \
@@ -107,8 +109,17 @@ RUN if [ "x$BULLSEYE" != "x" ]; then \
 
 USER daos_server:daos_server
 
-# Install scons from pip to avoid dependency cycle bug.
-RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user scons
+# Setup a python venv so that python packages can be installed locally.
+RUN python3 -m venv /home/daos/venv
+ENV PATH=/home/daos/venv/bin:$PATH
+ENV VIRTUAL_ENV=/home/daos/venv/
+
+# Install latest versions of python tools.
+# wheel is needed first to avoid a warning when installing pyyaml.
+COPY requirements.txt .
+RUN python3 -m pip --no-cache-dir install --upgrade pip && \
+    python3 -m pip --no-cache-dir install wheel && \
+    python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
 COPY --chown=daos_server:daos_server SConstruct .
@@ -195,4 +206,4 @@ WORKDIR /home/daos
 
 ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*
+RUN [ "$DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/daos /home/daos/pre

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +8,6 @@
 from getpass import getuser
 import math
 import os
-import socket
 import time
 import yaml
 import random
@@ -17,15 +16,17 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import CommonConfig, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubprocessManager
+from dmg_utils import get_dmg_command
+from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
     convert_list, get_default_config_file, distribute_files, DaosTestError, \
-    stop_processes, get_display_size, run_pcmd, get_primary_group
-from dmg_utils import get_dmg_command
+    stop_processes, get_display_size, run_pcmd
+from host_utils import get_local_host
 from server_utils_base import \
     ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
+from user_utils import get_chown_command
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -135,6 +136,30 @@ class DaosServerManager(SubprocessManager):
         self.storage_prepare_timeout = BasicParameter(None, 40)
         self.storage_format_timeout = BasicParameter(None, 40)
 
+        # Optional external yaml data to use to create the server config file, bypassing the values
+        # defined in the self.manager.job.yaml object.
+        self._external_yaml_data = None
+
+    @property
+    def engines(self):
+        """Get the total number of engines.
+
+        Returns:
+            int: total number of engines
+
+        """
+        return len(self.ranks.keys())
+
+    @property
+    def ranks(self):
+        """Get the rank and host pairing for all of the engines.
+
+        Returns:
+            dict: rank key with host value
+
+        """
+        return {rank: value["host"] for rank, value in self._expected_states.items()}
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -166,8 +191,7 @@ class DaosServerManager(SubprocessManager):
 
     def _prepare_dmg_certificates(self):
         """Set up dmg certificates."""
-        local_host = socket.gethostname().split('.', 1)[0]
-        self.dmg.copy_certificates(get_log_file("daosCA/certs"), local_host.split())
+        self.dmg.copy_certificates(get_log_file("daosCA/certs"), get_local_host())
 
     def _prepare_dmg_hostlist(self, hosts=None):
         """Set up the dmg command host list to use the specified hosts.
@@ -304,7 +328,8 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.nvme_only.value = True
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=self.storage_prepare_timeout.value)
+        results = run_pcmd(
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -394,6 +419,7 @@ class DaosServerManager(SubprocessManager):
         complete = False
         timed_out = False
         start = time.time()
+        elapsed = 0.0
 
         # Search for patterns in the dmg system query output:
         #   - the expected number of pattern matches are detected (success)
@@ -403,12 +429,14 @@ class DaosServerManager(SubprocessManager):
                 and (sub_process is None or sub_process.poll() is None):
             detected = self.detect_engine_states(expected_states)
             complete = detected == self.manager.job.pattern_count
-            timed_out = time.time() - start > self.manager.job.pattern_timeout.value
+            elapsed = time.time() - start
+            timed_out = elapsed > self.manager.job.pattern_timeout.value
             if not complete and not timed_out:
                 time.sleep(1)
 
         # Summarize results
-        self.manager.job.report_subprocess_status(start, detected, complete, timed_out, sub_process)
+        self.manager.job.report_subprocess_status(
+            elapsed, detected, complete, timed_out, sub_process)
 
         return complete
 
@@ -446,7 +474,7 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.force.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=120)
+        result = pcmd(self._hosts, cmd.with_exports, timeout=120)
         if len(result) > 1 or 0 not in result:
             raise ServerFailed("Error resetting NVMe storage")
 
@@ -470,7 +498,8 @@ class DaosServerManager(SubprocessManager):
 
             self.log.info("Changing ownership to %s for: %s", user, scm_mount)
             cmd_list.add(
-                "sudo chown -R {}:{} {}".format(user, get_primary_group(user), " ".join(scm_mount)))
+                "sudo -n {}".format(get_chown_command(user, options="-R", file=" ".join(scm_mount)))
+            )
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
@@ -806,7 +835,7 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed("No available candidate ranks to stop.")
 
         # Stop a random rank
-        random_rank = random.choice(candidate_ranks) #nosec
+        random_rank = random.choice(candidate_ranks)  # nosec
         return self.stop_ranks([random_rank], daos_log=daos_log, force=force)
 
     def kill(self):
@@ -889,7 +918,8 @@ class DaosServerManager(SubprocessManager):
                 self.log.info("class = %s", storage_tier["class"])
                 self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(idx)
+                per_engine_yaml_parameters = DaosServerYamlParameters.PerEngineYamlParameters(
+                    self.namespace, idx)
                 per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
                 per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
                 per_engine_yaml_parameters.scm_size.update(None)
@@ -1088,8 +1118,7 @@ class DaosServerManager(SubprocessManager):
             # Reboot the servers if a reduced number of targets is required
             if adjusted_targets < targets:
                 self.log.info(
-                        "Updating targets per server engine: %s -> %s",
-                        targets, adjusted_targets)
+                    "Updating targets per server engine: %s -> %s", targets, adjusted_targets)
                 self.set_config_value("targets", adjusted_targets)
                 self.stop()
                 self.start()

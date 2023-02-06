@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -648,7 +648,9 @@ obj_ec_leader_select(struct dc_object *obj, int grp_idx, bool cond_modify, uint8
 		shard = grp_start + tgt_idx;
 		pl_shard = obj_get_shard(obj, shard);
 		if (pl_shard->po_target == -1 || pl_shard->po_shard == -1 ||
-		    pl_shard->po_rebuilding) {
+		    pl_shard->po_rebuilding ||
+		    (DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_OPEN) &&
+		     daos_shard_in_fail_value(grp_size - 1 - i))) {
 			/* Then try former one */
 			continue;
 		}
@@ -1088,6 +1090,7 @@ obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi)
 void
 obj_auxi_set_degfetch(struct obj_auxi_args *obj_auxi)
 {
+	D_ASSERT(!obj_auxi->spec_shard);
 	obj_auxi->deg_fetch = 1;
 }
 
@@ -1109,7 +1112,7 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
-	if (obj_auxi->is_ec_obj &&
+	if (obj_auxi->is_ec_obj && !obj_auxi->spec_shard &&
 	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
 	     obj_auxi->force_degraded || DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
 		if (obj_auxi->tx_uncertain) {
@@ -1406,6 +1409,23 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (rc)
 			D_ERROR(DF_OID" obj_ec_check_exist_tgts_get failed "DF_RC"\n",
 				DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+		return rc;
+	}
+
+	if (obj_auxi->spec_shard) {
+		D_ASSERT(grp_nr == 1);
+		D_ASSERT(shard_cnt == 1);
+		D_ASSERT(bit_map == NIL_BITMAP);
+		D_ASSERT(req_tgts->ort_srv_disp == 0);
+
+		req_tgts->ort_grp_nr = 1;
+		req_tgts->ort_grp_size = 1;
+		if (obj_is_ec(obj))
+			req_tgts->ort_start_shard = rounddown(start_shard, obj_get_grp_size(obj));
+
+		rc = obj_shard_tgts_query(obj, map_ver, start_shard,
+					  start_shard % obj_get_grp_size(obj),
+					  req_tgts->ort_shard_tgts, obj_auxi);
 		return rc;
 	}
 
@@ -3515,7 +3535,7 @@ obj_ec_recxs_convert(d_list_t *merged_list, daos_recx_t *recx,
 	/* Normally the enumeration is sent to the parity node */
 	/* convert the parity off to daos off */
 	if (recx->rx_idx & PARITY_INDICATOR) {
-		obj_recx_parity_to_daos(oca, recx);
+		D_DEBUG(DB_IO, "skip parity recx "DF_RECX"\n", DP_RECX(*recx));
 		return 0;
 	}
 
@@ -3760,6 +3780,36 @@ obj_shard_list_comp_cb(struct shard_auxi_args *shard_auxi,
 
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	if (obj_auxi->req_tgts.ort_grp_size == 1) {
+		if (obj_is_ec(obj_auxi->obj) &&
+		    obj_auxi->opc == DAOS_OBJ_RECX_RPC_ENUMERATE &&
+		    shard_arg->la_recxs != NULL) {
+			int		i;
+			daos_obj_list_t	*obj_args;
+
+			obj_args = dc_task_get_args(obj_auxi->obj_task);
+			for (i = 0; i < shard_arg->la_nr; i++) {
+				int index;
+
+				index = obj_args->incr_order ? i : (shard_arg->la_nr - 1 - i);
+
+				if (shard_arg->la_recxs[index].rx_idx & PARITY_INDICATOR)
+					obj_recx_parity_to_daos(obj_get_oca(obj_auxi->obj),
+								&shard_arg->la_recxs[index]);
+
+				/* DAOS-9218: The output merged list will latter be reversed.  That
+				 * will be done in the function obj_list_recxs_cb(), when the merged
+				 * list will be dumped into the output buffer.
+				 */
+				rc = merge_recx(iter_arg->merged_list,
+						shard_arg->la_recxs[index].rx_idx,
+						shard_arg->la_recxs[index].rx_nr, 0);
+				if (rc)
+					return rc;
+			}
+
+			return 0;
+		}
+
 		iter_arg->merge_nr = shard_arg->la_nr;
 		return 0;
 	}
@@ -4269,13 +4319,24 @@ obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	}
 
 	D_ASSERT(obj_is_ec(obj_auxi->obj));
-	d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
-				   recx_list) {
-		if (idx >= *obj_args->nr)
-			break;
-		obj_args->recxs[idx++] = recx->recx;
-		d_list_del(&recx->recx_list);
-		D_FREE(recx);
+	if (obj_args->incr_order) {
+		d_list_for_each_entry_safe(recx, tmp, arg->merged_list,
+					   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
+	} else {
+		d_list_for_each_entry_reverse_safe(recx, tmp, arg->merged_list,
+						   recx_list) {
+			if (idx >= *obj_args->nr)
+				break;
+			obj_args->recxs[idx++] = recx->recx;
+			d_list_del(&recx->recx_list);
+			D_FREE(recx);
+		}
 	}
 	anchor_update_check_eof(obj_auxi, obj_args->anchor);
 	*obj_args->nr = idx;
@@ -5550,8 +5611,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			continue;
 		}
 
-		if (sub_anchor->ssa_kds != NULL)
-			continue;
+		if (sub_anchor->ssa_kds != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_kds);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_kds, nr);
 		if (sub_anchor->ssa_kds == NULL)
@@ -5568,8 +5632,11 @@ shard_anchors_check_alloc_bufs(struct obj_auxi_args *obj_auxi,
 			req_tgts->ort_shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
 		}
 
-		if (sub_anchor->ssa_recxs != NULL)
-			continue;
+		if (sub_anchor->ssa_recxs != NULL) {
+			if (sub_anchors->sa_nr == nr)
+				continue;
+			D_FREE(sub_anchor->ssa_recxs);
+		}
 
 		D_ALLOC_ARRAY(sub_anchor->ssa_recxs, nr);
 		if (sub_anchor->ssa_recxs == NULL)

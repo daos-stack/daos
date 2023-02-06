@@ -18,7 +18,7 @@ The `mdtest` tool to benchmark metadata performance is included in the
 same repository as the IOR tool.
 Like `IOR`, it is also an MPI-parallel application.
 
-The [Performance Tuning](https://docs.daos.io/v2.2/admin/performance_tuning/#benchmarking-daos)
+The [Performance Tuning](https://docs.daos.io/v2.2/admin/performance_tuning/)
 section of the Administration Guide contains further information on IOR and mdtest.
 
 ## Build ior and mdtest
