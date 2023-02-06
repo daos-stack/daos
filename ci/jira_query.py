@@ -42,7 +42,6 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 
 def set_output(key, value):
     """Set a key-value pair in GitHub actions metadata"""
-
     env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         clean_value = value.replace('\n', '%0A')
@@ -63,6 +62,7 @@ def valid_comp_from_dir(component):
 
 def fetch_pr_data():
     """Query GibHub API and return PR metadata"""
+    pr_data = None
     if len(sys.argv) == 2:
         try:
             pr_number = int(sys.argv[1])
@@ -79,12 +79,12 @@ def fetch_pr_data():
         print('Pass PR number on command line')
         sys.exit(1)
 
+    assert pr_data is not None
     return pr_data
 
 
 def main():
     """Run the script"""
-
     pr_data = fetch_pr_data()
 
     priority = None

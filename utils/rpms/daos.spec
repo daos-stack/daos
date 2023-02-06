@@ -91,8 +91,6 @@ BuildRequires: Lmod
 # see src/client/dfs/SConscript for why we need /etc/os-release
 # that code should be rewritten to use the python libraries provided for
 # os detection
-# prefer over libcurl4-mini
-BuildRequires: libcurl4
 BuildRequires: distribution-release
 BuildRequires: libnuma-devel
 BuildRequires: cunit-devel
@@ -102,14 +100,9 @@ BuildRequires: python3-distro
 BuildRequires: python-rpm-macros
 BuildRequires: lua-lmod
 BuildRequires: systemd-rpm-macros
-%if 0%{?is_opensuse}
-%else
-# have choice for libcurl.so.4()(64bit) needed by systemd: libcurl4 libcurl4-mini
-# have choice for libcurl.so.4()(64bit) needed by cmake: libcurl4 libcurl4-mini
-BuildRequires: libcurl4
 %endif
 %endif
-%endif
+BuildRequires: libuuid-devel
 
 %if (0%{?suse_version} > 0)
 BuildRequires: libucp-devel
