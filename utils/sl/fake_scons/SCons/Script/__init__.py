@@ -32,7 +32,7 @@ class SConscript():
     """Fake SConscript"""
 
     def __init__(self, *_args, **_kw):
-        """Constructor"""
+        """Init function"""
 
 
 class DefaultEnvironment():
@@ -281,6 +281,10 @@ class DefaultEnvironment():
     def PrependENVPath(self, key, value):
         """Fake PrependENVPath"""
         return
+
+    def Configure(self):
+        """Fake Configure"""
+        return Configure()
 
     def d_add_build_rpath(self, pathin='.'):
         """Fake d_add_build_rpath"""

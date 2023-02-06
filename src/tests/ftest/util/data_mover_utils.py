@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -50,25 +50,9 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for k, v in kwargs.items():
-            attr = getattr(self, k)
-            attr.update(v, k)
-
-    @staticmethod
-    def __param_sort(k):
-        """Key sort for get_param_names. Moves src and dst to the end of the list.
-
-        Args:
-            k (str): the key
-
-        Returns:
-            int: the sort priority
-
-        """
-        return {
-            'dst': 3,
-            'src': 2
-        }.get(k, 0)
+        for key, value in kwargs.items():
+            attr = getattr(self, key)
+            attr.update(value, key)
 
     def get_param_names(self):
         """Override the original get_param_names to sort the src and dst paths.
@@ -77,11 +61,26 @@ class MfuCommandBase(ExecutableCommand):
             list: the sorted param names.
 
         """
+        def _param_sort(key):
+            """Key sort for get_param_names. Moves src and dst to the end of the list.
+
+            Args:
+                key (str): the key
+
+            Returns:
+                int: the sort priority
+
+            """
+            return {
+                'dst': 3,
+                'src': 2
+            }.get(key, 0)
+
         param_names = super().get_param_names()
-        param_names.sort(key=self.__param_sort)
+        param_names.sort(key=_param_sort)
         return param_names
 
-    def run(self, processes, job_manager, ppn=None):
+    def run(self, processes, job_manager, ppn=None, env=None):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
@@ -89,6 +88,7 @@ class MfuCommandBase(ExecutableCommand):
             processes (int): Number of processes for the command.
             job_manager (JobManager): Job manager variable to set/assign
             ppn (int, optional): client processes per node for the command.
+            env (dict, optional): environment variables to update before running
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -108,6 +108,7 @@ class MfuCommandBase(ExecutableCommand):
             job_manager.ppn.update(ppn, 'mpirun.ppn')
             job_manager.processes.update(None, 'mpirun.np')
         job_manager.exit_status_exception = self.exit_status_exception
+        job_manager.assign_environment(env or {}, True)
 
         # Run the command
         out = job_manager.run()
