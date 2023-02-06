@@ -125,8 +125,6 @@ jobs:
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
-      - name: Checking for corefile
-        run: docker run --user root:root build-post ls -latr /home/daos/daos
       - name: Fetch results
         if: always()
         run: docker cp build-post:/home/daos/daos/nlt-junit.xml ./
@@ -300,6 +298,9 @@ jobs:
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
+      - name: Checking for corefile
+        run: docker run --env BASE_DISTRO --user root:root
+             build-image ./daos/utils/ci/corefile_in_gha.sh
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
@@ -386,7 +387,3 @@ jobs:
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy
-      - name: Try reproduce DAOS-12407
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
-              --env COMPILER --env DEPS_JOBS --user root:root build-image
-              ./daos/utils/ci/run_in_gha.sh
