@@ -19,9 +19,8 @@
 
 /** Minimum tree order for an evtree */
 #define EVT_MIN_ORDER	4
-/** Maximum tree order for an evtree */
-#define EVT_MAX_ORDER	128
-
+/** Maximum tree order for an evtree, no need to support larger order than VOS uses */
+#define EVT_MAX_ORDER   15
 
 enum {
 	EVT_UMEM_TYPE	= 150,

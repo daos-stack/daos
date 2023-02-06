@@ -1398,18 +1398,24 @@ evt_node_mbr_update(struct evt_context *tcx, struct evt_node *node,
 	return changed;
 }
 
-/**
- * Return the size of evtree node, leaf node has different size with internal
- * node.
- */
-static int
-evt_node_size(struct evt_context *tcx, bool leaf)
+static inline int
+evt_order2size(int order, bool leaf)
 {
 	size_t entry_size;
 
 	entry_size = leaf ? sizeof(struct evt_node_entry) : sizeof(uint64_t);
 
-	return sizeof(struct evt_node) + entry_size * tcx->tc_order;
+	return sizeof(struct evt_node) + entry_size * order;
+}
+
+/**
+ * Return the size of evtree node, leaf node has different size with internal
+ * node.
+ */
+static inline int
+evt_node_size(struct evt_context *tcx, bool leaf)
+{
+	return evt_order2size(tcx->tc_order, leaf);
 }
 
 /** Allocate a evtree node */
@@ -1418,8 +1424,10 @@ evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	       umem_off_t *nd_off_p)
 {
 	struct evt_node		*nd;
+	int                      slab;
 	umem_off_t		 nd_off;
 	bool			 leaf = (flags & EVT_NODE_LEAF);
+	int                      size;
 
 	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
@@ -1838,6 +1846,15 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 
 /** Maximum dynamic root size before switching to user-specified order */
 #define MAX_DYN_ROOT 7
+static inline int
+evt_new_order(int order, int max_order)
+{
+	if (order == MAX_DYN_ROOT)
+		return max_order;
+
+	return ((order + 1) << 1) - 1;
+}
+
 /** Expand the dynamic tree root node if it is currently full and not
  *  already at full size
  */
@@ -1865,10 +1882,7 @@ evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
 	old_order = tcx->tc_order;
 	old_size  = evt_node_size(tcx, true);
 
-	if (tcx->tc_order == MAX_DYN_ROOT)
-		tcx->tc_order = tcx->tc_max_order;
-	else
-		tcx->tc_order = ((tcx->tc_order + 1) << 1) - 1;
+	tcx->tc_order = evt_new_order(tcx->tc_order, tcx->tc_max_order);
 
 	if (tcx->tc_order > tcx->tc_max_order)
 		tcx->tc_order = tcx->tc_max_order;
@@ -3964,20 +3978,29 @@ int
 evt_overhead_get(int alloc_overhead, int tree_order,
 		 struct daos_tree_overhead *ovhd)
 {
+	int order;
+	int order_idx;
+
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
 		return -DER_INVAL;
 	}
 
-	ovhd->to_dyn_count = 0;
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
 	ovhd->to_node_rec_msize = sizeof(struct evt_node_entry);
-	ovhd->to_leaf_overhead.no_size = alloc_overhead +
-		sizeof(struct evt_node) +
-		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_leaf_overhead.no_size  = alloc_overhead + evt_order2size(tree_order, true);
 	ovhd->to_leaf_overhead.no_order = tree_order;
-	ovhd->to_int_node_size = alloc_overhead + sizeof(struct evt_node) +
-		(tree_order * sizeof(uint64_t));
+	ovhd->to_int_node_size          = alloc_overhead + evt_order2size(tree_order, false);
+
+	order_idx = 0;
+	order     = 1;
+	while (order != tree_order) {
+		ovhd->to_dyn_overhead[order_idx].no_order = order;
+		ovhd->to_dyn_overhead[order_idx].no_size  = evt_order2size(order, true);
+		order_idx++;
+		order = evt_new_order(order, tree_order);
+	}
+	ovhd->to_dyn_count = order_idx;
 
 	return 0;
 }
