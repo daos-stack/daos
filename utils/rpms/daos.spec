@@ -199,6 +199,7 @@ Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
+Requires: mpifileutils-mpich
 BuildArch: noarch
 
 %description tests-internal
@@ -217,7 +218,6 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
-Requires: mpifileutils-mpich
 Requires: ior
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod

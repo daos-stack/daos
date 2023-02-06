@@ -106,7 +106,8 @@ Architecture: any
 Multi-Arch: same
 Depends: daos-tests (= ${binary:Version}),
          daos-client-tests-openmpi (= ${binary:Version}),
-         daos-serialize (= ${binary:Version})
+         daos-serialize (= ${binary:Version}),
+         mpifileutils-mpich
 Description: This is the package is a metapackage to install all of the internal test packages
  .
  This package contains tests
@@ -118,8 +119,7 @@ Depends: python3 (>=3.8), python-yaml, python3-yaml,
          ${shlibs:Depends}, ${misc:Depends},
          lbzip2,
          daos-client (= ${binary:Version}),
-	     daos-admin (= ${binary:Version}),
-         mpifileutils-mpich
+	     daos-admin (= ${binary:Version})
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
