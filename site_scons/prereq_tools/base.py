@@ -493,8 +493,10 @@ class PreReqComponent():
 
         self.add_opts(BoolVariable('STACK_MMAP',
                                    'Allocate ABT ULTs stacks with mmap()', 1))
-        self.setup_path_var('PREFIX')
-        self.setup_path_var('GOPATH')
+
+        self._setup_path_var('PREFIX')
+        self._setup_path_var('GOPATH')
+
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
         self.prereq_prefix = self.__env.subst("$PREFIX/prereq/$TTYPE_REAL")
 
