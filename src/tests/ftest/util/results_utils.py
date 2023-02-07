@@ -1,10 +1,11 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
+from argparse import Namespace
 
 
 class TestName():
@@ -291,6 +292,7 @@ class Job():
             max_chars (int, optional): maximum number of characters of each test log to include in
                 with any test errors. Defaults to 100000.
         """
+        # For newer avocado versions
         self.config = {
             "job.run.result.xunit.enabled": xml_enabled,
             "job.run.result.xunit.output": xml_output,
@@ -302,7 +304,17 @@ class Job():
             "stdout_claimed_by": None,
         }
         self.logdir = log_dir
-        self.args = None
+
+        # For older avocado versions
+        self.args = Namespace(
+            xunit_job_result=('on' if xml_enabled else 'off'),
+            xunit_output=xml_output,
+            xunit_max_test_log_chars=max_chars,
+            xunit_job_name=name,
+            html_job_result=('on' if html_enabled else 'off'),
+            html_output=html_output,
+            open_browser=False,
+            stdout_claimed_by=None)
 
         # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"

@@ -643,21 +643,37 @@ crt_get_info_string(bool primary, int provider, char **string, int ctx_idx)
 
 	/* TODO: for now pass same info for all providers including CXI */
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s:%d",
-				   provider_str, domain_str,
-				   start_port + ctx_idx);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s:%d",
-				   provider_str, domain_str, ip_str,
-				   start_port + ctx_idx);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, domain_str, start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://:%d",
+					   provider_str, start_port + ctx_idx);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s:%d",
+					   provider_str, domain_str, ip_str,
+					   start_port + ctx_idx);
+			else
+				D_ASPRINTF(*string, "%s://%s:%d",
+					   provider_str, ip_str,
+					   start_port + ctx_idx);
+		}
 	} else {
-		if (ip_str == NULL)
-			D_ASPRINTF(*string, "%s://%s",
-				   provider_str, domain_str);
-		else
-			D_ASPRINTF(*string, "%s://%s/%s",
-				   provider_str, domain_str, ip_str);
+		if (ip_str == NULL) {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s",
+					   provider_str, domain_str);
+			else
+				D_ASPRINTF(*string, "%s://", provider_str);
+		} else {
+			if (domain_str)
+				D_ASPRINTF(*string, "%s://%s/%s",
+					   provider_str, domain_str, ip_str);
+			else
+				D_ASPRINTF(*string, "%s://%s", provider_str, ip_str);
+		}
 	}
 
 out:
