@@ -102,8 +102,11 @@ func testPoolLabelProp() []*mgmtpb.PoolProperty {
 
 func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 	for name, tc := range map[string]struct {
-		state   system.PoolServiceState
-		expResp *mgmtpb.PoolCreateResp
+		state     system.PoolServiceState
+		queryResp *mgmtpb.PoolQueryResp
+		queryErr  error
+		expResp   *mgmtpb.PoolCreateResp
+		expErr    error
 	}{
 		"creating": {
 			state: system.PoolServiceStateCreating,
@@ -113,9 +116,20 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		},
 		"ready": {
 			state: system.PoolServiceStateReady,
-			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(daos.Already),
+			queryResp: &mgmtpb.PoolQueryResp{
+				Leader: 1,
 			},
+			expResp: &mgmtpb.PoolCreateResp{
+				Leader:    1,
+				SvcReps:   []uint32{1},
+				TgtRanks:  []uint32{1},
+				TierBytes: []uint64{1, 2},
+			},
+		},
+		"ready (query error)": {
+			state:    system.PoolServiceStateReady,
+			queryErr: errors.New("query error"),
+			expErr:   errors.New("query error"),
 		},
 		"destroying": {
 			state: system.PoolServiceStateDestroying,
@@ -129,6 +143,10 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			svc := newTestMgmtSvc(t, log)
+			setupMockDrpcClient(svc, tc.queryResp, tc.queryErr)
+			if _, err := svc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
+				t.Fatal(err)
+			}
 			poolUUID := test.MockPoolUUID(1)
 			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
 			defer lock.Release()
@@ -136,7 +154,11 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			if err := svc.sysdb.AddPoolService(ctx, &system.PoolService{
 				PoolUUID: poolUUID,
 				State:    tc.state,
-				Storage:  &system.PoolServiceStorage{},
+				Storage: &system.PoolServiceStorage{
+					CreationRankStr:    "1",
+					PerRankTierStorage: []uint64{1, 2},
+				},
+				Replicas: []ranklist.Rank{1},
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -148,9 +170,10 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 				Properties: testPoolLabelProp(),
 			}
 
-			gotResp, err := svc.PoolCreate(ctx, req)
-			if err != nil {
-				t.Fatal(err)
+			gotResp, gotErr := svc.PoolCreate(ctx, req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
