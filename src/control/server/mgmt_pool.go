@@ -268,11 +268,20 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 	ps, err := svc.sysdb.FindPoolServiceByUUID(poolUUID)
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
-		resp.Status = int32(drpc.DaosAlready)
 		if ps.State != system.PoolServiceStateReady {
 			resp.Status = int32(drpc.DaosTryAgain)
 			return resp, svc.checkPools(ctx, false, ps)
 		}
+
+		// If the pool is already created and is Ready, just return the existing pool info.
+		// This can happen in the case of a retried PoolCreate after a leadership
+		// shuffle that results in the pool being successfully created by the previous
+		// gRPC handler which returned an error to the client after being unable to
+		// persist the state update.
+		resp.SvcReps = system.RanksToUint32(ps.Replicas)
+		resp.TgtRanks = system.RanksToUint32(ps.Storage.CreationRanks())
+		resp.TierBytes = ps.Storage.PerRankTierStorage
+
 		return resp, nil
 	}
 	if !system.IsPoolNotFound(err) {
