@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2540,7 +2540,7 @@ crt_rank_self_set(d_rank_t rank)
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
 	hg_class_t		*hg_class;
-	hg_size_t		size = CRT_ADDR_STR_MAX_LEN;
+	hg_size_t		size;
 	struct crt_context	*ctx;
 	char			uri_addr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 	d_list_t		*ctx_list;
