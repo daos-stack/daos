@@ -658,6 +658,10 @@ ut_fill_wal(struct bio_ut_args *args, int tx_nr, struct ut_tx_array **txa_ptr)
 	txa = ut_txa_alloc(tx_nr);
 	assert_non_null(txa);
 
+	/* Make the compiler happy */
+	D_ASSERT(tx_nr > 0);
+	tx = txa->ta_tx_ptrs[0];
+
 	/*
 	 * Each tx is roughly 800k, 22 txs will consume 17600k, which is more than
 	 * half of 32MB WAL size.
