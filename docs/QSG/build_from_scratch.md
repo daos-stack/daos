@@ -67,7 +67,7 @@ $ ./utils/scripts/install-leap15.sh
 As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu20.sh
+$ ./utils/scripts/install-ubuntu.sh
 ```
 
 ## Build DAOS
