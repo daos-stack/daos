@@ -387,7 +387,7 @@ test_simple_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off = umem_alloc(umm, 128);
+	off = umem_zalloc(umm, 128);
 	assert_false(UMOFF_IS_NULL(off));
 	ptr = umem_off2ptr(umm, off);
 	strcpy(ptr, "0123456789");
@@ -538,11 +538,11 @@ test_nested_outer_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off1 = umem_alloc(umm, 128);
+	off1 = umem_zalloc(umm, 128);
 	assert_false(UMOFF_IS_NULL(off1));
 	ptr1 = umem_off2ptr(umm, off1);
 	strcpy(ptr1, "0123456789");
-	off2 = umem_alloc(umm, 256);
+	off2 = umem_zalloc(umm, 256);
 	assert_false(UMOFF_IS_NULL(off2));
 	ptr2 = umem_off2ptr(umm, off2);
 	strcpy(ptr2, "ABCDEFGHIJ");
@@ -647,11 +647,11 @@ test_nested_inner_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off1 = umem_alloc(umm, 128);
+	off1 = umem_zalloc(umm, 128);
 	assert_false(UMOFF_IS_NULL(off1));
 	ptr1 = umem_off2ptr(umm, off1);
 	strcpy(ptr1, "0123456789");
-	off2 = umem_alloc(umm, 256);
+	off2 = umem_zalloc(umm, 256);
 	assert_false(UMOFF_IS_NULL(off2));
 	ptr2 = umem_off2ptr(umm, off2);
 	strcpy(ptr2, "ABCDEFGHIJ");
