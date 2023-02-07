@@ -905,6 +905,8 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "after restarting all servers")
+        else:
+            self._list_server_manager_info()
         self.log.info("-" * 100)
         return errors
 
@@ -1215,6 +1217,9 @@ class TestWithServers(TestWithoutServers):
                 "All %s groups(s) of servers currently running",
                 len(self.server_managers))
 
+        # List active server log files and storage devices
+        self._list_server_manager_info()
+
         return force_agent_start
 
     def check_running(self, name, manager_list, prepare_dmg=False,
@@ -1275,6 +1280,14 @@ class TestWithServers(TestWithoutServers):
                 name, manager.get_config_value("name"), manager.hosts,
                 manager.get_config_value("filename"))
             manager.start()
+
+    def _list_server_manager_info(self):
+        """Display information about the running servers."""
+        self.log.info("-" * 100)
+        self.log.info("--- SERVER INFORMATION ---")
+        for manager in self.server_managers:
+            manager.get_host_log_files()
+            manager.dmg.storage_query_list_devices()
 
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.
