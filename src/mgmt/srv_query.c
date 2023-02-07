@@ -366,6 +366,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		else
 			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
+		resp->devices[i]->roles = dev_info->bdi_dev_roles;
+
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
 		led_info.action = CTL__LED_ACTION__GET;
