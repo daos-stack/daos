@@ -701,6 +701,9 @@ class Launch():
                 except Exception:       # pylint: disable=broad-except
                     pass
         elif test_result:
+            # Elevate status from WARN to ERROR if necessary
+            if test_result.status == TestResult.WARN and status == TestResult.ERROR:
+                test_result.status = TestResult.ERROR
             # Additional errors only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]

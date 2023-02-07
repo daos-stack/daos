@@ -35,8 +35,10 @@ class HarnessAdvancedTest(TestWithServers):
 
     def tearDown(self):
         """Conditionally skip tearDown."""
-        if not self.skip_teardown:
-            super().tearDown()
+        if self.skip_teardown:
+            self.log.info("Skipping test tearDown()")
+            return
+        super().tearDown()
 
     def test_pool_timeout(self):
         """Test to verify tearDown() timeout setting for timed out tests.
