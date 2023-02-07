@@ -1,12 +1,12 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /*
  * This program provides a testing tool for the middleware consistency work to allow introducing
- * leaks in the container by unlinking object from the DFS or PyDAOS namespace without punching the
+ * leaks in the container by unlinking objects from the DFS or PyDAOS namespace without punching the
  * objects themselves.
  */
 
