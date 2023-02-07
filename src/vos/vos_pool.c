@@ -260,6 +260,10 @@ vos_pool_checkpoint(struct chkpt_ctx *ctx)
 
 	bio_wal_query(store->stor_priv, &wal_info);
 	tx_id = wal_info.wi_commit_id;
+	if (tx_id == wal_info.wi_ckp_id) {
+		D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n", DP_UUID(pool->vp_id));
+		return 0;
+	}
 
 	D_INFO("Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
 	       DP_UUID(pool->vp_id), tx_id);

@@ -12,7 +12,7 @@
 #include <fcntl.h>
 #include "bio_ut.h"
 
-static char		db_path[50];
+static char		db_path[100];
 struct bio_ut_args	ut_args;
 
 void
@@ -35,7 +35,7 @@ int
 ut_init(struct bio_ut_args *args)
 {
 	struct sys_db	*db;
-	char		 nvme_conf[100] = { 0 };
+	char		 nvme_conf[200] = { 0 };
 	int		 fd, rc;
 
 	snprintf(nvme_conf, sizeof(nvme_conf), "%s/daos_nvme.conf", db_path);
@@ -51,6 +51,7 @@ ut_init(struct bio_ut_args *args)
 	fd = open(nvme_conf, O_RDONLY, 0600);
 	if (fd < 0) {
 		D_ERROR("Failed to open %s. %s\n", nvme_conf, strerror(errno));
+		rc = daos_errno2der(errno);
 		goto out_abt;
 	}
 	close(fd);

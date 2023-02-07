@@ -603,13 +603,13 @@ wal_ut_checkpoint(void **state)
 	for (i = 0; i < tx_nr; i++) {
 		tx = txa->ta_tx_ptrs[i];
 
+		ut_tx_add_action(tx, UMEM_ACT_SET_BITS);
+		ut_tx_add_action(tx, UMEM_ACT_CLR_BITS);
 		ut_tx_add_action(tx, UMEM_ACT_COPY);
 		ut_tx_add_action(tx, UMEM_ACT_COPY_PTR);
 		ut_tx_add_action(tx, UMEM_ACT_ASSIGN);
 		ut_tx_add_action(tx, UMEM_ACT_MOVE);
 		ut_tx_add_action(tx, UMEM_ACT_SET);
-		ut_tx_add_action(tx, UMEM_ACT_SET_BITS);
-		ut_tx_add_action(tx, UMEM_ACT_CLR_BITS);
 
 		rc = bio_wal_reserve(args->bua_mc, &tx->utx_id);
 		assert_rc_equal(rc, 0);
