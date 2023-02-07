@@ -707,8 +707,8 @@ class Launch():
 
         if test_result.fail_count > 0:
             # Additional ERROR/WARN only update the test result fail reason with a fail counter
-            fail_reason = test_result.fail_reason.split(" (+")[0:1]
             plural = "s" if test_result.fail_count > 1 else ""
+            fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
