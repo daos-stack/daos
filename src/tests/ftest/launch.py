@@ -687,9 +687,13 @@ class Launch():
         """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
             test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
@@ -700,20 +704,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Elevate status from WARN to ERROR and use the first ERROR fail_reason.
+
+        if test_result.fail_count > 0:
             # Additional ERROR/WARN only update the test result fail reason with a fail counter
-            if test_result.status == TestResult.WARN and status == TestResult.ERROR:
-                test_result.status = TestResult.ERROR
-                fail_reason = fail_reason + " (+"
-            else:
-                fail_reason = test_result.fail_reason.split(" (+")[0:1]
+            fail_reason = test_result.fail_reason.split(" (+")[0:1]
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
