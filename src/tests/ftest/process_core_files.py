@@ -260,7 +260,8 @@ class CoreFileProcessing():
                 self.log, " ".join(["rpm", "-q", "--qf", "'%{evr}'", "daos"]), check=False)
             rpm_version = output.stdout
             cmds.append(
-                ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args + ["daos\*-" + rpm_version])
+                ["sudo", "dnf", "debuginfo-install", "-y"] + dnf_args
+                + ["daos-" + rpm_version, "daos-*-" + rpm_version])
         # else:
         #     # We're not using the yum API to install packages
         #     # See the comments below.
