@@ -200,6 +200,7 @@ Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
 Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 Requires: mpifileutils-mpich
+Requires: mpich
 BuildArch: noarch
 
 %description tests-internal
