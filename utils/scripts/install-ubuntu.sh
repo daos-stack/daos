@@ -21,6 +21,7 @@ apt-get install \
     clang-format \
     cmake \
     curl \
+    dpdk \
     fuse3 \
     git \
     golang-go \
