@@ -1465,12 +1465,12 @@ static const ProtobufCFieldDescriptor ctl__smd_device__field_descriptors[10] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "roles",
+    "role_bits",
     10,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_UINT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SmdDevice, roles),
+    offsetof(Ctl__SmdDevice, role_bits),
     NULL,
     NULL,
     0,             /* flags */
@@ -1483,7 +1483,7 @@ static const unsigned ctl__smd_device__field_indices_by_name[] = {
   3,   /* field[3] = dev_state */
   4,   /* field[4] = led_state */
   8,   /* field[8] = rank */
-  9,   /* field[9] = roles */
+  9,   /* field[9] = role_bits */
   1,   /* field[1] = tgt_ids */
   5,   /* field[5] = total_bytes */
   2,   /* field[2] = tr_addr */

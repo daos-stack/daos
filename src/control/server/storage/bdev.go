@@ -8,6 +8,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -245,6 +246,7 @@ type SmdDevice struct {
 	ClusterSize uint64        `json:"cluster_size"`
 	Health      *NvmeHealth   `json:"health"`
 	TrAddr      string        `json:"tr_addr"`
+	Roles       BdevRoles     `json:"roles"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -253,6 +255,82 @@ func (sd *SmdDevice) String() string {
 	}
 	return fmt.Sprintf("%+v", *sd)
 }
+
+//func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
+//	if sd == nil {
+//		return nil, errors.New("tried to marshal nil Member")
+//	}
+//
+//	type toJSON SmdDevice
+//	return json.Marshal(&struct {
+//		Roles uint32 `json:"roles"`
+//		*toJSON
+//	}{
+//		Roles:  0,
+//		toJSON: (*toJSON)(sd),
+//	})
+//}
+
+// UnmarshalJSON handles the special case where pb SmdDevice converts Bdev Roles bitmask to native
+// BdevRoles type.
+func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	type fromJSON SmdDevice
+	from := &struct {
+		RoleBits uint32 `json:"role_bits"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sd),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	if from.Roles.IsEmpty() && from.RoleBits != 0 {
+		sd.Roles.OptionBits = OptionBits(from.RoleBits)
+	}
+
+	return nil
+}
+
+//	state, ok := ctlpb.LedState_value[stateStr]
+//	if !ok {
+//		// Try converting the string to an int32, to handle the
+//		// conversion from protobuf message using convert.Types().
+//		si, err := strconv.ParseInt(stateStr, 0, 32)
+//		if err != nil {
+//			return errors.Errorf("invalid vmd led state number parse %q", stateStr)
+//		}
+//
+//		if _, ok = ctlpb.LedState_name[int32(si)]; !ok {
+//			return errors.Errorf("invalid vmd led state name lookup %q", stateStr)
+//		}
+//		state = int32(si)
+//	}
+//	*vls = BdevRole(state)
+
+//func (bdr BdevRoles) MarshalJSON() (interface{}, error) {
+//	fmt.Printf("Mar")
+//	return json.Marshal(bdr.OptionBits)
+//}
+
+//func (bdr *BdevRoles) UnmarshalJSON(unmarshal func(interface{}) error) error {
+//	fmt.Printf("UnMar")
+//	var opts []string
+//	if err := unmarshal(&opts); err != nil {
+//		return err
+//	}
+//
+//	return bdr.fromStrings(roleOptFlags, opts...)
+//}
+
+// TODO BdevRoles: Unmarshal takes string comma sep list or int bitmask either json-native or
+// pb-native.
+// Marshal turns into string comma sep list (native-json-native)
 
 // NvmeController represents a NVMe device controller which includes health
 // and namespace information and mirrors C.struct_ns_t.
@@ -429,7 +507,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
-		DeviceRoles    BdevDeviceRoles // NVMe SSD role assignments
+		DeviceRoles    BdevRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.

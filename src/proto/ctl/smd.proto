@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -99,7 +99,7 @@ message SmdDevice {
 	uint64 avail_bytes = 7;		// blobstore clusters available bytes
 	uint64 cluster_size = 8;	// blobstore cluster size in bytes
 	uint32 rank = 9;		// DAOS I/O Engine using controller
-	uint32 roles = 10;		// Device active roles
+	uint32 role_bits = 10;		// Device active roles (bitmask)
 }
 
 message SmdDevReq {}

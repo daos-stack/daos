@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -110,21 +111,46 @@ func Test_LedState(t *testing.T) {
 	}
 }
 
+// Test_Convert_SmdDevice should verify that pbSmdDevice can be converted to native but not
+// necessarily the other way round.
 func Test_Convert_SmdDevice(t *testing.T) {
 	native := MockSmdDevice(test.MockPCIAddr(1))
+	native.Roles.OptionBits = BdevRoleAll
 
-	s := new(ctlpb.SmdDevice)
-	if err := convert.Types(native, s); err != nil {
-		t.Fatal(err)
+	pbSD := ctlpb.SmdDevice{
+		RoleBits: uint32(native.Roles.OptionBits),
+		Uuid:     native.UUID,
+		TgtIds:   native.TargetIDs,
+		TrAddr:   native.TrAddr,
 	}
 
 	convertedNative := new(SmdDevice)
-	if err := convert.Types(s, convertedNative); err != nil {
+	if err := convert.Types(pbSD, convertedNative); err != nil {
 		t.Fatal(err)
 	}
 
 	if diff := cmp.Diff(native, convertedNative); diff != "" {
 		t.Fatalf("expected converted device to match original (-want, +got):\n%s\n", diff)
+	}
+
+	newNative := new(SmdDevice)
+	if err := convert.Types(native, newNative); err != nil {
+		t.Fatal(err)
+	}
+
+	if diff := cmp.Diff(native, newNative); diff != "" {
+		t.Fatalf("expected new device to match original (-want, +got):\n%s\n", diff)
+	}
+
+	out, err := json.Marshal(newNative)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expOut := `{"uuid":"00000001-0001-0001-0001-000000000001","tgt_ids":[5,6,7,8],` +
+		`"dev_state":"NORMAL","led_state":"OFF","rank":0,"total_bytes":0,"avail_bytes":0,` +
+		`"cluster_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal"}`
+	if diff := cmp.Diff(expOut, string(out)); diff != "" {
+		t.Fatalf("expected json output to be human readable (-want, +got):\n%s\n", diff)
 	}
 }
 

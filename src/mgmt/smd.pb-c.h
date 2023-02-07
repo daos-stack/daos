@@ -247,9 +247,9 @@ struct  _Ctl__SmdDevice
    */
   uint32_t rank;
   /*
-   * Device active roles
+   * Device active roles (bitmask)
    */
-  uint32_t roles;
+  uint32_t role_bits;
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
