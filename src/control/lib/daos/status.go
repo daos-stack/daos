@@ -150,4 +150,6 @@ const (
 	ChecksumError Status = -C.DER_CSUM
 	// ControlIncompatible indicates that one or more control plane components are incompatible
 	ControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
+	// NoCert indicates that one or more configured certificates could not be accessed.
+	NoCert Status = -C.DER_NO_CERT
 )
