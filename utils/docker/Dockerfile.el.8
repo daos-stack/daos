@@ -137,7 +137,7 @@ ARG JOBS=$DEPS_JOBS
 ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
-# Build DAOS with stack_mmap=1
+# Build DAOS with STACK_MMAP=1
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
         scons --jobs $JOBS install STACK_MMAP=1 PREFIX=/opt/daos COMPILER=$COMPILER     \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
