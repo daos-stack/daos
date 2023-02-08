@@ -57,7 +57,7 @@ jobs:
         run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
-      - name : Check for corefiles
+      - name: Check for corefiles
         run: docker run --env BASE_DISTRO --user root:root
              build-image ./daos/utils/ci/corefile_in_gha.sh
       - name: Fetch results
