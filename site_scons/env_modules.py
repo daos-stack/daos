@@ -190,10 +190,9 @@ def load_mpi(mpi):
             if error.errno == errno.ENOENT:
                 return False
         for line in proc.stdout.readlines():
-            if line.startswith(b"Value:"):
+            if line.startswith(b"Alternative:"):
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:
                     return True
-                return False
         return False
 
     if _env_module.env_module_init is None:

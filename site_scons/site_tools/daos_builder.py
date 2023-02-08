@@ -189,23 +189,24 @@ def _test_program(env, *args, **kwargs):
     return testbuild
 
 
-def _find_mpicc(env):
+def _find_mpicc(env, mpi=None):
     """Find mpicc"""
-    mpicc = WhereIs('mpicc')
+    _mpicc = 'mpicc' + ('.' + mpi) if mpi else ''
+    mpicc = WhereIs(_mpicc)
     if not mpicc:
         return False
 
-    env.Replace(CC="mpicc")
-    env.Replace(LINK="mpicc")
+    env.Replace(CC=_mpicc)
+    env.Replace(LINK=_mpicc)
     env.PrependENVPath('PATH', os.path.dirname(mpicc))
     env.compiler_setup()
 
     return True
 
 
-def _configure_mpi_pkg(env):
+def _configure_mpi_pkg(env, mpi):
     """Configure MPI using pkg-config"""
-    if _find_mpicc(env):
+    if _find_mpicc(env, mpi):
         return
     try:
         env.ParseConfig('pkg-config --cflags --libs $MPI_PKG')
@@ -229,13 +230,16 @@ def _configure_mpi(self):
     env['CXX'] = None
 
     if env.subst("$MPI_PKG") != "":
-        _configure_mpi_pkg(env)
+        _mpi = env.subst("$MPI_PKG")
+        if _mpi == "ompi":
+            _mpi = "openmpi"
+        _configure_mpi_pkg(env, _mpi)
         return env
 
     for mpi in ['openmpi', 'mpich']:
         if not load_mpi(mpi):
             continue
-        if _find_mpicc(env):
+        if _find_mpicc(env, mpi):
             print(f'{mpi} is installed')
             return env
         print(f'No {mpi} installed and/or loaded')
