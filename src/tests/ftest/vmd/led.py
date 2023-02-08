@@ -44,7 +44,7 @@ class VmdLedStatus(OSAUtils):
         for value in list(resp['host_storage_map'].values()):
             if value['storage']['smd_info']['devices']:
                 total_uuid = len(value['storage']['smd_info']['devices'])
-                for device in total_uuid:
+                for device in range(total_uuid):
                     uuid.append(value['storage']['smd_info']['devices'][device]['uuid'])
         return uuid
 
@@ -65,11 +65,11 @@ class VmdLedStatus(OSAUtils):
             self.fail("dmg command failed: {}".format(details))
 
         self.log.info(result)
-        if result['error'] or len(result['reponse']['host_errors']) > 0:
+        if result['error'] or len(result['response']['host_errors']) > 0:
             if result['error']:
                 self.fail("dmg command failed: {}".format(result['error']))
             else:
-                self.fail("dmg command failed: {}".format(result['reponse']['host_errors']))
+                self.fail("dmg command failed: {}".format(result['response']['host_errors']))
         return result
 
     def get_led_status_value(self, device_id=None):

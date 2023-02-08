@@ -911,11 +911,6 @@ class Launch():
         logger.info("DAOS functional test launcher")
         logger.info("")
         logger.info("Running with %s", self.avocado)
-        logger.info("Debugging")
-        # command = "ls -l \'/usr/lib/daos/TESTING/ftest\'"
-        command = "ls -al ./vmd"
-        os.system(command)
-
         logger.info("Launch job results directory:  %s", self.logdir)
         if renamed_log_dir is not None:
             logger.info("  Renamed existing launch job results directory to %s", renamed_log_dir)
