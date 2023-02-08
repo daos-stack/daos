@@ -104,8 +104,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                     "val={} and received val={}".format(attr, value,
                                                         decoded.get(attr.decode(), None)))
 
-    def daos_server_storage_prepare_reset(self, step):
-        """Perform daos_server storage prepare.
+    def daos_server_scm_reset(self, step):
+        """Perform daos_server scm reset.
 
         Args:
              step (str): test step.
@@ -124,8 +124,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "#({0}.A){1} failed, "
                 "please make sure the server equipped with PMem modules".format(step, cmd))
 
-    def daos_server_storage_prepare_ns(self, step, engines_per_socket=1):
-        """Perform daos_server storage prepare --scm-ns-per-socket and reboot.
+    def daos_server_scm_prepare_ns(self, step, engines_per_socket=1):
+        """Perform daos_server scm prepare --scm-ns-per-socket and reboot.
 
         Args:
              step (str): test step.
@@ -135,13 +135,12 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sudo = False
         cmd.debug.value = False
         cmd.set_sub_command("scm")
-        cmd.sub_command_class.set_sub_command("reset")
+        cmd.sub_command_class.set_sub_command("prepare")
         cmd.sub_command_class.sub_command_class.scm_ns_per_socket.value = engines_per_socket
         cmd.sub_command_class.sub_command_class.force.value = True
-        cmd.sub_command_class.sub_command_class.scm_only.value = True
 
         self.log.info(
-            "===(%s.B)Starting daos_server storage prepare -S: %s", step, str(cmd))
+            "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
         results = run_pcmd(self.hostlist_servers, str(cmd), timeout=180)
         if results[0]['exit_status']:
             self.fail(
@@ -179,7 +178,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """Test ID: DAOS-12076.
 
         Test description: Test multiple engines/sockets.
-            (1) Storage prepare --scm-ns-per-socket
+            (1) Scm reset and prepare --scm-ns-per-socket
             (2) Start server
             (3) Start agent
             (4) Dmg system query
@@ -196,13 +195,13 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         :avocado: tags=server
         :avocado: tags=test_multiengines_per_socket
         """
-        # (1) Storage prepare --scm-ns-per-socket
+        # (1) Scm reset and prepare --scm-ns-per-socket
         step = 1
-        self.log.info("===(%s)===Storage prepare --scm-ns-per-socket", step)
-        self.daos_server_storage_prepare_reset(step)
+        self.log.info("===(%s)===Scm reset and prepare --scm-ns-per-socket", step)
+        self.daos_server_scm_reset(step)
         engines_per_socket = self.params.get(
             "engines_per_socket", "/run/server_config/*", default=1)
-        self.daos_server_storage_prepare_ns(step, engines_per_socket)
+        self.daos_server_scm_prepare_ns(step, engines_per_socket)
         cmd = "/usr/bin/ls -l /dev/pmem*"
         results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
         retry = 0
@@ -210,14 +209,14 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         while results[0]['exit_status'] != 0 and retry < max_retry:
             retry += 1
             self.log.info("===(%s.%s retry)sleep 15 sec, retry server configure "
-                          "daos_server_storage_prepare_ns", step, retry)
+                          "daos_server_scm_prepare_ns", step, retry)
             time.sleep(15)
             results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
 
         if retry > max_retry:
             self.cleanup()
             self.fail(
-                "#PMem did not show after storage prepare --scm-ns-per-socket and {0} "
+                "#PMem did not show after scm prepare --scm-ns-per-socket and {0} "
                 "retries".format(max_retry))
 
         # (2) Start server
