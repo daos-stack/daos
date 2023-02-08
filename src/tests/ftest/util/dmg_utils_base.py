@@ -562,7 +562,7 @@ class DmgCommandBase(YamlCommand):
                     super().__init__("/run/dmg/storage/led/identify/*", "identify")
                     self.timeout = FormattedParameter("--timeout {}", None)
                     self.reset = FormattedParameter("--reset", False)
-                    self.ids = FormattedParameter("{}", None)
+                    self.ids = BasicParameter(None)
 
             class CheckSubCommand(CommandWithParameters):
                 """Get dmg storage led check sub command object"""
@@ -570,7 +570,7 @@ class DmgCommandBase(YamlCommand):
                 def __init__(self):
                     """Create a dmg storage led check command object."""
                     super().__init__("/run/dmg/storage/led/check/*", "check")
-                    self.ids = FormattedParameter("{}", None)
+                    self.ids = BasicParameter(None)
 
         class FormatSubCommand(CommandWithParameters):
             """Defines an object for the dmg storage format command."""

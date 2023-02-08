@@ -325,9 +325,9 @@ class DmgCommand(DmgCommandBase):
         """Get the result of the 'dmg storage led identify".
 
         Args:
-            timeout (str): Length of time for LED to blink.
+            timeout (str, optional): Length of time for LED to blink. Defaults to None.
             reset (bool, optional): Reset the LED status to previous state. Defaults to False.
-            ids (list): Comma separated device id.
+            ids (str, optional): Comma separated device id. Defaults to None.
 
         Returns:
             dict: JSON formatted dmg command result.
@@ -344,7 +344,7 @@ class DmgCommand(DmgCommandBase):
         """Get the result of the 'dmg storage led check".
 
         Args:
-            ids (list): Comma separated device id.
+            ids (str, optional): Comma separated device id. Defaults to None.
 
         Returns:
             dict: JSON formatted dmg command result.

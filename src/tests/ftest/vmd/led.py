@@ -43,16 +43,15 @@ class VmdLedStatus(OSAUtils):
         uuid = []
         for value in list(resp['host_storage_map'].values()):
             if value['storage']['smd_info']['devices']:
-                total_uuid = len(value['storage']['smd_info']['devices'])
-                for device in range(total_uuid):
-                    uuid.append(value['storage']['smd_info']['devices'][device]['uuid'])
+                for device in value['storage']['smd_info']['devices']:
+                    uuid.append(device['uuid'])
         return uuid
 
     def run_vmd_led_identify(self, device_id=None):
         """Run the VMD LED identify command.
 
         Args:
-            device_id (str): Device UUID
+            device_id (str, optional): Device UUID. Defaults to None.
         Returns:
             dmg LED identify command response.
         """
@@ -65,18 +64,17 @@ class VmdLedStatus(OSAUtils):
             self.fail("dmg command failed: {}".format(details))
 
         self.log.info(result)
-        if result['error'] or len(result['response']['host_errors']) > 0:
-            if result['error']:
-                self.fail("dmg command failed: {}".format(result['error']))
-            else:
-                self.fail("dmg command failed: {}".format(result['response']['host_errors']))
+        if result['error']:
+            self.fail("dmg command failed: {}".format(result['error']))
+        elif len(result['response']['host_errors']) > 0:
+            self.fail("dmg command failed: {}".format(result['response']['host_errors']))
         return result
 
     def get_led_status_value(self, device_id=None):
         """Get the LED status value (VMD or NVME)
 
         Args:
-            device_id (str): Device UUID
+            device_id (str, optional): Device UUID. Defaults to None.
         Returns:
             Get the LED status value.
         """
@@ -100,7 +98,7 @@ class VmdLedStatus(OSAUtils):
         """Get a device to faulty state.
 
         Args:
-            device_id (str): Device UUID
+            device_id (str, optional): Device UUID. Defaults to None.
         Returns:
             dict: dmg device faulty information.
         """
