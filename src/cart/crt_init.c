@@ -117,7 +117,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
-	uint32_t	mrc_enable = 0;
 	uint64_t	start_rpcid;
 	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
@@ -202,12 +201,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (fi_univ_size == 0) {
 		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
-	}
-
-	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
-	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	if (credits == 0) {
@@ -335,6 +328,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	int		max_num_ctx = CRT_SRV_CONTEXT_NUM;
 	uint32_t	ctx_num;
 	bool		share_addr;
+	uint32_t	mrc_enable = 0;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
@@ -483,6 +477,16 @@ do_init:
 		prov_data_init(&crt_gdata.cg_prov_gdata[prov],
 			       prov, set_sep, max_num_ctx,
 			       max_expect_size, max_unexpect_size);
+
+		/* Enable mrc by deafult for CXI */
+		if (prov == CRT_NA_OFI_CXI)
+			mrc_enable = 1;
+
+		d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+		if (mrc_enable == 0) {
+			D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+			setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+		}
 
 		/* rxm and verbs providers only works with regular EP */
 		if ((prov == CRT_NA_OFI_VERBS_RXM ||
