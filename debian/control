@@ -108,7 +108,7 @@ Depends: daos-tests (= ${binary:Version}),
          daos-client-tests-openmpi (= ${binary:Version}),
          daos-serialize (= ${binary:Version}),
          mpifileutils,
-         mpich
+         mpich, ior
 Description: This is the package is a metapackage to install all of the internal test packages
  .
  This package contains tests
