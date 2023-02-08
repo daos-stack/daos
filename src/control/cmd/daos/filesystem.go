@@ -299,14 +299,15 @@ func (cmd *fsCheckCmd) Execute(_ []string) error {
 	}
 	defer cleanupPool()
 
-	dirName := C.CString(cmd.DirName)
-	defer freeString(dirName)
-
+	var dirName *C.char
+	if cmd.DirName != "" {
+		dirName = C.CString(cmd.DirName)
+		defer freeString(dirName)
+	}
 	rc := C.dfs_cont_check(cmd.cPoolHandle, &ap.cont_str[0], cmd.FsckFlags.Flags, dirName)
 	if err := dfsError(rc); err != nil {
 		return errors.Wrapf(err, "failed filesystem check")
 	}
-
 	return nil
 }
 
