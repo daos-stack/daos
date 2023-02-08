@@ -20,14 +20,7 @@ server_config:
         - DD_MASK=mgmt,md,any
         - D_LOG_FILE_APPEND_PID=1
         - COVFILE=/tmp/test.cov
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       targets: 8
       pinned_numa_node: 1
@@ -43,14 +36,7 @@ server_config:
         - DD_MASK=mgmt,md,any
         - D_LOG_FILE_APPEND_PID=1
         - COVFILE=/tmp/test.cov
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 12G
 datasize:
