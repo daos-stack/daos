@@ -193,37 +193,6 @@ class TestPool(TestDaosApiBase):
         """
         super().get_params(test)
 
-        # Autosize any size/scm_size/nvme_size parameters
-        # pylint: disable=too-many-boolean-expressions
-        if ((self.scm_size.value is not None
-             and str(self.scm_size.value).endswith("%"))
-                or (self.nvme_size.value is not None
-                    and str(self.nvme_size.value).endswith("%"))):
-            index = self.server_index.value
-            try:
-                params = test.server_managers[index].autosize_pool_params(
-                    size=None,
-                    tier_ratio=None,
-                    scm_size=self.scm_size.value,
-                    nvme_size=self.nvme_size.value,
-                    min_targets=self.min_targets.value,
-                    quantity=self.quantity.value)
-            except ServerFailed as error:
-                test.fail(
-                    "Failure autosizing pool parameters: {}".format(error))
-            except AutosizeCancel as error:
-                test.cancel(error)
-
-            # Update the pool parameters with any autosized values
-            for name in params:
-                test_pool_param = getattr(self, name)
-                test_pool_param.update(params[name], name)
-
-                # Cache the autosized value so we do not calculate it again
-                # pylint: disable=protected-access
-                cache_id = (name, self.namespace, test_pool_param._default)
-                test.params._cache[cache_id] = params[name]
-
         # Use a unique pool label if using pool labels
         if self.label.value is not None:
             if not isinstance(self.label_generator, LabelGenerator):

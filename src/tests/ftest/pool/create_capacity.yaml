@@ -36,7 +36,6 @@ server_config:
 
 pool:
   control_method: dmg
-  scm_size: 60%
-  nvme_size: 60%
+  size: 60%
   quantity: 200
   set_logmasks: False

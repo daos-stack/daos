@@ -31,6 +31,8 @@ class PoolCreateTests(PoolTestBase):
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
         self.add_pool_qty(1, namespace="/run/pool_1/*", create=False)
+        data = self.server_managers[0].get_available_storage()
+        self.pool.scm_size.update(int(float(data["scm"]) * 0.9), "pool.scm_size")
         self.check_pool_creation(60)
 
     def test_create_max_pool(self):

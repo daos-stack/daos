@@ -31,8 +31,7 @@ server_config:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
 pool:
-  scm_size: 30%
-  nvme_size: 40%
+  size: 40%
   svcn: 1
   control_method: dmg
 container:
