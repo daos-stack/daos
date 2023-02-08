@@ -2388,15 +2388,17 @@ class Launch():
 
         """
         any_found = False
-
         hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
         proc_pattern = "|".join(PROCS_TO_CLEANUP)
-        logger.info("Looking for running processes: %s", proc_pattern)
+        logger.debug("Looking for running processes: %s", proc_pattern)
         pgrep_cmd = f"pgrep --list-full '{proc_pattern}'"
         pgrep_result = run_remote(logger, hosts, pgrep_cmd)
         if pgrep_result.passed_hosts:
             any_found = True
-            logger.info("Killing running processes: %s", proc_pattern)
+            logger.debug("Killing running processes: %s", proc_pattern)
             pkill_cmd = f"sudo -n pkill -e --signal KILL '{proc_pattern}'"
             pkill_result = run_remote(logger, pgrep_result.passed_hosts, pkill_cmd)
             if pkill_result.failed_hosts:
@@ -2406,14 +2408,14 @@ class Launch():
                 message = f"Running processes found on {pgrep_result.passed_hosts}"
                 self._warn_test(self.result.tests[-1], "Process", message)
 
-        logger.info("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging
         grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
         mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
         mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
         if mount_grep_result.passed_hosts:
             any_found = True
-            logger.info("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
             type_list = ",".join(TYPES_TO_UNMOUNT)
             umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
             umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
