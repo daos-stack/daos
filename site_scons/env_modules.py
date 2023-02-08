@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Intel Corporation
+# Copyright 2019-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -191,6 +191,7 @@ def load_mpi(mpi):
                 return False
         for line in proc.stdout.readlines():
             if line.startswith(b"Alternative:"):
+                print(line)
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:
                     return True
         return False

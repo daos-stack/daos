@@ -191,6 +191,7 @@ def _test_program(env, *args, **kwargs):
 
 def _find_mpicc(env, mpi=None):
     """Find mpicc"""
+    print("_find_mpicc(env, mpi=%s):" % (mpi,))
     _mpicc = 'mpicc' + ('.' + mpi) if mpi else ''
     mpicc = WhereIs(_mpicc)
     if not mpicc:
@@ -236,8 +237,10 @@ def _configure_mpi(self):
         _configure_mpi_pkg(env, _mpi)
         return env
 
-    for mpi in ['openmpi', 'mpich']:
+    for mpi in ['mpich', 'openmpi']:
+        print("Trying %s" % mpi)
         if not load_mpi(mpi):
+            print("Couldn't load_mpi(%s)" % mpi)
             continue
         if _find_mpicc(env, mpi):
             print(f'{mpi} is installed')
