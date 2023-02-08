@@ -1538,13 +1538,18 @@ vos_media_read(struct bio_io_context *ioc, struct umem_instance *umem,
 	return 0;
 }
 
+static inline struct bio_meta_context *
+vos_pool2mc(struct vos_pool *vp)
+{
+	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
+	return (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
+}
+
 static inline struct bio_io_context *
 vos_data_ioctxt(struct vos_pool *vp)
 {
-	struct bio_meta_context	*mc;
+	struct bio_meta_context	*mc = vos_pool2mc(vp);
 
-	D_ASSERT(vp && vp->vp_umm.umm_pool != NULL);
-	mc = (struct bio_meta_context *)vp->vp_umm.umm_pool->up_store.stor_priv;
 	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
 		return bio_mc2ioc(mc, SMD_DEV_TYPE_DATA);
 
@@ -1552,4 +1557,29 @@ vos_data_ioctxt(struct vos_pool *vp)
 	D_ASSERT(vp->vp_dummy_ioctxt != NULL);
 	return vp->vp_dummy_ioctxt;
 }
+
+/*
+ * When a local transaction includes data write to NVMe, we submit data write and WAL
+ * write in parallel to reduce one NVMe I/O latency, and the WAL replay on recovery
+ * relies on the data csum stored in WAL to verify the data integrity.
+ *
+ * To ensure the data integrity check on replay not being interfered by aggregation or
+ * container destroy (which could delete/change the committed NVMe extent), we need to
+ * explicitly flush WAL header before aggregation or container destroy, so that WAL
+ * replay will be able to tell that the transactions (can be potentially interfered)
+ * are already committed, and skip data integriy check over them.
+ */
+static inline int
+vos_flush_wal_header(struct vos_pool *vp)
+{
+	struct bio_meta_context *mc = vos_pool2mc(vp);
+
+	/* When both md-on-ssd and data blob are present */
+	if (mc != NULL && bio_mc2ioc(mc, SMD_DEV_TYPE_WAL) != NULL &&
+	    bio_mc2ioc(mc, SMD_DEV_TYPE_DATA) != NULL)
+		return bio_wal_flush_header(mc);
+
+	return 0;
+}
+
 #endif /* __VOS_INTERNAL_H__ */
