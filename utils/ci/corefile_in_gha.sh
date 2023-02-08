@@ -10,7 +10,7 @@ then
 else
     COREFILE_DIR="/var/lib/systemd/coredump/"
 fi
-if [ $(ls -1 "$COREFILE_DIR" | wc -l) == 0 ]
+if [ $(find '$COREFILE_DIR' -maxdepth 1 -type f | wc -l) == 0 ]
 then
     echo "no corefile in $COREFILE_DIR."
     exit 0
