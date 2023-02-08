@@ -136,10 +136,10 @@ class VmdLedStatus(OSAUtils):
         self.log.info("%s", dev_id)
         for val in dev_id:
             led_identify_result = self.run_vmd_led_identify(val)
-            get_led_ressult = self.get_led_status_value(val)
+            get_led_result = self.get_led_status_value(val)
             time.sleep(15)
             self.log.info(led_identify_result)
-            self.log.info(get_led_ressult)
+            self.log.info(get_led_result)
 
     def test_vmd_led_faulty(self):
         """Jira ID: DAOS-11290

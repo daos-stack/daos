@@ -333,7 +333,7 @@ class DmgCommand(DmgCommandBase):
             dict: JSON formatted dmg command result.
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg storage led identify command fails.
 
         """
         return self._get_json_result(
@@ -350,7 +350,7 @@ class DmgCommand(DmgCommandBase):
             dict: JSON formatted dmg command result.
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg storage led check command fails.
 
         """
         return self._get_json_result(
