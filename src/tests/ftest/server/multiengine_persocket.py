@@ -125,7 +125,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "please make sure the server equipped with PMem modules".format(step, cmd))
 
     def daos_server_scm_prepare_ns(self, step, engines_per_socket=1):
-        """Perform daos_server scm prepare --scm-ns-per-socket and reboot.
+        """Perform daos_server scm prepare --scm-ns-per-socket.
 
         Args:
              step (str): test step.
@@ -147,8 +147,6 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
                 "#({0}.B){1} failed, "
                 "please make sure the server equipped with {2} PMem "
                 "modules.".format(step, cmd, engines_per_socket))
-        time.sleep(15)
-        self.host_reboot(self.hostlist_servers)
 
     def host_reboot(self, hosts):
         """To reboot the hosts.
@@ -201,6 +199,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.daos_server_scm_reset(step)
         engines_per_socket = self.params.get(
             "engines_per_socket", "/run/server_config/*", default=1)
+        reboot_after_format = self.params.get(
+            "reboot_after_format", "/run/server_config/*", default=False)
         self.daos_server_scm_prepare_ns(step, engines_per_socket)
         cmd = "/usr/bin/ls -l /dev/pmem*"
         results = run_pcmd(self.hostlist_servers, cmd, timeout=90)
@@ -218,6 +218,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             self.fail(
                 "#PMem did not show after scm prepare --scm-ns-per-socket and {0} "
                 "retries".format(max_retry))
+        if reboot_after_format:
+            self.host_reboot(self.hostlist_servers)
 
         # (2) Start server
         step += 1
@@ -245,6 +247,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             # Check for agent start status
             if results[0]['exit_status'] and "sudo systemctl" in cmd:
                 self.fail("#Fail on {0}".format(cmd))
+        time.sleep(15)
 
         # (4) Dmg system query
         step += 1
