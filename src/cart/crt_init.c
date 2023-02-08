@@ -478,7 +478,7 @@ do_init:
 			       prov, set_sep, max_num_ctx,
 			       max_expect_size, max_unexpect_size);
 
-		/* Enable mrc by deafult for CXI */
+		/* Enable mrc by default for CXI */
 		if (prov == CRT_NA_OFI_CXI)
 			mrc_enable = 1;
 
