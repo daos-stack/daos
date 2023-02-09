@@ -807,14 +807,11 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 		return;
 	dev_health->bdh_stat_age = now;
 
-	/* only support Data SSD auto fauty detection and state transit. */
-	if (st == SMD_DEV_TYPE_DATA) {
-		auto_faulty_detect(bbs);
-		rc = bio_bs_state_transit(bbs);
-		if (rc)
-			D_ERROR("State transition on target %d failed. %d\n",
-				bbs->bb_owner_xs->bxc_tgt_id, rc);
-	}
+	auto_faulty_detect(bbs);
+	rc = bio_bs_state_transit(bbs);
+	if (rc)
+		D_ERROR("State transition on target %d failed. %d\n",
+			bbs->bb_owner_xs->bxc_tgt_id, rc);
 
 	if (!bypass_health_collect())
 		collect_raw_health_data((void *)&xs_ctxt->bxc_xs_blobstores[st]);

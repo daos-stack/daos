@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,11 +58,10 @@ on_faulty(struct bio_blobstore *bbs)
 }
 
 static void
-teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
+teardown_blobstore(struct bio_xs_blobstore *bxb)
 {
 	struct bio_io_context	*ioc;
 	int			 opened_blobs = 0;
-	struct bio_xs_blobstore	*bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 
 	/* This blobstore is torndown */
 	if (bxb->bxb_io_channel == NULL)
@@ -93,20 +92,35 @@ teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 	}
 }
 
+struct xs_blobstore_arg {
+	struct bio_xs_context	*xs_ctxt;
+	struct bio_blobstore	*bbs;
+};
+
 static void
 teardown_xstream(void *arg)
 {
-	struct bio_xs_context	*xs_ctxt = arg;
+	struct xs_blobstore_arg *xs_bbs_arg = arg;
+	enum smd_dev_type	 st;
+	struct bio_xs_blobstore *bxb = NULL;
 
-	D_ASSERT(xs_ctxt != NULL);
+	D_ASSERT(xs_bbs_arg->xs_ctxt != NULL);
 	if (!is_server_started()) {
 		D_INFO("Abort xs teardown on server start/shutdown\n");
-		return;
+		goto out;
 	}
 
-	xs_ctxt->bxc_ready = 0;
-	/* only teardown data blobstore for now */
-	teardown_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
+	xs_bbs_arg->xs_ctxt->bxc_ready = 0;
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_bbs_arg->xs_ctxt->bxc_xs_blobstores[st];
+		if (bxb != NULL && bxb->bxb_blobstore == xs_bbs_arg->bbs) {
+			teardown_blobstore(bxb);
+			break;
+		}
+	}
+out:
+	D_FREE(arg);
+	return;
 }
 
 static void
@@ -135,14 +149,22 @@ unload_bs_cp(void *arg, int rc)
 }
 
 static inline bool
-is_xstream_torndown(struct bio_xs_context *xs_ctxt)
+is_xstream_torndown(struct bio_xs_context *xs_ctxt, struct bio_blobstore *bbs)
 {
 	struct bio_xs_blobstore	*bxb;
+	enum smd_dev_type	 st;
 
-	/* only check data blobstore for now */
-	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
-	if (bxb->bxb_io_channel != NULL)
-		return false;
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (bxb != NULL && bxb->bxb_blobstore == bbs) {
+			if (bxb->bxb_io_channel != NULL)
+				return false;
+			else
+				return true;
+		}
+	}
+
+	D_ASSERT(0);
 
 	return true;
 }
@@ -156,6 +178,7 @@ on_teardown(struct bio_blobstore *bbs)
 {
 	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
 	int			 i, rc = 0;
+	struct xs_blobstore_arg *xs_bbs_arg;
 
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_holdings != 0) {
@@ -175,12 +198,19 @@ on_teardown(struct bio_blobstore *bbs)
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
 
 		/* This xstream is torndown */
-		if (is_xstream_torndown(xs_ctxt))
+		if (is_xstream_torndown(xs_ctxt, bbs))
 			continue;
 
+		D_ALLOC_PTR(xs_bbs_arg);
+		if (xs_bbs_arg == NULL) {
+			D_ERROR("Failed to allocate memory to teardown blobstore %p\n", bbs);
+			return 1;
+		}
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
+		xs_bbs_arg->xs_ctxt = xs_ctxt;
+		xs_bbs_arg->bbs = bbs;
 		spdk_thread_send_msg(xs_ctxt->bxc_thread, teardown_xstream,
-				     xs_ctxt);
+				     xs_bbs_arg);
 		rc += 1;
 	}
 
@@ -219,16 +249,12 @@ on_teardown(struct bio_blobstore *bbs)
 }
 
 static void
-setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
-		int *closed_blobs)
+setup_blobstore(struct bio_xs_blobstore *bxb, enum smd_dev_type st, int *closed_blobs)
 {
 	struct bio_io_context	*ioc;
 	struct bio_blobstore	*bbs;
-	struct bio_xs_blobstore	*bxb;
 
-	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 	D_ASSERT(bxb != NULL);
-
 	bbs = bxb->bxb_blobstore;
 	if (bbs == NULL)
 		return;
@@ -256,7 +282,6 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 		if (ioc->bic_opening || ioc->bic_closing)
 			continue;
 
-		/* fix sysdb */
 		bio_blob_open(ioc, true, 0, st, SPDK_BLOBID_INVALID);
 	}
 
@@ -270,27 +295,37 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 static void
 setup_xstream(void *arg)
 {
-	struct bio_xs_context	*xs_ctxt = arg;
+	struct xs_blobstore_arg	*xs_bbs_arg = arg;
 	int			 closed_blobs;
+	enum smd_dev_type	 st;
+	struct bio_xs_blobstore	*bxb;
 
-	D_ASSERT(xs_ctxt != NULL);
+	D_ASSERT(xs_bbs_arg->xs_ctxt != NULL);
 	if (!is_server_started()) {
 		D_INFO("Abort xs setup on server start/shutdown\n");
-		return;
+		goto out;
 	}
 
-	/* only support data blobstore for now */
 	closed_blobs = 0;
-	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_bbs_arg->xs_ctxt->bxc_xs_blobstores[st];
+		if (bxb != NULL && bxb->bxb_blobstore == xs_bbs_arg->bbs) {
+			setup_blobstore(bxb, st, &closed_blobs);
+			break;
+		}
+	}
+
 	/*
 	 * It doesn't mean setup failed when there is any closed blob,
 	 * it means some blob is still busy and we can't move forward to
 	 * next state yet, we'll retry setup_xstream() later.
 	 */
 	if (closed_blobs > 0)
-		return;
+		goto out;
 
-	xs_ctxt->bxc_ready = 1;
+	xs_bbs_arg->xs_ctxt->bxc_ready = 1;
+out:
+	D_FREE(arg);
 	return;
 
 }
@@ -327,6 +362,7 @@ on_setup(struct bio_blobstore *bbs)
 	struct bio_bdev		*d_bdev = bbs->bb_dev;
 	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
 	int			 i, rc = 0;
+	struct xs_blobstore_arg	*xs_bbs_arg;
 
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_holdings != 0) {
@@ -391,9 +427,15 @@ bs_loaded:
 		if (xs_ctxt->bxc_ready)
 			continue;
 
+		D_ALLOC_PTR(xs_bbs_arg);
+		if (xs_bbs_arg == NULL) {
+			D_ERROR("Failed to allocate memory for blobstore %p setup\n", bbs);
+			return 1;
+		}
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
-		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,
-				     xs_ctxt);
+		xs_bbs_arg->xs_ctxt = xs_ctxt;
+		xs_bbs_arg->bbs = bbs;
+		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream, xs_bbs_arg);
 		rc += 1;
 	}
 
