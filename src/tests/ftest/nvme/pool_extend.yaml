@@ -33,6 +33,12 @@ pool:
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
+pool_qty_1:
+  size: "50%"
+pool_qty_2:
+  size: "50%"
+pool_qty_3:
+  size: "50%"
 container:
   type: POSIX
   control_method: daos
@@ -51,12 +57,12 @@ ior:
     dfs_oclass: RP_2G8
     dfs_dir_oclass: RP_2G8
     ior_test_sequence:
-      # - [scm_size percent, nvme_size percent, transfersize, blocksize]
+      # - [scm_size, nvme_size, transfersize, blocksize]
       #   The values are set to be in the multiples of 10.
       #   Values are appx GB.
-      - [30, 90, 4000, 50000000]          # [4K, 51M]
-      - [30, 90, 1000000, 500000000]      # [1M, 512M]
-      - [30, 90, 1000000000, 8000000000]  # [1G, 8G]
+      - ["NA", "NA", 4000, 50000000]          # [4K, 51M]
+      - ["NA", "NA", 1000000, 500000000]      # [1M, 512M]
+      - ["NA", "NA", 1000000000, 8000000000]  # [1G, 8G]
 test_obj_class:
   oclass:
     - RP_3G6
