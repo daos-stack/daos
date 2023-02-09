@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -859,16 +859,16 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
 			struct ds_migrate_status *dms);
 int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
+		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
 		  unsigned int migrate_opc);
 void
-ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 /** Server init state (see server_init) */
 enum dss_init_state {

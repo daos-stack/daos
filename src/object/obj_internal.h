@@ -206,6 +206,7 @@ struct migrate_pool_tls {
 	struct ds_pool_child	*mpt_pool;
 	uint64_t		mpt_global_version;
 	unsigned int		mpt_version;
+	unsigned int		mpt_generation;
 
 	/* Link to the migrate_pool_tls list */
 	d_list_t		mpt_list;
