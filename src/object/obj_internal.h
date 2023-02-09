@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,8 +264,13 @@ struct migrate_pool_tls {
 	ABT_mutex		mpt_inflight_mutex;
 	int			mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
+
+	ABT_cond		mpt_init_cond;
+	ABT_mutex		mpt_init_mutex;
+
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
+				mpt_init_tls:1,
 				mpt_fini:1;
 };
 
@@ -432,7 +437,8 @@ struct obj_auxi_list_obj_enum {
 };
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph,
+	   uint64_t boundary);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
