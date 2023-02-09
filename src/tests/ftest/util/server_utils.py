@@ -1195,7 +1195,7 @@ class DaosServerManager(SubprocessManager):
             result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
             for data in result.output:
                 if data.returncode == 0:
-                    matches = re.findall(fr'{pattern}', data.stdout)
+                    matches = re.findall(fr'{pattern}', str(data.stdout))
                     log_file_matches += len(matches)
             self.log.debug("Found %s matches on %s", log_file_matches, host)
             matches += log_file_matches
